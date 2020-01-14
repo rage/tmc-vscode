@@ -1,4 +1,4 @@
 # tmc-vscode README
 
-## Dokumentaatio
+## Documentation
 Link to [Documentation GitHub](https://github.com/rage/tmc-vscode-documents)
