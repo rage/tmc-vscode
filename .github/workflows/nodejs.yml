@@ -1,32 +1,11 @@
+
 name: Node CI
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
-  test:
+  test_and_build:
 
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [8.x, 10.x, 12.x]
-
-    steps:
-    - uses: actions/checkout@v1
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
-      with:
-        node-version: ${{ matrix.node-version }}
-    - name: npm install and test
-      run: |
-        npm ci
-        npm run compile --if-present
-        sudo apt-get install xvfb
-        xvfb-run --auto-servernum npm test
-      env:
-        CI: true
-
-  build:
     runs-on: ubuntu-latest
 
     strategy:
@@ -39,15 +18,24 @@ jobs:
       uses: actions/setup-node@v1
       with:
         node-version: ${{ matrix.node-version }}
-    - name: npm install package and upload artifact
+    - name: run tests
       run: |
-        npm install -g vsce
-        npm install
-        vsce package
-        mkdir extension && mv *.vsix extension
+        npm ci
+        npm run compile
+        # use xvfb to render into virtual framebuffer
+        sudo apt-get install xvfb
+        xvfb-run --auto-servernum npm test
       env:
         CI: true
+    - name: upload artifact
+      if: success()
+      run: |
+        npm install -g vsce
+        vsce package
+        # move packaged extension from root to own release folder
+        mkdir extension && mv *.vsix extension
     - uses: actions/upload-artifact@v1
+      if: success()
       with:
         name: packaged-extension
         path: extension/
