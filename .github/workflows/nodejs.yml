@@ -3,7 +3,7 @@ name: Node CI
 on: [push]
 
 jobs:
-  build:
+  test:
 
     runs-on: ubuntu-latest
 
@@ -17,7 +17,7 @@ jobs:
       uses: actions/setup-node@v1
       with:
         node-version: ${{ matrix.node-version }}
-    - name: npm install, build, and test
+    - name: npm install and test
       run: |
         npm ci
         npm run compile --if-present
@@ -25,3 +25,29 @@ jobs:
         xvfb-run --auto-servernum npm test
       env:
         CI: true
+
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [10.x]
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: npm install package and upload artifact
+      run: |
+        npm install -g vsce
+        npm install
+        vsce package
+        mkdir extension && mv *.vsix extension
+      env:
+        CI: true
+    - uses: actions/upload-artifact@v1
+      with:
+        name: packaged-extension
+        path: extension/
