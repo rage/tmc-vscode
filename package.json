@@ -3,6 +3,7 @@
 	"displayName": "tmc-vscode",
 	"description": "TestMyCode extension for Visual Studio Code",
 	"version": "0.0.1",
+	"license": "MIT",
 	"publisher": "tmc-vscode-temporary",
 	"repository": "https://github.com/rage/tmc-vscode",
 	"engines": {
