@@ -21,6 +21,7 @@ jobs:
       run: |
         npm ci
         npm run compile --if-present
-        npm test
+        sudo apt-get install xvfb
+        xvfb-run --auto-servernum npm test
       env:
         CI: true
