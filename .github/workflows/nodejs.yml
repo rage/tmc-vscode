@@ -11,19 +11,20 @@ jobs:
         node-version: [10.x]
         
     steps:
-    - uses: actions/checkout@v1
+    - name: Checkout repository
+      uses: actions/checkout@v1
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v1
       with:
         node-version: ${{ matrix.node-version }}
-    - name: check style
+    - name: Lint source
       run: |
         npm ci
         # compile typescript
         npm run compile
         # check codestyle
         npm run tslint
-    - name: run tests
+    - name: Run tests
       run: |
         # use xvfb to render into virtual framebuffer and run tests
         sudo apt-get install xvfb
@@ -39,12 +40,13 @@ jobs:
         node-version: [10.x]
     
     steps:
-    - uses: actions/checkout@v1
+    - name: Checkout repository
+      uses: actions/checkout@v1
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v1
       with:
         node-version: ${{ matrix.node-version }}
-    - name: compile extension and upload
+    - name: Package extension
       run: |
         npm ci
         npm run compile
@@ -54,7 +56,7 @@ jobs:
         mkdir extension && mv *.vsix extension
       env:
         CI: true
-    - name: upload artifact
+    - name: Upload artifact
       uses: actions/upload-artifact@v1
       if: success()
       with:
