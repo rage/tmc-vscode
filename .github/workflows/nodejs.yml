@@ -22,7 +22,7 @@ jobs:
       run: |
         npm ci
         npm run compile
-        tslint --project .
+        npm run tslint
         # use xvfb to render into virtual framebuffer
         sudo apt-get install xvfb
         xvfb-run --auto-servernum npm test
