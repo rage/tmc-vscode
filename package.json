@@ -27,6 +27,14 @@
 				"title": "Activate"
 			}
 		],
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "tmcView.activateEntry",
+					"when": "false"
+				}
+			]
+		},
 		"viewsContainers": {
 			"activitybar": [
 				{
