@@ -32,18 +32,18 @@ export default class Storage {
     }
 
     /**
-     * Stores the given course id.
-     * @param courseId course id to store
+     * Updates the given course id in storage.
+     * @param courseId course id to update
      */
-    public storeCourseId(courseId: string) {
+    public updateCourseId(courseId: string) {
         this.context.globalState.update("course", courseId);
     }
 
     /**
-     * Stores the given organization slug.
-     * @param organizationSlug organization slug to store
+     * Updates the given organization slug in storage.
+     * @param organizationSlug organization slug to update
      */
-    public storeOrganizationSlug(organizationSlug: string) {
+    public updateOrganizationSlug(organizationSlug: string) {
         this.context.globalState.update("organization", organizationSlug);
     }
 
