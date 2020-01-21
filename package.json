@@ -13,7 +13,7 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onCommand:extension.helloWorld"
+		"onView:tmcView"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -21,8 +21,37 @@
 			{
 				"command": "extension.helloWorld",
 				"title": "Hello World"
+			},
+			{
+				"command": "tmcView.activateEntry",
+				"title": "Activate"
 			}
-		]
+		],
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "tmcView.activateEntry",
+					"when": "false"
+				}
+			]
+		},
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"title": "TestMyCode",
+					"id": "tmc",
+					"icon": "media/dep.svg"
+				}
+			]
+		},
+		"views": {
+			"tmc": [
+				{
+				"id": "tmcView",
+				"name": "Menu"
+				}
+			]
+		}
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
