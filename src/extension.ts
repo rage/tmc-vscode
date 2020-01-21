@@ -11,7 +11,7 @@ export function activate(context: vscode.ExtensionContext) {
     // This line of code will only be executed once when your extension is activated
     console.log('Congratulations, your extension "tmc-vscode" is now active!');
 
-    const ui = new UI();
+    const ui = new UI(context);
 
     // The command has been defined in the package.json file
     // Now provide the implementation of the command with registerCommand
