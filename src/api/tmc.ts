@@ -58,6 +58,10 @@ export default class TMC {
         this.storage.updateAuthenticationToken(undefined);
     }
 
+    /**
+     * TODO: actually check if the token is valid
+     * @returns whether an authentication token is present
+     */
     public isAuthenticated(): boolean {
         return this.token !== undefined;
     }
