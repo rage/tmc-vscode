@@ -40,28 +40,6 @@ export default class UI {
 
         vscode.window.registerTreeDataProvider("tmcView", this.treeDP);
 
-        // TEMPORARY: Register actions for the treeview, message handlers for the webview
-        this.treeDP.registerAction("login", () => {
-            this.webview.setContent(this.webview.htmlWrap(
-                `<h1>Login</h1>
-                <form onsubmit="acquireVsCodeApi().postMessage({type: 'login',
-                                                                username: document.getElementById('username').value,
-                                                                password: document.getElementById('password').value})">
-                Email or username:<br>
-                <input type="text" id="username"><br>
-                Password:<br>
-                <input type="password" id="password"><br>
-                <input type="submit">
-                </form>`));
-        }, true);
-        this.treeDP.registerAction("logout", () => {
-            this.treeDP.setVisibility("logout", false);
-            this.treeDP.setVisibility("login", true);
-        }, false);
-
-        this.webview.registerHandler("login", (msg: { type: string, username: string, password: string }) => {
-            console.log("Logging in as " + msg.username + " with password " + msg.password);
-        });
     }
 }
 
@@ -122,6 +100,13 @@ class TmcWebview {
             return;
         }
         this.messageHandlers.set(messageId, handler);
+    }
+
+    /**
+     * Closes the Webview.
+     */
+    public dispose() {
+        this.panel?.dispose();
     }
 
     /**
