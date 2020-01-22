@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import * as oauth2 from "client-oauth2";
 import * as TypeMoq from "typemoq";
 import * as vscode from "vscode";
 
@@ -44,6 +45,25 @@ suite("Storage tests", () => {
         // getting
         mockMemento.verify((x) => x.get(TypeMoq.It.isAnyString()), TypeMoq.Times.never());
         storage.getCourseId();
+        mockMemento.verify((x) => x.get(TypeMoq.It.isAnyString()), TypeMoq.Times.once());
+    });
+
+    test("Authentication token data is stored correctly", () => {
+        const { mockContext, mockMemento } = createMocks();
+        const storage = new Storage(mockContext.object);
+
+        const tokenData: oauth2.Data = {type: "bearer", scope: "public"};
+
+        // updating
+        mockMemento.verify((x) => x.update(TypeMoq.It.isAnyString(),
+                                           TypeMoq.It.isValue(tokenData)), TypeMoq.Times.never());
+        storage.updateAuthenticationToken(tokenData);
+        mockMemento.verify((x) => x.update(TypeMoq.It.isAnyString(),
+                                           TypeMoq.It.isValue(tokenData)), TypeMoq.Times.once());
+
+        // getting
+        mockMemento.verify((x) => x.get(TypeMoq.It.isAnyString()), TypeMoq.Times.never());
+        storage.getAuthenticationToken();
         mockMemento.verify((x) => x.get(TypeMoq.It.isAnyString()), TypeMoq.Times.once());
     });
 
