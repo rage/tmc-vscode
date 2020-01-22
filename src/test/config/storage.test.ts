@@ -6,12 +6,12 @@ import Storage from "../../config/storage";
 
 suite("Storage tests", () => {
 
-    const createMocks = () => {
+    function createMocks() {
         const mockMemento = TypeMoq.Mock.ofType<vscode.Memento>();
         const mockContext = TypeMoq.Mock.ofType<vscode.ExtensionContext>();
         mockContext.setup((x) => x.globalState).returns(() => mockMemento.object);
         return { mockContext, mockMemento };
-    };
+    }
 
     test("Organization slug is stored correctly", () => {
         const { mockContext, mockMemento } = createMocks();
