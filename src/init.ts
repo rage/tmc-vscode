@@ -17,12 +17,12 @@ export function registerUiActions(ui: UI, tmc: TMC) {
         ui.webview.dispose();
         ui.treeDP.setVisibility("logout", false);
         ui.treeDP.setVisibility("login", true);
-    }, false);
+    }, tmc.isAuthenticated());
 
     // Displays the login webview
     ui.treeDP.registerAction("login", () => {
         ui.webview.setContent(loginHTML(ui));
-    }, true);
+    }, !tmc.isAuthenticated());
 
     // Receives a login information from the webview, attempts to log in
     // If successful, show the logout command instead of the login one, and a temporary webview page
