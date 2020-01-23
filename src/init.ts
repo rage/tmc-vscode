@@ -16,7 +16,7 @@ import UI from "./ui/ui";
 export function registerUiActions(extensionContext: vscode.ExtensionContext, ui: UI, tmc: TMC) {
 
     // Logs out, closes the webview, hides the logout command, shows the login command
-    ui.treeDP.registerAction("logout", () => {
+    ui.treeDP.registerAction("Log out", "logout", () => {
         tmc.deauthenticate();
         ui.webview.dispose();
         ui.treeDP.setVisibility("logout", false);
@@ -24,7 +24,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
     }, tmc.isAuthenticated());
 
     // Displays the login webview
-    ui.treeDP.registerAction("login", async () => {
+    ui.treeDP.registerAction("Log in", "login", async () => {
         ui.webview.setContent(await getTemplate(extensionContext, "login"));
     }, !tmc.isAuthenticated());
 

@@ -22,9 +22,9 @@ export default class TmcMenuTree {
      * @param onClick An action handler
      * @param visible Determines whether the action should be visible in the treeview
      */
-    public registerAction(label: string, onClick: () => void, visible: boolean) {
+    public registerAction(label: string, id: string, onClick: () => void, visible: boolean) {
         // Use internal class
-        this.treeDP.registerAction(label, onClick, visible);
+        this.treeDP.registerAction(label, id, onClick, visible);
     }
 
     /**
@@ -32,9 +32,9 @@ export default class TmcMenuTree {
      * @param label The label of the action to modify
      * @param visible Whether the action should be visible or not
      */
-    public setVisibility(label: string, visible: boolean) {
+    public setVisibility(id: string, visible: boolean) {
         // use internal class
-        this.treeDP.setVisibility(label, visible);
+        this.treeDP.setVisibility(id, visible);
     }
 
 }
@@ -91,11 +91,11 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
     /**
      * Internal logic for TmcMenuTree.registerAction
      */
-    public registerAction(label: string, onClick: () => void, visible: boolean) {
+    public registerAction(label: string, id: string, onClick: () => void, visible: boolean) {
         if (this.actions.get(label) !== undefined) {
             return;
         }
-        this.actions.set(label, {
+        this.actions.set(id, {
             action: new TMCAction(label,
                 { command: "tmcView.activateEntry", title: "", arguments: [onClick] }), visible,
         });
@@ -105,8 +105,8 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
     /**
      * Internal logic for TmcMenuTree.registerAction
      */
-    public setVisibility(label: string, visible: boolean) {
-        const action = this.actions.get(label);
+    public setVisibility(id: string, visible: boolean) {
+        const action = this.actions.get(id);
 
         if (action) {
             if (action.visible !== visible) {
