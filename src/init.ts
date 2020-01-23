@@ -65,7 +65,7 @@ function getTemplate(extensionContext: vscode.ExtensionContext, name: string, da
  *
  * @param extensionContext
  * @param relativePath Path to resolve
- * 
+ *
  * @returns the absolute path
  */
 function resolvePath(extensionContext: vscode.ExtensionContext, relativePath: string): string {
