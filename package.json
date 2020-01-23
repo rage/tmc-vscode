@@ -47,8 +47,8 @@
 		"views": {
 			"tmc": [
 				{
-				"id": "tmcView",
-				"name": "Menu"
+					"id": "tmcView",
+					"name": "Menu"
 				}
 			]
 		}
@@ -72,5 +72,8 @@
 		"typemoq": "^2.1.0",
 		"typescript": "^3.6.4",
 		"vscode-test": "^1.2.2"
+	},
+	"dependencies": {
+		"client-oauth2": "^4.2.5"
 	}
 }

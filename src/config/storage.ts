@@ -1,3 +1,4 @@
+import * as oauth2 from "client-oauth2";
 import * as vscode from "vscode";
 
 /**
@@ -32,10 +33,18 @@ export default class Storage {
     }
 
     /**
+     * Gets currently stored authentication token.
+     * @returns currently stored authentication token or undefined if not set
+     */
+    public getAuthenticationToken(): oauth2.Data | undefined {
+        return this.context.globalState.get("token");
+    }
+
+    /**
      * Updates the given course id in storage.
      * @param courseId course id to update
      */
-    public updateCourseId(courseId: string) {
+    public updateCourseId(courseId: string | undefined) {
         this.context.globalState.update("course", courseId);
     }
 
@@ -43,8 +52,15 @@ export default class Storage {
      * Updates the given organization slug in storage.
      * @param organizationSlug organization slug to update
      */
-    public updateOrganizationSlug(organizationSlug: string) {
+    public updateOrganizationSlug(organizationSlug: string | undefined) {
         this.context.globalState.update("organization", organizationSlug);
     }
 
+    /**
+     * Updates the given authentication token in storage.
+     * @param authenticationToken authentication token to update
+     */
+    public updateAuthenticationToken(authenticationToken: oauth2.Data | undefined) {
+        this.context.globalState.update("token", authenticationToken);
+    }
 }

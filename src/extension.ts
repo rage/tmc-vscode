@@ -1,8 +1,12 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
+import * as init from "./init";
 
+import TMC from "./api/tmc";
+import Storage from "./config/storage";
 import UI from "./ui/ui";
+
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -12,6 +16,10 @@ export function activate(context: vscode.ExtensionContext) {
     console.log('Congratulations, your extension "tmc-vscode" is now active!');
 
     const ui = new UI(context);
+    const storage = new Storage(context);
+    const tmc = new TMC(storage);
+
+    init.registerUiActions(ui, tmc);
 
     // The command has been defined in the package.json file
     // Now provide the implementation of the command with registerCommand
