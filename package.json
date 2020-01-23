@@ -65,6 +65,7 @@
 		"@types/glob": "^7.1.1",
 		"@types/mocha": "^5.2.7",
 		"@types/node": "^12.11.7",
+		"@types/node-fetch": "^2.5.4",
 		"@types/vscode": "^1.41.0",
 		"glob": "^7.1.5",
 		"mocha": "^6.2.2",
@@ -74,6 +75,7 @@
 		"vscode-test": "^1.2.2"
 	},
 	"dependencies": {
-		"client-oauth2": "^4.2.5"
+		"client-oauth2": "^4.2.5",
+		"node-fetch": "^2.6.0"
 	}
 }
