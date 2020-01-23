@@ -1,5 +1,7 @@
-import * as ejs from "ejs";
+import * as fs from "fs";
+import * as handlebars from "handlebars";
 import * as path from "path";
+import * as util from "util";
 import * as vscode from "vscode";
 import TMC from "./api/tmc";
 import UI from "./ui/ui";
@@ -23,8 +25,8 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
     }, tmc.isAuthenticated());
 
     // Displays the login webview
-    ui.treeDP.registerAction("login", () => {
-        ui.webview.setContent(getTemplate(extensionContext, "login", {error: undefined}));
+    ui.treeDP.registerAction("login", async () => {
+        ui.webview.setContent(await getTemplate(extensionContext, "login", {error: undefined}));
     }, !tmc.isAuthenticated());
 
     // Receives a login information from the webview, attempts to log in
@@ -39,7 +41,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
             ui.webview.setContent("Logged in.");
         } else {
             console.log("Login failed: " + result.errorDesc);
-            ui.webview.setContent(getTemplate(extensionContext, "login", {error: result.errorDesc}));
+            ui.webview.setContent(await getTemplate(extensionContext, "login", {error: result.errorDesc}));
         }
     });
 }
@@ -53,11 +55,16 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
  *
  * @returns The HTML document as a string
  */
-function getTemplate(extensionContext: vscode.ExtensionContext, name: string, data: ejs.Data): string {
+async function getTemplate(extensionContext: vscode.ExtensionContext, name: string, data: any): Promise<string> {
 
+    const p = path.join(extensionContext.extensionPath, "resources/templates/" + name + ".html");
+    const readFile = util.promisify(fs.readFile);
+    const content = await readFile(p, "utf8");
+    const template = handlebars.compile(content);
     data.cssPath = resolvePath(extensionContext, "resources/style.css");
+    data.test = "login";
 
-    return ejs.render(ejs.fileLoader("resources/templates/" + name + ".ejstemplate").toString(), data, {});
+    return template(data);
 }
 
 /**

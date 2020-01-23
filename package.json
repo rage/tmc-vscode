@@ -70,8 +70,7 @@
 		"vscode-test": "^1.2.2"
 	},
 	"dependencies": {
-		"@types/ejs": "^3.0.0",
 		"client-oauth2": "^4.2.5",
-		"ejs": "^3.0.1"
+		"handlebars": "^4.7.2"
 	}
 }
