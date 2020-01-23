@@ -31,9 +31,35 @@ jobs:
         xvfb-run --auto-servernum npm test
       env:
         CI: true
+
+  test_windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        node-version: [10.x]
+        
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v1
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: Lint source
+      run: |
+        npm ci
+        # compile typescript
+        npm run compile
+        # check codestyle
+        npm run tslint
+    - name: Run tests
+      run: |
+        npm test
+      env:
+        CI: true
         
   build_and_upload:
-    needs: [test_linux]
+    needs: [test_linux, test_windows]
     runs-on: [ubuntu-latest]
     strategy:
       matrix:
