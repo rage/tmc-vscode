@@ -1,3 +1,6 @@
+import * as ejs from "ejs";
+import * as path from "path";
+import * as vscode from "vscode";
 import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
@@ -9,7 +12,7 @@ import UI from "./ui/ui";
  * @param ui The User Interface object
  * @param tmc The TMC API object
  */
-export function registerUiActions(ui: UI, tmc: TMC) {
+export function registerUiActions(extensionContext: vscode.ExtensionContext, ui: UI, tmc: TMC) {
 
     // Logs out, closes the webview, hides the logout command, shows the login command
     ui.treeDP.registerAction("logout", () => {
@@ -21,7 +24,7 @@ export function registerUiActions(ui: UI, tmc: TMC) {
 
     // Displays the login webview
     ui.treeDP.registerAction("login", () => {
-        ui.webview.setContent(loginHTML(ui));
+        ui.webview.setContent(getTemplate(extensionContext, "login", {error: undefined}));
     }, !tmc.isAuthenticated());
 
     // Receives a login information from the webview, attempts to log in
@@ -36,39 +39,35 @@ export function registerUiActions(ui: UI, tmc: TMC) {
             ui.webview.setContent(ui.webview.htmlWrap("Logged in."));
         } else {
             console.log("Login failed: " + result.errorDesc);
-            ui.webview.setContent(loginHTML(ui, result.errorDesc));
+            ui.webview.setContent(getTemplate(extensionContext, "login", {error: result.errorDesc}));
         }
     });
 }
 
 /**
- * Temporary helper function, to be replaced with an HTML templating engine
- * @param ui The UI object, could be refactored to not be needed
- * @param error An error message to displayed to the user
+ * Creates an HTML document from a template, with a default CSS applied
+ *
+ * @param extensionContext
+ * @param name Name of the template file to user
+ * @param data Must contain all the variables used in the template
+ *
+ * @returns The HTML document as a string
  */
-function loginHTML(ui: UI, error?: string): string {
-    let errorElement = "";
-    if (error) {
-        errorElement = `<p class="error">${error}</p>`;
-    }
-    return ui.webview.htmlWrap(
-        `<h1>Login</h1>
-        ${errorElement}
-        <form id="loginform">
-        Email or username:<br>
-        <input type="text" id="username"><br>
-        Password:<br>
-        <input type="password" id="password"><br>
-        <input type="submit">
-        <script>
-            const vscode = acquireVsCodeApi();
-            const form = document.getElementById("loginform");
-            const usernameField = document.getElementById("username");
-            const passwordField = document.getElementById("password");
-            form.onsubmit = () => {
-                vscode.postMessage({type: "login", username: usernameField.value, password: passwordField.value});
-                form.reset();
-            }
-        </script>
-        </form>`);
+function getTemplate(extensionContext: vscode.ExtensionContext, name: string, data: ejs.Data): string {
+
+    data.cssPath = resolvePath(extensionContext, "resources/style.css");
+
+    return ejs.render(ejs.fileLoader("resources/templates/" + name + ".ejstemplate").toString(), data, {});
+}
+
+/**
+ * Creates an absolute path from a relative one for use in webviews
+ *
+ * @param extensionContext
+ * @param relativePath Path to resolve
+ * 
+ * @returns the absolute path
+ */
+function resolvePath(extensionContext: vscode.ExtensionContext, relativePath: string): string {
+    return vscode.Uri.file(path.join(extensionContext.extensionPath, relativePath)).toString().replace("file:", "vscode-resource:");
 }

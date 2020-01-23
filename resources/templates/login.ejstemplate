@@ -1,0 +1,29 @@
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="<%- cssPath %>">
+    </head>
+    <body>
+        <h1>Login</h1>
+        <% if (error) { %>
+            <span class="error"><%= error %></span>
+        <% } %>
+
+        <form id="loginform">
+        Email or username:<br>
+        <input type="text" id="username"><br>
+        Password:<br>
+        <input type="password" id="password"><br>
+        <input type="submit">
+        <script>
+            const vscode = acquireVsCodeApi();
+            const form = document.getElementById("loginform");
+            const usernameField = document.getElementById("username");
+            const passwordField = document.getElementById("password");
+            form.onsubmit = () => {
+                vscode.postMessage({type: "login", username: usernameField.value, password: passwordField.value});
+                form.reset();
+            }
+        </script>
+        </form>
+    </body>
+</html>

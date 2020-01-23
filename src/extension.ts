@@ -19,7 +19,7 @@ export function activate(context: vscode.ExtensionContext) {
     const storage = new Storage(context);
     const tmc = new TMC(storage);
 
-    init.registerUiActions(ui, tmc);
+    init.registerUiActions(context, ui, tmc);
 
     // The command has been defined in the package.json file
     // Now provide the implementation of the command with registerCommand
