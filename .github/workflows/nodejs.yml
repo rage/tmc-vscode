@@ -82,7 +82,7 @@ jobs:
         # use xvfb to render into virtual framebuffer and run tests
         # ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)" < /dev/null 2> /dev/null ; brew install caskroom/cask/brew-cask 2> /dev/null
         brew cask install xquartz
-        xvfb-run --auto-servernum npm test
+        Xvfb :1337 & export DISPLAY=:1337 & npm test
       env:
         CI: true
    
