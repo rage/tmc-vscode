@@ -19,10 +19,6 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "extension.helloWorld",
-				"title": "Hello World"
-			},
-			{
 				"command": "tmcView.activateEntry",
 				"title": "Activate"
 			}
