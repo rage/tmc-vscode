@@ -1,6 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import TmcTDP from "./treeview";
+import TmcMenuTree from "./treeview";
 import {TmcWebview} from "./webview";
 
 /**
@@ -11,7 +11,7 @@ export default class UI {
     /**
      * A TmcTDP object for interacting with the treeview panel
      */
-    public treeDP: TmcTDP = new TmcTDP();
+    public treeDP: TmcMenuTree = new TmcMenuTree("tmcView");
     /**
      * A Webview object for interacting with the main Webview
      */
@@ -23,7 +23,6 @@ export default class UI {
      */
     constructor(extensionContext: vscode.ExtensionContext) {
         this.webview = new TmcWebview(extensionContext);
-        this.initialize();
     }
 
     /**
@@ -33,12 +32,5 @@ export default class UI {
         return (onClick: () => void) => {
             onClick();
         };
-    }
-
-    /**
-     * Registers a tree data provider for VSCode to use to populate the tmc actions treeview
-     */
-    public initialize() {
-        vscode.window.registerTreeDataProvider("tmcView", this.treeDP);
     }
 }

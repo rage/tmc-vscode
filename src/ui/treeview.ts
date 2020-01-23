@@ -1,9 +1,48 @@
 import * as vscode from "vscode";
 
 /**
+ * A class for handling the TMC menu treeview.
+ */
+export default class TmcMenuTree {
+
+    private readonly treeDP: TmcMenuTreeDataProvider;
+
+    /**
+     * Creates and registers a new instance of TMCMenuTree with given viewId.
+     * @param viewId Id of the view passed to `vscode.window.registerTreeDataProvider`
+     */
+    constructor(viewId: string) {
+        this.treeDP = new TmcMenuTreeDataProvider();
+        vscode.window.registerTreeDataProvider(viewId, this.treeDP);
+    }
+
+    /**
+     * Register an action to be shown in the action treeview.
+     * @param label An unique label, displayed in the treeview
+     * @param onClick An action handler
+     * @param visible Determines whether the action should be visible in the treeview
+     */
+    public registerAction(label: string, onClick: () => void, visible: boolean) {
+        // Use internal class
+        this.treeDP.registerAction(label, onClick, visible);
+    }
+
+    /**
+     * Modifies the visibility of a treeview action, refreshing the treeview if needed.
+     * @param label The label of the action to modify
+     * @param visible Whether the action should be visible or not
+     */
+    public setVisibility(label: string, visible: boolean) {
+        // use internal class
+        this.treeDP.setVisibility(label, visible);
+    }
+
+}
+
+/**
  * A class required by VSCode to fulfill the role of a data provider for the action treeview
  */
-export default class TmcTDP implements vscode.TreeDataProvider<TMCAction> {
+class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
 
     /**
      * @implements {vscode.TreeDataProvider<TMCAction>}
@@ -50,10 +89,7 @@ export default class TmcTDP implements vscode.TreeDataProvider<TMCAction> {
     }
 
     /**
-     * Register an action to be shown in the action treeview
-     * @param label An unique label, displayed in the treeview
-     * @param onClick An action handler
-     * @param visible Determines whether the action should be visible in the treeview
+     * Internal logic for TmcMenuTree.registerAction
      */
     public registerAction(label: string, onClick: () => void, visible: boolean) {
         if (this.actions.get(label) !== undefined) {
@@ -67,9 +103,7 @@ export default class TmcTDP implements vscode.TreeDataProvider<TMCAction> {
     }
 
     /**
-     * Modifies the visibility of a treeview action, refreshing the treeview if needed
-     * @param label The label of the action to modify
-     * @param visible Whether the action should be visible or not
+     * Internal logic for TmcMenuTree.registerAction
      */
     public setVisibility(label: string, visible: boolean) {
         const action = this.actions.get(label);
