@@ -19,10 +19,6 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "extension.helloWorld",
-				"title": "Hello World"
-			},
-			{
 				"command": "tmcView.activateEntry",
 				"title": "Activate"
 			}
@@ -74,6 +70,7 @@
 		"vscode-test": "^1.2.2"
 	},
 	"dependencies": {
-		"client-oauth2": "^4.2.5"
+		"client-oauth2": "^4.2.5",
+		"handlebars": "^4.7.2"
 	}
 }
