@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 /**
- * A class for handling the TMC menu treeview.
+ * A class for managing the TMC menu treeview.
  */
 export default class TmcMenuTree {
 
