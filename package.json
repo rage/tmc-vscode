@@ -19,10 +19,6 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "extension.helloWorld",
-				"title": "Hello World"
-			},
-			{
 				"command": "tmcView.activateEntry",
 				"title": "Activate"
 			}
@@ -76,6 +72,7 @@
 	},
 	"dependencies": {
 		"client-oauth2": "^4.2.5",
-		"node-fetch": "^2.6.0"
+    "handlebars": "^4.7.2",
+    "node-fetch": "^2.6.0"
 	}
 }
