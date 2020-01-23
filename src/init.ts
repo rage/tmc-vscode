@@ -36,7 +36,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
             console.log("Logged in successfully");
             ui.treeDP.setVisibility("login", false);
             ui.treeDP.setVisibility("logout", true);
-            ui.webview.setContent(ui.webview.htmlWrap("Logged in."));
+            ui.webview.setContent("Logged in.");
         } else {
             console.log("Login failed: " + result.errorDesc);
             ui.webview.setContent(getTemplate(extensionContext, "login", {error: result.errorDesc}));
