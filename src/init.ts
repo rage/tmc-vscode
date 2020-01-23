@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as handlebars from "handlebars";
 import * as path from "path";
-import * as util from "util";
 import * as vscode from "vscode";
 import TMC from "./api/tmc";
 import UI from "./ui/ui";
@@ -26,7 +25,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
 
     // Displays the login webview
     ui.treeDP.registerAction("login", async () => {
-        ui.webview.setContent(await getTemplate(extensionContext, "login", {error: undefined}));
+        ui.webview.setContent(await getTemplate(extensionContext, "login"));
     }, !tmc.isAuthenticated());
 
     // Receives a login information from the webview, attempts to log in
@@ -55,12 +54,13 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
  *
  * @returns The HTML document as a string
  */
-async function getTemplate(extensionContext: vscode.ExtensionContext, name: string, data: any): Promise<string> {
+async function getTemplate(extensionContext: vscode.ExtensionContext, name: string, data?: any): Promise<string> {
 
     const p = path.join(extensionContext.extensionPath, "resources/templates/" + name + ".html");
-    const readFile = util.promisify(fs.readFile);
-    const content = await readFile(p, "utf8");
-    const template = handlebars.compile(content);
+    const template = handlebars.compile(fs.readFileSync(p, "utf8"));
+    if (!data) {
+        data = {};
+    }
     data.cssPath = resolvePath(extensionContext, "resources/style.css");
     data.test = "login";
 
