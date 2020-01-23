@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 
 /**
- * A class for handling the Webview component of the plugin UI, to be used through the UI class
+ * A class for managing the Webview component of the plugin UI, to be used through the UI class
  */
-export class TmcWebview {
+export default class TmcWebview {
 
     private extensionContext: vscode.ExtensionContext;
     private messageHandlers: Map<string, (msg: any) => void> = new Map();

@@ -1,7 +1,6 @@
-import * as path from "path";
 import * as vscode from "vscode";
 import TmcMenuTree from "./treeview";
-import {TmcWebview} from "./webview";
+import TmcWebview from "./webview";
 
 /**
  * A class for interacting with the user through graphical means
@@ -11,7 +10,7 @@ export default class UI {
     /**
      * A TmcTDP object for interacting with the treeview panel
      */
-    public treeDP: TmcMenuTree = new TmcMenuTree("tmcView");
+    public treeDP: TmcMenuTree;
     /**
      * A Webview object for interacting with the main Webview
      */
@@ -23,6 +22,7 @@ export default class UI {
      */
     constructor(extensionContext: vscode.ExtensionContext) {
         this.webview = new TmcWebview(extensionContext);
+        this.treeDP = new TmcMenuTree("tmcView");
     }
 
     /**
