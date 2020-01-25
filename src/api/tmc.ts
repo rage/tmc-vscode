@@ -147,7 +147,7 @@ type CourseDetails = {
     };
 };
 
-// This is could be missing some fields, doesn't entirely match the description in the API docs
+// TODO: use runtime typechecking to verify correctness of this and other types
 type Exercise = {
     id: number;
     name: string;
@@ -170,6 +170,9 @@ type Exercise = {
     valgrind_strategy: string;
     code_review_requests_enabled: boolean;
     run_tests_locally_action_enabled: boolean;
+    latest_submission_url?: string;
+    latest_submission_id?: number;
+    solution_zip_url?: string;
 };
 
 type Organization = {
