@@ -55,9 +55,13 @@
 		"watch": "tsc -watch -p ./",
 		"pretest": "npm run compile",
 		"test": "node ./out/test/runTest.js",
-		"tslint": "tslint --project ."
+		"tslint": "tslint --project .",
+		"postinstall": "babel node_modules/ts-results --out-dir node_modules/ts-results --plugins=@babel/plugin-transform-modules-commonjs"
 	},
 	"devDependencies": {
+		"@babel/cli": "^7.8.3",
+		"@babel/core": "^7.8.3",
+		"@babel/plugin-transform-modules-commonjs": "^7.8.3",
 		"@types/glob": "^7.1.1",
 		"@types/mocha": "^5.2.7",
 		"@types/node": "^12.11.7",
@@ -73,6 +77,7 @@
 	"dependencies": {
 		"client-oauth2": "^4.2.5",
 		"handlebars": "^4.7.2",
-		"node-fetch": "^2.6.0"
+		"node-fetch": "^2.6.0",
+		"ts-results": "^2.0.1"
 	}
 }

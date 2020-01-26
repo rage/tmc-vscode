@@ -2,6 +2,9 @@ import ClientOauth2 = require("client-oauth2");
 import * as fetch from "node-fetch";
 import Storage from "../config/storage";
 
+import { Err, Ok, Result } from "ts-results";
+import { ApiError, AuthenticationError, ConnectionError } from "../errors";
+
 /**
  * A Class for interacting with the TestMyCode service, including authentication
  */
@@ -33,7 +36,7 @@ export default class TMC {
      * @param password Password
      * @returns A boolean determining success, and a human readable error description.
      */
-    public async authenticate(username: string, password: string): Promise<{success: boolean, errorDesc: string}> {
+    public async authenticate(username: string, password: string): Promise<Result<void, Error>> {
         if (this.token) {
             throw new Error("Authentication token already exists.");
         }
@@ -41,15 +44,15 @@ export default class TMC {
             this.token = await this.oauth2.owner.getToken(username, password);
         } catch (err) {
             if (err.code === "EAUTH") {
-                return {success: false, errorDesc: "Authentication error"};
+                return new Err(new AuthenticationError("Incorrect username and/or password"));
             } else if (err.code === "EUNAVAILABLE") {
-                return {success: false, errorDesc: "Connection error"};
+                return new Err(new ConnectionError("Connection error"));
             }
             console.error(err);
-            return {success: false, errorDesc: "Unknown error"};
+            return new Err(new Error("Unknown error: " + err.code));
         }
         this.storage.updateAuthenticationToken(this.token.data);
-        return {success: true, errorDesc: ""};
+        return Ok.EMPTY;
     }
 
     /**
@@ -71,31 +74,31 @@ export default class TMC {
     /**
      * @returns a list of organizations
      */
-    public async getOrganizations(): Promise<Organization[] | TMCApiError | ConnectionError> {
-        return this.tmcApiRequest("orgs.json") as
-            Promise<Organization[] | TMCApiError | ConnectionError>;
+    public async getOrganizations(): Promise<Result<Organization[], Error>> {
+        const result = await this.tmcApiRequest("orgs.json");
+        return result.ok ? new Ok(result.val as Organization[]) : new Err(result.val);
     }
 
     /**
      * Requires an organization to be selected
      * @returns a list of courses belonging to the currently selected organization
      */
-    public async getCourses(): Promise<Course[] | TMCApiError | ConnectionError> {
+    public async getCourses(): Promise<Result<Course[], Error>> {
         const orgSlug = this.storage.getOrganizationSlug();
         if (!orgSlug) {
             throw new Error("Organization not selected");
         }
-        return this.tmcApiRequest("core/org/" + orgSlug + "/courses") as
-            Promise<Course[] | TMCApiError | ConnectionError>;
+        const result = await this.tmcApiRequest("core/org/" + orgSlug + "/courses");
+        return result.ok ? new Ok(result.val as Course[]) : new Err(result.val);
     }
 
     /**
      * @param id course id
      * @returns a detailed description for the specified course
      */
-    public async getCourseDetails(id: number): Promise<CourseDetails | TMCApiError | ConnectionError> {
-        return this.tmcApiRequest("core/courses/" + id.toString()) as
-            Promise<CourseDetails | TMCApiError | ConnectionError>;
+    public async getCourseDetails(id: number): Promise<Result<CourseDetails, Error>> {
+        const result = await this.tmcApiRequest("core/courses/" + id.toString());
+        return result.ok ? new Ok(result.val as CourseDetails) : new Err(result.val);
     }
 
     /**
@@ -103,7 +106,7 @@ export default class TMC {
      * @param endpoint target API endpoint
      * @param method HTTP method, defaults to GET
      */
-    private async tmcApiRequest(endpoint: string, method?: "get" | "post"): Promise<TMCApiResponse> {
+    private async tmcApiRequest(endpoint: string, method?: "get" | "post"): Promise<Result<TMCApiResponse, Error>> {
         let request = {
             headers: {},
             method: method ? method : "get",
@@ -116,13 +119,11 @@ export default class TMC {
 
         try {
             const response = await fetch.default(request.url, request);
-            if (response.ok) {
-                return response.json();
-            } else {
-                return {statusCode: response.status, statusText: response.statusText};
-            }
+            return response.ok ?
+                new Ok(await response.json() as TMCApiResponse) :
+                new Err(new ApiError(response.status + " - " + response.statusText));
         } catch (error) {
-            return error as ConnectionError;
+            return new Err(new ConnectionError("Connection error: " + error.name));
         }
     }
 }
@@ -182,11 +183,4 @@ type Organization = {
     pinned: boolean;
 };
 
-type TMCApiError = {
-    statusCode: number;
-    statusText: string;
-};
-
-type ConnectionError = fetch.FetchError;
-
-type TMCApiResponse = Organization[] | Course[] | TMCApiError | ConnectionError;
+type TMCApiResponse = Course[] | CourseDetails | Organization[];

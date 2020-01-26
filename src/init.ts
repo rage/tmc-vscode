@@ -5,6 +5,8 @@ import * as vscode from "vscode";
 import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
+import { AuthenticationError } from "./errors";
+
 /**
  * Registers the various actions and handlers required for the user interface to function.
  * Should only be called once.
@@ -33,14 +35,17 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
     ui.webview.registerHandler("login", async (msg: { type: string, username: string, password: string }) => {
         console.log("Logging in as " + msg.username);
         const result = await tmc.authenticate(msg.username, msg.password);
-        if (result.success) {
+        if (result.ok) {
             console.log("Logged in successfully");
             ui.treeDP.setVisibility("login", false);
             ui.treeDP.setVisibility("logout", true);
             ui.webview.setContent("Logged in.");
         } else {
-            console.log("Login failed: " + result.errorDesc);
-            ui.webview.setContent(await getTemplate(extensionContext, "login", {error: result.errorDesc}));
+            console.log("Login failed: " + result.val.message);
+            if (result.val instanceof AuthenticationError) {
+                console.log("auth error");
+            }
+            ui.webview.setContent(await getTemplate(extensionContext, "login", {error: result.val.message}));
         }
     });
 }
