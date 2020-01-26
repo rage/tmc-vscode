@@ -88,7 +88,7 @@ export default class TMC {
         if (!orgSlug) {
             throw new Error("Organization not selected");
         }
-        const result = await this.tmcApiRequest("core/org/" + orgSlug + "/courses");
+        const result = await this.tmcApiRequest(`core/org/${orgSlug}/courses`);
         return result.ok ? new Ok(result.val as Course[]) : new Err(result.val);
     }
 
@@ -97,7 +97,7 @@ export default class TMC {
      * @returns a detailed description for the specified course
      */
     public async getCourseDetails(id: number): Promise<Result<CourseDetails, Error>> {
-        const result = await this.tmcApiRequest("core/courses/" + id.toString());
+        const result = await this.tmcApiRequest(`core/courses/${id}`);
         return result.ok ? new Ok(result.val as CourseDetails) : new Err(result.val);
     }
 
@@ -110,7 +110,7 @@ export default class TMC {
         let request = {
             headers: {},
             method: method ? method : "get",
-            url: "https://tmc.mooc.fi/api/v8/" + endpoint,
+            url: `https://tmc.mooc.fi/api/v8/${endpoint}`,
         };
 
         if (this.token) {
