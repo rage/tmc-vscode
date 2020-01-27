@@ -17,18 +17,19 @@ import { AuthenticationError } from "./errors";
  */
 export function registerUiActions(extensionContext: vscode.ExtensionContext, ui: UI, tmc: TMC) {
 
+    ui.treeDP.registerVisibilityGroup("loggedIn", tmc.isAuthenticated());
+
     // Logs out, closes the webview, hides the logout command, shows the login command
-    ui.treeDP.registerAction("Log out", "logout", () => {
+    ui.treeDP.registerAction("Log out", ["loggedIn"], () => {
         tmc.deauthenticate();
         ui.webview.dispose();
-        ui.treeDP.setVisibility("logout", false);
-        ui.treeDP.setVisibility("login", true);
-    }, tmc.isAuthenticated());
+        ui.treeDP.updateVisibility(["!loggedIn"]);
+    });
 
     // Displays the login webview
-    ui.treeDP.registerAction("Log in", "login", async () => {
+    ui.treeDP.registerAction("Log in", ["!loggedIn"], async () => {
         ui.webview.setContent(await getTemplate(extensionContext, "login"));
-    }, !tmc.isAuthenticated());
+    });
 
     // Receives a login information from the webview, attempts to log in
     // If successful, show the logout command instead of the login one, and a temporary webview page
@@ -37,8 +38,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         const result = await tmc.authenticate(msg.username, msg.password);
         if (result.ok) {
             console.log("Logged in successfully");
-            ui.treeDP.setVisibility("login", false);
-            ui.treeDP.setVisibility("logout", true);
+            ui.treeDP.updateVisibility(["loggedIn"]);
             ui.webview.setContent("Logged in.");
         } else {
             console.log("Login failed: " + result.val.message);

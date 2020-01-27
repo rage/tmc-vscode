@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import Visibility from "./visibility";
 
 /**
  * A class for managing the TMC menu treeview.
@@ -6,6 +7,8 @@ import * as vscode from "vscode";
 export default class TmcMenuTree {
 
     private readonly treeDP: TmcMenuTreeDataProvider;
+    private readonly visibility: Visibility;
+    private nextId: number;
 
     /**
      * Creates and registers a new instance of TMCMenuTree with given viewId.
@@ -14,27 +17,60 @@ export default class TmcMenuTree {
     constructor(viewId: string) {
         this.treeDP = new TmcMenuTreeDataProvider();
         vscode.window.registerTreeDataProvider(viewId, this.treeDP);
+
+        this.visibility = new Visibility();
+        this.nextId = 1;
     }
 
     /**
      * Register an action to be shown in the action treeview.
-     * @param label An unique label, displayed in the treeview
+     *
+     * @param label A label, displayed in the treeview
      * @param onClick An action handler
-     * @param visible Determines whether the action should be visible in the treeview
+     * @param groups Determines when the action should be visible in the treeview
      */
-    public registerAction(label: string, id: string, onClick: () => void, visible: boolean) {
-        // Use internal class
-        this.treeDP.registerAction(label, id, onClick, visible);
+    public registerAction(label: string, groups: string[], onClick: () => void) {
+        const id = (this.nextId++).toString();
+
+        // Use internal classes
+        this.visibility.registerAction(id, groups);
+        this.treeDP.registerAction(label, id, onClick, this.visibility.getVisible(id));
     }
 
     /**
-     * Modifies the visibility of a treeview action, refreshing the treeview if needed.
-     * @param label The label of the action to modify
-     * @param visible Whether the action should be visible or not
+     * Register a visibility group for the action treeview
+     * @param group Name of the group
+     * @param visible Whether the group should start as active or not
      */
-    public setVisibility(id: string, visible: boolean) {
-        // use internal class
-        this.treeDP.setVisibility(id, visible);
+    public registerVisibilityGroup(group: string, visible?: boolean) {
+        // Use internal class
+        this.visibility.registerGroup(group, visible ? visible : false);
+    }
+
+    /**
+     * Update the visibility status of a list of groups
+     * @param groups The groups to be updated, prepend an exclamation mark to disable
+     */
+    public updateVisibility(groups: string[]): void {
+
+        if (new Set(groups.map((group) => group.startsWith("!") ? group.substring(1) : group)).size !== groups.length) {
+            throw new Error("Visibility group list contains duplicates and/or conflicts");
+        }
+
+        let changes: Array<[string, boolean]> = [];
+
+        // Collect changes from each update
+        groups.forEach((group) => {
+            changes = changes.concat(this.visibility.setGroupVisible(group));
+        });
+
+        // Apply changes
+        changes.forEach(([id, isVisible]) => this.treeDP.setVisibility(id, isVisible));
+
+        // Refresh if necessary
+        if (changes.length > 0) {
+            this.treeDP.refresh();
+        }
     }
 
 }
@@ -93,7 +129,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
      */
     public registerAction(label: string, id: string, onClick: () => void, visible: boolean) {
         if (this.actions.get(label) !== undefined) {
-            return;
+            throw new Error("Action already registered");
         }
         this.actions.set(id, {
             action: new TMCAction(label,
@@ -109,17 +145,16 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
         const action = this.actions.get(id);
 
         if (action) {
-            if (action.visible !== visible) {
-                action.visible = visible;
-                this.refresh();
-            }
+            action.visible = visible;
+        } else {
+            throw new Error("Visibility logic very badly broken.");
         }
     }
 
     /**
      * Triggers a treeview refresh
      */
-    private refresh(): void {
+    public refresh() {
         this.refreshEventEmitter.fire();
     }
 }

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import TmcMenuTree from "./treeview";
+import TmcMenuTree from "./treeview/treeview";
 import TmcWebview from "./webview";
 
 /**
