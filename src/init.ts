@@ -16,6 +16,13 @@ import { AuthenticationError } from "./errors";
  * @param tmc The TMC API object
  */
 export function registerUiActions(extensionContext: vscode.ExtensionContext, ui: UI, tmc: TMC) {
+    // Register handlebars helper function to resolve full logo paths
+    // or switch to an existing placeholder image.
+    handlebars.registerHelper("resolve_logo_path", (logoPath: string) => {
+        return (!logoPath.endsWith("missing.png"))
+            ? `https://tmc.mooc.fi${logoPath}`
+            : "https://tmc.mooc.fi/logos/small_logo/missing.png";
+    });
 
     ui.treeDP.registerVisibilityGroup("loggedIn", tmc.isAuthenticated());
 
@@ -29,6 +36,21 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
     // Displays the login webview
     ui.treeDP.registerAction("Log in", ["!loggedIn"], async () => {
         ui.webview.setContent(await getTemplate(extensionContext, "login"));
+    });
+
+    // Displays the organization webview
+    ui.treeDP.registerAction("Organization", ["loggedIn"], async () => {
+        const result = await tmc.getOrganizations();
+        if (result.ok) {
+            console.log("Courses loaded");
+            const organizations = result.unwrap();
+                // .map((org): object => ({ ...org, logo_path: `https://tmc.mooc.fi${org.logo_path}`}));
+            console.log(organizations);
+            const data = { organizations };
+            ui.webview.setContent(await getTemplate(extensionContext, "organization", data));
+        } else {
+            console.log("Fetching organizations failed: " + result.val.message);
+        }
     });
 
     // Receives a login information from the webview, attempts to log in
@@ -61,7 +83,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
  */
 async function getTemplate(extensionContext: vscode.ExtensionContext, name: string, data?: any): Promise<string> {
 
-    const p = path.join(extensionContext.extensionPath, "resources/templates/" + name + ".html");
+    const p = path.join(extensionContext.extensionPath, `resources/templates/${name}.html`);
     const template = handlebars.compile(fs.readFileSync(p, "utf8"));
     if (!data) {
         data = {};

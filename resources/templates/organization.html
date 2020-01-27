@@ -1,0 +1,27 @@
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+    </head>
+    <body>
+        <h1>Organizations</h1>
+        <table>
+            <thead>
+                <tr>
+                    <td><strong>Logo</strong></td>
+                    <td><strong>Organizations</strong></td>
+                </tr>
+            </thead>
+            <tbody class="organizations">
+                {{#each organizations}}
+                    <tr>
+                        <td><img src="{{resolve_logo_path this.logo_path}}" /></td>
+                        <td>
+                            {{this.name}}
+                            <script>chooseOrganization()</script>
+                        </td>
+                    </tr>
+                {{/each}}
+            </tbody>
+        </table>
+    </body>
+</html>
