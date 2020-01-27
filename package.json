@@ -51,8 +51,8 @@
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -p ./",
-		"watch": "tsc -watch -p ./",
+		"compile": "ttsc -p ./",
+		"watch": "ttsc -watch -p ./",
 		"pretest": "npm run compile",
 		"test": "node ./out/test/runTest.js",
 		"tslint": "tslint --project .",
@@ -70,8 +70,10 @@
 		"glob": "^7.1.5",
 		"mocha": "^6.2.2",
 		"tslint": "^5.20.0",
+		"ttypescript": "^1.5.10",
 		"typemoq": "^2.1.0",
 		"typescript": "^3.6.4",
+		"typescript-is": "^0.13.1",
 		"vscode-test": "^1.2.2"
 	},
 	"dependencies": {
