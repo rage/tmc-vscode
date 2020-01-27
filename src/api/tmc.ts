@@ -75,7 +75,7 @@ export default class TMC {
     /**
      * @returns a list of organizations
      */
-    public async getOrganizations(): Promise<Result<Organization[], Error>> {
+    public getOrganizations(): Promise<Result<Organization[], Error>> {
         return this.checkApiResponse(this.tmcApiRequest("org.json"), createIs<Organization[]>());
     }
 
@@ -83,7 +83,7 @@ export default class TMC {
      * Requires an organization to be selected
      * @returns a list of courses belonging to the currently selected organization
      */
-    public async getCourses(): Promise<Result<Course[], Error>> {
+    public getCourses(): Promise<Result<Course[], Error>> {
         const orgSlug = this.storage.getOrganizationSlug();
         if (!orgSlug) {
             throw new Error("Organization not selected");
@@ -95,7 +95,7 @@ export default class TMC {
      * @param id course id
      * @returns a detailed description for the specified course
      */
-    public async getCourseDetails(id: number): Promise<Result<CourseDetails, Error>> {
+    public getCourseDetails(id: number): Promise<Result<CourseDetails, Error>> {
         return this.checkApiResponse(this.tmcApiRequest(`core/courses/${id}`), createIs<CourseDetails>());
     }
 
