@@ -1,5 +1,5 @@
 
-class BaseError {
+class BaseError implements Error {
     public readonly name: string = "BaseError";
     public message: string;
     constructor(message?: string) {
@@ -7,18 +7,18 @@ class BaseError {
     }
 }
 
-export class ConnectionError extends BaseError implements Error {
+export class ConnectionError extends BaseError {
     public readonly name = "ConnectionError";
 }
 
-export class AuthenticationError extends BaseError implements Error {
+export class AuthenticationError extends BaseError {
     public readonly name = "AuthenticationError";
 }
 
-export class ApiError extends BaseError implements Error {
+export class ApiError extends BaseError {
     public readonly name = "ApiError";
 }
 
-export class AuthorizationError extends BaseError implements Error {
+export class AuthorizationError extends BaseError {
     public readonly name = "AuthorizationError";
 }
