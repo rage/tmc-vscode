@@ -6,6 +6,12 @@
 		"lib": [
 			"es6"
 		],
+		"plugins": [
+			{
+				"transform": "typescript-is/lib/transform-inline/transformer",
+				"disallowSuperfluousObjectProperties": true
+			}
+		],
 		"sourceMap": true,
 		"rootDir": "src",
 		"strict": true   /* enable all strict type-checking options */

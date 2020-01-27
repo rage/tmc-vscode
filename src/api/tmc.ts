@@ -3,7 +3,8 @@ import * as fetch from "node-fetch";
 import Storage from "../config/storage";
 
 import { Err, Ok, Result } from "ts-results";
-import { ApiError, AuthenticationError, ConnectionError } from "../errors";
+import { createIs, is } from "typescript-is";
+import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -74,31 +75,48 @@ export default class TMC {
     /**
      * @returns a list of organizations
      */
-    public async getOrganizations(): Promise<Result<Organization[], Error>> {
-        const result = await this.tmcApiRequest("orgs.json");
-        return result.ok ? new Ok(result.val as Organization[]) : new Err(result.val);
+    public getOrganizations(): Promise<Result<Organization[], Error>> {
+        return this.checkApiResponse(this.tmcApiRequest("org.json"), createIs<Organization[]>());
     }
 
     /**
      * Requires an organization to be selected
      * @returns a list of courses belonging to the currently selected organization
      */
-    public async getCourses(): Promise<Result<Course[], Error>> {
+    public getCourses(): Promise<Result<Course[], Error>> {
         const orgSlug = this.storage.getOrganizationSlug();
         if (!orgSlug) {
             throw new Error("Organization not selected");
         }
-        const result = await this.tmcApiRequest(`core/org/${orgSlug}/courses`);
-        return result.ok ? new Ok(result.val as Course[]) : new Err(result.val);
+        return this.checkApiResponse(this.tmcApiRequest(`core/org/${orgSlug}/courses`), createIs<Course[]>());
     }
 
     /**
      * @param id course id
      * @returns a detailed description for the specified course
      */
-    public async getCourseDetails(id: number): Promise<Result<CourseDetails, Error>> {
-        const result = await this.tmcApiRequest(`core/courses/${id}`);
-        return result.ok ? new Ok(result.val as CourseDetails) : new Err(result.val);
+    public getCourseDetails(id: number): Promise<Result<CourseDetails, Error>> {
+        return this.checkApiResponse(this.tmcApiRequest(`core/courses/${id}`), createIs<CourseDetails>());
+    }
+
+    /**
+     * Unwraps the response, checks the type, and rewraps it with the type error possibly included
+     *
+     * Note that the current type checking method requires the type checker to be passed as a parameter
+     * to allow the correct type predicates to be generated during compilation
+     *
+     * @param response The response to be typechecked
+     * @param typechecker The type checker to be used
+     *
+     * @returns A type checked response
+     */
+    private async checkApiResponse<T>(response: Promise<Result<TMCApiResponse, Error>>,
+                                      checker: (object: any) => object is T): Promise<Result<T, Error>> {
+        const result = await response;
+        if (result.ok) {
+            return checker(result.val) ? new Ok(result.val) : new Err(new ApiError("Incorrect response type"));
+        }
+        return new Err(result.val);
     }
 
     /**
@@ -119,9 +137,23 @@ export default class TMC {
 
         try {
             const response = await fetch.default(request.url, request);
-            return response.ok ?
-                new Ok(await response.json() as TMCApiResponse) :
-                new Err(new ApiError(response.status + " - " + response.statusText));
+            if (response.ok) {
+                try {
+                    const responseObject = await response.json();
+                    if (is<TMCApiResponse>(responseObject)) {
+                        return new Ok(responseObject);
+                    }
+                    console.error("Unexpected TMC response type: ");
+                    console.error(responseObject);
+                    return new Err(new ApiError("Unexpected response type"));
+                } catch (error) {
+                    return new Err(new ApiError("Response not in JSON format: " + error.name));
+                }
+            }
+            if (response.status === 403) {
+                return new Err(new AuthorizationError("403 - Forbidden"));
+            }
+            return new Err(new ApiError(response.status + " - " + response.statusText));
         } catch (error) {
             return new Err(new ConnectionError("Connection error: " + error.name));
         }
@@ -147,7 +179,6 @@ type CourseDetails = {
     };
 };
 
-// TODO: use runtime typechecking to verify correctness of this and other types
 type Exercise = {
     id: number;
     name: string;
