@@ -53,6 +53,10 @@ export default class TmcMenuTree {
      */
     public updateVisibility(groups: string[]): void {
 
+        if (new Set(groups.map((group) => group.startsWith("!") ? group.substring(1) : group)).size !== groups.length) {
+            throw new Error("Visibility group list contains duplicates and/or conflicts");
+        }
+
         let changes: Array<[string, boolean]> = [];
 
         // Collect changes from each update
