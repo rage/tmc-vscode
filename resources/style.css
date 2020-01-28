@@ -1,3 +1,30 @@
 .error {
     color: red;
 }
+
+.orgRow {
+    padding: 10px 0px;
+    margin-bottom: 10px;
+    min-height: 115px;
+}
+
+.orgRow:hover {
+    background-color: rgb(219, 218, 218);
+    cursor: pointer;
+}
+
+.orgImg {
+    max-width: 100px;
+    max-height: 100px;
+    margin: 0 auto;
+    display: block;
+}
+
+.orgHeader {
+    padding: 20px 0px;
+}
+
+.border-dark {
+    border: 1px solid black !important;
+    border-radius: 5px;
+}
