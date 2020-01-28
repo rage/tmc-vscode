@@ -19,7 +19,7 @@ export default class TMC {
     private oauth2: ClientOauth2;
     private token: ClientOauth2.Token | undefined;
     private storage: Storage;
-    private dataPath: string;
+    private dataPath: string; // TODO: Use resource class to manage course downloads
 
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
@@ -113,7 +113,11 @@ export default class TMC {
     public async downloadExercise(id: number): Promise<Result<string, Error>> {
         const result = await downloadFile(`https://tmc.mooc.fi/exercises/${id}.zip`, `${this.dataPath}/${id}.zip`);
         if (result.ok) {
-            this.executeLangsAction("extract-project", this.dataPath + "/" + id, `${this.dataPath}/${id}.zip`);
+            this.executeLangsAction({
+                action: "extract-project",
+                exercisePath: `${this.dataPath}/${id}.zip`,
+                outputPath: `${this.dataPath}/${id}`,
+            });
             return new Ok(`${this.dataPath}/${id}`);
         }
         return new Err(result.val);
@@ -121,13 +125,15 @@ export default class TMC {
 
     /**
      * Executes external tmc-langs process with given arguments.
+     * @param tmcLangsAction Tmc-langs command and arguments
      */
-    private async executeLangsAction(action: "extract-project" | "compress-project" | "run-tests",
-                                     outputPath: string, exercisePath?: string): Promise<any> {
+    private async executeLangsAction(tmcLangsAction: TmcLangsAction): Promise<any> {
+        const { action, exercisePath, outputPath } = tmcLangsAction;
 
-        const jarPath = this.dataPath + "/tmc-langs.jar";
-        const arg0 = exercisePath ? "--exercisePath=" + exercisePath : "";
-        const arg1 = "--outputPath=" + outputPath;
+        const jarPath = `"${this.dataPath}/tmc-langs.jar"`;
+        const arg0 = (exercisePath) ? `--exercisePath="${exercisePath}"` : "";
+        const arg1 = `--outputPath="${outputPath}"`;
+
         console.log(`java -jar ${jarPath} ${action} ${arg0} ${arg1}`);
         cp.execSync(`java -jar ${jarPath} ${action} ${arg0} ${arg1}`);
 
@@ -200,3 +206,9 @@ export default class TMC {
         }
     }
 }
+
+type TmcLangsAction = {
+    action: "extract-project" | "compress-project" | "run-tests",
+    outputPath: string,
+    exercisePath?: string,
+};
