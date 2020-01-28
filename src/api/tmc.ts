@@ -1,10 +1,14 @@
+import * as cp from "child_process";
 import ClientOauth2 = require("client-oauth2");
+import * as fs from "fs";
 import * as fetch from "node-fetch";
+import * as vscode from "vscode";
 import Storage from "../config/storage";
 
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
+import { downloadFile } from "../utils";
 import { Course, CourseDetails, Organization, TMCApiResponse } from "./types";
 
 /**
@@ -15,11 +19,12 @@ export default class TMC {
     private oauth2: ClientOauth2;
     private token: ClientOauth2.Token | undefined;
     private storage: Storage;
+    private dataPath: string;
 
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage) {
+    constructor(storage: Storage, extensionContext: vscode.ExtensionContext) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: "https://tmc.mooc.fi/oauth/token",
             clientId: "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0",
@@ -30,6 +35,7 @@ export default class TMC {
         if (authToken) {
             this.token = new ClientOauth2.Token(this.oauth2, authToken);
         }
+        this.dataPath = extensionContext.globalStoragePath + "/tmcdata";
     }
 
     /**
@@ -98,6 +104,33 @@ export default class TMC {
      */
     public getCourseDetails(id: number): Promise<Result<CourseDetails, Error>> {
         return this.checkApiResponse(this.tmcApiRequest(`core/courses/${id}`), createIs<CourseDetails>());
+    }
+
+    public async downloadExercise(id: number): Promise<Result<string, Error>> {
+        const result = await downloadFile(`https://tmc.mooc.fi/exercises/${id}.zip`, `${this.dataPath}/${id}.zip`);
+        if (result.ok) {
+            this.executeLangsAction("extract-project", this.dataPath + "/" + id, `${this.dataPath}/${id}.zip`);
+            return new Ok(`${this.dataPath}/${id}`);
+        }
+        return new Err(result.val);
+    }
+
+    private async executeLangsAction(action: "extract-project" | "compress-project" | "run-tests",
+                                     outputPath: string, exercisePath?: string): Promise<any> {
+
+        const jarPath = this.dataPath + "/tmc-langs.jar";
+        const arg0 = exercisePath ? "--exercisePath=" + exercisePath : "";
+        const arg1 = "--outputPath=" + outputPath;
+        console.log(`java -jar ${jarPath} ${action} ${arg0} ${arg1}`);
+        cp.execSync(`java -jar ${jarPath} ${action} ${arg0} ${arg1}`);
+
+        if (action === "extract-project" || action === "compress-project") {
+            return {};
+        }
+
+        const result = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+
+        return result;
     }
 
     /**

@@ -37,5 +37,5 @@ export async function downloadFile(url: string, filePath: string, headers?: any)
 }
 
 export async function openFolder(folderPath: string) {
-    await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(folderPath));;
+    await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(folderPath));
 }
