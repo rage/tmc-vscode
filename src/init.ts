@@ -5,7 +5,6 @@ import * as vscode from "vscode";
 import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
-import { Organization } from "./api/types";
 import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
 
