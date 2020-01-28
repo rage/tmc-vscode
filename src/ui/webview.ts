@@ -69,6 +69,7 @@ export default class TmcWebview {
                 }
             },
                 this, this.extensionContext.subscriptions);
+            this.panel.iconPath = vscode.Uri.file(this.extensionContext.asAbsolutePath("media/TMC.svg"));
         }
         return this.panel;
     }
