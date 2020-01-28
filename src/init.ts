@@ -41,13 +41,21 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
 
     // Displays the organization webview
     ui.treeDP.registerAction("Organization", ["loggedIn"], async () => {
+        function organizationReducer(reduced: [Organization[], Organization[]], next: Organization) {
+            if (next.pinned) {
+                reduced[0] = reduced[0].concat(next);
+            } else {
+                reduced[1] = reduced[1].concat(next);
+            }
+            return reduced;
+        }
         const result = await tmc.getOrganizations();
         if (result.ok) {
             console.log("Courses loaded");
-            const organizations = result.unwrap();
+            const [pinned, unpinned] = result.unwrap().reduce(organizationReducer, [[], []]);
             //    .map((org): Organization => ({ ...org, logo_path: `https://tmc.mooc.fi${org.logo_path}`}));
-            console.log(organizations);
-            const data = { organizations };
+
+            const data = { pinned, unpinned };
             ui.webview.setContent(await getTemplate(extensionContext, "organization", data));
         } else {
             console.log("Fetching organizations failed: " + result.val.message);
@@ -90,6 +98,7 @@ async function getTemplate(extensionContext: vscode.ExtensionContext, name: stri
         data = {};
     }
     data.cssPath = resolvePath(extensionContext, "resources/style.css");
+    data.bootstrapPath = resolvePath(extensionContext, "resources/bootstrap.min.css");
     data.test = "login";
 
     return template(data);

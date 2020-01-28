@@ -1,27 +1,37 @@
 <html>
     <head>
         <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
     </head>
     <body>
-        <h1>Organizations</h1>
-        <table>
-            <thead>
-                <tr>
-                    <td><strong>Logo</strong></td>
-                    <td><strong>Organizations</strong></td>
-                </tr>
-            </thead>
-            <tbody class="organizations">
-                {{#each organizations}}
-                    <tr>
-                        <td><img src="{{resolve_logo_path this.logo_path}}" /></td>
-                        <td>
-                            {{this.name}}
-                            <script>chooseOrganization()</script>
-                        </td>
-                    </tr>
-                {{/each}}
-            </tbody>
-        </table>
+        <div class="container container-fluid">
+        <div id="pinned">
+            <h1 class="orgHeader">Frequently used organizations</h1 c>
+            {{#each pinned}}
+                <div class="row orgRow border-dark">
+                    <div class="col-md-1">
+                        <img class="img-thumbnail" src="{{resolve_logo_path this.logo_path}}" />
+                    </div>
+                    <div class="col-md-11">
+                        <h3>{{this.name}} <small class="text-muted">({{this.slug}})</small></h3>
+                        <p>{{this.information}}</p>
+                    </div>
+                </div>
+            {{/each}}
+        </div>
+
+        <div id="unpinned">
+            <h1 class="orgHeader">Organizations</h1>
+            {{#each unpinned}}
+                <div class="row orgRow border-dark">
+                    <div class="col-md-1"><img class="img-thumbnail" src="{{resolve_logo_path this.logo_path}}" /></div>
+                    <div class="col-md-11">
+                        <h4>{{this.name}} <small class="text-muted">({{this.slug}})</small></h4>
+                        <p>{{this.information}}</p>
+                    </div>
+                </div>
+            {{/each}}
+        </div>
+    </div>
     </body>
 </html>

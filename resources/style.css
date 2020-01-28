@@ -1,3 +1,17 @@
 .error {
     color: red;
 }
+
+.orgRow {
+    padding: 10px 0px;
+    margin-bottom: 10px;
+}
+
+.orgHeader {
+    padding: 20px 0px;
+}
+
+.border-dark {
+    border: 1px solid black !important;
+    border-radius: 5px;
+}
