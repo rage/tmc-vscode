@@ -28,8 +28,8 @@
             </div>
             
             <div id="unpinned">
-                <h1 class="orgHeader">Organizations</h1>
-                {{#each unpinned}}
+                <h1 class="orgHeader">All organizations</h1>
+                {{#each organizations}}
                     <div class="row orgRow border-dark" onclick="sendOrganization('{{this.slug}}')">
                         <div class="col-md-2">
                             <img class="img-fluid orgImg" src="{{resolve_logo_path this.logo_path}}" />

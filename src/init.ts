@@ -46,9 +46,9 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
 
         if (result.ok) {
             console.log("Courses loaded");
-            const pinned = result.val.filter((organization) => organization.pinned);
-            const unpinned = result.val.filter((organization) => !organization.pinned);
-            const data = { pinned, unpinned };
+            const organizations = result.val.sort((org1, org2) => org1.name.localeCompare(org2.name));
+            const pinned = organizations.filter((organization) => organization.pinned);
+            const data = { organizations, pinned };
             ui.webview.setContent(await getTemplate(extensionContext, "organization", data));
         } else {
             console.log("Fetching organizations failed: " + result.val.message);
