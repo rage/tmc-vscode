@@ -111,7 +111,7 @@ export default class TMC {
      * @param id Id of the exercise to download
      */
     public async downloadExercise(id: number): Promise<Result<string, Error>> {
-        const result = await downloadFile(`https://tmc.mooc.fi/exercises/${id}.zip`, `${this.dataPath}/${id}.zip`);
+        const result = await downloadFile(`https://tmc.mooc.fi/api/v8/core/exercises/${id}/download`, `${this.dataPath}/${id}.zip`);
         if (result.ok) {
             this.executeLangsAction({
                 action: "extract-project",
