@@ -42,19 +42,12 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
 
     // Displays the organization webview
     ui.treeDP.registerAction("Organization", ["loggedIn"], async () => {
-        function organizationReducer(reduced: [Organization[], Organization[]], next: Organization) {
-            if (next.pinned) {
-                reduced[0] = reduced[0].concat(next);
-            } else {
-                reduced[1] = reduced[1].concat(next);
-            }
-            return reduced;
-        }
         const result = await tmc.getOrganizations();
+
         if (result.ok) {
             console.log("Courses loaded");
-            const [pinned, unpinned] = result.unwrap().reduce(organizationReducer, [[], []]);
-
+            const pinned = result.val.filter((organization) => organization.pinned);
+            const unpinned = result.val.filter((organization) => !organization.pinned);
             const data = { pinned, unpinned };
             ui.webview.setContent(await getTemplate(extensionContext, "organization", data));
         } else {
