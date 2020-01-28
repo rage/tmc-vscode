@@ -5,10 +5,10 @@ import * as vscode from "vscode";
 import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
+import { Err, Ok, Result } from "ts-results";
 import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
 import { downloadFile } from "./utils";
-import { Result, Ok, Err } from "ts-results";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
