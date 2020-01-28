@@ -1,0 +1,29 @@
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+
+        <script>
+            const vscode = acquireVsCodeApi();
+            function sendCourse(id) {
+                vscode.postMessage({ type: "setCourse", id });
+            }
+            
+        </script>
+    </head>
+    <body>
+        <div class="container container-fluid">
+            <div id="pinned">
+                <h1 class="orgHeader">Courses</h1 c>
+                {{#each courses}}
+                    <div class="row orgRow border-dark" onclick="sendCourse('{{this.id}}')">
+                        <div class="col-md">
+                            <h3>{{this.title}} <small class="text-muted">({{this.name}})</small></h3>
+                            <p>{{this.description}}</p>
+                        </div>
+                    </div>
+                {{/each}}
+            </div>
+        </div>
+    </body>
+</html>

@@ -54,6 +54,20 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         }
     });
 
+    // Displays the course webview
+    ui.treeDP.registerAction("Courses", ["loggedIn"], async () => {
+        const result = await tmc.getCourses();
+
+        if (result.ok) {
+            console.log("Courses loaded");
+            const courses = result.val.sort((course1, course2) => course1.name.localeCompare(course2.name));
+            const data = { courses };
+            ui.webview.setContent(await getTemplate(extensionContext, "course", data));
+        } else {
+            console.log("Fetching courses failed: " + result.val.message);
+        }
+    });
+
     // Receives a login information from the webview, attempts to log in
     // If successful, show the logout command instead of the login one, and a temporary webview page
     ui.webview.registerHandler("login", async (msg: { type: string, username: string, password: string }) => {
