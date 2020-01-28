@@ -8,6 +8,7 @@ import UI from "./ui/ui";
 import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
 import { downloadFile } from "./utils";
+import { Result, Ok, Err } from "ts-results";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -85,7 +86,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
  *
  * @param extensionContext Extension context
  */
-export function firstTimeInitialization(extensionContext: vscode.ExtensionContext) {
+export async function firstTimeInitialization(extensionContext: vscode.ExtensionContext): Promise<Result<void, Error>> {
 
     const basePath = extensionContext.globalStoragePath;
     const tmcDataPath = path.join(basePath, "tmcdata");
@@ -102,10 +103,15 @@ export function firstTimeInitialization(extensionContext: vscode.ExtensionContex
     }
 
     if (!fs.existsSync(tmcLangsPath)) {
-        downloadFile("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
+        const result = await downloadFile("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
             tmcLangsPath);
+        if (result.err) {
+            return new Err(result.val);
+        }
         console.log("tmc-langs.jar downloaded");
     }
+
+    return Ok.EMPTY;
 }
 
 /**

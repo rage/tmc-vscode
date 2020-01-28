@@ -5,19 +5,24 @@ import TMC from "./api/tmc";
 import Storage from "./config/storage";
 import UI from "./ui/ui";
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 
     console.log('Congratulations, your extension "tmc-vscode" is now active!');
 
-    init.firstTimeInitialization(context);
+    const result = await init.firstTimeInitialization(context);
+    if (result.ok) {
+        const ui = new UI(context);
+        const storage = new Storage(context);
+        const tmc = new TMC(storage);
 
-    const ui = new UI(context);
-    const storage = new Storage(context);
-    const tmc = new TMC(storage);
+        init.registerUiActions(context, ui, storage, tmc);
 
-    init.registerUiActions(context, ui, storage, tmc);
-
-    context.subscriptions.push(vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()));
+        context.subscriptions.push(
+            vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
+        );
+    } else {
+        vscode.window.showErrorMessage("Something broke: " + result.val.message);
+    }
 }
 
 export function deactivate() {}
