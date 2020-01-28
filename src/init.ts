@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
+import { Organization } from "./api/types";
 import { AuthenticationError } from "./errors";
 
 /**
@@ -44,7 +45,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         if (result.ok) {
             console.log("Courses loaded");
             const organizations = result.unwrap();
-                // .map((org): object => ({ ...org, logo_path: `https://tmc.mooc.fi${org.logo_path}`}));
+            //    .map((org): Organization => ({ ...org, logo_path: `https://tmc.mooc.fi${org.logo_path}`}));
             console.log(organizations);
             const data = { organizations };
             ui.webview.setContent(await getTemplate(extensionContext, "organization", data));
