@@ -8,15 +8,16 @@
             function sendCourse(id) {
                 vscode.postMessage({ type: "setCourse", id });
             }
-            
         </script>
     </head>
+
     <body>
         <div class="container container-fluid">
             <div class="orgHeader">
                 <h1>{{organization.name}}</h1>
                 <p>{{organization.information}}</p>
             </div>
+            
             <div>
                 <h1 class="orgHeader">Courses</h1 c>
                 {{#each courses}}
