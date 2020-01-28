@@ -81,6 +81,14 @@ export default class TMC {
     }
 
     /**
+     * @returns one organization information
+     * @param slug organization slug/id
+     */
+    public getOrganization(slug: string): Promise<Result<Organization, Error>> {
+        return this.checkApiResponse(this.tmcApiRequest(`org/${slug}.json`), createIs<Organization>());
+    }
+
+    /**
      * Requires an organization to be selected
      * @returns a list of courses belonging to the currently selected organization
      */

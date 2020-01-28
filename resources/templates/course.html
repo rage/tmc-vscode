@@ -13,7 +13,11 @@
     </head>
     <body>
         <div class="container container-fluid">
-            <div id="pinned">
+            <div class="orgHeader">
+                <h1>{{organization.name}}</h1>
+                <p>{{organization.information}}</p>
+            </div>
+            <div>
                 <h1 class="orgHeader">Courses</h1 c>
                 {{#each courses}}
                     <div class="row orgRow border-dark" onclick="sendCourse('{{this.id}}')">

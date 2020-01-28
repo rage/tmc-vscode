@@ -2,6 +2,10 @@
     color: red;
 }
 
+.container {
+    padding-top: 20px;
+}
+
 .orgRow {
     padding: 10px 0px;
     margin-bottom: 10px;

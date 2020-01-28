@@ -52,4 +52,4 @@ export type Organization = {
     pinned: boolean;
 };
 
-export type TMCApiResponse = Course[] | CourseDetails | Organization[];
+export type TMCApiResponse = Course[] | CourseDetails | Organization[] | Organization;

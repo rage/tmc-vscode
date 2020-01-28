@@ -12,8 +12,8 @@
     </head>
     <body>
         <div class="container container-fluid">
-            <div id="pinned">
-                <h1 class="orgHeader">Frequently used organizations</h1 c>
+            <div>
+                <h1 class="orgHeader">Frequently used organizations</h1>
                 {{#each pinned}}
                     <div class="row orgRow border-dark" onclick="sendOrganization('{{this.slug}}')">
                         <div class="col-md-2">
@@ -27,7 +27,7 @@
                 {{/each}}
             </div>
             
-            <div id="unpinned">
+            <div>
                 <h1 class="orgHeader">All organizations</h1>
                 {{#each organizations}}
                     <div class="row orgRow border-dark" onclick="sendOrganization('{{this.slug}}')">
