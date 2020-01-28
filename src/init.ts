@@ -45,7 +45,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         const result = await tmc.getOrganizations();
 
         if (result.ok) {
-            console.log("Courses loaded");
+            console.log("Organizations loaded");
             const organizations = result.val.sort((org1, org2) => org1.name.localeCompare(org2.name));
             const pinned = organizations.filter((organization) => organization.pinned);
             const data = { organizations, pinned };
