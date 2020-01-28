@@ -6,6 +6,7 @@ import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
 import { Organization } from "./api/types";
+import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
 
 /**
@@ -16,7 +17,7 @@ import { AuthenticationError } from "./errors";
  * @param ui The User Interface object
  * @param tmc The TMC API object
  */
-export function registerUiActions(extensionContext: vscode.ExtensionContext, ui: UI, tmc: TMC) {
+export function registerUiActions(extensionContext: vscode.ExtensionContext, ui: UI, storage: Storage, tmc: TMC) {
     // Register handlebars helper function to resolve full logo paths
     // or switch to an existing placeholder image.
     handlebars.registerHelper("resolve_logo_path", (logoPath: string) => {
@@ -53,7 +54,6 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         if (result.ok) {
             console.log("Courses loaded");
             const [pinned, unpinned] = result.unwrap().reduce(organizationReducer, [[], []]);
-            //    .map((org): Organization => ({ ...org, logo_path: `https://tmc.mooc.fi${org.logo_path}`}));
 
             const data = { pinned, unpinned };
             ui.webview.setContent(await getTemplate(extensionContext, "organization", data));
@@ -76,8 +76,14 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
             if (result.val instanceof AuthenticationError) {
                 console.log("auth error");
             }
-            ui.webview.setContent(await getTemplate(extensionContext, "login", {error: result.val.message}));
+            ui.webview.setContent(await getTemplate(extensionContext, "login", { error: result.val.message }));
         }
+    });
+
+    // Receives the slug of a selected organization from the webview, stores the value
+    ui.webview.registerHandler("setOrganization", (msg: { type: string, slug: string }) => {
+        console.log("Organization selected:", msg.slug);
+        storage.updateOrganizationSlug(msg.slug);
     });
 }
 
