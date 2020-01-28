@@ -13,7 +13,7 @@ export async function activate(context: vscode.ExtensionContext) {
     if (result.ok) {
         const ui = new UI(context);
         const storage = new Storage(context);
-        const tmc = new TMC(storage);
+        const tmc = new TMC(storage, context);
 
         init.registerUiActions(context, ui, storage, tmc);
 
