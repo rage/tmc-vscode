@@ -106,6 +106,10 @@ export default class TMC {
         return this.checkApiResponse(this.tmcApiRequest(`core/courses/${id}`), createIs<CourseDetails>());
     }
 
+    /**
+     * Downloads exercise with given id and extracts it to the exercise folder.
+     * @param id Id of the exercise to download
+     */
     public async downloadExercise(id: number): Promise<Result<string, Error>> {
         const result = await downloadFile(`https://tmc.mooc.fi/exercises/${id}.zip`, `${this.dataPath}/${id}.zip`);
         if (result.ok) {
@@ -115,6 +119,9 @@ export default class TMC {
         return new Err(result.val);
     }
 
+    /**
+     * Executes external tmc-langs process with given arguments.
+     */
     private async executeLangsAction(action: "extract-project" | "compress-project" | "run-tests",
                                      outputPath: string, exercisePath?: string): Promise<any> {
 
