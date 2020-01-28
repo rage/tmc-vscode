@@ -52,7 +52,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         } else {
             console.log("Fetching organizations failed: " + result.val.message);
         }
-    });
+    }, "orgs");
 
     // Receives a login information from the webview, attempts to log in
     // If successful, show the logout command instead of the login one, and a temporary webview page
@@ -62,7 +62,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         if (result.ok) {
             console.log("Logged in successfully");
             ui.treeDP.updateVisibility(["loggedIn"]);
-            ui.webview.setContent("Logged in.");
+            ui.treeDP.triggerCallback("orgs");
         } else {
             console.log("Login failed: " + result.val.message);
             if (result.val instanceof AuthenticationError) {
