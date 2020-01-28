@@ -9,6 +9,8 @@ export function activate(context: vscode.ExtensionContext) {
 
     console.log('Congratulations, your extension "tmc-vscode" is now active!');
 
+    init.firstTimeInitialization(context);
+
     const ui = new UI(context);
     const storage = new Storage(context);
     const tmc = new TMC(storage);

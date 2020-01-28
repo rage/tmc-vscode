@@ -7,6 +7,7 @@ import UI from "./ui/ui";
 
 import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
+import { downloadFile } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -77,6 +78,34 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         console.log("Organization selected:", msg.slug);
         storage.updateOrganizationSlug(msg.slug);
     });
+}
+
+/**
+ * Performs various actions required before the extension can be started for the first time
+ *
+ * @param extensionContext Extension context
+ */
+export function firstTimeInitialization(extensionContext: vscode.ExtensionContext) {
+
+    const basePath = extensionContext.globalStoragePath;
+    const tmcDataPath = path.join(basePath, "tmcdata");
+    const tmcLangsPath = path.join(tmcDataPath, "tmc-langs.jar");
+
+    if (!fs.existsSync(basePath)) {
+        fs.mkdirSync(basePath);
+        console.log("Created global storage directory at", basePath);
+    }
+
+    if (!fs.existsSync(tmcDataPath)) {
+        fs.mkdirSync(tmcDataPath);
+        console.log("Created tmc data directory at", tmcDataPath);
+    }
+
+    if (!fs.existsSync(tmcLangsPath)) {
+        downloadFile("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
+            tmcLangsPath);
+        console.log("tmc-langs.jar downloaded");
+    }
 }
 
 /**
