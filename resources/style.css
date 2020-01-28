@@ -5,6 +5,19 @@
 .orgRow {
     padding: 10px 0px;
     margin-bottom: 10px;
+    min-height: 115px;
+}
+
+.orgRow:hover {
+    background-color: rgb(219, 218, 218);
+    cursor: pointer;
+}
+
+.orgImg {
+    max-width: 100px;
+    max-height: 100px;
+    margin: 0 auto;
+    display: block;
 }
 
 .orgHeader {
