@@ -7,15 +7,13 @@ import { Err, Ok, Result } from "ts-results";
 import { ConnectionError } from "./errors";
 
 /**
- * Downloads data from given url to specified file. Path to file must exist but file itself not.
+ * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
  * @param url Url to data
  * @param filePath Absolute path to the desired output file
  * @param headers Request headers if any
  */
 export async function downloadFile(url: string, filePath: string, headers?: any): Promise<Result<void, Error>> {
-    if (!fs.existsSync(path.resolve(filePath, "..")) || fs.existsSync(filePath)) {
-        throw new Error("Invalid file path or file already exists");
-    }
+    fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
 
     let response;
     try {
@@ -24,16 +22,15 @@ export async function downloadFile(url: string, filePath: string, headers?: any)
         return new Err(new ConnectionError("Connection error: " + error.name));
     }
 
-    if (response.ok) {
-        try {
-            fs.writeFileSync(filePath, await response.buffer());
-        } catch (error) {
-            return new Err(new Error("Writing to file failed: " + error));
-        }
-        return Ok.EMPTY;
-    } else {
-        return new Err(new Error("Request failed: " + response.statusText));
+    if (!response.ok) { return new Err(new Error("Request failed: " + response.statusText)); }
+
+    try {
+        fs.writeFileSync(filePath, await response.buffer());
+    } catch (error) {
+        return new Err(new Error("Writing to file failed: " + error));
     }
+
+    return Ok.EMPTY;
 }
 
 /**
