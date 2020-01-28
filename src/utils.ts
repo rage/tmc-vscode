@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as fetch from "node-fetch";
 import * as path from "path";
+import * as vscode from "vscode";
 
 import { Err, Ok, Result } from "ts-results";
 import { ConnectionError } from "./errors";
@@ -33,4 +34,8 @@ export async function downloadFile(url: string, filePath: string, headers?: any)
     } else {
         return new Err(new Error("Request failed: " + response.statusText));
     }
+}
+
+export async function openFolder(folderPath: string) {
+    await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(folderPath));;
 }
