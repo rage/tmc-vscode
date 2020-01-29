@@ -53,3 +53,29 @@ export type Organization = {
 };
 
 export type TMCApiResponse = Course[] | CourseDetails | Organization[];
+
+export type TmcLangsAction = {
+    action: "extract-project" | "compress-project",
+    archivePath: string,
+    exerciseFolderPath: string,
+} | {
+    action: "run-tests",
+    exerciseFolderPath: string,
+};
+
+export type TmcLangsTestResult = {
+    name: string,
+    successful: boolean,
+    message: string,
+    valgrindFailed: boolean,
+    points: string[],
+    exception: string[],
+};
+
+export type TmcLangsTestResults = {
+    status: string,
+    testResults: TmcLangsTestResult[],
+    logs: any;
+};
+
+export type TmcLangsResponse = string | TmcLangsTestResults;
