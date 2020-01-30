@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import Resources from "../config/resources";
 import TmcMenuTree from "./treeview/treeview";
 import TmcWebview from "./webview";
 
@@ -20,8 +21,8 @@ export default class UI {
      * Creates an UI object and (temporarily) initializes it with login-related content
      * @param extensionContext VSCode extension content
      */
-    constructor(extensionContext: vscode.ExtensionContext) {
-        this.webview = new TmcWebview(extensionContext);
+    constructor(extensionContext: vscode.ExtensionContext, resources: Resources) {
+        this.webview = new TmcWebview(extensionContext, resources);
         this.treeDP = new TmcMenuTree("tmcView");
     }
 

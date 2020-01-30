@@ -1,12 +1,12 @@
 import * as fs from "fs";
-import * as handlebars from "handlebars";
 import * as path from "path";
 import * as vscode from "vscode";
 import TMC from "./api/tmc";
+import TemplateEngine from "./ui/templateEngine";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
-import { Exercise } from "./api/types";
+import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
 import { downloadFile, openFolder } from "./utils";
@@ -19,14 +19,11 @@ import { downloadFile, openFolder } from "./utils";
  * @param ui The User Interface object
  * @param tmc The TMC API object
  */
-export function registerUiActions(extensionContext: vscode.ExtensionContext, ui: UI, storage: Storage, tmc: TMC) {
+export function registerUiActions(
+    extensionContext: vscode.ExtensionContext, ui: UI,
+    storage: Storage, tmc: TMC, resources: Resources) {
     // Register handlebars helper function to resolve full logo paths
     // or switch to an existing placeholder image.
-    handlebars.registerHelper("resolve_logo_path", (logoPath: string) => {
-        return (!logoPath.endsWith("missing.png"))
-            ? `https://tmc.mooc.fi${logoPath}`
-            : "https://tmc.mooc.fi/logos/small_logo/missing.png";
-    });
 
     ui.treeDP.registerVisibilityGroup("loggedIn", tmc.isAuthenticated());
     ui.treeDP.registerVisibilityGroup("orgChosen", storage.getOrganizationSlug() !== undefined);
@@ -41,7 +38,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
 
     // Displays the login webview
     ui.treeDP.registerAction("Log in", ["!loggedIn"], async () => {
-        ui.webview.setContent(await getTemplate(extensionContext, "login"));
+        await ui.webview.setContentFromTemplate("login");
     });
 
     // Displays the organization webview
@@ -53,7 +50,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
             const organizations = result.val.sort((org1, org2) => org1.name.localeCompare(org2.name));
             const pinned = organizations.filter((organization) => organization.pinned);
             const data = { organizations, pinned };
-            ui.webview.setContent(await getTemplate(extensionContext, "organization", data));
+            await ui.webview.setContentFromTemplate("organization", data);
         } else {
             console.log("Fetching organizations failed: " + result.val.message);
         }
@@ -74,7 +71,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
             const courses = result.val.sort((course1, course2) => course1.name.localeCompare(course2.name));
             const organization = resultOrg.val;
             const data = { courses, organization };
-            ui.webview.setContent(await getTemplate(extensionContext, "course", data));
+            await ui.webview.setContentFromTemplate("course", data);
         } else {
             console.log("Fetching courses failed: " + result.val.message);
         }
@@ -91,7 +88,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         if (result.ok) {
             const details = result.val.course;
             const data = { details };
-            ui.webview.setContent(await getTemplate(extensionContext, "course-details", data));
+            await ui.webview.setContentFromTemplate("course-details", data);
         } else {
             console.log("Fetching course details failed: " + result.val.message);
         }
@@ -112,7 +109,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
             if (result.val instanceof AuthenticationError) {
                 console.log("auth error");
             }
-            ui.webview.setContent(await getTemplate(extensionContext, "login", { error: result.val.message }));
+            ui.webview.setContentFromTemplate("login", { error: result.val.message });
         }
     });
 
@@ -149,7 +146,11 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
  *
  * @param extensionContext Extension context
  */
-export async function firstTimeInitialization(extensionContext: vscode.ExtensionContext): Promise<Result<void, Error>> {
+export async function firstTimeInitialization(extensionContext: vscode.ExtensionContext):
+    Promise<Result<Resources, Error>> {
+
+    const cssPath = extensionContext.asAbsolutePath("resources/styles");
+    const htmlPath = extensionContext.asAbsolutePath("resources/templates");
 
     const basePath = extensionContext.globalStoragePath;
     const tmcDataPath = path.join(basePath, "tmcdata");
@@ -174,40 +175,10 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
         console.log("tmc-langs.jar downloaded");
     }
 
-    return Ok.EMPTY;
-}
-
-/**
- * Creates an HTML document from a template, with a default CSS applied
- *
- * @param extensionContext
- * @param name Name of the template file to user
- * @param data Must contain all the variables used in the template
- *
- * @returns The HTML document as a string
- */
-async function getTemplate(extensionContext: vscode.ExtensionContext, name: string, data?: any): Promise<string> {
-
-    const p = path.join(extensionContext.extensionPath, `resources/templates/${name}.html`);
-    const template = handlebars.compile(fs.readFileSync(p, "utf8"));
-    if (!data) {
-        data = {};
-    }
-    data.cssPath = resolvePath(extensionContext, "resources/style.css");
-    data.bootstrapPath = resolvePath(extensionContext, "resources/bootstrap.min.css");
-    data.test = "login";
-
-    return template(data);
-}
-
-/**
- * Creates an absolute path from a relative one for use in webviews
- *
- * @param extensionContext
- * @param relativePath Path to resolve
- *
- * @returns the absolute path
- */
-function resolvePath(extensionContext: vscode.ExtensionContext, relativePath: string): string {
-    return vscode.Uri.file(path.join(extensionContext.extensionPath, relativePath)).toString().replace("file:", "vscode-resource:");
+    return new Ok(new Resources(
+        cssPath,
+        htmlPath,
+        tmcDataPath,
+        tmcLangsPath,
+    ));
 }

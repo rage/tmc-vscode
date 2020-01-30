@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import Resources from "../config/resources";
+import TemplateEngine from "./templateEngine";
 
 /**
  * A class for managing the Webview component of the plugin UI, to be used through the UI class
@@ -13,21 +15,37 @@ export default class TmcWebview {
      */
     private panel: vscode.WebviewPanel | undefined;
 
+    private readonly templateEngine: TemplateEngine;
+
     /**
      * Creates a TmcWebview object used by the UI class
      * @param extensionContext The VSCode extension context, required for path resolution for the CSS stylesheet
      */
-    constructor(extensionContext: vscode.ExtensionContext) {
+    constructor(extensionContext: vscode.ExtensionContext, resources: Resources) {
         this.extensionContext = extensionContext;
+        this.templateEngine = new TemplateEngine(resources, extensionContext);
     }
 
     /**
      * Sets the HTML content of the webview and brings it to the front
-     * @param html A string containing a full HTML document, see [[htmlWrap]]
+     * Deprecated, use [[setContentFromTemplate]] instead
+     *
+     * @param html A string containing a full HTML document
      */
     public setContent(html: string) {
         const panel = this.getPanel();
         panel.webview.html = html;
+        panel.reveal();
+    }
+
+    /**
+     * Sets the HTML content of the webview from a template and brings it to the front
+     * @param templateName A string containing the name of one of the templates
+     * @param data Any data to be passed to the template
+     */
+    public async setContentFromTemplate(templateName: string, data?: any) {
+        const panel = this.getPanel();
+        panel.webview.html = await this.templateEngine.getTemplate(panel.webview, templateName, data);
         panel.reveal();
     }
 
