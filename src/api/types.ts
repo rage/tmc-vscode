@@ -52,7 +52,7 @@ export type Organization = {
     pinned: boolean;
 };
 
-export type TMCApiResponse = Course[] | CourseDetails | Organization[];
+export type TMCApiResponse = Course[] | CourseDetails | Organization[] | Organization;
 
 export type TmcLangsAction = {
     action: "extract-project" | "compress-project",
