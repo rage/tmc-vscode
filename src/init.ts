@@ -6,6 +6,7 @@ import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
+import { Exercise } from "./api/types";
 import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
 import { downloadFile } from "./utils";
@@ -78,6 +79,19 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         }
     }, "courses");
 
+    ui.treeDP.registerAction("Course details", ["loggedIn"], async () => {
+        const result = await tmc.getCourseDetails(588);
+
+        if (result.ok) {
+            const details = result.val.course;
+            console.log(details);
+            const data = { details: {...details, exercises: details.exercises.map((exercise) => exercise.id)} };
+            ui.webview.setContent(await getTemplate(extensionContext, "course-details", data));
+        } else {
+            console.log("Fetching course details failed: " + result.val.message);
+        }
+    });
+
     // Receives a login information from the webview, attempts to log in
     // If successful, show the logout command instead of the login one, and a temporary webview page
     ui.webview.registerHandler("login", async (msg: { type: string, username: string, password: string }) => {
@@ -109,6 +123,10 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
     ui.webview.registerHandler("setCourse", (msg: { type: string, id: string }) => {
         console.log("Course selected:", msg.id);
         storage.updateCourseId(msg.id);
+    });
+
+    ui.webview.registerHandler("downloadExercises", (msg: { type: string, exercises: number[]}) => {
+        console.log("Loading course exercises:", msg.exercises);
     });
 }
 

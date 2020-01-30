@@ -1,0 +1,23 @@
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+
+        <script>
+            const vscode = acquireVsCodeApi();
+            function downloadExercises(exercises) {
+                vscode.postMessage({ type: "downloadExercises", exercises });
+            }
+        </script>
+    </head>
+
+    <body>
+        <div class="container container-fluid">
+            {{#with details}}
+                <h1>{{title}}</h1>
+                <div>{{description}}</div>
+                <button onclick="downloadExercises('{{exercises}}')" >Download exercises</button>
+            {{/with}}
+        </div>
+    </body>
+</html>
