@@ -5,8 +5,10 @@ import * as vscode from "vscode";
 import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
+import { Err, Ok, Result } from "ts-results";
 import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
+import { downloadFile } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -127,6 +129,39 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
             console.log("Fetching courses failed: " + result.val.message);
         }
     };
+}
+
+/**
+ * Performs various actions required before the extension can be started for the first time
+ *
+ * @param extensionContext Extension context
+ */
+export async function firstTimeInitialization(extensionContext: vscode.ExtensionContext): Promise<Result<void, Error>> {
+
+    const basePath = extensionContext.globalStoragePath;
+    const tmcDataPath = path.join(basePath, "tmcdata");
+    const tmcLangsPath = path.join(tmcDataPath, "tmc-langs.jar");
+
+    if (!fs.existsSync(basePath)) {
+        fs.mkdirSync(basePath);
+        console.log("Created global storage directory at", basePath);
+    }
+
+    if (!fs.existsSync(tmcDataPath)) {
+        fs.mkdirSync(tmcDataPath);
+        console.log("Created tmc data directory at", tmcDataPath);
+    }
+
+    if (!fs.existsSync(tmcLangsPath)) {
+        const result = await downloadFile("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
+            tmcLangsPath);
+        if (result.err) {
+            return new Err(result.val);
+        }
+        console.log("tmc-langs.jar downloaded");
+    }
+
+    return Ok.EMPTY;
 }
 
 /**

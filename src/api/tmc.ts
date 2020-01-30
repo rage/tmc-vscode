@@ -1,11 +1,16 @@
+import * as cp from "child_process";
 import ClientOauth2 = require("client-oauth2");
+import * as fs from "fs";
 import * as fetch from "node-fetch";
+import * as vscode from "vscode";
 import Storage from "../config/storage";
 
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
-import { Course, CourseDetails, Organization, TMCApiResponse } from "./types";
+import { downloadFile } from "../utils";
+import { Course, CourseDetails, Organization, TMCApiResponse,
+         TmcLangsAction, TmcLangsResponse, TmcLangsTestResults } from "./types";
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -15,11 +20,12 @@ export default class TMC {
     private oauth2: ClientOauth2;
     private token: ClientOauth2.Token | undefined;
     private storage: Storage;
+    private dataPath: string; // TODO: Use resource class to manage course downloads
 
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage) {
+    constructor(storage: Storage, extensionContext: vscode.ExtensionContext) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: "https://tmc.mooc.fi/oauth/token",
             clientId: "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0",
@@ -30,6 +36,7 @@ export default class TMC {
         if (authToken) {
             this.token = new ClientOauth2.Token(this.oauth2, authToken);
         }
+        this.dataPath = extensionContext.globalStoragePath + "/tmcdata";
     }
 
     /**
@@ -109,6 +116,88 @@ export default class TMC {
     }
 
     /**
+     * Downloads exercise with given id and extracts it to the exercise folder.
+     * @param id Id of the exercise to download
+     */
+    public async downloadExercise(id: number): Promise<Result<string, Error>> {
+        const result = await downloadFile(`https://tmc.mooc.fi/api/v8/core/exercises/${id}/download`, `${this.dataPath}/${id}.zip`);
+        if (result.ok) {
+            return this.checkApiResponse(this.executeLangsAction({
+                action: "extract-project",
+                archivePath: `${this.dataPath}/${id}.zip`,
+                exerciseFolderPath: `${this.dataPath}/${id}`,
+            }), createIs<string>());
+        }
+        return new Err(result.val);
+    }
+
+    /**
+     * Temporary: creates a submission archive and returns its path
+     * @param id Id of the exercise
+     */
+    public async prepareSubmissionArchive(id: number): Promise<Result<string, Error>> {
+        return this.checkApiResponse(this.executeLangsAction({
+            action: "compress-project",
+            archivePath: `${this.dataPath}/${id}-new.zip`,
+            exerciseFolderPath: `${this.dataPath}/${id}`,
+        }), createIs<string>());
+    }
+
+    /**
+     * Runs tests locally for an exercise
+     * @param id Id of the exercise
+     */
+    public async runTests(id: number): Promise<Result<TmcLangsTestResults, Error>> {
+        return this.checkApiResponse(this.executeLangsAction({
+            action: "run-tests",
+            exerciseFolderPath: `${this.dataPath}/${id}`,
+        }), createIs<TmcLangsTestResults>());
+    }
+
+    /**
+     * Executes external tmc-langs process with given arguments.
+     * @param tmcLangsAction Tmc-langs command and arguments
+     */
+    private async executeLangsAction(tmcLangsAction: TmcLangsAction): Promise<Result<TmcLangsResponse, Error>> {
+        const action = tmcLangsAction.action;
+        let exercisePath = "";
+        let outputPath = "";
+
+        switch (tmcLangsAction.action) {
+            case "extract-project":
+                [exercisePath, outputPath] = [tmcLangsAction.archivePath, tmcLangsAction.exerciseFolderPath];
+                break;
+            case "compress-project":
+                [outputPath, exercisePath] = [tmcLangsAction.archivePath, tmcLangsAction.exerciseFolderPath];
+                break;
+            case "run-tests":
+                exercisePath = tmcLangsAction.exerciseFolderPath;
+                outputPath = `${this.dataPath}/temp.json`;
+                break;
+        }
+
+        const jarPath = `"${this.dataPath}/tmc-langs.jar"`;
+        const arg0 = (exercisePath) ? `--exercisePath="${exercisePath}"` : "";
+        const arg1 = `--outputPath="${outputPath}"`;
+
+        console.log(`java -jar ${jarPath} ${action} ${arg0} ${arg1}`);
+        cp.execSync(`java -jar ${jarPath} ${action} ${arg0} ${arg1}`);
+
+        if (action === "extract-project" || action === "compress-project") {
+            return new Ok(outputPath);
+        }
+
+        const result = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+        if (is<TmcLangsResponse>(result)) {
+            return new Ok(result);
+        }
+
+        console.error(result);
+
+        return new Err(new Error("Unexpected response JSON type"));
+    }
+
+    /**
      * Unwraps the response, checks the type, and rewraps it with the type error possibly included
      *
      * Note that the current type checking method requires the type checker to be passed as a parameter
@@ -119,8 +208,8 @@ export default class TMC {
      *
      * @returns A type checked response
      */
-    private async checkApiResponse<T>(response: Promise<Result<TMCApiResponse, Error>>,
-                                      checker: (object: any) => object is T): Promise<Result<T, Error>> {
+    private async checkApiResponse<T, U>(response: Promise<Result<U, Error>>,
+                                         checker: (object: any) => object is T): Promise<Result<T, Error>> {
         const result = await response;
         if (result.ok) {
             return checker(result.val) ? new Ok(result.val) : new Err(new ApiError("Incorrect response type"));
