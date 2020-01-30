@@ -37,10 +37,10 @@ suite("Storage tests", () => {
 
         // updating
         mockMemento
-            .verify((x) => x.update(TypeMoq.It.isAnyString(), TypeMoq.It.isValue("1337")), TypeMoq.Times.never());
-        storage.updateCourseId("1337");
+            .verify((x) => x.update(TypeMoq.It.isAnyString(), TypeMoq.It.isValue(1337)), TypeMoq.Times.never());
+        storage.updateCourseId(1337);
         mockMemento
-            .verify((x) => x.update(TypeMoq.It.isAnyString(), TypeMoq.It.isValue("1337")), TypeMoq.Times.once());
+            .verify((x) => x.update(TypeMoq.It.isAnyString(), TypeMoq.It.isValue(1337)), TypeMoq.Times.once());
 
         // getting
         mockMemento.verify((x) => x.get(TypeMoq.It.isAnyString()), TypeMoq.Times.never());

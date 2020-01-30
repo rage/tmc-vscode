@@ -9,7 +9,7 @@ import { Err, Ok, Result } from "ts-results";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
-import { downloadFile } from "./utils";
+import { downloadFile, openFolder } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -27,6 +27,7 @@ export function registerUiActions(
 
     ui.treeDP.registerVisibilityGroup("loggedIn", tmc.isAuthenticated());
     ui.treeDP.registerVisibilityGroup("orgChosen", storage.getOrganizationSlug() !== undefined);
+    ui.treeDP.registerVisibilityGroup("courseChosen", storage.getCourseId() !== undefined);
 
     // Logs out, closes the webview, hides the logout command, shows the login command
     ui.treeDP.registerAction("Log out", ["loggedIn"], () => {
@@ -76,6 +77,23 @@ export function registerUiActions(
         }
     }, "courses");
 
+    // Displays course details
+    ui.treeDP.registerAction("Course details", ["courseChosen", "loggedIn"], async () => {
+        const id = storage.getCourseId();
+        if (!id) {
+            return new Err(new Error("Trying to view course details without selected course."));
+        }
+        const result = await tmc.getCourseDetails(id);
+
+        if (result.ok) {
+            const details = result.val.course;
+            const data = { details };
+            await ui.webview.setContentFromTemplate("course-details", data);
+        } else {
+            console.log("Fetching course details failed: " + result.val.message);
+        }
+    }, "courseDetails");
+
     // Receives a login information from the webview, attempts to log in
     // If successful, show the logout command instead of the login one, and a temporary webview page
     ui.webview.registerHandler("login", async (msg: { type: string, username: string, password: string }) => {
@@ -104,9 +122,22 @@ export function registerUiActions(
     });
 
     // Receives the id of selected course from the webview, stores the value
-    ui.webview.registerHandler("setCourse", (msg: { type: string, id: string }) => {
+    ui.webview.registerHandler("setCourse", (msg: { type: string, id: number }) => {
         console.log("Course selected:", msg.id);
         storage.updateCourseId(msg.id);
+        ui.treeDP.updateVisibility(["courseChosen"]);
+        ui.treeDP.triggerCallback("courseDetails");
+    });
+
+    // Receives the id of selected exercise from the webview, downloads and opens
+    ui.webview.registerHandler("downloadExercise", async (msg: { type: string, id: number}) => {
+        const result = await tmc.downloadExercise(msg.id);
+        if (result.ok) {
+            console.log("opening downloaded exercise in", result.val);
+            openFolder(result.val, msg.id.toString()); // TODO: get proper exercise name from API
+        } else {
+            return new Err(new Error("Failed to download exercise"));
+        }
     });
 }
 
