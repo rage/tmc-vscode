@@ -45,9 +45,9 @@ export default class TmcMenuTree {
      */
     public triggerCallback(id: string) {
         const action = this.treeDP.getAction(id);
-        if (action?.action.command?.arguments?.[0]) {
+        if (action?.action.callback) {
             this.treeview.reveal(action.action, {select: true});
-            action.action.command.arguments[0]();
+            action.action.callback();
         } else {
             throw new Error("No such action");
         }
@@ -156,7 +156,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
         }
         this.actions.set(id, {
             action: new TMCAction(label,
-                { command: "tmcView.activateEntry", title: "", arguments: [onClick] }), visible,
+                { command: "tmcView.activateEntry", title: "", arguments: [onClick] }, onClick), visible,
         });
         this.refresh();
     }
@@ -196,9 +196,12 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
  */
 class TMCAction extends vscode.TreeItem {
 
-    constructor(label: string, command?: vscode.Command) {
+    public callback: (() => void) | undefined;
+
+    constructor(label: string, command?: vscode.Command, callback?: () => void) {
         super(label);
         this.command = command;
+        this.callback = callback;
     }
 
 }

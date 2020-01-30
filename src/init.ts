@@ -62,6 +62,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         if (result.ok) {
             console.log("Logged in successfully");
             ui.treeDP.updateVisibility(["loggedIn"]);
+            // TODO: check if storage has organization slug, if not trigger callback for summary
             ui.treeDP.triggerCallback("orgs");
         } else {
             console.log("Login failed: " + result.val.message);
