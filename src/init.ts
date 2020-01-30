@@ -134,6 +134,7 @@ export function registerUiActions(
         const results = Results(...await Promise.all(msg.ids.map((x) => tmc.downloadExercise(x))));
         if (results.ok) {
             console.log("opening downloaded exercises in: ", results.val);
+            ui.webview.dispose();
             openFolder(...results.val.map((folderPath, index) =>
                 ({folderPath, name: msg.ids[index].toString()}))); // TODO: get proper exercise name from API
         } else {
