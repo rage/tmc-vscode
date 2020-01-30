@@ -3,6 +3,7 @@ import ClientOauth2 = require("client-oauth2");
 import * as fs from "fs";
 import * as fetch from "node-fetch";
 import * as vscode from "vscode";
+import Resources from "../config/resources";
 import Storage from "../config/storage";
 
 import { Err, Ok, Result } from "ts-results";
@@ -17,15 +18,16 @@ import { Course, CourseDetails, Organization, TMCApiResponse,
  */
 export default class TMC {
 
-    private oauth2: ClientOauth2;
+    private readonly oauth2: ClientOauth2;
     private token: ClientOauth2.Token | undefined;
-    private storage: Storage;
-    private dataPath: string; // TODO: Use resource class to manage course downloads
+    private readonly storage: Storage;
+    private readonly dataPath: string;
+    private readonly tmcLangsPath: string;
 
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage, extensionContext: vscode.ExtensionContext) {
+    constructor(storage: Storage, extensionContext: vscode.ExtensionContext, resources: Resources) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: "https://tmc.mooc.fi/oauth/token",
             clientId: "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0",
@@ -36,7 +38,8 @@ export default class TMC {
         if (authToken) {
             this.token = new ClientOauth2.Token(this.oauth2, authToken);
         }
-        this.dataPath = extensionContext.globalStoragePath + "/tmcdata";
+        this.dataPath = resources.tmcDataFolder;
+        this.tmcLangsPath = resources.tmcLangsPath;
     }
 
     /**
@@ -176,12 +179,11 @@ export default class TMC {
                 break;
         }
 
-        const jarPath = `"${this.dataPath}/tmc-langs.jar"`;
         const arg0 = (exercisePath) ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
 
-        console.log(`java -jar ${jarPath} ${action} ${arg0} ${arg1}`);
-        cp.execSync(`java -jar ${jarPath} ${action} ${arg0} ${arg1}`);
+        console.log(`java -jar ${this.tmcLangsPath} ${action} ${arg0} ${arg1}`);
+        cp.execSync(`java -jar ${this.tmcLangsPath} ${action} ${arg0} ${arg1}`);
 
         if (action === "extract-project" || action === "compress-project") {
             return new Ok(outputPath);
