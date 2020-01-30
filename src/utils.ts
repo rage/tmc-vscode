@@ -37,6 +37,6 @@ export async function downloadFile(url: string, filePath: string, headers?: any)
  * Opens the given folder in Visual Studio Code's explorer.
  * @param folderPath Absolute path to the folder
  */
-export async function openFolder(folderPath: string, name: string): Promise<void> {
+export function openFolder(folderPath: string, name: string): void {
     vscode.workspace.updateWorkspaceFolders(0, 0 , { uri: vscode.Uri.file(folderPath), name });
 }
