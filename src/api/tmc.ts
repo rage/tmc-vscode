@@ -3,6 +3,7 @@ import ClientOauth2 = require("client-oauth2");
 import * as fs from "fs";
 import * as fetch from "node-fetch";
 import * as vscode from "vscode";
+import Resources from "../config/resources";
 import Storage from "../config/storage";
 
 import { Err, Ok, Result } from "ts-results";
@@ -17,15 +18,18 @@ import { Course, CourseDetails, Organization, TMCApiResponse,
  */
 export default class TMC {
 
-    private oauth2: ClientOauth2;
+    private readonly oauth2: ClientOauth2;
     private token: ClientOauth2.Token | undefined;
-    private storage: Storage;
-    private dataPath: string; // TODO: Use resource class to manage course downloads
+    private readonly storage: Storage;
+    private readonly dataPath: string;
+    private readonly tmcLangsPath: string;
+
+    private readonly cache: Map<string, TMCApiResponse>;
 
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage, extensionContext: vscode.ExtensionContext) {
+    constructor(storage: Storage, extensionContext: vscode.ExtensionContext, resources: Resources) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: "https://tmc.mooc.fi/oauth/token",
             clientId: "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0",
@@ -36,7 +40,9 @@ export default class TMC {
         if (authToken) {
             this.token = new ClientOauth2.Token(this.oauth2, authToken);
         }
-        this.dataPath = extensionContext.globalStoragePath + "/tmcdata";
+        this.dataPath = resources.tmcDataFolder;
+        this.tmcLangsPath = resources.tmcLangsPath;
+        this.cache = new Map();
     }
 
     /**
@@ -83,36 +89,36 @@ export default class TMC {
     /**
      * @returns a list of organizations
      */
-    public getOrganizations(): Promise<Result<Organization[], Error>> {
-        return this.checkApiResponse(this.tmcApiRequest("org.json"), createIs<Organization[]>());
+    public getOrganizations(cache?: boolean): Promise<Result<Organization[], Error>> {
+        return this.checkApiResponse(this.tmcApiRequest("org.json", cache), createIs<Organization[]>());
     }
 
     /**
      * @returns one Organization information
      * @param slug Organization slug/id
      */
-    public getOrganization(slug: string): Promise<Result<Organization, Error>> {
-        return this.checkApiResponse(this.tmcApiRequest(`org/${slug}.json`), createIs<Organization>());
+    public getOrganization(slug: string, cache?: boolean): Promise<Result<Organization, Error>> {
+        return this.checkApiResponse(this.tmcApiRequest(`org/${slug}.json`, cache), createIs<Organization>());
     }
 
     /**
      * Requires an organization to be selected
      * @returns a list of courses belonging to the currently selected organization
      */
-    public getCourses(): Promise<Result<Course[], Error>> {
+    public getCourses(cache?: boolean): Promise<Result<Course[], Error>> {
         const orgSlug = this.storage.getOrganizationSlug();
         if (!orgSlug) {
             throw new Error("Organization not selected");
         }
-        return this.checkApiResponse(this.tmcApiRequest(`core/org/${orgSlug}/courses`), createIs<Course[]>());
+        return this.checkApiResponse(this.tmcApiRequest(`core/org/${orgSlug}/courses`, cache), createIs<Course[]>());
     }
 
     /**
      * @param id course id
      * @returns a detailed description for the specified course
      */
-    public getCourseDetails(id: number): Promise<Result<CourseDetails, Error>> {
-        return this.checkApiResponse(this.tmcApiRequest(`core/courses/${id}`), createIs<CourseDetails>());
+    public getCourseDetails(id: number, cache?: boolean): Promise<Result<CourseDetails, Error>> {
+        return this.checkApiResponse(this.tmcApiRequest(`core/courses/${id}`, cache), createIs<CourseDetails>());
     }
 
     /**
@@ -176,12 +182,11 @@ export default class TMC {
                 break;
         }
 
-        const jarPath = `"${this.dataPath}/tmc-langs.jar"`;
         const arg0 = (exercisePath) ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
 
-        console.log(`java -jar ${jarPath} ${action} ${arg0} ${arg1}`);
-        cp.execSync(`java -jar ${jarPath} ${action} ${arg0} ${arg1}`);
+        console.log(`java -jar ${this.tmcLangsPath} ${action} ${arg0} ${arg1}`);
+        cp.execSync(`java -jar ${this.tmcLangsPath} ${action} ${arg0} ${arg1}`);
 
         if (action === "extract-project" || action === "compress-project") {
             return new Ok(outputPath);
@@ -222,7 +227,18 @@ export default class TMC {
      * @param endpoint target API endpoint
      * @param method HTTP method, defaults to GET
      */
-    private async tmcApiRequest(endpoint: string, method?: "get" | "post"): Promise<Result<TMCApiResponse, Error>> {
+    private async tmcApiRequest(endpoint: string, cache: boolean | undefined, method?: "get" | "post"):
+        Promise<Result<TMCApiResponse, Error>> {
+
+        cache = cache === undefined ? true : cache;
+
+        if (cache) {
+            const cacheResult = this.cache.get(method + endpoint);
+            if (cacheResult) {
+                return new Ok(cacheResult);
+            }
+        }
+
         let request = {
             headers: {},
             method: method ? method : "get",
@@ -239,6 +255,7 @@ export default class TMC {
                 try {
                     const responseObject = await response.json();
                     if (is<TMCApiResponse>(responseObject)) {
+                        this.cache.set(method + endpoint, responseObject);
                         return new Ok(responseObject);
                     }
                     console.error("Unexpected TMC response type: ");
