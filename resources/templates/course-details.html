@@ -5,8 +5,8 @@
 
         <script>
             const vscode = acquireVsCodeApi();
-            function downloadExercises(exercises) {
-                vscode.postMessage({ type: "downloadExercises", exercises });
+            function downloadExercise(id) {
+                vscode.postMessage({ type: "downloadExercise", id });
             }
         </script>
     </head>
@@ -16,8 +16,16 @@
             {{#with details}}
                 <h1>{{title}}</h1>
                 <div>{{description}}</div>
-                <button onclick="downloadExercises('{{exercises}}')" >Download exercises</button>
+                <ul>
+                    {{#each exercises}}
+                        <li>
+                            {{this.name}}
+                            <button onclick="downloadExercise('{{this.id}}')">download</button>
+                        </li>
+                    {{/each}}
+                </ul>
             {{/with}}
         </div>
+        
     </body>
 </html>

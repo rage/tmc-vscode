@@ -9,7 +9,7 @@ import { Err, Ok, Result } from "ts-results";
 import { Exercise } from "./api/types";
 import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
-import { downloadFile } from "./utils";
+import { downloadFile, openFolder } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -80,6 +80,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         }
     }, "courses");
 
+    // Displays course details
     ui.treeDP.registerAction("Course details", ["courseChosen", "loggedIn"], async () => {
         const id = storage.getCourseId();
         if (!id) {
@@ -89,8 +90,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
 
         if (result.ok) {
             const details = result.val.course;
-            console.log(details);
-            const data = { details: {...details, exercises: details.exercises.map((exercise) => exercise.id)} };
+            const data = { details };
             ui.webview.setContent(await getTemplate(extensionContext, "course-details", data));
         } else {
             console.log("Fetching course details failed: " + result.val.message);
@@ -132,8 +132,15 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         ui.treeDP.triggerCallback("courseDetails");
     });
 
-    ui.webview.registerHandler("downloadExercises", (msg: { type: string, exercises: number[]}) => {
-        console.log("Loading course exercises:", msg.exercises);
+    // Receives the id of selected exercise from the webview, downloads and opens
+    ui.webview.registerHandler("downloadExercise", async (msg: { type: string, id: number}) => {
+        const result = await tmc.downloadExercise(msg.id);
+        if (result.ok) {
+            console.log("opening downloaded exercise in", result.val);
+            openFolder(result.val, msg.id.toString()); // TODO: get proper exercise name from API
+        } else {
+            return new Err(new Error("Failed to download exercise"));
+        }
     });
 }
 
