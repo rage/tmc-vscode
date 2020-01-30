@@ -20,7 +20,7 @@ export default class Storage {
      * Gets currently stored course.
      * @returns currently stored course id or undefined if not set
      */
-    public getCourseId(): string | undefined {
+    public getCourseId(): number | undefined {
         return this.context.globalState.get("course");
     }
 
@@ -44,7 +44,7 @@ export default class Storage {
      * Updates the given course id in storage.
      * @param courseId course id to update
      */
-    public updateCourseId(courseId: string | undefined) {
+    public updateCourseId(courseId: number | undefined) {
         this.context.globalState.update("course", courseId);
     }
 

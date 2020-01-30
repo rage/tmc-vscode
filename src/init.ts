@@ -30,6 +30,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
 
     ui.treeDP.registerVisibilityGroup("loggedIn", tmc.isAuthenticated());
     ui.treeDP.registerVisibilityGroup("orgChosen", storage.getOrganizationSlug() !== undefined);
+    ui.treeDP.registerVisibilityGroup("courseChosen", storage.getCourseId() !== undefined);
 
     // Logs out, closes the webview, hides the logout command, shows the login command
     ui.treeDP.registerAction("Log out", ["loggedIn"], () => {
@@ -79,8 +80,12 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         }
     }, "courses");
 
-    ui.treeDP.registerAction("Course details", ["loggedIn"], async () => {
-        const result = await tmc.getCourseDetails(588);
+    ui.treeDP.registerAction("Course details", ["courseChosen", "loggedIn"], async () => {
+        const id = storage.getCourseId();
+        if (!id) {
+            return new Err(new Error("Trying to view course details without selected course."));
+        }
+        const result = await tmc.getCourseDetails(id);
 
         if (result.ok) {
             const details = result.val.course;
@@ -90,7 +95,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         } else {
             console.log("Fetching course details failed: " + result.val.message);
         }
-    });
+    }, "courseDetails");
 
     // Receives a login information from the webview, attempts to log in
     // If successful, show the logout command instead of the login one, and a temporary webview page
@@ -120,9 +125,11 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
     });
 
     // Receives the id of selected course from the webview, stores the value
-    ui.webview.registerHandler("setCourse", (msg: { type: string, id: string }) => {
+    ui.webview.registerHandler("setCourse", (msg: { type: string, id: number }) => {
         console.log("Course selected:", msg.id);
         storage.updateCourseId(msg.id);
+        ui.treeDP.updateVisibility(["courseChosen"]);
+        ui.treeDP.triggerCallback("courseDetails");
     });
 
     ui.webview.registerHandler("downloadExercises", (msg: { type: string, exercises: number[]}) => {
