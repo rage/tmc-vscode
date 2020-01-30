@@ -55,7 +55,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         } else {
             console.log("Fetching organizations failed: " + result.val.message);
         }
-    });
+    }, "orgs");
 
     // Displays the course webview
     ui.treeDP.registerAction("Courses", ["orgChosen", "loggedIn"], async () => {
@@ -86,7 +86,8 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         if (result.ok) {
             console.log("Logged in successfully");
             ui.treeDP.updateVisibility(["loggedIn"]);
-            ui.webview.setContent("Logged in.");
+            // TODO: check if storage has organization slug, if not trigger callback for summary
+            ui.treeDP.triggerCallback("orgs");
         } else {
             console.log("Login failed: " + result.val.message);
             if (result.val instanceof AuthenticationError) {
