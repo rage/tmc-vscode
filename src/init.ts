@@ -5,7 +5,7 @@ import TMC from "./api/tmc";
 import TemplateEngine from "./ui/templateEngine";
 import UI from "./ui/ui";
 
-import { Err, Ok, Result } from "ts-results";
+import { Err, Ok, Result, Results } from "ts-results";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
@@ -130,13 +130,14 @@ export function registerUiActions(
     });
 
     // Receives the id of selected exercise from the webview, downloads and opens
-    ui.webview.registerHandler("downloadExercise", async (msg: { type: string, id: number}) => {
-        const result = await tmc.downloadExercise(msg.id);
-        if (result.ok) {
-            console.log("opening downloaded exercise in", result.val);
-            openFolder({folderPath: result.val, name: msg.id.toString()}); // TODO: get proper exercise name from API
+    ui.webview.registerHandler("downloadExercises", async (msg: { type: string, ids: number[]}) => {
+        const results = Results(...await Promise.all(msg.ids.map((x) => tmc.downloadExercise(x))));
+        if (results.ok) {
+            console.log("opening downloaded exercises in: ", results.val);
+            openFolder(...results.val.map((folderPath, index) =>
+                ({folderPath, name: msg.ids[index].toString()}))); // TODO: get proper exercise name from API
         } else {
-            return new Err(new Error("Failed to download exercise"));
+            vscode.window.showErrorMessage("One or more exercise downloads failed.");
         }
     });
 }
