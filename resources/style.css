@@ -6,25 +6,25 @@
     padding-top: 20px;
 }
 
-.orgRow {
+.org-row {
     padding: 10px 0px;
     margin-bottom: 10px;
     min-height: 115px;
 }
 
-.orgRow:hover {
+.org-row:hover {
     background-color: rgb(219, 218, 218);
     cursor: pointer;
 }
 
-.orgImg {
+.org-img {
     max-width: 100px;
     max-height: 100px;
     margin: 0 auto;
     display: block;
 }
 
-.orgHeader {
+.org-header {
     padding: 20px 0px;
 }
 

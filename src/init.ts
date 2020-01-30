@@ -76,7 +76,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         } else {
             console.log("Fetching courses failed: " + result.val.message);
         }
-    });
+    }, "courses");
 
     // Receives a login information from the webview, attempts to log in
     // If successful, show the logout command instead of the login one, and a temporary webview page
@@ -102,7 +102,7 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         console.log("Organization selected:", msg.slug);
         storage.updateOrganizationSlug(msg.slug);
         ui.treeDP.updateVisibility(["orgChosen"]);
-        courseView();
+        ui.treeDP.triggerCallback("courses");
     });
 
     // Receives the id of selected course from the webview, stores the value
@@ -110,26 +110,6 @@ export function registerUiActions(extensionContext: vscode.ExtensionContext, ui:
         console.log("Course selected:", msg.id);
         storage.updateCourseId(msg.id);
     });
-
-    // TODO: Call treeDP actions, than this can be removed.
-    const courseView = async () => {
-        const result = await tmc.getCourses();
-        const slug = storage.getOrganizationSlug();
-        if (slug === undefined) {
-            return;
-        }
-        const resultOrg = await tmc.getOrganization(slug);
-
-        if (result.ok) {
-            console.log("Courses loaded");
-            const courses = result.val.sort((course1, course2) => course1.name.localeCompare(course2.name));
-            const organization = resultOrg.val;
-            const data = { courses, organization };
-            ui.webview.setContent(await getTemplate(extensionContext, "course", data));
-        } else {
-            console.log("Fetching courses failed: " + result.val.message);
-        }
-    };
 }
 
 /**

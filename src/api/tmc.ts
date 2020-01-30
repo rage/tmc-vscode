@@ -88,8 +88,8 @@ export default class TMC {
     }
 
     /**
-     * @returns one organization information
-     * @param slug organization slug/id
+     * @returns one Organization information
+     * @param slug Organization slug/id
      */
     public getOrganization(slug: string): Promise<Result<Organization, Error>> {
         return this.checkApiResponse(this.tmcApiRequest(`org/${slug}.json`), createIs<Organization>());
