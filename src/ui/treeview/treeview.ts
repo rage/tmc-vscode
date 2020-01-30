@@ -17,7 +17,7 @@ export default class TmcMenuTree {
      */
     constructor(viewId: string) {
         this.treeDP = new TmcMenuTreeDataProvider();
-        this.treeview = vscode.window.createTreeView(viewId, {treeDataProvider: this.treeDP});
+        this.treeview = vscode.window.createTreeView(viewId, { treeDataProvider: this.treeDP });
 
         this.visibility = new Visibility();
         this.nextId = 1;
