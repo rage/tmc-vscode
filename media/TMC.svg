@@ -1,0 +1,6 @@
+<svg height="240" width="240" xmlns="http://www.w3.org/2000/svg">
+    <rect x="5" y="5" rx="40" ry="40" width="230" height="230" style="fill-opacity:0;stroke:white;stroke-width:10"/>
+    <text x="15" y="160" fill="white" font-style="bold" font-family="Tahoma, Geneva, sans-serif" font-size="100px">
+        TMC
+    </text>
+</svg> 
