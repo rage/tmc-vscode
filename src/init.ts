@@ -134,7 +134,7 @@ export function registerUiActions(
         const result = await tmc.downloadExercise(msg.id);
         if (result.ok) {
             console.log("opening downloaded exercise in", result.val);
-            openFolder(result.val, msg.id.toString()); // TODO: get proper exercise name from API
+            openFolder({folderPath: result.val, name: msg.id.toString()}); // TODO: get proper exercise name from API
         } else {
             return new Err(new Error("Failed to download exercise"));
         }
