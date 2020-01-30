@@ -5,8 +5,17 @@
 
         <script>
             const vscode = acquireVsCodeApi();
-            function downloadExercises(ids) {
-                vscode.postMessage({ type: "downloadExercises", ids });
+            function downloadSelectedExercises() {
+                const checkboxes = document.querySelectorAll("input#exerciseCheckbox");
+                const ids = [];
+                for (const checkbox of checkboxes) {
+                    if (checkbox.checked) {
+                        ids.push(parseInt(checkbox.value));
+                    }
+                }
+                if (ids.length > 0) {
+                    vscode.postMessage({ type: "downloadExercises", ids });
+                }
             }
         </script>
     </head>
@@ -16,11 +25,13 @@
             {{#with details}}
                 <h1>{{title}}</h1>
                 <div>{{description}}</div>
+                <button onclick="downloadSelectedExercises()">Download selected</button>
                 <ul>
                     {{#each exercises}}
                         <li>
-                            {{this.name}}
-                            <button onclick="downloadExercises([ {{this.id}} ])">download</button>
+                            <input type="checkbox" value="{{this.id}}" id="exerciseCheckbox">
+                                {{this.name}}
+                            </input>
                         </li>
                     {{/each}}
                 </ul>
