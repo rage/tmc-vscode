@@ -32,14 +32,18 @@
             {{#with details}}
                 <div class="row py-2">
                     <h1>{{title}}</h1>
+                </div>
+                <div class="row py-2">
                     <p>{{description}}</p>
+                </div>
+                <div class="row py-2">
                     <button class="mr-2" onclick="toggleAll()">Toggle all</button>
                     <button onclick="downloadSelectedExercises()">Download selected</button>
                 </div>
                 {{#each exercises}}
                     <div class="row pb-1">
-                        <div class="col-sm-1 checkbox-centered">
-                            <input type="checkbox" value="{{this.id}}" />
+                        <div class="col-sm-1 checkbox-centered checkbox-xl">
+                            <input type="checkbox" value="{{this.id}}"/>
                         </div>
                         <div class="col-sm">
                             {{this.name}}
