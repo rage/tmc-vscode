@@ -30,15 +30,17 @@
     <body>
         <div class="container container-fluid">
             {{#with details}}
-                <div class="sticky-top py-2 bg-white">
-                    <h1>{{title}}</h1>
-                </div>
-                <div class="row py-2">
-                    <p>{{description}}</p>
-                </div>
-                <div class="row py-2">
-                    <button class="mr-2" onclick="toggleAll()">Toggle all</button>
-                    <button onclick="downloadSelectedExercises()">Download selected</button>
+                <div class="sticky-top bg-white">
+                    <div class="py-2">
+                        <h1>{{title}}</h1>
+                    </div>
+                    <div class="row py-2">
+                        <p>{{description}}</p>
+                    </div>
+                    <div class="row py-2">
+                        <button class="mr-2" onclick="toggleAll()">Toggle all</button>
+                        <button onclick="downloadSelectedExercises()">Download selected</button>
+                    </div>
                 </div>
                 {{#each exercises}}
                     <div class="row pb-1">
