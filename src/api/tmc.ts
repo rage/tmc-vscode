@@ -186,7 +186,14 @@ export default class TMC {
         const arg1 = `--outputPath="${outputPath}"`;
 
         console.log(`java -jar ${this.tmcLangsPath} ${action} ${arg0} ${arg1}`);
-        cp.execSync(`java -jar ${this.tmcLangsPath} ${action} ${arg0} ${arg1}`);
+        try {
+            await new Promise(async (resolve, reject) => {
+                cp.exec(`java -jar ${this.tmcLangsPath} ${action} ${arg0} ${arg1}`,
+                        (err) => err ? reject(err) : resolve());
+            });
+        } catch (err) {
+            return new Err(err);
+        }
 
         if (action === "extract-project" || action === "compress-project") {
             return new Ok(outputPath);

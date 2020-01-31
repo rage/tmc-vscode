@@ -15,17 +15,21 @@ import { ConnectionError } from "./errors";
 export async function downloadFile(url: string, filePath: string, headers?: any): Promise<Result<void, Error>> {
     fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
 
-    let response;
+    let response: fetch.Response;
     try {
         response = await fetch.default(url, { method: "get", headers });
     } catch (error) {
         return new Err(new ConnectionError("Connection error: " + error.name));
     }
 
-    if (!response.ok) { return new Err(new Error("Request failed: " + response.statusText)); }
+    if (!response.ok) {
+        return new Err(new Error("Request failed: " + response.statusText));
+    }
 
     try {
-        fs.writeFileSync(filePath, await response.buffer());
+        await new Promise(async (resolve, reject) => {
+            fs.writeFile(filePath, await response.buffer(), (err) => err ? reject(err) : resolve());
+        });
     } catch (error) {
         return new Err(new Error("Writing to file failed: " + error));
     }
