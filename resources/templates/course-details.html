@@ -6,7 +6,7 @@
         <script>
             const vscode = acquireVsCodeApi();
             function downloadSelectedExercises() {
-                const checkboxes = document.querySelectorAll("input#exerciseCheckbox");
+                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
                 const ids = [];
                 for (const checkbox of checkboxes) {
                     if (checkbox.checked) {
@@ -17,26 +17,36 @@
                     vscode.postMessage({ type: "downloadExercises", ids });
                 }
             }
+
+            function toggleAll() {
+                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                for (const checkbox of checkboxes) {
+                    checkbox.checked = !checkbox.checked;
+                }
+            }
         </script>
     </head>
 
     <body>
         <div class="container container-fluid">
             {{#with details}}
-                <h1>{{title}}</h1>
-                <div>{{description}}</div>
-                <button onclick="downloadSelectedExercises()">Download selected</button>
-                <ul>
-                    {{#each exercises}}
-                        <li>
-                            <input type="checkbox" value="{{this.id}}" id="exerciseCheckbox">
-                                {{this.name}}
-                            </input>
-                        </li>
-                    {{/each}}
-                </ul>
+                <div class="row py-2">
+                    <h1>{{title}}</h1>
+                    <p>{{description}}</p>
+                    <button class="mr-2" onclick="toggleAll()">Toggle all</button>
+                    <button onclick="downloadSelectedExercises()">Download selected</button>
+                </div>
+                {{#each exercises}}
+                    <div class="row pb-1">
+                        <div class="col-sm-1 checkbox-centered">
+                            <input type="checkbox" value="{{this.id}}" />
+                        </div>
+                        <div class="col-sm">
+                            {{this.name}}
+                        </div>
+                    </div>
+                {{/each}}
             {{/with}}
         </div>
-        
     </body>
 </html>
