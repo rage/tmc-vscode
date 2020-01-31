@@ -41,6 +41,10 @@ export function registerUiActions(
         await ui.webview.setContentFromTemplate("login");
     });
 
+    ui.treeDP.registerAction("Summary", ["loggedIn"], async () => {
+        await ui.webview.setContentFromTemplate("index");
+    }, "index");
+
     // Displays the organization webview
     ui.treeDP.registerAction("Organization", ["loggedIn"], async () => {
         const result = await tmc.getOrganizations();
@@ -78,7 +82,7 @@ export function registerUiActions(
     }, "courses");
 
     // Displays course details
-    ui.treeDP.registerAction("Course details", ["courseChosen", "loggedIn"], async () => {
+    ui.treeDP.registerAction("Course details", ["orgChosen", "courseChosen", "loggedIn"], async () => {
         const id = storage.getCourseId();
         if (!id) {
             return new Err(new Error("Trying to view course details without selected course."));
@@ -102,8 +106,7 @@ export function registerUiActions(
         if (result.ok) {
             console.log("Logged in successfully");
             ui.treeDP.updateVisibility(["loggedIn"]);
-            // TODO: check if storage has organization slug, if not trigger callback for summary
-            ui.treeDP.triggerCallback("orgs");
+            storage.getOrganizationSlug() === undefined ? ui.treeDP.triggerCallback("orgs") : ui.treeDP.triggerCallback("index");
         } else {
             console.log("Login failed: " + result.val.message);
             if (result.val instanceof AuthenticationError) {
