@@ -5,6 +5,9 @@
 
         <script>
             const vscode = acquireVsCodeApi();
+            let selectedCount = 0;
+            let totalCount = undefined;
+
             function downloadSelectedExercises() {
                 const checkboxes = document.querySelectorAll('input[type="checkbox"]');
                 const ids = [];
@@ -18,17 +21,30 @@
                 }
             }
 
+            function updateCount(element) {
+                selectedCount += element.checked ? 1 : -1;
+                if (totalCount === undefined) {
+                    totalCount = document.querySelectorAll('input[type="checkbox"]').length
+                }
+                if (selectedCount === totalCount) {
+                    document.querySelector("button#togglebutton").innerHTML = "Deselect all";
+                } else if (selectedCount === totalCount - 1) {
+                    document.querySelector("button#togglebutton").innerHTML = "Select all";
+                }
+            }
+
             function toggleAll() {
                 const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                let allWereOn = true;
+                const deselect = selectedCount === totalCount;
                 for (const checkbox of checkboxes) {
-                    allWereOn = allWereOn && checkbox.checked;
-                    checkbox.checked = true;
+                    checkbox.checked = !deselect;
                 }
-                if (allWereOn) {
-                    for (const checkbox of checkboxes) {
-                        checkbox.checked = false;
-                    }
+                if (deselect) {
+                    document.querySelector("button#togglebutton").innerHTML = "Select all";
+                    selectedCount = 0;
+                } else {
+                    document.querySelector("button#togglebutton").innerHTML = "Deselect all";
+                    selectedCount = totalCount;
                 }
             }
         </script>
@@ -45,14 +61,14 @@
                         <p>{{description}}</p>
                     </div>
                     <div class="row py-2">
-                        <button class="mr-2" onclick="toggleAll()">Toggle all</button>
+                        <button class="mr-2" onclick="toggleAll()" id="togglebutton">Select all</button>
                         <button onclick="downloadSelectedExercises()">Download selected</button>
                     </div>
                 </div>
                 {{#each exercises}}
                     <div class="row pb-1">
                         <div class="col-sm-1 checkbox-centered checkbox-xl">
-                            <input type="checkbox" value="{{this.id}}"/>
+                            <input type="checkbox" value="{{this.id}}" onchange="updateCount(this)"/>
                         </div>
                         <div class="col-sm">
                             {{this.name}}
