@@ -131,6 +131,7 @@ export function registerUiActions(
 
     // Receives the id of selected exercise from the webview, downloads and opens
     ui.webview.registerHandler("downloadExercises", async (msg: { type: string, ids: number[]}) => {
+        ui.webview.setContentFromTemplate("loading");
         const results = Results(...await Promise.all(msg.ids.map((x) => tmc.downloadExercise(x))));
         if (results.ok) {
             console.log("opening downloaded exercises in: ", results.val);
