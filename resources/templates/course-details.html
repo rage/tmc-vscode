@@ -20,8 +20,15 @@
 
             function toggleAll() {
                 const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                let allWereOn = true;
                 for (const checkbox of checkboxes) {
-                    checkbox.checked = !checkbox.checked;
+                    allWereOn = allWereOn && checkbox.checked;
+                    checkbox.checked = true;
+                }
+                if (allWereOn) {
+                    for (const checkbox of checkboxes) {
+                        checkbox.checked = false;
+                    }
                 }
             }
         </script>
