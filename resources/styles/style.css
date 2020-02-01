@@ -32,3 +32,15 @@
     border: 1px solid black !important;
     border-radius: 5px;
 }
+
+.checkbox-centered { 
+    text-align:justify; 
+    display:flex; 
+    flex-direction:column; 
+    align-items:center; 
+    justify-content:center; 
+}
+
+.checkbox-xl {
+    transform:scale(1.75);
+}

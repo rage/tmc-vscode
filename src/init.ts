@@ -5,7 +5,7 @@ import TMC from "./api/tmc";
 import TemplateEngine from "./ui/templateEngine";
 import UI from "./ui/ui";
 
-import { Err, Ok, Result } from "ts-results";
+import { Err, Ok, Result, Results } from "ts-results";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
@@ -40,6 +40,10 @@ export function registerUiActions(
     ui.treeDP.registerAction("Log in", ["!loggedIn"], async () => {
         await ui.webview.setContentFromTemplate("login");
     });
+
+    ui.treeDP.registerAction("Summary", ["loggedIn"], async () => {
+        await ui.webview.setContentFromTemplate("index");
+    }, "index");
 
     // Displays the organization webview
     ui.treeDP.registerAction("Organization", ["loggedIn"], async () => {
@@ -78,7 +82,7 @@ export function registerUiActions(
     }, "courses");
 
     // Displays course details
-    ui.treeDP.registerAction("Course details", ["courseChosen", "loggedIn"], async () => {
+    ui.treeDP.registerAction("Course details", ["orgChosen", "courseChosen", "loggedIn"], async () => {
         const id = storage.getCourseId();
         if (!id) {
             return new Err(new Error("Trying to view course details without selected course."));
@@ -102,8 +106,7 @@ export function registerUiActions(
         if (result.ok) {
             console.log("Logged in successfully");
             ui.treeDP.updateVisibility(["loggedIn"]);
-            // TODO: check if storage has organization slug, if not trigger callback for summary
-            ui.treeDP.triggerCallback("orgs");
+            storage.getOrganizationSlug() === undefined ? ui.treeDP.triggerCallback("orgs") : ui.treeDP.triggerCallback("index");
         } else {
             console.log("Login failed: " + result.val.message);
             if (result.val instanceof AuthenticationError) {
@@ -130,13 +133,16 @@ export function registerUiActions(
     });
 
     // Receives the id of selected exercise from the webview, downloads and opens
-    ui.webview.registerHandler("downloadExercise", async (msg: { type: string, id: number}) => {
-        const result = await tmc.downloadExercise(msg.id);
-        if (result.ok) {
-            console.log("opening downloaded exercise in", result.val);
-            openFolder(result.val, msg.id.toString()); // TODO: get proper exercise name from API
+    ui.webview.registerHandler("downloadExercises", async (msg: { type: string, ids: number[]}) => {
+        ui.webview.setContentFromTemplate("loading");
+        const results = Results(...await Promise.all(msg.ids.map((x) => tmc.downloadExercise(x))));
+        if (results.ok) {
+            console.log("opening downloaded exercises in: ", results.val);
+            ui.webview.dispose();
+            openFolder(...results.val.map((folderPath, index) =>
+                ({folderPath, name: msg.ids[index].toString()}))); // TODO: get proper exercise name from API
         } else {
-            return new Err(new Error("Failed to download exercise"));
+            vscode.window.showErrorMessage("One or more exercise downloads failed.");
         }
     });
 }
