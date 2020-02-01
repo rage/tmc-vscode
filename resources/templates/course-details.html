@@ -65,16 +65,26 @@
                         <button onclick="downloadSelectedExercises()">Download selected</button>
                     </div>
                 </div>
-                {{#each exercises}}
-                    <div class="row pb-1">
-                        <div class="col-sm-1 checkbox-centered checkbox-xl">
-                            <input type="checkbox" value="{{this.id}}" onchange="updateCount(this)"/>
-                        </div>
-                        <div class="col-sm">
-                            {{this.name}}
-                        </div>
-                    </div>
-                {{/each}}
+                <div style="overflow-y: hidden;">
+                    <table class="table table-striped table-sm">
+                        {{#each exercises}}
+                        <tr>
+                            <td width="40">
+                                <div class="row pb-1">
+                                    <div class="col-sm-1 checkbox-xl">
+                                        <input type="checkbox" value="{{this.id}}" onchange="updateCount(this)"/>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="col-sm">
+                                    {{this.name}}
+                                </div>
+                            </td>
+                        </tr>
+                        {{/each}}
+                    </table>
+                </div>
             {{/with}}
         </div>
     </body>
