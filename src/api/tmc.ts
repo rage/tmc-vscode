@@ -1,7 +1,9 @@
 import * as cp from "child_process";
 import ClientOauth2 = require("client-oauth2");
+import * as FormData from "form-data";
 import * as fs from "fs";
 import * as fetch from "node-fetch";
+import * as path from "path";
 import * as vscode from "vscode";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
@@ -10,8 +12,8 @@ import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
 import { downloadFile } from "../utils";
-import { Course, CourseDetails, Organization, TMCApiResponse,
-         TmcLangsAction, TmcLangsResponse, TmcLangsTestResults } from "./types";
+import { Course, CourseDetails, ExerciseDetails, Organization, SubmissionResponse,
+         TMCApiResponse, TmcLangsAction, TmcLangsResponse, TmcLangsTestResults } from "./types";
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -23,6 +25,7 @@ export default class TMC {
     private readonly storage: Storage;
     private readonly dataPath: string;
     private readonly tmcLangsPath: string;
+    private readonly tmcApiUrl: string;
 
     private readonly cache: Map<string, TMCApiResponse>;
 
@@ -42,6 +45,7 @@ export default class TMC {
         }
         this.dataPath = resources.tmcDataFolder;
         this.tmcLangsPath = resources.tmcLangsPath;
+        this.tmcApiUrl = "https://tmc.mooc.fi/api/v8/";
         this.cache = new Map();
     }
 
@@ -122,11 +126,20 @@ export default class TMC {
     }
 
     /**
+     * @param id Exercise id
+     * @returns A description for the specified exercise
+     */
+    public async getExerciseDetails(id: number, cache?: boolean): Promise<Result<ExerciseDetails, Error>> {
+        return this.checkApiResponse(this.tmcApiRequest(`core/exercises/${id}`, cache), createIs<ExerciseDetails>());
+    }
+
+    /**
      * Downloads exercise with given id and extracts it to the exercise folder.
      * @param id Id of the exercise to download
      */
     public async downloadExercise(id: number): Promise<Result<string, Error>> {
-        const result = await downloadFile(`https://tmc.mooc.fi/api/v8/core/exercises/${id}/download`, `${this.dataPath}/${id}.zip`);
+        const result = await downloadFile(`${this.tmcApiUrl}core/exercises/${id}/download`,
+                                          `${this.dataPath}/${id}.zip`);
         if (result.ok) {
             return this.checkApiResponse(this.executeLangsAction({
                 action: "extract-project",
@@ -138,18 +151,6 @@ export default class TMC {
     }
 
     /**
-     * Temporary: creates a submission archive and returns its path
-     * @param id Id of the exercise
-     */
-    public async prepareSubmissionArchive(id: number): Promise<Result<string, Error>> {
-        return this.checkApiResponse(this.executeLangsAction({
-            action: "compress-project",
-            archivePath: `${this.dataPath}/${id}-new.zip`,
-            exerciseFolderPath: `${this.dataPath}/${id}`,
-        }), createIs<string>());
-    }
-
-    /**
      * Runs tests locally for an exercise
      * @param id Id of the exercise
      */
@@ -158,6 +159,35 @@ export default class TMC {
             action: "run-tests",
             exerciseFolderPath: `${this.dataPath}/${id}`,
         }), createIs<TmcLangsTestResults>());
+    }
+
+    /**
+     * Checks if a given file is a part of a TMC exercise and returns its id if it is
+     * @param filePath
+     */
+    public getExercisePath(filePath: string): number | undefined {
+        const relation = path.relative(this.dataPath, filePath);
+        return relation.startsWith("..") ? undefined : parseInt(relation.split(path.sep, 1)[0], 10);
+    }
+
+    /**
+     * Archives and submits the specified exercise to the TMC server
+     * @param id Exercise id
+     */
+    public async submitExercise(id: number): Promise<Result<SubmissionResponse, Error>> {
+        const compressResult = await this.checkApiResponse(this.executeLangsAction({
+            action: "compress-project",
+            archivePath: `${this.dataPath}/${id}-new.zip`,
+            exerciseFolderPath: `${this.dataPath}/${id}`,
+        }), createIs<string>());
+        if (compressResult.err) {
+            return new Err(compressResult.val);
+        }
+        const archivePath = compressResult.val;
+        const form = new FormData();
+        form.append("submission[file]", fs.createReadStream(archivePath));
+        return this.checkApiResponse(this.tmcApiRequest(`core/exercises/${id}/submissions`, false, "post",
+                                     form, form.getHeaders()), createIs<SubmissionResponse>());
     }
 
     /**
@@ -227,7 +257,8 @@ export default class TMC {
      * @param endpoint target API endpoint
      * @param method HTTP method, defaults to GET
      */
-    private async tmcApiRequest(endpoint: string, cache: boolean | undefined, method?: "get" | "post"):
+    private async tmcApiRequest(endpoint: string, cache: boolean | undefined,
+                                method?: "get" | "post", body?: any, headers?: any):
         Promise<Result<TMCApiResponse, Error>> {
 
         cache = cache === undefined ? true : cache;
@@ -240,9 +271,10 @@ export default class TMC {
         }
 
         let request = {
-            headers: {},
+            body,
+            headers: headers ? headers : {},
             method: method ? method : "get",
-            url: `https://tmc.mooc.fi/api/v8/${endpoint}`,
+            url: this.tmcApiUrl + endpoint,
         };
 
         if (this.token) {
@@ -268,7 +300,7 @@ export default class TMC {
             if (response.status === 403) {
                 return new Err(new AuthorizationError("403 - Forbidden"));
             }
-            return new Err(new ApiError(response.status + " - " + response.statusText));
+            return new Err(new ApiError(response.status + " - " + response.statusText + " - " + await response.text()));
         } catch (error) {
             return new Err(new ConnectionError("Connection error: " + error.name));
         }

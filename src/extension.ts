@@ -23,6 +23,27 @@ export async function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(
             vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
         );
+        context.subscriptions.push(
+            vscode.commands.registerCommand("uploadArchive", async () => {
+                const path = vscode.window.activeTextEditor?.document.fileName;
+                if (path) {
+                    const exerciseId = tmc.getExercisePath(path);
+                    if (exerciseId) {
+                        const submitResult = await tmc.submitExercise(exerciseId);
+                        if (submitResult.ok) {
+                            vscode.window.showInformationMessage("Exercise submitted successfully: " +
+                                                                 submitResult.val.show_submission_url);
+                        } else {
+                            vscode.window.showErrorMessage(`Exercise submission failed: \
+                                                            ${submitResult.val.name} - ${submitResult.val.message}`);
+                            console.error(submitResult.val);
+                        }
+                    } else {
+                        vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
+                    }
+                }
+            }),
+        );
     } else {
         vscode.window.showErrorMessage("Something broke: " + result.val.message);
     }
