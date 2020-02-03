@@ -307,7 +307,8 @@ export default class TMC {
             if (response.status === 403) {
                 return new Err(new AuthorizationError("403 - Forbidden"));
             }
-            return new Err(new ApiError(response.status + " - " + response.statusText + " - " + await response.text()));
+            const errorText = await response.text();
+            return new Err(new ApiError(`${response.status} - ${response.statusText} - ${errorText}`));
         } catch (error) {
             return new Err(new ConnectionError("Connection error: " + error.name));
         }
