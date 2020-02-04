@@ -9,6 +9,7 @@ import { Err, Ok, Result, Results } from "ts-results";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { AuthenticationError } from "./errors";
+import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, doLogout } from "./ui/treeview/actions";
 import { downloadFile, openFolder } from "./utils";
 
 /**
@@ -29,74 +30,14 @@ export function registerUiActions(
     ui.treeDP.registerVisibilityGroup("orgChosen", storage.getOrganizationSlug() !== undefined);
     ui.treeDP.registerVisibilityGroup("courseChosen", storage.getCourseId() !== undefined);
 
-    // Logs out, closes the webview, hides the logout command, shows the login command
-    ui.treeDP.registerAction("Log out", ["loggedIn"], () => {
-        tmc.deauthenticate();
-        ui.webview.dispose();
-        ui.treeDP.updateVisibility(["!loggedIn"]);
-    });
-
-    // Displays the login webview
-    ui.treeDP.registerAction("Log in", ["!loggedIn"], async () => {
-        await ui.webview.setContentFromTemplate("login");
-    });
-
-    ui.treeDP.registerAction("Summary", ["loggedIn"], async () => {
-        await ui.webview.setContentFromTemplate("index");
-    }, "index");
-
-    // Displays the organization webview
-    ui.treeDP.registerAction("Organization", ["loggedIn"], async () => {
-        const result = await tmc.getOrganizations();
-
-        if (result.ok) {
-            console.log("Organizations loaded");
-            const organizations = result.val.sort((org1, org2) => org1.name.localeCompare(org2.name));
-            const pinned = organizations.filter((organization) => organization.pinned);
-            const data = { organizations, pinned };
-            await ui.webview.setContentFromTemplate("organization", data);
-        } else {
-            console.log("Fetching organizations failed: " + result.val.message);
-        }
-    }, "orgs");
-
-    // Displays the course webview
-    ui.treeDP.registerAction("Courses", ["orgChosen", "loggedIn"], async () => {
-        const result = await tmc.getCourses();
-        const slug = storage.getOrganizationSlug();
-
-        if (slug === undefined) {
-            return;
-        }
-        const resultOrg = await tmc.getOrganization(slug);
-
-        if (result.ok) {
-            console.log("Courses loaded");
-            const courses = result.val.sort((course1, course2) => course1.name.localeCompare(course2.name));
-            const organization = resultOrg.val;
-            const data = { courses, organization };
-            await ui.webview.setContentFromTemplate("course", data);
-        } else {
-            console.log("Fetching courses failed: " + result.val.message);
-        }
-    }, "courses");
-
-    // Displays course details
-    ui.treeDP.registerAction("Course details", ["orgChosen", "courseChosen", "loggedIn"], async () => {
-        const id = storage.getCourseId();
-        if (!id) {
-            return new Err(new Error("Trying to view course details without selected course."));
-        }
-        const result = await tmc.getCourseDetails(id);
-
-        if (result.ok) {
-            const details = result.val.course;
-            const data = { details };
-            await ui.webview.setContentFromTemplate("course-details", data);
-        } else {
-            console.log("Fetching course details failed: " + result.val.message);
-        }
-    }, "courseDetails");
+    // Register UI actions
+    ui.treeDP.registerAction("Log out", ["loggedIn"], doLogout(ui, tmc));
+    ui.treeDP.registerAction("Log in", ["!loggedIn"], async () => await ui.webview.setContentFromTemplate("login"));
+    ui.treeDP.registerAction("Summary", ["loggedIn"], displaySummary(ui), "index");
+    ui.treeDP.registerAction("Organization", ["loggedIn"], displayOrganizations(ui, tmc), "orgs");
+    ui.treeDP.registerAction("Courses", ["orgChosen", "loggedIn"], displayCourses(ui, storage, tmc), "courses");
+    ui.treeDP.registerAction("Course details", ["orgChosen", "courseChosen", "loggedIn"],
+        displayCourseDetails(ui, storage, tmc), "courseDetails");
 
     // Receives a login information from the webview, attempts to log in
     // If successful, show the logout command instead of the login one, and a temporary webview page
@@ -133,14 +74,14 @@ export function registerUiActions(
     });
 
     // Receives the id of selected exercise from the webview, downloads and opens
-    ui.webview.registerHandler("downloadExercises", async (msg: { type: string, ids: number[]}) => {
+    ui.webview.registerHandler("downloadExercises", async (msg: { type: string, ids: number[] }) => {
         ui.webview.setContentFromTemplate("loading");
         const results = Results(...await Promise.all(msg.ids.map((x) => tmc.downloadExercise(x))));
         if (results.ok) {
             console.log("opening downloaded exercises in: ", results.val);
             ui.webview.dispose();
             openFolder(...results.val.map((folderPath, index) =>
-                ({folderPath, name: msg.ids[index].toString()}))); // TODO: get proper exercise name from API
+                ({ folderPath, name: msg.ids[index].toString() }))); // TODO: get proper exercise name from API
         } else {
             vscode.window.showErrorMessage("One or more exercise downloads failed.");
         }
