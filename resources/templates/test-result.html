@@ -1,0 +1,39 @@
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+    </head>
+
+    <body>
+        <div class="container container-fluid pt-0">
+            <div class="sticky-top">
+                <div class="py-2">
+                    <h1>{{status}}</h1>
+                </div>
+            </div>
+            <div style="overflow-y: hidden;">
+                <table class="table table-striped table-sm">
+                    {{#each testResults}}
+                    <tr>
+                        <td>
+                            <div>
+                                <span>{{this.name}}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div>
+                                <span>{{this.successful}}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div>
+                                <pre style="color:var(--vscode-editor-foreground);">{{this.message}}</pre>
+                            </div>
+                        </td>
+                    </tr>
+                    {{/each}}
+                </table>
+            </div>
+        </div>
+    </body>
+</html>
