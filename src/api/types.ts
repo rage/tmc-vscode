@@ -52,7 +52,26 @@ export type Organization = {
     pinned: boolean;
 };
 
-export type TMCApiResponse = Course[] | CourseDetails | Organization[] | Organization;
+export type ExerciseDetails = {
+    course_name: string;
+    course_id: number;
+    code_review_requests_enabled: boolean;
+    run_tests_locally_action_enabled: boolean;
+    exercise_name: string;
+    exercise_id: number;
+    unlocked_at: string | null;
+    deadline: string | null;
+    submissions: any[];
+};
+
+export type SubmissionResponse = {
+    submission_url: string;
+    paste_url: string;
+    show_submission_url: string;
+};
+
+export type TMCApiResponse = Course[] | CourseDetails | Organization[] | Organization | ExerciseDetails |
+                             SubmissionResponse;
 
 export type TmcLangsAction = {
     action: "extract-project" | "compress-project",
