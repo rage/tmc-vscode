@@ -7,7 +7,7 @@ import UI from "../ui";
 /**
  * Returns an action that fetches all courses of the current organization and displays them in webview when called.
  * @param ui UI instance used for setting up the webview
- * @param storage Storage object used for reading current organization
+ * @param storage Storage instance used for reading current organization
  * @param tmc TMC API instance used for fetching courses
  */
 export function displayCourses(ui: UI, storage: Storage, tmc: TMC) {
@@ -36,7 +36,7 @@ export function displayCourses(ui: UI, storage: Storage, tmc: TMC) {
  * Returns an action that fetches all details including exercises of the currently selected course and displays them in
  * webview when called.
  * @param ui UI instance used for setting up the webview
- * @param storage Storage object used for reading current organization
+ * @param storage Storage instance used for reading current organization
  * @param tmc TMC API instance used for fetching courses
  */
 export function displayCourseDetails(ui: UI, storage: Storage, tmc: TMC) {

@@ -2,30 +2,25 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import TMC from "./api/tmc";
-import TemplateEngine from "./ui/templateEngine";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result, Results } from "ts-results";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
-import { AuthenticationError } from "./errors";
 import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, doLogout } from "./ui/treeview/actions";
-import { downloadFile, openFolder } from "./utils";
+import { downloadExercises, handleLogin, setCourse, setOrganization } from "./ui/treeview/handlers";
+import { downloadFile } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
  * Should only be called once.
- *
- * TODO: split up into reasonable pieces as functionality expands
  * @param ui The User Interface object
  * @param tmc The TMC API object
  */
 export function registerUiActions(
     extensionContext: vscode.ExtensionContext, ui: UI,
-    storage: Storage, tmc: TMC, resources: Resources) {
-    // Register handlebars helper function to resolve full logo paths
-    // or switch to an existing placeholder image.
-
+    storage: Storage, tmc: TMC, resources: Resources,
+) {
     ui.treeDP.registerVisibilityGroup("loggedIn", tmc.isAuthenticated());
     ui.treeDP.registerVisibilityGroup("orgChosen", storage.getOrganizationSlug() !== undefined);
     ui.treeDP.registerVisibilityGroup("courseChosen", storage.getCourseId() !== undefined);
@@ -39,53 +34,11 @@ export function registerUiActions(
     ui.treeDP.registerAction("Course details", ["orgChosen", "courseChosen", "loggedIn"],
         displayCourseDetails(ui, storage, tmc), "courseDetails");
 
-    // Receives a login information from the webview, attempts to log in
-    // If successful, show the logout command instead of the login one, and a temporary webview page
-    ui.webview.registerHandler("login", async (msg: { type: string, username: string, password: string }) => {
-        console.log("Logging in as " + msg.username);
-        const result = await tmc.authenticate(msg.username, msg.password);
-        if (result.ok) {
-            console.log("Logged in successfully");
-            ui.treeDP.updateVisibility(["loggedIn"]);
-            storage.getOrganizationSlug() === undefined ? ui.treeDP.triggerCallback("orgs") : ui.treeDP.triggerCallback("index");
-        } else {
-            console.log("Login failed: " + result.val.message);
-            if (result.val instanceof AuthenticationError) {
-                console.log("auth error");
-            }
-            ui.webview.setContentFromTemplate("login", { error: result.val.message });
-        }
-    });
-
-    // Receives the slug of a selected organization from the webview, stores the value
-    ui.webview.registerHandler("setOrganization", (msg: { type: string, slug: string }) => {
-        console.log("Organization selected:", msg.slug);
-        storage.updateOrganizationSlug(msg.slug);
-        ui.treeDP.updateVisibility(["orgChosen"]);
-        ui.treeDP.triggerCallback("courses");
-    });
-
-    // Receives the id of selected course from the webview, stores the value
-    ui.webview.registerHandler("setCourse", (msg: { type: string, id: number }) => {
-        console.log("Course selected:", msg.id);
-        storage.updateCourseId(msg.id);
-        ui.treeDP.updateVisibility(["courseChosen"]);
-        ui.treeDP.triggerCallback("courseDetails");
-    });
-
-    // Receives the id of selected exercise from the webview, downloads and opens
-    ui.webview.registerHandler("downloadExercises", async (msg: { type: string, ids: number[] }) => {
-        ui.webview.setContentFromTemplate("loading");
-        const results = Results(...await Promise.all(msg.ids.map((x) => tmc.downloadExercise(x))));
-        if (results.ok) {
-            console.log("opening downloaded exercises in: ", results.val);
-            ui.webview.dispose();
-            openFolder(...results.val.map((folderPath, index) =>
-                ({ folderPath, name: msg.ids[index].toString() }))); // TODO: get proper exercise name from API
-        } else {
-            vscode.window.showErrorMessage("One or more exercise downloads failed.");
-        }
-    });
+    // Register webview handlers
+    ui.webview.registerHandler("setOrganization", setOrganization(ui, storage));
+    ui.webview.registerHandler("setCourse", setCourse(ui, storage));
+    ui.webview.registerHandler("login", handleLogin(ui, storage, tmc));
+    ui.webview.registerHandler("downloadExercises", downloadExercises(ui, tmc));
 }
 
 /**
