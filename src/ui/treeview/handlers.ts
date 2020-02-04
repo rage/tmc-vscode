@@ -34,13 +34,13 @@ export function downloadExercises({ ui, tmc }: HandlerContext) {
  * @param storage Storage for storing authorization token on successful login
  * @param tmc TMC API instance used for downloading exercises
  */
-export function handleLogin({ ui, storage, tmc }: HandlerContext) {
+export function handleLogin({ ui, storage, tmc, visibilityGroups }: HandlerContext) {
     return async (msg: { type: string, username: string, password: string }) => {
         console.log("Logging in as " + msg.username);
         const result = await tmc.authenticate(msg.username, msg.password);
         if (result.ok) {
             console.log("Logged in successfully");
-            ui.treeDP.updateVisibility(["loggedIn"]);
+            ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
             storage.getOrganizationSlug() === undefined ? ui.treeDP.triggerCallback("orgs") : ui.treeDP.triggerCallback("index");
         } else {
             console.log("Login failed: " + result.val.message);
@@ -57,11 +57,11 @@ export function handleLogin({ ui, storage, tmc }: HandlerContext) {
  * @param ui UI instance used for setting up the webview afterwards
  * @param storage Storage for updating currently selected organization
  */
-export function setOrganization({ ui, storage }: HandlerContext) {
+export function setOrganization({ ui, storage, visibilityGroups }: HandlerContext) {
     return async (msg: { type: string, slug: string }) => {
         console.log("Organization selected:", msg.slug);
         storage.updateOrganizationSlug(msg.slug);
-        ui.treeDP.updateVisibility(["orgChosen"]);
+        ui.treeDP.updateVisibility([visibilityGroups.ORGANIZATION_CHOSEN]);
         ui.treeDP.triggerCallback("courses");
     };
 }
@@ -71,11 +71,11 @@ export function setOrganization({ ui, storage }: HandlerContext) {
  * @param ui UI instance used for setting up the webview afterwards
  * @param storage Storage for updating currently selected organization
  */
-export function setCourse({ ui, storage }: HandlerContext) {
+export function setCourse({ ui, storage, visibilityGroups }: HandlerContext) {
     return async (msg: { type: string, id: number }) => {
         console.log("Course selected:", msg.id);
         storage.updateCourseId(msg.id);
-        ui.treeDP.updateVisibility(["courseChosen"]);
+        ui.treeDP.updateVisibility([visibilityGroups.COURSE_CHOSEN]);
         ui.treeDP.triggerCallback("courseDetails");
     };
 }

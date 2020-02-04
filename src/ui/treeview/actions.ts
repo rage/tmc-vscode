@@ -92,10 +92,10 @@ export function displaySummary({ ui }: ActionContext) {
  * @param ui UI instance used for disposing of the webview
  * @param tmc TMC API instance used for deauthenticating
  */
-export function doLogout({ tmc, ui }: ActionContext) {
+export function doLogout({ tmc, ui, visibilityGroups }: ActionContext) {
     return () => {
         tmc.deauthenticate();
         ui.webview.dispose();
-        ui.treeDP.updateVisibility(["!loggedIn"]);
+        ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN.not]);
     };
 }
