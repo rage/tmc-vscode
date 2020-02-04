@@ -18,7 +18,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const storage = new Storage(context);
         const tmc = new TMC(storage, context, resources);
 
-        init.registerUiActions(context, ui, storage, tmc, resources);
+        init.registerUiActions(ui, storage, tmc);
 
         context.subscriptions.push(
             vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),

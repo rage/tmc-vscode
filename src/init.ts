@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
-import { Err, Ok, Result, Results } from "ts-results";
+import { Err, Ok, Result } from "ts-results";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, doLogout } from "./ui/treeview/actions";
@@ -17,22 +17,24 @@ import { downloadFile } from "./utils";
  * @param ui The User Interface object
  * @param tmc The TMC API object
  */
-export function registerUiActions(
-    extensionContext: vscode.ExtensionContext, ui: UI,
-    storage: Storage, tmc: TMC, resources: Resources,
-) {
-    ui.treeDP.registerVisibilityGroup("loggedIn", tmc.isAuthenticated());
-    ui.treeDP.registerVisibilityGroup("orgChosen", storage.getOrganizationSlug() !== undefined);
-    ui.treeDP.registerVisibilityGroup("courseChosen", storage.getCourseId() !== undefined);
+export function registerUiActions(ui: UI, storage: Storage, tmc: TMC) {
+    const LOGGED_IN = "loggedIn";
+    const NOT_LOGGED_IN = "!loggedIn";
+    const ORGANIZATION_CHOSEN = "orgChosen";
+    const COURSE_CHOSEN = "courseChosen";
+
+    ui.treeDP.registerVisibilityGroup(LOGGED_IN, tmc.isAuthenticated());
+    ui.treeDP.registerVisibilityGroup(ORGANIZATION_CHOSEN, storage.getOrganizationSlug() !== undefined);
+    ui.treeDP.registerVisibilityGroup(COURSE_CHOSEN, storage.getCourseId() !== undefined);
 
     // Register UI actions
     const actionContext = { tmc, storage, ui };
-    ui.treeDP.registerAction("Log out", ["loggedIn"], doLogout(actionContext));
-    ui.treeDP.registerAction("Log in", ["!loggedIn"], async () => await ui.webview.setContentFromTemplate("login"));
-    ui.treeDP.registerAction("Summary", ["loggedIn"], displaySummary(actionContext), "index");
-    ui.treeDP.registerAction("Organization", ["loggedIn"], displayOrganizations(actionContext), "orgs");
-    ui.treeDP.registerAction("Courses", ["orgChosen", "loggedIn"], displayCourses(actionContext), "courses");
-    ui.treeDP.registerAction("Course details", ["orgChosen", "courseChosen", "loggedIn"],
+    ui.treeDP.registerAction("Log out", [LOGGED_IN], doLogout(actionContext));
+    ui.treeDP.registerAction("Log in", [NOT_LOGGED_IN], async () => await ui.webview.setContentFromTemplate("login"));
+    ui.treeDP.registerAction("Summary", [LOGGED_IN], displaySummary(actionContext), "index");
+    ui.treeDP.registerAction("Organization", [LOGGED_IN], displayOrganizations(actionContext), "orgs");
+    ui.treeDP.registerAction("Courses", [LOGGED_IN, ORGANIZATION_CHOSEN], displayCourses(actionContext), "courses");
+    ui.treeDP.registerAction("Course details", [LOGGED_IN, ORGANIZATION_CHOSEN, COURSE_CHOSEN],
         displayCourseDetails(actionContext), "courseDetails");
 
     // Register webview handlers
