@@ -3,6 +3,7 @@ import * as init from "./init";
 
 import TMC from "./api/tmc";
 import Storage from "./config/storage";
+import TemporaryWebview from "./ui/temporaryWebview";
 import UI from "./ui/ui";
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -37,6 +38,30 @@ export async function activate(context: vscode.ExtensionContext) {
                             vscode.window.showErrorMessage(`Exercise submission failed: \
                                                             ${submitResult.val.name} - ${submitResult.val.message}`);
                             console.error(submitResult.val);
+                        }
+                    } else {
+                        vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
+                    }
+                }
+            }),
+        );
+        context.subscriptions.push(
+            vscode.commands.registerCommand("runTests", async () => {
+                const path = vscode.window.activeTextEditor?.document.fileName;
+                if (path) {
+                    const exerciseId = tmc.getExercisePath(path);
+                    if (exerciseId) {
+                        const temp = new TemporaryWebview(resources, ui,
+                            "test stuff", () => {});
+                        temp.setContent("loading");
+                        const testResult = await tmc.runTests(exerciseId);
+                        console.log(testResult);
+                        if (testResult.ok) {
+                            temp.setContent("test-result", testResult.val);
+                        } else {
+                            vscode.window.showErrorMessage(`Exercise test run failed: \
+                                                            ${testResult.val.name} - ${testResult.val.message}`);
+                            console.error(testResult.val);
                         }
                     } else {
                         vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");

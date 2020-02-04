@@ -157,6 +157,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
 
     const cssPath = extensionContext.asAbsolutePath("resources/styles");
     const htmlPath = extensionContext.asAbsolutePath("resources/templates");
+    const mediaPath = extensionContext.asAbsolutePath("media");
 
     const basePath = extensionContext.globalStoragePath;
     const tmcDataPath = path.join(basePath, "tmcdata");
@@ -186,5 +187,6 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
         htmlPath,
         tmcDataPath,
         tmcLangsPath,
+        mediaPath,
     ));
 }

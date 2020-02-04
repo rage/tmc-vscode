@@ -13,7 +13,8 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onView:tmcView"
+		"onView:tmcView",
+		"onCommand:runTests"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -25,6 +26,10 @@
 			{
 				"command": "uploadArchive",
 				"title": "TMC - Submit solution"
+			},
+			{
+				"command": "runTests",
+				"title": "TMC - Run tests"
 			}
 		],
 		"menus": {
@@ -32,6 +37,13 @@
 				{
 					"command": "tmcView.activateEntry",
 					"when": "false"
+				}
+			],
+			"editor/title": [
+				{
+					"command": "runTests",
+					"group": "navigation",
+					"when": "resourceScheme == file"
 				}
 			]
 		},
