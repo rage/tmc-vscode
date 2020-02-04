@@ -35,6 +35,9 @@
 
             function toggleAll() {
                 const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                if (totalCount === undefined) {
+                    totalCount = checkboxes.length;
+                }
                 const deselect = selectedCount === totalCount;
                 for (const checkbox of checkboxes) {
                     checkbox.checked = !deselect;
