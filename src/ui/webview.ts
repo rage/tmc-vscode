@@ -7,24 +7,25 @@ import TemplateEngine from "./templateEngine";
  */
 export default class TmcWebview {
 
-    private extensionContext: vscode.ExtensionContext;
-    private messageHandlers: Map<string, (msg: any) => void> = new Map();
+    public readonly templateEngine: TemplateEngine;
+
+    private readonly extensionContext: vscode.ExtensionContext;
+    private readonly messageHandlers: Map<string, (msg: any) => void> = new Map();
 
     /**
      * NOTE: use [[getPanel]] to correctly handle disposed instances
      */
     private panel: vscode.WebviewPanel | undefined;
 
-    private readonly templateEngine: TemplateEngine;
     private readonly resources: Resources;
 
     /**
      * Creates a TmcWebview object used by the UI class
      * @param extensionContext The VSCode extension context, required for path resolution for the CSS stylesheet
      */
-    constructor(extensionContext: vscode.ExtensionContext, resources: Resources, templateEngine: TemplateEngine) {
+    constructor(extensionContext: vscode.ExtensionContext, resources: Resources) {
         this.extensionContext = extensionContext;
-        this.templateEngine = templateEngine;
+        this.templateEngine = new TemplateEngine(resources, extensionContext);
         this.resources = resources;
     }
 

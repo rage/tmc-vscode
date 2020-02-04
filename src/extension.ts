@@ -52,10 +52,9 @@ export async function activate(context: vscode.ExtensionContext) {
                     const exerciseId = tmc.getExercisePath(path);
                     if (exerciseId) {
                         const temp = new TemporaryWebview(resources, ui,
-                            "test stuff", () => {});
+                            "TMC Test Results", () => {});
                         temp.setContent("loading");
                         const testResult = await tmc.runTests(exerciseId);
-                        console.log(testResult);
                         if (testResult.ok) {
                             temp.setContent("test-result", testResult.val);
                         } else {

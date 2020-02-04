@@ -3,6 +3,9 @@ import * as vscode from "vscode";
 import Resources from "../config/resources";
 import UI from "./ui";
 
+/**
+ * A class for temporary webviews
+ */
 export default class TemporaryWebview {
 
     public disposed: boolean;
@@ -21,12 +24,23 @@ export default class TemporaryWebview {
         this.panel.reveal(undefined, true);
     }
 
+    /**
+     * Sets the content of the webview using an HTML template
+     *
+     * @param templateName Name of the template to use
+     * @param data Data to be passed to the template engine
+     */
     public async setContent(templateName: string, data?: any) {
-        this.panel.webview.html = await this.ui.templateEngine.getTemplate(this.panel.webview, templateName, data);
+        this.panel.webview.html = await this.ui.webview.templateEngine.getTemplate(
+            this.panel.webview, templateName, data);
         this.panel.reveal(undefined, true);
     }
 
-    public getWebview() {
-        return this.panel.webview;
+    /**
+     * Closes the webview
+     */
+    public dispose() {
+        this.panel.dispose();
     }
+
 }

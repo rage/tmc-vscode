@@ -18,15 +18,12 @@ export default class UI {
      */
     public webview: TmcWebview;
 
-    public templateEngine: TemplateEngine;
-
     /**
      * Creates an UI object and (temporarily) initializes it with login-related content
      * @param extensionContext VSCode extension content
      */
     constructor(extensionContext: vscode.ExtensionContext, resources: Resources) {
-        this.templateEngine = new TemplateEngine(resources, extensionContext);
-        this.webview = new TmcWebview(extensionContext, resources, this.templateEngine);
+        this.webview = new TmcWebview(extensionContext, resources);
         this.treeDP = new TmcMenuTree("tmcView");
     }
 
