@@ -26,19 +26,21 @@ export function registerUiActions(
     ui.treeDP.registerVisibilityGroup("courseChosen", storage.getCourseId() !== undefined);
 
     // Register UI actions
-    ui.treeDP.registerAction("Log out", ["loggedIn"], doLogout(ui, tmc));
+    const actionContext = { tmc, storage, ui };
+    ui.treeDP.registerAction("Log out", ["loggedIn"], doLogout(actionContext));
     ui.treeDP.registerAction("Log in", ["!loggedIn"], async () => await ui.webview.setContentFromTemplate("login"));
-    ui.treeDP.registerAction("Summary", ["loggedIn"], displaySummary(ui), "index");
-    ui.treeDP.registerAction("Organization", ["loggedIn"], displayOrganizations(ui, tmc), "orgs");
-    ui.treeDP.registerAction("Courses", ["orgChosen", "loggedIn"], displayCourses(ui, storage, tmc), "courses");
+    ui.treeDP.registerAction("Summary", ["loggedIn"], displaySummary(actionContext), "index");
+    ui.treeDP.registerAction("Organization", ["loggedIn"], displayOrganizations(actionContext), "orgs");
+    ui.treeDP.registerAction("Courses", ["orgChosen", "loggedIn"], displayCourses(actionContext), "courses");
     ui.treeDP.registerAction("Course details", ["orgChosen", "courseChosen", "loggedIn"],
-        displayCourseDetails(ui, storage, tmc), "courseDetails");
+        displayCourseDetails(actionContext), "courseDetails");
 
     // Register webview handlers
-    ui.webview.registerHandler("setOrganization", setOrganization(ui, storage));
-    ui.webview.registerHandler("setCourse", setCourse(ui, storage));
-    ui.webview.registerHandler("login", handleLogin(ui, storage, tmc));
-    ui.webview.registerHandler("downloadExercises", downloadExercises(ui, tmc));
+    const handlerContext = { tmc, storage, ui };
+    ui.webview.registerHandler("setOrganization", setOrganization(handlerContext));
+    ui.webview.registerHandler("setCourse", setCourse(handlerContext));
+    ui.webview.registerHandler("login", handleLogin(handlerContext));
+    ui.webview.registerHandler("downloadExercises", downloadExercises(handlerContext));
 }
 
 /**

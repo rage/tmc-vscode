@@ -6,13 +6,14 @@ import Storage from "../../config/storage";
 import { AuthenticationError } from "../../errors";
 import { openFolder } from "../../utils";
 import UI from "../ui";
+import { HandlerContext } from "./types";
 
 /**
  * Returns a handler that downloads given exercises and opens them in VSCode explorer, when called.
  * @param ui UI instance used for setting up the webview afterwards
  * @param tmc TMC API instance used for downloading exercises
  */
-export function downloadExercises(ui: UI, tmc: TMC): (msg: any) => Promise<void> {
+export function downloadExercises({ ui, tmc }: HandlerContext) {
     return async (msg: { type: string, ids: number[] }) => {
         ui.webview.setContentFromTemplate("loading");
         const results = Results(...await Promise.all(msg.ids.map((x) => tmc.downloadExercise(x))));
@@ -33,7 +34,7 @@ export function downloadExercises(ui: UI, tmc: TMC): (msg: any) => Promise<void>
  * @param storage Storage for storing authorization token on successful login
  * @param tmc TMC API instance used for downloading exercises
  */
-export function handleLogin(ui: UI, storage: Storage, tmc: TMC): (msg: any) => Promise<void> {
+export function handleLogin({ ui, storage, tmc }: HandlerContext) {
     return async (msg: { type: string, username: string, password: string }) => {
         console.log("Logging in as " + msg.username);
         const result = await tmc.authenticate(msg.username, msg.password);
@@ -56,7 +57,7 @@ export function handleLogin(ui: UI, storage: Storage, tmc: TMC): (msg: any) => P
  * @param ui UI instance used for setting up the webview afterwards
  * @param storage Storage for updating currently selected organization
  */
-export function setOrganization(ui: UI, storage: Storage): (msg: any) => Promise<void> {
+export function setOrganization({ ui, storage }: HandlerContext) {
     return async (msg: { type: string, slug: string }) => {
         console.log("Organization selected:", msg.slug);
         storage.updateOrganizationSlug(msg.slug);
@@ -70,7 +71,7 @@ export function setOrganization(ui: UI, storage: Storage): (msg: any) => Promise
  * @param ui UI instance used for setting up the webview afterwards
  * @param storage Storage for updating currently selected organization
  */
-export function setCourse(ui: UI, storage: Storage): (msg: any) => Promise<void> {
+export function setCourse({ ui, storage }: HandlerContext) {
     return async (msg: { type: string, id: number }) => {
         console.log("Course selected:", msg.id);
         storage.updateCourseId(msg.id);

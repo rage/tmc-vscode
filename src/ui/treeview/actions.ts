@@ -3,6 +3,7 @@ import { Err } from "ts-results";
 import TMC from "../../api/tmc";
 import Storage from "../../config/storage";
 import UI from "../ui";
+import { ActionContext } from "./types";
 
 /**
  * Returns an action that fetches all courses of the current organization and displays them in webview when called.
@@ -10,7 +11,7 @@ import UI from "../ui";
  * @param storage Storage instance used for reading current organization
  * @param tmc TMC API instance used for fetching courses
  */
-export function displayCourses(ui: UI, storage: Storage, tmc: TMC) {
+export function displayCourses({ tmc, storage, ui }: ActionContext) {
     return async () => {
         const result = await tmc.getCourses();
         const slug = storage.getOrganizationSlug();
@@ -39,7 +40,7 @@ export function displayCourses(ui: UI, storage: Storage, tmc: TMC) {
  * @param storage Storage instance used for reading current organization
  * @param tmc TMC API instance used for fetching courses
  */
-export function displayCourseDetails(ui: UI, storage: Storage, tmc: TMC) {
+export function displayCourseDetails({ tmc, storage, ui }: ActionContext) {
     return async () => {
         const id = storage.getCourseId();
         if (!id) {
@@ -62,7 +63,7 @@ export function displayCourseDetails(ui: UI, storage: Storage, tmc: TMC) {
  * @param ui UI instance used for setting up the webview
  * @param tmc TMC API instance used for fetching organizations
  */
-export function displayOrganizations(ui: UI, tmc: TMC) {
+export function displayOrganizations({ tmc, ui }: ActionContext) {
     return async () => {
         const result = await tmc.getOrganizations();
         if (result.ok) {
@@ -81,7 +82,7 @@ export function displayOrganizations(ui: UI, tmc: TMC) {
  * Returns an action that displays the summary page in webview when called.
  * @param ui UI instance used for setting the webview
  */
-export function displaySummary(ui: UI) {
+export function displaySummary({ ui }: ActionContext) {
     // TODO: Have something to display on summary.
     return async () => await ui.webview.setContentFromTemplate("index");
 }
@@ -91,7 +92,7 @@ export function displaySummary(ui: UI) {
  * @param ui UI instance used for disposing of the webview
  * @param tmc TMC API instance used for deauthenticating
  */
-export function doLogout(ui: UI, tmc: TMC) {
+export function doLogout({ tmc, ui }: ActionContext) {
     return () => {
         tmc.deauthenticate();
         ui.webview.dispose();
