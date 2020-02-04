@@ -14,7 +14,8 @@
 	],
 	"activationEvents": [
 		"onView:tmcView",
-		"onCommand:runTests"
+		"onCommand:runTests",
+		"onCommand:uploadArchive"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -42,6 +43,11 @@
 			"editor/title": [
 				{
 					"command": "runTests",
+					"group": "navigation",
+					"when": "resourceScheme == file"
+				},
+				{
+					"command": "uploadArchive",
 					"group": "navigation",
 					"when": "resourceScheme == file"
 				}
