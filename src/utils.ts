@@ -45,3 +45,11 @@ export function openFolder(...folders: Array<{folderPath: string, name: string}>
     vscode.workspace.updateWorkspaceFolders(0, 0,
         ...folders.map((x) => ({uri: vscode.Uri.file(x.folderPath), name: x.name})));
 }
+
+/**
+ * Await this to pause execution for an amount of time
+ * @param millis
+ */
+export function sleep(millis: number) {
+    return new Promise((resolve) => setTimeout(resolve, millis));
+}
