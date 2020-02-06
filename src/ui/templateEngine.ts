@@ -30,6 +30,15 @@ export default class TemplateEngine {
                 return "<h1>Something went wrong while running the tests</h1>";
             }
         });
+        handlebars.registerHelper("check_submission_status", (status: string) => {
+            if (status === "created") {
+                return "<div>Sandbox created</div>";
+            } else if (status === "sending_to_sandbox") {
+                return "<div>Sandbox created</div><div>Sending to sandbox</div>";
+            } else if (status === "processing_on_sandbox") {
+                return "<div>Sandbox created</div><div>Sending to sandbox</div><div>Testing submission</div>";
+            }
+        });
     }
 
     /**
