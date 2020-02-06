@@ -1,4 +1,3 @@
-import * as assert from "assert";
 import * as oauth2 from "client-oauth2";
 import * as TypeMoq from "typemoq";
 import * as vscode from "vscode";
@@ -6,70 +5,89 @@ import * as vscode from "vscode";
 import Storage from "../../config/storage";
 
 suite("Storage tests", () => {
+    let mockContext: TypeMoq.IMock<vscode.ExtensionContext>;
+    let mockMemento: TypeMoq.IMock<vscode.Memento>;
+    let storage: Storage;
 
-    // Same as hardcoded in storage. We also "magically" know them here to protect against data loss between releases
+    setup(() => {
+        mockMemento = TypeMoq.Mock.ofType<vscode.Memento>();
+        mockContext = TypeMoq.Mock.ofType<vscode.ExtensionContext>();
+        mockContext.setup((x) => x.globalState).returns(() => mockMemento.object);
+        storage = new Storage(mockContext.object);
+    });
+
+    // Same as hardcoded keys in Storage class.
+    // We "magically" know them also here to remind you that changing these may break compatibility between releases.
     const AUTHENTICATION_TOKEN_KEY = "token";
     const COURSE_KEY = "course";
+    const EXERCISE_DATA_KEY = "exerciseData";
     const ORGANIZATION_KEY = "organization";
 
-    function createMocks() {
-        const mockMemento = TypeMoq.Mock.ofType<vscode.Memento>();
-        const mockContext = TypeMoq.Mock.ofType<vscode.ExtensionContext>();
-        mockContext.setup((x) => x.globalState).returns(() => mockMemento.object);
-        return { mockContext, mockMemento };
+    /**
+     * Helper function for running similar mock tests to multiple storage's updaters.
+     * @param updater Storage method for updating some data
+     * @param hardcodedKey Hardcoded key used internally within the Storage object
+     * @param checkForValue Value that was stored with updater
+     */
+    function assertUpdater<T>(updater: () => void, hardcodedKey: string, checkForValue: T) {
+        mockMemento.verify(
+            (x) => x.update(TypeMoq.It.isAny(), TypeMoq.It.isAny()),
+            TypeMoq.Times.never(),
+        );
+        updater();
+        mockMemento.verify((x) => x.update(TypeMoq.It.isAny(), TypeMoq.It.isAny()), TypeMoq.Times.once());
+        mockMemento.verify(
+            (x) => x.update(TypeMoq.It.isValue(hardcodedKey), TypeMoq.It.isValue(checkForValue)),
+            TypeMoq.Times.once(),
+        );
     }
 
-    test("Organization slug is stored correctly", () => {
-        const { mockContext, mockMemento } = createMocks();
-        const storage = new Storage(mockContext.object);
+    /**
+     * Helper function for running similar mock tests to multiple storage's getters.
+     * @param getter Storage method for getting some data
+     * @param hardcodedKey Hardcoded key used internally within the Storage object
+     */
+    function assertGetter<T>(getter: () => T, hardcodedKey: string) {
+        mockMemento.verify((x) => x.get(TypeMoq.It.isAny()), TypeMoq.Times.never());
+        getter();
+        mockMemento.verify((x) => x.get(TypeMoq.It.isAny()), TypeMoq.Times.once());
+        mockMemento.verify((x) => x.get(TypeMoq.It.isValue(hardcodedKey)), TypeMoq.Times.once());
+    }
 
-        // updating
-        mockMemento
-            .verify((x) => x.update(TypeMoq.It.isAnyString(), TypeMoq.It.isValue("test")), TypeMoq.Times.never());
-        storage.updateOrganizationSlug("test");
-        mockMemento.verify((x) =>
-            x.update(TypeMoq.It.isValue(ORGANIZATION_KEY), TypeMoq.It.isValue("test")), TypeMoq.Times.once());
-
-        // getting
-        mockMemento.verify((x) => x.get(TypeMoq.It.isAnyString()), TypeMoq.Times.never());
-        storage.getOrganizationSlug();
-        mockMemento.verify((x) => x.get(TypeMoq.It.isValue(ORGANIZATION_KEY)), TypeMoq.Times.once());
+    test("Authentication token updater uses ExtensionContext correctly", () => {
+        const tokenData: oauth2.Data = { type: "bearer", scope: "public" };
+        assertUpdater(() => storage.updateAuthenticationToken(tokenData), AUTHENTICATION_TOKEN_KEY, tokenData);
     });
 
-    test("Course id is stored correctly", () => {
-        const { mockContext, mockMemento } = createMocks();
-        const storage = new Storage(mockContext.object);
-
-        // updating
-        mockMemento
-            .verify((x) => x.update(TypeMoq.It.isAnyString(), TypeMoq.It.isValue(1337)), TypeMoq.Times.never());
-        storage.updateCourseId(1337);
-        mockMemento
-            .verify((x) => x.update(TypeMoq.It.isValue(COURSE_KEY), TypeMoq.It.isValue(1337)), TypeMoq.Times.once());
-
-        // getting
-        mockMemento.verify((x) => x.get(TypeMoq.It.isAnyString()), TypeMoq.Times.never());
-        storage.getCourseId();
-        mockMemento.verify((x) => x.get(TypeMoq.It.isValue(COURSE_KEY)), TypeMoq.Times.once());
+    test("Authentication token getter uses ExtensionContext correctly", () => {
+        assertGetter(() => storage.getAuthenticationToken(), AUTHENTICATION_TOKEN_KEY);
     });
 
-    test("Authentication token data is stored correctly", () => {
-        const { mockContext, mockMemento } = createMocks();
-        const storage = new Storage(mockContext.object);
-
-        const tokenData: oauth2.Data = {type: "bearer", scope: "public"};
-
-        // updating
-        mockMemento.verify((x) => x.update(TypeMoq.It.isAnyString(),
-                                           TypeMoq.It.isValue(tokenData)), TypeMoq.Times.never());
-        storage.updateAuthenticationToken(tokenData);
-        mockMemento.verify((x) => x.update(TypeMoq.It.isValue(AUTHENTICATION_TOKEN_KEY),
-                                           TypeMoq.It.isValue(tokenData)), TypeMoq.Times.once());
-
-        // getting
-        mockMemento.verify((x) => x.get(TypeMoq.It.isAnyString()), TypeMoq.Times.never());
-        storage.getAuthenticationToken();
-        mockMemento.verify((x) => x.get(TypeMoq.It.isValue(AUTHENTICATION_TOKEN_KEY)), TypeMoq.Times.once());
+    test("Course ID updater uses ExtensionContext correctly", () => {
+        assertUpdater(() => storage.updateCourseId(1337), COURSE_KEY, 1337);
     });
 
+    test("Course ID getter uses ExtensionContext correctly", () => {
+        assertGetter(() => storage.getCourseId(), COURSE_KEY);
+    });
+
+    test("Exercise data updater uses ExtensionContext correctly", () => {
+        const exerciseData = {
+            idToPath: [[1337, "test/path/"]] as Array<[number, string]>,
+            pathToId: [["test/path/", 1337]] as Array<[string, number]>,
+        };
+        assertUpdater(() => storage.updateExerciseData(exerciseData), EXERCISE_DATA_KEY, exerciseData);
+    });
+
+    test("Exercise data getter uses ExtensionContext correctly", () => {
+        assertGetter(() => storage.getExerciseData(), EXERCISE_DATA_KEY);
+    });
+
+    test("Organization slug updater uses ExtensionContext correctly", () => {
+        assertUpdater(() => storage.updateOrganizationSlug("test"), ORGANIZATION_KEY, "test");
+    });
+
+    test("Organization slug getter uses ExtensionContext correctly", () => {
+        assertGetter(() => storage.getOrganizationSlug(), ORGANIZATION_KEY);
+    });
 });
