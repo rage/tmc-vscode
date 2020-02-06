@@ -165,9 +165,9 @@ export default class TMC {
     /**
      * Downloads exercise with given id and extracts it to the exercise folder.
      * @param id Id of the exercise to download
+     * @param organizationSlug Slug for the organization this exercise belongs to.
      */
     public async downloadExercise(id: number, organizationSlug: string): Promise<Result<string, Error>> {
-
         const result = await downloadFile(`${this.tmcApiUrl}core/exercises/${id}/download`,
             `${this.dataPath}/${id}.zip`);
         if (result.err) {
@@ -179,8 +179,7 @@ export default class TMC {
             return new Err(detailsResult.val);
         }
 
-        const { course_name, exercise_name } = detailsResult.val;
-        const exercisePath = this.exerciseManager.createExercise(organizationSlug, course_name, exercise_name, id);
+        const exercisePath = this.exerciseManager.createExercisePath(organizationSlug, detailsResult.val);
 
         return this.checkApiResponse(this.executeLangsAction({
             action: "extract-project",
