@@ -38,15 +38,6 @@ export async function downloadFile(url: string, filePath: string, headers?: any)
 }
 
 /**
- * Opens the given folders in Visual Studio Code's explorer.
- * @param folders Absolute paths and names of folders
- */
-export function openFolder(...folders: Array<{folderPath: string, name: string}>): void {
-    vscode.workspace.updateWorkspaceFolders(0, 0,
-        ...folders.map((x) => ({uri: vscode.Uri.file(x.folderPath), name: x.name})));
-}
-
-/**
  * Await this to pause execution for an amount of time
  * @param millis
  */

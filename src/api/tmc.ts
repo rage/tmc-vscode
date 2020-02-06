@@ -24,6 +24,7 @@ export default class TMC {
     private token: ClientOauth2.Token | undefined;
     private readonly storage: Storage;
     private readonly dataPath: string;
+    private readonly exerciseFolderPath: string;
     private readonly tmcLangsPath: string;
     private readonly tmcApiUrl: string;
 
@@ -44,6 +45,7 @@ export default class TMC {
             this.token = new ClientOauth2.Token(this.oauth2, authToken);
         }
         this.dataPath = resources.tmcDataFolder;
+        this.exerciseFolderPath = resources.tmcExercisesFolderPath;
         this.tmcLangsPath = resources.tmcLangsPath;
         this.tmcApiUrl = "https://tmc.mooc.fi/api/v8/";
         this.cache = new Map();
@@ -166,7 +168,7 @@ export default class TMC {
             return this.checkApiResponse(this.executeLangsAction({
                 action: "extract-project",
                 archivePath: `${this.dataPath}/${id}.zip`,
-                exerciseFolderPath: `${this.dataPath}/${id}`,
+                exerciseFolderPath: `${this.exerciseFolderPath}/${id}`,
             }), createIs<string>());
         }
         return new Err(result.val);
@@ -179,7 +181,7 @@ export default class TMC {
     public async runTests(id: number): Promise<Result<TmcLangsTestResults, Error>> {
         return this.checkApiResponse(this.executeLangsAction({
             action: "run-tests",
-            exerciseFolderPath: `${this.dataPath}/${id}`,
+            exerciseFolderPath: `${this.exerciseFolderPath}/${id}`,
         }), createIs<TmcLangsTestResults>());
     }
 
@@ -188,7 +190,7 @@ export default class TMC {
      * @param filePath
      */
     public getExercisePath(filePath: string): number | undefined {
-        const relation = path.relative(this.dataPath, filePath);
+        const relation = path.relative(this.exerciseFolderPath, filePath);
         return relation.startsWith("..") ? undefined : parseInt(relation.split(path.sep, 1)[0], 10);
     }
 
@@ -200,7 +202,7 @@ export default class TMC {
         const compressResult = await this.checkApiResponse(this.executeLangsAction({
             action: "compress-project",
             archivePath: `${this.dataPath}/${id}-new.zip`,
-            exerciseFolderPath: `${this.dataPath}/${id}`,
+            exerciseFolderPath: `${this.exerciseFolderPath}/${id}`,
         }), createIs<string>());
         if (compressResult.err) {
             return new Err(compressResult.val);
