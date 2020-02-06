@@ -5,6 +5,7 @@ import TMC from "./api/tmc";
 import Storage from "./config/storage";
 import TemporaryWebview from "./ui/temporaryWebview";
 import UI from "./ui/ui";
+import { sleep } from "./utils";
 
 export async function activate(context: vscode.ExtensionContext) {
 
@@ -34,6 +35,22 @@ export async function activate(context: vscode.ExtensionContext) {
                         if (submitResult.ok) {
                             vscode.window.showInformationMessage("Exercise submitted successfully: " +
                                                                  submitResult.val.show_submission_url);
+                            while (true) {
+                                const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
+                                if (statusResult.ok) {
+                                    if (statusResult.val.status !== "processing") {
+                                        if (statusResult.val.all_tests_passed) {
+                                            vscode.window.showInformationMessage("All tests passed on server!");
+                                        } else {
+                                            vscode.window.showInformationMessage("Tests failed on server");
+                                        }
+                                        break;
+                                    }
+                                } else {
+                                    console.error(statusResult.val);
+                                }
+                                await sleep(2500);
+                            }
                         } else {
                             vscode.window.showErrorMessage(`Exercise submission failed: \
                                                             ${submitResult.val.name} - ${submitResult.val.message}`);

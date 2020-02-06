@@ -13,7 +13,7 @@ import { createIs, is } from "typescript-is";
 import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
 import { downloadFile } from "../utils";
 import { Course, CourseDetails, ExerciseDetails, Organization, SubmissionResponse,
-         TMCApiResponse, TmcLangsAction, TmcLangsResponse, TmcLangsTestResults } from "./types";
+         SubmissionStatusReport, TMCApiResponse, TmcLangsAction, TmcLangsResponse, TmcLangsTestResults } from "./types";
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -131,6 +131,28 @@ export default class TMC {
      */
     public async getExerciseDetails(id: number, cache?: boolean): Promise<Result<ExerciseDetails, Error>> {
         return this.checkApiResponse(this.tmcApiRequest(`core/exercises/${id}`, cache), createIs<ExerciseDetails>());
+    }
+
+    /**
+     * Get submission status by url
+     * @param url Submission url
+     */
+    public async getSubmissionStatus(url: string): Promise<Result<SubmissionStatusReport, Error>> {
+        if (!this.token) {
+            throw new Error("User not logged in!");
+        }
+        const request = this.token.sign({url, headers: {}});
+        const response = await fetch.default(request.url, request);
+        if (response.ok) {
+            const responseObject = await response.json();
+            if (is<SubmissionStatusReport>(responseObject)) {
+                return new Ok(responseObject);
+            }
+            console.error(responseObject);
+            return new Err(new ApiError("Unexpected response type"));
+        } else {
+            return new Err(new ApiError(response.statusText));
+        }
     }
 
     /**
