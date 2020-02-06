@@ -49,8 +49,12 @@ export function displayCourseDetails({ tmc, storage, ui }: ActionContext) {
         const result = await tmc.getCourseDetails(id);
 
         if (result.ok) {
+            console.log(result.val);
             const details = result.val.course;
-            const data = { details };
+            const data = {
+                courseName: result.val.course.name, details,
+                organizationSlug: storage.getOrganizationSlug(),
+            };
             await ui.webview.setContentFromTemplate("course-details", data);
         } else {
             console.log("Fetching course details failed: " + result.val.message);

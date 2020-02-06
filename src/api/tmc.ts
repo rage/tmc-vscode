@@ -12,8 +12,11 @@ import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
 import { downloadFile } from "../utils";
-import { Course, CourseDetails, ExerciseDetails, Organization, SubmissionResponse,
-         SubmissionStatusReport, TMCApiResponse, TmcLangsAction, TmcLangsResponse, TmcLangsTestResults } from "./types";
+import ExerciseManager from "./exerciseManager";
+import {
+    Course, CourseDetails, ExerciseDetails, Organization, SubmissionResponse,
+    SubmissionStatusReport, TMCApiResponse, TmcLangsAction, TmcLangsResponse, TmcLangsTestResults,
+} from "./types";
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -21,12 +24,13 @@ import { Course, CourseDetails, ExerciseDetails, Organization, SubmissionRespons
 export default class TMC {
 
     private readonly oauth2: ClientOauth2;
-    private token: ClientOauth2.Token | undefined;
+    private token: ClientOauth2.Token | undefined;
     private readonly storage: Storage;
     private readonly dataPath: string;
     private readonly exerciseFolderPath: string;
     private readonly tmcLangsPath: string;
     private readonly tmcApiUrl: string;
+    private readonly exerciseManager: ExerciseManager;
 
     private readonly cache: Map<string, TMCApiResponse>;
 
@@ -38,7 +42,7 @@ export default class TMC {
             accessTokenUri: "https://tmc.mooc.fi/oauth/token",
             clientId: "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0",
             clientSecret: "3e6c4df1992e4031d316ea1933e350e9658326a67efb2e65a5b15207bdc09ee8",
-            });
+        });
         this.storage = storage;
         const authToken = storage.getAuthenticationToken();
         if (authToken) {
@@ -49,6 +53,7 @@ export default class TMC {
         this.tmcLangsPath = resources.tmcLangsPath;
         this.tmcApiUrl = "https://tmc.mooc.fi/api/v8/";
         this.cache = new Map();
+        this.exerciseManager = new ExerciseManager(storage, resources);
     }
 
     /**
@@ -143,7 +148,7 @@ export default class TMC {
         if (!this.token) {
             throw new Error("User not logged in!");
         }
-        const request = this.token.sign({url, headers: {}});
+        const request = this.token.sign({ url, headers: {} });
         const response = await fetch.default(request.url, request);
         if (response.ok) {
             const responseObject = await response.json();
@@ -161,17 +166,27 @@ export default class TMC {
      * Downloads exercise with given id and extracts it to the exercise folder.
      * @param id Id of the exercise to download
      */
-    public async downloadExercise(id: number): Promise<Result<string, Error>> {
+    public async downloadExercise(id: number, organizationSlug: string): Promise<Result<string, Error>> {
+
         const result = await downloadFile(`${this.tmcApiUrl}core/exercises/${id}/download`,
-                                          `${this.dataPath}/${id}.zip`);
-        if (result.ok) {
-            return this.checkApiResponse(this.executeLangsAction({
-                action: "extract-project",
-                archivePath: `${this.dataPath}/${id}.zip`,
-                exerciseFolderPath: `${this.exerciseFolderPath}/${id}`,
-            }), createIs<string>());
+            `${this.dataPath}/${id}.zip`);
+        if (result.err) {
+            return new Err(result.val);
         }
-        return new Err(result.val);
+
+        const detailsResult = await this.getExerciseDetails(id);
+        if (detailsResult.err) {
+            return new Err(detailsResult.val);
+        }
+
+        const { course_name, exercise_name } = detailsResult.val;
+        const exercisePath = this.exerciseManager.createExercise(organizationSlug, course_name, exercise_name, id);
+
+        return this.checkApiResponse(this.executeLangsAction({
+            action: "extract-project",
+            archivePath: `${this.dataPath}/${id}.zip`,
+            exerciseFolderPath: exercisePath,
+        }), createIs<string>());
     }
 
     /**
@@ -179,9 +194,14 @@ export default class TMC {
      * @param id Id of the exercise
      */
     public async runTests(id: number): Promise<Result<TmcLangsTestResults, Error>> {
+        const exerciseFolderPath = this.exerciseManager.getPathByExerciseId(id);
+        if (exerciseFolderPath.err) {
+            return new Err(new Error("???"));
+        }
+
         return this.checkApiResponse(this.executeLangsAction({
             action: "run-tests",
-            exerciseFolderPath: `${this.exerciseFolderPath}/${id}`,
+            exerciseFolderPath: exerciseFolderPath.val,
         }), createIs<TmcLangsTestResults>());
     }
 
@@ -191,7 +211,17 @@ export default class TMC {
      */
     public getExercisePath(filePath: string): number | undefined {
         const relation = path.relative(this.exerciseFolderPath, filePath);
-        return relation.startsWith("..") ? undefined : parseInt(relation.split(path.sep, 1)[0], 10);
+        console.log(relation);
+        if (relation.startsWith("..")) {
+            return undefined;
+        }
+        const idResult = this.exerciseManager.getExerciseIdByPath(
+            path.join(this.exerciseFolderPath, ...relation.split(path.sep, 3).slice(0, 3)));
+
+        if (idResult.err) {
+            return undefined;
+        }
+        return idResult.val;
     }
 
     /**
@@ -199,10 +229,16 @@ export default class TMC {
      * @param id Exercise id
      */
     public async submitExercise(id: number): Promise<Result<SubmissionResponse, Error>> {
+        const exerciseFolderPath = this.exerciseManager.getPathByExerciseId(id);
+
+        if (exerciseFolderPath.err) {
+            return new Err(new Error("???"));
+        }
+
         const compressResult = await this.checkApiResponse(this.executeLangsAction({
             action: "compress-project",
             archivePath: `${this.dataPath}/${id}-new.zip`,
-            exerciseFolderPath: `${this.exerciseFolderPath}/${id}`,
+            exerciseFolderPath: exerciseFolderPath.val,
         }), createIs<string>());
         if (compressResult.err) {
             return new Err(compressResult.val);
@@ -211,7 +247,7 @@ export default class TMC {
         const form = new FormData();
         form.append("submission[file]", fs.createReadStream(archivePath));
         return this.checkApiResponse(this.tmcApiRequest(`core/exercises/${id}/submissions`, false, "post",
-                                     form, form.getHeaders()), createIs<SubmissionResponse>());
+            form, form.getHeaders()), createIs<SubmissionResponse>());
     }
 
     /**
@@ -243,7 +279,7 @@ export default class TMC {
         try {
             await new Promise(async (resolve, reject) => {
                 cp.exec(`java -jar ${this.tmcLangsPath} ${action} ${arg0} ${arg1}`,
-                        (err) => err ? reject(err) : resolve());
+                    (err) => err ? reject(err) : resolve());
             });
         } catch (err) {
             return new Err(err);
@@ -288,8 +324,8 @@ export default class TMC {
      * @param endpoint target API endpoint
      * @param method HTTP method, defaults to GET
      */
-    private async tmcApiRequest(endpoint: string, cache: boolean | undefined,
-                                method?: "get" | "post", body?: any, headers?: any):
+    private async tmcApiRequest(endpoint: string, cache: boolean | undefined,
+                                method?: "get" | "post", body?: any, headers?: any):
         Promise<Result<TMCApiResponse, Error>> {
 
         cache = cache === undefined ? true : cache;

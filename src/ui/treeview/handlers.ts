@@ -13,9 +13,10 @@ import { HandlerContext } from "./types";
  * @param tmc TMC API instance used for downloading exercises
  */
 export function downloadExercises({ ui, tmc }: HandlerContext) {
-    return async (msg: { type: string, ids: number[] }) => {
+    return async (msg: { type: string, ids: number[], organizationSlug: string, courseName: string }) => {
         ui.webview.setContentFromTemplate("loading");
-        const results = Results(...await Promise.all(msg.ids.map((x) => tmc.downloadExercise(x))));
+        const results = Results(...await Promise.all(msg.ids.map(
+            (x) => tmc.downloadExercise(x, msg.organizationSlug))));
         if (results.ok) {
             console.log("opening downloaded exercises in: ", results.val);
             ui.webview.dispose();
