@@ -95,7 +95,6 @@
 		"ttypescript": "^1.5.10",
 		"typemoq": "^2.1.0",
 		"typescript": "^3.6.4",
-		"typescript-is": "^0.13.1",
 		"vscode-test": "^1.2.2"
 	},
 	"dependencies": {
@@ -103,6 +102,7 @@
 		"form-data": "^3.0.0",
 		"handlebars": "^4.7.2",
 		"node-fetch": "^2.6.0",
-		"ts-results": "^2.0.1"
+		"ts-results": "^2.0.1",
+		"typescript-is": "^0.13.1"
 	}
 }
