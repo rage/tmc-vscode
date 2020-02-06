@@ -17,13 +17,19 @@ export default class TemplateEngine {
         this.htmlPath = resources.htmlFolder;
         this.context = context;
         this.cache = new Map();
+        /**
+         * Logo path for organizations
+         */
         handlebars.registerHelper("resolve_logo_path", (logoPath: string) => {
             return (!logoPath.endsWith("missing.png"))
                 ? `https://tmc.mooc.fi${logoPath}`
                 : "https://tmc.mooc.fi/logos/small_logo/missing.png";
         });
 
-        handlebars.registerHelper("check_local_status", (arg: string) => {
+        /**
+         * Checks the locally runned test status.
+         */
+        handlebars.registerHelper("check_test_status", (arg: string) => {
             if (arg === "PASSED") {
                 return "<h1 class='passed-header'>PASSED</h1>";
             } else if (arg === "TESTS_FAILED") {
@@ -33,7 +39,9 @@ export default class TemplateEngine {
                 return "<h1>Something went wrong while running the tests</h1>";
             }
         });
-
+        /**
+         * Progress bar for running tests and submission.
+         */
         handlebars.registerHelper("progress_bar", (exercises: TmcLangsTestResult[]) => {
             const length = exercises.length;
             let passedAmount = 0;
@@ -54,13 +62,16 @@ export default class TemplateEngine {
                     </div>`;
         });
 
+        /**
+         * Returns the progress of submission status from TMC server
+         */
         handlebars.registerHelper("check_submission_status", (status: string) => {
             if (status === "created") {
-                return "<div>Sandbox created</div>";
+                return "<div>&#10004; Sandbox created</div>";
             } else if (status === "sending_to_sandbox") {
-                return "<div>Sandbox created</div><div>Sending to sandbox</div>";
+                return "<div>&#10004; Sandbox created</div><div>Sending to sandbox</div>";
             } else if (status === "processing_on_sandbox") {
-                return "<div>Sandbox created</div><div>Sending to sandbox</div><div>Testing submission</div>";
+                return "<div>&#10004; Sandbox created</div><div>&#10004; Sent to sandbox</div><div>Testing submission</div>";
             }
         });
     }

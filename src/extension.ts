@@ -35,8 +35,8 @@ export async function activate(context: vscode.ExtensionContext) {
                         if (submitResult.ok) {
                             vscode.window.showInformationMessage("Exercise submitted successfully: " +
                                                                  submitResult.val.show_submission_url);
-                            const temp = new TemporaryWebview(resources, ui,
-                                                                    "TMC server submission", () => {});
+                            const temp = new TemporaryWebview(resources, ui, "TMC Server Submission", () => {});
+                            temp.setContent("submission-status");
                             while (true) {
                                 const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
                                 if (statusResult.ok) {
