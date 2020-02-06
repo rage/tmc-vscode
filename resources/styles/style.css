@@ -1,3 +1,6 @@
+/*
+    Bootstrap fixes
+*/
 body {
     background-color: var(--vscode-editor-background) !important;
 }
@@ -14,28 +17,17 @@ body.vscode-high-contrast {
     color: red;
 }
 
-pre {
-    display: block;
-    font-size: 87.5%;
-    font-family: SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
-    margin-top: 0;
-    margin-bottom: 1rem;
-    overflow: auto;
-    color: inherit;
-}
-
-.sticky-top {
-    background-color: var(--vscode-editor-background);
+.container {
+    padding-top: 20px;
 }
 
 .error {
     color: red;
 }
 
-.container {
-    padding-top: 20px;
-}
-
+/*
+    Course and organization view
+*/
 .org-row {
     padding: 10px 0px;
     margin-bottom: 10px;
@@ -63,6 +55,10 @@ pre {
     border-radius: 5px;
 }
 
+
+/*
+    Course details checkbox styling
+*/
 .checkbox-centered { 
     text-align:justify; 
     display:flex; 
@@ -73,4 +69,44 @@ pre {
 
 .checkbox-xl {
     transform:scale(1.75);
+}
+
+.sticky-top {
+    background-color: var(--vscode-editor-background);
+}
+
+/*
+    TMC Test styles
+*/
+
+.passed {
+    border: 1px dashed green;
+    border-left: 5px solid green;
+    display: block;
+    padding: 10px 0px;
+}
+
+.failed {
+    border: 1px dashed red;
+    border-left: 5px solid red;
+    display: block;
+    padding: 10px 0px;
+}
+
+.passed-header {
+    color: green;
+    font-weight: bold;
+}
+
+.failed-header {
+    color: red;
+    font-weight: bold;
+}
+
+.message {
+    display: block;
+    font-size: 87.5%;
+    font-family: SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+    margin-top: 0;
+    overflow: auto;
 }
