@@ -3,6 +3,7 @@ import * as handlebars from "handlebars";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
 
 export default class TemplateEngine {
@@ -21,15 +22,38 @@ export default class TemplateEngine {
                 ? `https://tmc.mooc.fi${logoPath}`
                 : "https://tmc.mooc.fi/logos/small_logo/missing.png";
         });
+
         handlebars.registerHelper("check_local_status", (arg: string) => {
             if (arg === "PASSED") {
                 return "<h1 class='passed-header'>PASSED</h1>";
             } else if (arg === "TESTS_FAILED") {
-                return "<h1 class='failed-header'>TESTS FAILED</h1>";
+                return "<h1>TESTS FAILED</h1>";
             } else {
+                // TODO: Parse COMPILE_FAILED error logs
                 return "<h1>Something went wrong while running the tests</h1>";
             }
         });
+
+        handlebars.registerHelper("progress_bar", (exercises: TmcLangsTestResult[]) => {
+            const length = exercises.length;
+            let passedAmount = 0;
+            for (const exer of exercises) {
+                if (exer.successful) {
+                    passedAmount = passedAmount + 1;
+                }
+            }
+            passedAmount = Math.round((passedAmount / length * 100));
+            const notPassed = 100 - passedAmount;
+            return `<div class="progress" style="width: 100%">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: ${passedAmount}%" aria-valuenow="${passedAmount}" aria-valuemin="0" aria-valuemax="100">
+                            ${passedAmount} %
+                        </div>
+                        <div class="progress-bar bg-danger" role="progressbar" style="width: ${notPassed}%" aria-valuenow="${notPassed}" aria-valuemin="0" aria-valuemax="100">
+                            ${passedAmount === 0 ? "0 %" : ""}
+                        </div>
+                    </div>`;
+        });
+
         handlebars.registerHelper("check_submission_status", (status: string) => {
             if (status === "created") {
                 return "<div>Sandbox created</div>";

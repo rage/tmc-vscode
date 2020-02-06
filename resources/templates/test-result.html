@@ -4,11 +4,14 @@
         <link rel="stylesheet" type="text/css" href="{{cssPath}}">
     </head>
     <body>
-        <div class="container container-fluid">
+        <div class="container">
             <div class="row">
                 <div class="py-2">
                     {{{check_local_status this.status}}}
                 </div>
+            </div>
+            <div class="row">
+                {{{progress_bar testResults}}}
             </div>
             {{#each testResults}}
                 {{#if this.successful}}
