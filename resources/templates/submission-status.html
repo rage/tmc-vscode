@@ -1,0 +1,21 @@
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+    </head>
+
+    <body>
+        <div class="container container-fluid pt-0">
+            <div class="sticky-top">
+                <div class="py-2">
+                    <h2>Processing submission...</h2>
+                </div>
+                <div>
+                    {{#check_submission_status sandbox_status}}
+                    <h3>{{status}}</h3>
+                    {{/check_submission_status}}
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
