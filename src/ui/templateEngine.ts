@@ -21,6 +21,15 @@ export default class TemplateEngine {
                 ? `https://tmc.mooc.fi${logoPath}`
                 : "https://tmc.mooc.fi/logos/small_logo/missing.png";
         });
+        handlebars.registerHelper("check_local_status", (arg: string) => {
+            if (arg === "PASSED") {
+                return "<h1 class='passed-header'>PASSED</h1>";
+            } else if (arg === "TESTS_FAILED") {
+                return "<h1 class='failed-header'>TESTS FAILED</h1>";
+            } else {
+                return "<h1>Something went wrong while running the tests</h1>";
+            }
+        });
     }
 
     /**
