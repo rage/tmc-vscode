@@ -1,0 +1,54 @@
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+    </head>
+
+    <body>
+        <div class="container container-fluid pt-0">
+            <div class="sticky-top">
+                <div class="py-2">
+                    {{#if all_tests_passed}}
+                    <h1 class="passed-header">All tests passed on the server</h1>
+                    {{else}}
+                    <h1>Some tests failed on the server</h1>
+                    {{/if}}
+                </div>
+                <div>
+                    <h3>Points gained: {{points}}</h3>
+                </div>
+            </div>
+            <div>
+                {{#each test_cases}}
+                    {{#if this.successful}}
+                        <div class="row passed my-2">
+                    {{else}}
+                        <div class="row failed my-2">
+                    {{/if}}
+                    <div class="col">
+                        <div class="row">
+                            {{#if this.successful}}
+                            <div class="col-md-1 passed-header">
+                                PASS: 
+                            </div>
+                            {{else}}
+                            <div class="col-md-1 failed-header">
+                                FAIL: 
+                            </div>
+                            {{/if}}
+                            <div class="col-md">
+                                <span>{{this.name}}</span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col">
+                                <span class="message">{{this.message}}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {{/each}}
+            </div>
+        </div>
+    </body>
+</html>
