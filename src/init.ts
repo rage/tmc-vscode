@@ -59,6 +59,10 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
 
     const basePath = extensionContext.globalStoragePath;
     const tmcDataPath = path.join(basePath, "tmcdata");
+    const tmcWorkspacePath = path.join(tmcDataPath, "TMC workspace");
+    const tmcWorkspaceFilePath = path.join(tmcWorkspacePath, "TMC Exercises.code-workspace");
+    const tmcExercisesFolderPath = path.join(tmcWorkspacePath, "Exercises");
+
     const tmcLangsPath = path.join(tmcDataPath, "tmc-langs.jar");
 
     if (!fs.existsSync(basePath)) {
@@ -69,6 +73,21 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     if (!fs.existsSync(tmcDataPath)) {
         fs.mkdirSync(tmcDataPath);
         console.log("Created tmc data directory at", tmcDataPath);
+    }
+
+    if (!fs.existsSync(tmcWorkspacePath)) {
+        fs.mkdirSync(tmcWorkspacePath);
+        console.log("Created tmc workspace directory at", tmcWorkspacePath);
+    }
+
+    if (!fs.existsSync(tmcWorkspaceFilePath)) {
+        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({folders: [{path: "Exercises"}]}));
+        console.log("Created tmc workspace file at", tmcWorkspaceFilePath);
+    }
+
+    if (!fs.existsSync(tmcExercisesFolderPath)) {
+        fs.mkdirSync(tmcExercisesFolderPath);
+        console.log("Created tmc exercise directory at", tmcExercisesFolderPath);
     }
 
     if (!fs.existsSync(tmcLangsPath)) {
@@ -85,6 +104,9 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
         htmlPath,
         tmcDataPath,
         tmcLangsPath,
+        tmcWorkspacePath,
+        tmcWorkspaceFilePath,
+        tmcExercisesFolderPath,
         mediaPath,
     ));
 }
