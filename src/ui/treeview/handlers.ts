@@ -4,7 +4,6 @@ import * as vscode from "vscode";
 import TMC from "../../api/tmc";
 import Storage from "../../config/storage";
 import { AuthenticationError } from "../../errors";
-import { openFolder } from "../../utils";
 import UI from "../ui";
 import { HandlerContext } from "./types";
 
@@ -14,14 +13,15 @@ import { HandlerContext } from "./types";
  * @param tmc TMC API instance used for downloading exercises
  */
 export function downloadExercises({ ui, tmc }: HandlerContext) {
-    return async (msg: { type: string, ids: number[] }) => {
+    return async (msg: { type: string, ids: number[], organizationSlug: string, courseName: string }) => {
         ui.webview.setContentFromTemplate("loading");
-        const results = Results(...await Promise.all(msg.ids.map((x) => tmc.downloadExercise(x))));
+        const results = Results(...await Promise.all(msg.ids.map(
+            (x) => tmc.downloadExercise(x, msg.organizationSlug))));
         if (results.ok) {
             console.log("opening downloaded exercises in: ", results.val);
             ui.webview.dispose();
-            openFolder(...results.val.map((folderPath, index) =>
-                ({ folderPath, name: msg.ids[index].toString() }))); // TODO: get proper exercise name from API
+            // TODO: get proper exercise name from API
+            // TODO: allow downloading exercises without opening them
         } else {
             vscode.window.showErrorMessage("One or more exercise downloads failed.");
         }

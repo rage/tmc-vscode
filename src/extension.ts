@@ -16,6 +16,18 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const resources = result.val;
 
+        const currentWorkspaceFile = vscode.workspace.workspaceFile;
+        const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
+
+        if (!currentWorkspaceFile) {
+            await vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+        } else if (currentWorkspaceFile.toString() !== tmcWorkspaceFile.toString()) {
+            console.log(currentWorkspaceFile);
+            console.log(tmcWorkspaceFile);
+            vscode.window.showErrorMessage("Wont't open TMC workspace while another workspace is open");
+            return;
+        }
+
         const ui = new UI(context, resources);
         const storage = new Storage(context);
         const tmc = new TMC(storage, context, resources);
