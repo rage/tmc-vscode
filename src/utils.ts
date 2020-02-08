@@ -12,12 +12,24 @@ import { ConnectionError } from "./errors";
  * @param filePath Absolute path to the desired output file
  * @param headers Request headers if any
  */
-export async function downloadFile(url: string, filePath: string, headers?: any): Promise<Result<void, Error>> {
+export async function downloadFile(url: string, filePath: string, headers?: any,
+                                   progressCallback?: (downloaded: number, size: number) => void,
+    ): Promise<Result<void, Error>> {
+
     fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
 
     let response: fetch.Response;
     try {
         response = await fetch.default(url, { method: "get", headers });
+        const sizeString = response.headers.get("content-length");
+        if (sizeString && progressCallback) {
+            let downloaded = 0;
+            const size = parseInt(sizeString, 10);
+            response.body.on("data", (chunk: Buffer) => {
+                downloaded += chunk.length;
+                progressCallback(downloaded, size);
+            });
+        }
     } catch (error) {
         return new Err(new ConnectionError("Connection error: " + error.name));
     }
