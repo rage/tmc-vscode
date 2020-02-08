@@ -92,7 +92,9 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
 
     if (!fs.existsSync(tmcLangsPath)) {
         const result = await downloadFile("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
-            tmcLangsPath);
+            tmcLangsPath, undefined, (downloaded, size) => {
+                console.log("TMC Langs progress:", downloaded / size * 100, "%");
+            });
         if (result.err) {
             return new Err(result.val);
         }
