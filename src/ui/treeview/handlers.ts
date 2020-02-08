@@ -36,17 +36,16 @@ export function downloadExercises({ ui, tmc }: HandlerContext) {
  */
 export function handleLogin({ ui, storage, tmc }: HandlerContext) {
     return async (msg: { type: string, username: string, password: string }) => {
-        console.log("Logging in as " + msg.username);
+        if (!msg.username || !msg.password) {
+            ui.webview.setContentFromTemplate("login", { error: "Username and password may not be empty." });
+            return;
+        }
         const result = await tmc.authenticate(msg.username, msg.password);
         if (result.ok) {
-            console.log("Logged in successfully");
             ui.treeDP.updateVisibility(["loggedIn"]);
             storage.getOrganizationSlug() === undefined ? ui.treeDP.triggerCallback("orgs") : ui.treeDP.triggerCallback("index");
         } else {
             console.log("Login failed: " + result.val.message);
-            if (result.val instanceof AuthenticationError) {
-                console.log("auth error");
-            }
             ui.webview.setContentFromTemplate("login", { error: result.val.message });
         }
     };
