@@ -7,10 +7,10 @@ import UI from "./ui/ui";
 import { Err, Ok, Result } from "ts-results";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
+import TemporaryWebview from "./ui/temporaryWebview";
 import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, doLogout } from "./ui/treeview/actions";
 import { downloadExercises, handleLogin, setCourse, setOrganization } from "./ui/treeview/handlers";
 import { downloadFile } from "./utils";
-import TemporaryWebview from "./ui/temporaryWebview";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
