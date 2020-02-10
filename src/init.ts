@@ -76,10 +76,6 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
         tmcExercisesFolderPath,
         mediaPath,
     );
-    const ui = new UI(extensionContext, resources);
-    const temp = new TemporaryWebview(resources, ui,
-        "First time initialization...", () => { });
-    temp.setContent("init");
 
     if (!fs.existsSync(basePath)) {
         fs.mkdirSync(basePath);
@@ -107,15 +103,23 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     }
 
     if (!fs.existsSync(tmcLangsPath)) {
-        const result = await downloadFile("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
-            tmcLangsPath, undefined, (downloaded, size) => {
-                console.log("TMC Langs progress:", downloaded / size * 100, "%");
+        let result: Result<void, Error> | undefined;
+        vscode.window.withProgress(
+            { location: vscode.ProgressLocation.Window, title: "Welcome: " },
+            async (p) => {
+
+            p.report({
+                message: "Downloading important components for the Test My Code plugin... 0 %" });
+            result = await downloadFile("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
+                tmcLangsPath, p, undefined, () => {});
             });
-        if (result.err) {
-            return new Err(result.val);
+        if (result !== undefined) {
+            if (result.err) {
+                return new Err(result.val);
+            }
         }
         console.log("tmc-langs.jar downloaded");
     }
-    temp.dispose();
+
     return new Ok(resources);
 }

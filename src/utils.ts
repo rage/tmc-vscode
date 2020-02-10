@@ -12,7 +12,8 @@ import { ConnectionError } from "./errors";
  * @param filePath Absolute path to the desired output file
  * @param headers Request headers if any
  */
-export async function downloadFile(url: string, filePath: string, headers?: any,
+export async function downloadFile(url: string, filePath: string,
+                                   progressHandle?: vscode.Progress<{ message?: string }>, headers?: any,
                                    progressCallback?: (downloaded: number, size: number) => void,
     ): Promise<Result<void, Error>> {
 
@@ -27,6 +28,11 @@ export async function downloadFile(url: string, filePath: string, headers?: any,
             const size = parseInt(sizeString, 10);
             response.body.on("data", (chunk: Buffer) => {
                 downloaded += chunk.length;
+                const progress = Math.round((downloaded / size * 100));
+                if (progressHandle !== undefined) {
+                    progressHandle.report({
+                        message: `Downloading important components for the Test My Code plugin... ${progress} %` });
+                    }
                 progressCallback(downloaded, size);
             });
         }
