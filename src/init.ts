@@ -10,7 +10,7 @@ import Storage from "./config/storage";
 import TemporaryWebview from "./ui/temporaryWebview";
 import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, doLogout } from "./ui/treeview/actions";
 import { downloadExercises, handleLogin, setCourse, setOrganization } from "./ui/treeview/handlers";
-import { downloadFile } from "./utils";
+import { downloadFile, downloadFileWithProgress } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -103,20 +103,10 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     }
 
     if (!fs.existsSync(tmcLangsPath)) {
-        let result: Result<void, Error> | undefined;
-        vscode.window.withProgress(
-            { location: vscode.ProgressLocation.Window, title: "Welcome: " },
-            async (p) => {
-
-            p.report({
-                message: "Downloading important components for the Test My Code plugin... 0 %" });
-            result = await downloadFile("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
-                tmcLangsPath, p, undefined, () => {});
-            });
-        if (result !== undefined) {
-            if (result.err) {
-                return new Err(result.val);
-            }
+        const result = await downloadFileWithProgress("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar", tmcLangsPath,
+                                                    "Welcome", "Downloading important components for the Test My Code plugin... 0 %");
+        if (result.err) {
+            return new Err(result.val);
         }
         console.log("tmc-langs.jar downloaded");
     }
