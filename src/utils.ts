@@ -7,6 +7,31 @@ import { Err, Ok, Result } from "ts-results";
 import { ConnectionError } from "./errors";
 
 /**
+ * Downloads data from given url to the specified file path with a progress bar in the VSCode status bar.
+ * @param url Url to data
+ * @param title Title for status bar
+ * @param message First message to be displayed in status bar
+ * @param filePath Absolute path to the desired output file
+ * @param headers Request headers if any
+ */
+export async function downloadFileWithProgress(url: string, filePath: string, title: string, message: string,
+                                               headers?: any | undefined): Promise<Result<void, Error>> {
+
+    let result: Result<void, Error> | undefined;
+    await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Window, title: `${title}` },
+        async (p) => {
+        p.report({
+            message: `${message}` });
+        result = await downloadFile(url, filePath, p, headers, () => { } );
+        });
+    if (result === undefined) {
+        return new Err(new Error("Error while downloading files"));
+    }
+    return result;
+}
+
+/**
  * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
  * @param url Url to data
  * @param filePath Absolute path to the desired output file
