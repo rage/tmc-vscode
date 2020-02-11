@@ -7,10 +7,9 @@ import UI from "./ui/ui";
 import { Err, Ok, Result } from "ts-results";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
-import TemporaryWebview from "./ui/temporaryWebview";
 import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, doLogout } from "./ui/treeview/actions";
 import { downloadExercises, handleLogin, setCourse, setOrganization } from "./ui/treeview/handlers";
-import { downloadFile, downloadFileWithProgress } from "./utils";
+import { downloadFileWithProgress } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -66,17 +65,6 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
 
     const tmcLangsPath = path.join(tmcDataPath, "tmc-langs.jar");
 
-    const resources: Resources = new Resources(
-        cssPath,
-        htmlPath,
-        tmcDataPath,
-        tmcLangsPath,
-        tmcWorkspacePath,
-        tmcWorkspaceFilePath,
-        tmcExercisesFolderPath,
-        mediaPath,
-    );
-
     if (!fs.existsSync(basePath)) {
         fs.mkdirSync(basePath);
         console.log("Created global storage directory at", basePath);
@@ -110,6 +98,17 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
         }
         console.log("tmc-langs.jar downloaded");
     }
+
+    const resources: Resources = new Resources(
+        cssPath,
+        htmlPath,
+        tmcDataPath,
+        tmcLangsPath,
+        tmcWorkspacePath,
+        tmcWorkspaceFilePath,
+        tmcExercisesFolderPath,
+        mediaPath,
+    );
 
     return new Ok(resources);
 }
