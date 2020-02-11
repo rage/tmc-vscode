@@ -5,6 +5,17 @@ body {
     background-color: var(--vscode-editor-background) !important;
 }
 
+.invert {
+    background-color: var(--vscode-editor-background) !important;
+    filter: invert(100%);
+}
+
+.img-invert {
+    background-color: inherit;
+    filter: invert(100%);
+    background: transparent;
+}
+
 body.vscode-light {
     color: black;
 }
