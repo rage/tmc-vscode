@@ -17,8 +17,8 @@
                 <h1 class="org-header">Frequently used organizations</h1>
                 {{#each pinned}}
                     <div class="row org-row border-dark" onclick="sendOrganization('{{this.slug}}')">
-                        <div class="col-md-2">
-                            <img class="img-fluid org-img" src="{{resolve_logo_path this.logo_path}}" />
+                        <div class="col-md-2 bg-white">
+                            <img class="img-fluid org-img img-invert" src="{{resolve_logo_path this.logo_path}}" />
                         </div>
                         <div class="col-md-10">
                             <h3>{{this.name}} <small class="text-muted">({{this.slug}})</small></h3>
@@ -32,8 +32,8 @@
                 <h1 class="org-header">All organizations</h1>
                 {{#each organizations}}
                     <div class="row org-row border-dark" onclick="sendOrganization('{{this.slug}}')">
-                        <div class="col-md-2">
-                            <img class="img-fluid org-img" src="{{resolve_logo_path this.logo_path}}" />
+                        <div class="col-md-2 bg-white">
+                            <img class="img-fluid org-img img-invert" src="{{resolve_logo_path this.logo_path}}" />
                         </div>
                         <div class="col-md-10">
                             <h4>{{this.name}} <small class="text-muted">({{this.slug}})</small></h4>
