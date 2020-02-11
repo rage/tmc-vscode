@@ -1,40 +1,41 @@
 <html>
-    <head>
-        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
-        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
-    </head>
 
-    <body>
-        <div class="container">
-            <div class="row py-2">
-                {{#if all_tests_passed}}
-                <h1 class="passed-header">All tests passed on the server</h1>
+<head>
+    <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+    <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+</head>
+
+<body>
+    <div class="container">
+        <div class="row py-2">
+            {{#if all_tests_passed}}
+            <h1 class="passed-header">All tests passed on the server</h1>
+            {{else}}
+            <h1>Some tests failed on the server</h1>
+            {{/if}}
+        </div>
+        <div class="row my-1">
+            <h3>Points gained: {{points}}</h3>
+        </div>
+        <div class="row my-1">
+            {{{progress_bar test_cases}}}
+        </div>
+        <div>
+            {{#each test_cases}}
+            {{#if this.successful}}
+            <div class="row passed my-2">
                 {{else}}
-                <h1>Some tests failed on the server</h1>
-                {{/if}}
-            </div>
-            <div class="row my-1">
-                <h3>Points gained: {{points}}</h3>
-            </div>
-            <div class="row my-1">
-                {{{progress_bar test_cases}}}
-            </div>
-            <div>
-                {{#each test_cases}}
-                    {{#if this.successful}}
-                        <div class="row passed my-2">
-                    {{else}}
-                        <div class="row failed my-2">
+                <div class="row failed my-2">
                     {{/if}}
                     <div class="col">
                         <div class="row">
                             {{#if this.successful}}
                             <div class="col-md-1 passed-header">
-                                PASS: 
+                                PASS:
                             </div>
                             {{else}}
                             <div class="col-md-1 failed-header">
-                                FAIL: 
+                                FAIL:
                             </div>
                             {{/if}}
                             <div class="col-md">
@@ -51,5 +52,21 @@
                 {{/each}}
             </div>
         </div>
-    </body>
+        {{#if all_tests_passed}}
+        <div>
+            <h4>Anna palautetta</h4>
+            <form>
+                {{#each feedback_questions}}
+                <div>
+                    {{this.question}}
+                    <div>
+                        <input type="range" class="form-control-range w-100" min="0" max="5" step="1" value="0" />
+                    </div>
+                </div>
+                {{/each}}
+            </form>
+        </div>
+        {{/if}}
+</body>
+
 </html>
