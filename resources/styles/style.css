@@ -21,6 +21,10 @@ body.vscode-high-contrast {
     padding-top: 20px;
 }
 
+.table {
+    color: inherit;
+}
+
 .error {
     color: red;
 }
