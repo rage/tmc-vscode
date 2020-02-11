@@ -1,3 +1,4 @@
+import * as del from "del";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 
@@ -44,10 +45,7 @@ export default class ExerciseManager {
         const exercisePath = path.join(exerciseFolderPath, organizationSlug, course_name, exercise_name);
         this.pathToId.set(exercisePath, exercise_id);
         this.idToPath.set(exercise_id, exercisePath);
-        this.storage.updateExerciseData({
-            idToPath: Array.from(this.idToPath.entries()),
-            pathToId: Array.from(this.pathToId.entries()),
-        });
+        this.updatePersistentData();
         return exercisePath;
     }
 
@@ -89,5 +87,39 @@ export default class ExerciseManager {
         const exercisePath = this.idToPath.get(exerciseId);
         console.log(exercisePath);
         return (exercisePath !== undefined) ? new Ok(exercisePath) : new Err(new Error(`Exercise path not found for ${exerciseId}`));
+    }
+
+    /**
+     * Returns the organization slug corresponding to a given exercise ID
+     * @param exerciseId Exercise ID
+     */
+    public getOrganizationSlugByExerciseId(exerciseId: number): Result<string, Error> {
+        const exercisePath = this.idToPath.get(exerciseId);
+        if (exercisePath) {
+            const slug = path.basename(path.resolve(exercisePath, "../.."));
+            return new Ok(slug);
+        }
+        return new Err(new Error(`Exercise ${exerciseId} not found`));
+    }
+
+    /**
+     * Deletes an exercise folder from the workspace if present
+     * @param exerciseId Exercise ID to delete
+     */
+    public deleteExercise(exerciseId: number): void {
+        const exercisePath = this.idToPath.get(exerciseId);
+        if (exercisePath) {
+            del.sync(exercisePath, { force: true });
+            this.idToPath.delete(exerciseId);
+            this.pathToId.delete(exercisePath);
+            this.updatePersistentData();
+        }
+    }
+
+    private updatePersistentData() {
+        this.storage.updateExerciseData({
+            idToPath: Array.from(this.idToPath.entries()),
+            pathToId: Array.from(this.pathToId.entries()),
+        });
     }
 }

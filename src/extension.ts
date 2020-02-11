@@ -103,6 +103,28 @@ export async function activate(context: vscode.ExtensionContext) {
                 }
             }),
         );
+        context.subscriptions.push(
+            vscode.commands.registerCommand("resetExercise", async () => {
+                const path = vscode.window.activeTextEditor?.document.fileName;
+                if (path) {
+                    const exerciseId = exerciseManager.getExercisePath(path);
+                    if (exerciseId) {
+                        const submitResult = await tmc.submitExercise(exerciseId);
+                        if (submitResult.ok) {
+                            const slug = exerciseManager.getOrganizationSlugByExerciseId(exerciseId);
+                            exerciseManager.deleteExercise(exerciseId);
+                            tmc.downloadExercise(exerciseId, slug.unwrap());
+                        } else {
+                            vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
+                                                            ${submitResult.val.name} - ${submitResult.val.message}`);
+                            console.error(submitResult.val);
+                        }
+                    } else {
+                        vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
+                    }
+                }
+            }),
+        );
     } else {
         vscode.window.showErrorMessage("Something broke: " + result.val.message);
     }
