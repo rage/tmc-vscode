@@ -62,6 +62,26 @@ export default class ExerciseManager {
     }
 
     /**
+     * Checks if a given file is a part of a TMC exercise and returns its id if it is
+     * @param filePath
+     */
+    public getExercisePath(filePath: string): number | undefined {
+        const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
+        const relation = path.relative(exerciseFolderPath, filePath);
+        console.log(relation);
+        if (relation.startsWith("..")) {
+            return undefined;
+        }
+        const idResult = this.getExerciseIdByPath(
+            path.join(exerciseFolderPath, ...relation.split(path.sep, 3).slice(0, 3)));
+
+        if (idResult.err) {
+            return undefined;
+        }
+        return idResult.val;
+    }
+
+    /**
      * Gets the matching exercise folder path for the given ID, if managed by this object.
      * @param exerciseId Exercise ID used for matching with the path
      */
