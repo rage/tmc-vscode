@@ -37,6 +37,7 @@ export async function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(
             vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
         );
+
         context.subscriptions.push(
             vscode.commands.registerCommand("uploadArchive", async () => {
                 const path = vscode.window.activeTextEditor?.document.fileName;
@@ -45,23 +46,42 @@ export async function activate(context: vscode.ExtensionContext) {
                     if (exerciseId) {
                         const submitResult = await tmc.submitExercise(exerciseId);
                         if (submitResult.ok) {
-                            vscode.window.showInformationMessage("Exercise submitted successfully: " +
-                                                                 submitResult.val.show_submission_url);
-                            let temp = new TemporaryWebview(resources, ui,
-                                                                    "TMC server submission", () => {});
+                            let temp = new TemporaryWebview(resources, ui, "TMC server submission", () => {});
+
+                            vscode.window.showInformationMessage(`Exercise submitted successfully:
+                                ${submitResult.val.show_submission_url}`, ...["View submission in browser", "Run in background", "Hide notification"])
+                                .then((selection) => {
+                                    if (selection === "View submission in browser") {
+                                        vscode.env.openExternal(
+                                            vscode.Uri.parse(submitResult.val.show_submission_url));
+                                    } else if (selection === "Run in background") {
+                                        if (!temp.resultsShown) {
+                                            vscode.window.setStatusBarMessage("Waiting for results from server.", 5000);
+                                            temp.dispose();
+                                        } else {
+                                            vscode.window.showInformationMessage("Test results already returned from server.");
+                                        }
+                                    }
+                                });
+
                             while (true) {
                                 const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
                                 if (statusResult.ok) {
                                     const statusData = statusResult.val;
                                     if (statusResult.val.status !== "processing") {
                                         if (temp.disposed) {
+                                            vscode.window.setStatusBarMessage("Tests finished, see result", 5000);
                                             temp = new TemporaryWebview(resources, ui,
                                                     "TMC server submission", () => {});
                                         }
-                                        temp.setContent("submission-result", statusData);
+                                        temp.setContent("submission-result", statusData, true);
                                         break;
                                     }
-                                    temp.setContent("submission-status", statusData);
+                                    if (!temp.disposed) {
+                                        temp.setContent("submission-status", statusData);
+                                    } else {
+                                        vscode.window.setStatusBarMessage("Waiting for results from server.", 5000);
+                                    }
                                 } else {
                                     console.error(statusResult.val);
                                 }
@@ -78,6 +98,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 }
             }),
         );
+
         context.subscriptions.push(
             vscode.commands.registerCommand("runTests", async () => {
                 const path = vscode.window.activeTextEditor?.document.fileName;
