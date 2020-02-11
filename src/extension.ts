@@ -55,7 +55,7 @@ export async function activate(context: vscode.ExtensionContext) {
                                         vscode.env.openExternal(
                                             vscode.Uri.parse(submitResult.val.show_submission_url));
                                     } else if (selection === "Run in background") {
-                                        if (!temp.resultsShown) {
+                                        if (!temp.resultsShownInTempView) {
                                             vscode.window.setStatusBarMessage("Waiting for results from server.", 5000);
                                             temp.dispose();
                                         } else {
