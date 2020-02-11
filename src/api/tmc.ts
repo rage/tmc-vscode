@@ -27,7 +27,6 @@ export default class TMC {
     private token: ClientOauth2.Token | undefined;
     private readonly storage: Storage;
     private readonly dataPath: string;
-    private readonly exerciseFolderPath: string;
     private readonly tmcLangsPath: string;
     private readonly tmcApiUrl: string;
     private readonly exerciseManager: ExerciseManager;
@@ -37,7 +36,7 @@ export default class TMC {
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage, extensionContext: vscode.ExtensionContext, resources: Resources) {
+    constructor(exerciseManager: ExerciseManager, storage: Storage, resources: Resources) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: "https://tmc.mooc.fi/oauth/token",
             clientId: "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0",
@@ -49,11 +48,10 @@ export default class TMC {
             this.token = new ClientOauth2.Token(this.oauth2, authToken);
         }
         this.dataPath = resources.tmcDataFolder;
-        this.exerciseFolderPath = resources.tmcExercisesFolderPath;
         this.tmcLangsPath = resources.tmcLangsPath;
         this.tmcApiUrl = "https://tmc.mooc.fi/api/v8/";
         this.cache = new Map();
-        this.exerciseManager = new ExerciseManager(storage, resources);
+        this.exerciseManager = exerciseManager;
     }
 
     /**
@@ -202,25 +200,6 @@ export default class TMC {
             action: "run-tests",
             exerciseFolderPath: exerciseFolderPath.val,
         }), createIs<TmcLangsTestResults>());
-    }
-
-    /**
-     * Checks if a given file is a part of a TMC exercise and returns its id if it is
-     * @param filePath
-     */
-    public getExercisePath(filePath: string): number | undefined {
-        const relation = path.relative(this.exerciseFolderPath, filePath);
-        console.log(relation);
-        if (relation.startsWith("..")) {
-            return undefined;
-        }
-        const idResult = this.exerciseManager.getExerciseIdByPath(
-            path.join(this.exerciseFolderPath, ...relation.split(path.sep, 3).slice(0, 3)));
-
-        if (idResult.err) {
-            return undefined;
-        }
-        return idResult.val;
     }
 
     /**
