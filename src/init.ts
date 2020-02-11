@@ -9,7 +9,7 @@ import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, doLogout } from "./ui/treeview/actions";
 import { downloadExercises, handleLogin, setCourse, setOrganization } from "./ui/treeview/handlers";
-import { downloadFile } from "./utils";
+import { downloadFileWithProgress } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -81,7 +81,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     }
 
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
-        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({folders: [{path: "Exercises"}]}));
+        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ folders: [{ path: "Exercises" }] }));
         console.log("Created tmc workspace file at", tmcWorkspaceFilePath);
     }
 
@@ -91,15 +91,15 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     }
 
     if (!fs.existsSync(tmcLangsPath)) {
-        const result = await downloadFile("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
-            tmcLangsPath);
+        const result = await downloadFileWithProgress("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar", tmcLangsPath,
+                                                    "Welcome", "Downloading important components for the Test My Code plugin... 0 %");
         if (result.err) {
             return new Err(result.val);
         }
         console.log("tmc-langs.jar downloaded");
     }
 
-    return new Ok(new Resources(
+    const resources: Resources = new Resources(
         cssPath,
         htmlPath,
         tmcDataPath,
@@ -108,5 +108,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
         tmcWorkspaceFilePath,
         tmcExercisesFolderPath,
         mediaPath,
-    ));
+    );
+
+    return new Ok(resources);
 }

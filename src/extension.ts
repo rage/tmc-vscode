@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as init from "./init";
 
+import ExerciseManager from "./api/exerciseManager";
 import TMC from "./api/tmc";
 import Storage from "./config/storage";
 import TemporaryWebview from "./ui/temporaryWebview";
@@ -30,7 +31,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const ui = new UI(context, resources);
         const storage = new Storage(context);
-        const tmc = new TMC(storage, context, resources);
+        const exerciseManager = new ExerciseManager(storage, resources);
+        const tmc = new TMC(exerciseManager, storage, resources);
 
         init.registerUiActions(ui, storage, tmc);
 
@@ -42,7 +44,7 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.commands.registerCommand("uploadArchive", async () => {
                 const path = vscode.window.activeTextEditor?.document.fileName;
                 if (path) {
-                    const exerciseId = tmc.getExercisePath(path);
+                    const exerciseId = exerciseManager.getExercisePath(path);
                     if (exerciseId) {
                         const submitResult = await tmc.submitExercise(exerciseId);
                         if (submitResult.ok) {
@@ -103,7 +105,7 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.commands.registerCommand("runTests", async () => {
                 const path = vscode.window.activeTextEditor?.document.fileName;
                 if (path) {
-                    const exerciseId = tmc.getExercisePath(path);
+                    const exerciseId = exerciseManager.getExercisePath(path);
                     if (exerciseId) {
                         const temp = new TemporaryWebview(resources, ui,
                             "TMC Test Results", () => {});
