@@ -9,6 +9,7 @@ import UI from "./ui";
 export default class TemporaryWebview {
 
     public disposed: boolean;
+    public resultsShownInTempView: boolean | undefined;
 
     private panel: vscode.WebviewPanel;
     private ui: UI;
@@ -20,6 +21,7 @@ export default class TemporaryWebview {
         this.panel.webview.onDidReceiveMessage(messageHandler);
         this.panel.iconPath = vscode.Uri.file(`${resources.mediaFolder}/TMC.svg`);
         this.disposed = false;
+        this.resultsShownInTempView = false;
         this.ui = ui;
         this.panel.reveal(undefined, true);
     }
@@ -29,8 +31,10 @@ export default class TemporaryWebview {
      *
      * @param templateName Name of the template to use
      * @param data Data to be passed to the template engine
+     * @param results Boolean if the temporary webview content/data is test results
      */
-    public async setContent(templateName: string, data?: any) {
+    public async setContent(templateName: string, data?: any, isResults?: boolean) {
+        this.resultsShownInTempView = isResults;
         this.panel.webview.html = await this.ui.webview.templateEngine.getTemplate(
             this.panel.webview, templateName, data);
         this.panel.reveal(undefined, true);
