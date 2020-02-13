@@ -78,7 +78,12 @@ export async function activate(context: vscode.ExtensionContext) {
                                         if (temp.disposed) {
                                             vscode.window.setStatusBarMessage("Tests finished, see result", 5000);
                                             temp = new TemporaryWebview(resources, ui,
-                                                    "TMC server submission", () => {});
+                                                    "TMC server submission", async (msg) => {
+                                                        if (msg.feedback.status.length > 0) {
+                                                            console.log(await tmc.submitSubmissionFeedback(
+                                                                msg.url, msg.feedback));
+                                                        }
+                                                    });
                                         }
                                         temp.setContent("submission-result", statusData, true);
                                         break;
