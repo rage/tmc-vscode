@@ -25,7 +25,8 @@
                 <div>
                     {{this.question}}
                     <div>
-                        <input data-questionID="{{this.id}}" type="range" class="custom-range" min="0" max="5" step="1" value="0" />
+                        <input name="slider" data-questionID="{{this.id}}" type="range" class="custom-range" min="0"
+                            max="5" step="1" value="0" />
                     </div>
                 </div>
                 {{/each}}
@@ -79,10 +80,12 @@
     function submitFeedback() {
         const feedback = [];
         const questions = document.querySelectorAll("input[type=range]");
-        for(question of questions) {
-            feedback.push({question_id: parseInt(question.dataset.questionid, 10), answer: question.value})
+        for (question of questions) {
+            if (question.value !== "0") {
+                feedback.push({ question_id: parseInt(question.dataset.questionid, 10), answer: question.value })
+            }
         }
-        vscode.postMessage({feedback: {status:feedback}, url: feedback_url});
+        vscode.postMessage({ feedback: { status: feedback }, url: feedback_url });
     }
 </script>
 
