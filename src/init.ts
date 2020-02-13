@@ -26,21 +26,30 @@ export function registerUiActions(ui: UI, storage: Storage, tmc: TMC) {
         COURSE_CHOSEN, LOGGED_IN, ORGANIZATION_CHOSEN,
     };
 
+    // UI Action IDs
+    const LOGIN_ACTION = "login";
+    const INDEX_ACTION = "index";
+    const ORGANIZATIONS_ACTION = "orgs";
+    const COURSES_ACTION = "courses";
+    const COURSE_DETAILS_ACTION = "courseDetails";
+
     // Register UI actions
     const actionContext = { tmc, storage, ui, visibilityGroups };
     ui.treeDP.registerAction("Log out", [LOGGED_IN], doLogout(actionContext));
-    ui.treeDP.registerAction("Log in", [LOGGED_IN.not], async () => await ui.webview.setContentFromTemplate("login"));
-    ui.treeDP.registerAction("Summary", [LOGGED_IN], displaySummary(actionContext), "index");
-    ui.treeDP.registerAction("Organization", [LOGGED_IN], displayOrganizations(actionContext), "orgs");
-    ui.treeDP.registerAction("Courses", [LOGGED_IN, ORGANIZATION_CHOSEN], displayCourses(actionContext), "courses");
+    ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
+        async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
+    ui.treeDP.registerAction("Summary", [LOGGED_IN], displaySummary(actionContext), INDEX_ACTION);
+    ui.treeDP.registerAction("Organization", [LOGGED_IN], displayOrganizations(actionContext), ORGANIZATIONS_ACTION);
+    ui.treeDP.registerAction("Courses", [LOGGED_IN, ORGANIZATION_CHOSEN],
+        displayCourses(actionContext), COURSES_ACTION);
     ui.treeDP.registerAction("Course details", [LOGGED_IN, ORGANIZATION_CHOSEN, COURSE_CHOSEN],
-        displayCourseDetails(actionContext), "courseDetails");
+        displayCourseDetails(actionContext), COURSE_DETAILS_ACTION);
 
     // Register webview handlers
     const handlerContext = { tmc, storage, ui, visibilityGroups };
-    ui.webview.registerHandler("setOrganization", setOrganization(handlerContext));
-    ui.webview.registerHandler("setCourse", setCourse(handlerContext));
-    ui.webview.registerHandler("login", handleLogin(handlerContext));
+    ui.webview.registerHandler("setOrganization", setOrganization(handlerContext, COURSES_ACTION));
+    ui.webview.registerHandler("setCourse", setCourse(handlerContext, COURSE_DETAILS_ACTION));
+    ui.webview.registerHandler("login", handleLogin(handlerContext, ORGANIZATIONS_ACTION, INDEX_ACTION));
     ui.webview.registerHandler("downloadExercises", downloadExercises(handlerContext));
 }
 
