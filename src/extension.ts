@@ -7,7 +7,6 @@ import Storage from "./config/storage";
 import TemporaryWebview from "./ui/temporaryWebview";
 import UI from "./ui/ui";
 import { sleep } from "./utils";
-import { TmcLangsTestResults } from "./api/types";
 
 export async function activate(context: vscode.ExtensionContext) {
 
