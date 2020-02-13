@@ -98,3 +98,41 @@ export type TmcLangsTestResults = {
 };
 
 export type TmcLangsResponse = string | TmcLangsTestResults;
+
+export type SubmissionProcessingReport = {
+    status: "processing";
+    sandbox_status: "created" | "sending_to_sandbox" | "processing_on_sandbox";
+};
+
+export type SubmissionResultReport = {
+    api_version: number;
+    all_tests_passed: boolean;
+    user_id: number;
+    login: string;
+    course: string;
+    exercise_name: string;
+    status: "fail" | "ok";
+    points: string[];
+    validations: any;
+    valgrind: string;
+    submission_url: string;
+    solution_url: string | null;
+    submitted_at: string;
+    processing_time: number;
+    reviewed: boolean;
+    requests_review: boolean;
+    paste_url: string | null;
+    message_for_paste: string | null;
+    missing_review_points: string[];
+    test_cases: Array<{
+        name: string;
+        successful: boolean;
+        message: string;
+        exception: string[];
+        detailed_message: string | null;
+    }>;
+    feedback_questions?: any[];
+    feedback_answer_url?: string;
+};
+
+export type SubmissionStatusReport = SubmissionProcessingReport | SubmissionResultReport;

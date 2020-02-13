@@ -40,6 +40,10 @@ export default class Storage {
         return this.context.globalState.get("token");
     }
 
+    public getExerciseData(): {pathToId: Array<[string, number]>, idToPath: Array<[number, string]>} | undefined {
+        return this.context.globalState.get("exerciseData");
+    }
+
     /**
      * Updates the given course id in storage.
      * @param courseId course id to update
@@ -62,5 +66,9 @@ export default class Storage {
      */
     public updateAuthenticationToken(authenticationToken: oauth2.Data | undefined) {
         this.context.globalState.update("token", authenticationToken);
+    }
+
+    public updateExerciseData(exerciseData: {pathToId: Array<[string, number]>, idToPath: Array<[number, string]>}) {
+        this.context.globalState.update("exerciseData", exerciseData);
     }
 }

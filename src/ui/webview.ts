@@ -7,15 +7,17 @@ import TemplateEngine from "./templateEngine";
  */
 export default class TmcWebview {
 
-    private extensionContext: vscode.ExtensionContext;
-    private messageHandlers: Map<string, (msg: any) => void> = new Map();
+    public readonly templateEngine: TemplateEngine;
+
+    private readonly extensionContext: vscode.ExtensionContext;
+    private readonly messageHandlers: Map<string, (msg: any) => void> = new Map();
 
     /**
      * NOTE: use [[getPanel]] to correctly handle disposed instances
      */
     private panel: vscode.WebviewPanel | undefined;
 
-    private readonly templateEngine: TemplateEngine;
+    private readonly resources: Resources;
 
     /**
      * Creates a TmcWebview object used by the UI class
@@ -24,6 +26,7 @@ export default class TmcWebview {
     constructor(extensionContext: vscode.ExtensionContext, resources: Resources) {
         this.extensionContext = extensionContext;
         this.templateEngine = new TemplateEngine(resources, extensionContext);
+        this.resources = resources;
     }
 
     /**
@@ -74,7 +77,7 @@ export default class TmcWebview {
      */
     private getPanel(): vscode.WebviewPanel {
         if (this.panel === undefined) {
-            this.panel = vscode.window.createWebviewPanel("tmcmenu", "TestMyCode", vscode.ViewColumn.Active,
+            this.panel = vscode.window.createWebviewPanel("tmcmenu", "TestMyCode", vscode.ViewColumn.One,
                 { enableScripts: true });
             this.panel.onDidDispose(() => { this.panel = undefined; },
                 this, this.extensionContext.subscriptions);
@@ -87,7 +90,7 @@ export default class TmcWebview {
                 }
             },
                 this, this.extensionContext.subscriptions);
-            this.panel.iconPath = vscode.Uri.file(this.extensionContext.asAbsolutePath("media/TMC.svg"));
+            this.panel.iconPath = vscode.Uri.file(`${this.resources.mediaFolder}/TMC.svg`);
         }
         return this.panel;
     }

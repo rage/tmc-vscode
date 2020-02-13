@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import Resources from "../config/resources";
+import TemplateEngine from "./templateEngine";
 import TmcMenuTree from "./treeview/treeview";
 import TmcWebview from "./webview";
 

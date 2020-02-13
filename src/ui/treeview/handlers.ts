@@ -4,7 +4,6 @@ import * as vscode from "vscode";
 import TMC from "../../api/tmc";
 import Storage from "../../config/storage";
 import { AuthenticationError } from "../../errors";
-import { openFolder } from "../../utils";
 import UI from "../ui";
 import { HandlerContext } from "./types";
 
@@ -14,14 +13,15 @@ import { HandlerContext } from "./types";
  * @param tmc TMC API instance used for downloading exercises
  */
 export function downloadExercises({ ui, tmc }: HandlerContext) {
-    return async (msg: { type: string, ids: number[] }) => {
+    return async (msg: { type: string, ids: number[], organizationSlug: string, courseName: string }) => {
         ui.webview.setContentFromTemplate("loading");
-        const results = Results(...await Promise.all(msg.ids.map((x) => tmc.downloadExercise(x))));
+        const results = Results(...await Promise.all(msg.ids.map(
+            (x) => tmc.downloadExercise(x, msg.organizationSlug))));
         if (results.ok) {
             console.log("opening downloaded exercises in: ", results.val);
             ui.webview.dispose();
-            openFolder(...results.val.map((folderPath, index) =>
-                ({ folderPath, name: msg.ids[index].toString() }))); // TODO: get proper exercise name from API
+            // TODO: get proper exercise name from API
+            // TODO: allow downloading exercises without opening them
         } else {
             vscode.window.showErrorMessage("One or more exercise downloads failed.");
         }
@@ -36,17 +36,16 @@ export function downloadExercises({ ui, tmc }: HandlerContext) {
  */
 export function handleLogin({ ui, storage, tmc, visibilityGroups }: HandlerContext) {
     return async (msg: { type: string, username: string, password: string }) => {
-        console.log("Logging in as " + msg.username);
+        if (!msg.username || !msg.password) {
+            ui.webview.setContentFromTemplate("login", { error: "Username and password may not be empty." });
+            return;
+        }
         const result = await tmc.authenticate(msg.username, msg.password);
         if (result.ok) {
-            console.log("Logged in successfully");
             ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
             storage.getOrganizationSlug() === undefined ? ui.treeDP.triggerCallback("orgs") : ui.treeDP.triggerCallback("index");
         } else {
             console.log("Login failed: " + result.val.message);
-            if (result.val instanceof AuthenticationError) {
-                console.log("auth error");
-            }
             ui.webview.setContentFromTemplate("login", { error: result.val.message });
         }
     };

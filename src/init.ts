@@ -9,7 +9,7 @@ import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, doLogout } from "./ui/treeview/actions";
 import { downloadExercises, handleLogin, setCourse, setOrganization } from "./ui/treeview/handlers";
-import { downloadFile } from "./utils";
+import { downloadFileWithProgress } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -54,9 +54,14 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
 
     const cssPath = extensionContext.asAbsolutePath("resources/styles");
     const htmlPath = extensionContext.asAbsolutePath("resources/templates");
+    const mediaPath = extensionContext.asAbsolutePath("media");
 
     const basePath = extensionContext.globalStoragePath;
     const tmcDataPath = path.join(basePath, "tmcdata");
+    const tmcWorkspacePath = path.join(tmcDataPath, "TMC workspace");
+    const tmcWorkspaceFilePath = path.join(tmcWorkspacePath, "TMC Exercises.code-workspace");
+    const tmcExercisesFolderPath = path.join(tmcWorkspacePath, "Exercises");
+
     const tmcLangsPath = path.join(tmcDataPath, "tmc-langs.jar");
 
     if (!fs.existsSync(basePath)) {
@@ -69,19 +74,40 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
         console.log("Created tmc data directory at", tmcDataPath);
     }
 
+    if (!fs.existsSync(tmcWorkspacePath)) {
+        fs.mkdirSync(tmcWorkspacePath);
+        console.log("Created tmc workspace directory at", tmcWorkspacePath);
+    }
+
+    if (!fs.existsSync(tmcWorkspaceFilePath)) {
+        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ folders: [{ path: "Exercises" }] }));
+        console.log("Created tmc workspace file at", tmcWorkspaceFilePath);
+    }
+
+    if (!fs.existsSync(tmcExercisesFolderPath)) {
+        fs.mkdirSync(tmcExercisesFolderPath);
+        console.log("Created tmc exercise directory at", tmcExercisesFolderPath);
+    }
+
     if (!fs.existsSync(tmcLangsPath)) {
-        const result = await downloadFile("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
-            tmcLangsPath);
+        const result = await downloadFileWithProgress("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar", tmcLangsPath,
+                                                    "Welcome", "Downloading important components for the Test My Code plugin... 0 %");
         if (result.err) {
             return new Err(result.val);
         }
         console.log("tmc-langs.jar downloaded");
     }
 
-    return new Ok(new Resources(
+    const resources: Resources = new Resources(
         cssPath,
         htmlPath,
         tmcDataPath,
         tmcLangsPath,
-    ));
+        tmcWorkspacePath,
+        tmcWorkspaceFilePath,
+        tmcExercisesFolderPath,
+        mediaPath,
+    );
+
+    return new Ok(resources);
 }
