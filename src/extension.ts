@@ -86,16 +86,29 @@ export async function activate(context: vscode.ExtensionContext) {
                 if (path) {
                     const exerciseId = exerciseManager.getExercisePath(path);
                     if (exerciseId) {
-                        const temp = new TemporaryWebview(resources, ui,
-                            "TMC Test Results", () => {});
-                        temp.setContent("loading");
-                        const testResult = await tmc.runTests(exerciseId);
-                        if (testResult.ok) {
-                            temp.setContent("test-result", testResult.val);
+                        const exerciseDetails = await tmc.getExerciseDetails(exerciseId);
+                        if (exerciseDetails.ok) {
+                            const exerciseName = exerciseDetails.val.exercise_name;
+                            vscode.window.setStatusBarMessage(`Running tests for ${exerciseName}`);
+                            const testResult = await tmc.runTests(exerciseId);
+                            vscode.window.setStatusBarMessage("");
+                            if (testResult.ok) {
+                                vscode.window.setStatusBarMessage(`Tests finished for ${exerciseName}`, 5000);
+                                const temp = new TemporaryWebview(resources, ui,
+                                    "TMC Test Results", () => {});
+                                const testResultVal = testResult.val;
+                                const data = { testResultVal, exerciseId, exerciseName };
+                                temp.setContent("test-result", data);
+                            } else {
+                                vscode.window.setStatusBarMessage(`Running tests for ${exerciseName} failed`, 5000);
+                                vscode.window.showErrorMessage(`Exercise test run failed: \
+                                                                ${testResult.val.name} - ${testResult.val.message}`);
+                                console.error(testResult.val);
+                            }
                         } else {
-                            vscode.window.showErrorMessage(`Exercise test run failed: \
-                                                            ${testResult.val.name} - ${testResult.val.message}`);
-                            console.error(testResult.val);
+                            vscode.window.showErrorMessage(`Getting exercise details failed: \
+                                                            ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`);
+                            console.error(exerciseDetails.val);
                         }
                     } else {
                         vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
