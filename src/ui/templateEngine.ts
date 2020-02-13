@@ -29,10 +29,17 @@ export default class TemplateEngine {
         /**
          * Checks the locally runned test status.
          */
-        handlebars.registerHelper("check_test_status", (arg: string) => {
-            if (arg === "PASSED") {
+        handlebars.registerHelper("check_test_status", (status: string, exerciseId: number, exerciseName: string) => {
+            if (status === "PASSED") {
+                vscode.window.showInformationMessage(`Submit ${exerciseName} to server?`, ...["Submit to server", "No thanks"])
+                .then((selection) => {
+                    if (selection === "Submit to server") {
+                        // TODO: Call submit to server if submit is pressed on notification
+                        console.log (exerciseId);
+                    }
+                });
                 return "<h1 class='passed-header'>PASSED</h1>";
-            } else if (arg === "TESTS_FAILED") {
+            } else if (status === "TESTS_FAILED") {
                 return "<h1>TESTS FAILED</h1>";
             } else {
                 // TODO: Parse COMPILE_FAILED error logs
