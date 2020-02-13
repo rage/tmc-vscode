@@ -29,11 +29,11 @@ export default class TemplateEngine {
         /**
          * Checks the locally runned test status.
          */
-        handlebars.registerHelper("check_test_status", (status: string, exerciseId: number) => {
+        handlebars.registerHelper("check_test_status", (status: string, exerciseId: number, exerciseName: string) => {
             if (status === "PASSED") {
-                vscode.window.showInformationMessage("Submit to server?", ...["Submit", "No"])
+                vscode.window.showInformationMessage(`Submit ${exerciseName} to server?`, ...["Submit to server", "No thanks"])
                 .then((selection) => {
-                    if (selection === "Submit") {
+                    if (selection === "Submit to server") {
                         // TODO: Call submit to server if submit is pressed on notification
                         console.log (exerciseId);
                     }
