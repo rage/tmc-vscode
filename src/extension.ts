@@ -90,6 +90,7 @@ export async function activate(context: vscode.ExtensionContext) {
                         if (exerciseDetails.ok) {
                             const exerciseName = exerciseDetails.val.exercise_name;
                             vscode.window.setStatusBarMessage(`Running tests for ${exerciseName}`);
+                            vscode.window.showInformationMessage(`Running tests for ${exerciseName}`);
                             const testResult = await tmc.runTests(exerciseId);
                             vscode.window.setStatusBarMessage("");
                             if (testResult.ok) {

@@ -87,3 +87,7 @@ export async function downloadFile(url: string, filePath: string,
 export function sleep(millis: number) {
     return new Promise((resolve) => setTimeout(resolve, millis));
 }
+
+export function numbersToString(array: number[]) {
+    return String.fromCharCode(...array);
+}

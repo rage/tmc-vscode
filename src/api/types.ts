@@ -95,8 +95,8 @@ export type TmcLangsTestResults = {
     status: string,
     testResults: TmcLangsTestResult[],
     logs: {
-        stdout: Buffer,
-        stderr: Buffer,
+        stdout: number[],
+        stderr: number[],
     };
 };
 
