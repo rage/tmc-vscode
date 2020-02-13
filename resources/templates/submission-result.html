@@ -26,7 +26,7 @@
                     {{this.question}}
                     <div>
                         <input name="slider" data-questionID="{{this.id}}" type="range" class="custom-range" min="0"
-                            max="5" step="1" value="0" />
+                            max="5" step="1" value="0" onChange="showValue(this.value, "text-id-{{this.id}}")"/>
                     </div>
                 </div>
                 {{/each}}
@@ -87,6 +87,16 @@
         }
         vscode.postMessage({ feedback: { status: feedback }, url: feedback_url });
     }
+
+    function showValue(value, range) {
+        document.getElementById('text-id').innerHTML=value;
+    }
+
+    var slider = new Slider("question", {
+    ticks: [0, 100, 200, 300, 400],
+    ticks_labels: ['$0', '$100', '$200', '$300', '$400'],
+    ticks_snap_bounds: 30
+});
 </script>
 
 </html>
