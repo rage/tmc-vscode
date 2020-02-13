@@ -88,18 +88,19 @@ export async function activate(context: vscode.ExtensionContext) {
                     if (exerciseId) {
                         const exerciseDetails = await tmc.getExerciseDetails(exerciseId);
                         if (exerciseDetails.ok) {
-                            vscode.window.setStatusBarMessage(`Running tests for ${exerciseDetails.val.exercise_name}`);
+                            const exerciseName = exerciseDetails.val.exercise_name;
+                            vscode.window.setStatusBarMessage(`Running tests for ${exerciseName}`);
                             const testResult = await tmc.runTests(exerciseId);
                             vscode.window.setStatusBarMessage("");
                             if (testResult.ok) {
-                                vscode.window.setStatusBarMessage(`Tests finished for ${exerciseDetails.val.exercise_name}`, 5000);
+                                vscode.window.setStatusBarMessage(`Tests finished for ${exerciseName}`, 5000);
                                 const temp = new TemporaryWebview(resources, ui,
                                     "TMC Test Results", () => {});
                                 const testResultVal = testResult.val;
-                                const data = { testResultVal, exerciseId };
+                                const data = { testResultVal, exerciseId, exerciseName };
                                 temp.setContent("test-result", data);
                             } else {
-                                vscode.window.setStatusBarMessage(`Running tests for ${exerciseDetails.val.exercise_name} failed`, 5000);
+                                vscode.window.setStatusBarMessage(`Running tests for ${exerciseName} failed`, 5000);
                                 vscode.window.showErrorMessage(`Exercise test run failed: \
                                                                 ${testResult.val.name} - ${testResult.val.message}`);
                                 console.error(testResult.val);
