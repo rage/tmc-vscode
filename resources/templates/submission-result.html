@@ -17,16 +17,24 @@
         <div class="row my-1">
             <h3>Points gained: {{points}}</h3>
         </div>
-        {{#if all_tests_passed}}
-        <div>
+        <div class="row my-1">
+            {{{progress_bar test_cases}}}
+        </div>
+        {{#if feedback_questions}}
+        <div id="feedback" class="my-5">
             <h4>Anna palautetta</h4>
             <form>
                 {{#each feedback_questions}}
                 <div>
                     {{this.question}}
-                    <div>
+                    <div class="row">
+                        <div class="col-md-10">
                         <input name="slider" data-questionID="{{this.id}}" type="range" class="custom-range" min="0"
-                            max="5" step="1" value="0" onChange="showValue(this.value, "text-id-{{this.id}}")"/>
+                            max="5" step="1" value="0" oninput='showValue(this.value, "text-id-{{this.id}}")' />
+                        </div>
+                        <div class="col-md-2">
+                            <span class="font-weight-bold" id="text-id-{{this.id}}" >0</span>
+                        </div>
                     </div>
                 </div>
                 {{/each}}
@@ -36,9 +44,6 @@
             </form>
         </div>
         {{/if}}
-        <div class="row my-1">
-            {{{progress_bar test_cases}}}
-        </div>
         <div>
             {{#each test_cases}}
             {{#if this.successful}}
@@ -85,18 +90,13 @@
                 feedback.push({ question_id: parseInt(question.dataset.questionid, 10), answer: question.value })
             }
         }
+        document.getElementById("feedback").style.display = "none";
         vscode.postMessage({ feedback: { status: feedback }, url: feedback_url });
     }
 
-    function showValue(value, range) {
-        document.getElementById('text-id').innerHTML=value;
+    function showValue(value, id) {
+        document.getElementById(id).innerHTML=value;
     }
-
-    var slider = new Slider("question", {
-    ticks: [0, 100, 200, 300, 400],
-    ticks_labels: ['$0', '$100', '$200', '$300', '$400'],
-    ticks_snap_bounds: 30
-});
 </script>
 
 </html>
