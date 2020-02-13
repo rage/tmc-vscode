@@ -4,6 +4,7 @@ import * as FormData from "form-data";
 import * as fs from "fs";
 import * as fetch from "node-fetch";
 import * as path from "path";
+import * as url from "url";
 import * as vscode from "vscode";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
@@ -14,8 +15,9 @@ import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } fr
 import { downloadFile } from "../utils";
 import ExerciseManager from "./exerciseManager";
 import {
-    Course, CourseDetails, ExerciseDetails, Organization, SubmissionResponse,
-    SubmissionStatusReport, TMCApiResponse, TmcLangsAction, TmcLangsResponse, TmcLangsTestResults,
+    Course, CourseDetails, ExerciseDetails, Organization, SubmissionFeedback,
+    SubmissionFeedbackResponse, SubmissionResponse, SubmissionStatusReport,
+    TMCApiResponse, TmcLangsAction, TmcLangsResponse, TmcLangsTestResults,
 } from "./types";
 
 /**
@@ -140,13 +142,15 @@ export default class TMC {
 
     /**
      * Get submission status by url
-     * @param url Submission url
+     * @param submissionUrl Submission url
      */
-    public async getSubmissionStatus(url: string): Promise<Result<SubmissionStatusReport, Error>> {
+    public async getSubmissionStatus(submissionUrl: string): Promise<Result<SubmissionStatusReport, Error>> {
         if (!this.token) {
             throw new Error("User not logged in!");
         }
-        const request = this.token.sign({ url, headers: {} });
+        return this.checkApiResponse(this.tmcApiRequest(submissionUrl, false), createIs<SubmissionStatusReport>());
+        /*
+        const request = this.token.sign({ url: submissionUrl, headers: {} });
         const response = await fetch.default(request.url, request);
         if (response.ok) {
             const responseObject = await response.json();
@@ -158,6 +162,7 @@ export default class TMC {
         } else {
             return new Err(new ApiError(response.statusText));
         }
+        */
     }
 
     /**
@@ -226,6 +231,22 @@ export default class TMC {
         form.append("submission[file]", fs.createReadStream(archivePath));
         return this.checkApiResponse(this.tmcApiRequest(`core/exercises/${id}/submissions`, false, "post",
             form, form.getHeaders()), createIs<SubmissionResponse>());
+    }
+
+    /**
+     * Submit feedback for a submission, only usable from the submission details view
+     * @param feedbackUrl Feedback URL to use, from the submission response
+     * @param feedback Feedback to submit, shouldn't be empty
+     */
+    public async submitSubmissionFeedback(feedbackUrl: string, feedback: SubmissionFeedback):
+        Promise<Result<SubmissionFeedbackResponse, Error>> {
+        const params = new url.URLSearchParams();
+        feedback.status.forEach((answer, index) => {
+            params.append(`answers[${index}][question_id]`, answer.question_id.toString());
+            params.append(`answers[${index}][answer]`, answer.answer);
+        });
+        return this.checkApiResponse(this.tmcApiRequest(feedbackUrl, false, "post", params),
+                                     createIs<SubmissionFeedbackResponse>());
     }
 
     /**
@@ -299,14 +320,14 @@ export default class TMC {
 
     /**
      * Performs an HTTP request to the hardcoded TMC server
-     * @param endpoint target API endpoint
+     * @param endpoint target API endpoint, can also be complete URL
      * @param method HTTP method, defaults to GET
      */
     private async tmcApiRequest(endpoint: string, cache: boolean | undefined,
                                 method?: "get" | "post", body?: any, headers?: any):
         Promise<Result<TMCApiResponse, Error>> {
 
-        cache = cache === undefined ? true : cache;
+        cache = cache === undefined ? method === "get" : cache;
 
         if (cache) {
             const cacheResult = this.cache.get(method + endpoint);
@@ -319,7 +340,7 @@ export default class TMC {
             body,
             headers: headers ? headers : {},
             method: method ? method : "get",
-            url: this.tmcApiUrl + endpoint,
+            url: endpoint.startsWith("https://") ? endpoint : this.tmcApiUrl + endpoint,
         };
 
         if (this.token) {
