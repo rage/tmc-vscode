@@ -17,6 +17,24 @@
         <div class="row my-1">
             <h3>Points gained: {{points}}</h3>
         </div>
+        {{#if all_tests_passed}}
+        <div>
+            <h4>Anna palautetta</h4>
+            <form>
+                {{#each feedback_questions}}
+                <div>
+                    {{this.question}}
+                    <div>
+                        <input data-questionID="{{this.id}}" type="range" class="custom-range" min="0" max="5" step="1" value="0" />
+                    </div>
+                </div>
+                {{/each}}
+                <div>
+                    <button onclick="submitFeedback()">Lähetä palaute</button>
+                </div>
+            </form>
+        </div>
+        {{/if}}
         <div class="row my-1">
             {{{progress_bar test_cases}}}
         </div>
@@ -52,21 +70,20 @@
                 {{/each}}
             </div>
         </div>
-        {{#if all_tests_passed}}
-        <div>
-            <h4>Anna palautetta</h4>
-            <form>
-                {{#each feedback_questions}}
-                <div>
-                    {{this.question}}
-                    <div>
-                        <input type="range" class="form-control-range w-100" min="0" max="5" step="1" value="0" />
-                    </div>
-                </div>
-                {{/each}}
-            </form>
-        </div>
-        {{/if}}
 </body>
+
+<script>
+    const vscode = acquireVsCodeApi();
+    const feedback_url = "{{feedback_answer_url}}"
+
+    function submitFeedback() {
+        const feedback = [];
+        const questions = document.querySelectorAll("input[type=range]");
+        for(question of questions) {
+            feedback.push({question_id: parseInt(question.dataset.questionid, 10), answer: question.value})
+        }
+        vscode.postMessage({feedback: {status:feedback}, url: feedback_url});
+    }
+</script>
 
 </html>

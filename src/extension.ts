@@ -48,7 +48,9 @@ export async function activate(context: vscode.ExtensionContext) {
                     if (exerciseId) {
                         const submitResult = await tmc.submitExercise(exerciseId);
                         if (submitResult.ok) {
-                            let temp = new TemporaryWebview(resources, ui, "TMC server submission", () => {});
+                            let temp = new TemporaryWebview(resources, ui, "TMC server submission", (msg) => {
+                                console.log(msg);
+                            });
 
                             vscode.window.showInformationMessage(`Exercise submitted successfully:
                                 ${submitResult.val.show_submission_url}`, ...["View submission in browser", "Run in background", "Hide notification"])
