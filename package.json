@@ -80,7 +80,7 @@
 		"tslint": "tslint --project .",
 		"postinstall": "babel node_modules/ts-results --out-dir node_modules/ts-results --plugins=@babel/plugin-transform-modules-commonjs",
 		"webpack": "webpack --mode development",
-		"webpack-dev": "webpack --mode development --watch"
+		"webpack-dev": "webpack --mode development --watch --info-verbosity verbose"
 	},
 	"devDependencies": {
 		"@babel/cli": "^7.8.3",
