@@ -34,9 +34,11 @@ export default class TemplateEngine {
                 return "<h1 class='passed-header'>PASSED</h1>";
             } else if (arg === "TESTS_FAILED") {
                 return "<h1>TESTS FAILED</h1>";
-            } else {
+            } else if (arg === "COMPILE_FAILED") {
                 // TODO: Parse COMPILE_FAILED error logs
                 return "<h1>Something went wrong while running the tests</h1>";
+            } else {
+                return "<h1>Something went seriously wrong while running the tests</h1>";
             }
         });
         /**
