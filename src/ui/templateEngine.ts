@@ -51,9 +51,9 @@ export default class TemplateEngine {
             if (results.status === "ok") {
                 if (results.all_tests_passed) {
                     return `<h1 class="passed-header">All tests passed on the server</h1>`;
-                } else {
-                    return `<h1>Some tests failed on the server</h1>`;
                 }
+            } else if (results.status === "fail") {
+                return `<h1>Some tests failed on the server</h1>`;
             } else if (results.status === "error") {
                 return `<h1>Server returned following error:
                         <pre>${results.error}</pre>`;
