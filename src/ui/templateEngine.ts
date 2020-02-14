@@ -51,18 +51,22 @@ export default class TemplateEngine {
             }
         });
 
+        /**
+         * Submission result show correct heading or compilation error
+         */
         handlebars.registerHelper("submission_status", (results: SubmissionResultReport) => {
             if (results.status === "ok") {
                 if (results.all_tests_passed) {
                     return `<h1 class="passed-header">All tests passed on the server</h1>`;
-                } else {
-                    return `<h1>Some tests failed on the server</h1>`;
                 }
+            } else if (results.status === "fail") {
+                    return `<h1>Some tests failed on the server</h1>`;
             } else if (results.status === "error") {
                 return `<h1>Server returned following error:
-                        <pre>${results.error}</pre>`;
+                        <pre style="font-size: 14px">${results.error}</pre>`;
             }
         });
+
         /**
          * Progress bar for running tests and submission.
          */
