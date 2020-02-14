@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import Visibility from "./visibility";
+import {Visibility, VisibilityGroup, VisibilityGroupNegated} from "./visibility";
 
 /**
  * A class for managing the TMC menu treeview.
@@ -31,7 +31,8 @@ export default class TmcMenuTree {
      * @param groups Determines when the action should be visible in the treeview
      * @param id Optional, required for [[triggerCallback]]
      */
-    public registerAction(label: string, groups: string[], onClick: () => void, id?: string) {
+    public registerAction(label: string, groups: Array<VisibilityGroup | VisibilityGroupNegated>,
+                          onClick: () => void, id?: string) {
         id = id ? id : (this.nextId++).toString();
 
         // Use internal classes
@@ -58,18 +59,19 @@ export default class TmcMenuTree {
      * @param group Name of the group
      * @param visible Whether the group should start as active or not
      */
-    public registerVisibilityGroup(group: string, visible?: boolean) {
+    public createVisibilityGroup(visible?: boolean) {
         // Use internal class
-        this.visibility.registerGroup(group, visible ? visible : false);
+        return this.visibility.createGroup(visible ? visible : false);
     }
 
     /**
      * Update the visibility status of a list of groups
      * @param groups The groups to be updated, prepend an exclamation mark to disable
      */
-    public updateVisibility(groups: string[]): void {
+    public updateVisibility(groups: Array<VisibilityGroup | VisibilityGroupNegated>): void {
 
-        if (new Set(groups.map((group) => group.startsWith("!") ? group.substring(1) : group)).size !== groups.length) {
+        if (new Set(groups.map((group) => group._id.startsWith("!") ?
+            group._id.substring(1) : group._id)).size !== groups.length) {
             throw new Error("Visibility group list contains duplicates and/or conflicts");
         }
 

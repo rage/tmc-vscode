@@ -70,8 +70,13 @@ export type SubmissionResponse = {
     show_submission_url: string;
 };
 
+export type SubmissionFeedbackResponse = {
+    api_version: number;
+    status: "ok";
+};
+
 export type TMCApiResponse = Course[] | CourseDetails | Organization[] | Organization | ExerciseDetails |
-                             SubmissionResponse;
+                             SubmissionResponse | SubmissionFeedbackResponse | SubmissionStatusReport;
 
 export type TmcLangsAction = {
     action: "extract-project" | "compress-project",
@@ -131,11 +136,26 @@ export type SubmissionResultReport = {
         name: string;
         successful: boolean;
         message: string;
-        exception: string[];
+        exception: string[] | null;
         detailed_message: string | null;
     }>;
-    feedback_questions?: any[];
+    feedback_questions?: SubmissionFeedbackQuestion[];
     feedback_answer_url?: string;
+};
+
+export type SubmissionFeedbackQuestion = {
+    id: number;
+    question: string;
+    kind: string;
+};
+
+export type SubmissionFeedbackAnswer = {
+    question_id: number;
+    answer: string;
+};
+
+export type SubmissionFeedback = {
+    status: SubmissionFeedbackAnswer[];
 };
 
 export type SubmissionStatusReport = SubmissionProcessingReport | SubmissionResultReport;
