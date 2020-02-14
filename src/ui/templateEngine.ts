@@ -3,7 +3,7 @@ import * as handlebars from "handlebars";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { TmcLangsTestResult, SubmissionResultReport } from "../api/types";
+import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
 
 export default class TemplateEngine {
