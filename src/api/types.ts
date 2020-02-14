@@ -99,7 +99,10 @@ export type TmcLangsTestResult = {
 export type TmcLangsTestResults = {
     status: string,
     testResults: TmcLangsTestResult[],
-    logs: any;
+    logs: {
+        stdout: number[],
+        stderr: number[],
+    };
 };
 
 export type TmcLangsResponse = string | TmcLangsTestResults;

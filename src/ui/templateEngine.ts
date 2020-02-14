@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
+import { numbersToString } from "../utils";
 
 export default class TemplateEngine {
     private cssPath: string;
@@ -29,7 +30,9 @@ export default class TemplateEngine {
         /**
          * Checks the locally runned test status.
          */
-        handlebars.registerHelper("check_test_status", (status: string, exerciseId: number, exerciseName: string) => {
+        handlebars.registerHelper("check_test_status",
+                                    (status: string, exerciseId: number,
+                                     exerciseName: string, logs: { stdout: number[], stderr: number[] }) => {
             if (status === "PASSED") {
                 vscode.window.showInformationMessage(`Submit ${exerciseName} to server?`, ...["Submit to server", "No thanks"])
                 .then((selection) => {
@@ -41,9 +44,10 @@ export default class TemplateEngine {
                 return "<h1 class='passed-header'>PASSED</h1>";
             } else if (status === "TESTS_FAILED") {
                 return "<h1>TESTS FAILED</h1>";
+            } else if (status === "COMPILE_FAILED") {
+                return `<h1>COMPILE FAILED</h1><pre>${numbersToString(logs.stdout)}</pre>`;
             } else {
-                // TODO: Parse COMPILE_FAILED error logs
-                return "<h1>Something went wrong while running the tests</h1>";
+                return "<h1>Something went seriously wrong while running the tests</h1>";
             }
         });
 
