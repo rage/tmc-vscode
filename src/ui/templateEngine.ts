@@ -3,7 +3,7 @@ import * as handlebars from "handlebars";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { TmcLangsTestResult } from "../api/types";
+import { TmcLangsTestResult, SubmissionResultReport } from "../api/types";
 import Resources from "../config/resources";
 
 export default class TemplateEngine {
@@ -44,6 +44,19 @@ export default class TemplateEngine {
             } else {
                 // TODO: Parse COMPILE_FAILED error logs
                 return "<h1>Something went wrong while running the tests</h1>";
+            }
+        });
+
+        handlebars.registerHelper("submission_status", (results: SubmissionResultReport) => {
+            if (results.status === "ok") {
+                if (results.all_tests_passed) {
+                    return `<h1 class="passed-header">All tests passed on the server</h1>`;
+                } else {
+                    return `<h1>Some tests failed on the server</h1>`;
+                }
+            } else if (results.status === "error") {
+                return `<h1>Server returned following error:
+                        <pre>${results.error}</pre>`;
             }
         });
         /**

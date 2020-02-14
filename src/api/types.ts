@@ -116,7 +116,7 @@ export type SubmissionResultReport = {
     login: string;
     course: string;
     exercise_name: string;
-    status: "fail" | "ok";
+    status: "fail" | "ok" | "error";
     points: string[];
     validations: any;
     valgrind: string;
@@ -129,7 +129,7 @@ export type SubmissionResultReport = {
     paste_url: string | null;
     message_for_paste: string | null;
     missing_review_points: string[];
-    test_cases: Array<{
+    test_cases?: Array<{
         name: string;
         successful: boolean;
         message: string;
@@ -138,6 +138,7 @@ export type SubmissionResultReport = {
     }>;
     feedback_questions?: SubmissionFeedbackQuestion[];
     feedback_answer_url?: string;
+    error?: string;
 };
 
 export type SubmissionFeedbackQuestion = {
