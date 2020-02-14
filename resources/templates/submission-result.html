@@ -1,40 +1,65 @@
 <html>
-    <head>
-        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
-        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
-    </head>
 
-    <body>
-        <div class="container">
-            <div class="row py-2">
-                {{#if all_tests_passed}}
-                <h1 class="passed-header">All tests passed on the server</h1>
+<head>
+    <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+    <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+</head>
+
+<body>
+    <div class="container">
+        <div class="row py-2">
+            {{#if all_tests_passed}}
+            <h1 class="passed-header">All tests passed on the server</h1>
+            {{else}}
+            <h1>Some tests failed on the server</h1>
+            {{/if}}
+        </div>
+        <div class="row my-1">
+            <h3>Points gained: {{points}}</h3>
+        </div>
+        <div class="row my-1">
+            {{{progress_bar test_cases}}}
+        </div>
+        {{#if feedback_questions}}
+        <div id="feedback" class="my-5">
+            <h4>Anna palautetta</h4>
+            <form>
+                {{#each feedback_questions}}
+                <div>
+                    {{this.question}}
+                    <div class="row">
+                        <div class="col-md-10">
+                        <input name="slider" data-questionID="{{this.id}}" type="range" class="custom-range" min="0"
+                            max="5" step="1" value="0" oninput='showValue(this.value, "text-id-{{this.id}}")' />
+                        </div>
+                        <div class="col-md-2">
+                            <span class="font-weight-bold" id="text-id-{{this.id}}" >0</span>
+                        </div>
+                    </div>
+                </div>
+                {{/each}}
+                <div>
+                    <button onclick="submitFeedback()">Lähetä palaute</button>
+                </div>
+            </form>
+        </div>
+        {{/if}}
+        <div>
+            {{#each test_cases}}
+            {{#if this.successful}}
+            <div class="row passed my-2">
                 {{else}}
-                <h1>Some tests failed on the server</h1>
-                {{/if}}
-            </div>
-            <div class="row my-1">
-                <h3>Points gained: {{points}}</h3>
-            </div>
-            <div class="row my-1">
-                {{{progress_bar test_cases}}}
-            </div>
-            <div>
-                {{#each test_cases}}
-                    {{#if this.successful}}
-                        <div class="row passed my-2">
-                    {{else}}
-                        <div class="row failed my-2">
+                <div class="row failed my-2">
                     {{/if}}
                     <div class="col">
                         <div class="row">
                             {{#if this.successful}}
                             <div class="col-md-1 passed-header">
-                                PASS: 
+                                PASS:
                             </div>
                             {{else}}
                             <div class="col-md-1 failed-header">
-                                FAIL: 
+                                FAIL:
                             </div>
                             {{/if}}
                             <div class="col-md">
@@ -51,5 +76,27 @@
                 {{/each}}
             </div>
         </div>
-    </body>
+</body>
+
+<script>
+    const vscode = acquireVsCodeApi();
+    const feedback_url = "{{feedback_answer_url}}"
+
+    function submitFeedback() {
+        const feedback = [];
+        const questions = document.querySelectorAll("input[type=range]");
+        for (question of questions) {
+            if (question.value !== "0") {
+                feedback.push({ question_id: parseInt(question.dataset.questionid, 10), answer: question.value })
+            }
+        }
+        document.getElementById("feedback").style.display = "none";
+        vscode.postMessage({ feedback: { status: feedback }, url: feedback_url });
+    }
+
+    function showValue(value, id) {
+        document.getElementById(id).innerHTML=value;
+    }
+</script>
+
 </html>

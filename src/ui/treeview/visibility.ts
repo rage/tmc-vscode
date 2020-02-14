@@ -1,10 +1,19 @@
 /**
  * Logic class for managing visibility of treeview actions
  */
-export default class Visibility {
+export class Visibility {
     private idsByGroup = new Map<string, string[]>();
     private groupsById = new Map<string, string[]>();
     private enabledSet = new Set<string>();
+    private nextId: number = 0;
+
+    public createGroup(visible: boolean) {
+        const groupId = "_" + this.nextId++;
+        this.idsByGroup.set(groupId, []);
+        this.idsByGroup.set(this.negate(groupId), []);
+        this.enabledSet.add(visible ? groupId : this.negate(groupId));
+        return {_id: groupId, not: {_id: this.negate(groupId)}};
+    }
 
     /**
      * Implementation for the group registration, checks for name uniqueness and ensures
@@ -29,20 +38,20 @@ export default class Visibility {
      * @param id Id of the action
      * @param groups Names of the associated groups, possibly negated
      */
-    public registerAction(id: string, groups: string[]) {
+    public registerAction(id: string, groups: Array<VisibilityGroup | VisibilityGroupNegated>) {
         if (this.groupsById.has(id)) {
             throw new Error("Action already registered");
         }
 
         groups.forEach((x) => {
-            const group = this.idsByGroup.get(x);
+            const group = this.idsByGroup.get(x._id);
             if (!group) {
-                throw new Error("No such visibility group: " + this.normalize(x));
+                throw new Error("No such visibility group: " + this.normalize(x._id));
             } else {
                 group.push(id);
             }
         });
-        this.groupsById.set(id, groups);
+        this.groupsById.set(id, groups.map((x) => x._id));
     }
 
     /**
@@ -50,22 +59,23 @@ export default class Visibility {
      * @param group Name of the group, can be negated
      * @returns List of ids and states for modified action visibilities
      */
-    public setGroupVisible(group: string): Array<[string, boolean]> {
-        if (this.enabledSet.has(group)) {
+    public setGroupVisible(group: VisibilityGroup | VisibilityGroupNegated): Array<[string, boolean]> {
+        const groupId = group._id;
+        if (this.enabledSet.has(groupId)) {
             return [];
         }
 
-        const idsEnabled = this.idsByGroup.get(group);
-        const idsDisabled = this.idsByGroup.get(this.negate(group));
+        const idsEnabled = this.idsByGroup.get(groupId);
+        const idsDisabled = this.idsByGroup.get(this.negate(groupId));
         if (!idsEnabled || !idsDisabled) {
-            throw new Error("No such visibility group: " + this.normalize(group));
+            throw new Error("No such visibility group: " + this.normalize(groupId));
         }
 
         const ids = idsEnabled.concat(idsDisabled);
         const currentVisibility = new Map<string, boolean>(ids.map((id) => [id, this.getVisible(id)]));
 
-        this.enabledSet.add(group);
-        this.enabledSet.delete(this.negate(group));
+        this.enabledSet.add(groupId);
+        this.enabledSet.delete(this.negate(groupId));
 
         const changes: Array<[string, boolean]> = [];
 
@@ -107,3 +117,12 @@ export default class Visibility {
         return group.startsWith("!") ? group.substring(1) : group;
     }
 }
+
+export type VisibilityGroup = {
+    _id: string;
+    not: VisibilityGroupNegated;
+};
+
+export type VisibilityGroupNegated = {
+    _id: string;
+};
