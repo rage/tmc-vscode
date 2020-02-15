@@ -3,7 +3,7 @@ import * as handlebars from "handlebars";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { TmcLangsTestResult, TmcLangsTestResults } from "../api/types";
+import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
 import { numbersToString } from "../utils";
 
@@ -50,6 +50,23 @@ export default class TemplateEngine {
                 return "<h1>Something went seriously wrong while running the tests</h1>";
             }
         });
+
+        /**
+         * Submission result show correct heading or compilation error
+         */
+        handlebars.registerHelper("submission_status", (results: SubmissionResultReport) => {
+            if (results.status === "ok") {
+                if (results.all_tests_passed) {
+                    return `<h1 class="passed-header">All tests passed on the server</h1>`;
+                }
+            } else if (results.status === "fail") {
+                    return `<h1>Some tests failed on the server</h1>`;
+            } else if (results.status === "error") {
+                return `<h1>Server returned following error:
+                        <pre style="font-size: 14px">${results.error}</pre>`;
+            }
+        });
+
         /**
          * Progress bar for running tests and submission.
          */
