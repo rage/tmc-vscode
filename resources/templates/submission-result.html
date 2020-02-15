@@ -8,18 +8,16 @@
 <body>
     <div class="container">
         <div class="row py-2">
-            {{#if all_tests_passed}}
-            <h1 class="passed-header">All tests passed on the server</h1>
-            {{else}}
-            <h1>Some tests failed on the server</h1>
-            {{/if}}
+            {{{submission_status this}}}
         </div>
-        <div class="row my-1">
-            <h3>Points gained: {{points}}</h3>
-        </div>
-        <div class="row my-1">
-            {{{progress_bar test_cases}}}
-        </div>
+        {{#if test_cases}}
+            <div class="row my-1">
+                <h3>Points gained: {{points}}</h3>
+            </div>
+            <div class="row my-1">
+                    {{{progress_bar test_cases}}}
+            </div>
+        {{/if}}
         {{#if feedback_questions}}
         <div id="feedback" class="my-5">
             <h4>Anna palautetta</h4>
@@ -68,7 +66,7 @@
                         </div>
                         <div class="row">
                             <div class="col">
-                                <span class="message">{{this.message}}</span>
+                                <pre>{{this.message}}</pre>
                             </div>
                         </div>
                     </div>
