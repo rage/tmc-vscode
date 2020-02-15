@@ -40,6 +40,8 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
         );
 
+        const submissionStatusbar = vscode.window.createStatusBarItem();
+
         context.subscriptions.push(
             vscode.commands.registerCommand("uploadArchive", async () => {
                 const path = vscode.window.activeTextEditor?.document.fileName;
@@ -62,7 +64,8 @@ export async function activate(context: vscode.ExtensionContext) {
                                             vscode.Uri.parse(submitResult.val.show_submission_url));
                                     } else if (selection === "Run in background") {
                                         if (!temp.resultsShownInTempView) {
-                                            vscode.window.setStatusBarMessage("Waiting for results from server.", 5000);
+                                            submissionStatusbar.text = "Waiting for results from server.";
+                                            submissionStatusbar.show();
                                             temp.dispose();
                                         } else {
                                             vscode.window.showInformationMessage("Test results already returned from server.");
@@ -76,14 +79,17 @@ export async function activate(context: vscode.ExtensionContext) {
                                     const statusData = statusResult.val;
                                     if (statusResult.val.status !== "processing") {
                                         if (temp.disposed) {
-                                            vscode.window.setStatusBarMessage("Tests finished, see result", 5000);
+                                            submissionStatusbar.text = "Tests finished, see results", setTimeout(() => {
+                                                submissionStatusbar.hide();
+                                            }, 5000);
+                                            submissionStatusbar.show();
                                             temp = new TemporaryWebview(resources, ui,
-                                                    "TMC server submission", async (msg) => {
-                                                        if (msg.feedback.status.length > 0) {
-                                                            console.log(await tmc.submitSubmissionFeedback(
-                                                                msg.url, msg.feedback));
-                                                        }
-                                                    });
+                                                "TMC server submission", async (msg) => {
+                                                    if (msg.feedback.status.length > 0) {
+                                                        console.log(await tmc.submitSubmissionFeedback(
+                                                            msg.url, msg.feedback));
+                                                    }
+                                                });
                                         }
                                         temp.setContent("submission-result", statusData, true);
                                         break;
@@ -91,7 +97,8 @@ export async function activate(context: vscode.ExtensionContext) {
                                     if (!temp.disposed) {
                                         temp.setContent("submission-status", statusData);
                                     } else {
-                                        vscode.window.setStatusBarMessage("Waiting for results from server.", 5000);
+                                        submissionStatusbar.text = "Waiting for results from server.";
+                                        submissionStatusbar.show();
                                     }
                                 } else {
                                     console.error(statusResult.val);
@@ -110,6 +117,8 @@ export async function activate(context: vscode.ExtensionContext) {
             }),
         );
 
+        const testStatusbar = vscode.window.createStatusBarItem();
+
         context.subscriptions.push(
             vscode.commands.registerCommand("runTests", async () => {
                 const path = vscode.window.activeTextEditor?.document.fileName;
@@ -119,19 +128,24 @@ export async function activate(context: vscode.ExtensionContext) {
                         const exerciseDetails = await tmc.getExerciseDetails(exerciseId);
                         if (exerciseDetails.ok) {
                             const exerciseName = exerciseDetails.val.exercise_name;
-                            vscode.window.setStatusBarMessage(`Running tests for ${exerciseName}`);
+                            testStatusbar.text = `Running tests for ${exerciseName}`;
+                            testStatusbar.show();
                             vscode.window.showInformationMessage(`Running tests for ${exerciseName}`);
                             const testResult = await tmc.runTests(exerciseId);
-                            vscode.window.setStatusBarMessage("");
                             if (testResult.ok) {
-                                vscode.window.setStatusBarMessage(`Tests finished for ${exerciseName}`, 5000);
+
+                                testStatusbar.text = `Tests finished for ${exerciseName}`, setTimeout(() => {
+                                    testStatusbar.hide();
+                                }, 5000);
                                 const temp = new TemporaryWebview(resources, ui,
-                                    "TMC Test Results", () => {});
+                                    "TMC Test Results", () => { });
                                 const testResultVal = testResult.val;
                                 const data = { testResultVal, exerciseId, exerciseName };
                                 temp.setContent("test-result", data);
                             } else {
-                                vscode.window.setStatusBarMessage(`Running tests for ${exerciseName} failed`, 5000);
+                                testStatusbar.text = `Running tests for ${exerciseName} failed`, setTimeout(() => {
+                                    testStatusbar.hide();
+                                }, 5000);
                                 vscode.window.showErrorMessage(`Exercise test run failed: \
                                                                 ${testResult.val.name} - ${testResult.val.message}`);
                                 console.error(testResult.val);
@@ -152,4 +166,4 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 }
 
-export function deactivate() {}
+export function deactivate() { }
