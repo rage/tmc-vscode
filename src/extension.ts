@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 import * as init from "./init";
 
-import ExerciseManager from "./api/exerciseManager";
 import TMC from "./api/tmc";
+import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
 import TemporaryWebview from "./ui/temporaryWebview";
 import UI from "./ui/ui";
@@ -31,8 +31,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const ui = new UI(context, resources);
         const storage = new Storage(context);
-        const exerciseManager = new ExerciseManager(storage, resources);
-        const tmc = new TMC(exerciseManager, storage, resources);
+        const workspaceManager = new WorkspaceManager(storage, resources);
+        const tmc = new TMC(workspaceManager, storage, resources);
 
         init.registerUiActions(ui, storage, tmc);
 
@@ -44,7 +44,7 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.commands.registerCommand("uploadArchive", async () => {
                 const path = vscode.window.activeTextEditor?.document.fileName;
                 if (path) {
-                    const exerciseId = exerciseManager.getExercisePath(path);
+                    const exerciseId = workspaceManager.getExercisePath(path);
                     if (exerciseId) {
                         const submitResult = await tmc.submitExercise(exerciseId);
                         if (submitResult.ok) {
@@ -114,7 +114,7 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.commands.registerCommand("runTests", async () => {
                 const path = vscode.window.activeTextEditor?.document.fileName;
                 if (path) {
-                    const exerciseId = exerciseManager.getExercisePath(path);
+                    const exerciseId = workspaceManager.getExercisePath(path);
                     if (exerciseId) {
                         const exerciseDetails = await tmc.getExerciseDetails(exerciseId);
                         if (exerciseDetails.ok) {
@@ -156,14 +156,14 @@ export async function activate(context: vscode.ExtensionContext) {
                 resetStatusbar.show();
                 const path = vscode.window.activeTextEditor?.document.fileName;
                 if (path) {
-                    const exerciseId = exerciseManager.getExercisePath(path);
+                    const exerciseId = workspaceManager.getExercisePath(path);
                     if (exerciseId) {
                         vscode.window.showInformationMessage("Resetting exercise...");
                         const submitResult = await tmc.submitExercise(exerciseId);
                         if (submitResult.ok) {
-                            const slug = exerciseManager.getOrganizationSlugByExerciseId(exerciseId);
-                            exerciseManager.deleteExercise(exerciseId);
-                            await tmc.downloadExercise(exerciseId, slug.unwrap());
+                            const slug = workspaceManager.getExerciseDataById(exerciseId).unwrap().organization;
+                            workspaceManager.deleteExercise(exerciseId);
+                            await tmc.downloadExercise(exerciseId, slug);
 
                             resetStatusbar.text = `Exercise resetted succesfully`, setTimeout(() => {
                                 resetStatusbar.hide();
