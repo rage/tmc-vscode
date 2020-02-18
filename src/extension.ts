@@ -78,12 +78,12 @@ export async function activate(context: vscode.ExtensionContext) {
                                         if (temp.disposed) {
                                             vscode.window.setStatusBarMessage("Tests finished, see result", 5000);
                                             temp = new TemporaryWebview(resources, ui,
-                                                    "TMC server submission", async (msg) => {
-                                                        if (msg.feedback.status.length > 0) {
-                                                            console.log(await tmc.submitSubmissionFeedback(
-                                                                msg.url, msg.feedback));
-                                                        }
-                                                    });
+                                                "TMC server submission", async (msg) => {
+                                                    if (msg.feedback.status.length > 0) {
+                                                        console.log(await tmc.submitSubmissionFeedback(
+                                                            msg.url, msg.feedback));
+                                                    }
+                                                });
                                         }
                                         temp.setContent("submission-result", statusData, true);
                                         break;
@@ -147,9 +147,48 @@ export async function activate(context: vscode.ExtensionContext) {
                 }
             }),
         );
+
+        const resetStatusbar = vscode.window.createStatusBarItem();
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand("resetExercise", async () => {
+                resetStatusbar.text = `resetting exercise`;
+                resetStatusbar.show();
+                const path = vscode.window.activeTextEditor?.document.fileName;
+                if (path) {
+                    const exerciseId = exerciseManager.getExercisePath(path);
+                    if (exerciseId) {
+                        vscode.window.showInformationMessage("Resetting exercise...");
+                        const submitResult = await tmc.submitExercise(exerciseId);
+                        if (submitResult.ok) {
+                            const slug = exerciseManager.getOrganizationSlugByExerciseId(exerciseId);
+                            exerciseManager.deleteExercise(exerciseId);
+                            await tmc.downloadExercise(exerciseId, slug.unwrap());
+
+                            resetStatusbar.text = `Exercise resetted succesfully`, setTimeout(() => {
+                                resetStatusbar.hide();
+                            }, 5000);
+                            resetStatusbar.show();
+
+                        } else {
+                            vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
+                                                            ${submitResult.val.name} - ${submitResult.val.message}`);
+                            console.error(submitResult.val);
+
+                            resetStatusbar.text = `Something went wrong`, setTimeout(() => {
+                                resetStatusbar.hide();
+                            }, 5000);
+                            resetStatusbar.show();
+                        }
+                    } else {
+                        vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
+                    }
+                }
+            }),
+        );
     } else {
         vscode.window.showErrorMessage("Something broke: " + result.val.message);
     }
 }
 
-export function deactivate() {}
+export function deactivate() { }

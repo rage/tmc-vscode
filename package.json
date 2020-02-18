@@ -15,6 +15,7 @@
 	"activationEvents": [
 		"onView:tmcView",
 		"onCommand:runTests",
+		"onCommand:resetExercise",
 		"onCommand:uploadArchive"
 	],
 	"main": "./dist/extension",
@@ -27,6 +28,10 @@
 			{
 				"command": "uploadArchive",
 				"title": "TMC - Submit solution"
+			},
+			{
+				"command": "resetExercise",
+				"title": "TMC - Reset exercise"
 			},
 			{
 				"command": "runTests",
@@ -104,6 +109,7 @@
 	},
 	"dependencies": {
 		"client-oauth2": "^4.2.5",
+		"del": "^5.1.0",
 		"form-data": "^3.0.0",
 		"handlebars": "^4.7.2",
 		"node-fetch": "^2.6.0",
