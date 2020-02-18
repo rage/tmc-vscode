@@ -194,15 +194,18 @@ export default class TMC {
             return new Err(new Error("Exercise somehow missing from course"));
         }
 
-        const exercisePath = this.workspaceManager.createExercisePath(organizationSlug, checksum, detailsResult.val);
+        const exercisePath = this.workspaceManager.createExerciseDownloadPath(
+            organizationSlug, checksum, detailsResult.val,
+        );
 
         const extractResult = await this.checkApiResponse(this.executeLangsAction({
             action: "extract-project",
             archivePath: `${this.dataPath}/${id}.zip`,
             exerciseFolderPath: exercisePath,
         }), createIs<string>());
-        if (extractResult.ok) {
-            this.workspaceManager.openExercise(id);
+
+        if (extractResult.err) {
+            this.workspaceManager.clearExerciseData(id);
         }
 
         return extractResult;

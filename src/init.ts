@@ -70,6 +70,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     const tmcWorkspacePath = path.join(tmcDataPath, "TMC workspace");
     const tmcWorkspaceFilePath = path.join(tmcWorkspacePath, "TMC Exercises.code-workspace");
     const tmcExercisesFolderPath = path.join(tmcWorkspacePath, "Exercises");
+    const tmcClosedExercisesFolderPath = path.join(tmcDataPath, "closed-exercises");
 
     const tmcLangsPath = path.join(tmcDataPath, "tmc-langs.jar");
 
@@ -98,6 +99,11 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
         console.log("Created tmc exercise directory at", tmcExercisesFolderPath);
     }
 
+    if (!fs.existsSync(tmcClosedExercisesFolderPath)) {
+        fs.mkdirSync(tmcClosedExercisesFolderPath);
+        console.log("Created tmc closed exercise directory at", tmcClosedExercisesFolderPath);
+    }
+
     if (!fs.existsSync(tmcLangsPath)) {
         const result = await downloadFileWithProgress("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar", tmcLangsPath,
                                                     "Welcome", "Downloading important components for the Test My Code plugin... 0 %");
@@ -115,6 +121,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
         tmcWorkspacePath,
         tmcWorkspaceFilePath,
         tmcExercisesFolderPath,
+        tmcClosedExercisesFolderPath,
         mediaPath,
     );
 

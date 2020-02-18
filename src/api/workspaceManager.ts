@@ -1,4 +1,5 @@
 import * as del from "del";
+import * as fs from "fs";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 
@@ -40,7 +41,9 @@ export default class WorkspaceManager {
      * @param organizationSlug Organization slug used in the creation of exercise path
      * @param exerciseDetails Exercise details used in the creation of exercise path
      */
-    public createExercisePath(organizationSlug: string, checksum: string, exerciseDetails: ExerciseDetails): string {
+    public createExerciseDownloadPath(
+        organizationSlug: string, checksum: string, exerciseDetails: ExerciseDetails,
+    ): string {
         const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
         const { course_name, exercise_name, exercise_id } = exerciseDetails;
         const exercisePath = path.join(exerciseFolderPath, organizationSlug, course_name, exercise_name);
@@ -50,7 +53,16 @@ export default class WorkspaceManager {
             organization: organizationSlug, path: exercisePath,
         });
         this.updatePersistentData();
-        return exercisePath;
+        return this.getClosedPath(exercise_id);
+    }
+
+    public clearExerciseData(id: number) {
+        const exercisePath = this.idToData.get(id)?.path;
+        if (exercisePath) {
+            this.idToData.delete(id);
+            this.pathToId.delete(exercisePath);
+            this.updatePersistentData();
+        }
     }
 
     /**
@@ -111,6 +123,8 @@ export default class WorkspaceManager {
     public openExercise(id: number) {
         const data = this.idToData.get(id);
         if (data) {
+            fs.mkdirSync(data.path, {recursive: true});
+            fs.renameSync(this.getClosedPath(id), data.path);
             data.isOpen = true;
             this.idToData.set(id, data);
         }
@@ -119,6 +133,7 @@ export default class WorkspaceManager {
     public closeExercise(id: number) {
         const data = this.idToData.get(id);
         if (data) {
+            fs.renameSync(data.path, this.getClosedPath(id));
             data.isOpen = false;
             this.idToData.set(id, data);
         }
@@ -132,13 +147,15 @@ export default class WorkspaceManager {
         const exercisePath = this.idToData.get(exerciseId)?.path;
         if (exercisePath) {
             del.sync(exercisePath, { force: true });
-            this.idToData.delete(exerciseId);
-            this.pathToId.delete(exercisePath);
-            this.updatePersistentData();
+            this.clearExerciseData(exerciseId);
         }
     }
 
     private updatePersistentData() {
         this.storage.updateExerciseData(Array.from(this.idToData.values()));
+    }
+
+    private getClosedPath(id: number) {
+        return path.join(this.resources.tmcClosedExercisesFolderPath, id.toString());
     }
 }
