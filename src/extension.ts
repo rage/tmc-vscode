@@ -48,27 +48,20 @@ export async function activate(context: vscode.ExtensionContext) {
                     if (exerciseId) {
                         const submitResult = await tmc.submitExercise(exerciseId);
                         if (submitResult.ok) {
-                            let temp = new TemporaryWebview(resources, ui, "TMC server submission", async (msg) => {
-                                if (msg.feedback.status.length > 0) {
-                                    console.log(await tmc.submitSubmissionFeedback(msg.url, msg.feedback));
+                            const temp = new TemporaryWebview(resources, ui, "TMC server submission", async (msg) => {
+                                if (msg.feedback) {
+                                    if (msg.feedback.status.length > 0) {
+                                        console.log(await tmc.submitSubmissionFeedback(
+                                            msg.url, msg.feedback));
+                                    }
+                                } else if (msg.setToBackground) {
+                                    vscode.window.setStatusBarMessage("Waiting for results from server.", 5000);
+                                    temp.dispose();
+                                } else if (msg.showInBrowser) {
+                                    vscode.env.openExternal(
+                                        vscode.Uri.parse(submitResult.val.show_submission_url));
                                 }
                             });
-
-                            vscode.window.showInformationMessage(`Exercise submitted successfully:
-                                ${submitResult.val.show_submission_url}`, ...["View submission in browser", "Run in background", "Hide notification"])
-                                .then((selection) => {
-                                    if (selection === "View submission in browser") {
-                                        vscode.env.openExternal(
-                                            vscode.Uri.parse(submitResult.val.show_submission_url));
-                                    } else if (selection === "Run in background") {
-                                        if (!temp.resultsShownInTempView) {
-                                            vscode.window.setStatusBarMessage("Waiting for results from server.", 5000);
-                                            temp.dispose();
-                                        } else {
-                                            vscode.window.showInformationMessage("Test results already returned from server.");
-                                        }
-                                    }
-                                });
 
                             while (true) {
                                 const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
@@ -77,13 +70,7 @@ export async function activate(context: vscode.ExtensionContext) {
                                     if (statusResult.val.status !== "processing") {
                                         if (temp.disposed) {
                                             vscode.window.setStatusBarMessage("Tests finished, see result", 5000);
-                                            temp = new TemporaryWebview(resources, ui,
-                                                "TMC server submission", async (msg) => {
-                                                    if (msg.feedback.status.length > 0) {
-                                                        console.log(await tmc.submitSubmissionFeedback(
-                                                            msg.url, msg.feedback));
-                                                    }
-                                                });
+                                            temp.showPanel("TMC server submission");
                                         }
                                         temp.setContent("submission-result", statusData, true);
                                         break;
@@ -95,6 +82,7 @@ export async function activate(context: vscode.ExtensionContext) {
                                     }
                                 } else {
                                     console.error(statusResult.val);
+                                    break;
                                 }
                                 await sleep(2500);
                             }
@@ -124,7 +112,7 @@ export async function activate(context: vscode.ExtensionContext) {
                             const testResult = await tmc.runTests(exerciseId);
                             vscode.window.setStatusBarMessage("");
                             if (testResult.ok) {
-                                vscode.window.setStatusBarMessage(`Tests finished for ${exerciseName}`, 5000);
+                                vscode.window.setStatusBarMessage(`Tests  finished for ${exerciseName}`, 5000);
                                 const temp = new TemporaryWebview(resources, ui,
                                     "TMC Test Results", () => {});
                                 const testResultVal = testResult.val;

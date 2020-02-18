@@ -95,11 +95,12 @@ export default class TemplateEngine {
          */
         handlebars.registerHelper("check_submission_status", (status: string) => {
             if (status === "created") {
-                return "<div>&#10004; Sandbox created</div>";
+                return "<div>&#10004; Submission received. Waiting for it to be processed.</div>";
             } else if (status === "sending_to_sandbox") {
-                return "<div>&#10004; Sandbox created</div><div>Sending to sandbox</div>";
+                return "<div>&#10004; Submission received. Waiting for it to be processed.</div><div>Submission queued for processing.</div>";
             } else if (status === "processing_on_sandbox") {
-                return "<div>&#10004; Sandbox created</div><div>&#10004; Sent to sandbox</div><div>Testing submission</div>";
+                return "<div>&#10004; Submission received. Waiting for it to be processed.</div> \
+                    <div>&#10004; Submission in queue for processing.</div><div>Testing submission.</div>";
             }
         });
     }
