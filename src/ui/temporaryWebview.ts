@@ -13,6 +13,7 @@ export default class TemporaryWebview {
 
     private panel: vscode.WebviewPanel;
     private ui: UI;
+    private messageHandler: any;
 
     constructor(resources: Resources, ui: UI, title: string, messageHandler: (msg: any) => void) {
         this.panel = vscode.window.createWebviewPanel("tmctemp", title, vscode.ViewColumn.Two,
@@ -23,6 +24,7 @@ export default class TemporaryWebview {
         this.disposed = false;
         this.resultsShownInTempView = false;
         this.ui = ui;
+        this.messageHandler = messageHandler;
         this.panel.reveal(undefined, true);
     }
 
@@ -51,9 +53,12 @@ export default class TemporaryWebview {
      * Creates the webview panel.
      * @param title Title for the webview panel
      */
-    public showPanel(title: string) {
+    public showPanel(resources: Resources, title: string) {
         this.panel = vscode.window.createWebviewPanel("tmctemp", title, vscode.ViewColumn.Two,
         { enableScripts: true });
+        this.panel.webview.onDidReceiveMessage(this.messageHandler);
+        this.panel.onDidDispose(() => { this.disposed = true; });
+        this.panel.iconPath = vscode.Uri.file(`${resources.mediaFolder}/TMC.svg`);
         this.disposed = false;
     }
 

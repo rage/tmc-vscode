@@ -70,7 +70,7 @@ export async function activate(context: vscode.ExtensionContext) {
                                     if (statusResult.val.status !== "processing") {
                                         if (temp.disposed) {
                                             vscode.window.setStatusBarMessage("Tests finished, see result", 5000);
-                                            temp.showPanel("TMC server submission");
+                                            temp.showPanel(resources, "TMC server submission");
                                         }
                                         temp.setContent("submission-result", statusData, true);
                                         break;
@@ -107,14 +107,26 @@ export async function activate(context: vscode.ExtensionContext) {
                         const exerciseDetails = await tmc.getExerciseDetails(exerciseId);
                         if (exerciseDetails.ok) {
                             const exerciseName = exerciseDetails.val.exercise_name;
+                            const temp = new TemporaryWebview(resources, ui,
+                                "TMC Test Results", async (msg) => {
+                                    if (msg.setToBackground) {
+                                        temp.dispose();
+                                    }
+                                    if (msg.submit) {
+                                        // TO-DO: create function, wich submits current exercise to server
+                                        console.log("Submit to server");
+                                        console.log(msg.exerciseId);
+                                    }
+                                });
+                            temp.setContent("running-tests", { exerciseName });
                             vscode.window.setStatusBarMessage(`Running tests for ${exerciseName}`);
-                            vscode.window.showInformationMessage(`Running tests for ${exerciseName}`);
                             const testResult = await tmc.runTests(exerciseId);
                             vscode.window.setStatusBarMessage("");
                             if (testResult.ok) {
-                                vscode.window.setStatusBarMessage(`Tests  finished for ${exerciseName}`, 5000);
-                                const temp = new TemporaryWebview(resources, ui,
-                                    "TMC Test Results", () => {});
+                                vscode.window.setStatusBarMessage(`Tests finished for ${exerciseName}`, 5000);
+                                if (temp.disposed) {
+                                    temp.showPanel(resources, "TMC Test Results");
+                                }
                                 const testResultVal = testResult.val;
                                 const data = { testResultVal, exerciseId, exerciseName };
                                 temp.setContent("test-result", data);

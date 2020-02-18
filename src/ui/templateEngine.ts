@@ -34,14 +34,7 @@ export default class TemplateEngine {
                                     (status: string, exerciseId: number,
                                      exerciseName: string, logs: { stdout: number[], stderr: number[] }) => {
             if (status === "PASSED") {
-                vscode.window.showInformationMessage(`Submit ${exerciseName} to server?`, ...["Submit to server", "No thanks"])
-                .then((selection) => {
-                    if (selection === "Submit to server") {
-                        // TODO: Call submit to server if submit is pressed on notification
-                        console.log (exerciseId);
-                    }
-                });
-                return "<h1 class='passed-header'>PASSED</h1>";
+                return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
             } else if (status === "TESTS_FAILED") {
                 return "<h1>TESTS FAILED</h1>";
             } else if (status === "COMPILE_FAILED") {
