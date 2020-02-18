@@ -70,9 +70,8 @@ export async function activate(context: vscode.ExtensionContext) {
                                     if (statusResult.val.status !== "processing") {
                                         if (temp.disposed) {
                                             vscode.window.setStatusBarMessage("Tests finished, see result", 5000);
-                                            temp.showPanel(resources, "TMC server submission");
                                         }
-                                        temp.setContent("submission-result", statusData, true);
+                                        temp.setContent("submission-result", statusData);
                                         break;
                                     }
                                     if (!temp.disposed) {
@@ -124,9 +123,6 @@ export async function activate(context: vscode.ExtensionContext) {
                             vscode.window.setStatusBarMessage("");
                             if (testResult.ok) {
                                 vscode.window.setStatusBarMessage(`Tests finished for ${exerciseName}`, 5000);
-                                if (temp.disposed) {
-                                    temp.showPanel(resources, "TMC Test Results");
-                                }
                                 const testResultVal = testResult.val;
                                 const data = { testResultVal, exerciseId, exerciseName };
                                 temp.setContent("test-result", data);

@@ -9,23 +9,20 @@ import UI from "./ui";
 export default class TemporaryWebview {
 
     public disposed: boolean;
-    public resultsShownInTempView: boolean | undefined;
 
     private panel: vscode.WebviewPanel;
     private ui: UI;
     private messageHandler: any;
+    private iconPath: vscode.Uri;
+    private title: string;
 
     constructor(resources: Resources, ui: UI, title: string, messageHandler: (msg: any) => void) {
-        this.panel = vscode.window.createWebviewPanel("tmctemp", title, vscode.ViewColumn.Two,
-                        { enableScripts: true });
-        this.panel.onDidDispose(() => { this.disposed = true; });
-        this.panel.webview.onDidReceiveMessage(messageHandler);
-        this.panel.iconPath = vscode.Uri.file(`${resources.mediaFolder}/TMC.svg`);
-        this.disposed = false;
-        this.resultsShownInTempView = false;
         this.ui = ui;
         this.messageHandler = messageHandler;
-        this.panel.reveal(undefined, true);
+        this.title = title;
+        this.iconPath = vscode.Uri.file(`${resources.mediaFolder}/TMC.svg`);
+        this.panel = this.createPanel();
+        this.disposed = false;
     }
 
     /**
@@ -33,10 +30,13 @@ export default class TemporaryWebview {
      *
      * @param templateName Name of the template to use
      * @param data Data to be passed to the template engine
-     * @param results Boolean if the temporary webview content/data is test results
+     * @param recreate Whether the view should be recreated if disposed
      */
-    public async setContent(templateName: string, data?: any, isResults?: boolean) {
-        this.resultsShownInTempView = isResults;
+    public async setContent(templateName: string, data?: any) {
+        if (this.disposed) {
+            this.panel = this.createPanel();
+            this.disposed = false;
+        }
         this.panel.webview.html = await this.ui.webview.templateEngine.getTemplate(
             this.panel.webview, templateName, data);
         this.panel.reveal(undefined, true);
@@ -49,17 +49,13 @@ export default class TemporaryWebview {
         this.panel.dispose();
     }
 
-    /**
-     * Creates the webview panel.
-     * @param title Title for the webview panel
-     */
-    public showPanel(resources: Resources, title: string) {
-        this.panel = vscode.window.createWebviewPanel("tmctemp", title, vscode.ViewColumn.Two,
-        { enableScripts: true });
-        this.panel.webview.onDidReceiveMessage(this.messageHandler);
-        this.panel.onDidDispose(() => { this.disposed = true; });
-        this.panel.iconPath = vscode.Uri.file(`${resources.mediaFolder}/TMC.svg`);
-        this.disposed = false;
+    private createPanel() {
+        const panel = vscode.window.createWebviewPanel("tmctemp", this.title, vscode.ViewColumn.Two,
+                        { enableScripts: true });
+        panel.onDidDispose(() => { this.disposed = true; });
+        panel.webview.onDidReceiveMessage(this.messageHandler);
+        panel.iconPath = this.iconPath;
+        return panel;
     }
 
 }
