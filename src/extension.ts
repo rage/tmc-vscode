@@ -49,17 +49,12 @@ export async function activate(context: vscode.ExtensionContext) {
                         const submitResult = await tmc.submitExercise(exerciseId);
                         if (submitResult.ok) {
                             const temp = new TemporaryWebview(resources, ui, "TMC server submission", async (msg) => {
-                                if (msg.feedback) {
-                                    if (msg.feedback.status.length > 0) {
-                                        console.log(await tmc.submitSubmissionFeedback(
-                                            msg.url, msg.feedback));
-                                    }
+                                if (msg.feedback && msg.feedback.status.length > 0) {
+                                    console.log(await tmc.submitSubmissionFeedback(msg.url, msg.feedback));
                                 } else if (msg.setToBackground) {
-                                    vscode.window.setStatusBarMessage("Waiting for results from server.", 5000);
                                     temp.dispose();
                                 } else if (msg.showInBrowser) {
-                                    vscode.env.openExternal(
-                                        vscode.Uri.parse(submitResult.val.show_submission_url));
+                                    vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
                                 }
                             });
 
@@ -68,9 +63,7 @@ export async function activate(context: vscode.ExtensionContext) {
                                 if (statusResult.ok) {
                                     const statusData = statusResult.val;
                                     if (statusResult.val.status !== "processing") {
-                                        if (temp.disposed) {
-                                            vscode.window.setStatusBarMessage("Tests finished, see result", 5000);
-                                        }
+                                        vscode.window.setStatusBarMessage("Tests finished, see result", 5000);
                                         temp.setContent("submission-result", statusData);
                                         break;
                                     }
@@ -114,7 +107,7 @@ export async function activate(context: vscode.ExtensionContext) {
                                     if (msg.submit) {
                                         // TO-DO: create function, wich submits current exercise to server
                                         console.log("Submit to server");
-                                        console.log(msg.exerciseId);
+                                        console.log(typeof msg.exerciseId); // number
                                     }
                                 });
                             temp.setContent("running-tests", { exerciseName });
