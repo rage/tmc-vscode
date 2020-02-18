@@ -196,11 +196,16 @@ export default class TMC {
 
         const exercisePath = this.workspaceManager.createExercisePath(organizationSlug, checksum, detailsResult.val);
 
-        return this.checkApiResponse(this.executeLangsAction({
+        const extractResult = await this.checkApiResponse(this.executeLangsAction({
             action: "extract-project",
             archivePath: `${this.dataPath}/${id}.zip`,
             exerciseFolderPath: exercisePath,
         }), createIs<string>());
+        if (extractResult.ok) {
+            this.workspaceManager.openExercise(id);
+        }
+
+        return extractResult;
     }
 
     /**

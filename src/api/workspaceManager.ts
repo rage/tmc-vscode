@@ -46,7 +46,7 @@ export default class WorkspaceManager {
         const exercisePath = path.join(exerciseFolderPath, organizationSlug, course_name, exercise_name);
         this.pathToId.set(exercisePath, exercise_id);
         this.idToData.set(exercise_id, {
-            checksum, course: exerciseDetails.course_name, id: exercise_id,
+            checksum, course: exerciseDetails.course_name, id: exercise_id, isOpen: false,
             organization: organizationSlug, path: exercisePath,
         });
         this.updatePersistentData();
@@ -106,6 +106,22 @@ export default class WorkspaceManager {
             return undefined;
         }
         return idResult.val;
+    }
+
+    public openExercise(id: number) {
+        const data = this.idToData.get(id);
+        if (data) {
+            data.isOpen = true;
+            this.idToData.set(id, data);
+        }
+    }
+
+    public closeExercise(id: number) {
+        const data = this.idToData.get(id);
+        if (data) {
+            data.isOpen = false;
+            this.idToData.set(id, data);
+        }
     }
 
     /**

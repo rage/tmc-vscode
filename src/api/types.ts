@@ -167,4 +167,5 @@ export type LocalExerciseData = {
     organization: string;
     path: string;
     checksum: string;
+    isOpen: boolean;
 };
