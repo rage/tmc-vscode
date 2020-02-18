@@ -12,10 +12,14 @@
         </div>
         {{#if test_cases}}
             <div class="row my-1">
-                <h3>Points gained: {{points}}</h3>
+                {{#if points}}
+                    <h3>Points gained: {{points}}</h3>
+                {{else}}
+                    <h3>Points gained: -</h3>
+                {{/if}}
             </div>
             <div class="row my-1">
-                    {{{progress_bar test_cases}}}
+                {{{progress_bar test_cases}}}
             </div>
         {{/if}}
         {{#if feedback_questions}}
@@ -31,13 +35,13 @@
                             max="5" step="1" value="0" oninput='showValue(this.value, "text-id-{{this.id}}")' />
                         </div>
                         <div class="col-md-2">
-                            <span class="font-weight-bold" id="text-id-{{this.id}}" >0</span>
+                            <span class="font-weight-bold" id="text-id-{{this.id}}">0</span>
                         </div>
                     </div>
                 </div>
                 {{/each}}
                 <div>
-                    <button onclick="submitFeedback()">Lähetä palaute</button>
+                    <button class="btn-primary" onclick="submitFeedback()">Lähetä palaute</button>
                 </div>
             </form>
         </div>

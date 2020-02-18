@@ -47,4 +47,14 @@ export default class TemporaryWebview {
         this.panel.dispose();
     }
 
+    /**
+     * Creates the webview panel.
+     * @param title Title for the webview panel
+     */
+    public showPanel(title: string) {
+        this.panel = vscode.window.createWebviewPanel("tmctemp", title, vscode.ViewColumn.Two,
+        { enableScripts: true });
+        this.disposed = false;
+    }
+
 }
