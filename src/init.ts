@@ -5,9 +5,11 @@ import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
+import { displayCourseDetails, logout } from "./actions/actions";
+import ExerciseManager from "./api/exerciseManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
-import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, doLogout } from "./ui/treeview/actions";
+import { displayCourses, displayOrganizations, displaySummary } from "./ui/treeview/actions";
 import { downloadExercises, handleLogin, setCourse, setOrganization } from "./ui/treeview/handlers";
 import { downloadFileWithProgress } from "./utils";
 
@@ -17,7 +19,9 @@ import { downloadFileWithProgress } from "./utils";
  * @param ui The User Interface object
  * @param tmc The TMC API object
  */
-export function registerUiActions(ui: UI, storage: Storage, tmc: TMC) {
+export function registerUiActions(
+    ui: UI, storage: Storage, tmc: TMC, exerciseManager: ExerciseManager, resources: Resources,
+) {
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const ORGANIZATION_CHOSEN = ui.treeDP.createVisibilityGroup(storage.getOrganizationSlug() !== undefined);
     const COURSE_CHOSEN = ui.treeDP.createVisibilityGroup(storage.getCourseId() !== undefined);
@@ -35,7 +39,8 @@ export function registerUiActions(ui: UI, storage: Storage, tmc: TMC) {
 
     // Register UI actions
     const actionContext = { tmc, storage, ui, visibilityGroups };
-    ui.treeDP.registerAction("Log out", [LOGGED_IN], doLogout(actionContext));
+    ui.treeDP.registerAction("Log out", [LOGGED_IN],
+        () => { logout(visibilityGroups, {tmc, ui, resources, exerciseManager}); });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
         async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
     ui.treeDP.registerAction("Summary", [LOGGED_IN], displaySummary(actionContext), INDEX_ACTION);
@@ -43,7 +48,8 @@ export function registerUiActions(ui: UI, storage: Storage, tmc: TMC) {
     ui.treeDP.registerAction("Courses", [LOGGED_IN, ORGANIZATION_CHOSEN],
         displayCourses(actionContext), COURSES_ACTION);
     ui.treeDP.registerAction("Course details", [LOGGED_IN, ORGANIZATION_CHOSEN, COURSE_CHOSEN],
-        displayCourseDetails(actionContext), COURSE_DETAILS_ACTION);
+        () => { displayCourseDetails(storage.getCourseId() as number,
+               storage, {tmc, ui, resources, exerciseManager}); }, COURSE_DETAILS_ACTION);
 
     // Register webview handlers
     const handlerContext = { tmc, storage, ui, visibilityGroups };
