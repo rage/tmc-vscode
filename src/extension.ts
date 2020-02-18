@@ -158,6 +158,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 if (path) {
                     const exerciseId = exerciseManager.getExercisePath(path);
                     if (exerciseId) {
+                        vscode.window.showInformationMessage("Resetting exercise...");
                         const submitResult = await tmc.submitExercise(exerciseId);
                         if (submitResult.ok) {
                             const slug = exerciseManager.getOrganizationSlugByExerciseId(exerciseId);
