@@ -55,10 +55,14 @@ export async function activate(context: vscode.ExtensionContext) {
                                     temp.dispose();
                                 } else if (msg.showInBrowser) {
                                     vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
+                                } else if (msg.showSolutionInBrowser) {
+                                    vscode.env.openExternal(vscode.Uri.parse(msg.solutionUrl));
                                 }
                             });
 
-                            while (true) {
+                            let timeWaited = 0;
+                            let getStatus = true;
+                            while (getStatus) {
                                 const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
                                 if (statusResult.ok) {
                                     const statusData = statusResult.val;
@@ -77,6 +81,19 @@ export async function activate(context: vscode.ExtensionContext) {
                                     break;
                                 }
                                 await sleep(2500);
+                                if (timeWaited === 120000) {
+                                    vscode.window.showInformationMessage(`This seems to be taking a long time — consider continuing to the next exercise while this is running. \
+                                    Your submission will still be graded. Check the results later at ${submitResult.val.show_submission_url}`, ...["Open URL and move on...", "No, I'll wait"])
+                                    .then((selection) => {
+                                        if (selection === "Open URL and move on...") {
+                                            vscode.env.openExternal(
+                                                vscode.Uri.parse(submitResult.val.show_submission_url));
+                                            getStatus = false;
+                                            temp.dispose();
+                                        }
+                                    });
+                                }
+                                timeWaited = timeWaited + 2500;
                             }
                         } else {
                             vscode.window.showErrorMessage(`Exercise submission failed: \
