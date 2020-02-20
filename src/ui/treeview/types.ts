@@ -3,13 +3,6 @@ import Storage from "../../config/storage";
 import UI from "../ui";
 import { VisibilityGroup } from "./visibility";
 
-export type ActionContext = {
-    tmc: TMC;
-    storage: Storage;
-    ui: UI;
-    visibilityGroups: VisibilityGroups;
-};
-
 export type HandlerContext = {
     tmc: TMC;
     storage: Storage;

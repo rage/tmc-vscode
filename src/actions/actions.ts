@@ -6,6 +6,9 @@ import { VisibilityGroups } from "../ui/treeview/types";
 import { sleep } from "../utils";
 import { ActionContext } from "./types";
 
+/**
+ * Submits an exercise while keeping the user informed
+ */
 export async function submitExercise(id: number, { tmc, resources, ui }: ActionContext) {
     const submitResult = await tmc.submitExercise(id);
     if (submitResult.err) {
@@ -64,6 +67,9 @@ export async function submitExercise(id: number, { tmc, resources, ui }: ActionC
     }
 }
 
+/**
+ * Tests an exercise while keeping the user informed
+ */
 export async function testExercise(id: number, { tmc, resources, ui }: ActionContext) {
     const exerciseDetails = await tmc.getExerciseDetails(id);
     if (exerciseDetails.err) {
@@ -127,6 +133,32 @@ export async function resetExercise(
     statusBarItem.show();
 }
 
+/**
+ * Opens the organization course list view
+ */
+export async function displayCourses(storage: Storage, { tmc, ui }: ActionContext) {
+    const result = await tmc.getCourses();
+    const slug = storage.getOrganizationSlug();
+
+    if (slug === undefined) {
+        return;
+    }
+    const resultOrg = await tmc.getOrganization(slug);
+
+    if (result.ok) {
+        console.log("Courses loaded");
+        const courses = result.val.sort((course1, course2) => course1.name.localeCompare(course2.name));
+        const organization = resultOrg.val;
+        const data = { courses, organization };
+        await ui.webview.setContentFromTemplate("course", data);
+    } else {
+        console.log("Fetching courses failed: " + result.val.message);
+    }
+}
+
+/**
+ * Opens the course exercise list view
+ */
 export async function displayCourseDetails(id: number, storage: Storage, { tmc, ui }: ActionContext) {
     const result = await tmc.getCourseDetails(id);
 
@@ -142,6 +174,33 @@ export async function displayCourseDetails(id: number, storage: Storage, { tmc, 
     await ui.webview.setContentFromTemplate("course-details", data);
 }
 
+/**
+ * Opens the summary view
+ */
+export function displaySummary({ ui }: ActionContext) {
+    // TODO: Have something to display on summary.
+    return async () => await ui.webview.setContentFromTemplate("index");
+}
+
+/**
+ * Opens the organization list view
+ */
+export async function displayOrganizations({ tmc, ui }: ActionContext) {
+    const result = await tmc.getOrganizations();
+    if (result.err) {
+        console.log("Fetching organizations failed: " + result.val.message);
+        return;
+    }
+    console.log("Organizations loaded");
+    const organizations = result.val.sort((org1, org2) => org1.name.localeCompare(org2.name));
+    const pinned = organizations.filter((organization) => organization.pinned);
+    const data = { organizations, pinned };
+    await ui.webview.setContentFromTemplate("organization", data);
+}
+
+/**
+ * Logs the user out, updating UI state
+ */
 export function logout(visibility: VisibilityGroups, { tmc, ui }: ActionContext) {
     tmc.deauthenticate();
     ui.webview.dispose();

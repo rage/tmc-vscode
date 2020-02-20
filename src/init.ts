@@ -5,11 +5,10 @@ import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
-import { displayCourseDetails, logout } from "./actions/actions";
+import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, logout } from "./actions/actions";
 import ExerciseManager from "./api/exerciseManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
-import { displayCourses, displayOrganizations, displaySummary } from "./ui/treeview/actions";
 import { downloadExercises, handleLogin, setCourse, setOrganization } from "./ui/treeview/handlers";
 import { downloadFileWithProgress } from "./utils";
 
@@ -38,18 +37,20 @@ export function registerUiActions(
     const COURSE_DETAILS_ACTION = "courseDetails";
 
     // Register UI actions
-    const actionContext = { tmc, storage, ui, visibilityGroups };
+    const actionContext = { tmc, exerciseManager, ui, resources };
     ui.treeDP.registerAction("Log out", [LOGGED_IN],
-        () => { logout(visibilityGroups, {tmc, ui, resources, exerciseManager}); });
+        () => { logout(visibilityGroups, actionContext); });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
         async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
-    ui.treeDP.registerAction("Summary", [LOGGED_IN], displaySummary(actionContext), INDEX_ACTION);
-    ui.treeDP.registerAction("Organization", [LOGGED_IN], displayOrganizations(actionContext), ORGANIZATIONS_ACTION);
+    ui.treeDP.registerAction("Summary", [LOGGED_IN],
+        () => { displaySummary(actionContext); }, INDEX_ACTION);
+    ui.treeDP.registerAction("Organization", [LOGGED_IN],
+        () => { displayOrganizations(actionContext); }, ORGANIZATIONS_ACTION);
     ui.treeDP.registerAction("Courses", [LOGGED_IN, ORGANIZATION_CHOSEN],
-        displayCourses(actionContext), COURSES_ACTION);
+        () => { displayCourses(storage, actionContext); }, COURSES_ACTION);
     ui.treeDP.registerAction("Course details", [LOGGED_IN, ORGANIZATION_CHOSEN, COURSE_CHOSEN],
         () => { displayCourseDetails(storage.getCourseId() as number,
-               storage, {tmc, ui, resources, exerciseManager}); }, COURSE_DETAILS_ACTION);
+               storage, actionContext); }, COURSE_DETAILS_ACTION);
 
     // Register webview handlers
     const handlerContext = { tmc, storage, ui, visibilityGroups };
