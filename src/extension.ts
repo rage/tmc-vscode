@@ -2,8 +2,8 @@ import * as vscode from "vscode";
 import * as init from "./init";
 
 import { resetExercise, submitExercise, testExercise } from "./actions/actions";
-import ExerciseManager from "./api/exerciseManager";
 import TMC from "./api/tmc";
+import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
 import UI from "./ui/ui";
 import { getCurrentExerciseId } from "./utils";
@@ -31,12 +31,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const ui = new UI(context, resources);
         const storage = new Storage(context);
-        const exerciseManager = new ExerciseManager(storage, resources);
-        const tmc = new TMC(exerciseManager, storage, resources);
+        const workspaceManager = new WorkspaceManager(storage, resources);
+        const tmc = new TMC(workspaceManager, storage, resources);
 
-        init.registerUiActions(ui, storage, tmc, exerciseManager, resources);
+        init.registerUiActions(ui, storage, tmc, workspaceManager, resources);
 
-        const actionContext = {ui, resources, exerciseManager, tmc};
+        const actionContext = {ui, resources, workspaceManager, tmc};
 
         context.subscriptions.push(
             vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
@@ -44,7 +44,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         context.subscriptions.push(
             vscode.commands.registerCommand("uploadArchive", async () => {
-                const exerciseId = getCurrentExerciseId(exerciseManager);
+                const exerciseId = getCurrentExerciseId(workspaceManager);
                 exerciseId ? submitExercise(exerciseId, actionContext)
                     : vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
             }),
@@ -52,7 +52,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         context.subscriptions.push(
             vscode.commands.registerCommand("runTests", async () => {
-                const exerciseId = getCurrentExerciseId(exerciseManager);
+                const exerciseId = getCurrentExerciseId(workspaceManager);
                 exerciseId ? testExercise(exerciseId, actionContext)
                     : vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
             }),
@@ -62,7 +62,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         context.subscriptions.push(
             vscode.commands.registerCommand("resetExercise", async () => {
-                const exerciseId = getCurrentExerciseId(exerciseManager);
+                const exerciseId = getCurrentExerciseId(workspaceManager);
                 exerciseId ? resetExercise(exerciseId, actionContext, resetStatusbar)
                     : vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
             }),

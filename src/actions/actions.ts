@@ -117,7 +117,7 @@ export async function testExercise(id: number, actions: ActionContext) {
 }
 
 export async function resetExercise(
-    id: number, { tmc, exerciseManager }: ActionContext, statusBarItem: vscode.StatusBarItem,
+    id: number, { tmc, workspaceManager }: ActionContext, statusBarItem: vscode.StatusBarItem,
 ) {
     vscode.window.showInformationMessage("Resetting exercise...");
     statusBarItem.text = `resetting exercise`;
@@ -134,9 +134,9 @@ export async function resetExercise(
         statusBarItem.show();
         return;
     }
-    const slug = exerciseManager.getOrganizationSlugByExerciseId(id);
-    exerciseManager.deleteExercise(id);
-    await tmc.downloadExercise(id, slug.unwrap());
+    const slug = workspaceManager.getExerciseDataById(id).unwrap().organization;
+    workspaceManager.deleteExercise(id);
+    await tmc.downloadExercise(id, slug);
 
     statusBarItem.text = `Exercise resetted successfully`, setTimeout(() => {
         statusBarItem.hide();
