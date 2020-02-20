@@ -72,10 +72,8 @@ suite("Storage tests", () => {
     });
 
     test("Exercise data updater uses ExtensionContext correctly", () => {
-        const exerciseData = {
-            idToPath: [[1337, "test/path/"]] as Array<[number, string]>,
-            pathToId: [["test/path/", 1337]] as Array<[string, number]>,
-        };
+        const exerciseData = [{ checksum: "asd", course: "HY-jtkt", id: 1337, isOpen: true,
+            name: "hello-world", organization: "HY", path: "/tmp"}];
         assertUpdater(() => storage.updateExerciseData(exerciseData), EXERCISE_DATA_KEY, exerciseData);
     });
 
