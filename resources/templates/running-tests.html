@@ -1,0 +1,24 @@
+<html>
+
+<head>
+    <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+    <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+</head>
+
+<body>
+    <div class="container container-fluid">
+        <div class="row">
+            <h1>Running tests for {{ exerciseName }}</h1>
+            <input type="button" onclick="runInBackground()" class="btn-primary" value="Run in background" />
+        </div>
+    </div>
+    <script>
+        const vscode = acquireVsCodeApi();
+
+        function runInBackground() {
+            vscode.postMessage({ setToBackground: true });
+        }
+    </script>
+</body>
+
+</html>
