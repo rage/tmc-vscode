@@ -31,6 +31,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const ui = new UI(context, resources);
         const storage = new Storage(context);
+
         const workspaceManager = new WorkspaceManager(storage, resources);
         const tmc = new TMC(workspaceManager, storage, resources);
 
