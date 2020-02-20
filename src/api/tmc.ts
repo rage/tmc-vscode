@@ -116,12 +116,10 @@ export default class TMC {
      * Requires an organization to be selected
      * @returns a list of courses belonging to the currently selected organization
      */
-    public getCourses(cache?: boolean): Promise<Result<Course[], Error>> {
-        const orgSlug = this.storage.getOrganizationSlug();
-        if (!orgSlug) {
-            throw new Error("Organization not selected");
-        }
-        return this.checkApiResponse(this.tmcApiRequest(`core/org/${orgSlug}/courses`, cache), createIs<Course[]>());
+    public getCourses(organization: string, cache?: boolean): Promise<Result<Course[], Error>> {
+        return this.checkApiResponse(
+            this.tmcApiRequest(`core/org/${organization}/courses`, cache), createIs<Course[]>(),
+        );
     }
 
     /**
@@ -149,20 +147,6 @@ export default class TMC {
             throw new Error("User not logged in!");
         }
         return this.checkApiResponse(this.tmcApiRequest(submissionUrl, false), createIs<SubmissionStatusReport>());
-        /*
-        const request = this.token.sign({ url: submissionUrl, headers: {} });
-        const response = await fetch.default(request.url, request);
-        if (response.ok) {
-            const responseObject = await response.json();
-            if (is<SubmissionStatusReport>(responseObject)) {
-                return new Ok(responseObject);
-            }
-            console.error(responseObject);
-            return new Err(new ApiError("Unexpected response type"));
-        } else {
-            return new Err(new ApiError(response.statusText));
-        }
-        */
     }
 
     /**

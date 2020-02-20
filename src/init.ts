@@ -5,7 +5,7 @@ import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
-import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, logout } from "./actions/actions";
+import {displaySummary, logout, selectNewCourse } from "./actions/actions";
 import ExerciseManager from "./api/exerciseManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
@@ -44,13 +44,8 @@ export function registerUiActions(
         async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
     ui.treeDP.registerAction("Summary", [LOGGED_IN],
         () => { displaySummary(actionContext); }, INDEX_ACTION);
-    ui.treeDP.registerAction("Organization", [LOGGED_IN],
-        () => { displayOrganizations(actionContext); }, ORGANIZATIONS_ACTION);
-    ui.treeDP.registerAction("Courses", [LOGGED_IN, ORGANIZATION_CHOSEN],
-        () => { displayCourses(storage, actionContext); }, COURSES_ACTION);
-    ui.treeDP.registerAction("Course details", [LOGGED_IN, ORGANIZATION_CHOSEN, COURSE_CHOSEN],
-        () => { displayCourseDetails(storage.getCourseId() as number,
-               storage, actionContext); }, COURSE_DETAILS_ACTION);
+    ui.treeDP.registerAction("Add new course", [LOGGED_IN],
+        () => { selectNewCourse(actionContext); });
 
     // Register webview handlers
     const handlerContext = { tmc, storage, ui, visibilityGroups };
