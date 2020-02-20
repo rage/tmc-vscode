@@ -42,6 +42,16 @@ export default class TemporaryWebview {
         this.panel.reveal(undefined, true);
     }
 
+    public setMessageHandler(messageHandler: any) {
+        this.messageHandler = messageHandler;
+        this.panel.webview.onDidReceiveMessage(messageHandler);
+    }
+
+    public setTitle(title: string) {
+        this.title = title;
+        this.panel.title = title;
+    }
+
     /**
      * Closes the webview
      */
