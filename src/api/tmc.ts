@@ -13,12 +13,12 @@ import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
 import { downloadFile } from "../utils";
-import ExerciseManager from "./exerciseManager";
 import {
     Course, CourseDetails, ExerciseDetails, Organization, SubmissionFeedback,
     SubmissionFeedbackResponse, SubmissionResponse, SubmissionStatusReport,
     TMCApiResponse, TmcLangsAction, TmcLangsResponse, TmcLangsTestResults,
 } from "./types";
+import WorkspaceManager from "./workspaceManager";
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -31,14 +31,14 @@ export default class TMC {
     private readonly dataPath: string;
     private readonly tmcLangsPath: string;
     private readonly tmcApiUrl: string;
-    private readonly exerciseManager: ExerciseManager;
+    private readonly workspaceManager: WorkspaceManager;
 
     private readonly cache: Map<string, TMCApiResponse>;
 
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(exerciseManager: ExerciseManager, storage: Storage, resources: Resources) {
+    constructor(exerciseManager: WorkspaceManager, storage: Storage, resources: Resources) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: "https://tmc.mooc.fi/oauth/token",
             clientId: "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0",
@@ -53,7 +53,7 @@ export default class TMC {
         this.tmcLangsPath = resources.tmcLangsPath;
         this.tmcApiUrl = "https://tmc.mooc.fi/api/v8/";
         this.cache = new Map();
-        this.exerciseManager = exerciseManager;
+        this.workspaceManager = exerciseManager;
     }
 
     /**
@@ -166,13 +166,41 @@ export default class TMC {
             return new Err(detailsResult.val);
         }
 
-        const exercisePath = this.exerciseManager.createExercisePath(organizationSlug, detailsResult.val);
+        const courseResult = await this.getCourseDetails(detailsResult.val.course_id);
 
-        return this.checkApiResponse(this.executeLangsAction({
+        if (courseResult.err) {
+            return new Err(courseResult.val);
+        }
+
+        const checksum = courseResult.val.course.exercises.find((x) => x.id === id)?.checksum;
+
+        if (!checksum) {
+            return new Err(new Error("Exercise somehow missing from course"));
+        }
+
+        // TODO: Extract to a different location and handle pass that to ExerciseManager
+        const exercisePath = this.workspaceManager.createExerciseDownloadPath(
+            organizationSlug, checksum, detailsResult.val,
+        );
+
+        const extractResult = await this.checkApiResponse(this.executeLangsAction({
             action: "extract-project",
             archivePath: `${this.dataPath}/${id}.zip`,
             exerciseFolderPath: exercisePath,
         }), createIs<string>());
+
+        if (extractResult.err) {
+            this.workspaceManager.deleteExercise(id);
+        }
+
+        // TODO: Return closed path and call open elsewhere
+        const openResult = this.workspaceManager.openExercise(id);
+
+        if (openResult.err) {
+            console.log("Opening failed");
+        }
+
+        return openResult;
     }
 
     /**
@@ -180,14 +208,14 @@ export default class TMC {
      * @param id Id of the exercise
      */
     public async runTests(id: number): Promise<Result<TmcLangsTestResults, Error>> {
-        const exerciseFolderPath = this.exerciseManager.getPathByExerciseId(id);
+        const exerciseFolderPath = this.workspaceManager.getExerciseDataById(id);
         if (exerciseFolderPath.err) {
             return new Err(new Error("???"));
         }
 
         return this.checkApiResponse(this.executeLangsAction({
             action: "run-tests",
-            exerciseFolderPath: exerciseFolderPath.val,
+            exerciseFolderPath: exerciseFolderPath.val.path,
         }), createIs<TmcLangsTestResults>());
     }
 
@@ -196,7 +224,7 @@ export default class TMC {
      * @param id Exercise id
      */
     public async submitExercise(id: number): Promise<Result<SubmissionResponse, Error>> {
-        const exerciseFolderPath = this.exerciseManager.getPathByExerciseId(id);
+        const exerciseFolderPath = this.workspaceManager.getExerciseDataById(id);
 
         if (exerciseFolderPath.err) {
             return new Err(new Error("???"));
@@ -205,7 +233,7 @@ export default class TMC {
         const compressResult = await this.checkApiResponse(this.executeLangsAction({
             action: "compress-project",
             archivePath: `${this.dataPath}/${id}-new.zip`,
-            exerciseFolderPath: exerciseFolderPath.val,
+            exerciseFolderPath: exerciseFolderPath.val.path,
         }), createIs<string>());
         if (compressResult.err) {
             return new Err(compressResult.val);

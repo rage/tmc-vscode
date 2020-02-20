@@ -9,7 +9,7 @@
     <div class="container">
         <div class="row">
             <div class="py-2">
-                {{{ check_test_status testResultVal.status exerciseId exerciseName testResultVal.logs }}}
+                {{{ check_test_status testResultVal.status testResultVal.logs }}}
             </div>
         </div>
         <div class="row">
@@ -50,7 +50,7 @@
     </div><!-- close container -->
     <script>
         const vscode = acquireVsCodeApi();
-        const exerciseId = {{exerciseId}};
+        const exerciseId = {{id}};
 
         function submitToServer() {
             vscode.postMessage({ submit: true, exerciseId: exerciseId });
