@@ -163,6 +163,7 @@ export type SubmissionStatusReport = SubmissionProcessingReport | SubmissionRes
 
 export type LocalExerciseData = {
     id: number;
+    name: string;
     course: string;
     organization: string;
     path: string;

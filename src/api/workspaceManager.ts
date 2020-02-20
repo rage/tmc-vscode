@@ -53,7 +53,7 @@ export default class WorkspaceManager {
         this.pathToId.set(exercisePath, exercise_id);
         this.idToData.set(exercise_id, {
             checksum, course: exerciseDetails.course_name, id: exercise_id, isOpen: false,
-            organization: organizationSlug, path: exercisePath,
+            name: exerciseDetails.exercise_name, organization: organizationSlug, path: exercisePath,
         });
         this.updatePersistentData();
         return this.getClosedPath(exercise_id);
