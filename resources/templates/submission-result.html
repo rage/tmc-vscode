@@ -8,7 +8,9 @@
 <body>
     <div class="container">
         <div class="row py-2">
-            {{{submission_status this}}}
+            <div class="py-2">
+                {{{submission_status this}}}
+            </div>
         </div>
         {{#if test_cases}}
             <div class="row my-1">
@@ -82,7 +84,8 @@
 
 <script>
     const vscode = acquireVsCodeApi();
-    const feedback_url = "{{feedback_answer_url}}"
+    const feedback_url = "{{feedback_answer_url}}";
+    const solution_url = "{{solution_url}}";
 
     function submitFeedback() {
         const feedback = [];
@@ -99,6 +102,11 @@
     function showValue(value, id) {
         document.getElementById(id).innerHTML=value;
     }
+
+    function viewModelSolution() {
+        vscode.postMessage({ showSolutionInBrowser: true, solutionUrl: solution_url });
+    }
+
 </script>
 
 </html>
