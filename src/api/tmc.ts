@@ -194,6 +194,7 @@ export default class TMC {
             return new Err(new Error("Exercise somehow missing from course"));
         }
 
+        // TODO: Extract to a different location and handle pass that to ExerciseManager
         const exercisePath = this.workspaceManager.createExerciseDownloadPath(
             organizationSlug, checksum, detailsResult.val,
         );
@@ -205,10 +206,17 @@ export default class TMC {
         }), createIs<string>());
 
         if (extractResult.err) {
-            this.workspaceManager.clearExerciseData(id);
+            this.workspaceManager.deleteExercise(id);
         }
 
-        return extractResult;
+        // TODO: Return closed path and call open elsewhere
+        const openResult = this.workspaceManager.openExercise(id);
+
+        if (openResult.err) {
+            console.log("Opening failed");
+        }
+
+        return openResult;
     }
 
     /**

@@ -8,7 +8,7 @@ import Storage from "../config/storage";
 import { ExerciseDetails, LocalExerciseData } from "./types";
 
 /**
- * Helper class for creating unique and verbose folder paths to exercises and managing them.
+ * Class for managing, opening and closing of exercises on disk.
  */
 export default class WorkspaceManager {
     private readonly pathToId: Map<string, number>;
@@ -44,6 +44,9 @@ export default class WorkspaceManager {
     public createExerciseDownloadPath(
         organizationSlug: string, checksum: string, exerciseDetails: ExerciseDetails,
     ): string {
+        if (this.idToData.has(exerciseDetails.course_id)) {
+            throw new Error("Attempted to download existing exercise.");
+        }
         const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
         const { course_name, exercise_name, exercise_id } = exerciseDetails;
         const exercisePath = path.join(exerciseFolderPath, organizationSlug, course_name, exercise_name);
@@ -54,15 +57,6 @@ export default class WorkspaceManager {
         });
         this.updatePersistentData();
         return this.getClosedPath(exercise_id);
-    }
-
-    public clearExerciseData(id: number) {
-        const exercisePath = this.idToData.get(id)?.path;
-        if (exercisePath) {
-            this.idToData.delete(id);
-            this.pathToId.delete(exercisePath);
-            this.updatePersistentData();
-        }
     }
 
     /**
@@ -120,34 +114,62 @@ export default class WorkspaceManager {
         return idResult.val;
     }
 
-    public openExercise(id: number) {
+    /**
+     * Opens exercise by moving it to workspace folder.
+     * @param id Exercise ID to open
+     */
+    public openExercise(id: number): Result<string, Error> {
         const data = this.idToData.get(id);
-        if (data) {
-            fs.mkdirSync(data.path, {recursive: true});
+        if (data && !data.isOpen) {
+            fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
             fs.renameSync(this.getClosedPath(id), data.path);
             data.isOpen = true;
             this.idToData.set(id, data);
-        }
-    }
-
-    public closeExercise(id: number) {
-        const data = this.idToData.get(id);
-        if (data) {
-            fs.renameSync(data.path, this.getClosedPath(id));
-            data.isOpen = false;
-            this.idToData.set(id, data);
+            return new Ok(data.path);
+        } else {
+            throw new Error("Invalid ID or unable to open.");
         }
     }
 
     /**
-     * Deletes an exercise folder from the workspace if present
+     * Closes exercise by moving it away from workspace.
+     * @param id Exercise ID to close
+     */
+    public closeExercise(id: number) {
+        const data = this.idToData.get(id);
+        if (data && data.isOpen) {
+            fs.renameSync(data.path, this.getClosedPath(id));
+            data.isOpen = false;
+            this.idToData.set(id, data);
+        } else {
+            throw new Error("Invalid ID or unable to close.");
+        }
+    }
+
+    /**
+     * Deletes exercise from disk if present and clears all data related to it.
      * @param exerciseId Exercise ID to delete
      */
     public deleteExercise(exerciseId: number): void {
-        const exercisePath = this.idToData.get(exerciseId)?.path;
+        const workspacePath = this.idToData.get(exerciseId)?.path;
+        if (workspacePath) {
+            del.sync(workspacePath, { force: true });
+        }
+
+        const closedPath = this.getClosedPath(exerciseId);
+        if (closedPath) {
+            del.sync(closedPath, { force: true });
+        }
+
+        this.clearExerciseData(exerciseId);
+    }
+
+    private clearExerciseData(id: number) {
+        const exercisePath = this.idToData.get(id)?.path;
         if (exercisePath) {
-            del.sync(exercisePath, { force: true });
-            this.clearExerciseData(exerciseId);
+            this.idToData.delete(id);
+            this.pathToId.delete(exercisePath);
+            this.updatePersistentData();
         }
     }
 
