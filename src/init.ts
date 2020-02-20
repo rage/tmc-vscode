@@ -5,7 +5,7 @@ import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
-import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, logout } from "./actions/actions";
+import { displaySummary, logout, selectNewCourse } from "./actions/actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
