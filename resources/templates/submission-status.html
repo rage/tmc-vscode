@@ -10,6 +10,10 @@
                 <div class="py-2">
                     <h2>Processing submission...</h2>
                 </div>
+                <div class="py-2">
+                    <input type="button" onclick="runInBackground()" class="btn-primary" value="Run in background" />
+                    <input type="button" onclick="showInBrowser()" class="btn-primary" value="Show submission in browser" />
+                </div>
                 <div>
                     {{#check_submission_status sandbox_status}}
                     <h3>{{status}}</h3>
@@ -17,5 +21,17 @@
                 </div>
             </div>
         </div>
+
+        <script>
+            const vscode = acquireVsCodeApi();
+
+            function runInBackground() {
+                vscode.postMessage({setToBackground : true });
+            }
+            function showInBrowser() {
+                vscode.postMessage({showInBrowser : true });
+            }
+
+        </script>
     </body>
 </html>

@@ -8,14 +8,20 @@
 <body>
     <div class="container">
         <div class="row py-2">
-            {{{submission_status this}}}
+            <div class="py-2">
+                {{{submission_status this}}}
+            </div>
         </div>
         {{#if test_cases}}
             <div class="row my-1">
-                <h3>Points gained: {{points}}</h3>
+                {{#if points}}
+                    <h3>Points gained: {{points}}</h3>
+                {{else}}
+                    <h3>Points gained: -</h3>
+                {{/if}}
             </div>
             <div class="row my-1">
-                    {{{progress_bar test_cases}}}
+                {{{progress_bar test_cases}}}
             </div>
         {{/if}}
         {{#if feedback_questions}}
@@ -31,13 +37,13 @@
                             max="5" step="1" value="0" oninput='showValue(this.value, "text-id-{{this.id}}")' />
                         </div>
                         <div class="col-md-2">
-                            <span class="font-weight-bold" id="text-id-{{this.id}}" >0</span>
+                            <span class="font-weight-bold" id="text-id-{{this.id}}">0</span>
                         </div>
                     </div>
                 </div>
                 {{/each}}
                 <div>
-                    <button onclick="submitFeedback()">Lähetä palaute</button>
+                    <button class="btn-primary" onclick="submitFeedback()">Lähetä palaute</button>
                 </div>
             </form>
         </div>
@@ -78,7 +84,8 @@
 
 <script>
     const vscode = acquireVsCodeApi();
-    const feedback_url = "{{feedback_answer_url}}"
+    const feedback_url = "{{feedback_answer_url}}";
+    const solution_url = "{{solution_url}}";
 
     function submitFeedback() {
         const feedback = [];
@@ -95,6 +102,11 @@
     function showValue(value, id) {
         document.getElementById(id).innerHTML=value;
     }
+
+    function viewModelSolution() {
+        vscode.postMessage({ showSolutionInBrowser: true, solutionUrl: solution_url });
+    }
+
 </script>
 
 </html>

@@ -1,12 +1,12 @@
 import * as vscode from "vscode";
 import * as init from "./init";
 
+import { resetExercise, submitExercise, testExercise } from "./actions/actions";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
-import TemporaryWebview from "./ui/temporaryWebview";
 import UI from "./ui/ui";
-import { sleep } from "./utils";
+import { getCurrentExerciseId } from "./utils";
 
 export async function activate(context: vscode.ExtensionContext) {
 
@@ -34,7 +34,9 @@ export async function activate(context: vscode.ExtensionContext) {
         const workspaceManager = new WorkspaceManager(storage, resources);
         const tmc = new TMC(workspaceManager, storage, resources);
 
-        init.registerUiActions(ui, storage, tmc);
+        init.registerUiActions(ui, storage, tmc, workspaceManager, resources);
+
+        const actionContext = {ui, resources, workspaceManager, tmc};
 
         context.subscriptions.push(
             vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
@@ -42,109 +44,17 @@ export async function activate(context: vscode.ExtensionContext) {
 
         context.subscriptions.push(
             vscode.commands.registerCommand("uploadArchive", async () => {
-                const path = vscode.window.activeTextEditor?.document.fileName;
-                if (path) {
-                    const exerciseId = workspaceManager.getExercisePath(path);
-                    if (exerciseId) {
-                        const submitResult = await tmc.submitExercise(exerciseId);
-                        if (submitResult.ok) {
-                            let temp = new TemporaryWebview(resources, ui, "TMC server submission", async (msg) => {
-                                if (msg.feedback.status.length > 0) {
-                                    console.log(await tmc.submitSubmissionFeedback(msg.url, msg.feedback));
-                                }
-                            });
-
-                            vscode.window.showInformationMessage(`Exercise submitted successfully:
-                                ${submitResult.val.show_submission_url}`, ...["View submission in browser", "Run in background", "Hide notification"])
-                                .then((selection) => {
-                                    if (selection === "View submission in browser") {
-                                        vscode.env.openExternal(
-                                            vscode.Uri.parse(submitResult.val.show_submission_url));
-                                    } else if (selection === "Run in background") {
-                                        if (!temp.resultsShownInTempView) {
-                                            vscode.window.setStatusBarMessage("Waiting for results from server.", 5000);
-                                            temp.dispose();
-                                        } else {
-                                            vscode.window.showInformationMessage("Test results already returned from server.");
-                                        }
-                                    }
-                                });
-
-                            while (true) {
-                                const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
-                                if (statusResult.ok) {
-                                    const statusData = statusResult.val;
-                                    if (statusResult.val.status !== "processing") {
-                                        if (temp.disposed) {
-                                            vscode.window.setStatusBarMessage("Tests finished, see result", 5000);
-                                            temp = new TemporaryWebview(resources, ui,
-                                                "TMC server submission", async (msg) => {
-                                                    if (msg.feedback.status.length > 0) {
-                                                        console.log(await tmc.submitSubmissionFeedback(
-                                                            msg.url, msg.feedback));
-                                                    }
-                                                });
-                                        }
-                                        temp.setContent("submission-result", statusData, true);
-                                        break;
-                                    }
-                                    if (!temp.disposed) {
-                                        temp.setContent("submission-status", statusData);
-                                    } else {
-                                        vscode.window.setStatusBarMessage("Waiting for results from server.", 5000);
-                                    }
-                                } else {
-                                    console.error(statusResult.val);
-                                }
-                                await sleep(2500);
-                            }
-                        } else {
-                            vscode.window.showErrorMessage(`Exercise submission failed: \
-                                                            ${submitResult.val.name} - ${submitResult.val.message}`);
-                            console.error(submitResult.val);
-                        }
-                    } else {
-                        vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
-                    }
-                }
+                const exerciseId = getCurrentExerciseId(workspaceManager);
+                exerciseId ? submitExercise(exerciseId, actionContext)
+                    : vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
             }),
         );
 
         context.subscriptions.push(
             vscode.commands.registerCommand("runTests", async () => {
-                const path = vscode.window.activeTextEditor?.document.fileName;
-                if (path) {
-                    const exerciseId = workspaceManager.getExercisePath(path);
-                    if (exerciseId) {
-                        const exerciseDetails = await tmc.getExerciseDetails(exerciseId);
-                        if (exerciseDetails.ok) {
-                            const exerciseName = exerciseDetails.val.exercise_name;
-                            vscode.window.setStatusBarMessage(`Running tests for ${exerciseName}`);
-                            vscode.window.showInformationMessage(`Running tests for ${exerciseName}`);
-                            const testResult = await tmc.runTests(exerciseId);
-                            vscode.window.setStatusBarMessage("");
-                            if (testResult.ok) {
-                                vscode.window.setStatusBarMessage(`Tests finished for ${exerciseName}`, 5000);
-                                const temp = new TemporaryWebview(resources, ui,
-                                    "TMC Test Results", () => {});
-                                const testResultVal = testResult.val;
-                                const data = { testResultVal, exerciseId, exerciseName };
-                                temp.setContent("test-result", data);
-                            } else {
-                                vscode.window.setStatusBarMessage(`Running tests for ${exerciseName} failed`, 5000);
-                                vscode.window.showErrorMessage(`Exercise test run failed: \
-                                                                ${testResult.val.name} - ${testResult.val.message}`);
-                                console.error(testResult.val);
-                            }
-                        } else {
-                            vscode.window.showErrorMessage(`Getting exercise details failed: \
-                                                            ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`);
-                            console.error(exerciseDetails.val);
-                        }
-                    } else {
-                        vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
-                    }
-                }
+                const exerciseId = getCurrentExerciseId(workspaceManager);
+                exerciseId ? testExercise(exerciseId, actionContext)
+                    : vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
             }),
         );
 
@@ -152,38 +62,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
         context.subscriptions.push(
             vscode.commands.registerCommand("resetExercise", async () => {
-                resetStatusbar.text = `resetting exercise`;
-                resetStatusbar.show();
-                const path = vscode.window.activeTextEditor?.document.fileName;
-                if (path) {
-                    const exerciseId = workspaceManager.getExercisePath(path);
-                    if (exerciseId) {
-                        vscode.window.showInformationMessage("Resetting exercise...");
-                        const submitResult = await tmc.submitExercise(exerciseId);
-                        if (submitResult.ok) {
-                            const slug = workspaceManager.getExerciseDataById(exerciseId).unwrap().organization;
-                            workspaceManager.deleteExercise(exerciseId);
-                            await tmc.downloadExercise(exerciseId, slug);
-
-                            resetStatusbar.text = `Exercise resetted succesfully`, setTimeout(() => {
-                                resetStatusbar.hide();
-                            }, 5000);
-                            resetStatusbar.show();
-
-                        } else {
-                            vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
-                                                            ${submitResult.val.name} - ${submitResult.val.message}`);
-                            console.error(submitResult.val);
-
-                            resetStatusbar.text = `Something went wrong`, setTimeout(() => {
-                                resetStatusbar.hide();
-                            }, 5000);
-                            resetStatusbar.show();
-                        }
-                    } else {
-                        vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
-                    }
-                }
+                const exerciseId = getCurrentExerciseId(workspaceManager);
+                exerciseId ? resetExercise(exerciseId, actionContext, resetStatusbar)
+                    : vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
             }),
         );
     } else {

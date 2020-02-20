@@ -4,8 +4,8 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { Err, Ok, Result } from "ts-results";
+import WorkspacewManager from "./api/workspaceManager";
 import { ConnectionError } from "./errors";
-
 /**
  * Downloads data from given url to the specified file path with a progress bar in the VSCode status bar.
  * @param url Url to data
@@ -90,4 +90,12 @@ export function sleep(millis: number) {
 
 export function numbersToString(array: number[]) {
     return String.fromCharCode(...array);
+}
+
+export function getCurrentExerciseId(workspaceManager: WorkspacewManager): number | undefined {
+    const editorPath = vscode.window.activeTextEditor?.document.fileName;
+    if (!editorPath) {
+        return undefined;
+    }
+    return workspaceManager.getExercisePath(editorPath);
 }

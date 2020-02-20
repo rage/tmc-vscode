@@ -31,17 +31,9 @@ export default class TemplateEngine {
          * Checks the locally runned test status.
          */
         handlebars.registerHelper("check_test_status",
-                                    (status: string, exerciseId: number,
-                                     exerciseName: string, logs: { stdout: number[], stderr: number[] }) => {
+                                    (status: string, logs: { stdout: number[], stderr: number[] }) => {
             if (status === "PASSED") {
-                vscode.window.showInformationMessage(`Submit ${exerciseName} to server?`, ...["Submit to server", "No thanks"])
-                .then((selection) => {
-                    if (selection === "Submit to server") {
-                        // TODO: Call submit to server if submit is pressed on notification
-                        console.log (exerciseId);
-                    }
-                });
-                return "<h1 class='passed-header'>PASSED</h1>";
+                return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
             } else if (status === "TESTS_FAILED") {
                 return "<h1>TESTS FAILED</h1>";
             } else if (status === "COMPILE_FAILED") {
@@ -55,12 +47,10 @@ export default class TemplateEngine {
          * Submission result show correct heading or compilation error
          */
         handlebars.registerHelper("submission_status", (results: SubmissionResultReport) => {
-            if (results.status === "ok") {
-                if (results.all_tests_passed) {
-                    return `<h1 class="passed-header">All tests passed on the server</h1>`;
-                }
+            if (results.status === "ok" && results.all_tests_passed) {
+                return "<h1 class='passed-header'>All tests passed on the server</h1><input type='button' class='btn-primary' value='View model solution' onclick='viewModelSolution()' />";
             } else if (results.status === "fail") {
-                    return `<h1>Some tests failed on the server</h1>`;
+                return `<h1>Some tests failed on the server</h1>`;
             } else if (results.status === "error") {
                 return `<h1>Server returned following error:
                         <pre style="font-size: 14px">${results.error}</pre>`;
@@ -94,12 +84,32 @@ export default class TemplateEngine {
          * Returns the progress of submission status from TMC server
          */
         handlebars.registerHelper("check_submission_status", (status: string) => {
+            let percentDone = 0;
             if (status === "created") {
-                return "<div>&#10004; Sandbox created</div>";
+                percentDone = 30;
+                return `<div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
+                        </div>
+                        <div>&#10004; Submission received. Waiting for it to be processed.</div>`;
             } else if (status === "sending_to_sandbox") {
-                return "<div>&#10004; Sandbox created</div><div>Sending to sandbox</div>";
+                percentDone = 45;
+                return `<div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
+                        </div>
+                        <div>&#10004; Submission received. Waiting for it to be processed.</div><div>Submission queued for processing.</div>`;
             } else if (status === "processing_on_sandbox") {
-                return "<div>&#10004; Sandbox created</div><div>&#10004; Sent to sandbox</div><div>Testing submission</div>";
+                percentDone = 75;
+                return `<div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
+                        </div>
+                        <div>&#10004; Submission received. Waiting for it to be processed.</div>
+                        <div>&#10004; Submission in queue for processing.</div>
+                        <div>Testing submission.</div>`;
+            } else {
+                return `<div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
+                        </div>
+                        <div>Submission sent to server.</div>`;
             }
         });
     }
