@@ -4,7 +4,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { Err, Ok, Result } from "ts-results";
-import ExerciseManager from "./api/exerciseManager";
+import WorkspacewManager from "./api/workspaceManager";
 import { ConnectionError } from "./errors";
 /**
  * Downloads data from given url to the specified file path with a progress bar in the VSCode status bar.
@@ -92,10 +92,10 @@ export function numbersToString(array: number[]) {
     return String.fromCharCode(...array);
 }
 
-export function getCurrentExerciseId(exerciseManager: ExerciseManager): number | undefined {
+export function getCurrentExerciseId(workspaceManager: WorkspacewManager): number | undefined {
     const editorPath = vscode.window.activeTextEditor?.document.fileName;
     if (!editorPath) {
         return undefined;
     }
-    return exerciseManager.getExercisePath(editorPath);
+    return workspaceManager.getExercisePath(editorPath);
 }

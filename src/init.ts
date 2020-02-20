@@ -6,7 +6,7 @@ import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
 import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, logout } from "./actions/actions";
-import ExerciseManager from "./api/exerciseManager";
+import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { downloadExercises, handleLogin, setCourse, setOrganization } from "./ui/treeview/handlers";
@@ -19,7 +19,7 @@ import { downloadFileWithProgress } from "./utils";
  * @param tmc The TMC API object
  */
 export function registerUiActions(
-    ui: UI, storage: Storage, tmc: TMC, exerciseManager: ExerciseManager, resources: Resources,
+    ui: UI, storage: Storage, tmc: TMC, workspaceManager: WorkspaceManager, resources: Resources,
 ) {
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const ORGANIZATION_CHOSEN = ui.treeDP.createVisibilityGroup(storage.getOrganizationSlug() !== undefined);
@@ -37,7 +37,7 @@ export function registerUiActions(
     const COURSE_DETAILS_ACTION = "courseDetails";
 
     // Register UI actions
-    const actionContext = { tmc, exerciseManager, ui, resources };
+    const actionContext = { tmc, workspaceManager, ui, resources };
     ui.treeDP.registerAction("Log out", [LOGGED_IN],
         () => { logout(visibilityGroups, actionContext); });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
@@ -77,6 +77,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     const tmcWorkspacePath = path.join(tmcDataPath, "TMC workspace");
     const tmcWorkspaceFilePath = path.join(tmcWorkspacePath, "TMC Exercises.code-workspace");
     const tmcExercisesFolderPath = path.join(tmcWorkspacePath, "Exercises");
+    const tmcClosedExercisesFolderPath = path.join(tmcDataPath, "closed-exercises");
 
     const tmcLangsPath = path.join(tmcDataPath, "tmc-langs.jar");
 
@@ -105,6 +106,11 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
         console.log("Created tmc exercise directory at", tmcExercisesFolderPath);
     }
 
+    if (!fs.existsSync(tmcClosedExercisesFolderPath)) {
+        fs.mkdirSync(tmcClosedExercisesFolderPath);
+        console.log("Created tmc closed exercise directory at", tmcClosedExercisesFolderPath);
+    }
+
     if (!fs.existsSync(tmcLangsPath)) {
         const result = await downloadFileWithProgress("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar", tmcLangsPath,
                                                     "Welcome", "Downloading important components for the Test My Code plugin... 0 %");
@@ -122,6 +128,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
         tmcWorkspacePath,
         tmcWorkspaceFilePath,
         tmcExercisesFolderPath,
+        tmcClosedExercisesFolderPath,
         mediaPath,
     );
 
