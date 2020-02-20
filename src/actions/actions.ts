@@ -9,7 +9,7 @@ import { ActionContext } from "./types";
 /**
  * Submits an exercise while keeping the user informed
  */
-export async function submitExercise(id: number, { tmc, resources, ui }: ActionContext) {
+export async function submitExercise(id: number, { ui, resources, tmc }: ActionContext, tempView?: TemporaryWebview) {
     const submitResult = await tmc.submitExercise(id);
     if (submitResult.err) {
         vscode.window.showErrorMessage(`Exercise submission failed: \
@@ -17,7 +17,8 @@ export async function submitExercise(id: number, { tmc, resources, ui }: ActionC
         console.error(submitResult.val);
         return;
     }
-    const temp = new TemporaryWebview(resources, ui, "TMC server submission", async (msg) => {
+
+    const messageHandler = async (msg: any) => {
         if (msg.feedback && msg.feedback.status.length > 0) {
             console.log(await tmc.submitSubmissionFeedback(msg.url, msg.feedback));
         } else if (msg.setToBackground) {
@@ -27,7 +28,17 @@ export async function submitExercise(id: number, { tmc, resources, ui }: ActionC
         } else if (msg.showSolutionInBrowser) {
             vscode.env.openExternal(vscode.Uri.parse(msg.solutionUrl));
         }
-    });
+    };
+
+    if (tempView !== undefined) {
+        tempView.setMessageHandler(messageHandler);
+        tempView.setTitle("TMC Server Submission");
+    }
+
+    const temp =
+        tempView !== undefined ?
+        tempView :
+        new TemporaryWebview(resources, ui, "TMC Server Submission", messageHandler);
 
     let timeWaited = 0;
     let getStatus = true;
@@ -70,7 +81,8 @@ export async function submitExercise(id: number, { tmc, resources, ui }: ActionC
 /**
  * Tests an exercise while keeping the user informed
  */
-export async function testExercise(id: number, { tmc, resources, ui }: ActionContext) {
+export async function testExercise(id: number, actions: ActionContext) {
+    const { ui, resources, tmc } = actions;
     const exerciseDetails = await tmc.getExerciseDetails(id);
     if (exerciseDetails.err) {
         vscode.window.showErrorMessage(`Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`);
@@ -84,8 +96,7 @@ export async function testExercise(id: number, { tmc, resources, ui }: ActionCon
                 temp.dispose();
             }
             if (msg.submit) {
-                console.log("Submit to server");
-                console.log(typeof msg.exerciseId); // number
+                submitExercise(msg.exerciseId, actions, temp);
             }
         });
     temp.setContent("running-tests", { exerciseName });
@@ -177,9 +188,9 @@ export async function displayCourseDetails(id: number, storage: Storage, { tmc, 
 /**
  * Opens the summary view
  */
-export function displaySummary({ ui }: ActionContext) {
+export async function displaySummary({ ui }: ActionContext) {
     // TODO: Have something to display on summary.
-    return async () => await ui.webview.setContentFromTemplate("index");
+    await ui.webview.setContentFromTemplate("index");
 }
 
 /**

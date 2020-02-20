@@ -31,8 +31,7 @@ export default class TemplateEngine {
          * Checks the locally runned test status.
          */
         handlebars.registerHelper("check_test_status",
-                                    (status: string, exerciseId: number,
-                                     exerciseName: string, logs: { stdout: number[], stderr: number[] }) => {
+                                    (status: string, logs: { stdout: number[], stderr: number[] }) => {
             if (status === "PASSED") {
                 return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
             } else if (status === "TESTS_FAILED") {
