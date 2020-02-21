@@ -9,6 +9,7 @@ import { displaySummary, logout, selectNewCourse } from "./actions/actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
+import { UserData } from "./config/userdata";
 import { downloadExercises, handleLogin, setCourse, setOrganization } from "./ui/treeview/handlers";
 import { downloadFileWithProgress } from "./utils";
 
@@ -19,7 +20,7 @@ import { downloadFileWithProgress } from "./utils";
  * @param tmc The TMC API object
  */
 export function registerUiActions(
-    ui: UI, storage: Storage, tmc: TMC, workspaceManager: WorkspaceManager, resources: Resources,
+    ui: UI, storage: Storage, tmc: TMC, workspaceManager: WorkspaceManager, resources: Resources, userData: UserData,
 ) {
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const ORGANIZATION_CHOSEN = ui.treeDP.createVisibilityGroup(storage.getOrganizationSlug() !== undefined);
@@ -37,7 +38,7 @@ export function registerUiActions(
     const COURSE_DETAILS_ACTION = "courseDetails";
 
     // Register UI actions
-    const actionContext = { tmc, workspaceManager, ui, resources };
+    const actionContext = { tmc, workspaceManager, ui, resources, userData };
     ui.treeDP.registerAction("Log out", [LOGGED_IN],
         () => { logout(visibilityGroups, actionContext); });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not],

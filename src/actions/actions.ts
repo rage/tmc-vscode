@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import Storage from "../config/storage";
+import { LocalCourseData } from "../config/userdata";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
 import { sleep } from "../utils";
@@ -182,7 +183,7 @@ export async function selectCourse(orgSlug: string, { tmc, resources, ui }: Acti
         const organization = (await tmc.getOrganization(orgSlug)).unwrap();
         const data = { courses, organization };
         console.log(data);
-        let course;
+        let course: number = -1; // Temp fix; TypeScript can't resolve type from within Promise
         await new Promise((resolve) => {
             const temp = new TemporaryWebview(resources, ui, "Select course", (msg) => {
                 course = msg.id;
@@ -210,7 +211,7 @@ export async function selectOrganization({ resources, tmc, ui }: ActionContext) 
     const organizations = result.val.sort((org1, org2) => org1.name.localeCompare(org2.name));
     const pinned = organizations.filter((organization) => organization.pinned);
     const data = { organizations, pinned };
-    let slug;
+    let slug: string = ""; // Temp fix; TypeScript can't resolve type from within Promise
     await new Promise((resolve) => {
         const temp = new TemporaryWebview(resources, ui, "Select organization", (msg) => {
             slug = msg.slug;
@@ -225,17 +226,37 @@ export async function selectOrganization({ resources, tmc, ui }: ActionContext) 
 /**
  * Logs the user out, updating UI state
  */
-export function logout(visibility: VisibilityGroups, { tmc, ui }: ActionContext) {
+export function logout(visibility: VisibilityGroups, { tmc, ui, userData }: ActionContext) {
     tmc.deauthenticate();
     ui.webview.dispose();
     ui.treeDP.updateVisibility([visibility.LOGGED_IN.not]);
 }
 
 export async function selectNewCourse(actionContext: ActionContext) {
-    const org = await selectOrganization(actionContext);
-    if (!org) {
+    const organizationSlug = await selectOrganization(actionContext);
+    if (!organizationSlug || organizationSlug === "") {
         return;
     }
-    const course = await selectCourse(org, actionContext);
-    return {org, course};
+
+    const courseID = await selectCourse(organizationSlug, actionContext);
+    if (!courseID || courseID === -1) {
+        return;
+    }
+
+    const { tmc, userData } = actionContext;
+    const courseDetailsResult = await tmc.getCourseDetails(courseID);
+    if (courseDetailsResult.err) {
+        console.log(new Error("Fetching course data failed"));
+        return;
+    }
+
+    const courseDetails = courseDetailsResult.val.course;
+    const localData: LocalCourseData = {
+        exerciseIds: courseDetails.exercises.map((e) => e.id), // Only IDs?
+        id: courseDetails.id,
+        name: courseDetails.name,
+        organization: organizationSlug,
+    };
+    userData.addCourse(localData);
+    console.log(userData.getCourses()); // Can remove when this data is visible somewhere
 }

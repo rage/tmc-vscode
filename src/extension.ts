@@ -5,6 +5,7 @@ import { resetExercise, submitExercise, testExercise } from "./actions/actions";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
+import { UserData } from "./config/userdata";
 import UI from "./ui/ui";
 import { getCurrentExerciseId } from "./utils";
 
@@ -33,10 +34,11 @@ export async function activate(context: vscode.ExtensionContext) {
         const storage = new Storage(context);
         const workspaceManager = new WorkspaceManager(storage, resources);
         const tmc = new TMC(workspaceManager, storage, resources);
+        const userData = new UserData(storage);
 
-        init.registerUiActions(ui, storage, tmc, workspaceManager, resources);
+        init.registerUiActions(ui, storage, tmc, workspaceManager, resources, userData);
 
-        const actionContext = {ui, resources, workspaceManager, tmc};
+        const actionContext = {ui, resources, workspaceManager, tmc, userData};
 
         context.subscriptions.push(
             vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
