@@ -148,7 +148,7 @@ export async function resetExercise(
 /**
  * Opens the course exercise list view
  */
-export async function displayCourseDetails(id: number, storage: Storage, { tmc, ui }: ActionContext) {
+export async function displayCourseDetails(id: number, { tmc, ui }: ActionContext) {
     const result = await tmc.getCourseDetails(id);
 
     if (result.err) {
@@ -158,7 +158,7 @@ export async function displayCourseDetails(id: number, storage: Storage, { tmc, 
     const details = result.val.course;
     const data = {
         courseName: result.val.course.name, details,
-        organizationSlug: storage.getOrganizationSlug(),
+        organizationSlug: "", // TODO: Have a way to get slug by course id from tmc
     };
     await ui.webview.setContentFromTemplate("course-details", data);
 }
@@ -166,26 +166,8 @@ export async function displayCourseDetails(id: number, storage: Storage, { tmc, 
 /**
  * Opens the summary view
  */
-export async function displaySummary(storage: Storage,
-                                     { workspaceManager, userData, tmc, resources, ui }: ActionContext) {
-    const userdata = new UserData(storage);
-    const courses = userdata.getCourses();
-    const context: ActionContext = { workspaceManager, userData, tmc, resources, ui };
-    await new Promise((resolve) => {
-        const temp = new TemporaryWebview(resources, ui, "My courses", (msg) => {
-            if (msg.addNewCourse) {
-                console.log("Adding new course");
-                selectNewCourse(context);
-            }
-            if (msg.type === "courseDetails") {
-                console.log("Haetaan kurssin tiedot");
-                console.log(msg.type, msg.id);
-                displayCourseDetails(msg.id, storage, context);
-            }
-            resolve();
-        });
-        temp.setContent("index", { courses });
-    });
+export async function displaySummary({ userData, ui }: ActionContext) {
+    ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
 }
 
 /**
@@ -200,7 +182,7 @@ export async function selectCourse(orgSlug: string, { tmc, resources, ui }: Acti
         const organization = (await tmc.getOrganization(orgSlug)).unwrap();
         const data = { courses, organization };
         console.log(data);
-        let course: number = -1; // Temp fix; TypeScript can't resolve type from within Promise
+        let course: number | undefined;
         await new Promise((resolve) => {
             const temp = new TemporaryWebview(resources, ui, "Select course", (msg) => {
                 course = msg.id;
@@ -228,7 +210,7 @@ export async function selectOrganization({ resources, tmc, ui }: ActionContext) 
     const organizations = result.val.sort((org1, org2) => org1.name.localeCompare(org2.name));
     const pinned = organizations.filter((organization) => organization.pinned);
     const data = { organizations, pinned };
-    let slug: string = ""; // Temp fix; TypeScript can't resolve type from within Promise
+    let slug: string | undefined;
     await new Promise((resolve) => {
         const temp = new TemporaryWebview(resources, ui, "Select organization", (msg) => {
             slug = msg.slug;
@@ -243,13 +225,15 @@ export async function selectOrganization({ resources, tmc, ui }: ActionContext) 
 /**
  * Logs the user out, updating UI state
  */
-export function logout(visibility: VisibilityGroups, { tmc, ui, userData }: ActionContext) {
+export function logout(visibility: VisibilityGroups, { tmc, ui }: ActionContext) {
     tmc.deauthenticate();
     ui.webview.dispose();
     ui.treeDP.updateVisibility([visibility.LOGGED_IN.not]);
 }
 
 export async function selectNewCourse(actionContext: ActionContext) {
+
+    // TODO: Pass temporary webview around to improve UX
     const organizationSlug = await selectOrganization(actionContext);
     if (!organizationSlug || organizationSlug === "") {
         return;
@@ -275,5 +259,5 @@ export async function selectNewCourse(actionContext: ActionContext) {
         organization: organizationSlug,
     };
     userData.addCourse(localData);
-    console.log(userData.getCourses()); // Can remove when this data is visible somewhere
+    actionContext.ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
 }

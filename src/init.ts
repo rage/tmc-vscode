@@ -5,7 +5,7 @@ import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
-import { displaySummary, logout, selectNewCourse } from "./actions/actions";
+import { displayCourseDetails, displaySummary, logout, selectNewCourse } from "./actions/actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
@@ -44,7 +44,7 @@ export function registerUiActions(
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
         async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
     ui.treeDP.registerAction("My courses", [LOGGED_IN],
-        () => { displaySummary(storage, actionContext); }, INDEX_ACTION);
+        () => { displaySummary(actionContext); }, INDEX_ACTION);
     ui.treeDP.registerAction("Add new course", [LOGGED_IN],
         () => { selectNewCourse(actionContext); });
 
@@ -54,6 +54,12 @@ export function registerUiActions(
     ui.webview.registerHandler("setCourse", setCourse(handlerContext, COURSE_DETAILS_ACTION));
     ui.webview.registerHandler("login", handleLogin(handlerContext, ORGANIZATIONS_ACTION, INDEX_ACTION));
     ui.webview.registerHandler("downloadExercises", downloadExercises(handlerContext));
+    ui.webview.registerHandler("addCourse", () => {
+        selectNewCourse(actionContext);
+    });
+    ui.webview.registerHandler("courseDetails", (msg: {type: string, id: number}) => {
+        displayCourseDetails(msg.id, actionContext);
+    });
 }
 
 /**

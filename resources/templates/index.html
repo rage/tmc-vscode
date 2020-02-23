@@ -32,7 +32,7 @@
         const vscode = acquireVsCodeApi();
 
         function addCourse() {
-            vscode.postMessage({ addNewCourse: true });
+            vscode.postMessage({ type: "addCourse"});
         }
         function fetchCourseDetails(id) {
             vscode.postMessage({ type: "courseDetails", id: id });
