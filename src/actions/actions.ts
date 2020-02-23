@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import Storage from "../config/storage";
-import { LocalCourseData } from "../config/userdata";
+import { LocalCourseData, UserData } from "../config/userdata";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
 import { sleep } from "../utils";
@@ -38,8 +38,8 @@ export async function submitExercise(id: number, { ui, resources, tmc }: ActionC
 
     const temp =
         tempView !== undefined ?
-        tempView :
-        new TemporaryWebview(resources, ui, "TMC Server Submission", messageHandler);
+            tempView :
+            new TemporaryWebview(resources, ui, "TMC Server Submission", messageHandler);
 
     let timeWaited = 0;
     let getStatus = true;
@@ -66,15 +66,15 @@ export async function submitExercise(id: number, { ui, resources, tmc }: ActionC
         if (timeWaited === 120000) {
             vscode.window.showInformationMessage(`This seems to be taking a long time — consider continuing to the next exercise while this is running. \
             Your submission will still be graded. Check the results later at ${submitResult.val.show_submission_url}`,
-             ...["Open URL and move on...", "No, I'll wait"])
-            .then((selection) => {
-                if (selection === "Open URL and move on...") {
-                    vscode.env.openExternal(
-                        vscode.Uri.parse(submitResult.val.show_submission_url));
-                    getStatus = false;
-                    temp.dispose();
-                }
-            });
+                ...["Open URL and move on...", "No, I'll wait"])
+                .then((selection) => {
+                    if (selection === "Open URL and move on...") {
+                        vscode.env.openExternal(
+                            vscode.Uri.parse(submitResult.val.show_submission_url));
+                        getStatus = false;
+                        temp.dispose();
+                    }
+                });
         }
     }
 }
@@ -166,9 +166,26 @@ export async function displayCourseDetails(id: number, storage: Storage, { tmc, 
 /**
  * Opens the summary view
  */
-export async function displaySummary({ ui }: ActionContext) {
-    // TODO: Have something to display on summary.
-    await ui.webview.setContentFromTemplate("index");
+export async function displaySummary(storage: Storage,
+                                     { workspaceManager, userData, tmc, resources, ui }: ActionContext) {
+    const userdata = new UserData(storage);
+    const courses = userdata.getCourses();
+    const context: ActionContext = { workspaceManager, userData, tmc, resources, ui };
+    await new Promise((resolve) => {
+        const temp = new TemporaryWebview(resources, ui, "My courses", (msg) => {
+            if (msg.addNewCourse) {
+                console.log("Adding new course");
+                selectNewCourse(context);
+            }
+            if (msg.type === "courseDetails") {
+                console.log("Haetaan kurssin tiedot");
+                console.log(msg.type, msg.id);
+                displayCourseDetails(msg.id, storage, context);
+            }
+            resolve();
+        });
+        temp.setContent("index", { courses });
+    });
 }
 
 /**

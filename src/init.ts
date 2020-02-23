@@ -43,8 +43,8 @@ export function registerUiActions(
         () => { logout(visibilityGroups, actionContext); });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
         async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
-    ui.treeDP.registerAction("Summary", [LOGGED_IN],
-        () => { displaySummary(actionContext); }, INDEX_ACTION);
+    ui.treeDP.registerAction("My courses", [LOGGED_IN],
+        () => { displaySummary(storage, actionContext); }, INDEX_ACTION);
     ui.treeDP.registerAction("Add new course", [LOGGED_IN],
         () => { selectNewCourse(actionContext); });
 
