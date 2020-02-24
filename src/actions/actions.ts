@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 
-import Storage from "../config/storage";
 import { LocalCourseData, UserData } from "../config/userdata";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
@@ -83,14 +82,14 @@ export async function submitExercise(id: number, { ui, resources, tmc }: ActionC
  * Tests an exercise while keeping the user informed
  */
 export async function testExercise(id: number, actions: ActionContext) {
-    const { ui, resources, tmc } = actions;
-    const exerciseDetails = await tmc.getExerciseDetails(id);
+    const { ui, resources, tmc, workspaceManager } = actions;
+    const exerciseDetails =  workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         vscode.window.showErrorMessage(`Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`);
         console.error(exerciseDetails.val);
         return;
     }
-    const exerciseName = exerciseDetails.val.exercise_name;
+    const exerciseName = exerciseDetails.val.name;
     const temp = new TemporaryWebview(resources, ui,
         "TMC Test Results", async (msg) => {
             if (msg.setToBackground) {
