@@ -116,32 +116,53 @@ export async function testExercise(id: number, actions: ActionContext) {
     temp.setContent("test-result", data);
 }
 
+/**
+ * Prompts user to reset exercise and resets exercise if user replies to prompt correctly.
+ */
 export async function resetExercise(
     id: number, { tmc, workspaceManager }: ActionContext, statusBarItem: vscode.StatusBarItem,
 ) {
-    vscode.window.showInformationMessage("Resetting exercise...");
-    statusBarItem.text = `resetting exercise`;
-    statusBarItem.show();
-    const submitResult = await tmc.submitExercise(id);
-    if (submitResult.err) {
-        vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
-                                        ${submitResult.val.name} - ${submitResult.val.message}`);
-        console.error(submitResult.val);
+    const exerciseData = workspaceManager.getExerciseDataById(id).unwrap();
+    const options: vscode.InputBoxOptions = {
+        placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
+        prompt: `Are you sure you want to reset exercise ${exerciseData.name} ? `,
+    };
+    const reset = await vscode.window.showInputBox(options).then((value) => {
+        if (value?.toLowerCase() === "yes") {
+            return true;
+        } else {
+            return false;
+        }
+    });
 
-        statusBarItem.text = `Something went wrong`, setTimeout(() => {
-            statusBarItem.hide();
-        }, 5000);
+    if (reset) {
+        vscode.window.showInformationMessage(`Resetting exercise ${exerciseData.name}`);
+        statusBarItem.text = `Resetting exercise ${exerciseData.name}`;
         statusBarItem.show();
-        return;
-    }
-    const slug = workspaceManager.getExerciseDataById(id).unwrap().organization;
-    workspaceManager.deleteExercise(id);
-    await tmc.downloadExercise(id, slug);
+        const submitResult = await tmc.submitExercise(id);
+        if (submitResult.err) {
+            vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
+                                            ${submitResult.val.name} - ${submitResult.val.message}`);
+            console.error(submitResult.val);
 
-    statusBarItem.text = `Exercise resetted successfully`, setTimeout(() => {
-        statusBarItem.hide();
-    }, 5000);
-    statusBarItem.show();
+            statusBarItem.text = `Something went wrong while resetting exercise ${exerciseData.name}`,
+                setTimeout(() => {
+                    statusBarItem.hide();
+                }, 10000);
+            statusBarItem.show();
+            return;
+        }
+        const slug = exerciseData.organization;
+        workspaceManager.deleteExercise(id);
+        await tmc.downloadExercise(id, slug);
+
+        statusBarItem.text = `Exercise ${exerciseData.name} resetted successfully`, setTimeout(() => {
+            statusBarItem.hide();
+        }, 10000);
+        statusBarItem.show();
+    } else {
+        vscode.window.showInformationMessage(`Reset canceled for exercise ${exerciseData.name}.`);
+    }
 }
 
 /**
