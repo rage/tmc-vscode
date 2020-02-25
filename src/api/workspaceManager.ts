@@ -127,7 +127,7 @@ export default class WorkspaceManager {
             this.idToData.set(id, data);
             return new Ok(data.path);
         } else {
-            throw new Error("Invalid ID or unable to open.");
+            return new Err(new Error("Invalid ID or unable to open."));
         }
     }
 
@@ -142,7 +142,7 @@ export default class WorkspaceManager {
             data.isOpen = false;
             this.idToData.set(id, data);
         } else {
-            throw new Error("Invalid ID or unable to close.");
+            throw new Err(new Error("Invalid ID or unable to close."));
         }
     }
 

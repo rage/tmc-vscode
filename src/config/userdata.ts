@@ -30,6 +30,16 @@ export class UserData {
         this.updatePersistentData();
     }
 
+    public updateCompletedExercises(courseId: number, completedExercises: number[]) {
+        const courseData = this.courses.get(courseId);
+        if (!courseData) {
+            return;
+        }
+        courseData.completedExercises = completedExercises;
+        this.courses.set(courseId, courseData);
+        this.updatePersistentData();
+    }
+
     private updatePersistentData() {
         this.storage.updateUserData({ courses: Array.from(this.courses.values()) });
     }
@@ -41,4 +51,5 @@ export type LocalCourseData = {
     description: string;
     organization: string;
     exerciseIds: number[];
+    completedExercises: number[];
 };

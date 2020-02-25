@@ -29,38 +29,6 @@ export function downloadExercises({ ui, tmc }: HandlerContext) {
 }
 
 /**
- * Returns a handler that handles authentication with TMC server when called.
- * @param ui UI instance used for setting up the webview afterwards
- * @param storage Storage for storing authorization token on successful login
- * @param tmc TMC API instance used for downloading exercises
- * @param visibilityGroups Visibility groups for updating treeview
- * @param organizationsCallback Callback for organizations action
- * @param indexCallback Callback for index action
- */
-export function handleLogin(
-    { ui, storage, tmc, visibilityGroups }: HandlerContext,
-    organizationsCallback: string,
-    indexCallback: string,
-) {
-    return async (msg: { type: string, username: string, password: string }) => {
-        if (!msg.username || !msg.password) {
-            ui.webview.setContentFromTemplate("login", { error: "Username and password may not be empty." });
-            return;
-        }
-        const result = await tmc.authenticate(msg.username, msg.password);
-        if (result.ok) {
-            ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
-            storage.getOrganizationSlug() === undefined
-                ? ui.treeDP.triggerCallback(organizationsCallback)
-                : ui.treeDP.triggerCallback(indexCallback);
-        } else {
-            console.log("Login failed: " + result.val.message);
-            ui.webview.setContentFromTemplate("login", { error: result.val.message });
-        }
-    };
-}
-
-/**
  * Returns a handler that sets the current selected organization when called.
  * @param ui UI instance used for setting up the webview afterwards
  * @param storage Storage for updating currently selected organization
