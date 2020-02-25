@@ -9,11 +9,13 @@ export default class Resources {
     public readonly tmcExercisesFolderPath: string;
     public readonly tmcClosedExercisesFolderPath: string;
     public readonly mediaFolder: string;
+    public readonly extensionVersion: string;
 
-    constructor(cssFolder: string, htmlFolder: string, tmcDataFolder: string,
+    constructor(cssFolder: string, extensionVersion: string, htmlFolder: string, tmcDataFolder: string,
                 tmcLangsPath: string, tmcWorkspaceFolder: string, tmcWorkspaceFilePath: string,
                 tmcExercisesFolderPath: string, tmcClosedExercisesFolderPath: string, mediaFolder: string) {
         this.cssFolder = cssFolder;
+        this.extensionVersion = extensionVersion;
         this.htmlFolder = htmlFolder;
         this.tmcDataFolder = tmcDataFolder;
         this.tmcLangsPath = tmcLangsPath;
