@@ -1,9 +1,19 @@
 # Change Log
 
-All notable changes to the "tmc-vscode" extension will be documented in this file.
+## Unreleased
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+### 0.1.1 (2020-month-day)
 
-## [Unreleased]
+upcoming
 
-- Initial release
+## Releases
+
+### 0.1.0 (2020-02-27)
+
+#### New features
+
+- Selecting course(s).
+- Downloading excercise(s).
+- Testing excercise solution.
+- Submitting solution to TMC-server.
+- Resetting current active excercise.
