@@ -69,6 +69,7 @@ export function registerUiActions(
  */
 export async function firstTimeInitialization(extensionContext: vscode.ExtensionContext):
     Promise<Result<Resources, Error>> {
+    const extensionVersion = vscode.extensions.getExtension("tmc-vscode-temporary.tmc-vscode")?.packageJSON.version;
 
     const cssPath = extensionContext.asAbsolutePath("resources/styles");
     const htmlPath = extensionContext.asAbsolutePath("resources/templates");
@@ -124,6 +125,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
 
     const resources: Resources = new Resources(
         cssPath,
+        extensionVersion,
         htmlPath,
         tmcDataPath,
         tmcLangsPath,
