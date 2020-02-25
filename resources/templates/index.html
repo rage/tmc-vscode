@@ -21,7 +21,7 @@
 
         {{#each courses}}
         <div class="row org-row border-dark">
-            <div class="col-md" onclick="fetchCourseDetails('{{this.id}}')">
+            <div class="col-md" onclick="fetchCourseDetails({{this.id}})">
                 <h3>{{{this.name}}} <small class="text-muted">{{{this.organization}}}</small></h3>
             </div>
         </div>

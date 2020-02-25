@@ -168,7 +168,7 @@ export async function resetExercise(
 /**
  * Opens the course exercise list view
  */
-export async function displayCourseDetails(id: number, { tmc, ui }: ActionContext) {
+export async function displayCourseDetails(id: number, { tmc, ui, userData }: ActionContext) {
     const result = await tmc.getCourseDetails(id);
 
     if (result.err) {
@@ -176,9 +176,10 @@ export async function displayCourseDetails(id: number, { tmc, ui }: ActionContex
         return;
     }
     const details = result.val.course;
+    const organizationSlug = userData.getCourses().find((course) => course.id === id)?.organization;
     const data = {
         courseName: result.val.course.name, details,
-        organizationSlug: "", // TODO: Have a way to get slug by course id from tmc
+        organizationSlug,
     };
     await ui.webview.setContentFromTemplate("course-details", data);
 }
