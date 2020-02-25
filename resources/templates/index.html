@@ -7,7 +7,7 @@
 
 <body>
     <div class="container container-fluid">
-        <h1>My courses -- logged in as 'Username/email'</h1>
+        <h1>My courses</h1>
 
         <div class="row">
             <div class="col-md">
@@ -15,10 +15,10 @@
             </div>
         </div>
 
+        {{#if courses}}
         <div>
             <input type="button" onclick="addCourse()" class="btn-primary relative" value="Add a new course" />
         </div>
-        {{#if courses}}
         {{#each courses}}
         <div class="row org-row border-dark">
             <div class="col-md" onclick="fetchCourseDetails({{this.id}})">
@@ -29,7 +29,12 @@
         {{/each}}
         {{else}}
         <div>
-            <h4 class="org-header">Ei yhtään kurssi valittuna -- Aloita lisäämällä kurssi</h4>
+            <h4 class="org-header">
+                <div>
+                    <span>No courses selected</span>
+                    <input style="margin-left:10px" type="button" onclick="addCourse()" class="btn-primary relative" value="Add a new course" />
+                </div>
+            </h4>
         </div>
         {{/if}}
     </div>

@@ -5,12 +5,12 @@ import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
-import { displayCourseDetails, displaySummary, logout, selectNewCourse } from "./actions/actions";
+import { displayCourseDetails, displaySummary, login, logout, selectNewCourse } from "./actions/actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
-import { downloadExercises, handleLogin, setCourse, setOrganization } from "./ui/treeview/handlers";
+import { downloadExercises, setCourse, setOrganization } from "./ui/treeview/handlers";
 import { downloadFileWithProgress } from "./utils";
 
 /**
@@ -52,7 +52,10 @@ export function registerUiActions(
     const handlerContext = { tmc, storage, ui, visibilityGroups };
     ui.webview.registerHandler("setOrganization", setOrganization(handlerContext, COURSES_ACTION));
     ui.webview.registerHandler("setCourse", setCourse(handlerContext, COURSE_DETAILS_ACTION));
-    ui.webview.registerHandler("login", handleLogin(handlerContext, ORGANIZATIONS_ACTION, INDEX_ACTION));
+    ui.webview.registerHandler("login", ({ username, password }) => {
+        login(actionContext, username, password, visibilityGroups);
+    });
+    // handleLogin(handlerContext, ORGANIZATIONS_ACTION, INDEX_ACTION)
     ui.webview.registerHandler("downloadExercises", downloadExercises(handlerContext));
     ui.webview.registerHandler("addCourse", () => {
         selectNewCourse(actionContext);

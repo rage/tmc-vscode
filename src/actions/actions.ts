@@ -1,3 +1,4 @@
+import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { LocalCourseData, UserData } from "../config/userdata";
@@ -194,53 +195,127 @@ export async function displaySummary({ userData, ui }: ActionContext) {
 /**
  * Lets the user select a course
  */
-export async function selectCourse(orgSlug: string, { tmc, resources, ui }: ActionContext) {
+export async function selectCourse(orgSlug: string, { tmc, resources, ui }: ActionContext, webview?: TemporaryWebview):
+    Promise<Result<{changeOrg: boolean, course?: number}, Error>> {
     const result = await tmc.getCourses(orgSlug);
 
-    if (result.ok) {
-        console.log("Courses loaded");
-        const courses = result.val.sort((course1, course2) => course1.name.localeCompare(course2.name));
-        const organization = (await tmc.getOrganization(orgSlug)).unwrap();
-        const data = { courses, organization };
-        console.log(data);
-        let course: number | undefined;
-        await new Promise((resolve) => {
-            const temp = new TemporaryWebview(resources, ui, "Select course", (msg) => {
-                course = msg.id;
-                temp.dispose();
-                resolve();
-            });
-            temp.setContent("course", data);
-        });
-        return course;
-    } else {
-        console.log("Fetching courses failed: " + result.val.message);
+    if (result.err) {
+        return new Err(result.val);
     }
+    const courses = result.val.sort((course1, course2) => course1.name.localeCompare(course2.name));
+    const organization = (await tmc.getOrganization(orgSlug)).unwrap();
+    const data = { courses, organization };
+    let changeOrg = false;
+    let course: number | undefined;
+
+    await new Promise((resolve) => {
+        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
+        temp.setTitle("Select course");
+        temp.setMessageHandler((msg: {type: string, id: number}) => {
+            if (msg.type === "setCourse") {
+                course = msg.id;
+            } else if (msg.type === "changeOrg") {
+                changeOrg = true;
+            } else {
+                return;
+            }
+            if (!webview) {
+                temp.dispose();
+            }
+            resolve();
+        });
+        temp.setContent("course", data);
+    });
+    return new Ok({changeOrg, course});
 }
 
 /**
  * Lets the user select an organization
  */
-export async function selectOrganization({ resources, tmc, ui }: ActionContext) {
+export async function selectOrganization({ resources, tmc, ui }: ActionContext, webview?: TemporaryWebview):
+    Promise<Result<string, Error>> {
     const result = await tmc.getOrganizations();
     if (result.err) {
-        console.log("Fetching organizations failed: " + result.val.message);
-        return;
+        return new Err(result.val);
     }
-    console.log("Organizations loaded");
     const organizations = result.val.sort((org1, org2) => org1.name.localeCompare(org2.name));
     const pinned = organizations.filter((organization) => organization.pinned);
     const data = { organizations, pinned };
     let slug: string | undefined;
+
     await new Promise((resolve) => {
-        const temp = new TemporaryWebview(resources, ui, "Select organization", (msg) => {
+        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
+        temp.setTitle("Select organization");
+        temp.setMessageHandler((msg: {type: string, slug: string}) => {
+            if (msg.type !== "setOrganization") {
+                return;
+            }
             slug = msg.slug;
-            temp.dispose();
+            if (!webview) {
+                temp.dispose();
+            }
             resolve();
         });
         temp.setContent("organization", data);
     });
-    return slug;
+    if (!slug) {
+        return new Err(new Error("Couldn't get organization"));
+    }
+    return new Ok(slug);
+}
+
+export async function selectOrganizationAndCourse(actionContext: ActionContext):
+    Promise<Result<{organization: string, course: number}, Error>> {
+
+    const tempView = new TemporaryWebview(actionContext.resources, actionContext.ui, "", () => {});
+
+    let organizationSlug: string | undefined;
+    let courseID: number | undefined;
+
+    while (!(organizationSlug && courseID)) {
+        const orgResult = await selectOrganization(actionContext, tempView);
+        if (orgResult.err) {
+            tempView.dispose();
+            return new Err(orgResult.val);
+        }
+        organizationSlug = orgResult.val;
+        const courseResult = await selectCourse(organizationSlug, actionContext, tempView);
+        if (courseResult.err) {
+            tempView.dispose();
+            return new Err(courseResult.val);
+        }
+        if (courseResult.val.changeOrg) {
+            continue;
+        }
+        courseID = courseResult.val.course;
+    }
+
+    tempView.dispose();
+    return new Ok({organization: organizationSlug, course: courseID});
+}
+
+/**
+ * Authenticates and logs the user in of credentials are correct.
+ */
+export async function login(
+    actionContext: ActionContext,
+    username: string,
+    password: string,
+    visibilityGroups: VisibilityGroups,
+) {
+    const { tmc, ui } = actionContext;
+    if (!username || !password) {
+        ui.webview.setContentFromTemplate("login", { error: "Username and password may not be empty." }, true);
+        return;
+    }
+    const result = await tmc.authenticate(username, password);
+    if (result.ok) {
+        ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
+        displaySummary(actionContext);
+    } else {
+        console.log("Login failed: " + result.val.message);
+        ui.webview.setContentFromTemplate("login", { error: result.val.message }, true);
+    }
 }
 
 /**
@@ -254,19 +329,13 @@ export function logout(visibility: VisibilityGroups, { tmc, ui }: ActionContext)
 
 export async function selectNewCourse(actionContext: ActionContext) {
 
-    // TODO: Pass temporary webview around to improve UX
-    const organizationSlug = await selectOrganization(actionContext);
-    if (!organizationSlug || organizationSlug === "") {
-        return;
-    }
-
-    const courseID = await selectCourse(organizationSlug, actionContext);
-    if (!courseID || courseID === -1) {
+    const orgAndCourse = await selectOrganizationAndCourse(actionContext);
+    if (orgAndCourse.err) {
         return;
     }
 
     const { tmc, userData } = actionContext;
-    const courseDetailsResult = await tmc.getCourseDetails(courseID);
+    const courseDetailsResult = await tmc.getCourseDetails(orgAndCourse.val.course);
     if (courseDetailsResult.err) {
         console.log(new Error("Fetching course data failed"));
         return;
@@ -278,7 +347,7 @@ export async function selectNewCourse(actionContext: ActionContext) {
         exerciseIds: courseDetails.exercises.map((e) => e.id), // Only IDs?
         id: courseDetails.id,
         name: courseDetails.name,
-        organization: organizationSlug,
+        organization: orgAndCourse.val.organization,
     };
     userData.addCourse(localData);
     actionContext.ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
