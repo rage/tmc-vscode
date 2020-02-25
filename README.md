@@ -14,8 +14,9 @@ Next click "Log in" that shows up.
 
 ![Log in](/media/README_click_Login.png)
 
-1) Add new course.
-2) Download excercise.
+Now you can add courses to "My courses" list.
+
+By clicking the course, you can select the excercises you want to download.
 
 Next click the explorer icon on the left side bar.
 
