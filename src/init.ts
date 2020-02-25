@@ -53,7 +53,7 @@ export function registerUiActions(
     ui.webview.registerHandler("setOrganization", setOrganization(handlerContext, COURSES_ACTION));
     ui.webview.registerHandler("setCourse", setCourse(handlerContext, COURSE_DETAILS_ACTION));
     ui.webview.registerHandler("login", ({ username, password }) => {
-        login(actionContext, username, password, visibilityGroups, INDEX_ACTION);
+        login(actionContext, username, password, visibilityGroups);
     });
     // handleLogin(handlerContext, ORGANIZATIONS_ACTION, INDEX_ACTION)
     ui.webview.registerHandler("downloadExercises", downloadExercises(handlerContext));

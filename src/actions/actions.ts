@@ -298,23 +298,23 @@ export async function selectOrganizationAndCourse(actionContext: ActionContext):
  * Authenticates and logs the user in of credentials are correct.
  */
 export async function login(
-    { ui, tmc }: ActionContext,
+    actionContext: ActionContext,
     username: string,
     password: string,
     visibilityGroups: VisibilityGroups,
-    indexCallback: string,
 ) {
+    const { tmc, ui } = actionContext;
     if (!username || !password) {
-        ui.webview.setContentFromTemplate("login", { error: "Username and password may not be empty." });
+        ui.webview.setContentFromTemplate("login", { error: "Username and password may not be empty." }, true);
         return;
     }
     const result = await tmc.authenticate(username, password);
     if (result.ok) {
         ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
-        ui.treeDP.triggerCallback(indexCallback);
+        displaySummary(actionContext);
     } else {
         console.log("Login failed: " + result.val.message);
-        ui.webview.setContentFromTemplate("login", { error: result.val.message });
+        ui.webview.setContentFromTemplate("login", { error: result.val.message }, true);
     }
 }
 
