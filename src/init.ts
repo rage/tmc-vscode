@@ -5,11 +5,12 @@ import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
-import { displayCourseDetails, displayCourses, displayOrganizations, displaySummary, logout } from "./actions/actions";
+import { displayCourseDetails, displaySummary, login, logout, selectNewCourse } from "./actions/actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
-import { downloadExercises, handleLogin, setCourse, setOrganization } from "./ui/treeview/handlers";
+import { UserData } from "./config/userdata";
+import { downloadExercises, setCourse, setOrganization } from "./ui/treeview/handlers";
 import { downloadFileWithProgress } from "./utils";
 
 /**
@@ -19,7 +20,7 @@ import { downloadFileWithProgress } from "./utils";
  * @param tmc The TMC API object
  */
 export function registerUiActions(
-    ui: UI, storage: Storage, tmc: TMC, workspaceManager: WorkspaceManager, resources: Resources,
+    ui: UI, storage: Storage, tmc: TMC, workspaceManager: WorkspaceManager, resources: Resources, userData: UserData,
 ) {
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const ORGANIZATION_CHOSEN = ui.treeDP.createVisibilityGroup(storage.getOrganizationSlug() !== undefined);
@@ -37,27 +38,31 @@ export function registerUiActions(
     const COURSE_DETAILS_ACTION = "courseDetails";
 
     // Register UI actions
-    const actionContext = { tmc, workspaceManager, ui, resources };
+    const actionContext = { tmc, workspaceManager, ui, resources, userData };
     ui.treeDP.registerAction("Log out", [LOGGED_IN],
         () => { logout(visibilityGroups, actionContext); });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
         async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
-    ui.treeDP.registerAction("Summary", [LOGGED_IN],
+    ui.treeDP.registerAction("My courses", [LOGGED_IN],
         () => { displaySummary(actionContext); }, INDEX_ACTION);
-    ui.treeDP.registerAction("Organization", [LOGGED_IN],
-        () => { displayOrganizations(actionContext); }, ORGANIZATIONS_ACTION);
-    ui.treeDP.registerAction("Courses", [LOGGED_IN, ORGANIZATION_CHOSEN],
-        () => { displayCourses(storage, actionContext); }, COURSES_ACTION);
-    ui.treeDP.registerAction("Course details", [LOGGED_IN, ORGANIZATION_CHOSEN, COURSE_CHOSEN],
-        () => { displayCourseDetails(storage.getCourseId() as number,
-               storage, actionContext); }, COURSE_DETAILS_ACTION);
+    ui.treeDP.registerAction("Add new course", [LOGGED_IN],
+        () => { selectNewCourse(actionContext); });
 
     // Register webview handlers
     const handlerContext = { tmc, storage, ui, visibilityGroups };
     ui.webview.registerHandler("setOrganization", setOrganization(handlerContext, COURSES_ACTION));
     ui.webview.registerHandler("setCourse", setCourse(handlerContext, COURSE_DETAILS_ACTION));
-    ui.webview.registerHandler("login", handleLogin(handlerContext, ORGANIZATIONS_ACTION, INDEX_ACTION));
+    ui.webview.registerHandler("login", ({ username, password }) => {
+        login(actionContext, username, password, visibilityGroups);
+    });
+    // handleLogin(handlerContext, ORGANIZATIONS_ACTION, INDEX_ACTION)
     ui.webview.registerHandler("downloadExercises", downloadExercises(handlerContext));
+    ui.webview.registerHandler("addCourse", () => {
+        selectNewCourse(actionContext);
+    });
+    ui.webview.registerHandler("courseDetails", (msg: {type: string, id: number}) => {
+        displayCourseDetails(msg.id, actionContext);
+    });
 }
 
 /**
@@ -67,6 +72,7 @@ export function registerUiActions(
  */
 export async function firstTimeInitialization(extensionContext: vscode.ExtensionContext):
     Promise<Result<Resources, Error>> {
+    const extensionVersion = vscode.extensions.getExtension("tmc-vscode-temporary.tmc-vscode")?.packageJSON.version;
 
     const cssPath = extensionContext.asAbsolutePath("resources/styles");
     const htmlPath = extensionContext.asAbsolutePath("resources/templates");
@@ -122,6 +128,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
 
     const resources: Resources = new Resources(
         cssPath,
+        extensionVersion,
         htmlPath,
         tmcDataPath,
         tmcLangsPath,

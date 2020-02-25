@@ -2,6 +2,8 @@ import * as oauth2 from "client-oauth2";
 import * as vscode from "vscode";
 import { LocalExerciseData } from "../api/types";
 
+import { LocalCourseData } from "./userdata";
+
 /**
  * Interface class for accessing stored TMC configuration and data.
  */
@@ -43,6 +45,10 @@ export default class Storage {
 
     public getExerciseData(): LocalExerciseData[] | undefined {
         return this.context.globalState.get("exerciseData");
+
+    }
+    public getUserData(): {courses: LocalCourseData[]} | undefined {
+        return this.context.globalState.get("userData");
     }
 
     /**
@@ -71,5 +77,9 @@ export default class Storage {
 
     public updateExerciseData(exerciseData: LocalExerciseData[] | undefined) {
         this.context.globalState.update("exerciseData", exerciseData);
+    }
+
+    public updateUserData(userData: {courses: LocalCourseData[]}) {
+        this.context.globalState.update("userData", userData);
     }
 }

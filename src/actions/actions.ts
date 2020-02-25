@@ -1,6 +1,7 @@
+import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import Storage from "../config/storage";
+import { LocalCourseData, UserData } from "../config/userdata";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
 import { sleep } from "../utils";
@@ -37,8 +38,8 @@ export async function submitExercise(id: number, { ui, resources, tmc }: ActionC
 
     const temp =
         tempView !== undefined ?
-        tempView :
-        new TemporaryWebview(resources, ui, "TMC Server Submission", messageHandler);
+            tempView :
+            new TemporaryWebview(resources, ui, "TMC Server Submission", messageHandler);
 
     let timeWaited = 0;
     let getStatus = true;
@@ -65,15 +66,15 @@ export async function submitExercise(id: number, { ui, resources, tmc }: ActionC
         if (timeWaited === 120000) {
             vscode.window.showInformationMessage(`This seems to be taking a long time — consider continuing to the next exercise while this is running. \
             Your submission will still be graded. Check the results later at ${submitResult.val.show_submission_url}`,
-             ...["Open URL and move on...", "No, I'll wait"])
-            .then((selection) => {
-                if (selection === "Open URL and move on...") {
-                    vscode.env.openExternal(
-                        vscode.Uri.parse(submitResult.val.show_submission_url));
-                    getStatus = false;
-                    temp.dispose();
-                }
-            });
+                ...["Open URL and move on...", "No, I'll wait"])
+                .then((selection) => {
+                    if (selection === "Open URL and move on...") {
+                        vscode.env.openExternal(
+                            vscode.Uri.parse(submitResult.val.show_submission_url));
+                        getStatus = false;
+                        temp.dispose();
+                    }
+                });
         }
     }
 }
@@ -82,14 +83,14 @@ export async function submitExercise(id: number, { ui, resources, tmc }: ActionC
  * Tests an exercise while keeping the user informed
  */
 export async function testExercise(id: number, actions: ActionContext) {
-    const { ui, resources, tmc } = actions;
-    const exerciseDetails = await tmc.getExerciseDetails(id);
+    const { ui, resources, tmc, workspaceManager } = actions;
+    const exerciseDetails =  workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         vscode.window.showErrorMessage(`Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`);
         console.error(exerciseDetails.val);
         return;
     }
-    const exerciseName = exerciseDetails.val.exercise_name;
+    const exerciseName = exerciseDetails.val.name;
     const temp = new TemporaryWebview(resources, ui,
         "TMC Test Results", async (msg) => {
             if (msg.setToBackground) {
@@ -116,61 +117,59 @@ export async function testExercise(id: number, actions: ActionContext) {
     temp.setContent("test-result", data);
 }
 
+/**
+ * Prompts user to reset exercise and resets exercise if user replies to prompt correctly.
+ */
 export async function resetExercise(
     id: number, { tmc, workspaceManager }: ActionContext, statusBarItem: vscode.StatusBarItem,
 ) {
-    vscode.window.showInformationMessage("Resetting exercise...");
-    statusBarItem.text = `resetting exercise`;
-    statusBarItem.show();
-    const submitResult = await tmc.submitExercise(id);
-    if (submitResult.err) {
-        vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
-                                        ${submitResult.val.name} - ${submitResult.val.message}`);
-        console.error(submitResult.val);
+    const exerciseData = workspaceManager.getExerciseDataById(id).unwrap();
+    const options: vscode.InputBoxOptions = {
+        placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
+        prompt: `Are you sure you want to reset exercise ${exerciseData.name} ? `,
+    };
+    const reset = await vscode.window.showInputBox(options).then((value) => {
+        if (value?.toLowerCase() === "yes") {
+            return true;
+        } else {
+            return false;
+        }
+    });
 
-        statusBarItem.text = `Something went wrong`, setTimeout(() => {
-            statusBarItem.hide();
-        }, 5000);
+    if (reset) {
+        vscode.window.showInformationMessage(`Resetting exercise ${exerciseData.name}`);
+        statusBarItem.text = `Resetting exercise ${exerciseData.name}`;
         statusBarItem.show();
-        return;
-    }
-    const slug = workspaceManager.getExerciseDataById(id).unwrap().organization;
-    workspaceManager.deleteExercise(id);
-    await tmc.downloadExercise(id, slug);
+        const submitResult = await tmc.submitExercise(id);
+        if (submitResult.err) {
+            vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
+                                            ${submitResult.val.name} - ${submitResult.val.message}`);
+            console.error(submitResult.val);
 
-    statusBarItem.text = `Exercise resetted successfully`, setTimeout(() => {
-        statusBarItem.hide();
-    }, 5000);
-    statusBarItem.show();
-}
+            statusBarItem.text = `Something went wrong while resetting exercise ${exerciseData.name}`,
+                setTimeout(() => {
+                    statusBarItem.hide();
+                }, 10000);
+            statusBarItem.show();
+            return;
+        }
+        const slug = exerciseData.organization;
+        workspaceManager.deleteExercise(id);
+        await tmc.downloadExercise(id, slug);
 
-/**
- * Opens the organization course list view
- */
-export async function displayCourses(storage: Storage, { tmc, ui }: ActionContext) {
-    const result = await tmc.getCourses();
-    const slug = storage.getOrganizationSlug();
-
-    if (slug === undefined) {
-        return;
-    }
-    const resultOrg = await tmc.getOrganization(slug);
-
-    if (result.ok) {
-        console.log("Courses loaded");
-        const courses = result.val.sort((course1, course2) => course1.name.localeCompare(course2.name));
-        const organization = resultOrg.val;
-        const data = { courses, organization };
-        await ui.webview.setContentFromTemplate("course", data);
+        statusBarItem.text = `Exercise ${exerciseData.name} resetted successfully`, setTimeout(() => {
+            statusBarItem.hide();
+        }, 10000);
+        statusBarItem.show();
     } else {
-        console.log("Fetching courses failed: " + result.val.message);
+        vscode.window.showInformationMessage(`Reset canceled for exercise ${exerciseData.name}.`);
     }
 }
 
 /**
  * Opens the course exercise list view
  */
-export async function displayCourseDetails(id: number, storage: Storage, { tmc, ui }: ActionContext) {
+export async function displayCourseDetails(id: number, { tmc, ui, userData }: ActionContext) {
     const result = await tmc.getCourseDetails(id);
 
     if (result.err) {
@@ -178,9 +177,10 @@ export async function displayCourseDetails(id: number, storage: Storage, { tmc, 
         return;
     }
     const details = result.val.course;
+    const organizationSlug = userData.getCourses().find((course) => course.id === id)?.organization;
     const data = {
         courseName: result.val.course.name, details,
-        organizationSlug: storage.getOrganizationSlug(),
+        organizationSlug,
     };
     await ui.webview.setContentFromTemplate("course-details", data);
 }
@@ -188,25 +188,134 @@ export async function displayCourseDetails(id: number, storage: Storage, { tmc, 
 /**
  * Opens the summary view
  */
-export async function displaySummary({ ui }: ActionContext) {
-    // TODO: Have something to display on summary.
-    await ui.webview.setContentFromTemplate("index");
+export async function displaySummary({ userData, ui }: ActionContext) {
+    ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
 }
 
 /**
- * Opens the organization list view
+ * Lets the user select a course
  */
-export async function displayOrganizations({ tmc, ui }: ActionContext) {
+export async function selectCourse(orgSlug: string, { tmc, resources, ui }: ActionContext, webview?: TemporaryWebview):
+    Promise<Result<{changeOrg: boolean, course?: number}, Error>> {
+    const result = await tmc.getCourses(orgSlug);
+
+    if (result.err) {
+        return new Err(result.val);
+    }
+    const courses = result.val.sort((course1, course2) => course1.name.localeCompare(course2.name));
+    const organization = (await tmc.getOrganization(orgSlug)).unwrap();
+    const data = { courses, organization };
+    let changeOrg = false;
+    let course: number | undefined;
+
+    await new Promise((resolve) => {
+        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
+        temp.setTitle("Select course");
+        temp.setMessageHandler((msg: {type: string, id: number}) => {
+            if (msg.type === "setCourse") {
+                course = msg.id;
+            } else if (msg.type === "changeOrg") {
+                changeOrg = true;
+            } else {
+                return;
+            }
+            if (!webview) {
+                temp.dispose();
+            }
+            resolve();
+        });
+        temp.setContent("course", data);
+    });
+    return new Ok({changeOrg, course});
+}
+
+/**
+ * Lets the user select an organization
+ */
+export async function selectOrganization({ resources, tmc, ui }: ActionContext, webview?: TemporaryWebview):
+    Promise<Result<string, Error>> {
     const result = await tmc.getOrganizations();
     if (result.err) {
-        console.log("Fetching organizations failed: " + result.val.message);
-        return;
+        return new Err(result.val);
     }
-    console.log("Organizations loaded");
     const organizations = result.val.sort((org1, org2) => org1.name.localeCompare(org2.name));
     const pinned = organizations.filter((organization) => organization.pinned);
     const data = { organizations, pinned };
-    await ui.webview.setContentFromTemplate("organization", data);
+    let slug: string | undefined;
+
+    await new Promise((resolve) => {
+        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
+        temp.setTitle("Select organization");
+        temp.setMessageHandler((msg: {type: string, slug: string}) => {
+            if (msg.type !== "setOrganization") {
+                return;
+            }
+            slug = msg.slug;
+            if (!webview) {
+                temp.dispose();
+            }
+            resolve();
+        });
+        temp.setContent("organization", data);
+    });
+    if (!slug) {
+        return new Err(new Error("Couldn't get organization"));
+    }
+    return new Ok(slug);
+}
+
+export async function selectOrganizationAndCourse(actionContext: ActionContext):
+    Promise<Result<{organization: string, course: number}, Error>> {
+
+    const tempView = new TemporaryWebview(actionContext.resources, actionContext.ui, "", () => {});
+
+    let organizationSlug: string | undefined;
+    let courseID: number | undefined;
+
+    while (!(organizationSlug && courseID)) {
+        const orgResult = await selectOrganization(actionContext, tempView);
+        if (orgResult.err) {
+            tempView.dispose();
+            return new Err(orgResult.val);
+        }
+        organizationSlug = orgResult.val;
+        const courseResult = await selectCourse(organizationSlug, actionContext, tempView);
+        if (courseResult.err) {
+            tempView.dispose();
+            return new Err(courseResult.val);
+        }
+        if (courseResult.val.changeOrg) {
+            continue;
+        }
+        courseID = courseResult.val.course;
+    }
+
+    tempView.dispose();
+    return new Ok({organization: organizationSlug, course: courseID});
+}
+
+/**
+ * Authenticates and logs the user in of credentials are correct.
+ */
+export async function login(
+    actionContext: ActionContext,
+    username: string,
+    password: string,
+    visibilityGroups: VisibilityGroups,
+) {
+    const { tmc, ui } = actionContext;
+    if (!username || !password) {
+        ui.webview.setContentFromTemplate("login", { error: "Username and password may not be empty." }, true);
+        return;
+    }
+    const result = await tmc.authenticate(username, password);
+    if (result.ok) {
+        ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
+        displaySummary(actionContext);
+    } else {
+        console.log("Login failed: " + result.val.message);
+        ui.webview.setContentFromTemplate("login", { error: result.val.message }, true);
+    }
 }
 
 /**
@@ -216,4 +325,30 @@ export function logout(visibility: VisibilityGroups, { tmc, ui }: ActionContext)
     tmc.deauthenticate();
     ui.webview.dispose();
     ui.treeDP.updateVisibility([visibility.LOGGED_IN.not]);
+}
+
+export async function selectNewCourse(actionContext: ActionContext) {
+
+    const orgAndCourse = await selectOrganizationAndCourse(actionContext);
+    if (orgAndCourse.err) {
+        return;
+    }
+
+    const { tmc, userData } = actionContext;
+    const courseDetailsResult = await tmc.getCourseDetails(orgAndCourse.val.course);
+    if (courseDetailsResult.err) {
+        console.log(new Error("Fetching course data failed"));
+        return;
+    }
+
+    const courseDetails = courseDetailsResult.val.course;
+    const localData: LocalCourseData = {
+        description: courseDetails.description,
+        exerciseIds: courseDetails.exercises.map((e) => e.id), // Only IDs?
+        id: courseDetails.id,
+        name: courseDetails.name,
+        organization: orgAndCourse.val.organization,
+    };
+    userData.addCourse(localData);
+    actionContext.ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
 }

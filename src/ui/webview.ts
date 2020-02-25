@@ -46,9 +46,11 @@ export default class TmcWebview {
      * @param templateName A string containing the name of one of the templates
      * @param data Any data to be passed to the template
      */
-    public async setContentFromTemplate(templateName: string, data?: any) {
+    public async setContentFromTemplate(templateName: string, data?: any, forceUpdate: boolean = false) {
         const panel = this.getPanel();
-        panel.webview.html = await this.templateEngine.getTemplate(panel.webview, templateName, data);
+        const html = await this.templateEngine.getTemplate(panel.webview, templateName, data);
+        if (forceUpdate) { panel.webview.html = html + " "; }
+        panel.webview.html = html;
         panel.reveal();
     }
 
