@@ -38,6 +38,7 @@ export class UserData {
 export type LocalCourseData = {
     id: number;
     name: string;
+    description: string;
     organization: string;
     exerciseIds: number[];
 };

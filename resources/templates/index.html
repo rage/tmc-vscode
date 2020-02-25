@@ -7,7 +7,7 @@
 
 <body>
     <div class="container container-fluid">
-        <h1>My courses</h1>
+        <h1>My courses -- logged in as 'Username/email'</h1>
 
         <div class="row">
             <div class="col-md">
@@ -18,21 +18,27 @@
         <div>
             <input type="button" onclick="addCourse()" class="btn-primary relative" value="Add a new course" />
         </div>
-
+        {{#if courses}}
         {{#each courses}}
         <div class="row org-row border-dark">
             <div class="col-md" onclick="fetchCourseDetails('{{this.id}}')">
                 <h3>{{{this.name}}} <small class="text-muted">{{{this.organization}}}</small></h3>
+                <p>{{{this.description}}}</p>
             </div>
         </div>
         {{/each}}
+        {{else}}
+        <div>
+            <h4 class="org-header">Ei yhtään kurssi valittuna -- Aloita lisäämällä kurssi</h4>
+        </div>
+        {{/if}}
     </div>
 
     <script>
         const vscode = acquireVsCodeApi();
 
         function addCourse() {
-            vscode.postMessage({ type: "addCourse"});
+            vscode.postMessage({ type: "addCourse" });
         }
         function fetchCourseDetails(id) {
             vscode.postMessage({ type: "courseDetails", id: id });

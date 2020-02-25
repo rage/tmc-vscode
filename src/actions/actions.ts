@@ -273,6 +273,7 @@ export async function selectNewCourse(actionContext: ActionContext) {
 
     const courseDetails = courseDetailsResult.val.course;
     const localData: LocalCourseData = {
+        description: courseDetails.description,
         exerciseIds: courseDetails.exercises.map((e) => e.id), // Only IDs?
         id: courseDetails.id,
         name: courseDetails.name,
