@@ -5,8 +5,12 @@ import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
+<<<<<<< HEAD
 import { closeCompletedExercises, closeExercises, displayCourseDetails, displaySummary, login, logout,
          openExercises, openUncompletedExercises, selectNewCourse } from "./actions/actions";
+=======
+import { displayCourseDetails, displaySummary, login, logout, selectNewCourse } from "./actions/actions";
+>>>>>>> d50b5c865b3aaddb13a25f6fb7592b47eab1622a
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
