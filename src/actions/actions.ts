@@ -295,6 +295,30 @@ export async function selectOrganizationAndCourse(actionContext: ActionContext):
 }
 
 /**
+ * Authenticates and logs the user in of credentials are correct.
+ */
+export async function login(
+    { ui, tmc }: ActionContext,
+    username: string,
+    password: string,
+    visibilityGroups: VisibilityGroups,
+    indexCallback: string,
+) {
+    if (!username || !password) {
+        ui.webview.setContentFromTemplate("login", { error: "Username and password may not be empty." });
+        return;
+    }
+    const result = await tmc.authenticate(username, password);
+    if (result.ok) {
+        ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
+        ui.treeDP.triggerCallback(indexCallback);
+    } else {
+        console.log("Login failed: " + result.val.message);
+        ui.webview.setContentFromTemplate("login", { error: result.val.message });
+    }
+}
+
+/**
  * Logs the user out, updating UI state
  */
 export function logout(visibility: VisibilityGroups, { tmc, ui }: ActionContext) {
