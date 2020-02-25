@@ -1,16 +1,54 @@
 <html>
-    <head>
-        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
-        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
-    </head>
 
-    <body>
-        <div class="container container-fluid">
-            <h1>Generic index page</h1>
+<head>
+    <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+    <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+</head>
 
-            <p>Here we could have information about logged in user, selected organization, selected course</p>
-            <p>Perhaps if possible, some indication how much of the course is completed or which exercises are passed on the TMC server</p>
-            <p>We'll have to think about this...</p>
+<body>
+    <div class="container container-fluid">
+        <h1>My courses</h1>
+
+        <div class="row">
+            <div class="col-md">
+                <h4>Here are listed all the courses you have enrolled to.</h4>
+            </div>
         </div>
-    </body>
+
+        {{#if courses}}
+        <div>
+            <input type="button" onclick="addCourse()" class="btn-primary relative" value="Add a new course" />
+        </div>
+        {{#each courses}}
+        <div class="row org-row border-dark">
+            <div class="col-md" onclick="fetchCourseDetails({{this.id}})">
+                <h3>{{{this.name}}} <small class="text-muted">{{{this.organization}}}</small></h3>
+                <p>{{{this.description}}}</p>
+            </div>
+        </div>
+        {{/each}}
+        {{else}}
+        <div>
+            <h4 class="org-header">
+                <div>
+                    <span>No courses selected</span>
+                    <input style="margin-left:10px" type="button" onclick="addCourse()" class="btn-primary relative" value="Add a new course" />
+                </div>
+            </h4>
+        </div>
+        {{/if}}
+    </div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+
+        function addCourse() {
+            vscode.postMessage({ type: "addCourse" });
+        }
+        function fetchCourseDetails(id) {
+            vscode.postMessage({ type: "courseDetails", id: id });
+        }
+    </script>
+</body>
+
 </html>

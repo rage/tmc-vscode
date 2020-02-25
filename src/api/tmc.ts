@@ -31,6 +31,7 @@ export default class TMC {
     private readonly dataPath: string;
     private readonly tmcLangsPath: string;
     private readonly tmcApiUrl: string;
+    private readonly tmcDefaultHeaders: { client: string, client_version: string };
     private readonly workspaceManager: WorkspaceManager;
 
     private readonly cache: Map<string, TMCApiResponse>;
@@ -54,6 +55,7 @@ export default class TMC {
         this.tmcApiUrl = "https://tmc.mooc.fi/api/v8/";
         this.cache = new Map();
         this.workspaceManager = exerciseManager;
+        this.tmcDefaultHeaders = { client: "vscode_plugin", client_version: resources.extensionVersion };
     }
 
     /**
@@ -116,12 +118,10 @@ export default class TMC {
      * Requires an organization to be selected
      * @returns a list of courses belonging to the currently selected organization
      */
-    public getCourses(cache?: boolean): Promise<Result<Course[], Error>> {
-        const orgSlug = this.storage.getOrganizationSlug();
-        if (!orgSlug) {
-            throw new Error("Organization not selected");
-        }
-        return this.checkApiResponse(this.tmcApiRequest(`core/org/${orgSlug}/courses`, cache), createIs<Course[]>());
+    public getCourses(organization: string, cache?: boolean): Promise<Result<Course[], Error>> {
+        return this.checkApiResponse(
+            this.tmcApiRequest(`core/org/${organization}/courses`, cache), createIs<Course[]>(),
+        );
     }
 
     /**
@@ -149,20 +149,6 @@ export default class TMC {
             throw new Error("User not logged in!");
         }
         return this.checkApiResponse(this.tmcApiRequest(submissionUrl, false), createIs<SubmissionStatusReport>());
-        /*
-        const request = this.token.sign({ url: submissionUrl, headers: {} });
-        const response = await fetch.default(request.url, request);
-        if (response.ok) {
-            const responseObject = await response.json();
-            if (is<SubmissionStatusReport>(responseObject)) {
-                return new Ok(responseObject);
-            }
-            console.error(responseObject);
-            return new Err(new ApiError("Unexpected response type"));
-        } else {
-            return new Err(new ApiError(response.statusText));
-        }
-        */
     }
 
     /**
@@ -172,7 +158,7 @@ export default class TMC {
      */
     public async downloadExercise(id: number, organizationSlug: string): Promise<Result<string, Error>> {
         const result = await downloadFile(`${this.tmcApiUrl}core/exercises/${id}/download`,
-            `${this.dataPath}/${id}.zip`);
+            `${this.dataPath}/${id}.zip`, undefined, this.tmcDefaultHeaders);
         if (result.err) {
             return new Err(result.val);
         }
@@ -370,6 +356,8 @@ export default class TMC {
             method: method ? method : "get",
             url: endpoint.startsWith("https://") ? endpoint : this.tmcApiUrl + endpoint,
         };
+
+        Object.assign(request.headers, this.tmcDefaultHeaders);
 
         if (this.token) {
             request = this.token.sign(request);
