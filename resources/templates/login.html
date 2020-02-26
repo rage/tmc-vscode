@@ -1,27 +1,43 @@
 <html>
     <head>
+        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
         <link rel="stylesheet" type="text/css" href="{{cssPath}}">
-    </head>
-    <body>
-        <h1>Login</h1>
-        <p class="error">{{error}}</p>
-        <form id="loginform">
-        Email or username:<br>
-        <input type="text" id="username"><br>
-        Password:<br>
-        <input type="password" id="password"><br>
-        <input type="submit" id="submit">
+
         <script>
             const vscode = acquireVsCodeApi();
-            const form = document.getElementById("loginform");
-            const usernameField = document.getElementById("username");
-            const passwordField = document.getElementById("password");
-            const submitButton = document.getElementById("submit");
-            form.onsubmit = () => {
+            function onSubmit() {
+                const form = document.getElementById("loginform");
+                const usernameField = document.getElementById("username");
+                const passwordField = document.getElementById("password");
+                const submitButton = document.getElementById("submit");
                 submitButton.disabled = true;
                 vscode.postMessage({type: "login", username: usernameField.value, password: passwordField.value});
             }
+
+            setTimeout(() => {
+                document.getElementById("error").style.display = "none";
+            }, 7500);
         </script>
-        </form>
+    </head>
+    <body>
+        <div class="container fluid">
+            <div class="row">
+                <div class="col-md-6">
+                    <h1>Login</h1>
+
+                    <div id="error">{{{error}}}</div>
+
+                    <form id="loginform" onsubmit="onSubmit()">
+                        <div class="form-group">
+                            <label for="username">Email or username:</label>
+                            <input type="text" class="form-control" id="username"><br>
+                            <label for="password">Password:</label>
+                            <input type="password" class="form-control" id="password"><br>
+                        </div>
+                        <input type="submit" class="btn btn-primary" id="submit">
+                    </form>
+                </div>
+            </div>
+        </div>
     </body>
 </html>

@@ -303,9 +303,12 @@ export async function login(
     password: string,
     visibilityGroups: VisibilityGroups,
 ) {
+    const wrapError = (error: string) => `<div class="alert alert-danger fade show" role="alert">${error}</div>`;
+
     const { tmc, ui } = actionContext;
     if (!username || !password) {
-        ui.webview.setContentFromTemplate("login", { error: "Username and password may not be empty." }, true);
+        ui.webview.setContentFromTemplate("login",
+            { error: wrapError("Username and password may not be empty.") }, true);
         return;
     }
     const result = await tmc.authenticate(username, password);
@@ -314,7 +317,7 @@ export async function login(
         displaySummary(actionContext);
     } else {
         console.log("Login failed: " + result.val.message);
-        ui.webview.setContentFromTemplate("login", { error: result.val.message }, true);
+        ui.webview.setContentFromTemplate("login", { error: wrapError(result.val.message) }, true);
     }
 }
 
