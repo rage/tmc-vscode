@@ -98,7 +98,11 @@
         }
         document.getElementById("feedback").style.display = "none";
         document.getElementById("feedbacknoti").classList = "my-5 alert alert-success";
-        document.getElementById("feedbacknoti").innerText = "Feedback sent! Thank you.";
+        if (feedback.length > 0) {
+            document.getElementById("feedbacknoti").innerText = "Feedback sent! Thank you.";
+        } else {
+            document.getElementById("feedbacknoti").innerText = "No feedback given.";
+        }
         vscode.postMessage({ feedback: { status: feedback }, url: feedback_url });
     }
 
