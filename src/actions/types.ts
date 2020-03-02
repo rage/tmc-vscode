@@ -1,3 +1,4 @@
+import { StatusBarItem } from "vscode";
 import TMC from "../api/tmc";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
@@ -10,4 +11,5 @@ export type ActionContext = {
     resources: Resources;
     workspaceManager: WorkspaceManager;
     userData: UserData;
+    statusBar: StatusBarItem;
 };

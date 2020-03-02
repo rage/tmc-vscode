@@ -20,7 +20,8 @@ import { downloadFileWithProgress } from "./utils";
  * @param tmc The TMC API object
  */
 export function registerUiActions(
-    ui: UI, storage: Storage, tmc: TMC, workspaceManager: WorkspaceManager, resources: Resources, userData: UserData,
+    ui: UI, storage: Storage, tmc: TMC, workspaceManager: WorkspaceManager, resources: Resources,
+    userData: UserData, statusBar: vscode.StatusBarItem,
 ) {
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const ORGANIZATION_CHOSEN = ui.treeDP.createVisibilityGroup(storage.getOrganizationSlug() !== undefined);
@@ -38,7 +39,7 @@ export function registerUiActions(
     const COURSE_DETAILS_ACTION = "courseDetails";
 
     // Register UI actions
-    const actionContext = { tmc, workspaceManager, ui, resources, userData };
+    const actionContext = { tmc, workspaceManager, ui, resources, userData, statusBar };
     ui.treeDP.registerAction("Log out", [LOGGED_IN],
         () => { logout(visibilityGroups, actionContext); });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
