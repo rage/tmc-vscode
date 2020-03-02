@@ -23,7 +23,7 @@ export async function submitExercise(id: number, { ui, resources, tmc, statusBar
     const messageHandler = async (msg: any) => {
         if (msg.feedback && msg.feedback.status.length > 0) {
             console.log(await tmc.submitSubmissionFeedback(msg.url, msg.feedback));
-        } else if (msg.setToBackground) {
+        } else if (msg.runInBackground) {
             setStatusBar(statusBar, "Waiting for results from server.");
             temp.dispose();
         } else if (msg.showInBrowser) {
