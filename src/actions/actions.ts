@@ -10,8 +10,7 @@ import { ActionContext } from "./types";
 /**
  * Submits an exercise while keeping the user informed
  */
-export async function submitExercise(id: number, { ui, resources, tmc }: ActionContext,
-                                     tempView?: TemporaryWebview) {
+export async function submitExercise(id: number, { ui, resources, tmc }: ActionContext, tempView?: TemporaryWebview) {
     const submitResult = await tmc.submitExercise(id);
     if (submitResult.err) {
         vscode.window.showErrorMessage(`Exercise submission failed: \
@@ -119,8 +118,7 @@ export async function testExercise(id: number, actions: ActionContext) {
 /**
  * Prompts user to reset exercise and resets exercise if user replies to prompt correctly.
  */
-export async function resetExercise(
-    id: number, { ui, tmc, workspaceManager }: ActionContext) {
+export async function resetExercise(id: number, { ui, tmc, workspaceManager }: ActionContext) {
     const exerciseData = workspaceManager.getExerciseDataById(id).unwrap();
     const options: vscode.InputBoxOptions = {
         placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",

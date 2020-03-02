@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import Resources from "../config/resources";
-import TemplateEngine from "./templateEngine";
 import TmcMenuTree from "./treeview/treeview";
 import TmcWebview from "./webview";
 
@@ -18,7 +17,8 @@ export default class UI {
      */
     public webview: TmcWebview;
 
-    public statusbar: vscode.StatusBarItem;
+    private statusbar: vscode.StatusBarItem;
+    private statusBarTimeout: NodeJS.Timeout;
 
     /**
      * Creates an UI object and (temporarily) initializes it with login-related content
@@ -28,6 +28,7 @@ export default class UI {
         this.webview = new TmcWebview(extensionContext, resources);
         this.treeDP = new TmcMenuTree("tmcView");
         this.statusbar = statusbaritem;
+        this.statusBarTimeout = setTimeout(() => { }, 0);
     }
 
     /**
@@ -40,8 +41,10 @@ export default class UI {
     }
 
     public setStatusBar(text: string, timeout?: number) {
+        clearTimeout(this.statusBarTimeout);
         if (timeout) {
-            this.statusbar.text = `${text}`, setTimeout(() => { this.statusbar.hide(); }, timeout);
+            this.statusbar.text = `${text}`;
+            this.statusBarTimeout = setTimeout(() => { this.statusbar.hide(); }, timeout);
         } else {
             this.statusbar.text = `${text}`;
         }

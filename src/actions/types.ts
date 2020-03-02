@@ -1,4 +1,3 @@
-import { StatusBarItem } from "vscode";
 import TMC from "../api/tmc";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
