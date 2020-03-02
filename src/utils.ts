@@ -99,12 +99,3 @@ export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number
     }
     return workspaceManager.getExercisePath(editorPath);
 }
-
-export function setStatusBar(statusBar: vscode.StatusBarItem, text: string, timeout?: number) {
-    if (timeout) {
-        statusBar.text = `${text}`, setTimeout(() => { statusBar.hide(); }, timeout);
-    } else {
-        statusBar.text = `${text}`;
-    }
-    statusBar.show();
-}

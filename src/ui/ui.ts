@@ -18,13 +18,16 @@ export default class UI {
      */
     public webview: TmcWebview;
 
+    public statusbar: vscode.StatusBarItem;
+
     /**
      * Creates an UI object and (temporarily) initializes it with login-related content
      * @param extensionContext VSCode extension content
      */
-    constructor(extensionContext: vscode.ExtensionContext, resources: Resources) {
+    constructor(extensionContext: vscode.ExtensionContext, resources: Resources, statusbaritem: vscode.StatusBarItem) {
         this.webview = new TmcWebview(extensionContext, resources);
         this.treeDP = new TmcMenuTree("tmcView");
+        this.statusbar = statusbaritem;
     }
 
     /**
@@ -34,5 +37,18 @@ export default class UI {
         return (onClick: () => void) => {
             onClick();
         };
+    }
+
+    public setStatusBar(text: string, timeout?: number) {
+        if (timeout) {
+            this.statusbar.text = `${text}`, setTimeout(() => { this.statusbar.hide(); }, timeout);
+        } else {
+            this.statusbar.text = `${text}`;
+        }
+        this.statusbar.show();
+    }
+
+    public hideStatusBar() {
+        this.statusbar.hide();
     }
 }

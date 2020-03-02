@@ -30,16 +30,15 @@ export async function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        const ui = new UI(context, resources);
+        const ui = new UI(context, resources, vscode.window.createStatusBarItem());
         const storage = new Storage(context);
         const workspaceManager = new WorkspaceManager(storage, resources);
         const tmc = new TMC(workspaceManager, storage, resources);
         const userData = new UserData(storage);
-        const statusBar = vscode.window.createStatusBarItem();
 
-        init.registerUiActions(ui, storage, tmc, workspaceManager, resources, userData, statusBar);
+        init.registerUiActions(ui, storage, tmc, workspaceManager, resources, userData);
 
-        const actionContext = {ui, resources, workspaceManager, tmc, userData, statusBar};
+        const actionContext = {ui, resources, workspaceManager, tmc, userData};
 
         context.subscriptions.push(
             vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),

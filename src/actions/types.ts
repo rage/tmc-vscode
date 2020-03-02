@@ -11,5 +11,4 @@ export type ActionContext = {
     resources: Resources;
     workspaceManager: WorkspaceManager;
     userData: UserData;
-    statusBar: StatusBarItem;
 };
