@@ -25,6 +25,7 @@
             </div>
         {{/if}}
         {{#if feedback_questions}}
+        <div id="feedbacknoti"></div>
         <div id="feedback" class="my-5">
             <h4>Anna palautetta</h4>
             <form>
@@ -96,6 +97,8 @@
             }
         }
         document.getElementById("feedback").style.display = "none";
+        document.getElementById("feedbacknoti").classList = "my-5 alert alert-success";
+        document.getElementById("feedbacknoti").innerText = "Feedback sent! Thank you.";
         vscode.postMessage({ feedback: { status: feedback }, url: feedback_url });
     }
 
