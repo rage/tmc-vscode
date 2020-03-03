@@ -30,7 +30,7 @@ export async function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        const ui = new UI(context, resources);
+        const ui = new UI(context, resources, vscode.window.createStatusBarItem());
         const storage = new Storage(context);
         const workspaceManager = new WorkspaceManager(storage, resources);
         const tmc = new TMC(workspaceManager, storage, resources);
@@ -60,12 +60,10 @@ export async function activate(context: vscode.ExtensionContext) {
             }),
         );
 
-        const resetStatusbar = vscode.window.createStatusBarItem();
-
         context.subscriptions.push(
             vscode.commands.registerCommand("resetExercise", async () => {
                 const exerciseId = getCurrentExerciseId(workspaceManager);
-                exerciseId ? resetExercise(exerciseId, actionContext, resetStatusbar)
+                exerciseId ? resetExercise(exerciseId, actionContext)
                     : vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
             }),
         );
