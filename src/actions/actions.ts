@@ -191,7 +191,7 @@ export async function displayCourseDetails(id: number, { tmc, ui, userData }: Ac
  * Opens details view for local exercises
  */
 export async function displayLocalExerciseDetails(id: number, {tmc, ui, userData }: ActionContext) {
-    //TODO: get coursedetails from localcoursedata
+    // TODO: get coursedetails from localcoursedata
     const result = await tmc.getCourseDetails(id);
     if (result.err) {
         console.error("Fetching course details failed: " + result.val.message);
