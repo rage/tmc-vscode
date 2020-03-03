@@ -49,12 +49,12 @@
                 }
             }
             if (ids.length > 0) {
-                vscode.postMessage({ type: type, ids });
+                vscode.postMessage({ type: type, ids, id: {{courseId}} });
             }
         }
 
         function openCloseAll(type) {
-            vscode.postMessage({ type: type })
+            vscode.postMessage({ type: type, id: {{courseId}} })
         }
 
         function downloadView(courseId) {

@@ -63,17 +63,25 @@ export function registerUiActions(
     ui.webview.registerHandler("exerciseDetails", (msg: { type: string, id: number }) => {
         displayLocalExerciseDetails(msg.id, actionContext);
     });
-    ui.webview.registerHandler("openSelected", (msg: { type: "openSelected", ids: number[] }) => {
-        openExercises(msg.ids, actionContext);
+    ui.webview.registerHandler("openSelected", async (msg: { type: "openSelected", ids: number[], id: number }) => {
+        actionContext.ui.webview.setContentFromTemplate("loading");
+        await openExercises(msg.ids, actionContext);
+        displayLocalExerciseDetails(msg.id, actionContext);
     });
-    ui.webview.registerHandler("closeSelected", (msg: { type: "closeSelected", ids: number[] }) => {
-        closeExercises(msg.ids, actionContext);
+    ui.webview.registerHandler("closeSelected", async (msg: { type: "closeSelected", ids: number[], id: number }) => {
+        actionContext.ui.webview.setContentFromTemplate("loading");
+        await closeExercises(msg.ids, actionContext);
+        displayLocalExerciseDetails(msg.id, actionContext);
     });
-    ui.webview.registerHandler("openUncompleted", (msg: { type: "openUncompleted", id: number }) => {
-        openUncompletedExercises(msg.id, actionContext);
+    ui.webview.registerHandler("openUncompleted", async (msg: { type: "openUncompleted", id: number }) => {
+        actionContext.ui.webview.setContentFromTemplate("loading");
+        await openUncompletedExercises(msg.id, actionContext);
+        displayLocalExerciseDetails(msg.id, actionContext);
     });
-    ui.webview.registerHandler("closeCompleted", (msg: { type: "closeCompleted", id: number }) => {
-        closeCompletedExercises(msg.id, actionContext);
+    ui.webview.registerHandler("closeCompleted", async (msg: { type: "closeCompleted", id: number }) => {
+        actionContext.ui.webview.setContentFromTemplate("loading");
+        await closeCompletedExercises(msg.id, actionContext);
+        displayLocalExerciseDetails(msg.id, actionContext);
     });
 }
 

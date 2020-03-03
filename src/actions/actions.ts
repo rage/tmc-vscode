@@ -183,7 +183,7 @@ export async function displayLocalExerciseDetails(id: number, {tmc, ui, userData
         return;
     }
     const exercises = userData.getCoursesLocalExercises(result.val.course.name);
-    ui.webview.setContentFromTemplate("exercise-details", { exercises, courseId: id });
+    ui.webview.setContentFromTemplate("exercise-details", { exercises, courseId: id }, true);
 }
 
 /**
@@ -397,9 +397,12 @@ export async function closeCompletedExercises(courseId: number, actionContext: A
 
 export async function openUncompletedExercises(courseId: number, actionContext: ActionContext) {
     const courseData = actionContext.userData.getCourses().find((x) => x.id === courseId);
+    console.log(courseId);
+    console.log(courseData);
     if (!courseData) {
         return;
     }
     const uncompleted = courseData.exerciseIds.filter((x) => !courseData.completedExercises.includes(x));
+    console.log(uncompleted);
     openExercises(uncompleted, actionContext);
 }
