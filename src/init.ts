@@ -5,12 +5,10 @@ import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
-<<<<<<< HEAD
-import { closeCompletedExercises, closeExercises, displayCourseDetails, displaySummary, login, logout,
-         openExercises, openUncompletedExercises, selectNewCourse } from "./actions/actions";
-=======
-import { displayCourseDetails, displaySummary, login, logout, selectNewCourse } from "./actions/actions";
->>>>>>> d50b5c865b3aaddb13a25f6fb7592b47eab1622a
+import {
+    closeCompletedExercises, closeExercises, displayCourseDetails, displayLocalExerciseDetails, displaySummary,
+    login, logout, openExercises, openUncompletedExercises, selectNewCourse,
+} from "./actions/actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
@@ -65,19 +63,22 @@ export function registerUiActions(
     ui.webview.registerHandler("addCourse", () => {
         selectNewCourse(actionContext);
     });
-    ui.webview.registerHandler("courseDetails", (msg: {type: string, id: number}) => {
+    ui.webview.registerHandler("courseDetails", (msg: { type: string, id: number }) => {
         displayCourseDetails(msg.id, actionContext);
     });
-    ui.webview.registerHandler("openSelected", (msg: {type: "openSelected", ids: number[]}) => {
+    ui.webview.registerHandler("exerciseDetails", (msg: { type: string, id: number }) => {
+        displayLocalExerciseDetails(msg.id, actionContext);
+    });
+    ui.webview.registerHandler("openSelected", (msg: { type: "openSelected", ids: number[] }) => {
         openExercises(msg.ids, actionContext);
     });
-    ui.webview.registerHandler("closeSelected", (msg: {type: "closeSelected", ids: number[]}) => {
+    ui.webview.registerHandler("closeSelected", (msg: { type: "closeSelected", ids: number[] }) => {
         closeExercises(msg.ids, actionContext);
     });
-    ui.webview.registerHandler("openUncompleted", (msg: {type: "openUncompleted", id: number}) => {
+    ui.webview.registerHandler("openUncompleted", (msg: { type: "openUncompleted", id: number }) => {
         openUncompletedExercises(msg.id, actionContext);
     });
-    ui.webview.registerHandler("closeCompleted", (msg: {type: "closeCompleted", id: number}) => {
+    ui.webview.registerHandler("closeCompleted", (msg: { type: "closeCompleted", id: number }) => {
         closeCompletedExercises(msg.id, actionContext);
     });
 }
@@ -136,7 +137,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
 
     if (!fs.existsSync(tmcLangsPath)) {
         const result = await downloadFileWithProgress("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar", tmcLangsPath,
-                                                    "Welcome", "Downloading important components for the Test My Code plugin... 0 %");
+            "Welcome", "Downloading important components for the Test My Code plugin... 0 %");
         if (result.err) {
             return new Err(result.val);
         }

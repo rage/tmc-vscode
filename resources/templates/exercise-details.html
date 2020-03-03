@@ -23,7 +23,7 @@
                 <td width=" 40">
                     <div class="row pb-1">
                         <div class="col-sm-1 checkbox-xl">
-                            <input type="checkbox" value="{{this.id}}" onchange="updateCount(this)" />
+                            <input type="checkbox" value="{{this.id}}" />
                         </div>
                     </div>
                 </td>
@@ -35,8 +35,8 @@
             </tr>
             {{/each}}
         </table>
+        <button class="btn-primary" onclick="downloadView('{{courseId}}')">download more exercises</button>
     </div>
-
     <script>
         const vscode = acquireVsCodeApi();
 
@@ -54,7 +54,12 @@
         }
 
         function openCloseAll(type) {
-            vscode.postMessage({ type: type, id: {{ details.id }}})
+            vscode.postMessage({ type: type })
+        }
+
+        function downloadView(courseId) {
+            console.log(courseId)
+            vscode.postMessage({ type: "courseDetails", id: courseId })
         }
 
     </script>

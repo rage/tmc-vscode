@@ -17,6 +17,11 @@ export class UserData {
         return Array.from(this.courses.values());
     }
 
+    public getCourse(id: number) {
+        const course = this.getCourses().filter((x) => x.id === id);
+        return course;
+    }
+
     public addCourse(data: LocalCourseData) {
         if (this.courses.has(data.id)) {
             throw new Error("Trying to add an already existing course");
@@ -38,6 +43,14 @@ export class UserData {
         courseData.completedExercises = completedExercises;
         this.courses.set(courseId, courseData);
         this.updatePersistentData();
+    }
+
+    public getCoursesLocalExercises(courseName: string) {
+        const exercises = this.storage.getExerciseData();
+        if (!exercises) {
+            return;
+        }
+        return exercises.filter((x) => x.course === courseName);
     }
 
     private updatePersistentData() {

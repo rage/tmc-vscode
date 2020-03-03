@@ -1,7 +1,7 @@
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { LocalCourseData, UserData } from "../config/userdata";
+import { LocalCourseData } from "../config/userdata";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
 import { sleep } from "../utils";
@@ -84,7 +84,7 @@ export async function submitExercise(id: number, { ui, resources, tmc }: ActionC
  */
 export async function testExercise(id: number, actions: ActionContext) {
     const { ui, resources, tmc, workspaceManager } = actions;
-    const exerciseDetails =  workspaceManager.getExerciseDataById(id);
+    const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         vscode.window.showErrorMessage(`Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`);
         console.error(exerciseDetails.val);
@@ -188,6 +188,20 @@ export async function displayCourseDetails(id: number, { tmc, ui, userData }: Ac
 }
 
 /**
+ * Opens details view for local exercises
+ */
+export async function displayLocalExerciseDetails(id: number, {tmc, ui, userData }: ActionContext) {
+    //TODO: get coursedetails from localcoursedata
+    const result = await tmc.getCourseDetails(id);
+    if (result.err) {
+        console.error("Fetching course details failed: " + result.val.message);
+        return;
+    }
+    const exercises = userData.getCoursesLocalExercises(result.val.course.name);
+    ui.webview.setContentFromTemplate("exercise-details", { exercises, courseId: id });
+}
+
+/**
  * Opens the summary view
  */
 export async function displaySummary({ userData, ui }: ActionContext) {
@@ -198,7 +212,7 @@ export async function displaySummary({ userData, ui }: ActionContext) {
  * Lets the user select a course
  */
 export async function selectCourse(orgSlug: string, { tmc, resources, ui }: ActionContext, webview?: TemporaryWebview):
-    Promise<Result<{changeOrg: boolean, course?: number}, Error>> {
+    Promise<Result<{ changeOrg: boolean, course?: number }, Error>> {
     const result = await tmc.getCourses(orgSlug);
 
     if (result.err) {
@@ -208,12 +222,12 @@ export async function selectCourse(orgSlug: string, { tmc, resources, ui }: Acti
     const organization = (await tmc.getOrganization(orgSlug)).unwrap();
     const data = { courses, organization };
     let changeOrg = false;
-    let course: number | undefined;
+    let course: number | undefined;
 
     await new Promise((resolve) => {
-        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
+        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => { });
         temp.setTitle("Select course");
-        temp.setMessageHandler((msg: {type: string, id: number}) => {
+        temp.setMessageHandler((msg: { type: string, id: number }) => {
             if (msg.type === "setCourse") {
                 course = msg.id;
             } else if (msg.type === "changeOrg") {
@@ -228,7 +242,7 @@ export async function selectCourse(orgSlug: string, { tmc, resources, ui }: Acti
         });
         temp.setContent("course", data);
     });
-    return new Ok({changeOrg, course});
+    return new Ok({ changeOrg, course });
 }
 
 /**
@@ -243,12 +257,12 @@ export async function selectOrganization({ resources, tmc, ui }: ActionContext, 
     const organizations = result.val.sort((org1, org2) => org1.name.localeCompare(org2.name));
     const pinned = organizations.filter((organization) => organization.pinned);
     const data = { organizations, pinned };
-    let slug: string | undefined;
+    let slug: string | undefined;
 
     await new Promise((resolve) => {
-        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
+        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => { });
         temp.setTitle("Select organization");
-        temp.setMessageHandler((msg: {type: string, slug: string}) => {
+        temp.setMessageHandler((msg: { type: string, slug: string }) => {
             if (msg.type !== "setOrganization") {
                 return;
             }
@@ -267,12 +281,12 @@ export async function selectOrganization({ resources, tmc, ui }: ActionContext, 
 }
 
 export async function selectOrganizationAndCourse(actionContext: ActionContext):
-    Promise<Result<{organization: string, course: number}, Error>> {
+    Promise<Result<{ organization: string, course: number }, Error>> {
 
-    const tempView = new TemporaryWebview(actionContext.resources, actionContext.ui, "", () => {});
+    const tempView = new TemporaryWebview(actionContext.resources, actionContext.ui, "", () => { });
 
-    let organizationSlug: string | undefined;
-    let courseID: number | undefined;
+    let organizationSlug: string | undefined;
+    let courseID: number | undefined;
 
     while (!(organizationSlug && courseID)) {
         const orgResult = await selectOrganization(actionContext, tempView);
@@ -293,7 +307,7 @@ export async function selectOrganizationAndCourse(actionContext: ActionContext):
     }
 
     tempView.dispose();
-    return new Ok({organization: organizationSlug, course: courseID});
+    return new Ok({ organization: organizationSlug, course: courseID });
 }
 
 /**
