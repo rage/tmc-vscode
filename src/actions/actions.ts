@@ -22,7 +22,8 @@ export async function submitExercise(id: number, { ui, resources, tmc }: ActionC
     const messageHandler = async (msg: any) => {
         if (msg.feedback && msg.feedback.status.length > 0) {
             console.log(await tmc.submitSubmissionFeedback(msg.url, msg.feedback));
-        } else if (msg.setToBackground) {
+        } else if (msg.runInBackground) {
+            ui.setStatusBar("Waiting for results from server.");
             temp.dispose();
         } else if (msg.showInBrowser) {
             vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
@@ -51,14 +52,12 @@ export async function submitExercise(id: number, { ui, resources, tmc }: ActionC
         }
         const statusData = statusResult.val;
         if (statusResult.val.status !== "processing") {
-            vscode.window.setStatusBarMessage("Tests finished, see result", 5000);
+            ui.setStatusBar("Tests finished, see result", 5000);
             temp.setContent("submission-result", statusData);
             break;
         }
         if (!temp.disposed) {
             temp.setContent("submission-status", statusData);
-        } else {
-            vscode.window.setStatusBarMessage("Waiting for results from server.", 5000);
         }
         await sleep(2500);
         timeWaited = timeWaited + 2500;
@@ -101,17 +100,16 @@ export async function testExercise(id: number, actions: ActionContext) {
             }
         });
     temp.setContent("running-tests", { exerciseName });
-    vscode.window.setStatusBarMessage(`Running tests for ${exerciseName}`);
+    ui.setStatusBar(`Running tests for ${exerciseName}`);
     const testResult = await tmc.runTests(id);
-    vscode.window.setStatusBarMessage("");
     if (testResult.err) {
-        vscode.window.setStatusBarMessage(`Running tests for ${exerciseName} failed`, 5000);
+        ui.setStatusBar(`Running tests for ${exerciseName} failed`, 5000);
         vscode.window.showErrorMessage(`Exercise test run failed: \
                                         ${testResult.val.name} - ${testResult.val.message}`);
         console.error(testResult.val);
         return;
     }
-    vscode.window.setStatusBarMessage(`Tests finished for ${exerciseName}`, 5000);
+    ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
     const testResultVal = testResult.val;
     const data = { testResultVal, id, exerciseName };
     temp.setContent("test-result", data);
@@ -120,9 +118,7 @@ export async function testExercise(id: number, actions: ActionContext) {
 /**
  * Prompts user to reset exercise and resets exercise if user replies to prompt correctly.
  */
-export async function resetExercise(
-    id: number, { tmc, workspaceManager }: ActionContext, statusBarItem: vscode.StatusBarItem,
-) {
+export async function resetExercise(id: number, { ui, tmc, workspaceManager }: ActionContext) {
     const exerciseData = workspaceManager.getExerciseDataById(id).unwrap();
     const options: vscode.InputBoxOptions = {
         placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
@@ -138,29 +134,19 @@ export async function resetExercise(
 
     if (reset) {
         vscode.window.showInformationMessage(`Resetting exercise ${exerciseData.name}`);
-        statusBarItem.text = `Resetting exercise ${exerciseData.name}`;
-        statusBarItem.show();
+        ui.setStatusBar(`Resetting exercise ${exerciseData.name}`);
         const submitResult = await tmc.submitExercise(id);
         if (submitResult.err) {
             vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
                                             ${submitResult.val.name} - ${submitResult.val.message}`);
             console.error(submitResult.val);
-
-            statusBarItem.text = `Something went wrong while resetting exercise ${exerciseData.name}`,
-                setTimeout(() => {
-                    statusBarItem.hide();
-                }, 10000);
-            statusBarItem.show();
+            ui.setStatusBar(`Something went wrong while resetting exercise ${exerciseData.name}`, 10000);
             return;
         }
         const slug = exerciseData.organization;
         workspaceManager.deleteExercise(id);
         await tmc.downloadExercise(id, slug);
-
-        statusBarItem.text = `Exercise ${exerciseData.name} resetted successfully`, setTimeout(() => {
-            statusBarItem.hide();
-        }, 10000);
-        statusBarItem.show();
+        ui.setStatusBar(`Exercise ${exerciseData.name} resetted successfully`, 10000);
     } else {
         vscode.window.showInformationMessage(`Reset canceled for exercise ${exerciseData.name}.`);
     }
@@ -303,9 +289,12 @@ export async function login(
     password: string,
     visibilityGroups: VisibilityGroups,
 ) {
+    const wrapError = (error: string) => `<div class="alert alert-danger fade show" role="alert">${error}</div>`;
+
     const { tmc, ui } = actionContext;
     if (!username || !password) {
-        ui.webview.setContentFromTemplate("login", { error: "Username and password may not be empty." }, true);
+        ui.webview.setContentFromTemplate("login",
+            { error: wrapError("Username and password may not be empty.") }, true);
         return;
     }
     const result = await tmc.authenticate(username, password);
@@ -314,7 +303,7 @@ export async function login(
         displaySummary(actionContext);
     } else {
         console.log("Login failed: " + result.val.message);
-        ui.webview.setContentFromTemplate("login", { error: result.val.message }, true);
+        ui.webview.setContentFromTemplate("login", { error: wrapError(result.val.message) }, true);
     }
 }
 
