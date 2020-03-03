@@ -32,6 +32,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const ui = new UI(context, resources, vscode.window.createStatusBarItem());
         const storage = new Storage(context);
+
         const workspaceManager = new WorkspaceManager(storage, resources);
         const tmc = new TMC(workspaceManager, storage, resources);
         const userData = new UserData(storage);
