@@ -7,13 +7,12 @@ import UI from "./ui/ui";
 import { Err, Ok, Result } from "ts-results";
 import {
     closeCompletedExercises, closeExercises, displayCourseDetails, displayLocalExerciseDetails, displaySummary,
-    login, logout, openExercises, openUncompletedExercises, selectNewCourse,
+    downloadExercises, login, logout, openExercises, openUncompletedExercises, selectNewCourse,
 } from "./actions/actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
-import { downloadExercises, setCourse, setOrganization } from "./ui/treeview/handlers";
 import { downloadFileWithProgress } from "./utils";
 
 /**
@@ -36,9 +35,6 @@ export function registerUiActions(
     // UI Action IDs
     const LOGIN_ACTION = "login";
     const INDEX_ACTION = "index";
-    const ORGANIZATIONS_ACTION = "orgs";
-    const COURSES_ACTION = "courses";
-    const COURSE_DETAILS_ACTION = "courseDetails";
 
     // Register UI actions
     const actionContext = { tmc, workspaceManager, ui, resources, userData };
@@ -52,14 +48,14 @@ export function registerUiActions(
         () => { selectNewCourse(actionContext); });
 
     // Register webview handlers
-    const handlerContext = { tmc, storage, ui, visibilityGroups };
-    ui.webview.registerHandler("setOrganization", setOrganization(handlerContext, COURSES_ACTION));
-    ui.webview.registerHandler("setCourse", setCourse(handlerContext, COURSE_DETAILS_ACTION));
     ui.webview.registerHandler("login", ({ username, password }) => {
         login(actionContext, username, password, visibilityGroups);
     });
-    // handleLogin(handlerContext, ORGANIZATIONS_ACTION, INDEX_ACTION)
-    ui.webview.registerHandler("downloadExercises", downloadExercises(handlerContext));
+    ui.webview.registerHandler("downloadExercises",
+        (msg: { type: "downloadExercises", ids: number[], courseName: string,
+                organizationSlug: string, courseId: number }) => {
+                    downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseName, msg.courseId);
+    });
     ui.webview.registerHandler("addCourse", () => {
         selectNewCourse(actionContext);
     });

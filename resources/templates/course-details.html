@@ -17,7 +17,7 @@
                     }
                 }
                 if (ids.length > 0) {
-                    vscode.postMessage({ type: "downloadExercises", ids, courseName: "{{courseName}}", organizationSlug: "{{organizationSlug}}" });
+                    vscode.postMessage({ type: "downloadExercises", ids, courseName: "{{courseName}}", organizationSlug: "{{organizationSlug}}", courseId: {{courseId}} });
                 }
             }
 
@@ -66,6 +66,7 @@
                     <div class="row py-2">
                         <button class="mr-2" onclick="toggleAll()" id="togglebutton">Select all</button>
                         <button onclick="downloadSelectedExercises()">Download selected</button>
+                        <button onclick="vscode.postMessage({type: 'exerciseDetails', id: {{id}} })">Return to exercise view</button>
                     </div>
                 </div>
                 <div style="overflow-y: hidden;">

@@ -1,4 +1,4 @@
-import { Err, Ok, Result } from "ts-results";
+import { Err, Ok, Result, Results } from "ts-results";
 import * as vscode from "vscode";
 
 import { LocalCourseData } from "../config/userdata";
@@ -181,8 +181,7 @@ export async function displayCourseDetails(id: number, { tmc, ui, userData }: Ac
 
     const organizationSlug = userData.getCourses().find((course) => course.id === id)?.organization;
     const data = {
-        courseName: result.val.course.name, details,
-        organizationSlug,
+        courseId: id, courseName: result.val.course.name, details, organizationSlug,
     };
     await ui.webview.setContentFromTemplate("course-details", data);
 }
@@ -206,6 +205,26 @@ export async function displayLocalExerciseDetails(id: number, {tmc, ui, userData
  */
 export async function displaySummary({ userData, ui }: ActionContext) {
     ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
+}
+
+/**
+ * Returns a handler that downloads given exercises and opens them in VSCode explorer, when called.
+ * @param ui UI instance used for setting up the webview afterwards
+ * @param tmc TMC API instance used for downloading exercises
+ */
+export async function downloadExercises(
+    actionContext: ActionContext, ids: number[], organizationSlug: string, courseName: string, courseId: number) {
+    const { tmc, ui } = actionContext;
+    ui.webview.setContentFromTemplate("loading");
+    const results = Results(...await Promise.all(ids.map(
+        (x) => tmc.downloadExercise(x, organizationSlug))));
+
+    if (results.err) {
+        vscode.window.showErrorMessage("One or more exercise downloads failed.");
+        return;
+    }
+
+    await displayLocalExerciseDetails(courseId, actionContext);
 }
 
 /**
