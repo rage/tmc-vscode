@@ -1,10 +1,10 @@
 {
-	"name": "tmc-vscode",
-	"displayName": "tmc-vscode",
+	"name": "test-my-code",
+	"displayName": "TestMyCode",
 	"description": "TestMyCode extension for Visual Studio Code",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"license": "MIT",
-	"publisher": "tmc-vscode-temporary",
+	"publisher": "moocfi",
 	"repository": "https://github.com/rage/tmc-vscode",
 	"engines": {
 		"vscode": "^1.41.0"
