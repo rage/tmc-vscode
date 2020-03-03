@@ -8,18 +8,18 @@ This extension is used for sending excercise solutions to TMC-server.
 
 Click TMC icon on the left side bar.
 
-![TMC button](/media/README_click_TMC.png)
+![TMC button](media/README_click_TMC.png)
 
 Next click "Log in" that shows up.
 
-![Log in](/media/README_click_Login.png)
+![Log in](media/README_click_Login.png)
 
 1) Add new course.
 2) Download excercise.
 
 Next click the explorer icon on the left side bar.
 
-![Explorer button](/media/README_click_Explorer.png)
+![Explorer button](media/README_click_Explorer.png)
 
 Now your excercises will show in the explorer.
 
@@ -32,4 +32,4 @@ If your solution passes tests, click the "TMC - Submit solutions" in the top rig
 ### Resetting an excercise
 If you want to reset your active excercice, you can open a dropdown menu by clicking the button highlighted as green in the following image. It is located in the top right corner. Click "TMC - Reset excercise" from the dropdown menu.
 
-![TestSubmintReset](/media/README_submit_test_reset.png)
+![TestSubmintReset](media/README_submit_test_reset.png)
