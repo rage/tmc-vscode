@@ -1,6 +1,6 @@
 # Instructions for extension users
------------------------------------
-(logo) "Visual Studio Marketplace v1.x"
+
+![Node CI](https://github.com/rage/tmc-vscode/workflows/Node%20CI/badge.svg)
 
 This extension is used for sending excercise solutions to TMC-server. 
 

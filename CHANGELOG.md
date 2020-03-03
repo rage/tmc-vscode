@@ -2,18 +2,18 @@
 
 ## Unreleased
 
-### 0.1.1 (2020-month-day)
+### 0.1.1 - TBD
 
 upcoming
 
 ## Releases
 
-### 0.1.0 (2020-02-27)
+### 0.1.0 - February 27th, 2020
 
 #### New features
 
 - Selecting course(s).
 - Downloading excercise(s).
-- Testing excercise solution.
+- Testing excercise solution locally.
 - Submitting solution to TMC-server.
 - Resetting current active excercise.
