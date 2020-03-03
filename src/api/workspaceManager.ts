@@ -122,7 +122,13 @@ export default class WorkspaceManager {
         const data = this.idToData.get(id);
         if (data && !data.isOpen) {
             fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
-            fs.renameSync(this.getClosedPath(id), data.path);
+            del.sync(data.path, { force: true });
+            try {
+                fs.renameSync(this.getClosedPath(id), data.path);
+            } catch (err) {
+                del.sync(data.path, { force: true });
+                fs.renameSync(this.getClosedPath(id), data.path);
+            }
             data.isOpen = true;
             this.idToData.set(id, data);
             return new Ok(data.path);

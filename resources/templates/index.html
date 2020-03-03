@@ -8,33 +8,23 @@
 <body>
     <div class="container container-fluid">
         <h1>My courses</h1>
-
-        <div class="row">
-            <div class="col-md">
-                <h4>Here are listed all the courses you have enrolled to.</h4>
-            </div>
-        </div>
-
+        
         {{#if courses}}
         <div>
-            <input type="button" onclick="addCourse()" class="btn-primary relative" value="Add a new course" />
+            <input type="button" onclick="addCourse()" class="btn-primary mb-4 mt-2" value="Add new course" />
         </div>
         {{#each courses}}
         <div class="row org-row border-dark">
             <div class="col-md" onclick="fetchCourseDetails({{this.id}})">
-                <h3>{{{this.name}}} <small class="text-muted">{{{this.organization}}}</small></h3>
-                <p>{{{this.description}}}</p>
+                <h3>{{this.name}} <small class="text-muted">{{this.organization}}</small></h3>
+                <p>{{this.description}}</p>
             </div>
         </div>
         {{/each}}
         {{else}}
         <div>
-            <h4 class="org-header">
-                <div>
-                    <span>No courses selected</span>
-                    <input style="margin-left:10px" type="button" onclick="addCourse()" class="btn-primary relative" value="Add a new course" />
-                </div>
-            </h4>
+            <h4>No courses selected</h4>
+            <input type="button" onclick="addCourse()" class="btn-primary" value="Add new course" />    
         </div>
         {{/if}}
     </div>

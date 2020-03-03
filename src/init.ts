@@ -44,8 +44,6 @@ export function registerUiActions(
         async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
     ui.treeDP.registerAction("My courses", [LOGGED_IN],
         () => { displaySummary(actionContext); }, INDEX_ACTION);
-    ui.treeDP.registerAction("Add new course", [LOGGED_IN],
-        () => { selectNewCourse(actionContext); });
 
     // Register webview handlers
     ui.webview.registerHandler("login", ({ username, password }) => {

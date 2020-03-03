@@ -26,7 +26,7 @@
             const vscode = acquireVsCodeApi();
 
             function runInBackground() {
-                vscode.postMessage({setToBackground : true });
+                vscode.postMessage({runInBackground : true });
             }
             function showInBrowser() {
                 vscode.postMessage({showInBrowser : true });
