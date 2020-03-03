@@ -1,7 +1,5 @@
 # Instructions for extension users
 
-![Node CI](https://github.com/rage/tmc-vscode/workflows/Node%20CI/badge.svg)
-
 This extension is used for sending excercise solutions to TMC-server. 
 
 ## Usage
