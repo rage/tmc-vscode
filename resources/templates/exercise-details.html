@@ -9,35 +9,39 @@
     
 
     <div class="container">
-        <div class="row">
-            <div class="col">
-                <h1>Exercise details</h1>
-                <h2>Course name</h2>
-                <p>Course description</p>
+        <div class="sticky-top pb-2">
+            <div class="row">
+                <div class="col-sm">
+                    <h1>Exercise details</h1>
+                    <h2>Course name</h2>
+                    <p>Course description</p>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-sm-3">
+                    <button class="btn-primary m-1 w-100" onclick="openCloseAll('openUncompleted')">Open all uncompleted</button>
+                </div>
+                <div class="col-sm-3">
+                    <button class="btn-primary m-1 w-100" onclick="openCloseAll('closeCompleted')">Close all completed</button>
+                </div>
+                <div class="col-sm-3">
+                    <button class="btn-primary m-1 w-100" onclick="downloadView({{courseId}})">Download more exercises</button>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-sm-3">
+                    <button class="btn-primary m-1 w-100" onclick="handleSelected('openSelected')">Open selected</button>
+                </div>
+                <div class="col-sm-3">
+                    <button class="btn-primary m-1 w-100" onclick="handleSelected('closeSelected')">Close selected</button>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-sm-3">
+                    <button class="btn-secondary m-1 w-100" onclick="toggleAll()" id="togglebutton">Select all</button>
+                </div>
             </div>
         </div>
-        <div class="row">
-            <div class="col-md-3">
-                <button class="btn-primary m-1" onclick="openCloseAll('closeCompleted')">Close all completed</button>
-            </div>
-            <div class="col-md-3">
-                <button class="btn-primary m-1" onclick="openCloseAll('openUncompleted')">Open all uncompleted</button>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col-md-3">
-                <button class="btn-primary m-1" onclick="handleSelected('openSelected')">Open selected</button>
-            </div>
-            <div class="col-md-3">
-                <button class="btn-primary m-1" onclick="handleSelected('closeSelected')">Close selected</button>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col-md-3">
-                <button class="btn-primary m-1" onclick="toggleAll()" id="togglebutton">Select all</button>
-            </div>
-        </div>
-
         <table class="table table-striped">
             <thead>
                 <tr>
@@ -51,7 +55,7 @@
             <tbody>
             {{#each exercises}}
                 <tr>
-                    <td class="checkbox-xl"><input type="checkbox" value="{{this.id}}" onchange="updateCount(this)" /></td>
+                    <td class="checkbox-xl text-center"><input type="checkbox" value="{{this.id}}" onchange="updateCount(this)" /></td>
                     <td>{{this.name}}</td>
                     <td>Deadline</td>
                     <td>Passed</td>
@@ -60,10 +64,8 @@
             {{/each}}
             </tbody>
         </table>
-        <div class="row">
-            <button class="btn-primary m-1" onclick="downloadView({{courseId}})">Download more exercises</button>
-        </div>
     </div>
+
     <script>
         const vscode = acquireVsCodeApi();
         let selectedCount = 0;
