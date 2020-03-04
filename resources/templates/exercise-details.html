@@ -6,39 +6,68 @@
 </head>
 
 <body>
-    <h1>Exercise details</h1>
+    
 
-    <div style="overflow-y: hidden;">
-        <table class="table table-striped table-sm">
-            <div>
-                <button class="btn-primary" onclick="openCloseAll('closeCompleted')">Close all completed</button>
-                <button class=" btn-primary" onclick="openCloseAll('openUncompleted')">Open all uncompleted</button>
+    <div class="container">
+        <div class="row">
+            <div class="col">
+                <h1>Exercise details</h1>
+                <h2>Course name</h2>
+                <p>Course description</p>
             </div>
-            <div>
-                <button class="btn-primary" onclick="handleSelected('openSelected')">Open selected</button>
-                <button class="btn-primary" onclick="handleSelected('closeSelected')">Close selected</button>
+        </div>
+        <div class="row">
+            <div class="col-md-3">
+                <button class="btn-primary m-1" onclick="openCloseAll('closeCompleted')">Close all completed</button>
             </div>
+            <div class="col-md-3">
+                <button class="btn-primary m-1" onclick="openCloseAll('openUncompleted')">Open all uncompleted</button>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-3">
+                <button class="btn-primary m-1" onclick="handleSelected('openSelected')">Open selected</button>
+            </div>
+            <div class="col-md-3">
+                <button class="btn-primary m-1" onclick="handleSelected('closeSelected')">Close selected</button>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-3">
+                <button class="btn-primary m-1" onclick="toggleAll()" id="togglebutton">Select all</button>
+            </div>
+        </div>
+
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th scope="col"></th>
+                    <th scope="col">Exercise name</th>
+                    <th scope="col">Deadline</th>
+                    <th scope="col">Passed</th>
+                    <th scope="col">Open in workspace</th>
+                </tr>
+            </thead>
+            <tbody>
             {{#each exercises}}
-            <tr>
-                <td width=" 40">
-                    <div class="row pb-1">
-                        <div class="col-sm-1 checkbox-xl">
-                            <input type="checkbox" value="{{this.id}}" />
-                        </div>
-                    </div>
-                </td>
-                <td>
-                    <div class="col-sm">
-                        {{this.name}}
-                    </div>
-                </td>
-            </tr>
+                <tr>
+                    <td class="checkbox-xl"><input type="checkbox" value="{{this.id}}" onchange="updateCount(this)" /></td>
+                    <td>{{this.name}}</td>
+                    <td>Deadline</td>
+                    <td>Passed</td>
+                    <td>Open in workspace</td>
+                </tr>
             {{/each}}
+            </tbody>
         </table>
-        <button class="btn-primary" onclick="downloadView({{courseId}})">Download more exercises</button>
+        <div class="row">
+            <button class="btn-primary m-1" onclick="downloadView({{courseId}})">Download more exercises</button>
+        </div>
     </div>
     <script>
         const vscode = acquireVsCodeApi();
+        let selectedCount = 0;
+        let totalCount = undefined;
 
         function handleSelected(type) {
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
@@ -50,6 +79,36 @@
             }
             if (ids.length > 0) {
                 vscode.postMessage({ type: type, ids, id: {{courseId}} });
+            }
+        }
+
+        function updateCount(element) {
+            selectedCount += element.checked ? 1 : -1;
+            if (totalCount === undefined) {
+                totalCount = document.querySelectorAll('input[type="checkbox"]').length
+            }
+            if (selectedCount === totalCount) {
+                document.querySelector("button#togglebutton").innerHTML = "Deselect all";
+            } else if (selectedCount === totalCount - 1) {
+                document.querySelector("button#togglebutton").innerHTML = "Select all";
+            }
+        }
+
+        function toggleAll() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            if (totalCount === undefined) {
+                totalCount = checkboxes.length;
+            }
+            const deselect = selectedCount === totalCount;
+            for (const checkbox of checkboxes) {
+                checkbox.checked = !deselect;
+            }
+            if (deselect) {
+                document.querySelector("button#togglebutton").innerHTML = "Select all";
+                selectedCount = 0;
+            } else {
+                document.querySelector("button#togglebutton").innerHTML = "Deselect all";
+                selectedCount = totalCount;
             }
         }
 
