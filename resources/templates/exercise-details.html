@@ -35,7 +35,7 @@
             </tr>
             {{/each}}
         </table>
-        <button class="btn-primary" onclick="downloadView('{{courseId}}')">download more exercises</button>
+        <button class="btn-primary" onclick="downloadView({{courseId}})">Download more exercises</button>
     </div>
     <script>
         const vscode = acquireVsCodeApi();
@@ -58,7 +58,6 @@
         }
 
         function downloadView(courseId) {
-            console.log(courseId)
             vscode.postMessage({ type: "courseDetails", id: courseId })
         }
 
