@@ -155,8 +155,11 @@ export default class TMC {
      * Downloads exercise with given id and extracts it to the exercise folder.
      * @param id Id of the exercise to download
      * @param organizationSlug Slug for the organization this exercise belongs to.
+     * @param reset If the call comes from resetExercise function, this is implemented because we need to be sure that
+     * no other extension has generated the folder again.
      */
-    public async downloadExercise(id: number, organizationSlug: string): Promise<Result<string, Error>> {
+    public async downloadExercise(id: number, organizationSlug: string, reset?: boolean ):
+    Promise<Result<string, Error>> {
         const result = await downloadFile(`${this.tmcApiUrl}core/exercises/${id}/download`,
             `${this.dataPath}/${id}.zip`, undefined, this.tmcDefaultHeaders);
         if (result.err) {
@@ -196,7 +199,7 @@ export default class TMC {
         }
 
         // TODO: Return closed path and call open elsewhere
-        const openResult = this.workspaceManager.openExercise(id);
+        const openResult = this.workspaceManager.openExercise(id, reset);
 
         if (openResult.err) {
             console.log("Opening failed");

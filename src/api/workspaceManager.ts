@@ -117,18 +117,14 @@ export default class WorkspaceManager {
     /**
      * Opens exercise by moving it to workspace folder.
      * @param id Exercise ID to open
+     * @param clearFolder Force remove the folder and it's contents, before opening from closed path.
      */
-    public openExercise(id: number): Result<string, Error> {
+    public openExercise(id: number, clearFolder?: boolean): Result<string, Error> {
         const data = this.idToData.get(id);
         if (data && !data.isOpen) {
             fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
-            del.sync(data.path, { force: true });
-            try {
-                fs.renameSync(this.getClosedPath(id), data.path);
-            } catch (err) {
-                del.sync(data.path, { force: true });
-                fs.renameSync(this.getClosedPath(id), data.path);
-            }
+            clearFolder ? del.sync(data.path, { force: true }) : console.log(`${data.path} not cleared.`) ;
+            fs.renameSync(this.getClosedPath(id), data.path);
             data.isOpen = true;
             this.idToData.set(id, data);
             return new Ok(data.path);

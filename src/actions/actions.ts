@@ -145,7 +145,7 @@ export async function resetExercise(id: number, { ui, tmc, workspaceManager }: A
         }
         const slug = exerciseData.organization;
         workspaceManager.deleteExercise(id);
-        await tmc.downloadExercise(id, slug);
+        await tmc.downloadExercise(id, slug, true);
         ui.setStatusBar(`Exercise ${exerciseData.name} resetted successfully`, 10000);
     } else {
         vscode.window.showInformationMessage(`Reset canceled for exercise ${exerciseData.name}.`);
