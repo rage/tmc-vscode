@@ -60,7 +60,7 @@ export function registerUiActions(
     ui.webview.registerHandler("exerciseDownloads", (msg: { type: string, id: number }) => {
         displayCourseDownloadDetails(msg.id, actionContext);
     });
-    ui.webview.registerHandler("exerciseDetails", (msg: { type: string, id: number }) => {
+    ui.webview.registerHandler("courseDetails", (msg: { type: "courseDetails", id: number }) => {
         displayLocalExerciseDetails(msg.id, actionContext);
     });
     ui.webview.registerHandler("openSelected", async (msg: { type: "openSelected", ids: number[], id: number }) => {

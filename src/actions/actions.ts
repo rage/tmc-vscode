@@ -226,15 +226,45 @@ export async function displaySummary({ userData, ui }: ActionContext) {
 export async function downloadExercises(
     actionContext: ActionContext, ids: number[], organizationSlug: string, courseName: string, courseId: number) {
     const { tmc, ui } = actionContext;
-    ui.webview.setContentFromTemplate("loading");
-    const results = Results(...await Promise.all(ids.map(
-        (x) => tmc.downloadExercise(x, organizationSlug))));
 
-    if (results.err) {
-        vscode.window.showErrorMessage("One or more exercise downloads failed.");
+    const courseDetails = await tmc.getCourseDetails(courseId);
+    if (courseDetails.err) {
+        return;
     }
 
-    await displayLocalExerciseDetails(courseId, actionContext);
+    const exerciseStatus = new Map<number, {name: string, downloaded: boolean, failed: boolean, error: string}>(
+        courseDetails.val.course.exercises.filter((x) => ids.includes(x.id)).map(
+            (x) => [x.id, {name: x.name, downloaded: false, failed: false, error: ""}]),
+    );
+
+    let successful = 0;
+    let failed = 0;
+
+    ui.webview.setContentFromTemplate("downloading-exercises",
+        { courseId, exercises: exerciseStatus.values(), failed, failed_pct: Math.round(100 * failed / ids.length),
+          remaining: ids.length - successful - failed,
+          successful, successful_pct: Math.round(100 * successful / ids.length), total: ids.length});
+    await Promise.all(ids.map<Promise<Result<string, Error>>>(
+        (x) => new Promise(async (resolve) => {
+            const res = await tmc.downloadExercise(x, organizationSlug);
+            const d = exerciseStatus.get(x);
+            if (d) {
+                if (res.ok) {
+                    successful += 1;
+                    d.downloaded = true;
+                } else {
+                    failed += 1;
+                    d.failed = true;
+                    d.error = res.val.message;
+                }
+                exerciseStatus.set(x, d);
+                ui.webview.setContentFromTemplate("downloading-exercises",
+                    { courseId, exercises: exerciseStatus.values(), failed,
+                      failed_pct: Math.round(100 * failed / ids.length), remaining: ids.length - successful - failed,
+                      successful, successful_pct: Math.round(100 * successful / ids.length), total: ids.length});
+            }
+            resolve(res);
+        })));
 }
 
 /**

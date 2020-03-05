@@ -186,10 +186,14 @@ export default class TMC {
             organizationSlug, checksum, detailsResult.val,
         );
 
+        if (exercisePath.err) {
+            return new Err(exercisePath.val);
+        }
+
         const extractResult = await this.checkApiResponse(this.executeLangsAction({
             action: "extract-project",
             archivePath: `${this.dataPath}/${id}.zip`,
-            exerciseFolderPath: exercisePath,
+            exerciseFolderPath: exercisePath.val,
         }), createIs<string>());
 
         if (extractResult.err) {

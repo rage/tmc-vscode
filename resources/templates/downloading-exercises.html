@@ -1,0 +1,62 @@
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+
+        <script>
+            const vscode = acquireVsCodeApi();
+        </script>
+    </head>
+
+    <body>
+        <div class="container container-fluid">
+            <div>
+                {{#if remaining}}
+                    <div class="row">
+                        <h1>Downloading exercises...</h1>
+                    </div>
+                {{/if}}
+                {{#unless remaining}}
+                    <div class="row">
+                        <h1>Download complete</h1>
+                    </div>
+                    <div class="row">
+                        <button onclick="vscode.postMessage({type: 'courseDetails', id: {{courseId}} })">Return to course details</button>
+                    </div>
+                {{/unless}}
+                <div class="row">
+                    <div class="progress" style="width: 100%">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {{successful_pct}}%"
+                            aria-valuenow="{{successful}}" aria-valuemin="0" aria-valuemax="{{total}}">
+                            {{successful_pct}} %
+                        </div>
+                        <div class="progress-bar bg-danger" role="progressbar" style="width: {{failed_pct}}%"
+                            aria-valuenow="{{failed}}" aria-valuemin="0" aria-valuemax="{{total}}">
+                            {{failed_pct}} %
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <ul>
+                <table>
+                {{#each exercises}}
+                    <tr>
+                        <td>{{this.name}}</td>
+                        {{#if this.downloaded}}
+                            <td style="color: greenyellow"> Downloaded! </td>
+                        {{/if}}
+                        {{#if this.failed}}
+                            <td style="color: red"> Download failed: {{this.error}} </td>
+                        {{/if}}
+                        {{#unless this.failed}}
+                            {{#unless this.downloaded}}
+                                <td><div class="spinner-border ml-auto" role="status" aria-hidden="true"></div></td>
+                            {{/unless}}
+                        {{/unless}}
+                    </tr>
+                {{/each}}
+            </table>
+            </ul>
+        </div>
+    </body>
+</html>

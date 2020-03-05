@@ -43,9 +43,9 @@ export default class WorkspaceManager {
      */
     public createExerciseDownloadPath(
         organizationSlug: string, checksum: string, exerciseDetails: ExerciseDetails,
-    ): string {
-        if (this.idToData.has(exerciseDetails.course_id)) {
-            throw new Error("Attempted to download existing exercise.");
+    ): Result<string, Error> {
+        if (this.idToData.has(exerciseDetails.exercise_id)) {
+            return new Err(new Error("Exercise already downloaded."));
         }
         const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
         const { course_name, exercise_name, exercise_id, deadline } = exerciseDetails;
@@ -57,7 +57,7 @@ export default class WorkspaceManager {
             path: exercisePath,
         });
         this.updatePersistentData();
-        return this.getClosedPath(exercise_id);
+        return new Ok(this.getClosedPath(exercise_id));
     }
 
     /**
