@@ -22,6 +22,11 @@ export class UserData {
         return course[0];
     }
 
+    public getCourseByName(name: string) {
+        const course = this.getCourses().filter((x) => x.name === name);
+        return course[0];
+    }
+
     public addCourse(data: LocalCourseData) {
         if (this.courses.has(data.id)) {
             throw new Error("Trying to add an already existing course");
@@ -40,7 +45,7 @@ export class UserData {
         if (!courseData) {
             return;
         }
-        courseData.completedExercises = completedExercises;
+        courseData.exercises = courseData.exercises.map((x) => ({id: x.id, passed: completedExercises.includes(x.id)}));
         this.courses.set(courseId, courseData);
         this.updatePersistentData();
     }
@@ -53,6 +58,17 @@ export class UserData {
         return exercises.filter((x) => x.course === courseName);
     }
 
+    public setPassed(courseId: number, exerciseId: number): void {
+        const courseData = this.courses.get(courseId);
+        if (!courseData) {
+            return;
+        }
+        courseData.exercises = courseData.exercises.map((x) =>
+        ({id: x.id, passed: exerciseId === x.id ? true : x.passed }));
+        this.courses.set(courseId, courseData);
+        this.updatePersistentData();
+    }
+
     private updatePersistentData() {
         this.storage.updateUserData({ courses: Array.from(this.courses.values()) });
     }
@@ -63,6 +79,8 @@ export type LocalCourseData = {
     name: string;
     description: string;
     organization: string;
-    exerciseIds: number[];
-    completedExercises: number[];
+    exercises: Array<{
+        id: number;
+        passed: boolean;
+    }>;
 };

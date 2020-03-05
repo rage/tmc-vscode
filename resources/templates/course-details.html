@@ -53,12 +53,12 @@
                 </tr>
             </thead>
             <tbody>
-            {{#each exercises}}
+            {{#each exerciseData}}
                 <tr>
                     <td class="checkbox-xl text-center"><input type="checkbox" value="{{this.id}}" onchange="updateCount(this)" /></td>
                     <td>{{this.name}}</td>
                     <td>Deadline</td>
-                    <td>Passed</td>
+                    <td>{{this.passed}}</td>
                     <td>{{this.isOpen}}</td>
                 </tr>
             {{/each}}
