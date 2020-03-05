@@ -48,12 +48,13 @@ export default class WorkspaceManager {
             throw new Error("Attempted to download existing exercise.");
         }
         const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
-        const { course_name, exercise_name, exercise_id } = exerciseDetails;
+        const { course_name, exercise_name, exercise_id, deadline } = exerciseDetails;
         const exercisePath = path.join(exerciseFolderPath, organizationSlug, course_name, exercise_name);
         this.pathToId.set(exercisePath, exercise_id);
         this.idToData.set(exercise_id, {
-            checksum, course: exerciseDetails.course_name, id: exercise_id, isOpen: false,
-            name: exerciseDetails.exercise_name, organization: organizationSlug, path: exercisePath,
+            checksum, course: exerciseDetails.course_name, deadline,
+            id: exercise_id, isOpen: false, name: exerciseDetails.exercise_name, organization: organizationSlug,
+            path: exercisePath,
         });
         this.updatePersistentData();
         return this.getClosedPath(exercise_id);

@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import { LocalCourseData, UserData } from "../config/userdata";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
-import { sleep } from "../utils";
+import { parseDeadline, sleep } from "../utils";
 import { ActionContext } from "./types";
 
 /**
@@ -162,7 +162,7 @@ export async function resetExercise(id: number, { ui, tmc, workspaceManager }: A
 /**
  * Opens the course exercise list view
  */
-export async function displayCourseDetails(id: number, { tmc, ui, userData }: ActionContext) {
+export async function displayCourseDownloadDetails(id: number, { tmc, ui, userData }: ActionContext) {
     const result = await tmc.getCourseDetails(id);
 
     if (result.err) {
@@ -185,8 +185,14 @@ export async function displayCourseDetails(id: number, { tmc, ui, userData }: Ac
 export async function displayLocalExerciseDetails(id: number, { tmc, ui, userData }: ActionContext) {
     const course = userData.getCourse(id);
     const exercises = userData.getCoursesLocalExercises(course.name);
-    const exerciseData = new Map<number, { id: number, name: string, isOpen: boolean, passed: boolean }>();
-    exercises?.forEach((x) => exerciseData.set(x.id, { id: x.id, name: x.name, isOpen: x.isOpen, passed: false }));
+    const exerciseData = new Map<number, { id: number, name: string, isOpen: boolean,
+                                        passed: boolean, deadlineString: string }>();
+
+    exercises?.forEach((x) => exerciseData.set(x.id,
+    { deadlineString: x.deadline ? parseDeadline(x.deadline).toString().split("(", 1)[0] : "-",
+    id: x.id, isOpen: x.isOpen, name: x.name, passed: false }));
+    console.log(exercises);
+
     course.exercises.forEach((x) => {
         const data = exerciseData.get(x.id);
         if (data) {

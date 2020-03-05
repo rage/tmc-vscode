@@ -106,3 +106,13 @@ export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number
     }
     return workspaceManager.getExercisePath(editorPath);
 }
+
+/**
+ * Creates a date object from string
+ * @param deadline Deadline as string from API
+ */
+export function parseDeadline(deadline: string) {
+    const inMillis = Date.parse(deadline);
+    const date = new Date(inMillis);
+    return date;
+}

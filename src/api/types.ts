@@ -169,4 +169,5 @@ export type LocalExerciseData = {
     path: string;
     checksum: string;
     isOpen: boolean;
+    deadline: string | null;
 };

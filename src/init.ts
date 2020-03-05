@@ -6,7 +6,7 @@ import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
 import {
-    closeCompletedExercises, closeExercises, displayCourseDetails, displayLocalExerciseDetails, displaySummary,
+    closeCompletedExercises, closeExercises, displayCourseDownloadDetails, displayLocalExerciseDetails, displaySummary,
     downloadExercises, login, logout, openExercises, openUncompletedExercises, selectNewCourse,
 } from "./actions/actions";
 import WorkspaceManager from "./api/workspaceManager";
@@ -57,8 +57,8 @@ export function registerUiActions(
     ui.webview.registerHandler("addCourse", () => {
         selectNewCourse(actionContext);
     });
-    ui.webview.registerHandler("courseDetails", (msg: { type: string, id: number }) => {
-        displayCourseDetails(msg.id, actionContext);
+    ui.webview.registerHandler("exerciseDownloads", (msg: { type: string, id: number }) => {
+        displayCourseDownloadDetails(msg.id, actionContext);
     });
     ui.webview.registerHandler("exerciseDetails", (msg: { type: string, id: number }) => {
         displayLocalExerciseDetails(msg.id, actionContext);
