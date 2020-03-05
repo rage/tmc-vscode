@@ -1,7 +1,7 @@
 import { Err, Ok, Result, Results } from "ts-results";
 import * as vscode from "vscode";
 
-import { LocalCourseData } from "../config/userdata";
+import { LocalCourseData, UserData } from "../config/userdata";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
 import { sleep } from "../utils";
@@ -10,7 +10,9 @@ import { ActionContext } from "./types";
 /**
  * Submits an exercise while keeping the user informed
  */
-export async function submitExercise(id: number, { ui, resources, tmc }: ActionContext, tempView?: TemporaryWebview) {
+export async function submitExercise(id: number,
+                                     { userData, ui, resources, tmc, workspaceManager }: ActionContext,
+                                     tempView?: TemporaryWebview) {
     const submitResult = await tmc.submitExercise(id);
     if (submitResult.err) {
         vscode.window.showErrorMessage(`Exercise submission failed: \
@@ -54,6 +56,11 @@ export async function submitExercise(id: number, { ui, resources, tmc }: ActionC
         if (statusResult.val.status !== "processing") {
             ui.setStatusBar("Tests finished, see result", 5000);
             temp.setContent("submission-result", statusData);
+            if (statusData.status === "ok") {
+                userData.setPassed(
+                    userData.getCourseByName(workspaceManager.getExerciseDataById(id).unwrap().course).id
+                    , id);
+            }
             break;
         }
         if (!temp.disposed) {
@@ -178,7 +185,17 @@ export async function displayCourseDetails(id: number, { tmc, ui, userData }: Ac
 export async function displayLocalExerciseDetails(id: number, { tmc, ui, userData }: ActionContext) {
     const course = userData.getCourse(id);
     const exercises = userData.getCoursesLocalExercises(course.name);
-    ui.webview.setContentFromTemplate("exercise-details", { exercises, course, courseId: course.id }, true);
+    const exerciseData = new Map<number, { id: number, name: string, isOpen: boolean, passed: boolean }>();
+    exercises?.forEach((x) => exerciseData.set(x.id, { id: x.id, name: x.name, isOpen: x.isOpen, passed: false }));
+    course.exercises.forEach((x) => {
+        const data = exerciseData.get(x.id);
+        if (data) {
+            data.passed = x.passed;
+            exerciseData.set(x.id, data);
+        }
+    });
+    ui.webview.setContentFromTemplate("exercise-details",
+    { exerciseData: exerciseData.values(), course, courseId: course.id }, true);
 }
 
 /**
@@ -363,9 +380,8 @@ export async function selectNewCourse(actionContext: ActionContext) {
     const courseDetails = courseDetailsResult.val.course;
 
     const localData: LocalCourseData = {
-        completedExercises: courseDetails.exercises.filter((e) => e.completed).map((e) => e.id),
         description: courseDetails.description,
-        exerciseIds: courseDetails.exercises.map((e) => e.id), // Only IDs?
+        exercises: courseDetails.exercises.map((e) => ({ id: e.id, passed: e.completed })),
         id: courseDetails.id,
         name: courseDetails.name,
         organization: orgAndCourse.val.organization,
@@ -387,7 +403,7 @@ export async function closeCompletedExercises(courseId: number, actionContext: A
     if (!courseData) {
         return;
     }
-    closeExercises(courseData.completedExercises, actionContext);
+    closeExercises(courseData.exercises.filter((x) => x.passed).map((x) => x.id), actionContext);
 }
 
 export async function openUncompletedExercises(courseId: number, actionContext: ActionContext) {
@@ -397,7 +413,5 @@ export async function openUncompletedExercises(courseId: number, actionContext: 
     if (!courseData) {
         return;
     }
-    const uncompleted = courseData.exerciseIds.filter((x) => !courseData.completedExercises.includes(x));
-    console.log(uncompleted);
-    openExercises(uncompleted, actionContext);
+    openExercises(courseData.exercises.filter((x) => !x.passed).map((x) => x.id), actionContext);
 }
