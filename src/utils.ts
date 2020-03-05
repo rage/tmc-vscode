@@ -1,3 +1,4 @@
+import * as cp from "child_process";
 import * as fs from "fs";
 import * as fetch from "node-fetch";
 import * as path from "path";
@@ -7,6 +8,7 @@ import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
 import WorkspaceManager from "./api/workspaceManager";
 import { ConnectionError } from "./errors";
+
 /**
  * Downloads data from given url to the specified file path with a progress bar in the VSCode status bar.
  * @param url Url to data
@@ -79,6 +81,19 @@ export async function downloadFile(url: string, filePath: string,
     }
 
     return Ok.EMPTY;
+}
+
+/**
+ * Check if calling java programs is possible.
+ */
+export async function isJavaPresent(): Promise<boolean> {
+    let result = false;
+    await new Promise((resolve) => cp.exec("java -version", (error) => {
+        result = (error === null);
+        resolve();
+    }));
+
+    return result;
 }
 
 /**
