@@ -4,6 +4,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { Err, Ok, Result } from "ts-results";
+import { is } from "typescript-is";
 import WorkspaceManager from "./api/workspaceManager";
 import { ConnectionError } from "./errors";
 /**
@@ -78,6 +79,26 @@ export async function downloadFile(url: string, filePath: string,
     }
 
     return Ok.EMPTY;
+}
+
+/**
+ * Checks whether the extension is running in a development or production environment.
+ */
+export function isProductionBuild(): boolean {
+    // Use configuration properties to see whether superflous object properties are enabled in tsconfig.
+    // In the code this feature is used when fetched API data is being parsed.
+    // For configuration, see tsconfig.json used by webpack.dev.json
+    // and tsconfig.production.json used by webpack.prod.json
+    type TestType = {
+        strict: boolean,
+    };
+
+    const testObject = {
+        strict: true,
+        superflous: "a superfluous property",
+    };
+
+    return is<TestType>(testObject);
 }
 
 /**

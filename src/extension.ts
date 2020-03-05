@@ -7,11 +7,11 @@ import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import UI from "./ui/ui";
-import { getCurrentExerciseId } from "./utils";
+import { getCurrentExerciseId, isProductionBuild } from "./utils";
 
 export async function activate(context: vscode.ExtensionContext) {
-
-    console.log('Congratulations, your extension "tmc-vscode" is now active!');
+    const productionMode = isProductionBuild();
+    console.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
 
     const result = await init.firstTimeInitialization(context);
     if (result.ok) {

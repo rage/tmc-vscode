@@ -17,7 +17,7 @@
 		{
 			"label": "webpackBuild",
 			"type": "npm",
-			"script": "webpack-dev",
+			"script": "webpack:watch",
 			"problemMatcher": {
 				"base": "$tsc-watch",
 				"background": {
