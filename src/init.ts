@@ -11,7 +11,7 @@ import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { downloadExercises, setCourse, setOrganization } from "./ui/treeview/handlers";
-import { downloadFileWithProgress } from "./utils";
+import { downloadFileWithProgress, isJavaPresent } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -70,6 +70,11 @@ export function registerUiActions(
  */
 export async function firstTimeInitialization(extensionContext: vscode.ExtensionContext):
     Promise<Result<Resources, Error>> {
+
+    if (!(await isJavaPresent())) {
+        return new Err(new Error("Java not found or improperly configured."));
+    }
+
     const extensionVersion = vscode.extensions.getExtension("tmc-vscode-temporary.tmc-vscode")?.packageJSON.version;
 
     const cssPath = extensionContext.asAbsolutePath("resources/styles");
