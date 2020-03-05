@@ -84,6 +84,16 @@ export default class WorkspaceManager {
         return new Ok(data);
     }
 
+    public getExercisesByCourseName(courseName: string): LocalExerciseData[] {
+        const exercises: LocalExerciseData[] = [];
+        for (const data of this.idToData.values()) {
+            if (data.course === courseName) {
+                exercises.push(data);
+            }
+        }
+        return exercises;
+    }
+
     /**
      * Gets the matching exercise's ID for the given path, if managed by this object.
      * @param exerciseFolder Path to exercise folder used for matching with the id

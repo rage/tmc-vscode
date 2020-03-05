@@ -50,14 +50,6 @@ export class UserData {
         this.updatePersistentData();
     }
 
-    public getCoursesLocalExercises(courseName: string) {
-        const exercises = this.storage.getExerciseData();
-        if (!exercises) {
-            return;
-        }
-        return exercises.filter((x) => x.course === courseName);
-    }
-
     public setPassed(courseId: number, exerciseId: number): void {
         const courseData = this.courses.get(courseId);
         if (!courseData) {

@@ -182,9 +182,9 @@ export async function displayCourseDetails(id: number, { tmc, ui, userData }: Ac
 /**
  * Opens details view for local exercises
  */
-export async function displayLocalExerciseDetails(id: number, { tmc, ui, userData }: ActionContext) {
+export async function displayLocalExerciseDetails(id: number, { tmc, ui, userData, workspaceManager }: ActionContext) {
     const course = userData.getCourse(id);
-    const exercises = userData.getCoursesLocalExercises(course.name);
+    const exercises = workspaceManager.getExercisesByCourseName(course.name);
     const exerciseData = new Map<number, { id: number, name: string, isOpen: boolean, passed: boolean }>();
     exercises?.forEach((x) => exerciseData.set(x.id, { id: x.id, name: x.name, isOpen: x.isOpen, passed: false }));
     course.exercises.forEach((x) => {
@@ -219,7 +219,6 @@ export async function downloadExercises(
 
     if (results.err) {
         vscode.window.showErrorMessage("One or more exercise downloads failed.");
-        return;
     }
 
     await displayLocalExerciseDetails(courseId, actionContext);
