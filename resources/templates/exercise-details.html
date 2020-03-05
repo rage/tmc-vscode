@@ -13,8 +13,8 @@
             <div class="row">
                 <div class="col-sm">
                     <h1>Exercise details</h1>
-                    <h2>Course name</h2>
-                    <p>Course description</p>
+                    <h2>{{course.name}}</h2>
+                    <p>{{course.description}}</p>
                 </div>
             </div>
             <div class="row">
@@ -25,7 +25,7 @@
                     <button class="btn-primary m-1 w-100" onclick="openCloseAll('closeCompleted')">Close all completed</button>
                 </div>
                 <div class="col-sm-3">
-                    <button class="btn-primary m-1 w-100" onclick="downloadView({{courseId}})">Download more exercises</button>
+                    <button class="btn-primary m-1 w-100" onclick="downloadView( {{courseId}} )">Download more exercises</button>
                 </div>
             </div>
             <div class="row">

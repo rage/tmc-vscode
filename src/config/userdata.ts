@@ -19,7 +19,7 @@ export class UserData {
 
     public getCourse(id: number) {
         const course = this.getCourses().filter((x) => x.id === id);
-        return course;
+        return course[0];
     }
 
     public addCourse(data: LocalCourseData) {

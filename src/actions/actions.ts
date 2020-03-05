@@ -175,15 +175,10 @@ export async function displayCourseDetails(id: number, { tmc, ui, userData }: Ac
 /**
  * Opens details view for local exercises
  */
-export async function displayLocalExerciseDetails(id: number, {tmc, ui, userData }: ActionContext) {
-    // TODO: get coursedetails from localcoursedata
-    const result = await tmc.getCourseDetails(id);
-    if (result.err) {
-        console.error("Fetching course details failed: " + result.val.message);
-        return;
-    }
-    const exercises = userData.getCoursesLocalExercises(result.val.course.name);
-    ui.webview.setContentFromTemplate("exercise-details", { exercises, courseId: id }, true);
+export async function displayLocalExerciseDetails(id: number, { tmc, ui, userData }: ActionContext) {
+    const course = userData.getCourse(id);
+    const exercises = userData.getCoursesLocalExercises(course.name);
+    ui.webview.setContentFromTemplate("exercise-details", { exercises, course, courseId: course.id }, true);
 }
 
 /**
