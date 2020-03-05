@@ -169,7 +169,7 @@ export async function displayCourseDetails(id: number, { tmc, ui, userData }: Ac
     const data = {
         courseId: id, courseName: result.val.course.name, details, organizationSlug,
     };
-    await ui.webview.setContentFromTemplate("course-details", data);
+    await ui.webview.setContentFromTemplate("download-exercises", data);
 }
 
 /**
@@ -178,7 +178,7 @@ export async function displayCourseDetails(id: number, { tmc, ui, userData }: Ac
 export async function displayLocalExerciseDetails(id: number, { tmc, ui, userData }: ActionContext) {
     const course = userData.getCourse(id);
     const exercises = userData.getCoursesLocalExercises(course.name);
-    ui.webview.setContentFromTemplate("exercise-details", { exercises, course, courseId: course.id }, true);
+    ui.webview.setContentFromTemplate("course-details", { exercises, course, courseId: course.id }, true);
 }
 
 /**

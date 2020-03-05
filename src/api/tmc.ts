@@ -3,9 +3,7 @@ import ClientOauth2 = require("client-oauth2");
 import * as FormData from "form-data";
 import * as fs from "fs";
 import * as fetch from "node-fetch";
-import * as path from "path";
 import * as url from "url";
-import * as vscode from "vscode";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
 

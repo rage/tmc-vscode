@@ -1,7 +1,6 @@
 import TMC from "../../api/tmc";
 import Storage from "../../config/storage";
 import UI from "../ui";
-import { VisibilityGroup } from "./visibility";
 
 export type HandlerContext = {
     tmc: TMC;
@@ -14,4 +13,13 @@ export type VisibilityGroups = {
     LOGGED_IN: VisibilityGroup;
     ORGANIZATION_CHOSEN: VisibilityGroup;
     COURSE_CHOSEN: VisibilityGroup;
+};
+
+export type VisibilityGroup = {
+    _id: string;
+    not: VisibilityGroupNegated;
+};
+
+export type VisibilityGroupNegated = {
+    _id: string;
 };

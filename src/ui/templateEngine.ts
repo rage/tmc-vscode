@@ -10,13 +10,11 @@ import { numbersToString } from "../utils";
 export default class TemplateEngine {
     private cssPath: string;
     private htmlPath: string;
-    private context: vscode.ExtensionContext;
     private cache: Map<string, HandlebarsTemplateDelegate<any>>;
 
-    constructor(resources: Resources, context: vscode.ExtensionContext) {
+    constructor(resources: Resources) {
         this.cssPath = resources.cssFolder;
         this.htmlPath = resources.htmlFolder;
-        this.context = context;
         this.cache = new Map();
         /**
          * Logo path for organizations

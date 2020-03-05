@@ -88,10 +88,17 @@ export function sleep(millis: number) {
     return new Promise((resolve) => setTimeout(resolve, millis));
 }
 
+/**
+ * Convert Chars to a string
+ * @param array Char numbers array
+ */
 export function numbersToString(array: number[]) {
     return String.fromCharCode(...array);
 }
 
+/**
+ * Get the Exercise ID for the currently open text editor
+ */
 export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number | undefined {
     const editorPath = vscode.window.activeTextEditor?.document.fileName;
     if (!editorPath) {

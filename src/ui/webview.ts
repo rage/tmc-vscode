@@ -25,7 +25,7 @@ export default class TmcWebview {
      */
     constructor(extensionContext: vscode.ExtensionContext, resources: Resources) {
         this.extensionContext = extensionContext;
-        this.templateEngine = new TemplateEngine(resources, extensionContext);
+        this.templateEngine = new TemplateEngine(resources);
         this.resources = resources;
     }
 

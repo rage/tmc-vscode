@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
-import {Visibility, VisibilityGroup, VisibilityGroupNegated} from "./visibility";
+import { VisibilityGroup, VisibilityGroupNegated } from "./types";
+import { Visibility } from "./visibility";
 
 /**
  * A class for managing the TMC menu treeview.

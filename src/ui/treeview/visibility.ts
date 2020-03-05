@@ -1,3 +1,5 @@
+import { VisibilityGroup, VisibilityGroupNegated } from "./types";
+
 /**
  * Logic class for managing visibility of treeview actions
  */
@@ -117,12 +119,3 @@ export class Visibility {
         return group.startsWith("!") ? group.substring(1) : group;
     }
 }
-
-export type VisibilityGroup = {
-    _id: string;
-    not: VisibilityGroupNegated;
-};
-
-export type VisibilityGroupNegated = {
-    _id: string;
-};
