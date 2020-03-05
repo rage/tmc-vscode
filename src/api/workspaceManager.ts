@@ -127,6 +127,7 @@ export default class WorkspaceManager {
             fs.renameSync(this.getClosedPath(id), data.path);
             data.isOpen = true;
             this.idToData.set(id, data);
+            this.updatePersistentData();
             return new Ok(data.path);
         } else {
             return new Err(new Error("Invalid ID or unable to open."));
@@ -143,6 +144,7 @@ export default class WorkspaceManager {
             fs.renameSync(data.path, this.getClosedPath(id));
             data.isOpen = false;
             this.idToData.set(id, data);
+            this.updatePersistentData();
         } else {
             throw new Err(new Error("Invalid ID or unable to close."));
         }
