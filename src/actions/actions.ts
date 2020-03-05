@@ -191,7 +191,6 @@ export async function displayLocalExerciseDetails(id: number, { tmc, ui, userDat
     exercises?.forEach((x) => exerciseData.set(x.id,
     { deadlineString: x.deadline ? parseDeadline(x.deadline).toString().split("(", 1)[0] : "-",
     id: x.id, isOpen: x.isOpen, name: x.name, passed: false }));
-    console.log(exercises);
 
     course.exercises.forEach((x) => {
         const data = exerciseData.get(x.id);
@@ -200,8 +199,16 @@ export async function displayLocalExerciseDetails(id: number, { tmc, ui, userDat
             exerciseData.set(x.id, data);
         }
     });
+
+    const sortedExercises = Array.from(exerciseData.values()).sort((a, b) => {
+        if (a.deadlineString === b.deadlineString) {
+            return a.name.localeCompare(b.name);
+        }
+        return a.deadlineString.localeCompare(b.deadlineString);
+    });
+
     ui.webview.setContentFromTemplate("course-details",
-    { exerciseData: exerciseData.values(), course, courseId: course.id }, true);
+    { exerciseData: sortedExercises, course, courseId: course.id }, true);
 }
 
 /**
