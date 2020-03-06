@@ -30,6 +30,8 @@ export async function activate(context: vscode.ExtensionContext) {
             return;
         }
 
+        await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
+
         const ui = new UI(context, resources, vscode.window.createStatusBarItem());
         const storage = new Storage(context);
         const workspaceManager = new WorkspaceManager(storage, resources);

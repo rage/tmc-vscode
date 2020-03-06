@@ -54,20 +54,20 @@
 				{
 					"command": "runTests",
 					"group": "navigation",
-					"when": "resourceScheme == file"
+					"when": "resourceScheme == file && tmcWorkspaceActive"
 				},
 				{
 					"command": "uploadArchive",
 					"group": "navigation",
-					"when": "resourceScheme == file"
+					"when": "resourceScheme == file && tmcWorkspaceActive"
 				},
 				{
 					"command": "closeExercise",
-					"when": "resourceScheme == file"
+					"when": "resourceScheme == file && tmcWorkspaceActive"
 				},
 				{
 					"command": "resetExercise",
-					"when": "resourceScheme == file"
+					"when": "resourceScheme == file && tmcWorkspaceActive"
 				}
 			]
 		},
