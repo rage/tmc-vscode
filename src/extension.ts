@@ -7,7 +7,7 @@ import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import UI from "./ui/ui";
-import { getCurrentExerciseId } from "./utils";
+import { askForConfirmation, getCurrentExerciseId } from "./utils";
 
 export async function activate(context: vscode.ExtensionContext) {
 
@@ -63,8 +63,42 @@ export async function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(
             vscode.commands.registerCommand("resetExercise", async () => {
                 const exerciseId = getCurrentExerciseId(workspaceManager);
-                exerciseId ? resetExercise(exerciseId, actionContext)
-                    : vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
+                if (!exerciseId) {
+                    vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
+                    return;
+                }
+                const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
+                if (exerciseData.err) {
+                    vscode.window.showErrorMessage("The data for this exercise seems to be missing");
+                    return;
+                }
+                askForConfirmation(`Are you sure you want to reset exercise ${exerciseData.val.name}?`,
+                    () => resetExercise(exerciseId, actionContext),
+                    () => vscode.window.showInformationMessage(`Reset canceled for exercise ${exerciseData.val.name}.`),
+                );
+            }),
+        );
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand("closeExercise", async () => {
+                const exerciseId = getCurrentExerciseId(workspaceManager);
+                if (!exerciseId) {
+                    vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
+                    return;
+                }
+                const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
+                if (exerciseData.err) {
+                    vscode.window.showErrorMessage("The data for this exercise seems to be missing");
+                    return;
+                }
+                if (userData.getPassed(exerciseId)) {
+                    workspaceManager.closeExercise(exerciseId);
+                    return;
+                }
+                askForConfirmation(`Are you sure you want to close uncompleted exercise ${exerciseData.val.name}?`,
+                    () => workspaceManager.closeExercise(exerciseId),
+                    () => vscode.window.showInformationMessage(`Close canceled for exercise ${exerciseData.val.name}.`),
+                );
             }),
         );
     } else {

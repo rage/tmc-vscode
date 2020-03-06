@@ -2,11 +2,18 @@ import Storage from "./storage";
 
 export class UserData {
     private courses: Map<number, LocalCourseData>;
+    private passedExercises: Set<number> = new Set();
     private storage: Storage;
     constructor(storage: Storage) {
         const persistentData = storage.getUserData();
         if (persistentData) {
             this.courses = new Map(persistentData.courses.map((x) => [x.id, x]));
+
+            persistentData.courses.forEach((x) => x.exercises.forEach((y) => {
+                if (y.passed) {
+                    this.passedExercises.add(y.id);
+                }
+            }));
         } else {
             this.courses = new Map();
         }
@@ -46,6 +53,9 @@ export class UserData {
             return;
         }
         courseData.exercises = courseData.exercises.map((x) => ({id: x.id, passed: completedExercises.includes(x.id)}));
+        courseData.exercises.forEach((x) =>
+            completedExercises.includes(x.id) ? this.passedExercises.add(x.id) : this.passedExercises.delete(x.id),
+        );
         this.courses.set(courseId, courseData);
         this.updatePersistentData();
     }
@@ -57,8 +67,13 @@ export class UserData {
         }
         courseData.exercises = courseData.exercises.map((x) =>
         ({id: x.id, passed: exerciseId === x.id ? true : x.passed }));
+        this.passedExercises.add(exerciseId);
         this.courses.set(courseId, courseData);
         this.updatePersistentData();
+    }
+
+    public getPassed(exerciseId: number) {
+        return this.passedExercises.has(exerciseId);
     }
 
     private updatePersistentData() {

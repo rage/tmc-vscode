@@ -235,12 +235,24 @@ export default class WorkspaceManager {
     private initializeWatcherData() {
         this.watcherTree.clear();
         for (const data of this.idToData.values()) {
-            this.addToWatcherTree(data);
+            if (data.isOpen) {
+                this.addToWatcherTree(data);
+            }
         }
     }
 
     private watcherAction(targetPath: string) {
         const relation = path.relative(this.resources.tmcExercisesFolderPath, targetPath).toString().split(path.sep, 3);
+        console.log(relation);
+        console.log(Array.from(this.watcherTree.entries()));
+        const x = this.watcherTree.get("hy")?.entries();
+        if (x) {
+            console.log(Array.from(x));
+            const xx = this.watcherTree.get("hy")?.get("hy-C-programming-2018")?.entries();
+            if (xx) {
+                console.log(Array.from(xx));
+            }
+        }
         if (relation[0] === "..") {
             return;
         }
