@@ -1,48 +1,69 @@
 <html>
-    <head>
-        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
-        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
 
-        <script>
-            const vscode = acquireVsCodeApi();
-            function sendCourse(id) {
-                vscode.postMessage({ type: "setCourse", id });
+<head>
+    <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+    <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+
+    <script>
+        const vscode = acquireVsCodeApi();
+        function sendCourse(id) {
+            vscode.postMessage({ type: "setCourse", id });
+        }
+        function changeOrg() {
+            vscode.postMessage({ type: "changeOrg" });
+        }
+
+        function searchCourse(param) {
+            courses = document.getElementsByClassName("course")
+            for (i = 0; i < courses.length; i++) {
+                name = courses[i].getAttribute('name')
+                console.log(name)
+                if (name.toUpperCase().includes(param.toUpperCase())) {
+                    courses[i].style.display = ""
+                } else {
+                    courses[i].style.display = "none"
+                }
             }
-            function changeOrg() {
-                vscode.postMessage({ type: "changeOrg"});
-            }
-        </script>
-    </head>
+        }
+    </script>
+</head>
 
-    <body>
-        <div class="container container-fluid">
-            <div class="row org-row">
-                <div class="col-md-2 bg-white d-flex flex-wrap align-items-center">
-                    <img class="img-fluid org-img" src="{{resolve_logo_path organization.logo_path}}" />
-                </div>
-                <div class="col-md-10">
-                    <h1>{{organization.name}}</h1>
-                    <p>{{organization.information}}</p>
-                </div>
+<body>
+    <div class="container container-fluid">
+        <div class="row org-row">
+            <div class="col-md-2 bg-white d-flex flex-wrap align-items-center">
+                <img class="img-fluid org-img" src="{{resolve_logo_path organization.logo_path}}" />
             </div>
-
-            <div class="row">
-                <div class="col-md px-0">
-                    <input type="button" onclick="changeOrg()" class="btn-primary relative" value="Change organization" />
-                </div>
-            </div>
-            
-            <div>
-                <h1 class="org-header">Courses</h1 c>
-                {{#each courses}}
-                    <div class="row org-row border-dark" onclick="sendCourse('{{this.id}}')">
-                        <div class="col-md">
-                            <h3>{{this.title}} <small class="text-muted">({{this.name}})</small></h3>
-                            <p>{{this.description}}</p>
-                        </div>
-                    </div>
-                {{/each}}
+            <div class="col-md-10">
+                <h1>{{organization.name}}</h1>
+                <p>{{organization.information}}</p>
             </div>
         </div>
-    </body>
+
+        <div class="row">
+            <div class="col-md px-0">
+                <input type="button" onclick="changeOrg()" class="btn-primary relative" value="Change organization" />
+            </div>
+        </div>
+
+        <div>
+            <h1 class="org-header">Courses</h1>
+
+            <div class="container fluid input-group-lg">
+                <input class="form-group form-control-lg" type="text" placeholder="search courses"
+                    onkeyup="searchCourse(this.value)" value="" />
+            </div>
+
+            {{#each courses}}
+            <div name="{{this.name}}, {{this.title}}" class="row org-row border-dark course" onclick="sendCourse('{{this.id}}')">
+                <div class="col-md">
+                    <h3>{{this.title}} <small class="text-muted">({{this.name}})</small></h3>
+                    <p>{{this.description}}</p>
+                </div>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+</body>
+
 </html>

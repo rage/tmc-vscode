@@ -1,47 +1,66 @@
 <html>
-    <head>
-        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
-        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
 
-        <script>
-            const vscode = acquireVsCodeApi();
-            function sendOrganization(slug) {
-                vscode.postMessage({ type: "setOrganization", slug });
+<head>
+    <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+    <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+
+    <script>
+        const vscode = acquireVsCodeApi();
+        function sendOrganization(slug) {
+            vscode.postMessage({ type: "setOrganization", slug });
+        }
+
+        function searchOrgs(param) {
+            orgs = document.getElementsByClassName("organization")
+            for (i = 0; i < orgs.length; i++) {
+                name = orgs[i].getAttribute('name')
+                if (name.toUpperCase().includes(param.toUpperCase())) {
+                    orgs[i].style.display = ""
+                } else {
+                    orgs[i].style.display = "none"
+                }
             }
-        </script>
-    </head>
-    
-    <body>
-        <div class="container container-fluid">
-            <div>
-                <h1 class="org-header">Frequently used organizations</h1>
-                {{#each pinned}}
-                    <div class="row org-row border-dark" onclick="sendOrganization('{{this.slug}}')">
-                        <div class="col-md-2 bg-white d-flex flex-wrap align-items-center">
-                            <img class="img-fluid org-img" src="{{resolve_logo_path this.logo_path}}" />
-                        </div>
-                        <div class="col-md-10">
-                            <h3>{{this.name}} <small class="text-muted">({{this.slug}})</small></h3>
-                            <p>{{this.information}}</p>
-                        </div>
-                    </div>
-                {{/each}}
+        }
+    </script>
+</head>
+
+<body>
+    <div class="container container-fluid">
+        <div>
+            <h1 class="org-header">Frequently used organizations</h1>
+            {{#each pinned}}
+            <div class="row org-row border-dark" onclick="sendOrganization('{{this.slug}}')">
+                <div class="col-md-2 bg-white d-flex flex-wrap align-items-center">
+                    <img class="img-fluid org-img" src="{{resolve_logo_path this.logo_path}}" />
+                </div>
+                <div class="col-md-10">
+                    <h3>{{this.name}} <small class="text-muted">({{this.slug}})</small></h3>
+                    <p>{{this.information}}</p>
+                </div>
             </div>
-            
-            <div>
-                <h1 class="org-header">All organizations</h1>
-                {{#each organizations}}
-                    <div class="row org-row border-dark" onclick="sendOrganization('{{this.slug}}')">
-                        <div class="col-md-2 bg-white d-flex flex-wrap align-items-center">
-                            <img class="img-fluid org-img" src="{{resolve_logo_path this.logo_path}}" />
-                        </div>
-                        <div class="col-md-10">
-                            <h4>{{this.name}} <small class="text-muted">({{this.slug}})</small></h4>
-                            <p>{{this.information}}</p>
-                        </div>
-                    </div>
-                {{/each}}
-            </div>
+            {{/each}}
         </div>
-    </body>
+
+        <div>
+            <h1 class="org-header">All organizations</h1>
+            <div class="container fluid input-group-lg">
+                <input class="form-group form-control-lg" type="text" placeholder="search organizations"
+                    onkeyup="searchOrgs(this.value)" value="" />
+            </div>
+            {{#each organizations}}
+            <div name="{{this.name}}" class="row org-row border-dark organization"
+                onclick="sendOrganization('{{this.slug}}')">
+                <div class="col-md-2 bg-white d-flex flex-wrap align-items-center">
+                    <img class="img-fluid org-img" src="{{resolve_logo_path this.logo_path}}" />
+                </div>
+                <div class="col-md-10">
+                    <h4>{{this.name}} <small class="text-muted">({{this.slug}})</small></h4>
+                    <p>{{this.information}}</p>
+                </div>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+</body>
+
 </html>
