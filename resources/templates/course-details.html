@@ -49,7 +49,7 @@
                     <th scope="col">Exercise name</th>
                     <th scope="col">Deadline</th>
                     <th scope="col">Passed</th>
-                    <th scope="col">Open in workspace</th>
+                    <th scope="col">In workspace</th>
                 </tr>
             </thead>
             <tbody>
@@ -64,9 +64,9 @@
                     <td><div>&#10060;</div></td>
                     {{/if}}
                     {{#if this.isOpen}}
-                    <td><span class="badge badge-primary">auki</span></td>
+                    <td><span class="badge badge-primary">open</span></td>
                     {{else}}
-                    <td><span class="badge badge-secondary">kiinni</span></td>
+                    <td><span class="badge badge-secondary">closed</span></td>
                     {{/if}}
                 </tr>
             {{/each}}
