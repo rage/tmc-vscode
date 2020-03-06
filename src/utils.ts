@@ -116,3 +116,13 @@ export function parseDeadline(deadline: string) {
     const date = new Date(inMillis);
     return date;
 }
+
+/**
+ * Return bootstrap striped, animated progress bar div as string
+ * @param percentDone How much done of the progress
+ */
+export function getProgressBar(percentDone: number): string {
+    return `<div class="progress">
+        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
+    </div>`;
+}

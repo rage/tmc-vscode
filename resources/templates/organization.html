@@ -26,29 +26,37 @@
 
 <body>
     <div class="container container-fluid">
-        <div>
-            <h1 class="org-header">Frequently used organizations</h1>
-            {{#each pinned}}
-            <div class="row org-row border-dark" onclick="sendOrganization('{{this.slug}}')">
-                <div class="col-md-2 bg-white d-flex flex-wrap align-items-center">
-                    <img class="img-fluid org-img" src="{{resolve_logo_path this.logo_path}}" />
+        <div class="row">
+            <div class="col">
+                <h1 class="org-header">Frequently used organizations</h1>
+                {{#each pinned}}
+                <div class="row org-row border-dark" onclick="sendOrganization('{{this.slug}}')">
+                    <div class="col-md-2 bg-white d-flex flex-wrap align-items-center">
+                        <img class="img-fluid org-img" src="{{resolve_logo_path this.logo_path}}" />
+                    </div>
+                    <div class="col-md-10">
+                        <h3>{{this.name}} <small class="text-muted">({{this.slug}})</small></h3>
+                        <p>{{this.information}}</p>
+                    </div>
                 </div>
-                <div class="col-md-10">
-                    <h3>{{this.name}} <small class="text-muted">({{this.slug}})</small></h3>
-                    <p>{{this.information}}</p>
-                </div>
+                {{/each}}
             </div>
-            {{/each}}
         </div>
 
-        <div>
-            <h1 class="org-header">All organizations</h1>
-            <div class="container fluid input-group-lg">
-                <input class="form-group form-control-lg" type="text" placeholder="search organizations"
-                    onkeyup="searchOrgs(this.value)" value="" />
+        <div class="row pt-4">
+            <div class="col">
+                <h1>All organizations</h1>
+                <div class="input-group-lg">
+                    <input class="form-group form-control-lg" type="text" placeholder="Search organizations"
+                        onkeyup="searchOrgs(this.value)" value="" />
+                </div>
             </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
             {{#each organizations}}
-            <div name="{{this.name}}" class="row org-row border-dark organization"
+            <div name="{{this.name}}, {{this.information}}, {{this.slug}}" class="row org-row border-dark organization"
                 onclick="sendOrganization('{{this.slug}}')">
                 <div class="col-md-2 bg-white d-flex flex-wrap align-items-center">
                     <img class="img-fluid org-img" src="{{resolve_logo_path this.logo_path}}" />
@@ -59,6 +67,7 @@
                 </div>
             </div>
             {{/each}}
+            </div>
         </div>
     </div>
 </body>

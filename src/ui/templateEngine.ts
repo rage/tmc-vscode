@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
-import { numbersToString } from "../utils";
+import { getProgressBar, numbersToString } from "../utils";
 
 export default class TemplateEngine {
     private cssPath: string;
@@ -85,28 +85,21 @@ export default class TemplateEngine {
             let percentDone = 0;
             if (status === "created") {
                 percentDone = 30;
-                return `<div class="progress">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
-                        </div>
+                return `${getProgressBar(percentDone)}
                         <div>&#10004; Submission received. Waiting for it to be processed.</div>`;
             } else if (status === "sending_to_sandbox") {
                 percentDone = 45;
-                return `<div class="progress">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
-                        </div>
-                        <div>&#10004; Submission received. Waiting for it to be processed.</div><div>Submission queued for processing.</div>`;
+                return `${getProgressBar(percentDone)}
+                        <div>&#10004; Submission received. Waiting for it to be processed.</div>
+                        <div>Submission queued for processing.</div>`;
             } else if (status === "processing_on_sandbox") {
                 percentDone = 75;
-                return `<div class="progress">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
-                        </div>
+                return `${getProgressBar(percentDone)}
                         <div>&#10004; Submission received. Waiting for it to be processed.</div>
                         <div>&#10004; Submission in queue for processing.</div>
                         <div>Testing submission.</div>`;
             } else {
-                return `<div class="progress">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
-                        </div>
+                return  `${getProgressBar(percentDone)}
                         <div>Submission sent to server.</div>`;
             }
         });

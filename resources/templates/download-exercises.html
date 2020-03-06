@@ -64,31 +64,33 @@
                         <p>{{description}}</p>
                     </div>
                     <div class="row py-2">
-                        <button class="mr-2" onclick="toggleAll()" id="togglebutton">Select all</button>
-                        <button onclick="downloadSelectedExercises()">Download selected</button>
-                        <button onclick="vscode.postMessage({type: 'courseDetails', id: {{id}} })">Return to exercise view</button>
+                        <div class="col-sm-3">
+                            <button class="btn-primary m-1 w-100" onclick="toggleAll()" id="togglebutton">Select all</button>
+                        </div>
+                        <div class="col-sm-3">
+                            <button class="btn-primary m-1 w-100" onclick="downloadSelectedExercises()">Download selected</button>
+                        </div>
+                        <div class="col-sm-3">
+                            <button class="btn-primary m-1 w-100" onclick="vscode.postMessage({type: 'courseDetails', id: {{id}} })">Return to exercise view</button>
+                        </div>
                     </div>
                 </div>
-                <div style="overflow-y: hidden;">
-                    <table class="table table-striped table-sm">
-                        {{#each exercises}}
+                <table class="table table-striped">
+                    <thead>
                         <tr>
-                            <td width="40">
-                                <div class="row pb-1">
-                                    <div class="col-sm-1 checkbox-xl">
-                                        <input type="checkbox" value="{{this.id}}" onchange="updateCount(this)"/>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="col-sm">
-                                    {{this.name}}
-                                </div>
-                            </td>
+                            <th scope="col">Select</th>
+                            <th scope="col">Exercise name</th>
                         </tr>
-                        {{/each}}
-                    </table>
-                </div>
+                    </thead>
+                    <tbody>
+                    {{#each exercises}}
+                    <tr>
+                        <td class="text-center"><input class="checkbox-xl" type="checkbox" value="{{this.id}}" onchange="updateCount(this)" /></td>
+                        <td>{{this.name}}</td>
+                    </tr>
+                    {{/each}}
+                    </tbody>
+                </table>
             {{/with}}
         </div>
     </body>
