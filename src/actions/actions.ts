@@ -123,40 +123,30 @@ export async function testExercise(id: number, actions: ActionContext) {
 }
 
 /**
- * Prompts user to reset exercise and resets exercise if user replies to prompt correctly.
+ * Resets an exercise
  */
 export async function resetExercise(id: number, { ui, tmc, workspaceManager }: ActionContext) {
-    const exerciseData = workspaceManager.getExerciseDataById(id).unwrap();
-    const options: vscode.InputBoxOptions = {
-        placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
-        prompt: `Are you sure you want to reset exercise ${exerciseData.name} ? `,
-    };
-    const reset = await vscode.window.showInputBox(options).then((value) => {
-        if (value?.toLowerCase() === "yes") {
-            return true;
-        } else {
-            return false;
-        }
-    });
 
-    if (reset) {
-        vscode.window.showInformationMessage(`Resetting exercise ${exerciseData.name}`);
-        ui.setStatusBar(`Resetting exercise ${exerciseData.name}`);
-        const submitResult = await tmc.submitExercise(id);
-        if (submitResult.err) {
-            vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
-                                            ${submitResult.val.name} - ${submitResult.val.message}`);
-            console.error(submitResult.val);
-            ui.setStatusBar(`Something went wrong while resetting exercise ${exerciseData.name}`, 10000);
-            return;
-        }
-        const slug = exerciseData.organization;
-        workspaceManager.deleteExercise(id);
-        await tmc.downloadExercise(id, slug, true);
-        ui.setStatusBar(`Exercise ${exerciseData.name} resetted successfully`, 10000);
-    } else {
-        vscode.window.showInformationMessage(`Reset canceled for exercise ${exerciseData.name}.`);
+    const exerciseData = workspaceManager.getExerciseDataById(id);
+    if (exerciseData.err) {
+        vscode.window.showErrorMessage("The data for this exercise seems to be missing");
+        return;
     }
+
+    vscode.window.showInformationMessage(`Resetting exercise ${exerciseData.val.name}`);
+    ui.setStatusBar(`Resetting exercise ${exerciseData.val.name}`);
+    const submitResult = await tmc.submitExercise(id);
+    if (submitResult.err) {
+        vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
+                                        ${submitResult.val.name} - ${submitResult.val.message}`);
+        console.error(submitResult.val);
+        ui.setStatusBar(`Something went wrong while resetting exercise ${exerciseData.val.name}`, 10000);
+        return;
+    }
+    const slug = exerciseData.val.organization;
+    workspaceManager.deleteExercise(id);
+    await tmc.downloadExercise(id, slug, true);
+    ui.setStatusBar(`Exercise ${exerciseData.val.name} resetted successfully`, 10000);
 }
 
 /**
