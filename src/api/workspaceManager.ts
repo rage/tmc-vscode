@@ -1,6 +1,8 @@
 import * as del from "del";
 import * as fs from "fs";
 import * as path from "path";
+import * as vscode from "vscode";
+
 import { Err, Ok, Result } from "ts-results";
 
 import Resources from "../config/resources";
@@ -16,6 +18,9 @@ export default class WorkspaceManager {
     private readonly storage: Storage;
     private readonly resources: Resources;
 
+    // Data for the workspace filesystem event watcher
+    private readonly watcherTree: Map<string, Map<string, Set<string>>> = new Map();
+
     /**
      * Creates a new instance of the WorkspaceManager class.
      * @param storage Storage object for persistent data storing
@@ -26,13 +31,13 @@ export default class WorkspaceManager {
         this.resources = resources;
         const storedData = this.storage.getExerciseData();
         if (storedData) {
-            console.log(storedData);
             this.idToData = new Map(storedData.map((x) => ([x.id, x])));
             this.pathToId = new Map(storedData.map((x) => ([x.path, x.id])));
         } else {
             this.idToData = new Map();
             this.pathToId = new Map();
         }
+        this.startWatcher();
     }
 
     /**
@@ -135,7 +140,13 @@ export default class WorkspaceManager {
         if (data && !data.isOpen) {
             fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
             clearFolder ? del.sync(data.path, { force: true }) : console.log(`${data.path} not cleared.`) ;
-            fs.renameSync(this.getClosedPath(id), data.path);
+            this.addToWatcherTree(data);
+            try {
+                fs.renameSync(this.getClosedPath(id), data.path);
+            } catch (err) {
+                this.removeFromWatcherTree(data);
+                return new Err(new Error("Folder move operation failed."));
+            }
             data.isOpen = true;
             this.idToData.set(id, data);
             this.updatePersistentData();
@@ -149,15 +160,17 @@ export default class WorkspaceManager {
      * Closes exercise by moving it away from workspace.
      * @param id Exercise ID to close
      */
-    public closeExercise(id: number) {
+    public closeExercise(id: number): Result<void, Error> {
         const data = this.idToData.get(id);
         if (data && data.isOpen) {
             fs.renameSync(data.path, this.getClosedPath(id));
             data.isOpen = false;
             this.idToData.set(id, data);
+            this.removeFromWatcherTree(data);
             this.updatePersistentData();
+            return Ok.EMPTY;
         } else {
-            throw new Err(new Error("Invalid ID or unable to close."));
+            return new Err(new Error("Invalid ID or unable to close."));
         }
     }
 
@@ -194,5 +207,65 @@ export default class WorkspaceManager {
 
     private getClosedPath(id: number) {
         return path.join(this.resources.tmcClosedExercisesFolderPath, id.toString());
+    }
+
+    private addToWatcherTree({organization, course, name}: LocalExerciseData) {
+        if (!this.watcherTree.has(organization)) {
+            this.watcherTree.set(organization, new Map());
+        }
+        if (!this.watcherTree.get(organization)?.has(course)) {
+            this.watcherTree.get(organization)?.set(course, new Set());
+        }
+        this.watcherTree.get(organization)?.get(course)?.add(name);
+    }
+
+    private removeFromWatcherTree({organization, course, name, path: exercisePath}: LocalExerciseData) {
+        if (this.watcherTree.get(organization)?.has(course)) {
+            this.watcherTree.get(organization)?.get(course)?.delete(name);
+            if (this.watcherTree.get(organization)?.get(course)?.size === 0) {
+                this.watcherTree.get(organization)?.delete(course);
+                if (this.watcherTree.get(organization)?.size === 0) {
+                    this.watcherTree.delete(organization);
+                }
+            }
+            this.watcherAction(exercisePath);
+        }
+    }
+
+    private initializeWatcherData() {
+        this.watcherTree.clear();
+        for (const data of this.idToData.values()) {
+            this.addToWatcherTree(data);
+        }
+    }
+
+    private watcherAction(targetPath: string) {
+        const relation = path.relative(this.resources.tmcExercisesFolderPath, targetPath).toString().split(path.sep, 3);
+        if (relation[0] === "..") {
+            return;
+        }
+        if (relation.length > 0 && !this.watcherTree.has(relation[0])) {
+            del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0]), { force: true });
+            return;
+        }
+        if (relation.length > 1 && !this.watcherTree.get(relation[0])?.has(relation[1])) {
+            del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0], relation[1]), { force: true });
+            return;
+        }
+        if (relation.length > 2 && !this.watcherTree.get(relation[0])?.get(relation[1])?.has(relation[2])) {
+            del.sync(path.join(this.resources.tmcExercisesFolderPath, ...relation), { force: true });
+            return;
+        }
+    }
+
+    private startWatcher() {
+        this.initializeWatcherData();
+        const watcher = vscode.workspace.createFileSystemWatcher("**", false, true, true);
+        watcher.onDidCreate((x) => {
+            if (x.scheme === "file") {
+                this.watcherAction(x.path);
+            }
+        });
+
     }
 }
