@@ -58,8 +58,16 @@
                     <td class="text-center"><input class="checkbox-xl" type="checkbox" value="{{this.id}}" onchange="updateCount(this)" /></td>
                     <td>{{this.name}}</td>
                     <td>{{this.deadlineString}}</td>
-                    <td>{{this.passed}}</td>
-                    <td>{{this.isOpen}}</td>
+                    {{#if this.passed}}
+                    <td><div>&#10004;</div></td>
+                    {{else}}
+                    <td><div>&#10060;</div></td>
+                    {{/if}}
+                    {{#if this.isOpen}}
+                    <td><span class="badge badge-primary">auki</span></td>
+                    {{else}}
+                    <td><span class="badge badge-secondary">kiinni</span></td>
+                    {{/if}}
                 </tr>
             {{/each}}
             </tbody>
