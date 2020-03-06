@@ -29,17 +29,17 @@ export default class TemplateEngine {
          * Checks the locally runned test status.
          */
         handlebars.registerHelper("check_test_status",
-                                    (status: string, logs: { stdout: number[], stderr: number[] }) => {
-            if (status === "PASSED") {
-                return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
-            } else if (status === "TESTS_FAILED") {
-                return "<h1>TESTS FAILED</h1>";
-            } else if (status === "COMPILE_FAILED") {
-                return `<h1>COMPILE FAILED</h1><pre>${numbersToString(logs.stdout)}</pre>`;
-            } else {
-                return "<h1>Something went seriously wrong while running the tests</h1>";
-            }
-        });
+            (status: string, logs: { stdout: number[], stderr: number[] }) => {
+                if (status === "PASSED") {
+                    return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
+                } else if (status === "TESTS_FAILED") {
+                    return "<h1>TESTS FAILED</h1>";
+                } else if (status === "COMPILE_FAILED") {
+                    return `<h1>COMPILE FAILED</h1><pre>${numbersToString(logs.stdout)}</pre>`;
+                } else {
+                    return "<h1>Something went seriously wrong while running the tests</h1>";
+                }
+            });
 
         /**
          * Submission result show correct heading or compilation error
