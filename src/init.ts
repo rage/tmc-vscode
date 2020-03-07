@@ -49,6 +49,9 @@ export function registerUiActions(
     ui.webview.registerHandler("login", ({ username, password }) => {
         login(actionContext, username, password, visibilityGroups);
     });
+    ui.webview.registerHandler("myCourses", (msg: { type: string} ) => {
+        displaySummary(actionContext);
+    });
     ui.webview.registerHandler("downloadExercises",
         (msg: { type: "downloadExercises", ids: number[], courseName: string,
                 organizationSlug: string, courseId: number }) => {
