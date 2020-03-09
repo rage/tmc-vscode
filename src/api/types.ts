@@ -114,7 +114,7 @@ export type SubmissionProcessingReport = {
 
 export type SubmissionResultReport = {
     api_version: number;
-    all_tests_passed: boolean;
+    all_tests_passed: boolean | null;
     user_id: number;
     login: string;
     course: string;
@@ -122,7 +122,7 @@ export type SubmissionResultReport = {
     status: "fail" | "ok" | "error";
     points: string[];
     validations: any;
-    valgrind: string;
+    valgrind: string | null;
     submission_url: string;
     solution_url: string | null;
     submitted_at: string;
@@ -135,7 +135,7 @@ export type SubmissionResultReport = {
     test_cases?: Array<{
         name: string;
         successful: boolean;
-        message: string;
+        message: string | null;
         exception: string[] | null;
         detailed_message: string | null;
     }>;
