@@ -17,8 +17,7 @@
                             <h1>Downloading exercises...</h1>
                         </div>
                     </div>
-                {{/if}}
-                {{#unless remaining}}
+                {{else}}
                     <div class="row py-1">
                         <div class="col">
                             <h1>Download complete</h1>
@@ -29,7 +28,7 @@
                             <button class="btn btn-primary" onclick="vscode.postMessage({type: 'courseDetails', id: {{courseId}} })">Return to course details</button>
                         </div>
                     </div>
-                {{/unless}}
+                {{/if}}
                 <div class="row py-1">
                     <div class="col">
                         <div class="progress" style="width: 100%">
@@ -51,15 +50,13 @@
                     <td>{{this.name}}</td>
                     {{#if this.downloaded}}
                         <td style="color: greenyellow"> Downloaded! </td>
-                    {{/if}}
-                    {{#if this.failed}}
-                        <td style="color: red"> Download failed: {{this.error}} </td>
-                    {{/if}}
-                    {{#unless this.failed}}
-                        {{#unless this.downloaded}}
+                    {{else}}
+                        {{#if this.failed}}
+                            <td style="color: red"> Download failed: {{this.error}} </td>
+                        {{else}}
                             <td><div class="spinner-border spinner-border-sm ml-auto" role="status" aria-hidden="true"></div></td>
-                        {{/unless}}
-                    {{/unless}}
+                        {{/if}}
+                    {{/if}}
                 </tr>
             {{/each}}
             </table>

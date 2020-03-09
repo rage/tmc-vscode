@@ -25,7 +25,7 @@
             </div>
         {{/if}}
         {{#if feedback_questions}}
-        <div id="feedbacknoti"></div>
+        <div id="feedbacknotification"></div>
         <div id="feedback" class="my-5">
             <h4>Anna palautetta</h4>
             <form>
@@ -88,6 +88,9 @@
     const feedback_url = "{{feedback_answer_url}}";
     const solution_url = "{{solution_url}}";
 
+    const feedbackNotification = document.getElementById("feedbacknotification");
+    const feedbackFormContainer = document.getElementById("feedback");
+
     function submitFeedback() {
         const feedback = [];
         const questions = document.querySelectorAll("input[type=range]");
@@ -96,12 +99,12 @@
                 feedback.push({ question_id: parseInt(question.dataset.questionid, 10), answer: question.value })
             }
         }
-        document.getElementById("feedback").style.display = "none";
-        document.getElementById("feedbacknoti").classList = "my-5 alert alert-success";
+        feedbackFormContainer.style.display = "none";
+        feedbackNotification.classList = "my-5 alert alert-success";
         if (feedback.length > 0) {
-            document.getElementById("feedbacknoti").innerText = "Feedback sent! Thank you.";
+            feedbackNotification.innerText = "Feedback sent! Thank you.";
         } else {
-            document.getElementById("feedbacknoti").innerText = "No feedback given.";
+            feedbackNotification.innerText = "No feedback given.";
         }
         vscode.postMessage({ feedback: { status: feedback }, url: feedback_url });
     }

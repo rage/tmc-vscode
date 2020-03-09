@@ -27,7 +27,7 @@
                 </div>
             </div>
             <div class="row">
-                <div class="col-sm-2">
+                <div class="col-sm-3">
                     <button class="btn-primary m-1 w-100" onclick="downloadView( {{courseId}} )">Download exercises</button>
                 </div>
             </div>
@@ -35,23 +35,23 @@
                 <div class="col">
                     <h3 class="mt-2">Select</h3>
                     <div class="row">
-                        <div class="col-sm-2">
+                        <div class="col-sm-3">
                             <button class="btn-secondary m-1 w-100" onclick="toggleAll()" id="togglebutton">All</button>
                         </div>
-                        <div class="col-sm-2">
+                        <div class="col-sm-3">
                             <button class="btn-primary m-1 w-100" onclick="toggleAllPassed(false)">All uncompleted</button>
                         </div>
-                        <div class="col-sm-2">
+                        <div class="col-sm-3">
                             <button class="btn-primary m-1 w-100" onclick="toggleAllPassed(true)">All completed</button>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="row">
-                <div class="col-sm-2">
+                <div class="col-sm-3">
                     <button class="btn-primary m-1 w-100" onclick="handleSelected('openSelected')">Open selected</button>
                 </div>
-                <div class="col-sm-2">
+                <div class="col-sm-3">
                     <button class="btn-primary m-1 w-100" onclick="handleSelected('closeSelected')">Close selected</button>
                 </div>
             </div>
@@ -62,32 +62,28 @@
                     <th scope="col"></th>
                     <th scope="col">Exercise name</th>
                     <th scope="col">Deadline</th>
-                    <th scope="col">Passed</th>
-                    <th scope="col">In workspace</th>
+                    <th scope="col" class="text-center">Completed</th>
+                    <th scope="col">Status</th>
                 </tr>
             </thead>
             <tbody>
             {{#each exerciseData}}
                 <tr>
                     <td class="text-center">
-                        {{#if this.passed}}
-                        <input class="checkbox-xl" type="checkbox" data="passed" value="{{this.id}}" onchange="updateCount(this)" />
-                        {{else}}
-                        <input class="checkbox-xl" type="checkbox" data="unpassed" value="{{this.id}}" onchange="updateCount(this)" />
-                        {{/if}}
+                        <input class="checkbox-xl" type="checkbox" data-isPassed={{this.passed}} value="{{this.id}}" onchange="updateCount(this)" />
                     </td>
                     <td>{{this.name}}</td>
                     <td>{{this.deadlineString}}</td>
-                    {{#if this.passed}}
-                    <td><div>&#10004;</div></td>
-                    {{else}}
-                    <td><div>&#10060;</div></td>
-                    {{/if}}
-                    {{#if this.isOpen}}
-                    <td><span class="badge badge-primary" onclick="closeExercise({{this.id}})">open</span></td>
-                    {{else}}
-                    <td><span class="badge badge-secondary" onclick="openExercise({{this.id}})">closed</span></td>
-                    {{/if}}
+                    <td class="text-center">
+                        {{#if this.passed}} &#10004; {{else}} &#10060; {{/if}}
+                    </td>
+                    <td>
+                        {{#if this.isOpen}}
+                            <span class="badge badge-primary" onclick="closeExercise({{this.id}})">open</span>
+                        {{else}}
+                            <span class="badge badge-secondary" onclick="openExercise({{this.id}})">closed</span>
+                        {{/if}}
+                    </td>
                 </tr>
             {{/each}}
             </tbody>
@@ -134,11 +130,10 @@
         }
 
         function toggleAllPassed(isPassed) {
-            const selector = isPassed ? "passed" : "unpassed";
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             for (const checkbox of checkboxes) {
-                if (checkbox.checked !== (checkbox.getAttribute("data") === selector)) {
-                    checkbox.checked = checkbox.getAttribute("data") === selector;
+                if (checkbox.checked !== ((checkbox.dataset.ispassed === "true") === isPassed)) {
+                    checkbox.checked = (checkbox.dataset.ispassed === "true") === isPassed;
                     updateCount(checkbox);
                 }
             }
