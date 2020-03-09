@@ -103,6 +103,27 @@ export default class TemplateEngine {
                         <div>Submission sent to server.</div>`;
             }
         });
+
+        handlebars.registerHelper("feedback_question",
+            (question: { id: number, kind: string, lower?: number,
+                         upper?: number, question: string }) => {
+                if (question.kind === "text") {
+                    return `<div class="col-md-10">
+                                <textarea data-questionID="${question.id}" rows="6" cols="40" class="feedback-textarea"></textarea>
+                            </div>`;
+                } else if (question.kind === "intrange" &&
+                           question.lower !== undefined && question.upper !== undefined) {
+                    return `<div class="col-md-10">
+                            <input data-questionID="${question.id}" type="range" class="custom-range" min="${question.lower - 1}"
+                                max="${question.upper}" step="1" value="${question.lower - 1}" oninput='showValue(this, "text-id-${question.id}")' />
+                            </div>
+                            <div class="col-md-2">
+                                <span class="font-weight-bold" id="text-id-${question.id}">-</span>
+                            </div>`;
+                } else {
+                    return "";
+                }
+            });
     }
 
     /**

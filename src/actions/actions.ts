@@ -55,12 +55,27 @@ export async function submitExercise(id: number,
         const statusData = statusResult.val;
         if (statusResult.val.status !== "processing") {
             ui.setStatusBar("Tests finished, see result", 5000);
-            temp.setContent("submission-result", statusData);
-            if (statusData.status === "ok") {
+            const feedbackQuestions: Array<{ id: number, kind: string, lower?: number,
+                                             upper?: number, question: string }> = [];
+            if (statusData.status === "ok" && statusData.all_tests_passed) {
                 userData.setPassed(
                     userData.getCourseByName(workspaceManager.getExerciseDataById(id).unwrap().course).id
                     , id);
+                if (statusData.feedback_questions) {
+                    statusData.feedback_questions.forEach((x) => {
+                        const kindRangeMatch = x.kind.match("intrange\\[(-?[0-9]+)..(-?[0-9]+)\\]");
+                        if (kindRangeMatch && kindRangeMatch[0] === x.kind) {
+                            feedbackQuestions.push({ id: x.id, kind: "intrange", lower: parseInt(kindRangeMatch[1], 10),
+                                                     question: x.question, upper: parseInt(kindRangeMatch[2], 10) });
+                        } else if (x.kind === "text") {
+                            feedbackQuestions.push({ id: x.id, kind: "text", question: x.question });
+                        } else {
+                            console.log("Unexpected feedback question type:", x.kind);
+                        }
+                    });
+                }
             }
+            temp.setContent("submission-result", {statusData, feedbackQuestions});
             break;
         }
         if (!temp.disposed) {

@@ -92,6 +92,10 @@ body.vscode-high-contrast {
     cursor: pointer;
 }
 
+.feedback-textarea {
+    width: inherit;
+}
+
 /*
     TMC Test styles
 */
