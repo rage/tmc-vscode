@@ -15,19 +15,24 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const result = await init.firstTimeInitialization(context);
     if (result.ok) {
-
         const resources = result.val;
-
         const currentWorkspaceFile = vscode.workspace.workspaceFile;
         const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
 
-        if (!currentWorkspaceFile) {
-            await vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
-        } else if (currentWorkspaceFile.toString() !== tmcWorkspaceFile.toString()) {
-            console.log(currentWorkspaceFile);
-            console.log(tmcWorkspaceFile);
-            vscode.window.showErrorMessage("Wont't open TMC workspace while another workspace is open");
-            return;
+        if (currentWorkspaceFile?.toString() !== tmcWorkspaceFile.toString()) {
+            console.log("Current workspace:", currentWorkspaceFile);
+            console.log("TMC workspace:", tmcWorkspaceFile);
+            const confirmOpen = () => new Promise<boolean>((resolve) => {
+                askForConfirmation("Do you want to open TMC workspace and close the current one?",
+                    () => resolve(true),
+                    () => resolve(false));
+            });
+            if (!currentWorkspaceFile || await confirmOpen()) {
+                await vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+            } else {
+                vscode.window.showErrorMessage("Please close your current workspace before using TestMyCode.");
+                return;
+            }
         }
 
         await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
