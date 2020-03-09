@@ -174,13 +174,20 @@ export async function displayCourseDownloadDetails(id: number, { tmc, ui, userDa
  */
 export async function displayLocalExerciseDetails(id: number, { tmc, ui, userData, workspaceManager }: ActionContext) {
     const course = userData.getCourse(id);
-    const exercises = workspaceManager.getExercisesByCourseName(course.name);
+    const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
+
+    // If no exercises downloaded, skip straight to downloading
+    if (workspaceExercises.length === 0) {
+        return displayCourseDownloadDetails(id, { tmc, ui, userData } as ActionContext);
+    }
+
     const exerciseData = new Map<number, { id: number, name: string, isOpen: boolean,
                                         passed: boolean, deadlineString: string }>();
 
-    exercises?.forEach((x) => exerciseData.set(x.id,
-    { deadlineString: x.deadline ? parseDeadline(x.deadline).toString().split("(", 1)[0] : "-",
-    id: x.id, isOpen: x.isOpen, name: x.name, passed: false }));
+    workspaceExercises?.forEach((x) => exerciseData.set(x.id, {
+        deadlineString: x.deadline ? parseDeadline(x.deadline).toString().split("(", 1)[0] : "-",
+        id: x.id, isOpen: x.isOpen, name: x.name, passed: false,
+    }));
 
     course.exercises.forEach((x) => {
         const data = exerciseData.get(x.id);
@@ -190,15 +197,13 @@ export async function displayLocalExerciseDetails(id: number, { tmc, ui, userDat
         }
     });
 
-    const sortedExercises = Array.from(exerciseData.values()).sort((a, b) => {
-        if (a.deadlineString === b.deadlineString) {
-            return a.name.localeCompare(b.name);
-        }
-        return a.deadlineString.localeCompare(b.deadlineString);
-    });
+    const sortedExercises = Array.from(exerciseData.values()).sort((a, b) => (a.deadlineString === b.deadlineString)
+        ? a.name.localeCompare(b.name)
+        : a.deadlineString.localeCompare(b.deadlineString),
+    );
 
-    ui.webview.setContentFromTemplate("course-details",
-    { exerciseData: sortedExercises, course, courseId: course.id }, true);
+    ui.webview
+        .setContentFromTemplate("course-details", { exerciseData: sortedExercises, course, courseId: course.id }, true);
 }
 
 /**
