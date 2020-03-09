@@ -126,7 +126,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     }
 
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
-        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ folders: [{ path: "Exercises" }] }));
+        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ folders: [{ path: "Exercises" }], settings: { "workbench.editor.closeOnFileDelete": true, "files.autoSave": "onFocusChange"}}));
         console.log("Created tmc workspace file at", tmcWorkspaceFilePath);
     }
 
