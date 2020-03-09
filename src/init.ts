@@ -76,16 +76,6 @@ export function registerUiActions(
         await closeExercises(msg.ids, actionContext);
         displayLocalExerciseDetails(msg.id, actionContext);
     });
-    ui.webview.registerHandler("openUncompleted", async (msg: { type: "openUncompleted", id: number }) => {
-        actionContext.ui.webview.setContentFromTemplate("loading");
-        await openUncompletedExercises(msg.id, actionContext);
-        displayLocalExerciseDetails(msg.id, actionContext);
-    });
-    ui.webview.registerHandler("closeCompleted", async (msg: { type: "closeCompleted", id: number }) => {
-        actionContext.ui.webview.setContentFromTemplate("loading");
-        await closeCompletedExercises(msg.id, actionContext);
-        displayLocalExerciseDetails(msg.id, actionContext);
-    });
 }
 
 /**
@@ -126,7 +116,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     }
 
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
-        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ folders: [{ path: "Exercises" }], settings: { "workbench.editor.closeOnFileDelete": true, "files.autoSave": "onFocusChange"}}));
+        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ folders: [{ path: "Exercises" }], settings: { "workbench.editor.closeOnFileDelete": true, "files.autoSave": "onFocusChange" } }));
         console.log("Created tmc workspace file at", tmcWorkspaceFilePath);
     }
 

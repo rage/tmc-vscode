@@ -11,39 +11,48 @@
     <div class="container pt-0">
         <div class="sticky-top py-2">
             <div class="row">
+                <div class="col">
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                          <li class="breadcrumb-item"><a onclick="backToMyCourses() "href="#">My courses</a></li>
+                          <li class="breadcrumb-item" aria-current="page">{{course.name}}</li>
+                        </ol>
+                    </nav>
+                </div>
+            </div>
+            <div class="row">
                 <div class="col-sm">
-                    <h1>Course details</h1>
                     <h2>{{course.name}}</h2>
                     <p>{{course.description}}</p>
                 </div>
             </div>
             <div class="row">
-                <div class="col-sm-3">
-                    <button class="btn-primary m-1 w-100" onclick="backToMyCourses()">My courses</button>
+                <div class="col-sm-2">
+                    <button class="btn-primary m-1 w-100" onclick="downloadView( {{courseId}} )">Download exercises</button>
                 </div>
             </div>
             <div class="row">
-                <div class="col-sm-3">
-                    <button class="btn-primary m-1 w-100" onclick="openCloseAll('openUncompleted')">Open all uncompleted</button>
-                </div>
-                <div class="col-sm-3">
-                    <button class="btn-primary m-1 w-100" onclick="openCloseAll('closeCompleted')">Close all completed</button>
-                </div>
-                <div class="col-sm-3">
-                    <button class="btn-primary m-1 w-100" onclick="downloadView( {{courseId}} )">Download more exercises</button>
+                <div class="col">
+                    <h3 class="mt-2">Select</h3>
+                    <div class="row">
+                        <div class="col-sm-2">
+                            <button class="btn-secondary m-1 w-100" onclick="toggleAll()" id="togglebutton">All</button>
+                        </div>
+                        <div class="col-sm-2">
+                            <button class="btn-primary m-1 w-100" onclick="toggleAllPassed(false)">All uncompleted</button>
+                        </div>
+                        <div class="col-sm-2">
+                            <button class="btn-primary m-1 w-100" onclick="toggleAllPassed(true)">All completed</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="row">
-                <div class="col-sm-3">
+                <div class="col-sm-2">
                     <button class="btn-primary m-1 w-100" onclick="handleSelected('openSelected')">Open selected</button>
                 </div>
-                <div class="col-sm-3">
+                <div class="col-sm-2">
                     <button class="btn-primary m-1 w-100" onclick="handleSelected('closeSelected')">Close selected</button>
-                </div>
-            </div>
-            <div class="row">
-                <div class="col-sm-3">
-                    <button class="btn-secondary m-1 w-100" onclick="toggleAll()" id="togglebutton">Select all</button>
                 </div>
             </div>
         </div>
@@ -60,7 +69,13 @@
             <tbody>
             {{#each exerciseData}}
                 <tr>
-                    <td class="text-center"><input class="checkbox-xl" type="checkbox" value="{{this.id}}" onchange="updateCount(this)" /></td>
+                    <td class="text-center">
+                        {{#if this.passed}}
+                        <input class="checkbox-xl" type="checkbox" data="passed" value="{{this.id}}" onchange="updateCount(this)" />
+                        {{else}}
+                        <input class="checkbox-xl" type="checkbox" data="unpassed" value="{{this.id}}" onchange="updateCount(this)" />
+                        {{/if}}
+                    </td>
                     <td>{{this.name}}</td>
                     <td>{{this.deadlineString}}</td>
                     {{#if this.passed}}
@@ -69,9 +84,9 @@
                     <td><div>&#10060;</div></td>
                     {{/if}}
                     {{#if this.isOpen}}
-                    <td><span class="badge badge-primary">open</span></td>
+                    <td><span class="badge badge-primary" onclick="closeExercise({{this.id}})">open</span></td>
                     {{else}}
-                    <td><span class="badge badge-secondary">closed</span></td>
+                    <td><span class="badge badge-secondary" onclick="openExercise({{this.id}})">closed</span></td>
                     {{/if}}
                 </tr>
             {{/each}}
@@ -82,7 +97,7 @@
     <script>
         const vscode = acquireVsCodeApi();
         let selectedCount = 0;
-        let totalCount = undefined;
+        let totalCount = document.querySelectorAll('input[type="checkbox"]').length;
 
         function handleSelected(type) {
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
@@ -97,38 +112,51 @@
             }
         }
 
+        function openExercise(id) {
+            vscode.postMessage({type: 'openSelected', ids: [id], id: {{courseId}} });
+        }
+
+        function closeExercise(id) {
+            vscode.postMessage({type: 'closeSelected', ids: [id], id: {{courseId}} });
+        }
+
         function updateCount(element) {
             selectedCount += element.checked ? 1 : -1;
             if (totalCount === undefined) {
                 totalCount = document.querySelectorAll('input[type="checkbox"]').length
             }
+
             if (selectedCount === totalCount) {
-                document.querySelector("button#togglebutton").innerHTML = "Deselect all";
+                document.querySelector("button#togglebutton").innerHTML = "None";
             } else if (selectedCount === totalCount - 1) {
-                document.querySelector("button#togglebutton").innerHTML = "Select all";
+                document.querySelector("button#togglebutton").innerHTML = "All";
+            }
+        }
+
+        function toggleAllPassed(isPassed) {
+            const selector = isPassed ? "passed" : "unpassed";
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            for (const checkbox of checkboxes) {
+                if (checkbox.checked !== (checkbox.getAttribute("data") === selector)) {
+                    checkbox.checked = checkbox.getAttribute("data") === selector;
+                    updateCount(checkbox);
+                }
             }
         }
 
         function toggleAll() {
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            if (totalCount === undefined) {
-                totalCount = checkboxes.length;
-            }
             const deselect = selectedCount === totalCount;
             for (const checkbox of checkboxes) {
                 checkbox.checked = !deselect;
             }
             if (deselect) {
-                document.querySelector("button#togglebutton").innerHTML = "Select all";
+                document.querySelector("button#togglebutton").innerHTML = "All";
                 selectedCount = 0;
             } else {
-                document.querySelector("button#togglebutton").innerHTML = "Deselect all";
+                document.querySelector("button#togglebutton").innerHTML = "None";
                 selectedCount = totalCount;
             }
-        }
-
-        function openCloseAll(type) {
-            vscode.postMessage({ type: type, id: {{courseId}} })
         }
 
         function backToMyCourses() {

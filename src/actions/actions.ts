@@ -435,6 +435,11 @@ export async function closeExercises(ids: number[], actionContext: ActionContext
     ids.forEach((id) => actionContext.workspaceManager.closeExercise(id));
 }
 
+/**
+ * Currently not in use
+ * @param courseId
+ * @param actionContext
+ */
 export async function closeCompletedExercises(courseId: number, actionContext: ActionContext) {
     const courseData = actionContext.userData.getCourses().find((x) => x.id === courseId);
     if (!courseData) {
@@ -443,6 +448,11 @@ export async function closeCompletedExercises(courseId: number, actionContext: A
     closeExercises(courseData.exercises.filter((x) => x.passed).map((x) => x.id), actionContext);
 }
 
+/**
+ * Currently not in use
+ * @param courseId
+ * @param actionContext
+ */
 export async function openUncompletedExercises(courseId: number, actionContext: ActionContext) {
     const courseData = actionContext.userData.getCourses().find((x) => x.id === courseId);
     console.log(courseId);

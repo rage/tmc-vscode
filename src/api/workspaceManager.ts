@@ -139,7 +139,7 @@ export default class WorkspaceManager {
         const data = this.idToData.get(id);
         if (data && !data.isOpen) {
             fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
-            clearFolder ? del.sync(data.path, { force: true }) : console.log(`${data.path} not cleared.`) ;
+            if (clearFolder) { del.sync(data.path, { force: true }); }
             this.addToWatcherTree(data);
             try {
                 fs.renameSync(this.getClosedPath(id), data.path);
@@ -243,16 +243,6 @@ export default class WorkspaceManager {
 
     private watcherAction(targetPath: string) {
         const relation = path.relative(this.resources.tmcExercisesFolderPath, targetPath).toString().split(path.sep, 3);
-        console.log(relation);
-        console.log(Array.from(this.watcherTree.entries()));
-        const x = this.watcherTree.get("hy")?.entries();
-        if (x) {
-            console.log(Array.from(x));
-            const xx = this.watcherTree.get("hy")?.get("hy-C-programming-2018")?.entries();
-            if (xx) {
-                console.log(Array.from(xx));
-            }
-        }
         if (relation[0] === "..") {
             return;
         }
