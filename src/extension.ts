@@ -22,12 +22,7 @@ export async function activate(context: vscode.ExtensionContext) {
         if (currentWorkspaceFile?.toString() !== tmcWorkspaceFile.toString()) {
             console.log("Current workspace:", currentWorkspaceFile);
             console.log("TMC workspace:", tmcWorkspaceFile);
-            const confirmOpen = () => new Promise<boolean>((resolve) => {
-                askForConfirmation("Do you want to open TMC workspace and close the current one?",
-                    () => resolve(true),
-                    () => resolve(false));
-            });
-            if (!currentWorkspaceFile || await confirmOpen()) {
+            if (!currentWorkspaceFile || await askForConfirmation("Do you want to open TMC workspace and close the current one?")) {
                 await vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
             } else {
                 vscode.window.showErrorMessage("Please close your current workspace before using TestMyCode.");
@@ -80,8 +75,9 @@ export async function activate(context: vscode.ExtensionContext) {
                     return;
                 }
                 askForConfirmation(`Are you sure you want to reset exercise ${exerciseData.val.name}?`,
-                    () => resetExercise(exerciseId, actionContext),
-                    () => vscode.window.showInformationMessage(`Reset canceled for exercise ${exerciseData.val.name}.`),
+                    (success) => success
+                        ? resetExercise(exerciseId, actionContext)
+                        : vscode.window.showInformationMessage(`Reset canceled for exercise ${exerciseData.val.name}.`),
                 );
             }),
         );
@@ -103,8 +99,9 @@ export async function activate(context: vscode.ExtensionContext) {
                     return;
                 }
                 askForConfirmation(`Are you sure you want to close uncompleted exercise ${exerciseData.val.name}?`,
-                    () => workspaceManager.closeExercise(exerciseId),
-                    () => vscode.window.showInformationMessage(`Close canceled for exercise ${exerciseData.val.name}.`),
+                    (success) => success
+                        ? workspaceManager.closeExercise(exerciseId)
+                        : vscode.window.showInformationMessage(`Close canceled for exercise ${exerciseData.val.name}.`),
                 );
             }),
         );

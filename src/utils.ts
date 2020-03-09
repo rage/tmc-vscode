@@ -127,11 +127,13 @@ export function getProgressBar(percentDone: number): string {
     </div>`;
 }
 
-export function askForConfirmation(prompt: string, confirmCallback: () => void, cancelCallback: () => void) {
+export async function askForConfirmation(prompt: string, resultCallback: (success: boolean) => void = () => {},
+): Promise<boolean> {
     const options: vscode.InputBoxOptions = {
         placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
         prompt,
     };
-    vscode.window.showInputBox(options).then((value) =>
-        value?.toLowerCase() === "yes" ? confirmCallback() : cancelCallback());
+    const success = (await vscode.window.showInputBox(options))?.toLowerCase() === "yes";
+    resultCallback(success);
+    return success;
 }
