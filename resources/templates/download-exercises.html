@@ -75,23 +75,30 @@
                         </div>
                     </div>
                 </div>
-                <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th scope="col">Select</th>
-                            <th scope="col">Exercise name</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    {{#each exercises}}
-                    <tr>
-                        <td class="text-center"><input class="checkbox-xl" type="checkbox" value="{{this.id}}" onchange="updateCount(this)" /></td>
-                        <td>{{this.name}}</td>
-                    </tr>
-                    {{/each}}
-                    </tbody>
-                </table>
             {{/with}}
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th scope="col">Select</th>
+                        <th scope="col">Exercise name</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{#each exerciseDetails}}
+                    <tr>
+                        <td class="text-center">
+                            {{#if this.downloaded}}
+                                -
+                            {{/if}}
+                            {{#unless this.downloaded}}
+                                <input class="checkbox-xl" type="checkbox" value="{{this.exercise.id}}" onchange="updateCount(this)" />
+                            {{/unless}}
+                        </td>
+                        <td>{{this.exercise.name}}</td>
+                    </tr>
+                {{/each}}
+                </tbody>
+            </table>
         </div>
     </body>
 </html>

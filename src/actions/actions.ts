@@ -152,7 +152,7 @@ export async function resetExercise(id: number, { ui, tmc, workspaceManager }: A
 /**
  * Opens the course exercise list view
  */
-export async function displayCourseDownloadDetails(id: number, { tmc, ui, userData }: ActionContext) {
+export async function displayCourseDownloadDetails(id: number, { tmc, ui, userData, workspaceManager }: ActionContext) {
     const result = await tmc.getCourseDetails(id);
 
     if (result.err) {
@@ -163,8 +163,10 @@ export async function displayCourseDownloadDetails(id: number, { tmc, ui, userDa
     userData.updateCompletedExercises(id, details.exercises.filter((x) => x.completed).map((x) => x.id));
 
     const organizationSlug = userData.getCourses().find((course) => course.id === id)?.organization;
+    const exerciseDetails = details.exercises.map((x) =>
+        ({exercise: x, downloaded: workspaceManager.getExerciseDataById(x.id).ok}));
     const data = {
-        courseId: id, courseName: result.val.course.name, details, organizationSlug,
+        courseId: id, courseName: result.val.course.name, details, exerciseDetails, organizationSlug,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
 }
@@ -172,13 +174,16 @@ export async function displayCourseDownloadDetails(id: number, { tmc, ui, userDa
 /**
  * Opens details view for local exercises
  */
-export async function displayLocalExerciseDetails(id: number, { tmc, ui, userData, workspaceManager }: ActionContext) {
+export async function displayLocalExerciseDetails(id: number, actionContext: ActionContext) {
+
+    const { tmc, ui, userData, workspaceManager } = actionContext;
+
     const course = userData.getCourse(id);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
 
     // If no exercises downloaded, skip straight to downloading
     if (workspaceExercises.length === 0) {
-        return displayCourseDownloadDetails(id, { tmc, ui, userData } as ActionContext);
+        return displayCourseDownloadDetails(id, actionContext);
     }
 
     const exerciseData = new Map<number, { id: number, name: string, isOpen: boolean,
