@@ -44,6 +44,16 @@
 				"title": "TMC - Run tests"
 			}
 		],
+		"keybindings":[
+			{
+				"command": "runTests",
+				"key": "ctrl+shift+t"
+			},
+			{
+				"command": "closeExercise",
+				"key": "ctrl+shift+c"
+			}
+		],
 		"menus": {
 			"commandPalette": [
 				{
