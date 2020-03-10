@@ -70,7 +70,6 @@ export default class WorkspaceManager {
      * @param exerciseFolder Path to exercise folder used for matching with the data
      */
     public getExerciseDataByPath(exerciseFolder: string): Result<LocalExerciseData, Error> {
-        console.log(exerciseFolder);
         const id = this.pathToId.get(exerciseFolder);
         if (!id) {
             return new Err(new Error(`Exercise ID not found for ${exerciseFolder}`));
@@ -105,7 +104,6 @@ export default class WorkspaceManager {
      * @param exerciseFolder Path to exercise folder used for matching with the id
      */
     public getExerciseIdByPath(exerciseFolder: string): Result<number, Error> {
-        console.log(exerciseFolder);
         const id = this.pathToId.get(exerciseFolder);
         return (id !== undefined) ? new Ok(id) : new Err(new Error(`Exercise ID not found for ${exerciseFolder}`));
     }
@@ -117,7 +115,7 @@ export default class WorkspaceManager {
     public getExercisePath(filePath: string): number | undefined {
         const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
         const relation = path.relative(exerciseFolderPath, filePath);
-        console.log(relation);
+
         if (relation.startsWith("..")) {
             return undefined;
         }

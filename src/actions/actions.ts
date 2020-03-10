@@ -17,13 +17,12 @@ export async function submitExercise(id: number,
     if (submitResult.err) {
         vscode.window.showErrorMessage(`Exercise submission failed: \
                                         ${submitResult.val.name} - ${submitResult.val.message}`);
-        console.error(submitResult.val);
         return;
     }
 
     const messageHandler = async (msg: any) => {
         if (msg.feedback && msg.feedback.status.length > 0) {
-            console.log(await tmc.submitSubmissionFeedback(msg.url, msg.feedback));
+            await tmc.submitSubmissionFeedback(msg.url, msg.feedback);
         } else if (msg.runInBackground) {
             ui.setStatusBar("Waiting for results from server.");
             temp.dispose();
@@ -49,7 +48,7 @@ export async function submitExercise(id: number,
     while (getStatus) {
         const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
         if (statusResult.err) {
-            console.error(statusResult.val);
+            vscode.window.showErrorMessage(`Failed getting submission status: ${statusResult.val.name} - ${statusResult.val.message}`);
             break;
         }
         const statusData = statusResult.val;
@@ -108,7 +107,6 @@ export async function testExercise(id: number, actions: ActionContext) {
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         vscode.window.showErrorMessage(`Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`);
-        console.error(exerciseDetails.val);
         return;
     }
     const exerciseName = exerciseDetails.val.name;
@@ -128,7 +126,6 @@ export async function testExercise(id: number, actions: ActionContext) {
         ui.setStatusBar(`Running tests for ${exerciseName} failed`, 5000);
         vscode.window.showErrorMessage(`Exercise test run failed: \
                                         ${testResult.val.name} - ${testResult.val.message}`);
-        console.error(testResult.val);
         return;
     }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
@@ -148,16 +145,17 @@ export async function resetExercise(id: number, { ui, tmc, workspaceManager }: A
         return;
     }
 
-    vscode.window.showInformationMessage(`Resetting exercise ${exerciseData.val.name}`);
-    ui.setStatusBar(`Resetting exercise ${exerciseData.val.name}`);
     const submitResult = await tmc.submitExercise(id);
     if (submitResult.err) {
         vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
                                         ${submitResult.val.name} - ${submitResult.val.message}`);
-        console.error(submitResult.val);
         ui.setStatusBar(`Something went wrong while resetting exercise ${exerciseData.val.name}`, 10000);
         return;
     }
+
+    vscode.window.showInformationMessage(`Resetting exercise ${exerciseData.val.name}`);
+    ui.setStatusBar(`Resetting exercise ${exerciseData.val.name}`);
+
     const slug = exerciseData.val.organization;
     workspaceManager.deleteExercise(id);
     await tmc.downloadExercise(id, slug, true);
@@ -171,7 +169,8 @@ export async function displayCourseDownloadDetails(
     courseId: number, { tmc, ui, userData, workspaceManager }: ActionContext) {
     const result = await tmc.getCourseDetails(courseId);
     if (result.err) {
-        console.error("Fetching course details failed: " + result.val.message);
+        vscode.window.showErrorMessage(`Cannot display download details for course: \
+                                        ${result.val.name} - ${result.val.message}`);
         return;
     }
     const details = result.val.course;
@@ -245,6 +244,8 @@ export async function downloadExercises(
 
     const courseDetails = await tmc.getCourseDetails(courseId);
     if (courseDetails.err) {
+        vscode.window.showErrorMessage(`Could not download exercises, course details not found: \
+                                        ${courseDetails.val.name} - ${courseDetails.val.message}`);
         return;
     }
 
@@ -425,13 +426,16 @@ export async function selectNewCourse(actionContext: ActionContext) {
 
     const orgAndCourse = await selectOrganizationAndCourse(actionContext);
     if (orgAndCourse.err) {
+        vscode.window.showErrorMessage(`Adding a new course failed: \
+                                        ${orgAndCourse.val.name} - ${orgAndCourse.val.message}`);
         return;
     }
 
     const { tmc, userData } = actionContext;
     const courseDetailsResult = await tmc.getCourseDetails(orgAndCourse.val.course);
     if (courseDetailsResult.err) {
-        console.log(new Error("Fetching course data failed"));
+        vscode.window.showErrorMessage(`Fetching course data failed: \
+                                        ${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`);
         return;
     }
 
@@ -476,8 +480,6 @@ export async function closeCompletedExercises(courseId: number, actionContext: A
  */
 export async function openUncompletedExercises(courseId: number, actionContext: ActionContext) {
     const courseData = actionContext.userData.getCourses().find((x) => x.id === courseId);
-    console.log(courseId);
-    console.log(courseData);
     if (!courseData) {
         return;
     }

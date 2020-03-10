@@ -151,8 +151,6 @@ export default class TemplateEngine {
         data.cssPath = webview.asWebviewUri(vscode.Uri.file(path.join(this.cssPath, "style.css")));
         data.bootstrapPath = webview.asWebviewUri(vscode.Uri.file(path.join(this.cssPath, "bootstrap.min.css")));
 
-        console.log(data);
-
         return template(data);
     }
 

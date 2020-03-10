@@ -17,7 +17,6 @@
             courses = document.getElementsByClassName("course")
             for (i = 0; i < courses.length; i++) {
                 name = courses[i].getAttribute('name')
-                console.log(name)
                 if (name.toUpperCase().includes(param.toUpperCase())) {
                     courses[i].style.display = ""
                 } else {
