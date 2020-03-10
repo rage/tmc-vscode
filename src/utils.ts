@@ -1,11 +1,14 @@
+import * as cp from "child_process";
 import * as fs from "fs";
 import * as fetch from "node-fetch";
 import * as path from "path";
 import * as vscode from "vscode";
 
 import { Err, Ok, Result } from "ts-results";
+import { is } from "typescript-is";
 import WorkspaceManager from "./api/workspaceManager";
 import { ConnectionError } from "./errors";
+
 /**
  * Downloads data from given url to the specified file path with a progress bar in the VSCode status bar.
  * @param url Url to data
@@ -78,6 +81,39 @@ export async function downloadFile(url: string, filePath: string,
     }
 
     return Ok.EMPTY;
+}
+
+/**
+ * Check if calling java programs is possible.
+ */
+export async function isJavaPresent(): Promise<boolean> {
+    let result = false;
+    await new Promise((resolve) => cp.exec("java -version", (error) => {
+        result = (error === null);
+        resolve();
+    }));
+
+    return result;
+}
+
+/**
+ * Checks whether the extension is running in a development or production environment.
+ */
+export function isProductionBuild(): boolean {
+    // Use configuration properties to see whether superflous object properties are enabled in tsconfig.
+    // In the code this feature is used when fetched API data is being parsed.
+    // For configuration, see tsconfig.json used by webpack.dev.json
+    // and tsconfig.production.json used by webpack.prod.json
+    type TestType = {
+        strict: boolean,
+    };
+
+    const testObject = {
+        strict: true,
+        superflous: "a superfluous property",
+    };
+
+    return is<TestType>(testObject);
 }
 
 /**

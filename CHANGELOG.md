@@ -1,9 +1,10 @@
 # Change Log
 
-All notable changes to the "tmc-vscode" extension will be documented in this file.
-
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
-
 ## [Unreleased]
 
-- Initial release
+### Added
+- Selecting course(s).
+- Downloading exercise(s).
+- Testing exercise solution locally.
+- Submitting solution to TMC-server.
+- Resetting current active exercise.
