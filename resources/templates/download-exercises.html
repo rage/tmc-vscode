@@ -2,6 +2,71 @@
     <head>
         <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
         <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+    </head>
+
+    <body>
+        <div class="container container-fluid pt-0">
+            <div class="row">
+                <div class="col">
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a onclick="backToMyCourses() "href="#">My courses</a></li>
+                            <li class="breadcrumb-item">
+                                {{#if workspaceEmpty}}
+                                    {{details.name}}
+                                {{else}}
+                                    <a onclick="goToCourseDetails()" href="#">{{details.name}}</a>
+                                {{/if}}
+                            </li>
+                            <li class="breadcrumb-item" aria-current="page">Download exercises</li>
+                        </ol>
+                    </nav>
+                </div>
+            </div>
+            {{#with details}}
+                <div class="sticky-top row">
+                    <div class="col">
+                        <div class="py-2">
+                            <h1>{{title}}</h1>
+                        </div>
+                        <div class="row py-2">
+                            <span>{{description}}</span>
+                        </div>
+                        <div class="row py-2">
+                            <div class="col-sm-3">
+                                <button class="btn-primary m-1 w-100" onclick="toggleAll()" id="togglebutton">Select all</button>
+                            </div>
+                            <div class="col-sm-3">
+                                <button class="btn-primary m-1 w-100" onclick="downloadSelectedExercises()">Download selected</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {{/with}}
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th scope="col">Select</th>
+                        <th scope="col">Exercise name</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{#each exerciseDetails}}
+                    <tr>
+                        <td class="text-center">
+                            {{#if this.downloaded}}
+                                -
+                            {{/if}}
+                            {{#unless this.downloaded}}
+                                <input class="checkbox-xl" type="checkbox" value="{{this.exercise.id}}" onchange="updateCount(this)" />
+                            {{/unless}}
+                        </td>
+                        <td>{{this.exercise.name}}</td>
+                    </tr>
+                {{/each}}
+                </tbody>
+            </table>
+        </div>
 
         <script>
             const vscode = acquireVsCodeApi();
@@ -50,55 +115,14 @@
                     selectedCount = totalCount;
                 }
             }
-        </script>
-    </head>
 
-    <body>
-        <div class="container container-fluid pt-0">
-            {{#with details}}
-                <div class="sticky-top">
-                    <div class="py-2">
-                        <h1>{{title}}</h1>
-                    </div>
-                    <div class="row py-2">
-                        <p>{{description}}</p>
-                    </div>
-                    <div class="row py-2">
-                        <div class="col-sm-3">
-                            <button class="btn-primary m-1 w-100" onclick="toggleAll()" id="togglebutton">Select all</button>
-                        </div>
-                        <div class="col-sm-3">
-                            <button class="btn-primary m-1 w-100" onclick="downloadSelectedExercises()">Download selected</button>
-                        </div>
-                        <div class="col-sm-3">
-                            <button class="btn-primary m-1 w-100" onclick="vscode.postMessage({type: 'courseDetails', id: {{id}} })">Return to exercise view</button>
-                        </div>
-                    </div>
-                </div>
-            {{/with}}
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th scope="col">Select</th>
-                        <th scope="col">Exercise name</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {{#each exerciseDetails}}
-                    <tr>
-                        <td class="text-center">
-                            {{#if this.downloaded}}
-                                -
-                            {{/if}}
-                            {{#unless this.downloaded}}
-                                <input class="checkbox-xl" type="checkbox" value="{{this.exercise.id}}" onchange="updateCount(this)" />
-                            {{/unless}}
-                        </td>
-                        <td>{{this.exercise.name}}</td>
-                    </tr>
-                {{/each}}
-                </tbody>
-            </table>
-        </div>
+            function goToCourseDetails() {
+                vscode.postMessage({ type: "courseDetails", id: {{courseId}} });
+            }
+
+            function backToMyCourses() {
+                vscode.postMessage({ type: "myCourses" });
+            }
+        </script>
     </body>
 </html>

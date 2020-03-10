@@ -47,6 +47,12 @@ body.vscode-high-contrast {
     min-height: 125px;
 }
 
+.org {
+    padding: 10px 0px;
+    margin-bottom: 10px;
+    min-height: 125px;
+}
+
 .org-row:hover {
     background-color: #CAC7C7;
     cursor: pointer;

@@ -167,21 +167,22 @@ export async function resetExercise(id: number, { ui, tmc, workspaceManager }: A
 /**
  * Opens the course exercise list view
  */
-export async function displayCourseDownloadDetails(id: number, { tmc, ui, userData, workspaceManager }: ActionContext) {
-    const result = await tmc.getCourseDetails(id);
-
+export async function displayCourseDownloadDetails(
+    courseId: number, { tmc, ui, userData, workspaceManager }: ActionContext) {
+    const result = await tmc.getCourseDetails(courseId);
     if (result.err) {
         console.error("Fetching course details failed: " + result.val.message);
         return;
     }
     const details = result.val.course;
-    userData.updateCompletedExercises(id, details.exercises.filter((x) => x.completed).map((x) => x.id));
+    userData.updateCompletedExercises(courseId, details.exercises.filter((x) => x.completed).map((x) => x.id));
 
-    const organizationSlug = userData.getCourses().find((course) => course.id === id)?.organization;
+    const organizationSlug = userData.getCourses().find((course) => course.id === courseId)?.organization;
     const exerciseDetails = details.exercises.map((x) =>
         ({exercise: x, downloaded: workspaceManager.getExerciseDataById(x.id).ok}));
+    const workspaceEmpty = workspaceManager.getExercisesByCourseName(details.name).length === 0;
     const data = {
-        courseId: id, courseName: result.val.course.name, details, exerciseDetails, organizationSlug,
+        courseId, courseName: result.val.course.name, details, exerciseDetails, organizationSlug, workspaceEmpty,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
 }
@@ -189,16 +190,16 @@ export async function displayCourseDownloadDetails(id: number, { tmc, ui, userDa
 /**
  * Opens details view for local exercises
  */
-export async function displayLocalExerciseDetails(id: number, actionContext: ActionContext) {
+export async function displayLocalExerciseDetails(courseId: number, actionContext: ActionContext) {
 
     const { tmc, ui, userData, workspaceManager } = actionContext;
 
-    const course = userData.getCourse(id);
+    const course = userData.getCourse(courseId);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
 
     // If no exercises downloaded, skip straight to downloading
     if (workspaceExercises.length === 0) {
-        return displayCourseDownloadDetails(id, actionContext);
+        return displayCourseDownloadDetails(courseId, actionContext);
     }
 
     const exerciseData = new Map<number, { id: number, name: string, isOpen: boolean,

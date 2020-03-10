@@ -24,9 +24,13 @@ export async function activate(context: vscode.ExtensionContext) {
             console.log("TMC workspace:", tmcWorkspaceFile);
             if (!currentWorkspaceFile || await askForConfirmation("Do you want to open TMC workspace and close the current one?")) {
                 await vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+                // Restarts VSCode
             } else {
-                vscode.window.showErrorMessage("Please close your current workspace before using TestMyCode.");
-                return;
+                const choice = "Close current and open TMC Workspace";
+                await vscode.window.showErrorMessage("Please close your current workspace before using TestMyCode.",
+                ...[choice]).then((selection) => { if (selection === choice) {
+                    vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+                }});
             }
         }
 
