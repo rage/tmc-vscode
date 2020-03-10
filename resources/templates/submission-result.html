@@ -9,39 +9,35 @@
     <div class="container">
         <div class="row py-2">
             <div class="py-2">
-                {{{submission_status this}}}
+                {{{submission_status statusData}}}
             </div>
         </div>
-        {{#if test_cases}}
-            <div class="row my-1">
-                {{#if points}}
-                    <h3>Points gained: {{points}}</h3>
-                {{else}}
-                    <h3>Points gained: -</h3>
-                {{/if}}
-            </div>
-            <div class="row my-1">
-                {{{progress_bar test_cases}}}
-            </div>
-        {{/if}}
-        {{#if feedback_questions}}
-        <div id="feedbacknoti"></div>
+        {{#with statusData}}
+            {{#if test_cases}}
+                <div class="row my-1">
+                    {{#if points}}
+                        <h3>Points gained: {{points}}</h3>
+                    {{else}}
+                        <h3>Points gained: -</h3>
+                    {{/if}}
+                </div>
+                <div class="row my-1">
+                    {{{progress_bar test_cases}}}
+                </div>
+            {{/if}}
+        {{/with}}
+        {{#if feedbackQuestions}}
+        <div id="feedbacknotification"></div>
         <div id="feedback" class="my-5">
             <h4>Anna palautetta</h4>
             <form>
-                {{#each feedback_questions}}
-                <div>
-                    {{this.question}}
-                    <div class="row">
-                        <div class="col-md-10">
-                        <input name="slider" data-questionID="{{this.id}}" type="range" class="custom-range" min="0"
-                            max="5" step="1" value="0" oninput='showValue(this.value, "text-id-{{this.id}}")' />
-                        </div>
-                        <div class="col-md-2">
-                            <span class="font-weight-bold" id="text-id-{{this.id}}">0</span>
+                {{#each feedbackQuestions}}
+                    <div>
+                        <span>{{this.question}}</span>
+                        <div class="row">
+                            {{{feedback_question this}}}
                         </div>
                     </div>
-                </div>
                 {{/each}}
                 <div>
                     <button class="btn-primary" onclick="submitFeedback()">Lähetä palaute</button>
@@ -49,6 +45,7 @@
             </form>
         </div>
         {{/if}}
+        {{#with statusData}}
         <div>
             {{#each test_cases}}
             {{#if this.successful}}
@@ -81,33 +78,44 @@
                 {{/each}}
             </div>
         </div>
+        {{/with}}
 </body>
 
 <script>
     const vscode = acquireVsCodeApi();
-    const feedback_url = "{{feedback_answer_url}}";
-    const solution_url = "{{solution_url}}";
+    const feedback_url = "{{statusData.feedback_answer_url}}";
+    const solution_url = "{{statusData.solution_url}}";
+
+    const feedbackNotification = document.getElementById("feedbacknotification");
+    const feedbackFormContainer = document.getElementById("feedback");
 
     function submitFeedback() {
         const feedback = [];
-        const questions = document.querySelectorAll("input[type=range]");
-        for (question of questions) {
-            if (question.value !== "0") {
-                feedback.push({ question_id: parseInt(question.dataset.questionid, 10), answer: question.value })
+        const sliders = document.querySelectorAll("input[type=range]");
+        for (slider of sliders) {
+            if (slider.value !== slider.min) {
+                feedback.push({ question_id: parseInt(slider.dataset.questionid, 10), answer: slider.value })
             }
         }
-        document.getElementById("feedback").style.display = "none";
-        document.getElementById("feedbacknoti").classList = "my-5 alert alert-success";
+        const textareas = document.querySelectorAll("textarea");
+        for (textarea of textareas) {
+            if (textarea.value !== "") {
+                feedback.push({ question_id: parseInt(textarea.dataset.questionid, 10), answer: textarea.value })
+            }
+        }
+
+        feedbackFormContainer.style.display = "none";
+        feedbackNotification.classList = "my-5 alert alert-success";
         if (feedback.length > 0) {
-            document.getElementById("feedbacknoti").innerText = "Feedback sent! Thank you.";
+            feedbackNotification.innerText = "Feedback sent! Thank you.";
         } else {
-            document.getElementById("feedbacknoti").innerText = "No feedback given.";
+            feedbackNotification.innerText = "No feedback given.";
         }
         vscode.postMessage({ feedback: { status: feedback }, url: feedback_url });
     }
 
-    function showValue(value, id) {
-        document.getElementById(id).innerHTML=value;
+    function showValue(slider, id) {
+        document.getElementById(id).innerHTML = slider.value === slider.min ? "-" : slider.value;
     }
 
     function viewModelSolution() {

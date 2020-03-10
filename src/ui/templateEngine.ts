@@ -5,18 +5,16 @@ import * as vscode from "vscode";
 
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
-import { numbersToString } from "../utils";
+import { getProgressBar, numbersToString } from "../utils";
 
 export default class TemplateEngine {
     private cssPath: string;
     private htmlPath: string;
-    private context: vscode.ExtensionContext;
     private cache: Map<string, HandlebarsTemplateDelegate<any>>;
 
-    constructor(resources: Resources, context: vscode.ExtensionContext) {
+    constructor(resources: Resources) {
         this.cssPath = resources.cssFolder;
         this.htmlPath = resources.htmlFolder;
-        this.context = context;
         this.cache = new Map();
         /**
          * Logo path for organizations
@@ -31,17 +29,17 @@ export default class TemplateEngine {
          * Checks the locally runned test status.
          */
         handlebars.registerHelper("check_test_status",
-                                    (status: string, logs: { stdout: number[], stderr: number[] }) => {
-            if (status === "PASSED") {
-                return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
-            } else if (status === "TESTS_FAILED") {
-                return "<h1>TESTS FAILED</h1>";
-            } else if (status === "COMPILE_FAILED") {
-                return `<h1>COMPILE FAILED</h1><pre>${numbersToString(logs.stdout)}</pre>`;
-            } else {
-                return "<h1>Something went seriously wrong while running the tests</h1>";
-            }
-        });
+            (status: string, logs: { stdout: number[], stderr: number[] }) => {
+                if (status === "PASSED") {
+                    return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
+                } else if (status === "TESTS_FAILED") {
+                    return "<h1>TESTS FAILED</h1>";
+                } else if (status === "COMPILE_FAILED") {
+                    return `<h1>COMPILE FAILED</h1><pre>${numbersToString(logs.stdout)}</pre>`;
+                } else {
+                    return "<h1>Something went seriously wrong while running the tests</h1>";
+                }
+            });
 
         /**
          * Submission result show correct heading or compilation error
@@ -87,31 +85,45 @@ export default class TemplateEngine {
             let percentDone = 0;
             if (status === "created") {
                 percentDone = 30;
-                return `<div class="progress">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
-                        </div>
+                return `${getProgressBar(percentDone)}
                         <div>&#10004; Submission received. Waiting for it to be processed.</div>`;
             } else if (status === "sending_to_sandbox") {
                 percentDone = 45;
-                return `<div class="progress">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
-                        </div>
-                        <div>&#10004; Submission received. Waiting for it to be processed.</div><div>Submission queued for processing.</div>`;
+                return `${getProgressBar(percentDone)}
+                        <div>&#10004; Submission received. Waiting for it to be processed.</div>
+                        <div>Submission queued for processing.</div>`;
             } else if (status === "processing_on_sandbox") {
                 percentDone = 75;
-                return `<div class="progress">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
-                        </div>
+                return `${getProgressBar(percentDone)}
                         <div>&#10004; Submission received. Waiting for it to be processed.</div>
                         <div>&#10004; Submission in queue for processing.</div>
                         <div>Testing submission.</div>`;
             } else {
-                return `<div class="progress">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
-                        </div>
+                return  `${getProgressBar(percentDone)}
                         <div>Submission sent to server.</div>`;
             }
         });
+
+        handlebars.registerHelper("feedback_question",
+            (question: { id: number, kind: string, lower?: number,
+                         upper?: number, question: string }) => {
+                if (question.kind === "text") {
+                    return `<div class="col-md-10">
+                                <textarea data-questionID="${question.id}" rows="6" cols="40" class="feedback-textarea"></textarea>
+                            </div>`;
+                } else if (question.kind === "intrange" &&
+                           question.lower !== undefined && question.upper !== undefined) {
+                    return `<div class="col-md-10">
+                            <input data-questionID="${question.id}" type="range" class="custom-range" min="${question.lower - 1}"
+                                max="${question.upper}" step="1" value="${question.lower - 1}" oninput='showValue(this, "text-id-${question.id}")' />
+                            </div>
+                            <div class="col-md-2">
+                                <span class="font-weight-bold" id="text-id-${question.id}">-</span>
+                            </div>`;
+                } else {
+                    return "";
+                }
+            });
     }
 
     /**

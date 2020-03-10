@@ -3,9 +3,7 @@ import ClientOauth2 = require("client-oauth2");
 import * as FormData from "form-data";
 import * as fs from "fs";
 import * as fetch from "node-fetch";
-import * as path from "path";
 import * as url from "url";
-import * as vscode from "vscode";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
 
@@ -155,8 +153,11 @@ export default class TMC {
      * Downloads exercise with given id and extracts it to the exercise folder.
      * @param id Id of the exercise to download
      * @param organizationSlug Slug for the organization this exercise belongs to.
+     * @param reset If the call comes from resetExercise function, this is implemented because we need to be sure that
+     * no other extension has generated the folder again.
      */
-    public async downloadExercise(id: number, organizationSlug: string): Promise<Result<string, Error>> {
+    public async downloadExercise(id: number, organizationSlug: string, reset?: boolean ):
+    Promise<Result<string, Error>> {
         const result = await downloadFile(`${this.tmcApiUrl}core/exercises/${id}/download`,
             `${this.dataPath}/${id}.zip`, undefined, this.tmcDefaultHeaders);
         if (result.err) {
@@ -185,10 +186,14 @@ export default class TMC {
             organizationSlug, checksum, detailsResult.val,
         );
 
+        if (exercisePath.err) {
+            return new Err(exercisePath.val);
+        }
+
         const extractResult = await this.checkApiResponse(this.executeLangsAction({
             action: "extract-project",
             archivePath: `${this.dataPath}/${id}.zip`,
-            exerciseFolderPath: exercisePath,
+            exerciseFolderPath: exercisePath.val,
         }), createIs<string>());
 
         if (extractResult.err) {
@@ -196,7 +201,7 @@ export default class TMC {
         }
 
         // TODO: Return closed path and call open elsewhere
-        const openResult = this.workspaceManager.openExercise(id);
+        const openResult = this.workspaceManager.openExercise(id, reset);
 
         if (openResult.err) {
             console.log("Opening failed");

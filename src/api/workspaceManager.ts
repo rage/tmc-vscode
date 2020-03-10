@@ -1,6 +1,8 @@
 import * as del from "del";
 import * as fs from "fs";
 import * as path from "path";
+import * as vscode from "vscode";
+
 import { Err, Ok, Result } from "ts-results";
 
 import Resources from "../config/resources";
@@ -16,6 +18,9 @@ export default class WorkspaceManager {
     private readonly storage: Storage;
     private readonly resources: Resources;
 
+    // Data for the workspace filesystem event watcher
+    private readonly watcherTree: Map<string, Map<string, Set<string>>> = new Map();
+
     /**
      * Creates a new instance of the WorkspaceManager class.
      * @param storage Storage object for persistent data storing
@@ -26,13 +31,13 @@ export default class WorkspaceManager {
         this.resources = resources;
         const storedData = this.storage.getExerciseData();
         if (storedData) {
-            console.log(storedData);
             this.idToData = new Map(storedData.map((x) => ([x.id, x])));
             this.pathToId = new Map(storedData.map((x) => ([x.path, x.id])));
         } else {
             this.idToData = new Map();
             this.pathToId = new Map();
         }
+        this.startWatcher();
     }
 
     /**
@@ -43,20 +48,21 @@ export default class WorkspaceManager {
      */
     public createExerciseDownloadPath(
         organizationSlug: string, checksum: string, exerciseDetails: ExerciseDetails,
-    ): string {
-        if (this.idToData.has(exerciseDetails.course_id)) {
-            throw new Error("Attempted to download existing exercise.");
+    ): Result<string, Error> {
+        if (this.idToData.has(exerciseDetails.exercise_id)) {
+            return new Err(new Error("Exercise already downloaded."));
         }
         const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
-        const { course_name, exercise_name, exercise_id } = exerciseDetails;
+        const { course_name, exercise_name, exercise_id, deadline } = exerciseDetails;
         const exercisePath = path.join(exerciseFolderPath, organizationSlug, course_name, exercise_name);
         this.pathToId.set(exercisePath, exercise_id);
         this.idToData.set(exercise_id, {
-            checksum, course: exerciseDetails.course_name, id: exercise_id, isOpen: false,
-            name: exerciseDetails.exercise_name, organization: organizationSlug, path: exercisePath,
+            checksum, course: exerciseDetails.course_name, deadline,
+            id: exercise_id, isOpen: false, name: exerciseDetails.exercise_name, organization: organizationSlug,
+            path: exercisePath,
         });
         this.updatePersistentData();
-        return this.getClosedPath(exercise_id);
+        return new Ok(this.getClosedPath(exercise_id));
     }
 
     /**
@@ -82,6 +88,16 @@ export default class WorkspaceManager {
             return new Err(new Error(`Exercise data missing for ${id}`));
         }
         return new Ok(data);
+    }
+
+    public getExercisesByCourseName(courseName: string): LocalExerciseData[] {
+        const exercises: LocalExerciseData[] = [];
+        for (const data of this.idToData.values()) {
+            if (data.course === courseName) {
+                exercises.push(data);
+            }
+        }
+        return exercises;
     }
 
     /**
@@ -117,23 +133,26 @@ export default class WorkspaceManager {
     /**
      * Opens exercise by moving it to workspace folder.
      * @param id Exercise ID to open
+     * @param clearFolder Force remove the folder and it's contents, before opening from closed path.
      */
-    public openExercise(id: number): Result<string, Error> {
+    public openExercise(id: number, clearFolder?: boolean): Result<string, Error> {
         const data = this.idToData.get(id);
         if (data && !data.isOpen) {
             fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
-            del.sync(data.path, { force: true });
+            if (clearFolder) { del.sync(data.path, { force: true }); }
+            this.addToWatcherTree(data);
             try {
                 fs.renameSync(this.getClosedPath(id), data.path);
             } catch (err) {
-                del.sync(data.path, { force: true });
-                fs.renameSync(this.getClosedPath(id), data.path);
+                this.removeFromWatcherTree(data);
+                return new Err(new Error("Folder move operation failed."));
             }
             data.isOpen = true;
             this.idToData.set(id, data);
+            this.updatePersistentData();
             return new Ok(data.path);
         } else {
-            throw new Error("Invalid ID or unable to open.");
+            return new Err(new Error("Invalid ID or unable to open."));
         }
     }
 
@@ -141,14 +160,17 @@ export default class WorkspaceManager {
      * Closes exercise by moving it away from workspace.
      * @param id Exercise ID to close
      */
-    public closeExercise(id: number) {
+    public closeExercise(id: number): Result<void, Error> {
         const data = this.idToData.get(id);
         if (data && data.isOpen) {
             fs.renameSync(data.path, this.getClosedPath(id));
             data.isOpen = false;
             this.idToData.set(id, data);
+            this.removeFromWatcherTree(data);
+            this.updatePersistentData();
+            return Ok.EMPTY;
         } else {
-            throw new Error("Invalid ID or unable to close.");
+            return new Err(new Error("Invalid ID or unable to close."));
         }
     }
 
@@ -185,5 +207,67 @@ export default class WorkspaceManager {
 
     private getClosedPath(id: number) {
         return path.join(this.resources.tmcClosedExercisesFolderPath, id.toString());
+    }
+
+    private addToWatcherTree({organization, course, name}: LocalExerciseData) {
+        if (!this.watcherTree.has(organization)) {
+            this.watcherTree.set(organization, new Map());
+        }
+        if (!this.watcherTree.get(organization)?.has(course)) {
+            this.watcherTree.get(organization)?.set(course, new Set());
+        }
+        this.watcherTree.get(organization)?.get(course)?.add(name);
+    }
+
+    private removeFromWatcherTree({organization, course, name, path: exercisePath}: LocalExerciseData) {
+        if (this.watcherTree.get(organization)?.has(course)) {
+            this.watcherTree.get(organization)?.get(course)?.delete(name);
+            if (this.watcherTree.get(organization)?.get(course)?.size === 0) {
+                this.watcherTree.get(organization)?.delete(course);
+                if (this.watcherTree.get(organization)?.size === 0) {
+                    this.watcherTree.delete(organization);
+                }
+            }
+            this.watcherAction(exercisePath);
+        }
+    }
+
+    private initializeWatcherData() {
+        this.watcherTree.clear();
+        for (const data of this.idToData.values()) {
+            if (data.isOpen) {
+                this.addToWatcherTree(data);
+            }
+        }
+    }
+
+    private watcherAction(targetPath: string) {
+        const relation = path.relative(this.resources.tmcExercisesFolderPath, targetPath).toString().split(path.sep, 3);
+        if (relation[0] === "..") {
+            return;
+        }
+        if (relation.length > 0 && !this.watcherTree.has(relation[0])) {
+            del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0]), { force: true });
+            return;
+        }
+        if (relation.length > 1 && !this.watcherTree.get(relation[0])?.has(relation[1])) {
+            del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0], relation[1]), { force: true });
+            return;
+        }
+        if (relation.length > 2 && !this.watcherTree.get(relation[0])?.get(relation[1])?.has(relation[2])) {
+            del.sync(path.join(this.resources.tmcExercisesFolderPath, ...relation), { force: true });
+            return;
+        }
+    }
+
+    private startWatcher() {
+        this.initializeWatcherData();
+        const watcher = vscode.workspace.createFileSystemWatcher("**", false, true, true);
+        watcher.onDidCreate((x) => {
+            if (x.scheme === "file") {
+                this.watcherAction(x.path);
+            }
+        });
+
     }
 }

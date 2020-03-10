@@ -1,16 +1,18 @@
-import { Err, Ok, Result } from "ts-results";
+import { Err, Ok, Result, Results } from "ts-results";
 import * as vscode from "vscode";
 
 import { LocalCourseData, UserData } from "../config/userdata";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
-import { sleep } from "../utils";
+import { parseDeadline, sleep } from "../utils";
 import { ActionContext } from "./types";
 
 /**
  * Submits an exercise while keeping the user informed
  */
-export async function submitExercise(id: number, { ui, resources, tmc }: ActionContext, tempView?: TemporaryWebview) {
+export async function submitExercise(id: number,
+                                     { userData, ui, resources, tmc, workspaceManager }: ActionContext,
+                                     tempView?: TemporaryWebview) {
     const submitResult = await tmc.submitExercise(id);
     if (submitResult.err) {
         vscode.window.showErrorMessage(`Exercise submission failed: \
@@ -53,7 +55,27 @@ export async function submitExercise(id: number, { ui, resources, tmc }: ActionC
         const statusData = statusResult.val;
         if (statusResult.val.status !== "processing") {
             ui.setStatusBar("Tests finished, see result", 5000);
-            temp.setContent("submission-result", statusData);
+            const feedbackQuestions: Array<{ id: number, kind: string, lower?: number,
+                                             upper?: number, question: string }> = [];
+            if (statusData.status === "ok" && statusData.all_tests_passed) {
+                userData.setPassed(
+                    userData.getCourseByName(workspaceManager.getExerciseDataById(id).unwrap().course).id
+                    , id);
+                if (statusData.feedback_questions) {
+                    statusData.feedback_questions.forEach((x) => {
+                        const kindRangeMatch = x.kind.match("intrange\\[(-?[0-9]+)..(-?[0-9]+)\\]");
+                        if (kindRangeMatch && kindRangeMatch[0] === x.kind) {
+                            feedbackQuestions.push({ id: x.id, kind: "intrange", lower: parseInt(kindRangeMatch[1], 10),
+                                                     question: x.question, upper: parseInt(kindRangeMatch[2], 10) });
+                        } else if (x.kind === "text") {
+                            feedbackQuestions.push({ id: x.id, kind: "text", question: x.question });
+                        } else {
+                            console.log("Unexpected feedback question type:", x.kind);
+                        }
+                    });
+                }
+            }
+            temp.setContent("submission-result", {statusData, feedbackQuestions});
             break;
         }
         if (!temp.disposed) {
@@ -83,7 +105,7 @@ export async function submitExercise(id: number, { ui, resources, tmc }: ActionC
  */
 export async function testExercise(id: number, actions: ActionContext) {
     const { ui, resources, tmc, workspaceManager } = actions;
-    const exerciseDetails =  workspaceManager.getExerciseDataById(id);
+    const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         vscode.window.showErrorMessage(`Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`);
         console.error(exerciseDetails.val);
@@ -116,59 +138,93 @@ export async function testExercise(id: number, actions: ActionContext) {
 }
 
 /**
- * Prompts user to reset exercise and resets exercise if user replies to prompt correctly.
+ * Resets an exercise
  */
 export async function resetExercise(id: number, { ui, tmc, workspaceManager }: ActionContext) {
-    const exerciseData = workspaceManager.getExerciseDataById(id).unwrap();
-    const options: vscode.InputBoxOptions = {
-        placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
-        prompt: `Are you sure you want to reset exercise ${exerciseData.name} ? `,
-    };
-    const reset = await vscode.window.showInputBox(options).then((value) => {
-        if (value?.toLowerCase() === "yes") {
-            return true;
-        } else {
-            return false;
-        }
-    });
 
-    if (reset) {
-        vscode.window.showInformationMessage(`Resetting exercise ${exerciseData.name}`);
-        ui.setStatusBar(`Resetting exercise ${exerciseData.name}`);
-        const submitResult = await tmc.submitExercise(id);
-        if (submitResult.err) {
-            vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
-                                            ${submitResult.val.name} - ${submitResult.val.message}`);
-            console.error(submitResult.val);
-            ui.setStatusBar(`Something went wrong while resetting exercise ${exerciseData.name}`, 10000);
-            return;
-        }
-        const slug = exerciseData.organization;
-        workspaceManager.deleteExercise(id);
-        await tmc.downloadExercise(id, slug);
-        ui.setStatusBar(`Exercise ${exerciseData.name} resetted successfully`, 10000);
-    } else {
-        vscode.window.showInformationMessage(`Reset canceled for exercise ${exerciseData.name}.`);
+    const exerciseData = workspaceManager.getExerciseDataById(id);
+    if (exerciseData.err) {
+        vscode.window.showErrorMessage("The data for this exercise seems to be missing");
+        return;
     }
+
+    vscode.window.showInformationMessage(`Resetting exercise ${exerciseData.val.name}`);
+    ui.setStatusBar(`Resetting exercise ${exerciseData.val.name}`);
+    const submitResult = await tmc.submitExercise(id);
+    if (submitResult.err) {
+        vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
+                                        ${submitResult.val.name} - ${submitResult.val.message}`);
+        console.error(submitResult.val);
+        ui.setStatusBar(`Something went wrong while resetting exercise ${exerciseData.val.name}`, 10000);
+        return;
+    }
+    const slug = exerciseData.val.organization;
+    workspaceManager.deleteExercise(id);
+    await tmc.downloadExercise(id, slug, true);
+    ui.setStatusBar(`Exercise ${exerciseData.val.name} resetted successfully`, 10000);
 }
 
 /**
  * Opens the course exercise list view
  */
-export async function displayCourseDetails(id: number, { tmc, ui, userData }: ActionContext) {
-    const result = await tmc.getCourseDetails(id);
-
+export async function displayCourseDownloadDetails(
+    courseId: number, { tmc, ui, userData, workspaceManager }: ActionContext) {
+    const result = await tmc.getCourseDetails(courseId);
     if (result.err) {
         console.error("Fetching course details failed: " + result.val.message);
         return;
     }
     const details = result.val.course;
-    const organizationSlug = userData.getCourses().find((course) => course.id === id)?.organization;
+    userData.updateCompletedExercises(courseId, details.exercises.filter((x) => x.completed).map((x) => x.id));
+
+    const organizationSlug = userData.getCourses().find((course) => course.id === courseId)?.organization;
+    const exerciseDetails = details.exercises.map((x) =>
+        ({exercise: x, downloaded: workspaceManager.getExerciseDataById(x.id).ok}));
+    const workspaceEmpty = workspaceManager.getExercisesByCourseName(details.name).length === 0;
     const data = {
-        courseName: result.val.course.name, details,
-        organizationSlug,
+        courseId, courseName: result.val.course.name, details, exerciseDetails, organizationSlug, workspaceEmpty,
     };
-    await ui.webview.setContentFromTemplate("course-details", data);
+    await ui.webview.setContentFromTemplate("download-exercises", data);
+}
+
+/**
+ * Opens details view for local exercises
+ */
+export async function displayLocalExerciseDetails(courseId: number, actionContext: ActionContext) {
+
+    const { tmc, ui, userData, workspaceManager } = actionContext;
+
+    const course = userData.getCourse(courseId);
+    const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
+
+    // If no exercises downloaded, skip straight to downloading
+    if (workspaceExercises.length === 0) {
+        return displayCourseDownloadDetails(courseId, actionContext);
+    }
+
+    const exerciseData = new Map<number, { id: number, name: string, isOpen: boolean,
+                                        passed: boolean, deadlineString: string }>();
+
+    workspaceExercises?.forEach((x) => exerciseData.set(x.id, {
+        deadlineString: x.deadline ? parseDeadline(x.deadline).toString().split("(", 1)[0] : "-",
+        id: x.id, isOpen: x.isOpen, name: x.name, passed: false,
+    }));
+
+    course.exercises.forEach((x) => {
+        const data = exerciseData.get(x.id);
+        if (data) {
+            data.passed = x.passed;
+            exerciseData.set(x.id, data);
+        }
+    });
+
+    const sortedExercises = Array.from(exerciseData.values()).sort((a, b) => (a.deadlineString === b.deadlineString)
+        ? a.name.localeCompare(b.name)
+        : a.deadlineString.localeCompare(b.deadlineString),
+    );
+
+    ui.webview
+        .setContentFromTemplate("course-details", { exerciseData: sortedExercises, course, courseId: course.id }, true);
 }
 
 /**
@@ -179,10 +235,59 @@ export async function displaySummary({ userData, ui }: ActionContext) {
 }
 
 /**
+ * Returns a handler that downloads given exercises and opens them in VSCode explorer, when called.
+ * @param ui UI instance used for setting up the webview afterwards
+ * @param tmc TMC API instance used for downloading exercises
+ */
+export async function downloadExercises(
+    actionContext: ActionContext, ids: number[], organizationSlug: string, courseName: string, courseId: number) {
+    const { tmc, ui } = actionContext;
+
+    const courseDetails = await tmc.getCourseDetails(courseId);
+    if (courseDetails.err) {
+        return;
+    }
+
+    const exerciseStatus = new Map<number, {name: string, downloaded: boolean, failed: boolean, error: string}>(
+        courseDetails.val.course.exercises.filter((x) => ids.includes(x.id)).map(
+            (x) => [x.id, {name: x.name, downloaded: false, failed: false, error: ""}]),
+    );
+
+    let successful = 0;
+    let failed = 0;
+
+    ui.webview.setContentFromTemplate("downloading-exercises",
+        { courseId, exercises: exerciseStatus.values(), failed, failed_pct: Math.round(100 * failed / ids.length),
+          remaining: ids.length - successful - failed,
+          successful, successful_pct: Math.round(100 * successful / ids.length), total: ids.length});
+    await Promise.all(ids.map<Promise<Result<string, Error>>>(
+        (x) => new Promise(async (resolve) => {
+            const res = await tmc.downloadExercise(x, organizationSlug);
+            const d = exerciseStatus.get(x);
+            if (d) {
+                if (res.ok) {
+                    successful += 1;
+                    d.downloaded = true;
+                } else {
+                    failed += 1;
+                    d.failed = true;
+                    d.error = res.val.message;
+                }
+                exerciseStatus.set(x, d);
+                ui.webview.setContentFromTemplate("downloading-exercises",
+                    { courseId, exercises: exerciseStatus.values(), failed,
+                      failed_pct: Math.round(100 * failed / ids.length), remaining: ids.length - successful - failed,
+                      successful, successful_pct: Math.round(100 * successful / ids.length), total: ids.length});
+            }
+            resolve(res);
+        })));
+}
+
+/**
  * Lets the user select a course
  */
 export async function selectCourse(orgSlug: string, { tmc, resources, ui }: ActionContext, webview?: TemporaryWebview):
-    Promise<Result<{changeOrg: boolean, course?: number}, Error>> {
+    Promise<Result<{ changeOrg: boolean, course?: number }, Error>> {
     const result = await tmc.getCourses(orgSlug);
 
     if (result.err) {
@@ -192,12 +297,12 @@ export async function selectCourse(orgSlug: string, { tmc, resources, ui }: Acti
     const organization = (await tmc.getOrganization(orgSlug)).unwrap();
     const data = { courses, organization };
     let changeOrg = false;
-    let course: number | undefined;
+    let course: number | undefined;
 
     await new Promise((resolve) => {
-        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
+        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => { });
         temp.setTitle("Select course");
-        temp.setMessageHandler((msg: {type: string, id: number}) => {
+        temp.setMessageHandler((msg: { type: string, id: number }) => {
             if (msg.type === "setCourse") {
                 course = msg.id;
             } else if (msg.type === "changeOrg") {
@@ -212,7 +317,7 @@ export async function selectCourse(orgSlug: string, { tmc, resources, ui }: Acti
         });
         temp.setContent("course", data);
     });
-    return new Ok({changeOrg, course});
+    return new Ok({ changeOrg, course });
 }
 
 /**
@@ -227,12 +332,12 @@ export async function selectOrganization({ resources, tmc, ui }: ActionContext, 
     const organizations = result.val.sort((org1, org2) => org1.name.localeCompare(org2.name));
     const pinned = organizations.filter((organization) => organization.pinned);
     const data = { organizations, pinned };
-    let slug: string | undefined;
+    let slug: string | undefined;
 
     await new Promise((resolve) => {
-        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
+        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => { });
         temp.setTitle("Select organization");
-        temp.setMessageHandler((msg: {type: string, slug: string}) => {
+        temp.setMessageHandler((msg: { type: string, slug: string }) => {
             if (msg.type !== "setOrganization") {
                 return;
             }
@@ -251,12 +356,12 @@ export async function selectOrganization({ resources, tmc, ui }: ActionContext, 
 }
 
 export async function selectOrganizationAndCourse(actionContext: ActionContext):
-    Promise<Result<{organization: string, course: number}, Error>> {
+    Promise<Result<{ organization: string, course: number }, Error>> {
 
-    const tempView = new TemporaryWebview(actionContext.resources, actionContext.ui, "", () => {});
+    const tempView = new TemporaryWebview(actionContext.resources, actionContext.ui, "", () => { });
 
-    let organizationSlug: string | undefined;
-    let courseID: number | undefined;
+    let organizationSlug: string | undefined;
+    let courseID: number | undefined;
 
     while (!(organizationSlug && courseID)) {
         const orgResult = await selectOrganization(actionContext, tempView);
@@ -277,7 +382,7 @@ export async function selectOrganizationAndCourse(actionContext: ActionContext):
     }
 
     tempView.dispose();
-    return new Ok({organization: organizationSlug, course: courseID});
+    return new Ok({ organization: organizationSlug, course: courseID });
 }
 
 /**
@@ -331,13 +436,50 @@ export async function selectNewCourse(actionContext: ActionContext) {
     }
 
     const courseDetails = courseDetailsResult.val.course;
+
     const localData: LocalCourseData = {
         description: courseDetails.description,
-        exerciseIds: courseDetails.exercises.map((e) => e.id), // Only IDs?
+        exercises: courseDetails.exercises.map((e) => ({ id: e.id, passed: e.completed })),
         id: courseDetails.id,
         name: courseDetails.name,
         organization: orgAndCourse.val.organization,
     };
     userData.addCourse(localData);
     actionContext.ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
+}
+
+export async function openExercises(ids: number[], actionContext: ActionContext) {
+    ids.forEach((id) => actionContext.workspaceManager.openExercise(id));
+}
+
+export async function closeExercises(ids: number[], actionContext: ActionContext) {
+    ids.forEach((id) => actionContext.workspaceManager.closeExercise(id));
+}
+
+/**
+ * Currently not in use
+ * @param courseId
+ * @param actionContext
+ */
+export async function closeCompletedExercises(courseId: number, actionContext: ActionContext) {
+    const courseData = actionContext.userData.getCourses().find((x) => x.id === courseId);
+    if (!courseData) {
+        return;
+    }
+    closeExercises(courseData.exercises.filter((x) => x.passed).map((x) => x.id), actionContext);
+}
+
+/**
+ * Currently not in use
+ * @param courseId
+ * @param actionContext
+ */
+export async function openUncompletedExercises(courseId: number, actionContext: ActionContext) {
+    const courseData = actionContext.userData.getCourses().find((x) => x.id === courseId);
+    console.log(courseId);
+    console.log(courseData);
+    if (!courseData) {
+        return;
+    }
+    openExercises(courseData.exercises.filter((x) => !x.passed).map((x) => x.id), actionContext);
 }

@@ -13,7 +13,9 @@
 		"Other"
 	],
 	"activationEvents": [
+		"workspaceContains:**/.tmc-root",
 		"onView:tmcView",
+		"onCommand:closeExercise",
 		"onCommand:runTests",
 		"onCommand:resetExercise",
 		"onCommand:uploadArchive"
@@ -24,6 +26,10 @@
 			{
 				"command": "tmcView.activateEntry",
 				"title": "Activate"
+			},
+			{
+				"command": "closeExercise",
+				"title": "TMC - Close exercise"
 			},
 			{
 				"command": "uploadArchive",
@@ -38,6 +44,16 @@
 				"title": "TMC - Run tests"
 			}
 		],
+		"keybindings":[
+			{
+				"command": "runTests",
+				"key": "ctrl+shift+t"
+			},
+			{
+				"command": "closeExercise",
+				"key": "ctrl+shift+c"
+			}
+		],
 		"menus": {
 			"commandPalette": [
 				{
@@ -49,16 +65,20 @@
 				{
 					"command": "runTests",
 					"group": "navigation",
-					"when": "resourceScheme == file"
+					"when": "resourceScheme == file && tmcWorkspaceActive"
 				},
 				{
 					"command": "uploadArchive",
 					"group": "navigation",
-					"when": "resourceScheme == file"
+					"when": "resourceScheme == file && tmcWorkspaceActive"
+				},
+				{
+					"command": "closeExercise",
+					"when": "resourceScheme == file && tmcWorkspaceActive"
 				},
 				{
 					"command": "resetExercise",
-					"when": "resourceScheme == file"
+					"when": "resourceScheme == file && tmcWorkspaceActive"
 				}
 			]
 		},

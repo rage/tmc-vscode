@@ -22,6 +22,10 @@ body.vscode-high-contrast {
     color: red;
 }
 
+.breadcrumb {
+    background-color: inherit;
+}
+
 .container {
     padding-top: 20px;
 }
@@ -38,6 +42,12 @@ body.vscode-high-contrast {
     Course and organization view
 */
 .org-row {
+    padding: 10px 0px;
+    margin-bottom: 10px;
+    min-height: 125px;
+}
+
+.org {
     padding: 10px 0px;
     margin-bottom: 10px;
     min-height: 125px;
@@ -82,6 +92,14 @@ body.vscode-high-contrast {
 
 .sticky-top {
     background-color: var(--vscode-editor-background);
+}
+
+.badge:hover {
+    cursor: pointer;
+}
+
+.feedback-textarea {
+    width: inherit;
 }
 
 /*

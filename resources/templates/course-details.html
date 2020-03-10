@@ -1,94 +1,168 @@
 <html>
-    <head>
-        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
-        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
 
-        <script>
-            const vscode = acquireVsCodeApi();
-            let selectedCount = 0;
-            let totalCount = undefined;
+<head>
+    <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+    <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+</head>
 
-            function downloadSelectedExercises() {
-                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                const ids = [];
-                for (const checkbox of checkboxes) {
-                    if (checkbox.checked) {
-                        ids.push(parseInt(checkbox.value));
-                    }
-                }
-                if (ids.length > 0) {
-                    vscode.postMessage({ type: "downloadExercises", ids, courseName: "{{courseName}}", organizationSlug: "{{organizationSlug}}" });
-                }
-            }
+<body>
+    
 
-            function updateCount(element) {
-                selectedCount += element.checked ? 1 : -1;
-                if (totalCount === undefined) {
-                    totalCount = document.querySelectorAll('input[type="checkbox"]').length
-                }
-                if (selectedCount === totalCount) {
-                    document.querySelector("button#togglebutton").innerHTML = "Deselect all";
-                } else if (selectedCount === totalCount - 1) {
-                    document.querySelector("button#togglebutton").innerHTML = "Select all";
-                }
-            }
-
-            function toggleAll() {
-                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                if (totalCount === undefined) {
-                    totalCount = checkboxes.length;
-                }
-                const deselect = selectedCount === totalCount;
-                for (const checkbox of checkboxes) {
-                    checkbox.checked = !deselect;
-                }
-                if (deselect) {
-                    document.querySelector("button#togglebutton").innerHTML = "Select all";
-                    selectedCount = 0;
-                } else {
-                    document.querySelector("button#togglebutton").innerHTML = "Deselect all";
-                    selectedCount = totalCount;
-                }
-            }
-        </script>
-    </head>
-
-    <body>
-        <div class="container container-fluid pt-0">
-            {{#with details}}
-                <div class="sticky-top">
-                    <div class="py-2">
-                        <h1>{{title}}</h1>
-                    </div>
-                    <div class="row py-2">
-                        <p>{{description}}</p>
-                    </div>
-                    <div class="row py-2">
-                        <button class="mr-2" onclick="toggleAll()" id="togglebutton">Select all</button>
-                        <button onclick="downloadSelectedExercises()">Download selected</button>
+    <div class="container pt-0">
+        <div class="sticky-top py-2">
+            <div class="row">
+                <div class="col">
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                          <li class="breadcrumb-item"><a onclick="backToMyCourses() "href="#">My courses</a></li>
+                          <li class="breadcrumb-item" aria-current="page">{{course.name}}</li>
+                        </ol>
+                    </nav>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-sm">
+                    <h2>{{course.name}}</h2>
+                    <span>{{course.description}}</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-sm-3">
+                    <button class="btn-primary m-1 w-100" onclick="downloadView( {{courseId}} )">Download exercises</button>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <h3 class="mt-2">Select</h3>
+                    <div class="row">
+                        <div class="col-sm-3">
+                            <button class="btn-secondary m-1 w-100" onclick="toggleAll()" id="togglebutton">All</button>
+                        </div>
+                        <div class="col-sm-3">
+                            <button class="btn-primary m-1 w-100" onclick="toggleAllPassed(false)">All uncompleted</button>
+                        </div>
+                        <div class="col-sm-3">
+                            <button class="btn-primary m-1 w-100" onclick="toggleAllPassed(true)">All completed</button>
+                        </div>
                     </div>
                 </div>
-                <div style="overflow-y: hidden;">
-                    <table class="table table-striped table-sm">
-                        {{#each exercises}}
-                        <tr>
-                            <td width="40">
-                                <div class="row pb-1">
-                                    <div class="col-sm-1 checkbox-xl">
-                                        <input type="checkbox" value="{{this.id}}" onchange="updateCount(this)"/>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="col-sm">
-                                    {{this.name}}
-                                </div>
-                            </td>
-                        </tr>
-                        {{/each}}
-                    </table>
+            </div>
+            <div class="row">
+                <div class="col-sm-3">
+                    <button class="btn-primary m-1 w-100" onclick="handleSelected('openSelected')">Open selected</button>
                 </div>
-            {{/with}}
+                <div class="col-sm-3">
+                    <button class="btn-primary m-1 w-100" onclick="handleSelected('closeSelected')">Close selected</button>
+                </div>
+            </div>
         </div>
-    </body>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th scope="col"></th>
+                    <th scope="col">Exercise name</th>
+                    <th scope="col">Deadline</th>
+                    <th scope="col" class="text-center">Completed</th>
+                    <th scope="col">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{#each exerciseData}}
+                <tr>
+                    <td class="text-center">
+                        <input class="checkbox-xl" type="checkbox" data-isPassed={{this.passed}} value="{{this.id}}" onchange="updateCount(this)" />
+                    </td>
+                    <td>{{this.name}}</td>
+                    <td>{{this.deadlineString}}</td>
+                    <td class="text-center">
+                        {{#if this.passed}} &#10004; {{else}} &#10060; {{/if}}
+                    </td>
+                    <td>
+                        {{#if this.isOpen}}
+                            <span class="badge badge-primary" onclick="closeExercise({{this.id}})">open</span>
+                        {{else}}
+                            <span class="badge badge-secondary" onclick="openExercise({{this.id}})">closed</span>
+                        {{/if}}
+                    </td>
+                </tr>
+            {{/each}}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+        let selectedCount = 0;
+        let totalCount = document.querySelectorAll('input[type="checkbox"]').length;
+
+        function handleSelected(type) {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const ids = [];
+            for (const checkbox of checkboxes) {
+                if (checkbox.checked) {
+                    ids.push(parseInt(checkbox.value));
+                }
+            }
+            if (ids.length > 0) {
+                vscode.postMessage({ type: type, ids, id: {{courseId}} });
+            }
+        }
+
+        function openExercise(id) {
+            vscode.postMessage({type: 'openSelected', ids: [id], id: {{courseId}} });
+        }
+
+        function closeExercise(id) {
+            vscode.postMessage({type: 'closeSelected', ids: [id], id: {{courseId}} });
+        }
+
+        function updateCount(element) {
+            selectedCount += element.checked ? 1 : -1;
+            if (totalCount === undefined) {
+                totalCount = document.querySelectorAll('input[type="checkbox"]').length
+            }
+
+            if (selectedCount === totalCount) {
+                document.querySelector("button#togglebutton").innerHTML = "None";
+            } else if (selectedCount === totalCount - 1) {
+                document.querySelector("button#togglebutton").innerHTML = "All";
+            }
+        }
+
+        function toggleAllPassed(isPassed) {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            for (const checkbox of checkboxes) {
+                if (checkbox.checked !== ((checkbox.dataset.ispassed === "true") === isPassed)) {
+                    checkbox.checked = (checkbox.dataset.ispassed === "true") === isPassed;
+                    updateCount(checkbox);
+                }
+            }
+        }
+
+        function toggleAll() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const deselect = selectedCount === totalCount;
+            for (const checkbox of checkboxes) {
+                checkbox.checked = !deselect;
+            }
+            if (deselect) {
+                document.querySelector("button#togglebutton").innerHTML = "All";
+                selectedCount = 0;
+            } else {
+                document.querySelector("button#togglebutton").innerHTML = "None";
+                selectedCount = totalCount;
+            }
+        }
+
+        function backToMyCourses() {
+            vscode.postMessage({ type: "myCourses" });
+        }
+
+        function downloadView(courseId) {
+            vscode.postMessage({ type: "exerciseDownloads", id: courseId })
+        }
+
+    </script>
+</body>
+
 </html>

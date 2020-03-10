@@ -1,0 +1,65 @@
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="{{cssPath}}">
+        <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+
+        <script>
+            const vscode = acquireVsCodeApi();
+        </script>
+    </head>
+
+    <body>
+        <div class="container">
+            <div>
+                {{#if remaining}}
+                    <div class="row py-1">
+                        <div class="col">
+                            <h1>Downloading exercises...</h1>
+                        </div>
+                    </div>
+                {{else}}
+                    <div class="row py-1">
+                        <div class="col">
+                            <h1>Download complete</h1>
+                        </div>
+                    </div>
+                    <div class="row py-1">
+                        <div class="col">
+                            <button class="btn btn-primary" onclick="vscode.postMessage({type: 'courseDetails', id: {{courseId}} })">Return to course details</button>
+                        </div>
+                    </div>
+                {{/if}}
+                <div class="row py-1">
+                    <div class="col">
+                        <div class="progress" style="width: 100%">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: {{successful_pct}}%"
+                                aria-valuenow="{{successful}}" aria-valuemin="0" aria-valuemax="{{total}}">
+                                {{successful_pct}} %
+                            </div>
+                            <div class="progress-bar bg-danger" role="progressbar" style="width: {{failed_pct}}%"
+                                aria-valuenow="{{failed}}" aria-valuemin="0" aria-valuemax="{{total}}">
+                                {{failed_pct}} %
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <table>
+            {{#each exercises}}
+                <tr>
+                    <td>{{this.name}}</td>
+                    {{#if this.downloaded}}
+                        <td style="color: greenyellow"> Downloaded! </td>
+                    {{else}}
+                        {{#if this.failed}}
+                            <td style="color: red"> Download failed: {{this.error}} </td>
+                        {{else}}
+                            <td><div class="spinner-border spinner-border-sm ml-auto" role="status" aria-hidden="true"></div></td>
+                        {{/if}}
+                    {{/if}}
+                </tr>
+            {{/each}}
+            </table>
+        </div>
+    </body>
+</html>

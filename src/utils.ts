@@ -124,14 +124,52 @@ export function sleep(millis: number) {
     return new Promise((resolve) => setTimeout(resolve, millis));
 }
 
+/**
+ * Convert Chars to a string
+ * @param array Char numbers array
+ */
 export function numbersToString(array: number[]) {
     return String.fromCharCode(...array);
 }
 
+/**
+ * Get the Exercise ID for the currently open text editor
+ */
 export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number | undefined {
     const editorPath = vscode.window.activeTextEditor?.document.fileName;
     if (!editorPath) {
         return undefined;
     }
     return workspaceManager.getExercisePath(editorPath);
+}
+
+/**
+ * Creates a date object from string
+ * @param deadline Deadline as string from API
+ */
+export function parseDeadline(deadline: string) {
+    const inMillis = Date.parse(deadline);
+    const date = new Date(inMillis);
+    return date;
+}
+
+/**
+ * Return bootstrap striped, animated progress bar div as string
+ * @param percentDone How much done of the progress
+ */
+export function getProgressBar(percentDone: number): string {
+    return `<div class="progress">
+        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
+    </div>`;
+}
+
+export async function askForConfirmation(prompt: string, resultCallback: (success: boolean) => void = () => {},
+): Promise<boolean> {
+    const options: vscode.InputBoxOptions = {
+        placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
+        prompt,
+    };
+    const success = (await vscode.window.showInputBox(options))?.toLowerCase() === "yes";
+    resultCallback(success);
+    return success;
 }

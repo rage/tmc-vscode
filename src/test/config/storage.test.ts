@@ -72,7 +72,7 @@ suite("Storage tests", () => {
     });
 
     test("Exercise data updater uses ExtensionContext correctly", () => {
-        const exerciseData = [{ checksum: "asd", course: "HY-jtkt", id: 1337, isOpen: true,
+        const exerciseData = [{ checksum: "asd", course: "HY-jtkt", deadline: "2020-03-21", id: 1337, isOpen: true,
             name: "hello-world", organization: "HY", path: "/tmp"}];
         assertUpdater(() => storage.updateExerciseData(exerciseData), EXERCISE_DATA_KEY, exerciseData);
     });

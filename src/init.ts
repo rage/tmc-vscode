@@ -5,12 +5,14 @@ import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
-import { displayCourseDetails, displaySummary, login, logout, selectNewCourse } from "./actions/actions";
+import {
+    closeCompletedExercises, closeExercises, displayCourseDownloadDetails, displayLocalExerciseDetails, displaySummary,
+    downloadExercises, login, logout, openExercises, openUncompletedExercises, selectNewCourse,
+} from "./actions/actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
-import { downloadExercises, setCourse, setOrganization } from "./ui/treeview/handlers";
 import { downloadFileWithProgress, isJavaPresent } from "./utils";
 
 /**
@@ -33,9 +35,6 @@ export function registerUiActions(
     // UI Action IDs
     const LOGIN_ACTION = "login";
     const INDEX_ACTION = "index";
-    const ORGANIZATIONS_ACTION = "orgs";
-    const COURSES_ACTION = "courses";
-    const COURSE_DETAILS_ACTION = "courseDetails";
 
     // Register UI actions
     const actionContext = { tmc, workspaceManager, ui, resources, userData };
@@ -47,19 +46,35 @@ export function registerUiActions(
         () => { displaySummary(actionContext); }, INDEX_ACTION);
 
     // Register webview handlers
-    const handlerContext = { tmc, storage, ui, visibilityGroups };
-    ui.webview.registerHandler("setOrganization", setOrganization(handlerContext, COURSES_ACTION));
-    ui.webview.registerHandler("setCourse", setCourse(handlerContext, COURSE_DETAILS_ACTION));
     ui.webview.registerHandler("login", ({ username, password }) => {
         login(actionContext, username, password, visibilityGroups);
     });
-    // handleLogin(handlerContext, ORGANIZATIONS_ACTION, INDEX_ACTION)
-    ui.webview.registerHandler("downloadExercises", downloadExercises(handlerContext));
+    ui.webview.registerHandler("myCourses", (msg: { type: string} ) => {
+        displaySummary(actionContext);
+    });
+    ui.webview.registerHandler("downloadExercises",
+        (msg: { type: "downloadExercises", ids: number[], courseName: string,
+                organizationSlug: string, courseId: number }) => {
+                    downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseName, msg.courseId);
+    });
     ui.webview.registerHandler("addCourse", () => {
         selectNewCourse(actionContext);
     });
-    ui.webview.registerHandler("courseDetails", (msg: {type: string, id: number}) => {
-        displayCourseDetails(msg.id, actionContext);
+    ui.webview.registerHandler("exerciseDownloads", (msg: { type: string, id: number }) => {
+        displayCourseDownloadDetails(msg.id, actionContext);
+    });
+    ui.webview.registerHandler("courseDetails", (msg: { type: "courseDetails", id: number }) => {
+        displayLocalExerciseDetails(msg.id, actionContext);
+    });
+    ui.webview.registerHandler("openSelected", async (msg: { type: "openSelected", ids: number[], id: number }) => {
+        actionContext.ui.webview.setContentFromTemplate("loading");
+        await openExercises(msg.ids, actionContext);
+        displayLocalExerciseDetails(msg.id, actionContext);
+    });
+    ui.webview.registerHandler("closeSelected", async (msg: { type: "closeSelected", ids: number[], id: number }) => {
+        actionContext.ui.webview.setContentFromTemplate("loading");
+        await closeExercises(msg.ids, actionContext);
+        displayLocalExerciseDetails(msg.id, actionContext);
     });
 }
 
@@ -106,12 +121,13 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     }
 
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
-        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ folders: [{ path: "Exercises" }] }));
+        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ folders: [{ path: "Exercises" }], settings: { "workbench.editor.closeOnFileDelete": true, "files.autoSave": "onFocusChange", "files.exclude": { "**/.tmc-root": true } } }));
         console.log("Created tmc workspace file at", tmcWorkspaceFilePath);
     }
 
     if (!fs.existsSync(tmcExercisesFolderPath)) {
         fs.mkdirSync(tmcExercisesFolderPath);
+        fs.writeFileSync(path.join(tmcExercisesFolderPath, ".tmc-root"), "DO NOT DELETE!");
         console.log("Created tmc exercise directory at", tmcExercisesFolderPath);
     }
 
@@ -122,7 +138,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
 
     if (!fs.existsSync(tmcLangsPath)) {
         const result = await downloadFileWithProgress("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar", tmcLangsPath,
-                                                    "Welcome", "Downloading important components for the Test My Code plugin... 0 %");
+            "Welcome", "Downloading important components for the Test My Code plugin... 0 %");
         if (result.err) {
             return new Err(result.val);
         }
