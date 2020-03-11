@@ -6,9 +6,9 @@ import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
 import {
-    closeCompletedExercises, closeExercises, displayCourseDownloadDetails, displayLocalExerciseDetails, displaySummary,
-    downloadExercises, login, logout, openExercises, openUncompletedExercises, selectNewCourse,
-} from "./actions/actions";
+    addNewCourse, closeExercises, displayCourseDownloads, displayLocalCourseDetails,
+    displayUserCourses, downloadExercises, login, logout, openExercises,
+} from "./actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
@@ -43,38 +43,40 @@ export function registerUiActions(
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
         async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
     ui.treeDP.registerAction("My courses", [LOGGED_IN],
-        () => { displaySummary(actionContext); }, INDEX_ACTION);
+        () => { displayUserCourses(actionContext); }, INDEX_ACTION);
 
     // Register webview handlers
     ui.webview.registerHandler("login", ({ username, password }) => {
         login(actionContext, username, password, visibilityGroups);
     });
-    ui.webview.registerHandler("myCourses", (msg: { type: string} ) => {
-        displaySummary(actionContext);
+    ui.webview.registerHandler("myCourses", (msg: { type: string }) => {
+        displayUserCourses(actionContext);
     });
     ui.webview.registerHandler("downloadExercises",
-        (msg: { type: "downloadExercises", ids: number[], courseName: string,
-                organizationSlug: string, courseId: number }) => {
-                    downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseName, msg.courseId);
-    });
+        (msg: {
+            type: "downloadExercises", ids: number[], courseName: string,
+            organizationSlug: string, courseId: number,
+        }) => {
+            downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseName, msg.courseId);
+        });
     ui.webview.registerHandler("addCourse", () => {
-        selectNewCourse(actionContext);
+        addNewCourse(actionContext);
     });
     ui.webview.registerHandler("exerciseDownloads", (msg: { type: string, id: number }) => {
-        displayCourseDownloadDetails(msg.id, actionContext);
+        displayCourseDownloads(msg.id, actionContext);
     });
     ui.webview.registerHandler("courseDetails", (msg: { type: "courseDetails", id: number }) => {
-        displayLocalExerciseDetails(msg.id, actionContext);
+        displayLocalCourseDetails(msg.id, actionContext);
     });
     ui.webview.registerHandler("openSelected", async (msg: { type: "openSelected", ids: number[], id: number }) => {
         actionContext.ui.webview.setContentFromTemplate("loading");
         await openExercises(msg.ids, actionContext);
-        displayLocalExerciseDetails(msg.id, actionContext);
+        displayLocalCourseDetails(msg.id, actionContext);
     });
     ui.webview.registerHandler("closeSelected", async (msg: { type: "closeSelected", ids: number[], id: number }) => {
         actionContext.ui.webview.setContentFromTemplate("loading");
         await closeExercises(msg.ids, actionContext);
-        displayLocalExerciseDetails(msg.id, actionContext);
+        displayLocalCourseDetails(msg.id, actionContext);
     });
 }
 

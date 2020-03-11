@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as init from "./init";
 
-import { resetExercise, submitExercise, testExercise } from "./actions/actions";
+import { resetExercise, submitExercise, testExercise } from "./actions";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
