@@ -7,13 +7,13 @@ import UI from "./ui/ui";
 import { Err, Ok, Result } from "ts-results";
 import {
     closeCompletedExercises, closeExercises, displayCourseDownloadDetails, displayLocalExerciseDetails, displaySummary,
-    downloadExercises, login, logout, openExercises, openUncompletedExercises, selectNewCourse,
+    downloadExercises, login, logout, openExercises, openUncompletedExercises, removeCourse, selectNewCourse,
 } from "./actions/actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
-import { downloadFileWithProgress, isJavaPresent } from "./utils";
+import { askForConfirmation, downloadFileWithProgress, isJavaPresent } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -59,6 +59,13 @@ export function registerUiActions(
     });
     ui.webview.registerHandler("addCourse", () => {
         selectNewCourse(actionContext);
+    });
+    ui.webview.registerHandler("removeCourse", async (msg: { type: "removeCourse", id: number }) => {
+        const course = actionContext.userData.getCourse(msg.id);
+        if (await askForConfirmation(`Do you want to remove ${course.name} from your courses? This won't delete your downloaded exercises.`)) {
+            await removeCourse(msg.id, actionContext);
+            displaySummary(actionContext);
+        }
     });
     ui.webview.registerHandler("exerciseDownloads", (msg: { type: string, id: number }) => {
         displayCourseDownloadDetails(msg.id, actionContext);
