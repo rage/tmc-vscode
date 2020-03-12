@@ -1,8 +1,7 @@
 <html>
 
 <head>
-    <link rel="stylesheet" type="text/css" href="{{cssPath}}">
-    <link rel="stylesheet" type="text/css" href="{{bootstrapPath}}">
+    <style>{{{cssBlob}}}</style>
 </head>
 
 <body>
@@ -16,6 +15,9 @@
         {{#each courses}}
         <div class="row org-row border-dark">
             <div class="col-md" onclick="fetchCourseDetails({{this.id}})">
+                <button type="button" class="close"  onclick="removeCourse(event, {{this.id}})" aria-label="Remove course">
+                    <span aria-hidden="true">&times;</span>
+                </button>
                 <h3>{{this.name}} <small class="text-muted">{{this.organization}}</small></h3>
                 <p>{{this.description}}</p>
             </div>
@@ -35,6 +37,12 @@
         function addCourse() {
             vscode.postMessage({ type: "addCourse" });
         }
+
+        function removeCourse(event, id) {
+            event.stopPropagation(); // Don't send onclick event upwards
+            vscode.postMessage({ type: "removeCourse", id });
+        }
+
         function fetchCourseDetails(id) {
             vscode.postMessage({ type: "courseDetails", id: id });
         }

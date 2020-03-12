@@ -12,6 +12,7 @@ import { VisibilityGroups } from "../ui/treeview/types";
 import { sleep } from "../utils";
 import { ActionContext } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
+import { closeExercises } from "./workspace";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -208,4 +209,15 @@ export async function addNewCourse(actionContext: ActionContext) {
     };
     userData.addCourse(localData);
     actionContext.ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
+}
+
+/**
+ * Removes given course from UserData and closes all its exercises.
+ * @param id ID of the course to remove
+ */
+export async function removeCourse(id: number, actionContext: ActionContext) {
+    const course = actionContext.userData.getCourse(id);
+    await closeExercises(course.exercises.map((e) => e.id), actionContext);
+    actionContext.userData.deleteCourse(id);
+    vscode.window.showInformationMessage(`${course.name} was removed from courses.`);
 }

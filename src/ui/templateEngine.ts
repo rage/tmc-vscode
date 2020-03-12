@@ -11,11 +11,14 @@ export default class TemplateEngine {
     private cssPath: string;
     private htmlPath: string;
     private cache: Map<string, HandlebarsTemplateDelegate<any>>;
+    private cssBlob: string;
 
     constructor(resources: Resources) {
         this.cssPath = resources.cssFolder;
         this.htmlPath = resources.htmlFolder;
         this.cache = new Map();
+        this.cssBlob = fs.readFileSync(path.join(this.cssPath, "bootstrap.min.css"), "utf8") +
+                       fs.readFileSync(path.join(this.cssPath, "style.css"), "utf8");
         /**
          * Logo path for organizations
          */
@@ -148,8 +151,7 @@ export default class TemplateEngine {
         if (!data) {
             data = {};
         }
-        data.cssPath = webview.asWebviewUri(vscode.Uri.file(path.join(this.cssPath, "style.css")));
-        data.bootstrapPath = webview.asWebviewUri(vscode.Uri.file(path.join(this.cssPath, "bootstrap.min.css")));
+        data.cssBlob = this.cssBlob;
 
         return template(data);
     }
