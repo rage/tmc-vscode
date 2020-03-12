@@ -151,8 +151,6 @@ export default class TemplateEngine {
         if (!data) {
             data = {};
         }
-        data.cssPath = webview.asWebviewUri(vscode.Uri.file(path.join(this.cssPath, "style.css")));
-        data.bootstrapPath = webview.asWebviewUri(vscode.Uri.file(path.join(this.cssPath, "bootstrap.min.css")));
         data.cssBlob = this.cssBlob;
 
         console.log(data);
