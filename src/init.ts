@@ -4,11 +4,11 @@ import * as vscode from "vscode";
 import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
-import { Err, Ok, Result } from "ts-results";
+import { Err, Ok, Result, Results } from "ts-results";
 import {
-    closeCompletedExercises, closeExercises, displayCourseDownloadDetails, displayLocalExerciseDetails, displaySummary,
-    downloadExercises, login, logout, openExercises, openUncompletedExercises, removeCourse, selectNewCourse,
-} from "./actions/actions";
+    addNewCourse, closeExercises, displayCourseDownloads, displayLocalCourseDetails,
+    displayUserCourses, downloadExercises, login, logout, openExercises, removeCourse,
+} from "./actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
@@ -43,46 +43,55 @@ export function registerUiActions(
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
         async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
     ui.treeDP.registerAction("My courses", [LOGGED_IN],
-        () => { displaySummary(actionContext); }, INDEX_ACTION);
+        () => { displayUserCourses(actionContext); }, INDEX_ACTION);
 
     // Register webview handlers
     ui.webview.registerHandler("login", ({ username, password }) => {
         login(actionContext, username, password, visibilityGroups);
     });
-    ui.webview.registerHandler("myCourses", (msg: { type: string} ) => {
-        displaySummary(actionContext);
+    ui.webview.registerHandler("myCourses", (msg: { type: string }) => {
+        displayUserCourses(actionContext);
     });
     ui.webview.registerHandler("downloadExercises",
-        (msg: { type: "downloadExercises", ids: number[], courseName: string,
-                organizationSlug: string, courseId: number }) => {
-                    downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseName, msg.courseId);
-    });
+        (msg: {
+            type: "downloadExercises", ids: number[], courseName: string,
+            organizationSlug: string, courseId: number,
+        }) => {
+            downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseName, msg.courseId);
+        });
     ui.webview.registerHandler("addCourse", () => {
-        selectNewCourse(actionContext);
+        addNewCourse(actionContext);
+    });
+    ui.webview.registerHandler("exerciseDownloads", async (msg: { type: string, id: number }) => {
+        const res = await displayCourseDownloads(msg.id, actionContext);
+        if (res.err) {
+            vscode.window.showErrorMessage(`Can't display downloads: ${res.val.message}`);
+        }
     });
     ui.webview.registerHandler("removeCourse", async (msg: { type: "removeCourse", id: number }) => {
         const course = actionContext.userData.getCourse(msg.id);
         if (await askForConfirmation(`Do you want to remove ${course.name} from your courses? This won't delete your downloaded exercises.`)) {
             await removeCourse(msg.id, actionContext);
-            displaySummary(actionContext);
+            displayUserCourses(actionContext);
         }
     });
-    ui.webview.registerHandler("exerciseDownloads", (msg: { type: string, id: number }) => {
-        displayCourseDownloadDetails(msg.id, actionContext);
-    });
     ui.webview.registerHandler("courseDetails", (msg: { type: "courseDetails", id: number }) => {
-        displayLocalExerciseDetails(msg.id, actionContext);
+        displayLocalCourseDetails(msg.id, actionContext);
     });
     ui.webview.registerHandler("openSelected", async (msg: { type: "openSelected", ids: number[], id: number }) => {
         actionContext.ui.webview.setContentFromTemplate("loading");
         await openExercises(msg.ids, actionContext);
-        displayLocalExerciseDetails(msg.id, actionContext);
+        displayLocalCourseDetails(msg.id, actionContext);
     });
     ui.webview.registerHandler("closeSelected", async (msg: { type: "closeSelected", ids: number[], id: number }) => {
         actionContext.ui.webview.setContentFromTemplate("loading");
         await closeExercises(msg.ids, actionContext);
-        displayLocalExerciseDetails(msg.id, actionContext);
+        displayLocalCourseDetails(msg.id, actionContext);
     });
+}
+
+async function errorWrapper(result: Promise<any>, errorPrefix: string) {
+    const rest = await result;
 }
 
 /**
@@ -128,7 +137,7 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     }
 
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
-        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ folders: [{ path: "Exercises" }], settings: { "workbench.editor.closeOnFileDelete": true, "files.autoSave": "onFocusChange", "files.exclude": { "**/.tmc-root": true } } }));
+        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ folders: [{ path: "Exercises" }], settings: { "workbench.editor.closeOnFileDelete": true, "files.autoSave": "onFocusChange" } }));
         console.log("Created tmc workspace file at", tmcWorkspaceFilePath);
     }
 

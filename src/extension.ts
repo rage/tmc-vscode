@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as init from "./init";
 
-import { resetExercise, submitExercise, testExercise } from "./actions/actions";
+import { resetExercise, submitExercise, testExercise } from "./actions";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
@@ -82,11 +82,10 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.window.showErrorMessage("The data for this exercise seems to be missing");
                 return;
             }
-            askForConfirmation(`Are you sure you want to reset exercise ${exerciseData.val.name}?`,
-                (success) => success
-                    ? resetExercise(exerciseId, actionContext)
-                    : vscode.window.showInformationMessage(`Reset canceled for exercise ${exerciseData.val.name}.`),
-            );
+
+            await askForConfirmation(`Are you sure you want to reset exercise ${exerciseData.val.name}?`)
+                ? resetExercise(exerciseId, actionContext)
+                : vscode.window.showInformationMessage(`Reset canceled for exercise ${exerciseData.val.name}.`);
         }),
     );
 
@@ -106,11 +105,9 @@ export async function activate(context: vscode.ExtensionContext) {
                 workspaceManager.closeExercise(exerciseId);
                 return;
             }
-            askForConfirmation(`Are you sure you want to close uncompleted exercise ${exerciseData.val.name}?`,
-                (success) => success
-                    ? workspaceManager.closeExercise(exerciseId)
-                    : vscode.window.showInformationMessage(`Close canceled for exercise ${exerciseData.val.name}.`),
-            );
+            await askForConfirmation(`Are you sure you want to close uncompleted exercise ${exerciseData.val.name}?`)
+                ? workspaceManager.closeExercise(exerciseId)
+                : vscode.window.showInformationMessage(`Close canceled for exercise ${exerciseData.val.name}.`);
         }),
     );
 }

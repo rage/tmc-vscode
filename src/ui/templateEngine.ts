@@ -153,8 +153,6 @@ export default class TemplateEngine {
         }
         data.cssBlob = this.cssBlob;
 
-        console.log(data);
-
         return template(data);
     }
 
