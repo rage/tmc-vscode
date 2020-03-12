@@ -321,6 +321,17 @@ export async function selectCourse(orgSlug: string, { tmc, resources, ui }: Acti
 }
 
 /**
+ * Removes given course from UserData and closes all its exercises.
+ * @param id ID of the course to remove
+ */
+export async function removeCourse(id: number, actionContext: ActionContext) {
+    const course = actionContext.userData.getCourse(id);
+    await closeExercises(course.exercises.map((e) => e.id), actionContext);
+    actionContext.userData.deleteCourse(id);
+    vscode.window.showInformationMessage(`${course.name} was removed from courses.`);
+}
+
+/**
  * Lets the user select an organization
  */
 export async function selectOrganization({ resources, tmc, ui }: ActionContext, webview?: TemporaryWebview):
