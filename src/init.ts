@@ -25,12 +25,10 @@ export function registerUiActions(
     ui: UI, storage: Storage, tmc: TMC, workspaceManager: WorkspaceManager, resources: Resources, userData: UserData,
 ) {
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
-    const ORGANIZATION_CHOSEN = ui.treeDP.createVisibilityGroup(storage.getOrganizationSlug() !== undefined);
-    const COURSE_CHOSEN = ui.treeDP.createVisibilityGroup(storage.getCourseId() !== undefined);
     const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
 
     const visibilityGroups = {
-        COURSE_CHOSEN, LOGGED_IN, ORGANIZATION_CHOSEN, WORKSPACE_OPEN,
+        LOGGED_IN, WORKSPACE_OPEN,
     };
 
     // Register UI actions
@@ -67,7 +65,7 @@ export function registerUiActions(
     }) => {
         downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseName, msg.courseId);
     });
-    ui.webview.registerHandler("addCourse", (msg: {type: "addCourse" }) => {
+    ui.webview.registerHandler("addCourse", (msg: { type: "addCourse" }) => {
         addNewCourse(actionContext);
     });
     ui.webview.registerHandler("exerciseDownloads", async (msg: { type: "exerciseDownloads", id: number }) => {

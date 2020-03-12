@@ -11,8 +11,6 @@ export type HandlerContext = {
 
 export type VisibilityGroups = {
     LOGGED_IN: VisibilityGroup;
-    ORGANIZATION_CHOSEN: VisibilityGroup;
-    COURSE_CHOSEN: VisibilityGroup;
     WORKSPACE_OPEN: VisibilityGroup;
 };
 

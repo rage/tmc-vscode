@@ -355,6 +355,7 @@ export default class TMC {
                                 method?: "get" | "post", body?: any, headers?: any):
         Promise<Result<TMCApiResponse, Error>> {
 
+        method = method || "get";
         cache = cache === undefined ? method === "get" : cache;
 
         if (cache) {

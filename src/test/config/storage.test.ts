@@ -19,9 +19,7 @@ suite("Storage tests", () => {
     // Same as hardcoded keys in Storage class.
     // We "magically" know them also here to remind you that changing these may break compatibility between releases.
     const AUTHENTICATION_TOKEN_KEY = "token";
-    const COURSE_KEY = "course";
     const EXERCISE_DATA_KEY = "exerciseData";
-    const ORGANIZATION_KEY = "organization";
 
     /**
      * Helper function for running similar mock tests to multiple storage's updaters.
@@ -63,14 +61,6 @@ suite("Storage tests", () => {
         assertGetter(() => storage.getAuthenticationToken(), AUTHENTICATION_TOKEN_KEY);
     });
 
-    test("Course ID updater uses ExtensionContext correctly", () => {
-        assertUpdater(() => storage.updateCourseId(1337), COURSE_KEY, 1337);
-    });
-
-    test("Course ID getter uses ExtensionContext correctly", () => {
-        assertGetter(() => storage.getCourseId(), COURSE_KEY);
-    });
-
     test("Exercise data updater uses ExtensionContext correctly", () => {
         const exerciseData = [{ checksum: "asd", course: "HY-jtkt", deadline: "2020-03-21", id: 1337, isOpen: true,
             name: "hello-world", organization: "HY", path: "/tmp"}];
@@ -79,13 +69,5 @@ suite("Storage tests", () => {
 
     test("Exercise data getter uses ExtensionContext correctly", () => {
         assertGetter(() => storage.getExerciseData(), EXERCISE_DATA_KEY);
-    });
-
-    test("Organization slug updater uses ExtensionContext correctly", () => {
-        assertUpdater(() => storage.updateOrganizationSlug("test"), ORGANIZATION_KEY, "test");
-    });
-
-    test("Organization slug getter uses ExtensionContext correctly", () => {
-        assertGetter(() => storage.getOrganizationSlug(), ORGANIZATION_KEY);
     });
 });
