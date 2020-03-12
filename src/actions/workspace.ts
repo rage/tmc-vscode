@@ -64,7 +64,9 @@ export async function downloadExercises(
  * Sends given exercise to the server and resets it to initial state.
  * @param id ID of the exercise to reset
  */
-export async function resetExercise(id: number, { ui, tmc, workspaceManager }: ActionContext) {
+export async function resetExercise(id: number, actionContext: ActionContext) {
+    const { ui, tmc, workspaceManager } = actionContext;
+
     const exerciseData = workspaceManager.getExerciseDataById(id);
 
     if (exerciseData.err) {
@@ -93,7 +95,8 @@ export async function resetExercise(id: number, { ui, tmc, workspaceManager }: A
  * Opens given exercises, showing them in TMC workspace.
  * @param ids Array of exercise IDs
  */
-export async function openExercises(ids: number[], { workspaceManager }: ActionContext) {
+export async function openExercises(ids: number[], actionContext: ActionContext) {
+    const { workspaceManager } = actionContext;
     ids.forEach((id) => workspaceManager.openExercise(id));
 }
 
@@ -101,6 +104,7 @@ export async function openExercises(ids: number[], { workspaceManager }: ActionC
  * Closes given exercises, hiding them in TMC workspace.
  * @param ids Array of exercise IDs
  */
-export async function closeExercises(ids: number[], { workspaceManager }: ActionContext) {
+export async function closeExercises(ids: number[], actionContext: ActionContext) {
+    const { workspaceManager } = actionContext;
     ids.forEach((id) => workspaceManager.closeExercise(id));
 }

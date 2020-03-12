@@ -14,7 +14,8 @@ import { ActionContext } from "./types";
 /**
  * Displays a summary page of user's courses.
  */
-export async function displayUserCourses({ userData, ui }: ActionContext) {
+export async function displayUserCourses(actionContext: ActionContext) {
+    const { userData, ui } = actionContext;
     ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
 }
 
@@ -56,8 +57,9 @@ export async function displayLocalCourseDetails(courseId: number, actionContext:
 /**
  * Lets the user select a course
  */
-export async function selectCourse(orgSlug: string, { tmc, resources, ui }: ActionContext, webview?: TemporaryWebview):
-    Promise<Result<{ changeOrg: boolean, course?: number }, Error>> {
+export async function selectCourse(orgSlug: string, actionContext: ActionContext, webview?: TemporaryWebview)
+: Promise<Result<{ changeOrg: boolean, course?: number }, Error>> {
+    const { tmc, resources, ui } = actionContext;
     const result = await tmc.getCourses(orgSlug);
 
     if (result.err) {
@@ -93,8 +95,10 @@ export async function selectCourse(orgSlug: string, { tmc, resources, ui }: Acti
 /**
  * Lets the user select an organization
  */
-export async function selectOrganization({ resources, tmc, ui }: ActionContext, webview?: TemporaryWebview):
-    Promise<Result<string, Error>> {
+export async function selectOrganization(actionContext: ActionContext, webview?: TemporaryWebview)
+: Promise<Result<string, Error>> {
+    const { tmc, resources, ui } = actionContext;
+
     const result = await tmc.getOrganizations();
     if (result.err) {
         return new Err(result.val);
@@ -128,10 +132,11 @@ export async function selectOrganization({ resources, tmc, ui }: ActionContext, 
 /**
  * Creates a new temporary webview where user can select an organization and a course.
  */
-export async function selectOrganizationAndCourse(actionContext: ActionContext):
-    Promise<Result<{ organization: string, course: number }, Error>> {
+export async function selectOrganizationAndCourse(actionContext: ActionContext)
+: Promise<Result<{ organization: string, course: number }, Error>> {
+    const { resources, ui } = actionContext;
 
-    const tempView = new TemporaryWebview(actionContext.resources, actionContext.ui, "", () => { });
+    const tempView = new TemporaryWebview(resources, ui, "", () => { });
 
     let organizationSlug: string | undefined;
     let courseID: number | undefined;

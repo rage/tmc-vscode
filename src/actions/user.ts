@@ -14,35 +14,34 @@ import { ActionContext } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import { closeExercises } from "./workspace";
 
+import { Err, Ok, Result } from "ts-results";
+
 /**
  * Authenticates and logs the user in if credentials are correct.
  */
 export async function login(
     actionContext: ActionContext, username: string, password: string, visibilityGroups: VisibilityGroups,
-) {
+): Promise<Result<void, Error>> {
     const { tmc, ui } = actionContext;
-    const wrapError = (error: string) => `<div class="alert alert-danger fade show" role="alert">${error}</div>`;
 
     if (!username || !password) {
-        ui.webview.setContentFromTemplate("login",
-            { error: wrapError("Username and password may not be empty.") }, true);
-        return;
+        return new Err(new Error("Username and password may not be empty."));
     }
 
     const result = await tmc.authenticate(username, password);
-    if (result.ok) {
-        ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
-        displayUserCourses(actionContext);
-    } else {
-        console.log("Login failed: " + result.val.message);
-        ui.webview.setContentFromTemplate("login", { error: wrapError(result.val.message) }, true);
+    if (result.err) {
+        return new Err(result.val);
     }
+
+    ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
+    return Ok.EMPTY;
 }
 
 /**
  * Logs the user out, updating UI state
  */
-export function logout(visibility: VisibilityGroups, { tmc, ui }: ActionContext) {
+export function logout(visibility: VisibilityGroups, actionContext: ActionContext) {
+    const { tmc, ui } = actionContext;
     tmc.deauthenticate();
     ui.webview.dispose();
     ui.treeDP.updateVisibility([visibility.LOGGED_IN.not]);

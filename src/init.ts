@@ -50,8 +50,13 @@ export function registerUiActions(
     });
 
     // Register webview handlers
-    ui.webview.registerHandler("login", (msg: { type: "login", username: string, password: string }) => {
-        login(actionContext, msg.username, msg.password, visibilityGroups);
+    ui.webview.registerHandler("login", async (msg: { type: "login", username: string, password: string }) => {
+        const result = await login(actionContext, msg.username, msg.password, visibilityGroups);
+        if (result.err) {
+            ui.webview.setContentFromTemplate("login", { error: result.val.message }, true);
+            return;
+        }
+        displayUserCourses(actionContext);
     });
     ui.webview.registerHandler("myCourses", (msg: { type: "myCourses" }) => {
         displayUserCourses(actionContext);
