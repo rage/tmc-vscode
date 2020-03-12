@@ -25,11 +25,9 @@ export function registerUiActions(
     ui: UI, storage: Storage, tmc: TMC, workspaceManager: WorkspaceManager, resources: Resources, userData: UserData,
 ) {
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
-    const ORGANIZATION_CHOSEN = ui.treeDP.createVisibilityGroup(storage.getOrganizationSlug() !== undefined);
-    const COURSE_CHOSEN = ui.treeDP.createVisibilityGroup(storage.getCourseId() !== undefined);
 
     const visibilityGroups = {
-        COURSE_CHOSEN, LOGGED_IN, ORGANIZATION_CHOSEN,
+        LOGGED_IN,
     };
 
     // UI Action IDs

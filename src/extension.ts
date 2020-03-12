@@ -6,6 +6,7 @@ import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
+import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
 import { askForConfirmation, getCurrentExerciseId, isProductionBuild } from "./utils";
 
@@ -40,8 +41,30 @@ export async function activate(context: vscode.ExtensionContext) {
 
     await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
-    const ui = new UI(context, resources, vscode.window.createStatusBarItem());
     const storage = new Storage(context);
+    const ui = new UI(context, resources, vscode.window.createStatusBarItem());
+
+    // Uncomment this to test the new reconstruction functionality
+    /*
+    storage.updateExerciseData(storage.getExerciseData()?.map((x) => {
+        x.deadline = undefined as unknown as string;
+        return x;
+    }));
+
+    const userd = storage.getUserData();
+    if (userd) {
+        userd.courses = userd.courses.map((x) => ({id: x.id, organization: x.organization} as LocalCourseData));
+        storage.updateUserData(userd);
+    }
+    */
+
+    const tmcTemp = new TMC(undefined as unknown as WorkspaceManager, storage, resources);
+    const validationResult = await validateAndFix(storage, tmcTemp, ui, resources);
+    if (validationResult.err) {
+        vscode.window.showErrorMessage("Data reconstruction failed: " + validationResult.val.message);
+        return;
+    }
+
     const workspaceManager = new WorkspaceManager(storage, resources);
     const tmc = new TMC(workspaceManager, storage, resources);
     const userData = new UserData(storage);

@@ -20,22 +20,6 @@ export default class Storage {
     }
 
     /**
-     * Gets currently stored course.
-     * @returns currently stored course id or undefined if not set
-     */
-    public getCourseId(): number | undefined {
-        return this.context.globalState.get("course");
-    }
-
-    /**
-     * Gets currently stored organization slug.
-     * @returns currently stored organization slug or undefined if not set
-     */
-    public getOrganizationSlug(): string | undefined {
-        return this.context.globalState.get("organization");
-    }
-
-    /**
      * Gets currently stored authentication token.
      * @returns currently stored authentication token or undefined if not set
      */
@@ -49,22 +33,6 @@ export default class Storage {
     }
     public getUserData(): {courses: LocalCourseData[]} | undefined {
         return this.context.globalState.get("userData");
-    }
-
-    /**
-     * Updates the given course id in storage.
-     * @param courseId course id to update
-     */
-    public updateCourseId(courseId: number | undefined) {
-        this.context.globalState.update("course", courseId);
-    }
-
-    /**
-     * Updates the given organization slug in storage.
-     * @param organizationSlug organization slug to update
-     */
-    public updateOrganizationSlug(organizationSlug: string | undefined) {
-        this.context.globalState.update("organization", organizationSlug);
     }
 
     /**
