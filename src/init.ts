@@ -4,12 +4,11 @@ import * as vscode from "vscode";
 import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
-import { Err, Ok, Result, Results } from "ts-results";
+import { Err, Ok, Result } from "ts-results";
 import {
     addNewCourse, closeExercises, displayCourseDownloads, displayLocalCourseDetails,
-    displayUserCourses, downloadExercises, login, logout, openExercises, removeCourse,
+    displayUserCourses, downloadExercises, login, logout, openExercises, openWorkspace, removeCourse,
 } from "./actions";
-import { openWorkspace } from "./actions/actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
@@ -38,8 +37,6 @@ export function registerUiActions(
     const INDEX_ACTION = "index";
 
     // Register UI actions
-    const currentWorkspaceFile = vscode.workspace.workspaceFile;
-    const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
     const actionContext = { tmc, workspaceManager, ui, resources, userData };
 
     ui.treeDP.registerAction("Log out", [LOGGED_IN],
@@ -49,7 +46,7 @@ export function registerUiActions(
     ui.treeDP.registerAction("My courses", [LOGGED_IN],
         () => { displayUserCourses(actionContext); }, INDEX_ACTION);
     ui.treeDP.registerAction("Open exercises", [LOGGED_IN],
-        () => { openWorkspace(currentWorkspaceFile, tmcWorkspaceFile); });
+        () => openWorkspace(actionContext));
 
     // Register webview handlers
     ui.webview.registerHandler("login", ({ username, password }) => {

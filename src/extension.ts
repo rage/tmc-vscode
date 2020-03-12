@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as init from "./init";
 
-import { openWorkspace, resetExercise, submitExercise, testExercise } from "./actions/actions";
+import { openWorkspace, resetExercise, submitExercise, testExercise } from "./actions";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
@@ -19,14 +19,9 @@ export async function activate(context: vscode.ExtensionContext) {
         return;
     }
 
-    const resources = result.val;
-    const currentWorkspaceFile = vscode.workspace.workspaceFile;
-    const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
-
-    openWorkspace(currentWorkspaceFile, tmcWorkspaceFile);
-
     await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
+    const resources = result.val;
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
     const storage = new Storage(context);
     const workspaceManager = new WorkspaceManager(storage, resources);
@@ -35,7 +30,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     init.registerUiActions(ui, storage, tmc, workspaceManager, resources, userData);
 
-    const actionContext = {ui, resources, workspaceManager, tmc, userData};
+    const actionContext = { ui, resources, workspaceManager, tmc, userData };
 
     context.subscriptions.push(
         vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),

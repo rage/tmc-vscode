@@ -9,7 +9,7 @@ import * as vscode from "vscode";
 import { LocalCourseData } from "../config/userdata";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
-import { sleep } from "../utils";
+import { askForConfirmation, sleep } from "../utils";
 import { ActionContext } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import { closeExercises } from "./workspace";
@@ -172,6 +172,32 @@ export async function submitExercise(id: number, actionContext: ActionContext, t
                             vscode.Uri.parse(submitResult.val.show_submission_url));
                         getStatus = false;
                         temp.dispose();
+                    }
+                });
+        }
+    }
+}
+
+/**
+ * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
+ */
+export async function openWorkspace(actionContext: ActionContext) {
+    const { resources } = actionContext;
+    const currentWorkspaceFile = vscode.workspace.workspaceFile;
+    const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
+
+    if (currentWorkspaceFile?.toString() !== tmcWorkspaceFile.toString()) {
+        console.log("Current workspace:", currentWorkspaceFile);
+        console.log("TMC workspace:", tmcWorkspaceFile);
+        if (!currentWorkspaceFile || await askForConfirmation("Do you want to open TMC workspace and close the current one?")) {
+            await vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+            // Restarts VSCode
+        } else {
+            const choice = "Close current and open TMC Workspace";
+            await vscode.window.showErrorMessage("Please close your current workspace before using TestMyCode.",
+                ...[choice]).then((selection) => {
+                    if (selection === choice) {
+                        vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
                     }
                 });
         }
