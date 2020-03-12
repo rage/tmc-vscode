@@ -1,5 +1,6 @@
 import * as cp from "child_process";
-import ClientOauth2 = require("client-oauth2");
+import * as ClientOauth2 from "client-oauth2";
+import * as del from "del";
 import * as FormData from "form-data";
 import * as fs from "fs";
 import * as fetch from "node-fetch";
@@ -33,6 +34,8 @@ export default class TMC {
     private readonly workspaceManager: WorkspaceManager;
 
     private readonly cache: Map<string, TMCApiResponse>;
+
+    private nextLangsJsonId: number = 0;
 
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
@@ -158,8 +161,11 @@ export default class TMC {
      */
     public async downloadExercise(id: number, organizationSlug: string, reset?: boolean ):
     Promise<Result<string, Error>> {
+
+        const archivePath = `${this.dataPath}/${id}.zip`;
+
         const result = await downloadFile(`${this.tmcApiUrl}core/exercises/${id}/download`,
-            `${this.dataPath}/${id}.zip`, this.tmcDefaultHeaders);
+            archivePath, this.tmcDefaultHeaders);
         if (result.err) {
             return new Err(result.val);
         }
@@ -192,13 +198,15 @@ export default class TMC {
 
         const extractResult = await this.checkApiResponse(this.executeLangsAction({
             action: "extract-project",
-            archivePath: `${this.dataPath}/${id}.zip`,
+            archivePath,
             exerciseFolderPath: exercisePath.val,
         }), createIs<string>());
 
         if (extractResult.err) {
             this.workspaceManager.deleteExercise(id);
         }
+
+        del.sync(archivePath, { force: true });
 
         // TODO: Return closed path and call open elsewhere
         const openResult = this.workspaceManager.openExercise(id, reset);
@@ -286,7 +294,7 @@ export default class TMC {
                 break;
             case "run-tests":
                 exercisePath = tmcLangsAction.exerciseFolderPath;
-                outputPath = `${this.dataPath}/temp.json`;
+                outputPath = `${this.dataPath}/temp_${this.nextLangsJsonId++}.json`;
                 break;
         }
 
@@ -308,6 +316,7 @@ export default class TMC {
         }
 
         const result = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+        del.sync(outputPath, { force: true });
         if (is<TmcLangsResponse>(result)) {
             return new Ok(result);
         }
