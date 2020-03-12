@@ -7,6 +7,7 @@ import * as vscode from "vscode";
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
 import WorkspaceManager from "./api/workspaceManager";
+import Resources from "./config/resources";
 import { ConnectionError } from "./errors";
 
 /**
@@ -83,6 +84,12 @@ export function isProductionBuild(): boolean {
     };
 
     return is<TestType>(testObject);
+}
+
+export function isWorkspaceOpen(resources: Resources): boolean {
+    const currentWorkspaceFile = vscode.workspace.workspaceFile;
+    const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
+    return currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString();
 }
 
 /**

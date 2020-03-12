@@ -9,7 +9,7 @@ import * as vscode from "vscode";
 import { LocalCourseData } from "../config/userdata";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
-import { askForConfirmation, sleep } from "../utils";
+import { askForConfirmation, isWorkspaceOpen, sleep } from "../utils";
 import { ActionContext } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import { closeExercises } from "./workspace";
@@ -186,16 +186,16 @@ export async function openWorkspace(actionContext: ActionContext) {
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
     const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
 
-    if (currentWorkspaceFile?.toString() !== tmcWorkspaceFile.toString()) {
+    if (!isWorkspaceOpen(resources)) {
         console.log("Current workspace:", currentWorkspaceFile);
         console.log("TMC workspace:", tmcWorkspaceFile);
         if (!currentWorkspaceFile || await askForConfirmation("Do you want to open TMC workspace and close the current one?")) {
-            await vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+            vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
             // Restarts VSCode
         } else {
             const choice = "Close current and open TMC Workspace";
-            await vscode.window.showErrorMessage("Please close your current workspace before using TestMyCode.",
-                ...[choice]).then((selection) => {
+            await vscode.window.showErrorMessage("Please close your current workspace before using TestMyCode.", choice)
+                .then((selection) => {
                     if (selection === choice) {
                         vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
                     }

@@ -13,7 +13,7 @@ import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
-import { askForConfirmation, downloadFile, isJavaPresent } from "./utils";
+import { askForConfirmation, downloadFile, isJavaPresent, isWorkspaceOpen } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -27,9 +27,10 @@ export function registerUiActions(
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const ORGANIZATION_CHOSEN = ui.treeDP.createVisibilityGroup(storage.getOrganizationSlug() !== undefined);
     const COURSE_CHOSEN = ui.treeDP.createVisibilityGroup(storage.getCourseId() !== undefined);
+    const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
 
     const visibilityGroups = {
-        COURSE_CHOSEN, LOGGED_IN, ORGANIZATION_CHOSEN,
+        COURSE_CHOSEN, LOGGED_IN, ORGANIZATION_CHOSEN, WORKSPACE_OPEN,
     };
 
     // Register UI actions
@@ -44,7 +45,7 @@ export function registerUiActions(
     ui.treeDP.registerAction("My courses", [LOGGED_IN], () => {
         displayUserCourses(actionContext);
     });
-    ui.treeDP.registerAction("Open exercises", [LOGGED_IN], () => {
+    ui.treeDP.registerAction("Open exercise workspace", [WORKSPACE_OPEN.not], () => {
         openWorkspace(actionContext);
     });
 
