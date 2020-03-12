@@ -182,7 +182,7 @@ export async function displayCourseDownloads(courseId: number, actionContext: Ac
     });
     const workspaceEmpty = workspaceManager.getExercisesByCourseName(details.name).length === 0;
     const data = {
-        courseId, courseName: result.val.course.name, details, sortedExercises, organizationSlug, workspaceEmpty,
+        courseId, courseName: result.val.course.name, details, organizationSlug, sortedExercises, workspaceEmpty,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
     return Ok.EMPTY;

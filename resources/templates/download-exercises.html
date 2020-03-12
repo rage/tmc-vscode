@@ -3,45 +3,49 @@
         <style>{{{cssBlob}}}</style>
     </head>
 
-    <body>
-        <div class="container container-fluid pt-0">
-            <div class="row">
-                <div class="col">
-                    <nav aria-label="breadcrumb">
-                        <ol class="breadcrumb">
-                            <li class="breadcrumb-item"><a onclick="backToMyCourses() "href="#">My courses</a></li>
-                            <li class="breadcrumb-item">
-                                {{#if workspaceEmpty}}
-                                    {{details.name}}
-                                {{else}}
-                                    <a onclick="goToCourseDetails()" href="#">{{details.name}}</a>
-                                {{/if}}
-                            </li>
-                            <li class="breadcrumb-item" aria-current="page">Download exercises</li>
-                        </ol>
-                    </nav>
-                </div>
-            </div>
-            {{#with details}}
-                <div class="sticky-top row">
+    <body class="p-0">
+        <div class="w-100 sticky-top">
+            <div class="container pt-0">
+                <div class="row">
                     <div class="col">
-                        <div class="py-2">
-                            <h1>{{title}}</h1>
-                        </div>
-                        <div class="row py-2">
-                            <span>{{description}}</span>
-                        </div>
-                        <div class="row py-2">
-                            <div class="col-sm-3">
-                                <button class="btn-primary m-1 w-100" onclick="toggleAll()" id="togglebutton">Select all</button>
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb">
+                                <li class="breadcrumb-item"><a onclick="backToMyCourses() "href="#">My courses</a></li>
+                                <li class="breadcrumb-item">
+                                    {{#if workspaceEmpty}}
+                                        {{details.name}}
+                                    {{else}}
+                                        <a onclick="goToCourseDetails()" href="#">{{details.name}}</a>
+                                    {{/if}}
+                                </li>
+                                <li class="breadcrumb-item" aria-current="page">Download exercises</li>
+                            </ol>
+                        </nav>
+                    </div>
+                </div>
+                {{#with details}}
+                    <div class="row">
+                        <div class="col">
+                            <div class="py-2">
+                                <h1>{{title}}</h1>
                             </div>
-                            <div class="col-sm-3">
-                                <button class="btn-primary m-1 w-100" onclick="downloadSelectedExercises()">Download selected</button>
+                            <div class="row p-2">
+                                <span>{{description}}</span>
+                            </div>
+                            <div class="row py-2">
+                                <div class="col-sm-3">
+                                    <button class="btn-primary m-1 w-100" onclick="toggleAll()" id="togglebutton">Select all</button>
+                                </div>
+                                <div class="col-sm-3">
+                                    <button class="btn-primary m-1 w-100" onclick="downloadSelectedExercises()">Download selected</button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            {{/with}}
+                {{/with}}
+            </div>
+        </div>
+        <div class="container">
             <table class="table table-striped">
                 <thead>
                     <tr>
