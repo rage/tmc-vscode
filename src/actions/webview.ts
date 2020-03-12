@@ -162,7 +162,7 @@ export async function selectOrganizationAndCourse(actionContext: ActionContext):
  * Displays the course exercise list view
  */
 export async function displayCourseDownloads(courseId: number, actionContext: ActionContext)
-: Promise<Result<void, Error>> {
+    : Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
     const result = await tmc.getCourseDetails(courseId);
     if (result.err) {
@@ -177,9 +177,12 @@ export async function displayCourseDownloads(courseId: number, actionContext: Ac
     }
     const exerciseDetails = details.exercises.map((x) =>
         ({ exercise: x, downloaded: workspaceManager.getExerciseDataById(x.id).ok }));
+    const sortedExercises = exerciseDetails.sort((x, y) => {
+        return (x.downloaded === y.downloaded) ? 0 : x.downloaded ? 1 : -1;
+    });
     const workspaceEmpty = workspaceManager.getExercisesByCourseName(details.name).length === 0;
     const data = {
-        courseId, courseName: result.val.course.name, details, exerciseDetails, organizationSlug, workspaceEmpty,
+        courseId, courseName: result.val.course.name, details, organizationSlug, sortedExercises, workspaceEmpty,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
     return Ok.EMPTY;

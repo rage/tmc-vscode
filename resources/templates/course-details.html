@@ -4,17 +4,15 @@
     <style>{{{cssBlob}}}</style>
 </head>
 
-<body>
-    
-
-    <div class="container pt-0">
-        <div class="sticky-top py-2">
+<body class="p-0">
+    <div class="w-100 sticky-top">
+        <div class="container pt-0">
             <div class="row">
                 <div class="col">
                     <nav aria-label="breadcrumb">
                         <ol class="breadcrumb">
-                          <li class="breadcrumb-item"><a onclick="backToMyCourses() "href="#">My courses</a></li>
-                          <li class="breadcrumb-item" aria-current="page">{{course.name}}</li>
+                            <li class="breadcrumb-item"><a onclick="backToMyCourses() " href="#">My courses</a></li>
+                            <li class="breadcrumb-item" aria-current="page">{{course.name}}</li>
                         </ol>
                     </nav>
                 </div>
@@ -27,7 +25,8 @@
             </div>
             <div class="row">
                 <div class="col-sm-3">
-                    <button class="btn-primary m-1 w-100" onclick="downloadView( {{courseId}} )">Download exercises</button>
+                    <button class="btn-primary m-1 w-100" onclick="downloadView( {{courseId}} )">Download
+                        exercises</button>
                 </div>
             </div>
             <div class="row">
@@ -38,7 +37,8 @@
                             <button class="btn-secondary m-1 w-100" onclick="toggleAll()" id="togglebutton">All</button>
                         </div>
                         <div class="col-sm-3">
-                            <button class="btn-primary m-1 w-100" onclick="toggleAllPassed(false)">All uncompleted</button>
+                            <button class="btn-primary m-1 w-100" onclick="toggleAllPassed(false)">All
+                                uncompleted</button>
                         </div>
                         <div class="col-sm-3">
                             <button class="btn-primary m-1 w-100" onclick="toggleAllPassed(true)">All completed</button>
@@ -48,13 +48,18 @@
             </div>
             <div class="row">
                 <div class="col-sm-3">
-                    <button class="btn-primary m-1 w-100" onclick="handleSelected('openSelected')">Open selected</button>
+                    <button class="btn-primary m-1 w-100" onclick="handleSelected('openSelected')">Open
+                        selected</button>
                 </div>
                 <div class="col-sm-3">
-                    <button class="btn-primary m-1 w-100" onclick="handleSelected('closeSelected')">Close selected</button>
+                    <button class="btn-primary m-1 w-100" onclick="handleSelected('closeSelected')">Close
+                        selected</button>
                 </div>
             </div>
         </div>
+
+    </div>
+    <div class="container">
         <table class="table table-striped">
             <thead>
                 <tr>
@@ -66,10 +71,11 @@
                 </tr>
             </thead>
             <tbody>
-            {{#each exerciseData}}
+                {{#each exerciseData}}
                 <tr>
                     <td class="text-center">
-                        <input class="checkbox-xl" type="checkbox" data-isPassed={{this.passed}} value="{{this.id}}" onchange="updateCount(this)" />
+                        <input class="checkbox-xl" type="checkbox" data-isPassed={{this.passed}} value="{{this.id}}"
+                            onchange="updateCount(this)" />
                     </td>
                     <td>{{this.name}}</td>
                     <td>{{this.deadlineString}}</td>
@@ -78,13 +84,13 @@
                     </td>
                     <td>
                         {{#if this.isOpen}}
-                            <span class="badge badge-primary" onclick="closeExercise({{this.id}})">open</span>
+                        <span class="badge badge-primary" onclick="closeExercise({{this.id}})">open</span>
                         {{else}}
-                            <span class="badge badge-secondary" onclick="openExercise({{this.id}})">closed</span>
+                        <span class="badge badge-secondary" onclick="openExercise({{this.id}})">closed</span>
                         {{/if}}
                     </td>
                 </tr>
-            {{/each}}
+                {{/each}}
             </tbody>
         </table>
     </div>
@@ -103,16 +109,17 @@
                 }
             }
             if (ids.length > 0) {
-                vscode.postMessage({ type: type, ids, id: {{courseId}} });
+                vscode.postMessage({ type: type, ids, id: {{ courseId }}
+        });
             }
         }
 
         function openExercise(id) {
-            vscode.postMessage({type: 'openSelected', ids: [id], id: {{courseId}} });
+            vscode.postMessage({ type: 'openSelected', ids: [id], id: {{ courseId }} });
         }
 
         function closeExercise(id) {
-            vscode.postMessage({type: 'closeSelected', ids: [id], id: {{courseId}} });
+            vscode.postMessage({ type: 'closeSelected', ids: [id], id: {{ courseId }} });
         }
 
         function updateCount(element) {
