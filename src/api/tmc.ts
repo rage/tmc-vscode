@@ -159,7 +159,7 @@ export default class TMC {
     public async downloadExercise(id: number, organizationSlug: string, reset?: boolean ):
     Promise<Result<string, Error>> {
         const result = await downloadFile(`${this.tmcApiUrl}core/exercises/${id}/download`,
-            `${this.dataPath}/${id}.zip`, undefined, this.tmcDefaultHeaders);
+            `${this.dataPath}/${id}.zip`, this.tmcDefaultHeaders);
         if (result.err) {
             return new Err(result.val);
         }

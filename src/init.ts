@@ -13,7 +13,7 @@ import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
-import { askForConfirmation, downloadFileWithProgress, isJavaPresent } from "./utils";
+import { askForConfirmation, downloadFile, isJavaPresent } from "./utils";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -149,10 +149,18 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     }
 
     if (!fs.existsSync(tmcLangsPath)) {
-        const result = await downloadFileWithProgress("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar", tmcLangsPath,
-            "Welcome", "Downloading important components for the Test My Code plugin... 0 %");
-        if (result.err) {
-            return new Err(result.val);
+        const tmcLangsResult = await vscode.window.withProgress(
+            { location: vscode.ProgressLocation.Notification, title: "TestMyCode" },
+            async (p) => {
+                return downloadFile("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
+                    tmcLangsPath, undefined, (progress: number, increment: number) =>
+                    p.report({ message: `(${progress}%) Downloading required files`, increment }),
+                );
+            },
+        );
+
+        if (tmcLangsResult.err) {
+            return new Err(tmcLangsResult.val);
         }
         console.log("tmc-langs.jar downloaded");
     }
