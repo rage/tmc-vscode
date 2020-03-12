@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import TMC from "./api/tmc";
 import UI from "./ui/ui";
 
-import { Err, Ok, Result } from "ts-results";
+import { Err, Ok, Result, Results } from "ts-results";
 import {
     addNewCourse, closeExercises, displayCourseDownloads, displayLocalCourseDetails,
     displayUserCourses, downloadExercises, login, logout, openExercises,
@@ -62,8 +62,11 @@ export function registerUiActions(
     ui.webview.registerHandler("addCourse", () => {
         addNewCourse(actionContext);
     });
-    ui.webview.registerHandler("exerciseDownloads", (msg: { type: string, id: number }) => {
-        displayCourseDownloads(msg.id, actionContext);
+    ui.webview.registerHandler("exerciseDownloads", async (msg: { type: string, id: number }) => {
+        const res = await displayCourseDownloads(msg.id, actionContext);
+        if (res.err) {
+            vscode.window.showErrorMessage(`Can't display downloads: ${res.val.message}`);
+        }
     });
     ui.webview.registerHandler("courseDetails", (msg: { type: "courseDetails", id: number }) => {
         displayLocalCourseDetails(msg.id, actionContext);
@@ -78,6 +81,10 @@ export function registerUiActions(
         await closeExercises(msg.ids, actionContext);
         displayLocalCourseDetails(msg.id, actionContext);
     });
+}
+
+async function errorWrapper(result: Promise<any>, errorPrefix: string) {
+    const rest = await result;
 }
 
 /**

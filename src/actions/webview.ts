@@ -26,11 +26,6 @@ export async function displayLocalCourseDetails(courseId: number, actionContext:
     const course = userData.getCourse(courseId);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
 
-    // If no exercises downloaded, skip straight to downloading - DISABLED FOR NOW
-    /* if (workspaceExercises.length === 0) {
-        return displayCourseDownloadDetails(courseId, actionContext);
-    } */
-
     const exerciseData = new Map<number, {
         id: number, name: string, isOpen: boolean,
         passed: boolean, deadlineString: string,
@@ -166,18 +161,20 @@ export async function selectOrganizationAndCourse(actionContext: ActionContext):
 /**
  * Displays the course exercise list view
  */
-export async function displayCourseDownloads(
-    courseId: number, { tmc, ui, userData, workspaceManager }: ActionContext) {
+export async function displayCourseDownloads(courseId: number, actionContext: ActionContext)
+: Promise<Result<void, Error>> {
+    const { tmc, ui, userData, workspaceManager } = actionContext;
     const result = await tmc.getCourseDetails(courseId);
     if (result.err) {
-        vscode.window.showErrorMessage(`Cannot display download details for course: \
-                                        ${result.val.name} - ${result.val.message}`);
-        return;
+        return new Err(new Error("Course details not found"));
     }
     const details = result.val.course;
     userData.updateCompletedExercises(courseId, details.exercises.filter((x) => x.completed).map((x) => x.id));
 
     const organizationSlug = userData.getCourses().find((course) => course.id === courseId)?.organization;
+    if (!organizationSlug) {
+        return new Err(new Error("Course data not found"));
+    }
     const exerciseDetails = details.exercises.map((x) =>
         ({ exercise: x, downloaded: workspaceManager.getExerciseDataById(x.id).ok }));
     const workspaceEmpty = workspaceManager.getExercisesByCourseName(details.name).length === 0;
@@ -185,4 +182,5 @@ export async function displayCourseDownloads(
         courseId, courseName: result.val.course.name, details, exerciseDetails, organizationSlug, workspaceEmpty,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
+    return Ok.EMPTY;
 }
