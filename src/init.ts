@@ -32,19 +32,15 @@ export function registerUiActions(
         COURSE_CHOSEN, LOGGED_IN, ORGANIZATION_CHOSEN,
     };
 
-    // UI Action IDs
-    const LOGIN_ACTION = "login";
-    const INDEX_ACTION = "index";
-
     // Register UI actions
     const actionContext = { tmc, workspaceManager, ui, resources, userData };
 
     ui.treeDP.registerAction("Log out", [LOGGED_IN],
         () => { logout(visibilityGroups, actionContext); });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
-        async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
+        async () => await ui.webview.setContentFromTemplate("login"));
     ui.treeDP.registerAction("My courses", [LOGGED_IN],
-        () => { displayUserCourses(actionContext); }, INDEX_ACTION);
+        () => { displayUserCourses(actionContext); });
     ui.treeDP.registerAction("Open exercises", [LOGGED_IN],
         () => openWorkspace(actionContext));
 
