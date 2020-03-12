@@ -35,37 +35,38 @@ export function registerUiActions(
     // Register UI actions
     const actionContext = { tmc, workspaceManager, ui, resources, userData };
 
-    ui.treeDP.registerAction("Log out", [LOGGED_IN],
-        () => { logout(visibilityGroups, actionContext); });
-    ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
-        async () => await ui.webview.setContentFromTemplate("login"));
-    ui.treeDP.registerAction("My courses", [LOGGED_IN],
-        () => { displayUserCourses(actionContext); });
-    ui.treeDP.registerAction("Open exercises", [LOGGED_IN],
-        () => openWorkspace(actionContext));
-
-    // Register webview handlers
-    ui.webview.registerHandler("login", ({ username, password }) => {
-        login(actionContext, username, password, visibilityGroups);
+    ui.treeDP.registerAction("Log out", [LOGGED_IN], () => {
+        logout(visibilityGroups, actionContext);
     });
-    ui.webview.registerHandler("myCourses", () => {
+    ui.treeDP.registerAction("Log in", [LOGGED_IN.not], () => {
+        ui.webview.setContentFromTemplate("login");
+    });
+    ui.treeDP.registerAction("My courses", [LOGGED_IN], () => {
         displayUserCourses(actionContext);
     });
-    ui.webview.registerHandler("downloadExercises",
-        (msg: {
-            type: "downloadExercises", ids: number[], courseName: string,
-            organizationSlug: string, courseId: number,
-        }) => {
-            downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseName, msg.courseId);
-        });
-    ui.webview.registerHandler("addCourse", () => {
+    ui.treeDP.registerAction("Open exercises", [LOGGED_IN], () => {
+        openWorkspace(actionContext);
+    });
+
+    // Register webview handlers
+    ui.webview.registerHandler("login", (msg: { type: "login", username: string, password: string }) => {
+        login(actionContext, msg.username, msg.password, visibilityGroups);
+    });
+    ui.webview.registerHandler("myCourses", (msg: { type: "myCourses" }) => {
+        displayUserCourses(actionContext);
+    });
+    ui.webview.registerHandler("downloadExercises", (msg: {
+        type: "downloadExercises", ids: number[], courseName: string,
+        organizationSlug: string, courseId: number,
+    }) => {
+        downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseName, msg.courseId);
+    });
+    ui.webview.registerHandler("addCourse", (msg: {type: "addCourse" }) => {
         addNewCourse(actionContext);
     });
-    ui.webview.registerHandler("exerciseDownloads", async (msg: { type: string, id: number }) => {
+    ui.webview.registerHandler("exerciseDownloads", async (msg: { type: "exerciseDownloads", id: number }) => {
         const res = await displayCourseDownloads(msg.id, actionContext);
-        if (res.err) {
-            vscode.window.showErrorMessage(`Can't display downloads: ${res.val.message}`);
-        }
+        if (res.err) { vscode.window.showErrorMessage(`Can't display downloads: ${res.val.message}`); }
     });
     ui.webview.registerHandler("removeCourse", async (msg: { type: "removeCourse", id: number }) => {
         const course = actionContext.userData.getCourse(msg.id);
