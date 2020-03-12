@@ -9,6 +9,7 @@ import {
     addNewCourse, closeExercises, displayCourseDownloads, displayLocalCourseDetails,
     displayUserCourses, downloadExercises, login, logout, openExercises, removeCourse,
 } from "./actions";
+import { openWorkspace } from "./actions/actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import Storage from "./config/storage";
@@ -37,19 +38,24 @@ export function registerUiActions(
     const INDEX_ACTION = "index";
 
     // Register UI actions
+    const currentWorkspaceFile = vscode.workspace.workspaceFile;
+    const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
     const actionContext = { tmc, workspaceManager, ui, resources, userData };
+
     ui.treeDP.registerAction("Log out", [LOGGED_IN],
         () => { logout(visibilityGroups, actionContext); });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not],
         async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
     ui.treeDP.registerAction("My courses", [LOGGED_IN],
         () => { displayUserCourses(actionContext); }, INDEX_ACTION);
+    ui.treeDP.registerAction("Open exercises(function not yet)", [LOGGED_IN],
+        () => { openWorkspace(currentWorkspaceFile, tmcWorkspaceFile); });
 
     // Register webview handlers
     ui.webview.registerHandler("login", ({ username, password }) => {
         login(actionContext, username, password, visibilityGroups);
     });
-    ui.webview.registerHandler("myCourses", (msg: { type: string }) => {
+    ui.webview.registerHandler("myCourses", () => {
         displayUserCourses(actionContext);
     });
     ui.webview.registerHandler("downloadExercises",
@@ -88,10 +94,6 @@ export function registerUiActions(
         await closeExercises(msg.ids, actionContext);
         displayLocalCourseDetails(msg.id, actionContext);
     });
-}
-
-async function errorWrapper(result: Promise<any>, errorPrefix: string) {
-    const rest = await result;
 }
 
 /**

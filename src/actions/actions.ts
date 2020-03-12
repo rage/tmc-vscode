@@ -1,10 +1,9 @@
-import { Err, Ok, Result, Results } from "ts-results";
+import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
-
-import { LocalCourseData, UserData } from "../config/userdata";
+import { LocalCourseData } from "../config/userdata";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
-import { parseDeadline, sleep } from "../utils";
+import { askForConfirmation, parseDeadline, sleep } from "../utils";
 import { ActionContext } from "./types";
 
 /**
@@ -494,3 +493,25 @@ export async function openUncompletedExercises(courseId: number, actionContext: 
     }
     openExercises(courseData.exercises.filter((x) => !x.passed).map((x) => x.id), actionContext);
 }
+
+/**
+ * open workspace in explorer
+ * @param currentWorkspaceFile
+ * @param tmcWorkspaceFile
+ */
+export async function openWorkspace(currentWorkspaceFile: any, tmcWorkspaceFile: vscode.Uri) {
+    if (currentWorkspaceFile?.toString() !== tmcWorkspaceFile.toString()) {
+        console.log("Current workspace:", currentWorkspaceFile);
+        console.log("TMC workspace:", tmcWorkspaceFile);
+        if (!currentWorkspaceFile || await askForConfirmation("Do you want to open TMC workspace and close the current one?")) {
+            await vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+            // Restarts VSCode
+        } else {
+            const choice = "Close current and open TMC Workspace";
+            await vscode.window.showErrorMessage("Please close your current workspace before using TestMyCode.",
+            ...[choice]).then((selection) => { if (selection === choice) {
+                vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+            }});
+        }
+    }
+ }
