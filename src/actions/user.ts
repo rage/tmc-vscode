@@ -11,7 +11,7 @@ import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
 import { askForConfirmation, isWorkspaceOpen, sleep } from "../utils";
 import { ActionContext } from "./types";
-import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
+import { selectOrganizationAndCourse } from "./webview";
 import { closeExercises } from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
@@ -40,11 +40,14 @@ export async function login(
 /**
  * Logs the user out, updating UI state
  */
-export function logout(visibility: VisibilityGroups, actionContext: ActionContext) {
-    const { tmc, ui } = actionContext;
-    tmc.deauthenticate();
-    ui.webview.dispose();
-    ui.treeDP.updateVisibility([visibility.LOGGED_IN.not]);
+export async function logout(visibility: VisibilityGroups, actionContext: ActionContext) {
+    if (await askForConfirmation("Are you sure you want to log out?")) {
+        const { tmc, ui } = actionContext;
+        tmc.deauthenticate();
+        ui.webview.dispose();
+        ui.treeDP.updateVisibility([visibility.LOGGED_IN.not]);
+        vscode.window.showInformationMessage("Logged out from TestMyCode.");
+    }
 }
 
 /**
