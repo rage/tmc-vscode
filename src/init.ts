@@ -48,7 +48,7 @@ export function registerUiActions(
         async () => await ui.webview.setContentFromTemplate(LOGIN_ACTION));
     ui.treeDP.registerAction("My courses", [LOGGED_IN],
         () => { displayUserCourses(actionContext); }, INDEX_ACTION);
-    ui.treeDP.registerAction("Open exercises(function not yet)", [LOGGED_IN],
+    ui.treeDP.registerAction("Open exercises", [LOGGED_IN],
         () => { openWorkspace(currentWorkspaceFile, tmcWorkspaceFile); });
 
     // Register webview handlers
