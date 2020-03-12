@@ -180,9 +180,12 @@ export async function displayCourseDownloads(
     const organizationSlug = userData.getCourses().find((course) => course.id === courseId)?.organization;
     const exerciseDetails = details.exercises.map((x) =>
         ({ exercise: x, downloaded: workspaceManager.getExerciseDataById(x.id).ok }));
+    const sortedExercises = exerciseDetails.sort((x, y) => {
+        return (x.downloaded === y.downloaded) ? 0 : x.downloaded ? 1 : -1;
+    });
     const workspaceEmpty = workspaceManager.getExercisesByCourseName(details.name).length === 0;
     const data = {
-        courseId, courseName: result.val.course.name, details, exerciseDetails, organizationSlug, workspaceEmpty,
+        courseId, courseName: result.val.course.name, details, sortedExercises, organizationSlug, workspaceEmpty,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
 }
