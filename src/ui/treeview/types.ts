@@ -11,6 +11,7 @@ export type HandlerContext = {
 
 export type VisibilityGroups = {
     LOGGED_IN: VisibilityGroup;
+    WORKSPACE_OPEN: VisibilityGroup;
 };
 
 export type VisibilityGroup = {

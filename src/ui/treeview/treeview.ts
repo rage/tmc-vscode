@@ -33,26 +33,12 @@ export default class TmcMenuTree {
      * @param id Optional, required for [[triggerCallback]]
      */
     public registerAction(label: string, groups: Array<VisibilityGroup | VisibilityGroupNegated>,
-                          onClick: () => void, id?: string) {
-        id = id ? id : (this.nextId++).toString();
+                          onClick: () => void) {
+        const id = (this.nextId++).toString();
 
         // Use internal classes
         this.visibility.registerAction(id, groups);
         this.treeDP.registerAction(label, id, onClick, this.visibility.getVisible(id));
-    }
-
-    /**
-     * Triggers a callback by id
-     * @param id
-     */
-    public triggerCallback(id: string) {
-        const action = this.treeDP.getAction(id);
-        if (action?.action.callback) {
-            this.treeview.reveal(action.action, {select: true});
-            action.action.callback();
-        } else {
-            throw new Error("No such action");
-        }
     }
 
     /**

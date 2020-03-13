@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as init from "./init";
 
-import { resetExercise, submitExercise, testExercise } from "./actions";
+import { openWorkspace, resetExercise, submitExercise, testExercise } from "./actions";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
@@ -20,27 +20,9 @@ export async function activate(context: vscode.ExtensionContext) {
         return;
     }
 
-    const resources = result.val;
-    const currentWorkspaceFile = vscode.workspace.workspaceFile;
-    const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
-
-    if (currentWorkspaceFile?.toString() !== tmcWorkspaceFile.toString()) {
-        console.log("Current workspace:", currentWorkspaceFile);
-        console.log("TMC workspace:", tmcWorkspaceFile);
-        if (!currentWorkspaceFile || await askForConfirmation("Do you want to open TMC workspace and close the current one?")) {
-            await vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
-            // Restarts VSCode
-        } else {
-            const choice = "Close current and open TMC Workspace";
-            await vscode.window.showErrorMessage("Please close your current workspace before using TestMyCode.",
-            ...[choice]).then((selection) => { if (selection === choice) {
-                vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
-            }});
-        }
-    }
-
     await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
+    const resources = result.val;
     const storage = new Storage(context);
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
 
@@ -71,7 +53,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     init.registerUiActions(ui, storage, tmc, workspaceManager, resources, userData);
 
-    const actionContext = {ui, resources, workspaceManager, tmc, userData};
+    const actionContext = { ui, resources, workspaceManager, tmc, userData };
 
     context.subscriptions.push(
         vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),

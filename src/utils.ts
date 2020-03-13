@@ -7,32 +7,8 @@ import * as vscode from "vscode";
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
 import WorkspaceManager from "./api/workspaceManager";
+import Resources from "./config/resources";
 import { ConnectionError } from "./errors";
-
-/**
- * Downloads data from given url to the specified file path with a progress bar in the VSCode status bar.
- * @param url Url to data
- * @param title Title for status bar
- * @param message First message to be displayed in status bar
- * @param filePath Absolute path to the desired output file
- * @param headers Request headers if any
- */
-export async function downloadFileWithProgress(url: string, filePath: string, title: string, message: string,
-                                               headers?: any | undefined): Promise<Result<void, Error>> {
-
-    let result: Result<void, Error> | undefined;
-    await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Window, title: `${title}` },
-        async (p) => {
-        p.report({
-            message: `${message}` });
-        result = await downloadFile(url, filePath, p, headers, () => { } );
-        });
-    if (result === undefined) {
-        return new Err(new Error("Error while downloading files"));
-    }
-    return result;
-}
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
@@ -40,9 +16,8 @@ export async function downloadFileWithProgress(url: string, filePath: string, ti
  * @param filePath Absolute path to the desired output file
  * @param headers Request headers if any
  */
-export async function downloadFile(url: string, filePath: string,
-                                   progressHandle?: vscode.Progress<{ message?: string }>, headers?: any,
-                                   progressCallback?: (downloaded: number, size: number) => void,
+export async function downloadFile(url: string, filePath: string, headers?: any,
+                                   progressCallback?: (downloadedPct: number, increment: number) => void,
     ): Promise<Result<void, Error>> {
 
     fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
@@ -56,12 +31,7 @@ export async function downloadFile(url: string, filePath: string,
             const size = parseInt(sizeString, 10);
             response.body.on("data", (chunk: Buffer) => {
                 downloaded += chunk.length;
-                const progress = Math.round((downloaded / size * 100));
-                if (progressHandle !== undefined) {
-                    progressHandle.report({
-                        message: `Downloading important components for the Test My Code plugin... ${progress} %` });
-                    }
-                progressCallback(downloaded, size);
+                progressCallback(Math.round((downloaded / size * 100)), 100 * chunk.length / size);
             });
         }
     } catch (error) {
@@ -114,6 +84,12 @@ export function isProductionBuild(): boolean {
     };
 
     return is<TestType>(testObject);
+}
+
+export function isWorkspaceOpen(resources: Resources): boolean {
+    const currentWorkspaceFile = vscode.workspace.workspaceFile;
+    const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
+    return currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString();
 }
 
 /**

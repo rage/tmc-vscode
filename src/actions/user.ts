@@ -9,43 +9,45 @@ import * as vscode from "vscode";
 import { LocalCourseData } from "../config/userdata";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
-import { sleep } from "../utils";
+import { askForConfirmation, isWorkspaceOpen, sleep } from "../utils";
 import { ActionContext } from "./types";
-import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
+import { selectOrganizationAndCourse } from "./webview";
 import { closeExercises } from "./workspace";
+
+import { Err, Ok, Result } from "ts-results";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
  */
 export async function login(
     actionContext: ActionContext, username: string, password: string, visibilityGroups: VisibilityGroups,
-) {
+): Promise<Result<void, Error>> {
     const { tmc, ui } = actionContext;
-    const wrapError = (error: string) => `<div class="alert alert-danger fade show" role="alert">${error}</div>`;
 
     if (!username || !password) {
-        ui.webview.setContentFromTemplate("login",
-            { error: wrapError("Username and password may not be empty.") }, true);
-        return;
+        return new Err(new Error("Username and password may not be empty."));
     }
 
     const result = await tmc.authenticate(username, password);
-    if (result.ok) {
-        ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
-        displayUserCourses(actionContext);
-    } else {
-        console.log("Login failed: " + result.val.message);
-        ui.webview.setContentFromTemplate("login", { error: wrapError(result.val.message) }, true);
+    if (result.err) {
+        return new Err(result.val);
     }
+
+    ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
+    return Ok.EMPTY;
 }
 
 /**
  * Logs the user out, updating UI state
  */
-export function logout(visibility: VisibilityGroups, { tmc, ui }: ActionContext) {
-    tmc.deauthenticate();
-    ui.webview.dispose();
-    ui.treeDP.updateVisibility([visibility.LOGGED_IN.not]);
+export async function logout(visibility: VisibilityGroups, actionContext: ActionContext) {
+    if (await askForConfirmation("Are you sure you want to log out?")) {
+        const { tmc, ui } = actionContext;
+        tmc.deauthenticate();
+        ui.webview.dispose();
+        ui.treeDP.updateVisibility([visibility.LOGGED_IN.not]);
+        vscode.window.showInformationMessage("Logged out from TestMyCode.");
+    }
 }
 
 /**
@@ -172,6 +174,32 @@ export async function submitExercise(id: number, actionContext: ActionContext, t
                             vscode.Uri.parse(submitResult.val.show_submission_url));
                         getStatus = false;
                         temp.dispose();
+                    }
+                });
+        }
+    }
+}
+
+/**
+ * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
+ */
+export async function openWorkspace(actionContext: ActionContext) {
+    const { resources } = actionContext;
+    const currentWorkspaceFile = vscode.workspace.workspaceFile;
+    const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
+
+    if (!isWorkspaceOpen(resources)) {
+        console.log("Current workspace:", currentWorkspaceFile);
+        console.log("TMC workspace:", tmcWorkspaceFile);
+        if (!currentWorkspaceFile || await askForConfirmation("Do you want to open TMC workspace and close the current one?")) {
+            vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+            // Restarts VSCode
+        } else {
+            const choice = "Close current and open TMC Workspace";
+            await vscode.window.showErrorMessage("Please close your current workspace before using TestMyCode.", choice)
+                .then((selection) => {
+                    if (selection === choice) {
+                        vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
                     }
                 });
         }
