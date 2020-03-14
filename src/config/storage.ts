@@ -37,15 +37,17 @@ export default class Storage {
      * Updates the given authentication token in storage.
      * @param authenticationToken authentication token to update
      */
-    public updateAuthenticationToken(authenticationToken: oauth2.Data | undefined) {
-        this.context.globalState.update("token", authenticationToken);
+    public async updateAuthenticationToken(
+        authenticationToken: oauth2.Data | undefined,
+    ): Promise<void> {
+        await this.context.globalState.update("token", authenticationToken);
     }
 
-    public updateExerciseData(exerciseData: LocalExerciseData[] | undefined) {
-        this.context.globalState.update("exerciseData", exerciseData);
+    public async updateExerciseData(exerciseData: LocalExerciseData[] | undefined): Promise<void> {
+        await this.context.globalState.update("exerciseData", exerciseData);
     }
 
-    public updateUserData(userData: { courses: LocalCourseData[] }) {
-        this.context.globalState.update("userData", userData);
+    public async updateUserData(userData: { courses: LocalCourseData[] }): Promise<void> {
+        await this.context.globalState.update("userData", userData);
     }
 }

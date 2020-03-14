@@ -37,7 +37,7 @@ export function registerUiActions(
     workspaceManager: WorkspaceManager,
     resources: Resources,
     userData: UserData,
-) {
+): void {
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
 
@@ -65,7 +65,10 @@ export function registerUiActions(
     // Register webview handlers
     ui.webview.registerHandler(
         "login",
-        async (msg: { type: "login"; username: string; password: string }) => {
+        async (msg: { type?: "login"; username?: string; password?: string }) => {
+            if (!(msg.type && msg.username && msg.password)) {
+                return;
+            }
             const result = await login(actionContext, msg.username, msg.password, visibilityGroups);
             if (result.err) {
                 ui.webview.setContentFromTemplate("login", { error: result.val.message }, true);
@@ -74,18 +77,21 @@ export function registerUiActions(
             displayUserCourses(actionContext);
         },
     );
-    ui.webview.registerHandler("myCourses", (msg: { type: "myCourses" }) => {
+    ui.webview.registerHandler("myCourses", () => {
         displayUserCourses(actionContext);
     });
     ui.webview.registerHandler(
         "downloadExercises",
         (msg: {
-            type: "downloadExercises";
-            ids: number[];
-            courseName: string;
-            organizationSlug: string;
-            courseId: number;
+            type?: "downloadExercises";
+            ids?: number[];
+            courseName?: string;
+            organizationSlug?: string;
+            courseId?: number;
         }) => {
+            if (!(msg.type && msg.ids && msg.courseName && msg.organizationSlug && msg.courseId)) {
+                return;
+            }
             downloadExercises(
                 actionContext,
                 msg.ids,
@@ -95,12 +101,18 @@ export function registerUiActions(
             );
         },
     );
-    ui.webview.registerHandler("addCourse", (msg: { type: "addCourse" }) => {
-        addNewCourse(actionContext);
+    ui.webview.registerHandler("addCourse", async () => {
+        const result = await addNewCourse(actionContext);
+        if (result.err) {
+            vscode.window.showErrorMessage(result.val.message);
+        }
     });
     ui.webview.registerHandler(
         "exerciseDownloads",
-        async (msg: { type: "exerciseDownloads"; id: number }) => {
+        async (msg: { type?: "exerciseDownloads"; id?: number }) => {
+            if (!(msg.type && msg.id)) {
+                return;
+            }
             const res = await displayCourseDownloads(msg.id, actionContext);
             if (res.err) {
                 vscode.window.showErrorMessage(`Can't display downloads: ${res.val.message}`);
@@ -109,7 +121,10 @@ export function registerUiActions(
     );
     ui.webview.registerHandler(
         "removeCourse",
-        async (msg: { type: "removeCourse"; id: number }) => {
+        async (msg: { type?: "removeCourse"; id?: number }) => {
+            if (!(msg.type && msg.id)) {
+                return;
+            }
             const course = actionContext.userData.getCourse(msg.id);
             if (
                 await askForConfirmation(
@@ -117,16 +132,23 @@ export function registerUiActions(
                 )
             ) {
                 await removeCourse(msg.id, actionContext);
-                displayUserCourses(actionContext);
+                await displayUserCourses(actionContext);
+                vscode.window.showInformationMessage(`${course.name} was removed from courses.`);
             }
         },
     );
-    ui.webview.registerHandler("courseDetails", (msg: { type: "courseDetails"; id: number }) => {
+    ui.webview.registerHandler("courseDetails", (msg: { type?: "courseDetails"; id?: number }) => {
+        if (!(msg.type && msg.id)) {
+            return;
+        }
         displayLocalCourseDetails(msg.id, actionContext);
     });
     ui.webview.registerHandler(
         "openSelected",
-        async (msg: { type: "openSelected"; ids: number[]; id: number }) => {
+        async (msg: { type?: "openSelected"; ids?: number[]; id?: number }) => {
+            if (!(msg.type && msg.ids && msg.id)) {
+                return;
+            }
             actionContext.ui.webview.setContentFromTemplate("loading");
             await openExercises(msg.ids, actionContext);
             displayLocalCourseDetails(msg.id, actionContext);
@@ -134,7 +156,10 @@ export function registerUiActions(
     );
     ui.webview.registerHandler(
         "closeSelected",
-        async (msg: { type: "closeSelected"; ids: number[]; id: number }) => {
+        async (msg: { type?: "closeSelected"; ids?: number[]; id?: number }) => {
+            if (!(msg.type && msg.ids && msg.id)) {
+                return;
+            }
             actionContext.ui.webview.setContentFromTemplate("loading");
             await closeExercises(msg.ids, actionContext);
             displayLocalCourseDetails(msg.id, actionContext);

@@ -15,6 +15,7 @@ import { selectOrganizationAndCourse } from "./webview";
 import { closeExercises } from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
+import { SubmissionFeedback } from "../api/types";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -69,14 +70,19 @@ export async function testExercise(id: number, actions: ActionContext): Promise<
         return;
     }
     const exerciseName = exerciseDetails.val.name;
-    const temp = new TemporaryWebview(resources, ui, "TMC Test Results", async (msg) => {
-        if (msg.setToBackground) {
-            temp.dispose();
-        }
-        if (msg.submit) {
-            submitExercise(msg.exerciseId, actions, temp);
-        }
-    });
+    const temp = new TemporaryWebview(
+        resources,
+        ui,
+        "TMC Test Results",
+        async (msg: { setToBackground?: boolean; submit?: boolean; exerciseId?: number }) => {
+            if (msg.setToBackground) {
+                temp.dispose();
+            }
+            if (msg.submit && msg.exerciseId) {
+                submitExercise(msg.exerciseId, actions, temp);
+            }
+        },
+    );
     temp.setContent("running-tests", { exerciseName });
     ui.setStatusBar(`Running tests for ${exerciseName}`);
     const testResult = await tmc.runTests(id);
@@ -110,29 +116,36 @@ export async function submitExercise(
         return;
     }
 
-    const messageHandler = async (msg: any): Promise<void> => {
-        if (msg.feedback && msg.feedback.status.length > 0) {
-            await tmc.submitSubmissionFeedback(msg.url, msg.feedback);
-        } else if (msg.runInBackground) {
-            ui.setStatusBar("Waiting for results from server.");
-            // eslint-disable-next-line @typescript-eslint/no-use-before-define
-            temp.dispose();
-        } else if (msg.showInBrowser) {
-            vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
-        } else if (msg.showSolutionInBrowser) {
-            vscode.env.openExternal(vscode.Uri.parse(msg.solutionUrl));
-        }
-    };
+    const temp = tempView || new TemporaryWebview(resources, ui, "", () => {});
 
-    if (tempView !== undefined) {
-        tempView.setMessageHandler(messageHandler);
-        tempView.setTitle("TMC Server Submission");
-    }
-
-    const temp =
-        tempView !== undefined
-            ? tempView
-            : new TemporaryWebview(resources, ui, "TMC Server Submission", messageHandler);
+    temp.setMessageHandler(
+        async (msg: {
+            runInBackground?: boolean;
+            showInBrowser?: boolean;
+            showSolutionInBrowser?: boolean;
+            solutionUrl?: string;
+            submissionFeedback?: boolean;
+            url?: string;
+            feedback?: SubmissionFeedback;
+        }): Promise<void> => {
+            if (
+                msg.submissionFeedback &&
+                msg.feedback &&
+                msg.url &&
+                msg.feedback.status.length > 0
+            ) {
+                await tmc.submitSubmissionFeedback(msg.url, msg.feedback);
+            } else if (msg.runInBackground) {
+                ui.setStatusBar("Waiting for results from server.");
+                temp.dispose();
+            } else if (msg.showInBrowser) {
+                vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
+            } else if (msg.showSolutionInBrowser && msg.solutionUrl) {
+                vscode.env.openExternal(vscode.Uri.parse(msg.solutionUrl));
+            }
+        },
+    );
+    temp.setTitle("TMC Server Submission");
 
     let timeWaited = 0;
     let getStatus = true;
@@ -251,21 +264,17 @@ export async function openWorkspace(actionContext: ActionContext): Promise<void>
 /**
  * Adds a new course to user's courses.
  */
-export async function addNewCourse(actionContext: ActionContext) {
+export async function addNewCourse(actionContext: ActionContext): Promise<Result<void, Error>> {
     const orgAndCourse = await selectOrganizationAndCourse(actionContext);
 
     if (orgAndCourse.err) {
-        vscode.window.showErrorMessage(`Adding a new course failed: \
-                                        ${orgAndCourse.val.name} - ${orgAndCourse.val.message}`);
-        return;
+        return new Err(orgAndCourse.val);
     }
 
     const { tmc, userData } = actionContext;
     const courseDetailsResult = await tmc.getCourseDetails(orgAndCourse.val.course);
     if (courseDetailsResult.err) {
-        vscode.window.showErrorMessage(`Fetching course data failed: \
-                                        ${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`);
-        return;
+        return new Err(courseDetailsResult.val);
     }
 
     const courseDetails = courseDetailsResult.val.course;
@@ -278,19 +287,21 @@ export async function addNewCourse(actionContext: ActionContext) {
         organization: orgAndCourse.val.organization,
     };
     userData.addCourse(localData);
-    actionContext.ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
+    await actionContext.ui.webview.setContentFromTemplate("index", {
+        courses: userData.getCourses(),
+    });
+    return Ok.EMPTY;
 }
 
 /**
  * Removes given course from UserData and closes all its exercises.
  * @param id ID of the course to remove
  */
-export async function removeCourse(id: number, actionContext: ActionContext) {
+export async function removeCourse(id: number, actionContext: ActionContext): Promise<void> {
     const course = actionContext.userData.getCourse(id);
     await closeExercises(
         course.exercises.map((e) => e.id),
         actionContext,
     );
     actionContext.userData.deleteCourse(id);
-    vscode.window.showInformationMessage(`${course.name} was removed from courses.`);
 }

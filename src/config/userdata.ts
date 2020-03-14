@@ -1,4 +1,5 @@
 import Storage from "./storage";
+import { Err, Ok, Result } from "ts-results";
 
 export class UserData {
     private courses: Map<number, LocalCourseData>;
@@ -49,10 +50,13 @@ export class UserData {
         this.updatePersistentData();
     }
 
-    public updateCompletedExercises(courseId: number, completedExercises: number[]) {
+    public async updateCompletedExercises(
+        courseId: number,
+        completedExercises: number[],
+    ): Promise<Result<void, Error>> {
         const courseData = this.courses.get(courseId);
         if (!courseData) {
-            return;
+            return new Err(new Error("Data missing"));
         }
         courseData.exercises = courseData.exercises.map((x) => ({
             id: x.id,
@@ -64,13 +68,14 @@ export class UserData {
                 : this.passedExercises.delete(x.id),
         );
         this.courses.set(courseId, courseData);
-        this.updatePersistentData();
+        await this.updatePersistentData();
+        return Ok.EMPTY;
     }
 
-    public setPassed(courseId: number, exerciseId: number): void {
+    public async setPassed(courseId: number, exerciseId: number): Promise<Result<void, Error>> {
         const courseData = this.courses.get(courseId);
         if (!courseData) {
-            return;
+            return new Err(new Error("Data missing"));
         }
         courseData.exercises = courseData.exercises.map((x) => ({
             id: x.id,
@@ -78,15 +83,16 @@ export class UserData {
         }));
         this.passedExercises.add(exerciseId);
         this.courses.set(courseId, courseData);
-        this.updatePersistentData();
+        await this.updatePersistentData();
+        return Ok.EMPTY;
     }
 
-    public getPassed(exerciseId: number) {
+    public getPassed(exerciseId: number): boolean {
         return this.passedExercises.has(exerciseId);
     }
 
-    private updatePersistentData() {
-        this.storage.updateUserData({ courses: Array.from(this.courses.values()) });
+    private updatePersistentData(): Promise<void> {
+        return this.storage.updateUserData({ courses: Array.from(this.courses.values()) });
     }
 }
 

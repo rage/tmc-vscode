@@ -9,7 +9,7 @@ export class Visibility {
     private enabledSet = new Set<string>();
     private nextId = 0;
 
-    public createGroup(visible: boolean) {
+    public createGroup(visible: boolean): VisibilityGroup {
         const groupId = "_" + this.nextId++;
         this.idsByGroup.set(groupId, []);
         this.idsByGroup.set(this.negate(groupId), []);
@@ -23,7 +23,7 @@ export class Visibility {
      * @param group Name of group
      * @param visible Should the group be active
      */
-    public registerGroup(group: string, visible: boolean) {
+    public registerGroup(group: string, visible: boolean): void {
         if (group.startsWith("!")) {
             throw new Error("Visibility group name may not start with a exclamation mark");
         }
@@ -40,7 +40,10 @@ export class Visibility {
      * @param id Id of the action
      * @param groups Names of the associated groups, possibly negated
      */
-    public registerAction(id: string, groups: Array<VisibilityGroup | VisibilityGroupNegated>) {
+    public registerAction(
+        id: string,
+        groups: Array<VisibilityGroup | VisibilityGroupNegated>,
+    ): void {
         if (this.groupsById.has(id)) {
             throw new Error("Action already registered");
         }

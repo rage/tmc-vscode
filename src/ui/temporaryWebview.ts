@@ -11,11 +11,16 @@ export default class TemporaryWebview {
 
     private panel: vscode.WebviewPanel;
     private ui: UI;
-    private messageHandler: any;
+    private messageHandler: (msg: { [key: string]: unknown }) => void;
     private iconPath: vscode.Uri;
     private title: string;
 
-    constructor(resources: Resources, ui: UI, title: string, messageHandler: (msg: any) => void) {
+    constructor(
+        resources: Resources,
+        ui: UI,
+        title: string,
+        messageHandler: (msg: { [key: string]: unknown }) => void,
+    ) {
         this.ui = ui;
         this.messageHandler = messageHandler;
         this.title = title;
@@ -31,7 +36,10 @@ export default class TemporaryWebview {
      * @param data Data to be passed to the template engine
      * @param recreate Whether the view should be recreated if disposed
      */
-    public async setContent(templateName: string, data?: any): Promise<void> {
+    public async setContent(
+        templateName: string,
+        data?: { [key: string]: unknown },
+    ): Promise<void> {
         if (this.disposed) {
             this.panel = this.createPanel();
             this.disposed = false;
@@ -44,8 +52,7 @@ export default class TemporaryWebview {
         this.panel.reveal(undefined, true);
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    public setMessageHandler(messageHandler: any): void {
+    public setMessageHandler(messageHandler: (msg: { [key: string]: unknown }) => void): void {
         this.messageHandler = messageHandler;
         this.panel.webview.onDidReceiveMessage(messageHandler);
     }

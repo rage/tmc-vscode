@@ -1,6 +1,3 @@
-// Since properties in API use camel_case, we want some of ours to reflect them.
-/* eslint-disable @typescript-eslint/camelcase */
-
 import * as del from "del";
 import * as fs from "fs";
 import * as path from "path";
@@ -58,26 +55,25 @@ export default class WorkspaceManager {
             return new Err(new Error("Exercise already downloaded."));
         }
         const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
-        const { course_name, exercise_name, exercise_id, deadline } = exerciseDetails;
         const exercisePath = path.join(
             exerciseFolderPath,
             organizationSlug,
-            course_name,
-            exercise_name,
+            exerciseDetails.course_name,
+            exerciseDetails.exercise_name,
         );
-        this.pathToId.set(exercisePath, exercise_id);
-        this.idToData.set(exercise_id, {
+        this.pathToId.set(exercisePath, exerciseDetails.exercise_id);
+        this.idToData.set(exerciseDetails.exercise_id, {
             checksum,
             course: exerciseDetails.course_name,
-            deadline,
-            id: exercise_id,
+            deadline: exerciseDetails.deadline,
+            id: exerciseDetails.exercise_id,
             isOpen: false,
             name: exerciseDetails.exercise_name,
             organization: organizationSlug,
             path: exercisePath,
         });
         this.updatePersistentData();
-        return new Ok(this.getClosedPath(exercise_id));
+        return new Ok(this.getClosedPath(exerciseDetails.exercise_id));
     }
 
     /**
@@ -261,7 +257,7 @@ export default class WorkspaceManager {
         }
     }
 
-    private initializeWatcherData() {
+    private initializeWatcherData(): void {
         this.watcherTree.clear();
         for (const data of this.idToData.values()) {
             if (data.isOpen) {
@@ -270,7 +266,7 @@ export default class WorkspaceManager {
         }
     }
 
-    private watcherAction(targetPath: string) {
+    private watcherAction(targetPath: string): void {
         const relation = path
             .relative(this.resources.tmcExercisesFolderPath, targetPath)
             .toString()
@@ -304,7 +300,7 @@ export default class WorkspaceManager {
         }
     }
 
-    private startWatcher() {
+    private startWatcher(): void {
         this.initializeWatcherData();
         const watcher = vscode.workspace.createFileSystemWatcher("**", false, true, true);
         watcher.onDidCreate((x) => {

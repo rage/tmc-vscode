@@ -16,8 +16,8 @@ export async function validateAndFix(
     ui: UI,
     resources: Resources,
 ): Promise<Result<void, Error>> {
-    const exerciseData = storage.getExerciseData() as any[];
-    if (!is<LocalExerciseData[]>(exerciseData)) {
+    const exerciseData = storage.getExerciseData() as unknown[];
+    if (!is<LocalExerciseData[]>(exerciseData) && is<unknown[]>(exerciseData)) {
         const login = await ensureLogin(tmc, ui, resources);
         if (login.err) {
             return new Err(login.val);
@@ -26,17 +26,24 @@ export async function validateAndFix(
         const exerciseDataFixed: LocalExerciseData[] = [];
         for (const ex of exerciseData) {
             if (
-                ex.id === undefined ||
-                ex.isOpen === undefined ||
-                ex.organization === undefined ||
-                ex.course === undefined ||
-                ex.path === undefined ||
-                ex.checksum === undefined
+                !is<{
+                    isOpen: boolean;
+                    organization: string;
+                    path: string;
+                    checksum: string;
+                    course?: string;
+                    id?: number;
+                    [key: string]: unknown;
+                }>(ex) ||
+                (ex.course === undefined && ex.id === undefined)
             ) {
                 continue;
             }
 
-            const details = await getCourseDetails(tmc, ex.organization, ex.course);
+            // TypeScript can't quite determine that either ex.id or ex.course must exist
+            const details = await (ex.id !== undefined
+                ? tmc.getCourseDetails(ex.id)
+                : getCourseDetails(tmc, ex.organization, ex.course as string));
 
             if (details.err) {
                 if (details.val instanceof ApiError) {
@@ -50,11 +57,11 @@ export async function validateAndFix(
             if (exerciseDetails) {
                 exerciseDataFixed.push({
                     checksum: ex.checksum,
-                    course: ex.course,
+                    course: details.val.course.name,
                     deadline: exerciseDetails.deadline,
-                    id: ex.id,
+                    id: exerciseDetails.id,
                     isOpen: ex.isOpen,
-                    name: ex.name,
+                    name: exerciseDetails.name,
                     organization: ex.organization,
                     path: ex.path,
                 });
@@ -63,8 +70,8 @@ export async function validateAndFix(
         storage.updateExerciseData(exerciseDataFixed);
         console.log("Workspacemanager data fixed");
     }
-    const userData = storage.getUserData() as any;
-    if (!is<{ courses: LocalCourseData[] }>(userData)) {
+    const userData = storage.getUserData() as { courses: unknown[] };
+    if (!is<{ courses: LocalCourseData[] }>(userData) && is<{ courses: unknown[] }>(userData)) {
         const login = await ensureLogin(tmc, ui, resources);
         if (login.err) {
             return new Err(login.val);
@@ -74,14 +81,20 @@ export async function validateAndFix(
         if (userData.courses !== undefined) {
             for (const course of userData.courses) {
                 if (
-                    course.organization === undefined ||
-                    (course.id === undefined && course.name === undefined)
+                    !is<{
+                        organization: string;
+                        id?: number;
+                        name?: string;
+                        [key: string]: unknown;
+                    }>(course) ||
+                    (course.id === undefined && course.name == undefined)
                 ) {
-                    break;
+                    continue;
                 }
+                // See comment above
                 const courseDetails = await (course.id !== undefined
                     ? tmc.getCourseDetails(course.id)
-                    : getCourseDetails(tmc, course.organization, course.name));
+                    : getCourseDetails(tmc, course.organization, course.name as string));
                 if (courseDetails.err) {
                     if (courseDetails.val instanceof ApiError) {
                         console.log("Skipping bad userdata:", JSON.stringify(course));
@@ -129,15 +142,25 @@ async function ensureLogin(
     resources: Resources,
 ): Promise<Result<void, ConnectionError>> {
     while (!tmc.isAuthenticated()) {
-        const loginMsg: { type: "login"; username: string; password: string } = await new Promise(
-            (resolve) => {
-                const temp = new TemporaryWebview(resources, ui, "Login", (msg) => {
+        const loginMsg: {
+            type?: "login";
+            username?: string;
+            password?: string;
+        } = await new Promise((resolve) => {
+            const temp = new TemporaryWebview(
+                resources,
+                ui,
+                "Login",
+                (msg: { type?: "login"; username?: string; password?: string }) => {
                     temp.dispose();
                     resolve(msg);
-                });
-                temp.setContent("login");
-            },
-        );
+                },
+            );
+            temp.setContent("login");
+        });
+        if (!loginMsg.username || !loginMsg.password) {
+            continue;
+        }
         const authResult = await tmc.authenticate(loginMsg.username, loginMsg.password);
         if (authResult.err && authResult.val instanceof ConnectionError) {
             return new Err(authResult.val);

@@ -38,12 +38,12 @@ export default class UI {
      * @return A handler callback for the tmcView.activateEntry command
      */
     public createUiActionHandler(): (onClick: () => void) => void {
-        return (onClick: () => void) => {
+        return (onClick: () => void): void => {
             onClick();
         };
     }
 
-    public setStatusBar(text: string, timeout?: number) {
+    public setStatusBar(text: string, timeout?: number): void {
         clearTimeout(this.statusBarTimeout);
         if (timeout) {
             this.statusbar.text = `${text}`;
@@ -56,7 +56,7 @@ export default class UI {
         this.statusbar.show();
     }
 
-    public hideStatusBar() {
+    public hideStatusBar(): void {
         this.statusbar.hide();
     }
 }

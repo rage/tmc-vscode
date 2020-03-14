@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as init from "./init";
 
-import { openWorkspace, resetExercise, submitExercise, testExercise } from "./actions";
+import { resetExercise, submitExercise, testExercise } from "./actions";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
@@ -10,7 +10,7 @@ import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
 import { askForConfirmation, getCurrentExerciseId, isProductionBuild } from "./utils";
 
-export async function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const productionMode = isProductionBuild();
     console.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
 
@@ -137,4 +137,4 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 }
 
-export function deactivate() {}
+export function deactivate(): void {}

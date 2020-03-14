@@ -27,7 +27,7 @@ suite("Storage tests", () => {
      * @param hardcodedKey Hardcoded key used internally within the Storage object
      * @param checkForValue Value that was stored with updater
      */
-    function assertUpdater<T>(updater: () => void, hardcodedKey: string, checkForValue: T) {
+    function assertUpdater<T>(updater: () => void, hardcodedKey: string, checkForValue: T): void {
         mockMemento.verify(
             (x) => x.update(TypeMoq.It.isAny(), TypeMoq.It.isAny()),
             TypeMoq.Times.never(),
@@ -48,7 +48,7 @@ suite("Storage tests", () => {
      * @param getter Storage method for getting some data
      * @param hardcodedKey Hardcoded key used internally within the Storage object
      */
-    function assertGetter<T>(getter: () => T, hardcodedKey: string) {
+    function assertGetter<T>(getter: () => T, hardcodedKey: string): void {
         mockMemento.verify((x) => x.get(TypeMoq.It.isAny()), TypeMoq.Times.never());
         getter();
         mockMemento.verify((x) => x.get(TypeMoq.It.isAny()), TypeMoq.Times.once());

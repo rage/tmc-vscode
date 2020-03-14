@@ -1,9 +1,15 @@
 import * as assert from "assert";
 
 import { Visibility } from "../../ui/treeview/visibility";
+import { VisibilityGroup } from "../../ui/treeview/types";
 
 suite("Treeview Visibility tests", () => {
-    function before() {
+    function before(): {
+        visibility: Visibility;
+        g0: VisibilityGroup;
+        g1: VisibilityGroup;
+        g2: VisibilityGroup;
+    } {
         const visibility = new Visibility();
 
         const g0 = visibility.createGroup(false);

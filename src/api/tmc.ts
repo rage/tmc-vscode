@@ -1,6 +1,3 @@
-// Since properties in API use camel_case, we want some of ours to reflect them.
-/* eslint-disable @typescript-eslint/camelcase */
-
 import * as cp from "child_process";
 import * as ClientOauth2 from "client-oauth2";
 import * as del from "del";
@@ -69,6 +66,7 @@ export default class TMC {
         this.workspaceManager = exerciseManager;
         this.tmcDefaultHeaders = {
             client: "vscode_plugin",
+            // eslint-disable-next-line @typescript-eslint/camelcase
             client_version: resources.extensionVersion,
         };
     }
@@ -374,8 +372,7 @@ export default class TMC {
 
         console.log(`java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`);
         try {
-            // eslint-disable-next-line no-async-promise-executor
-            await new Promise(async (resolve, reject) => {
+            await new Promise((resolve, reject) => {
                 cp.exec(`java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`, (err) =>
                     err ? reject(err) : resolve(),
                 );
@@ -412,7 +409,7 @@ export default class TMC {
      */
     private async checkApiResponse<T, U>(
         response: Promise<Result<U, Error>>,
-        checker: (object: any) => object is T,
+        checker: (object: unknown) => object is T,
     ): Promise<Result<T, Error>> {
         const result = await response;
         if (result.ok) {
@@ -432,8 +429,8 @@ export default class TMC {
         endpoint: string,
         cache: boolean | undefined,
         method?: "get" | "post",
-        body?: any,
-        headers?: any,
+        body?: string | FormData | url.URLSearchParams,
+        headers?: { [key: string]: string },
     ): Promise<Result<TMCApiResponse, Error>> {
         method = method || "get";
         cache = cache === undefined ? method === "get" : cache;

@@ -10,7 +10,7 @@ import { getProgressBar, numbersToString } from "../utils";
 export default class TemplateEngine {
     private cssPath: string;
     private htmlPath: string;
-    private cache: Map<string, HandlebarsTemplateDelegate<any>>;
+    private cache: Map<string, HandlebarsTemplateDelegate<unknown>>;
     private cssBlob: string;
 
     constructor(resources: Resources) {
@@ -154,9 +154,13 @@ export default class TemplateEngine {
      *
      * @returns The HTML document as a string
      */
-    public async getTemplate(webview: vscode.Webview, name: string, data?: any): Promise<string> {
+    public async getTemplate(
+        webview: vscode.Webview,
+        name: string,
+        data?: { [key: string]: unknown },
+    ): Promise<string> {
         const p = path.join(this.htmlPath, `${name}.html`);
-        let template: HandlebarsTemplateDelegate<any>;
+        let template: HandlebarsTemplateDelegate<unknown>;
         const cacheResult = this.cache.get(name);
         if (cacheResult) {
             template = cacheResult;

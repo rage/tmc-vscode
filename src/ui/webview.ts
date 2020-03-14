@@ -9,7 +9,10 @@ export default class TmcWebview {
     public readonly templateEngine: TemplateEngine;
 
     private readonly extensionContext: vscode.ExtensionContext;
-    private readonly messageHandlers: Map<string, (msg: any) => void> = new Map();
+    private readonly messageHandlers: Map<
+        string,
+        (msg: { [key: string]: unknown }) => void
+    > = new Map();
 
     /**
      * NOTE: use [[getPanel]] to correctly handle disposed instances
@@ -47,7 +50,7 @@ export default class TmcWebview {
      */
     public async setContentFromTemplate(
         templateName: string,
-        data?: any,
+        data?: { [key: string]: unknown },
         forceUpdate = false,
     ): Promise<void> {
         const panel = this.getPanel();
@@ -64,7 +67,10 @@ export default class TmcWebview {
      * @param messageId The message type to handle
      * @param handler A handler function that receives the full message as a parameter
      */
-    public registerHandler(messageId: string, handler: (msg: any) => void): void {
+    public registerHandler(
+        messageId: string,
+        handler: (msg: { [key: string]: unknown }) => void,
+    ): void {
         if (this.messageHandlers.get(messageId) !== undefined) {
             return;
         }

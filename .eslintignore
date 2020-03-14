@@ -2,7 +2,3 @@
 dist
 node_modules
 out
-
-# Prettier can't parse these due to exotic div usage
-**/submission-result.html
-**/test-result.html

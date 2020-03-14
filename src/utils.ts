@@ -19,7 +19,7 @@ import { ConnectionError } from "./errors";
 export async function downloadFile(
     url: string,
     filePath: string,
-    headers?: any,
+    headers?: { [key: string]: string },
     progressCallback?: (downloadedPct: number, increment: number) => void,
 ): Promise<Result<void, Error>> {
     fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
@@ -48,12 +48,11 @@ export async function downloadFile(
     }
 
     try {
-        // eslint-disable-next-line no-async-promise-executor
-        await new Promise(async (resolve, reject) => {
-            fs.writeFile(filePath, await response.buffer(), (err) =>
-                err ? reject(err) : resolve(),
-            );
-        });
+        await new Promise((resolve, reject) =>
+            response.buffer().then((buffer) => {
+                fs.writeFile(filePath, buffer, (err) => (err ? reject(err) : resolve()));
+            }),
+        );
     } catch (error) {
         return new Err(new Error("Writing to file failed: " + error));
     }
@@ -106,7 +105,7 @@ export function isWorkspaceOpen(resources: Resources): boolean {
  * Await this to pause execution for an amount of time
  * @param millis
  */
-export function sleep(millis: number) {
+export function sleep(millis: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, millis));
 }
 
@@ -133,7 +132,7 @@ export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number
  * Creates a date object from string
  * @param deadline Deadline as string from API
  */
-export function parseDeadline(deadline: string) {
+export function parseDeadline(deadline: string): Date {
     const inMillis = Date.parse(deadline);
     const date = new Date(inMillis);
     return date;

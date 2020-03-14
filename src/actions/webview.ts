@@ -4,8 +4,6 @@
  * ---------------------------------------------------------------------------------------------------------------------
  */
 
-import * as vscode from "vscode";
-
 import { Err, Ok, Result } from "ts-results";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { parseDeadline } from "../utils";
@@ -14,15 +12,18 @@ import { ActionContext } from "./types";
 /**
  * Displays a summary page of user's courses.
  */
-export async function displayUserCourses(actionContext: ActionContext) {
+export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
     const { userData, ui } = actionContext;
-    ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
+    await ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
 }
 
 /**
  * Displays details view for a local course.
  */
-export async function displayLocalCourseDetails(courseId: number, actionContext: ActionContext) {
+export async function displayLocalCourseDetails(
+    courseId: number,
+    actionContext: ActionContext,
+): Promise<void> {
     const { ui, userData, workspaceManager } = actionContext;
     const course = userData.getCourse(courseId);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
@@ -66,7 +67,7 @@ export async function displayLocalCourseDetails(courseId: number, actionContext:
             : a.deadlineString.localeCompare(b.deadlineString),
     );
 
-    ui.webview.setContentFromTemplate(
+    await ui.webview.setContentFromTemplate(
         "course-details",
         { exerciseData: sortedExercises, course, courseId: course.id },
         true,
@@ -96,7 +97,7 @@ export async function selectCourse(
     await new Promise((resolve) => {
         const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
         temp.setTitle("Select course");
-        temp.setMessageHandler((msg: { type: string; id: number }) => {
+        temp.setMessageHandler((msg: { type?: string; id?: number }) => {
             if (msg.type === "setCourse") {
                 course = msg.id;
             } else if (msg.type === "changeOrg") {
@@ -135,7 +136,7 @@ export async function selectOrganization(
     await new Promise((resolve) => {
         const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
         temp.setTitle("Select organization");
-        temp.setMessageHandler((msg: { type: string; slug: string }) => {
+        temp.setMessageHandler((msg: { type?: string; slug?: string }) => {
             if (msg.type !== "setOrganization") {
                 return;
             }

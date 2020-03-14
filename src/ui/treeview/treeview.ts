@@ -48,7 +48,7 @@ export default class TmcMenuTree {
      * @param group Name of the group
      * @param visible Whether the group should start as active or not
      */
-    public createVisibilityGroup(visible?: boolean) {
+    public createVisibilityGroup(visible?: boolean): VisibilityGroup {
         // Use internal class
         return this.visibility.createGroup(visible ? visible : false);
     }
@@ -136,8 +136,8 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
     /**
      * @implements {vscode.TreeDataProvider<TMCAction>}
      */
-    public getParent(element: TMCAction): TMCAction {
-        return (null as unknown) as TMCAction;
+    public getParent(): TMCAction | undefined {
+        return undefined;
     }
 
     /**
@@ -183,7 +183,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
      *
      * @param id
      */
-    public getAction(id: string) {
+    public getAction(id: string): { action: TMCAction; visible: boolean } | undefined {
         return this.actions.get(id);
     }
 }

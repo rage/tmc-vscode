@@ -61,7 +61,7 @@ export type ExerciseDetails = {
     exercise_id: number;
     unlocked_at: string | null;
     deadline: string | null;
-    submissions: any[];
+    submissions: unknown;
 };
 
 export type SubmissionResponse = {
@@ -130,7 +130,7 @@ export type SubmissionResultReport = {
     exercise_name: string;
     status: "fail" | "ok" | "error";
     points: string[];
-    validations: any;
+    validations: unknown;
     valgrind: string | null;
     submission_url: string;
     solution_url: string | null;

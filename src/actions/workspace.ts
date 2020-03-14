@@ -4,7 +4,7 @@
  * ---------------------------------------------------------------------------------------------------------------------
  */
 
-import { Result } from "ts-results";
+import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 import { ActionContext } from "./types";
 
@@ -43,46 +43,42 @@ export async function downloadExercises(
         courseId,
         exercises: exerciseStatus.values(),
         failed,
-        // eslint-disable-next-line @typescript-eslint/camelcase
-        failed_pct: Math.round((100 * failed) / ids.length),
+        failedPct: Math.round((100 * failed) / ids.length),
         remaining: ids.length - successful - failed,
         successful,
-        // eslint-disable-next-line @typescript-eslint/camelcase
-        successful_pct: Math.round((100 * successful) / ids.length),
+        successfulPct: Math.round((100 * successful) / ids.length),
         total: ids.length,
     });
 
     await Promise.all(
         ids.map<Promise<Result<string, Error>>>(
             (x) =>
-                // eslint-disable-next-line no-async-promise-executor
-                new Promise(async (resolve) => {
-                    const res = await tmc.downloadExercise(x, organizationSlug);
-                    const d = exerciseStatus.get(x);
-                    if (d) {
-                        if (res.ok) {
-                            successful += 1;
-                            d.downloaded = true;
-                        } else {
-                            failed += 1;
-                            d.failed = true;
-                            d.error = res.val.message;
+                new Promise((resolve) => {
+                    tmc.downloadExercise(x, organizationSlug).then((res: Result<string, Error>) => {
+                        const d = exerciseStatus.get(x);
+                        if (d) {
+                            if (res.ok) {
+                                successful += 1;
+                                d.downloaded = true;
+                            } else {
+                                failed += 1;
+                                d.failed = true;
+                                d.error = res.val.message;
+                            }
+                            exerciseStatus.set(x, d);
+                            ui.webview.setContentFromTemplate("downloading-exercises", {
+                                courseId,
+                                exercises: exerciseStatus.values(),
+                                failed,
+                                failedPct: Math.round((100 * failed) / ids.length),
+                                remaining: ids.length - successful - failed,
+                                successful,
+                                successfulPct: Math.round((100 * successful) / ids.length),
+                                total: ids.length,
+                            });
                         }
-                        exerciseStatus.set(x, d);
-                        ui.webview.setContentFromTemplate("downloading-exercises", {
-                            courseId,
-                            exercises: exerciseStatus.values(),
-                            failed,
-                            // eslint-disable-next-line @typescript-eslint/camelcase
-                            failed_pct: Math.round((100 * failed) / ids.length),
-                            remaining: ids.length - successful - failed,
-                            successful,
-                            // eslint-disable-next-line @typescript-eslint/camelcase
-                            successful_pct: Math.round((100 * successful) / ids.length),
-                            total: ids.length,
-                        });
-                    }
-                    resolve(res);
+                        resolve(res);
+                    });
                 }),
         ),
     );
@@ -92,14 +88,17 @@ export async function downloadExercises(
  * Sends given exercise to the server and resets it to initial state.
  * @param id ID of the exercise to reset
  */
-export async function resetExercise(id: number, actionContext: ActionContext) {
+export async function resetExercise(
+    id: number,
+    actionContext: ActionContext,
+): Promise<Result<void, Error>> {
     const { ui, tmc, workspaceManager } = actionContext;
 
     const exerciseData = workspaceManager.getExerciseDataById(id);
 
     if (exerciseData.err) {
         vscode.window.showErrorMessage("The data for this exercise seems to be missing");
-        return;
+        return new Err(exerciseData.val);
     }
 
     const submitResult = await tmc.submitExercise(id);
@@ -110,7 +109,7 @@ export async function resetExercise(id: number, actionContext: ActionContext) {
             `Something went wrong while resetting exercise ${exerciseData.val.name}`,
             10000,
         );
-        return;
+        return new Err(submitResult.val);
     }
 
     vscode.window.showInformationMessage(`Resetting exercise ${exerciseData.val.name}`);
@@ -120,13 +119,14 @@ export async function resetExercise(id: number, actionContext: ActionContext) {
     workspaceManager.deleteExercise(id);
     await tmc.downloadExercise(id, slug, true);
     ui.setStatusBar(`Exercise ${exerciseData.val.name} resetted successfully`, 10000);
+    return Ok.EMPTY;
 }
 
 /**
  * Opens given exercises, showing them in TMC workspace.
  * @param ids Array of exercise IDs
  */
-export async function openExercises(ids: number[], actionContext: ActionContext) {
+export async function openExercises(ids: number[], actionContext: ActionContext): Promise<void> {
     const { workspaceManager } = actionContext;
     ids.forEach((id) => workspaceManager.openExercise(id));
 }
@@ -135,7 +135,7 @@ export async function openExercises(ids: number[], actionContext: ActionContext)
  * Closes given exercises, hiding them in TMC workspace.
  * @param ids Array of exercise IDs
  */
-export async function closeExercises(ids: number[], actionContext: ActionContext) {
+export async function closeExercises(ids: number[], actionContext: ActionContext): Promise<void> {
     const { workspaceManager } = actionContext;
     ids.forEach((id) => workspaceManager.closeExercise(id));
 }
