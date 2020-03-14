@@ -45,7 +45,7 @@ jobs:
     - name: Lint source
       run: |
         npm ci
-        npm run lint
+        npm run eslint
     - name: Run tests
       run: |
         npm test
