@@ -7,7 +7,6 @@ import UI from "./ui";
  * A class for temporary webviews
  */
 export default class TemporaryWebview {
-
     public disposed: boolean;
 
     private panel: vscode.WebviewPanel;
@@ -32,22 +31,26 @@ export default class TemporaryWebview {
      * @param data Data to be passed to the template engine
      * @param recreate Whether the view should be recreated if disposed
      */
-    public async setContent(templateName: string, data?: any) {
+    public async setContent(templateName: string, data?: any): Promise<void> {
         if (this.disposed) {
             this.panel = this.createPanel();
             this.disposed = false;
         }
         this.panel.webview.html = await this.ui.webview.templateEngine.getTemplate(
-            this.panel.webview, templateName, data);
+            this.panel.webview,
+            templateName,
+            data,
+        );
         this.panel.reveal(undefined, true);
     }
 
-    public setMessageHandler(messageHandler: any) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    public setMessageHandler(messageHandler: any): void {
         this.messageHandler = messageHandler;
         this.panel.webview.onDidReceiveMessage(messageHandler);
     }
 
-    public setTitle(title: string) {
+    public setTitle(title: string): void {
         this.title = title;
         this.panel.title = title;
     }
@@ -55,17 +58,22 @@ export default class TemporaryWebview {
     /**
      * Closes the webview
      */
-    public dispose() {
+    public dispose(): void {
         this.panel.dispose();
     }
 
-    private createPanel() {
-        const panel = vscode.window.createWebviewPanel("tmctemp", this.title, vscode.ViewColumn.Two,
-                        { enableScripts: true });
-        panel.onDidDispose(() => { this.disposed = true; });
+    private createPanel(): vscode.WebviewPanel {
+        const panel = vscode.window.createWebviewPanel(
+            "tmctemp",
+            this.title,
+            vscode.ViewColumn.Two,
+            { enableScripts: true },
+        );
+        panel.onDidDispose(() => {
+            this.disposed = true;
+        });
         panel.webview.onDidReceiveMessage(this.messageHandler);
         panel.iconPath = this.iconPath;
         return panel;
     }
-
 }

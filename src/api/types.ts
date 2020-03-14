@@ -12,8 +12,8 @@ export type Course = {
 
 export type CourseDetails = {
     course: Course & {
-        unlockables: string[],
-        exercises: Exercise[],
+        unlockables: string[];
+        exercises: Exercise[];
     };
 };
 
@@ -21,10 +21,10 @@ export type Exercise = {
     id: number;
     name: string;
     locked: boolean;
-    deadline_description: string | null;
-    deadline: string | null;
-    soft_deadline: string | null;
-    soft_deadline_description: string | null;
+    deadline_description: string | null;
+    deadline: string | null;
+    soft_deadline: string | null;
+    soft_deadline_description: string | null;
     checksum: string;
     return_url: string;
     zip_url: string;
@@ -75,51 +75,60 @@ export type SubmissionFeedbackResponse = {
     status: "ok";
 };
 
-export type TMCApiResponse = Course[] | CourseDetails | Organization[] | Organization | ExerciseDetails |
-                             SubmissionResponse | SubmissionFeedbackResponse | SubmissionStatusReport;
+export type TMCApiResponse =
+    | Course[]
+    | CourseDetails
+    | Organization[]
+    | Organization
+    | ExerciseDetails
+    | SubmissionResponse
+    | SubmissionFeedbackResponse
+    | SubmissionStatusReport;
 
-export type TmcLangsAction = {
-    action: "extract-project" | "compress-project",
-    archivePath: string,
-    exerciseFolderPath: string,
-} | {
-    action: "run-tests",
-    exerciseFolderPath: string,
-};
+export type TmcLangsAction =
+    | {
+          action: "extract-project" | "compress-project";
+          archivePath: string;
+          exerciseFolderPath: string;
+      }
+    | {
+          action: "run-tests";
+          exerciseFolderPath: string;
+      };
 
 export type TmcLangsTestResult = {
-    name: string,
-    successful: boolean,
-    message: string,
-    valgrindFailed: boolean,
-    points: string[],
-    exception: string[],
+    name: string;
+    successful: boolean;
+    message: string;
+    valgrindFailed: boolean;
+    points: string[];
+    exception: string[];
 };
 
 export type TmcLangsTestResults = {
-    status: string,
-    testResults: TmcLangsTestResult[],
+    status: string;
+    testResults: TmcLangsTestResult[];
     logs: {
-        stdout?: number[],
-        stderr?: number[],
+        stdout?: number[];
+        stderr?: number[];
     };
 };
 
-export type TmcLangsResponse = string | TmcLangsTestResults;
+export type TmcLangsResponse = string | TmcLangsTestResults;
 
 export type SubmissionProcessingReport = {
     status: "processing";
-    sandbox_status: "created" | "sending_to_sandbox" | "processing_on_sandbox";
+    sandbox_status: "created" | "sending_to_sandbox" | "processing_on_sandbox";
 };
 
 export type SubmissionResultReport = {
     api_version: number;
-    all_tests_passed: boolean | null;
+    all_tests_passed: boolean | null;
     user_id: number;
     login: string;
     course: string;
     exercise_name: string;
-    status: "fail" | "ok" | "error";
+    status: "fail" | "ok" | "error";
     points: string[];
     validations: any;
     valgrind: string | null;
@@ -129,14 +138,14 @@ export type SubmissionResultReport = {
     processing_time: number;
     reviewed: boolean;
     requests_review: boolean;
-    paste_url: string | null;
+    paste_url: string | null;
     message_for_paste: string | null;
     missing_review_points: string[];
     test_cases?: Array<{
         name: string;
         successful: boolean;
         message: string | null;
-        exception: string[] | null;
+        exception: string[] | null;
         detailed_message: string | null;
     }>;
     feedback_questions?: SubmissionFeedbackQuestion[];
@@ -159,7 +168,7 @@ export type SubmissionFeedback = {
     status: SubmissionFeedbackAnswer[];
 };
 
-export type SubmissionStatusReport = SubmissionProcessingReport | SubmissionResultReport;
+export type SubmissionStatusReport = SubmissionProcessingReport | SubmissionResultReport;
 
 export type LocalExerciseData = {
     id: number;

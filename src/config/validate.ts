@@ -10,17 +10,29 @@ import UI from "../ui/ui";
 import Resources from "./resources";
 import { LocalCourseData } from "./userdata";
 
-export async function validateAndFix(storage: Storage, tmc: TMC, ui: UI, resources: Resources)
-: Promise<Result<void, Error>> {
+export async function validateAndFix(
+    storage: Storage,
+    tmc: TMC,
+    ui: UI,
+    resources: Resources,
+): Promise<Result<void, Error>> {
     const exerciseData = storage.getExerciseData() as any[];
     if (!is<LocalExerciseData[]>(exerciseData)) {
         const login = await ensureLogin(tmc, ui, resources);
-        if (login.err) { return new Err(login.val); }
+        if (login.err) {
+            return new Err(login.val);
+        }
         console.log("Fixing workspacemanager data");
         const exerciseDataFixed: LocalExerciseData[] = [];
         for (const ex of exerciseData) {
-            if (ex.id === undefined || ex.isOpen === undefined || ex.organization === undefined ||
-                ex.course === undefined || ex.path === undefined || ex.checksum === undefined) {
+            if (
+                ex.id === undefined ||
+                ex.isOpen === undefined ||
+                ex.organization === undefined ||
+                ex.course === undefined ||
+                ex.path === undefined ||
+                ex.checksum === undefined
+            ) {
                 continue;
             }
 
@@ -36,8 +48,16 @@ export async function validateAndFix(storage: Storage, tmc: TMC, ui: UI, resourc
             }
             const exerciseDetails = details.val.course.exercises.find((x) => x.id === ex.id);
             if (exerciseDetails) {
-                exerciseDataFixed.push({ checksum: ex.checksum, course: ex.course, deadline: exerciseDetails.deadline,
-                    id: ex.id, isOpen: ex.isOpen, name: ex.name, organization: ex.organization, path: ex.path });
+                exerciseDataFixed.push({
+                    checksum: ex.checksum,
+                    course: ex.course,
+                    deadline: exerciseDetails.deadline,
+                    id: ex.id,
+                    isOpen: ex.isOpen,
+                    name: ex.name,
+                    organization: ex.organization,
+                    path: ex.path,
+                });
             }
         }
         storage.updateExerciseData(exerciseDataFixed);
@@ -46,12 +66,17 @@ export async function validateAndFix(storage: Storage, tmc: TMC, ui: UI, resourc
     const userData = storage.getUserData() as any;
     if (!is<{ courses: LocalCourseData[] }>(userData)) {
         const login = await ensureLogin(tmc, ui, resources);
-        if (login.err) { return new Err(login.val); }
+        if (login.err) {
+            return new Err(login.val);
+        }
         console.log("Fixing userdata");
         const userDataFixed: { courses: LocalCourseData[] } = { courses: [] };
         if (userData.courses !== undefined) {
             for (const course of userData.courses) {
-                if (course.organization === undefined || (course.id === undefined && course.name === undefined)) {
+                if (
+                    course.organization === undefined ||
+                    (course.id === undefined && course.name === undefined)
+                ) {
                     break;
                 }
                 const courseDetails = await (course.id !== undefined
@@ -68,7 +93,9 @@ export async function validateAndFix(storage: Storage, tmc: TMC, ui: UI, resourc
                 userDataFixed.courses.push({
                     description: courseData.description,
                     exercises: courseData.exercises.map((x) => ({ id: x.id, passed: x.completed })),
-                    id: courseData.id, name: courseData.name, organization: course.organization,
+                    id: courseData.id,
+                    name: courseData.name,
+                    organization: course.organization,
                 });
             }
         }
@@ -79,7 +106,11 @@ export async function validateAndFix(storage: Storage, tmc: TMC, ui: UI, resourc
     return Ok.EMPTY;
 }
 
-async function getCourseDetails(tmc: TMC, organization: string, course: string): Promise<Result<CourseDetails, Error>> {
+async function getCourseDetails(
+    tmc: TMC,
+    organization: string,
+    course: string,
+): Promise<Result<CourseDetails, Error>> {
     const coursesResult = await tmc.getCourses(organization);
     if (coursesResult.err) {
         return new Err(coursesResult.val);
@@ -92,15 +123,21 @@ async function getCourseDetails(tmc: TMC, organization: string, course: string):
     return tmc.getCourseDetails(courseId);
 }
 
-async function ensureLogin(tmc: TMC, ui: UI, resources: Resources): Promise<Result<void, ConnectionError>> {
+async function ensureLogin(
+    tmc: TMC,
+    ui: UI,
+    resources: Resources,
+): Promise<Result<void, ConnectionError>> {
     while (!tmc.isAuthenticated()) {
-        const loginMsg: { type: "login", username: string, password: string } = await new Promise((resolve) => {
-            const temp = new TemporaryWebview(resources, ui, "Login", (msg) => {
-                temp.dispose();
-                resolve(msg);
-            });
-            temp.setContent("login");
-        });
+        const loginMsg: { type: "login"; username: string; password: string } = await new Promise(
+            (resolve) => {
+                const temp = new TemporaryWebview(resources, ui, "Login", (msg) => {
+                    temp.dispose();
+                    resolve(msg);
+                });
+                temp.setContent("login");
+            },
+        );
         const authResult = await tmc.authenticate(loginMsg.username, loginMsg.password);
         if (authResult.err && authResult.val instanceof ConnectionError) {
             return new Err(authResult.val);

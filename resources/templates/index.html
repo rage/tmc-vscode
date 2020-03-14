@@ -1,52 +1,66 @@
 <html>
+    <head>
+        <style>
+            {{{cssBlob}}}
+        </style>
+    </head>
 
-<head>
-    <style>{{{cssBlob}}}</style>
-</head>
+    <body>
+        <div class="container container-fluid">
+            <h1>My courses</h1>
 
-<body>
-    <div class="container container-fluid">
-        <h1>My courses</h1>
-        
-        {{#if courses}}
-        <div>
-            <input type="button" onclick="addCourse()" class="btn-primary mb-4 mt-2" value="Add new course" />
-        </div>
-        {{#each courses}}
-        <div class="row org-row border-dark">
-            <div class="col-md" onclick="fetchCourseDetails({{this.id}})">
-                <button type="button" class="close"  onclick="removeCourse(event, {{this.id}})" aria-label="Remove course">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-                <h3>{{this.name}} <small class="text-muted">{{this.organization}}</small></h3>
-                <p>{{this.description}}</p>
+            {{#if courses}}
+            <div>
+                <input
+                    type="button"
+                    onclick="addCourse()"
+                    class="btn-primary mb-4 mt-2"
+                    value="Add new course"
+                />
             </div>
+            {{#each courses}}
+            <div class="row org-row border-dark">
+                <div class="col-md" onclick="fetchCourseDetails({{this.id}})">
+                    <button
+                        type="button"
+                        class="close"
+                        onclick="removeCourse(event, {{this.id}})"
+                        aria-label="Remove course"
+                    >
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                    <h3>{{this.name}} <small class="text-muted">{{this.organization}}</small></h3>
+                    <p>{{this.description}}</p>
+                </div>
+            </div>
+            {{/each}} {{else}}
+            <div>
+                <h4>No courses selected</h4>
+                <input
+                    type="button"
+                    onclick="addCourse()"
+                    class="btn-primary"
+                    value="Add new course"
+                />
+            </div>
+            {{/if}}
         </div>
-        {{/each}}
-        {{else}}
-        <div>
-            <h4>No courses selected</h4>
-            <input type="button" onclick="addCourse()" class="btn-primary" value="Add new course" />    
-        </div>
-        {{/if}}
-    </div>
 
-    <script>
-        const vscode = acquireVsCodeApi();
+        <script>
+            const vscode = acquireVsCodeApi();
 
-        function addCourse() {
-            vscode.postMessage({ type: "addCourse" });
-        }
+            function addCourse() {
+                vscode.postMessage({ type: "addCourse" });
+            }
 
-        function removeCourse(event, id) {
-            event.stopPropagation(); // Don't send onclick event upwards
-            vscode.postMessage({ type: "removeCourse", id });
-        }
+            function removeCourse(event, id) {
+                event.stopPropagation(); // Don't send onclick event upwards
+                vscode.postMessage({ type: "removeCourse", id });
+            }
 
-        function fetchCourseDetails(id) {
-            vscode.postMessage({ type: "courseDetails", id: id });
-        }
-    </script>
-</body>
-
+            function fetchCourseDetails(id) {
+                vscode.postMessage({ type: "courseDetails", id: id });
+            }
+        </script>
+    </body>
 </html>

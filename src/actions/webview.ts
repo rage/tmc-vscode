@@ -27,15 +27,30 @@ export async function displayLocalCourseDetails(courseId: number, actionContext:
     const course = userData.getCourse(courseId);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
 
-    const exerciseData = new Map<number, {
-        id: number, name: string, isOpen: boolean,
-        passed: boolean, deadlineString: string,
-    }>();
+    const exerciseData = new Map<
+        number,
+        {
+            id: number;
+            name: string;
+            isOpen: boolean;
+            passed: boolean;
+            deadlineString: string;
+        }
+    >();
 
-    workspaceExercises?.forEach((x) => exerciseData.set(x.id, {
-        deadlineString: x.deadline ? parseDeadline(x.deadline).toString().split("(", 1)[0] : "-",
-        id: x.id, isOpen: x.isOpen, name: x.name, passed: false,
-    }));
+    workspaceExercises?.forEach((x) =>
+        exerciseData.set(x.id, {
+            deadlineString: x.deadline
+                ? parseDeadline(x.deadline)
+                      .toString()
+                      .split("(", 1)[0]
+                : "-",
+            id: x.id,
+            isOpen: x.isOpen,
+            name: x.name,
+            passed: false,
+        }),
+    );
 
     course.exercises.forEach((x) => {
         const data = exerciseData.get(x.id);
@@ -45,20 +60,27 @@ export async function displayLocalCourseDetails(courseId: number, actionContext:
         }
     });
 
-    const sortedExercises = Array.from(exerciseData.values()).sort((a, b) => (a.deadlineString === b.deadlineString)
-        ? a.name.localeCompare(b.name)
-        : a.deadlineString.localeCompare(b.deadlineString),
+    const sortedExercises = Array.from(exerciseData.values()).sort((a, b) =>
+        a.deadlineString === b.deadlineString
+            ? a.name.localeCompare(b.name)
+            : a.deadlineString.localeCompare(b.deadlineString),
     );
 
-    ui.webview
-        .setContentFromTemplate("course-details", { exerciseData: sortedExercises, course, courseId: course.id }, true);
+    ui.webview.setContentFromTemplate(
+        "course-details",
+        { exerciseData: sortedExercises, course, courseId: course.id },
+        true,
+    );
 }
 
 /**
  * Lets the user select a course
  */
-export async function selectCourse(orgSlug: string, actionContext: ActionContext, webview?: TemporaryWebview)
-: Promise<Result<{ changeOrg: boolean, course?: number }, Error>> {
+export async function selectCourse(
+    orgSlug: string,
+    actionContext: ActionContext,
+    webview?: TemporaryWebview,
+): Promise<Result<{ changeOrg: boolean; course?: number }, Error>> {
     const { tmc, resources, ui } = actionContext;
     const result = await tmc.getCourses(orgSlug);
 
@@ -72,9 +94,9 @@ export async function selectCourse(orgSlug: string, actionContext: ActionContext
     let course: number | undefined;
 
     await new Promise((resolve) => {
-        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => { });
+        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
         temp.setTitle("Select course");
-        temp.setMessageHandler((msg: { type: string, id: number }) => {
+        temp.setMessageHandler((msg: { type: string; id: number }) => {
             if (msg.type === "setCourse") {
                 course = msg.id;
             } else if (msg.type === "changeOrg") {
@@ -95,8 +117,10 @@ export async function selectCourse(orgSlug: string, actionContext: ActionContext
 /**
  * Lets the user select an organization
  */
-export async function selectOrganization(actionContext: ActionContext, webview?: TemporaryWebview)
-: Promise<Result<string, Error>> {
+export async function selectOrganization(
+    actionContext: ActionContext,
+    webview?: TemporaryWebview,
+): Promise<Result<string, Error>> {
     const { tmc, resources, ui } = actionContext;
 
     const result = await tmc.getOrganizations();
@@ -109,9 +133,9 @@ export async function selectOrganization(actionContext: ActionContext, webview?:
     let slug: string | undefined;
 
     await new Promise((resolve) => {
-        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => { });
+        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
         temp.setTitle("Select organization");
-        temp.setMessageHandler((msg: { type: string, slug: string }) => {
+        temp.setMessageHandler((msg: { type: string; slug: string }) => {
             if (msg.type !== "setOrganization") {
                 return;
             }
@@ -132,11 +156,12 @@ export async function selectOrganization(actionContext: ActionContext, webview?:
 /**
  * Creates a new temporary webview where user can select an organization and a course.
  */
-export async function selectOrganizationAndCourse(actionContext: ActionContext)
-: Promise<Result<{ organization: string, course: number }, Error>> {
+export async function selectOrganizationAndCourse(
+    actionContext: ActionContext,
+): Promise<Result<{ organization: string; course: number }, Error>> {
     const { resources, ui } = actionContext;
 
-    const tempView = new TemporaryWebview(resources, ui, "", () => { });
+    const tempView = new TemporaryWebview(resources, ui, "", () => {});
 
     let organizationSlug: string | undefined;
     let courseID: number | undefined;
@@ -166,28 +191,41 @@ export async function selectOrganizationAndCourse(actionContext: ActionContext)
 /**
  * Displays the course exercise list view
  */
-export async function displayCourseDownloads(courseId: number, actionContext: ActionContext)
-    : Promise<Result<void, Error>> {
+export async function displayCourseDownloads(
+    courseId: number,
+    actionContext: ActionContext,
+): Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
     const result = await tmc.getCourseDetails(courseId);
     if (result.err) {
         return new Err(new Error("Course details not found"));
     }
     const details = result.val.course;
-    userData.updateCompletedExercises(courseId, details.exercises.filter((x) => x.completed).map((x) => x.id));
+    userData.updateCompletedExercises(
+        courseId,
+        details.exercises.filter((x) => x.completed).map((x) => x.id),
+    );
 
-    const organizationSlug = userData.getCourses().find((course) => course.id === courseId)?.organization;
+    const organizationSlug = userData.getCourses().find((course) => course.id === courseId)
+        ?.organization;
     if (!organizationSlug) {
         return new Err(new Error("Course data not found"));
     }
-    const exerciseDetails = details.exercises.map((x) =>
-        ({ exercise: x, downloaded: workspaceManager.getExerciseDataById(x.id).ok }));
+    const exerciseDetails = details.exercises.map((x) => ({
+        exercise: x,
+        downloaded: workspaceManager.getExerciseDataById(x.id).ok,
+    }));
     const sortedExercises = exerciseDetails.sort((x, y) => {
-        return (x.downloaded === y.downloaded) ? 0 : x.downloaded ? 1 : -1;
+        return x.downloaded === y.downloaded ? 0 : x.downloaded ? 1 : -1;
     });
     const workspaceEmpty = workspaceManager.getExercisesByCourseName(details.name).length === 0;
     const data = {
-        courseId, courseName: result.val.course.name, details, organizationSlug, sortedExercises, workspaceEmpty,
+        courseId,
+        courseName: result.val.course.name,
+        details,
+        organizationSlug,
+        sortedExercises,
+        workspaceEmpty,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
     return Ok.EMPTY;

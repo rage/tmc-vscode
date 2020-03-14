@@ -6,7 +6,6 @@ import TemplateEngine from "./templateEngine";
  * A class for managing the Webview component of the plugin UI, to be used through the UI class
  */
 export default class TmcWebview {
-
     public readonly templateEngine: TemplateEngine;
 
     private readonly extensionContext: vscode.ExtensionContext;
@@ -35,7 +34,7 @@ export default class TmcWebview {
      *
      * @param html A string containing a full HTML document
      */
-    public setContent(html: string) {
+    public setContent(html: string): void {
         const panel = this.getPanel();
         panel.webview.html = html;
         panel.reveal();
@@ -46,10 +45,16 @@ export default class TmcWebview {
      * @param templateName A string containing the name of one of the templates
      * @param data Any data to be passed to the template
      */
-    public async setContentFromTemplate(templateName: string, data?: any, forceUpdate: boolean = false) {
+    public async setContentFromTemplate(
+        templateName: string,
+        data?: any,
+        forceUpdate = false,
+    ): Promise<void> {
         const panel = this.getPanel();
         const html = await this.templateEngine.getTemplate(panel.webview, templateName, data);
-        if (forceUpdate) { panel.webview.html = html + " "; }
+        if (forceUpdate) {
+            panel.webview.html = html + " ";
+        }
         panel.webview.html = html;
         panel.reveal();
     }
@@ -59,7 +64,7 @@ export default class TmcWebview {
      * @param messageId The message type to handle
      * @param handler A handler function that receives the full message as a parameter
      */
-    public registerHandler(messageId: string, handler: (msg: any) => void) {
+    public registerHandler(messageId: string, handler: (msg: any) => void): void {
         if (this.messageHandlers.get(messageId) !== undefined) {
             return;
         }
@@ -69,7 +74,7 @@ export default class TmcWebview {
     /**
      * Closes the Webview.
      */
-    public dispose() {
+    public dispose(): void {
         this.panel?.dispose();
     }
 
@@ -79,19 +84,31 @@ export default class TmcWebview {
      */
     private getPanel(): vscode.WebviewPanel {
         if (this.panel === undefined) {
-            this.panel = vscode.window.createWebviewPanel("tmcmenu", "TestMyCode", vscode.ViewColumn.One,
-                { enableScripts: true });
-            this.panel.onDidDispose(() => { this.panel = undefined; },
-                this, this.extensionContext.subscriptions);
-            this.panel.webview.onDidReceiveMessage((msg: { type: string, [x: string]: string }) => {
-                const handler = this.messageHandlers.get(msg.type);
-                if (handler) {
-                    handler(msg);
-                } else {
-                    console.error("Unhandled message type: " + msg.type);
-                }
-            },
-                this, this.extensionContext.subscriptions);
+            this.panel = vscode.window.createWebviewPanel(
+                "tmcmenu",
+                "TestMyCode",
+                vscode.ViewColumn.One,
+                { enableScripts: true },
+            );
+            this.panel.onDidDispose(
+                () => {
+                    this.panel = undefined;
+                },
+                this,
+                this.extensionContext.subscriptions,
+            );
+            this.panel.webview.onDidReceiveMessage(
+                (msg: { type: string; [x: string]: string }) => {
+                    const handler = this.messageHandlers.get(msg.type);
+                    if (handler) {
+                        handler(msg);
+                    } else {
+                        console.error("Unhandled message type: " + msg.type);
+                    }
+                },
+                this,
+                this.extensionContext.subscriptions,
+            );
             this.panel.iconPath = vscode.Uri.file(`${this.resources.mediaFolder}/TMC.svg`);
         }
         return this.panel;

@@ -40,10 +40,12 @@ export async function activate(context: vscode.ExtensionContext) {
     }
     */
 
-    const tmcTemp = new TMC(undefined as unknown as WorkspaceManager, storage, resources);
+    const tmcTemp = new TMC((undefined as unknown) as WorkspaceManager, storage, resources);
     const validationResult = await validateAndFix(storage, tmcTemp, ui, resources);
     if (validationResult.err) {
-        vscode.window.showErrorMessage("Data reconstruction failed: " + validationResult.val.message);
+        vscode.window.showErrorMessage(
+            "Data reconstruction failed: " + validationResult.val.message,
+        );
         return;
     }
 
@@ -62,16 +64,22 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand("uploadArchive", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
-            exerciseId ? submitExercise(exerciseId, actionContext)
-                : vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
+            exerciseId
+                ? submitExercise(exerciseId, actionContext)
+                : vscode.window.showErrorMessage(
+                      "Currently open editor is not part of a TMC exercise",
+                  );
         }),
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand("runTests", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
-            exerciseId ? testExercise(exerciseId, actionContext)
-                : vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
+            exerciseId
+                ? testExercise(exerciseId, actionContext)
+                : vscode.window.showErrorMessage(
+                      "Currently open editor is not part of a TMC exercise",
+                  );
         }),
     );
 
@@ -79,7 +87,9 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand("resetExercise", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
             if (!exerciseId) {
-                vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
+                vscode.window.showErrorMessage(
+                    "Currently open editor is not part of a TMC exercise",
+                );
                 return;
             }
             const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
@@ -88,9 +98,13 @@ export async function activate(context: vscode.ExtensionContext) {
                 return;
             }
 
-            await askForConfirmation(`Are you sure you want to reset exercise ${exerciseData.val.name}?`)
+            (await askForConfirmation(
+                `Are you sure you want to reset exercise ${exerciseData.val.name}?`,
+            ))
                 ? resetExercise(exerciseId, actionContext)
-                : vscode.window.showInformationMessage(`Reset canceled for exercise ${exerciseData.val.name}.`);
+                : vscode.window.showInformationMessage(
+                      `Reset canceled for exercise ${exerciseData.val.name}.`,
+                  );
         }),
     );
 
@@ -98,7 +112,9 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand("closeExercise", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
             if (!exerciseId) {
-                vscode.window.showErrorMessage("Currently open editor is not part of a TMC exercise");
+                vscode.window.showErrorMessage(
+                    "Currently open editor is not part of a TMC exercise",
+                );
                 return;
             }
             const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
@@ -110,11 +126,15 @@ export async function activate(context: vscode.ExtensionContext) {
                 workspaceManager.closeExercise(exerciseId);
                 return;
             }
-            await askForConfirmation(`Are you sure you want to close uncompleted exercise ${exerciseData.val.name}?`)
+            (await askForConfirmation(
+                `Are you sure you want to close uncompleted exercise ${exerciseData.val.name}?`,
+            ))
                 ? workspaceManager.closeExercise(exerciseId)
-                : vscode.window.showInformationMessage(`Close canceled for exercise ${exerciseData.val.name}.`);
+                : vscode.window.showInformationMessage(
+                      `Close canceled for exercise ${exerciseData.val.name}.`,
+                  );
         }),
     );
 }
 
-export function deactivate() { }
+export function deactivate() {}

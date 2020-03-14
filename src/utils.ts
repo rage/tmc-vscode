@@ -16,10 +16,12 @@ import { ConnectionError } from "./errors";
  * @param filePath Absolute path to the desired output file
  * @param headers Request headers if any
  */
-export async function downloadFile(url: string, filePath: string, headers?: any,
-                                   progressCallback?: (downloadedPct: number, increment: number) => void,
-    ): Promise<Result<void, Error>> {
-
+export async function downloadFile(
+    url: string,
+    filePath: string,
+    headers?: any,
+    progressCallback?: (downloadedPct: number, increment: number) => void,
+): Promise<Result<void, Error>> {
     fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
 
     let response: fetch.Response;
@@ -31,7 +33,10 @@ export async function downloadFile(url: string, filePath: string, headers?: any,
             const size = parseInt(sizeString, 10);
             response.body.on("data", (chunk: Buffer) => {
                 downloaded += chunk.length;
-                progressCallback(Math.round((downloaded / size * 100)), 100 * chunk.length / size);
+                progressCallback(
+                    Math.round((downloaded / size) * 100),
+                    (100 * chunk.length) / size,
+                );
             });
         }
     } catch (error) {
@@ -43,8 +48,11 @@ export async function downloadFile(url: string, filePath: string, headers?: any,
     }
 
     try {
+        // eslint-disable-next-line no-async-promise-executor
         await new Promise(async (resolve, reject) => {
-            fs.writeFile(filePath, await response.buffer(), (err) => err ? reject(err) : resolve());
+            fs.writeFile(filePath, await response.buffer(), (err) =>
+                err ? reject(err) : resolve(),
+            );
         });
     } catch (error) {
         return new Err(new Error("Writing to file failed: " + error));
@@ -58,10 +66,12 @@ export async function downloadFile(url: string, filePath: string, headers?: any,
  */
 export async function isJavaPresent(): Promise<boolean> {
     let result = false;
-    await new Promise((resolve) => cp.exec("java -version", (error) => {
-        result = (error === null);
-        resolve();
-    }));
+    await new Promise((resolve) =>
+        cp.exec("java -version", (error) => {
+            result = error === null;
+            resolve();
+        }),
+    );
 
     return result;
 }
@@ -75,7 +85,7 @@ export function isProductionBuild(): boolean {
     // For configuration, see tsconfig.json used by webpack.dev.json
     // and tsconfig.production.json used by webpack.prod.json
     type TestType = {
-        strict: boolean,
+        strict: boolean;
     };
 
     const testObject = {
@@ -104,14 +114,14 @@ export function sleep(millis: number) {
  * Convert Chars to a string
  * @param array Char numbers array
  */
-export function numbersToString(array: number[]) {
+export function numbersToString(array: number[]): string {
     return String.fromCharCode(...array);
 }
 
 /**
  * Get the Exercise ID for the currently open text editor
  */
-export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number | undefined {
+export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number | undefined {
     const editorPath = vscode.window.activeTextEditor?.document.fileName;
     if (!editorPath) {
         return undefined;
@@ -139,8 +149,7 @@ export function getProgressBar(percentDone: number): string {
     </div>`;
 }
 
-export async function askForConfirmation(prompt: string,
-): Promise<boolean> {
+export async function askForConfirmation(prompt: string): Promise<boolean> {
     const options: vscode.InputBoxOptions = {
         placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
         prompt,

@@ -17,13 +17,14 @@ export default class TemplateEngine {
         this.cssPath = resources.cssFolder;
         this.htmlPath = resources.htmlFolder;
         this.cache = new Map();
-        this.cssBlob = fs.readFileSync(path.join(this.cssPath, "bootstrap.min.css"), "utf8") +
-                       fs.readFileSync(path.join(this.cssPath, "style.css"), "utf8");
+        this.cssBlob =
+            fs.readFileSync(path.join(this.cssPath, "bootstrap.min.css"), "utf8") +
+            fs.readFileSync(path.join(this.cssPath, "style.css"), "utf8");
         /**
          * Logo path for organizations
          */
         handlebars.registerHelper("resolve_logo_path", (logoPath: string) => {
-            return (!logoPath.endsWith("missing.png"))
+            return !logoPath.endsWith("missing.png")
                 ? `https://tmc.mooc.fi${logoPath}`
                 : "https://tmc.mooc.fi/logos/small_logo/missing.png";
         });
@@ -31,8 +32,9 @@ export default class TemplateEngine {
         /**
          * Checks the locally runned test status.
          */
-        handlebars.registerHelper("check_test_status",
-            (status: string, logs: { stdout: number[], stderr: number[] }) => {
+        handlebars.registerHelper(
+            "check_test_status",
+            (status: string, logs: { stdout: number[]; stderr: number[] }) => {
                 if (status === "PASSED") {
                     return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
                 } else if (status === "TESTS_FAILED") {
@@ -42,7 +44,8 @@ export default class TemplateEngine {
                 } else {
                     return "<h1>Something went seriously wrong while running the tests</h1>";
                 }
-            });
+            },
+        );
 
         /**
          * Submission result show correct heading or compilation error
@@ -51,7 +54,7 @@ export default class TemplateEngine {
             if (results.status === "ok" && results.all_tests_passed) {
                 return "<h1 class='passed-header'>All tests passed on the server</h1><input type='button' class='btn-primary' value='View model solution' onclick='viewModelSolution()' />";
             } else if (results.status === "fail") {
-                return `<h1>Some tests failed on the server</h1>`;
+                return "<h1>Some tests failed on the server</h1>";
             } else if (results.status === "error") {
                 return `<h1>Server returned following error:
                         <pre style="font-size: 14px">${results.error}</pre>`;
@@ -69,7 +72,7 @@ export default class TemplateEngine {
                     passedAmount = passedAmount + 1;
                 }
             }
-            passedAmount = Math.round((passedAmount / length * 100));
+            passedAmount = Math.round((passedAmount / length) * 100);
             const notPassed = 100 - passedAmount;
             return `<div class="progress" style="width: 100%">
                         <div class="progress-bar bg-success" role="progressbar" style="width: ${passedAmount}%" aria-valuenow="${passedAmount}" aria-valuemin="0" aria-valuemax="100">
@@ -102,23 +105,35 @@ export default class TemplateEngine {
                         <div>&#10004; Submission in queue for processing.</div>
                         <div>Testing submission.</div>`;
             } else {
-                return  `${getProgressBar(percentDone)}
+                return `${getProgressBar(percentDone)}
                         <div>Submission sent to server.</div>`;
             }
         });
 
-        handlebars.registerHelper("feedback_question",
-            (question: { id: number, kind: string, lower?: number,
-                         upper?: number, question: string }) => {
+        handlebars.registerHelper(
+            "feedback_question",
+            (question: {
+                id: number;
+                kind: string;
+                lower?: number;
+                upper?: number;
+                question: string;
+            }) => {
                 if (question.kind === "text") {
                     return `<div class="col-md-10">
                                 <textarea data-questionID="${question.id}" rows="6" cols="40" class="feedback-textarea"></textarea>
                             </div>`;
-                } else if (question.kind === "intrange" &&
-                           question.lower !== undefined && question.upper !== undefined) {
+                } else if (
+                    question.kind === "intrange" &&
+                    question.lower !== undefined &&
+                    question.upper !== undefined
+                ) {
                     return `<div class="col-md-10">
-                            <input data-questionID="${question.id}" type="range" class="custom-range" min="${question.lower - 1}"
-                                max="${question.upper}" step="1" value="${question.lower - 1}" oninput='showValue(this, "text-id-${question.id}")' />
+                            <input data-questionID="${
+                                question.id
+                            }" type="range" class="custom-range" min="${question.lower - 1}"
+                                max="${question.upper}" step="1" value="${question.lower -
+                        1}" oninput='showValue(this, "text-id-${question.id}")' />
                             </div>
                             <div class="col-md-2">
                                 <span class="font-weight-bold" id="text-id-${question.id}">-</span>
@@ -126,7 +141,8 @@ export default class TemplateEngine {
                 } else {
                     return "";
                 }
-            });
+            },
+        );
     }
 
     /**
@@ -139,7 +155,6 @@ export default class TemplateEngine {
      * @returns The HTML document as a string
      */
     public async getTemplate(webview: vscode.Webview, name: string, data?: any): Promise<string> {
-
         const p = path.join(this.htmlPath, `${name}.html`);
         let template: HandlebarsTemplateDelegate<any>;
         const cacheResult = this.cache.get(name);
@@ -155,5 +170,4 @@ export default class TemplateEngine {
 
         return template(data);
     }
-
 }

@@ -12,7 +12,12 @@ import { ActionContext } from "./types";
  * Downloads given exercises and opens them in TMC workspace.
  */
 export async function downloadExercises(
-    actionContext: ActionContext, ids: number[], organizationSlug: string, courseName: string, courseId: number) {
+    actionContext: ActionContext,
+    ids: number[],
+    organizationSlug: string,
+    courseName: string,
+    courseId: number,
+): Promise<void> {
     const { tmc, ui } = actionContext;
 
     const courseDetails = await tmc.getCourseDetails(courseId);
@@ -22,42 +27,65 @@ export async function downloadExercises(
         return;
     }
 
-    const exerciseStatus = new Map<number, { name: string, downloaded: boolean, failed: boolean, error: string }>(
-        courseDetails.val.course.exercises.filter((x) => ids.includes(x.id)).map(
-            (x) => [x.id, { name: x.name, downloaded: false, failed: false, error: "" }]),
+    const exerciseStatus = new Map<
+        number,
+        { name: string; downloaded: boolean; failed: boolean; error: string }
+    >(
+        courseDetails.val.course.exercises
+            .filter((x) => ids.includes(x.id))
+            .map((x) => [x.id, { name: x.name, downloaded: false, failed: false, error: "" }]),
     );
 
     let successful = 0;
     let failed = 0;
 
     ui.webview.setContentFromTemplate("downloading-exercises", {
-        courseId, exercises: exerciseStatus.values(), failed, failed_pct: Math.round(100 * failed / ids.length),
+        courseId,
+        exercises: exerciseStatus.values(),
+        failed,
+        // eslint-disable-next-line @typescript-eslint/camelcase
+        failed_pct: Math.round((100 * failed) / ids.length),
         remaining: ids.length - successful - failed,
-        successful, successful_pct: Math.round(100 * successful / ids.length), total: ids.length,
+        successful,
+        // eslint-disable-next-line @typescript-eslint/camelcase
+        successful_pct: Math.round((100 * successful) / ids.length),
+        total: ids.length,
     });
 
-    await Promise.all(ids.map<Promise<Result<string, Error>>>(
-        (x) => new Promise(async (resolve) => {
-            const res = await tmc.downloadExercise(x, organizationSlug);
-            const d = exerciseStatus.get(x);
-            if (d) {
-                if (res.ok) {
-                    successful += 1;
-                    d.downloaded = true;
-                } else {
-                    failed += 1;
-                    d.failed = true;
-                    d.error = res.val.message;
-                }
-                exerciseStatus.set(x, d);
-                ui.webview.setContentFromTemplate("downloading-exercises", {
-                    courseId, exercises: exerciseStatus.values(), failed,
-                    failed_pct: Math.round(100 * failed / ids.length), remaining: ids.length - successful - failed,
-                    successful, successful_pct: Math.round(100 * successful / ids.length), total: ids.length,
-                });
-            }
-            resolve(res);
-        })));
+    await Promise.all(
+        ids.map<Promise<Result<string, Error>>>(
+            (x) =>
+                // eslint-disable-next-line no-async-promise-executor
+                new Promise(async (resolve) => {
+                    const res = await tmc.downloadExercise(x, organizationSlug);
+                    const d = exerciseStatus.get(x);
+                    if (d) {
+                        if (res.ok) {
+                            successful += 1;
+                            d.downloaded = true;
+                        } else {
+                            failed += 1;
+                            d.failed = true;
+                            d.error = res.val.message;
+                        }
+                        exerciseStatus.set(x, d);
+                        ui.webview.setContentFromTemplate("downloading-exercises", {
+                            courseId,
+                            exercises: exerciseStatus.values(),
+                            failed,
+                            // eslint-disable-next-line @typescript-eslint/camelcase
+                            failed_pct: Math.round((100 * failed) / ids.length),
+                            remaining: ids.length - successful - failed,
+                            successful,
+                            // eslint-disable-next-line @typescript-eslint/camelcase
+                            successful_pct: Math.round((100 * successful) / ids.length),
+                            total: ids.length,
+                        });
+                    }
+                    resolve(res);
+                }),
+        ),
+    );
 }
 
 /**
@@ -78,7 +106,10 @@ export async function resetExercise(id: number, actionContext: ActionContext) {
     if (submitResult.err) {
         vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
        ${submitResult.val.name} - ${submitResult.val.message}`);
-        ui.setStatusBar(`Something went wrong while resetting exercise ${exerciseData.val.name}`, 10000);
+        ui.setStatusBar(
+            `Something went wrong while resetting exercise ${exerciseData.val.name}`,
+            10000,
+        );
         return;
     }
 

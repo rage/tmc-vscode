@@ -7,14 +7,14 @@ export class Visibility {
     private idsByGroup = new Map<string, string[]>();
     private groupsById = new Map<string, string[]>();
     private enabledSet = new Set<string>();
-    private nextId: number = 0;
+    private nextId = 0;
 
     public createGroup(visible: boolean) {
         const groupId = "_" + this.nextId++;
         this.idsByGroup.set(groupId, []);
         this.idsByGroup.set(this.negate(groupId), []);
         this.enabledSet.add(visible ? groupId : this.negate(groupId));
-        return {_id: groupId, not: {_id: this.negate(groupId)}};
+        return { _id: groupId, not: { _id: this.negate(groupId) } };
     }
 
     /**
@@ -53,7 +53,10 @@ export class Visibility {
                 group.push(id);
             }
         });
-        this.groupsById.set(id, groups.map((x) => x._id));
+        this.groupsById.set(
+            id,
+            groups.map((x) => x._id),
+        );
     }
 
     /**
@@ -61,7 +64,9 @@ export class Visibility {
      * @param group Name of the group, can be negated
      * @returns List of ids and states for modified action visibilities
      */
-    public setGroupVisible(group: VisibilityGroup | VisibilityGroupNegated): Array<[string, boolean]> {
+    public setGroupVisible(
+        group: VisibilityGroup | VisibilityGroupNegated,
+    ): Array<[string, boolean]> {
         const groupId = group._id;
         if (this.enabledSet.has(groupId)) {
             return [];
@@ -74,7 +79,9 @@ export class Visibility {
         }
 
         const ids = idsEnabled.concat(idsDisabled);
-        const currentVisibility = new Map<string, boolean>(ids.map((id) => [id, this.getVisible(id)]));
+        const currentVisibility = new Map<string, boolean>(
+            ids.map((id) => [id, this.getVisible(id)]),
+        );
 
         this.enabledSet.add(groupId);
         this.enabledSet.delete(this.negate(groupId));

@@ -8,7 +8,6 @@ import { LocalCourseData } from "./userdata";
  * Interface class for accessing stored TMC configuration and data.
  */
 export default class Storage {
-
     private context: vscode.ExtensionContext;
 
     /**
@@ -29,9 +28,8 @@ export default class Storage {
 
     public getExerciseData(): LocalExerciseData[] | undefined {
         return this.context.globalState.get("exerciseData");
-
     }
-    public getUserData(): {courses: LocalCourseData[]} | undefined {
+    public getUserData(): { courses: LocalCourseData[] } | undefined {
         return this.context.globalState.get("userData");
     }
 
@@ -39,7 +37,7 @@ export default class Storage {
      * Updates the given authentication token in storage.
      * @param authenticationToken authentication token to update
      */
-    public updateAuthenticationToken(authenticationToken: oauth2.Data | undefined) {
+    public updateAuthenticationToken(authenticationToken: oauth2.Data | undefined) {
         this.context.globalState.update("token", authenticationToken);
     }
 
@@ -47,7 +45,7 @@ export default class Storage {
         this.context.globalState.update("exerciseData", exerciseData);
     }
 
-    public updateUserData(userData: {courses: LocalCourseData[]}) {
+    public updateUserData(userData: { courses: LocalCourseData[] }) {
         this.context.globalState.update("userData", userData);
     }
 }

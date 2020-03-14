@@ -168,7 +168,7 @@
 	"lint-staged": {
 		"*.{js,ts}": [
 			"prettier --write",
-			"eslint --cache --fix --max-warnings 3"
+			"eslint --cache --fix --max-warnings 60"
 		]
 	}
 }

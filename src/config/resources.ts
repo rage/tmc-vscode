@@ -1,4 +1,3 @@
-
 export default class Resources {
     public readonly cssFolder: string;
     public readonly htmlFolder: string;
@@ -11,9 +10,18 @@ export default class Resources {
     public readonly mediaFolder: string;
     public readonly extensionVersion: string;
 
-    constructor(cssFolder: string, extensionVersion: string, htmlFolder: string, tmcDataFolder: string,
-                tmcLangsPath: string, tmcWorkspaceFolder: string, tmcWorkspaceFilePath: string,
-                tmcExercisesFolderPath: string, tmcClosedExercisesFolderPath: string, mediaFolder: string) {
+    constructor(
+        cssFolder: string,
+        extensionVersion: string,
+        htmlFolder: string,
+        tmcDataFolder: string,
+        tmcLangsPath: string,
+        tmcWorkspaceFolder: string,
+        tmcWorkspaceFilePath: string,
+        tmcExercisesFolderPath: string,
+        tmcClosedExercisesFolderPath: string,
+        mediaFolder: string,
+    ) {
         this.cssFolder = cssFolder;
         this.extensionVersion = extensionVersion;
         this.htmlFolder = htmlFolder;
@@ -25,5 +33,4 @@ export default class Resources {
         this.tmcClosedExercisesFolderPath = tmcClosedExercisesFolderPath;
         this.mediaFolder = mediaFolder;
     }
-
 }

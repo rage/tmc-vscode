@@ -20,7 +20,10 @@ import { Err, Ok, Result } from "ts-results";
  * Authenticates and logs the user in if credentials are correct.
  */
 export async function login(
-    actionContext: ActionContext, username: string, password: string, visibilityGroups: VisibilityGroups,
+    actionContext: ActionContext,
+    username: string,
+    password: string,
+    visibilityGroups: VisibilityGroups,
 ): Promise<Result<void, Error>> {
     const { tmc, ui } = actionContext;
 
@@ -40,7 +43,10 @@ export async function login(
 /**
  * Logs the user out, updating UI state
  */
-export async function logout(visibility: VisibilityGroups, actionContext: ActionContext) {
+export async function logout(
+    visibility: VisibilityGroups,
+    actionContext: ActionContext,
+): Promise<void> {
     if (await askForConfirmation("Are you sure you want to log out?")) {
         const { tmc, ui } = actionContext;
         tmc.deauthenticate();
@@ -53,23 +59,24 @@ export async function logout(visibility: VisibilityGroups, actionContext: Action
 /**
  * Tests an exercise while keeping the user informed
  */
-export async function testExercise(id: number, actions: ActionContext) {
+export async function testExercise(id: number, actions: ActionContext): Promise<void> {
     const { ui, resources, tmc, workspaceManager } = actions;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
-        vscode.window.showErrorMessage(`Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`);
+        vscode.window.showErrorMessage(
+            `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`,
+        );
         return;
     }
     const exerciseName = exerciseDetails.val.name;
-    const temp = new TemporaryWebview(resources, ui,
-        "TMC Test Results", async (msg) => {
-            if (msg.setToBackground) {
-                temp.dispose();
-            }
-            if (msg.submit) {
-                submitExercise(msg.exerciseId, actions, temp);
-            }
-        });
+    const temp = new TemporaryWebview(resources, ui, "TMC Test Results", async (msg) => {
+        if (msg.setToBackground) {
+            temp.dispose();
+        }
+        if (msg.submit) {
+            submitExercise(msg.exerciseId, actions, temp);
+        }
+    });
     temp.setContent("running-tests", { exerciseName });
     ui.setStatusBar(`Running tests for ${exerciseName}`);
     const testResult = await tmc.runTests(id);
@@ -89,7 +96,11 @@ export async function testExercise(id: number, actions: ActionContext) {
  * Submits an exercise while keeping the user informed
  * @param tempView Existing TemporaryWebview to use if any
  */
-export async function submitExercise(id: number, actionContext: ActionContext, tempView?: TemporaryWebview) {
+export async function submitExercise(
+    id: number,
+    actionContext: ActionContext,
+    tempView?: TemporaryWebview,
+): Promise<void> {
     const { userData, ui, resources, tmc, workspaceManager } = actionContext;
     const submitResult = await tmc.submitExercise(id);
 
@@ -99,11 +110,12 @@ export async function submitExercise(id: number, actionContext: ActionContext, t
         return;
     }
 
-    const messageHandler = async (msg: any) => {
+    const messageHandler = async (msg: any): Promise<void> => {
         if (msg.feedback && msg.feedback.status.length > 0) {
             await tmc.submitSubmissionFeedback(msg.url, msg.feedback);
         } else if (msg.runInBackground) {
             ui.setStatusBar("Waiting for results from server.");
+            // eslint-disable-next-line @typescript-eslint/no-use-before-define
             temp.dispose();
         } else if (msg.showInBrowser) {
             vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
@@ -118,37 +130,54 @@ export async function submitExercise(id: number, actionContext: ActionContext, t
     }
 
     const temp =
-        tempView !== undefined ?
-            tempView :
-            new TemporaryWebview(resources, ui, "TMC Server Submission", messageHandler);
+        tempView !== undefined
+            ? tempView
+            : new TemporaryWebview(resources, ui, "TMC Server Submission", messageHandler);
 
     let timeWaited = 0;
     let getStatus = true;
     while (getStatus) {
         const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
         if (statusResult.err) {
-            vscode.window.showErrorMessage(`Failed getting submission status: ${statusResult.val.name} - ${statusResult.val.message}`);
+            vscode.window.showErrorMessage(
+                `Failed getting submission status: ${statusResult.val.name} - ${statusResult.val.message}`,
+            );
             break;
         }
         const statusData = statusResult.val;
         if (statusResult.val.status !== "processing") {
             ui.setStatusBar("Tests finished, see result", 5000);
-            const feedbackQuestions:
-                Array<{ id: number, kind: string, lower?: number, upper?: number, question: string }> = [];
+            const feedbackQuestions: Array<{
+                id: number;
+                kind: string;
+                lower?: number;
+                upper?: number;
+                question: string;
+            }> = [];
             if (statusData.status === "ok" && statusData.all_tests_passed) {
                 userData.setPassed(
-                    userData.getCourseByName(workspaceManager.getExerciseDataById(id).unwrap().course).id
-                    , id);
+                    userData.getCourseByName(
+                        workspaceManager.getExerciseDataById(id).unwrap().course,
+                    ).id,
+                    id,
+                );
                 if (statusData.feedback_questions) {
                     statusData.feedback_questions.forEach((x) => {
                         const kindRangeMatch = x.kind.match("intrange\\[(-?[0-9]+)..(-?[0-9]+)\\]");
                         if (kindRangeMatch && kindRangeMatch[0] === x.kind) {
                             feedbackQuestions.push({
-                                id: x.id, kind: "intrange", lower: parseInt(kindRangeMatch[1], 10),
-                                question: x.question, upper: parseInt(kindRangeMatch[2], 10),
+                                id: x.id,
+                                kind: "intrange",
+                                lower: parseInt(kindRangeMatch[1], 10),
+                                question: x.question,
+                                upper: parseInt(kindRangeMatch[2], 10),
                             });
                         } else if (x.kind === "text") {
-                            feedbackQuestions.push({ id: x.id, kind: "text", question: x.question });
+                            feedbackQuestions.push({
+                                id: x.id,
+                                kind: "text",
+                                question: x.question,
+                            });
                         } else {
                             console.log("Unexpected feedback question type:", x.kind);
                         }
@@ -165,13 +194,17 @@ export async function submitExercise(id: number, actionContext: ActionContext, t
         timeWaited = timeWaited + 2500;
 
         if (timeWaited === 120000) {
-            vscode.window.showInformationMessage(`This seems to be taking a long time — consider continuing to the next exercise while this is running. \
+            vscode.window
+                .showInformationMessage(
+                    `This seems to be taking a long time — consider continuing to the next exercise while this is running. \
                 Your submission will still be graded. Check the results later at ${submitResult.val.show_submission_url}`,
-                ...["Open URL and move on...", "No, I'll wait"])
+                    ...["Open URL and move on...", "No, I'll wait"],
+                )
                 .then((selection) => {
                     if (selection === "Open URL and move on...") {
                         vscode.env.openExternal(
-                            vscode.Uri.parse(submitResult.val.show_submission_url));
+                            vscode.Uri.parse(submitResult.val.show_submission_url),
+                        );
                         getStatus = false;
                         temp.dispose();
                     }
@@ -183,7 +216,7 @@ export async function submitExercise(id: number, actionContext: ActionContext, t
 /**
  * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
  */
-export async function openWorkspace(actionContext: ActionContext) {
+export async function openWorkspace(actionContext: ActionContext): Promise<void> {
     const { resources } = actionContext;
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
     const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
@@ -191,12 +224,21 @@ export async function openWorkspace(actionContext: ActionContext) {
     if (!isWorkspaceOpen(resources)) {
         console.log("Current workspace:", currentWorkspaceFile);
         console.log("TMC workspace:", tmcWorkspaceFile);
-        if (!currentWorkspaceFile || await askForConfirmation("Do you want to open TMC workspace and close the current one?")) {
+        if (
+            !currentWorkspaceFile ||
+            (await askForConfirmation(
+                "Do you want to open TMC workspace and close the current one?",
+            ))
+        ) {
             vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
             // Restarts VSCode
         } else {
             const choice = "Close current and open TMC Workspace";
-            await vscode.window.showErrorMessage("Please close your current workspace before using TestMyCode.", choice)
+            await vscode.window
+                .showErrorMessage(
+                    "Please close your current workspace before using TestMyCode.",
+                    choice,
+                )
                 .then((selection) => {
                     if (selection === choice) {
                         vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
@@ -245,7 +287,10 @@ export async function addNewCourse(actionContext: ActionContext) {
  */
 export async function removeCourse(id: number, actionContext: ActionContext) {
     const course = actionContext.userData.getCourse(id);
-    await closeExercises(course.exercises.map((e) => e.id), actionContext);
+    await closeExercises(
+        course.exercises.map((e) => e.id),
+        actionContext,
+    );
     actionContext.userData.deleteCourse(id);
     vscode.window.showInformationMessage(`${course.name} was removed from courses.`);
 }
