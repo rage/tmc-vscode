@@ -141,6 +141,13 @@ export function parseDate(dateAsString: string): Date {
 }
 
 /**
+ * Returns a trimmed string presentation of a date.
+ */
+export function dateToString(date: Date): string {
+    return date.toString().split("(", 1)[0];
+}
+
+/**
  * Return bootstrap striped, animated progress bar div as string
  * @param percentDone How much done of the progress
  */

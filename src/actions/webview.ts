@@ -6,21 +6,56 @@
 
 import { Err, Ok, Result } from "ts-results";
 import TemporaryWebview from "../ui/temporaryWebview";
-import { parseDate } from "../utils";
+import { dateToString, parseDate } from "../utils";
 import { ActionContext } from "./types";
 
 /**
  * Displays a summary page of user's courses.
  */
 export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
-    const { userData, ui } = actionContext;
-    let courses = userData.getCourses();
-    courses = courses.map((course) => {
+    const { userData, tmc, ui } = actionContext;
+    const now = new Date();
+    const nextFutureDeadline = (nextDeadline: Date | null, next: Date | null): Date | null => {
+        if (!next) {
+            return nextDeadline;
+        }
+        if (!nextDeadline) {
+            return next;
+        }
+        return now < next && next < nextDeadline ? next : nextDeadline;
+    };
+
+    const courses = userData.getCourses().map((course) => {
         const passedLength = course.exercises.filter((e) => e.passed === true);
-        const completed = Math.floor((passedLength.length / course.exercises.length) * 100);
-        return { ...course, completedPrc: completed };
+        const completedPrc = Math.floor((passedLength.length / course.exercises.length) * 100);
+        return { ...course, completedPrc };
     });
+
+    // Display the page immediatedly before fetching any data from API.
     await ui.webview.setContentFromTemplate("index", { courses });
+
+    const apiCourses = await Promise.all(
+        courses.map(async (course) => {
+            const exercises = await Promise.all(
+                course.exercises.map(async (exercise) => {
+                    const result = await tmc.getExerciseDetails(exercise.id);
+                    const deadline =
+                        result.ok && result.val.deadline ? parseDate(result.val.deadline) : null;
+                    return { ...exercise, deadline };
+                }),
+            );
+            const nextDeadlineObject = exercises
+                .map((exercise) => exercise.deadline)
+                .reduce(nextFutureDeadline, null);
+            const nextDeadline = nextDeadlineObject
+                ? dateToString(nextDeadlineObject)
+                : "Unavailable";
+
+            return { ...course, exercises, nextDeadline };
+        }),
+    );
+
+    await ui.webview.setContentFromTemplate("index", { courses: apiCourses });
 }
 
 /**
@@ -47,11 +82,7 @@ export async function displayLocalCourseDetails(
 
     workspaceExercises?.forEach((x) =>
         exerciseData.set(x.id, {
-            deadlineString: x.deadline
-                ? parseDate(x.deadline)
-                      .toString()
-                      .split("(", 1)[0]
-                : "-",
+            deadlineString: x.deadline ? dateToString(parseDate(x.deadline)) : "-",
             id: x.id,
             isOpen: x.isOpen,
             name: x.name,
