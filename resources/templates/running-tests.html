@@ -37,7 +37,7 @@
             const vscode = acquireVsCodeApi();
 
             function runInBackground() {
-                vscode.postMessage({ setToBackground: true });
+                vscode.postMessage({ type: "setToBackground" });
             }
         </script>
     </body>

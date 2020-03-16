@@ -6,7 +6,7 @@
 
 import { Err, Ok, Result } from "ts-results";
 import TemporaryWebview from "../ui/temporaryWebview";
-import { parseDeadline } from "../utils";
+import { parseDate } from "../utils";
 import { ActionContext } from "./types";
 
 /**
@@ -42,7 +42,7 @@ export async function displayLocalCourseDetails(
     workspaceExercises?.forEach((x) =>
         exerciseData.set(x.id, {
             deadlineString: x.deadline
-                ? parseDeadline(x.deadline)
+                ? parseDate(x.deadline)
                       .toString()
                       .split("(", 1)[0]
                 : "-",

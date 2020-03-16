@@ -50,7 +50,7 @@
             const exerciseId = {{id}};
 
             function submitToServer() {
-                vscode.postMessage({ submit: true, exerciseId: exerciseId });
+                vscode.postMessage({ type: 'submitToServer', data: { exerciseId: exerciseId } });
             }
         </script>
     </body>

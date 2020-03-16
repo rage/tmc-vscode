@@ -6,11 +6,11 @@
 
 import * as vscode from "vscode";
 
-import { LocalCourseData } from "../config/userdata";
+import { LocalCourseData } from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
-import { askForConfirmation, isWorkspaceOpen, sleep } from "../utils";
-import { ActionContext } from "./types";
+import { askForConfirmation, isWorkspaceOpen, parseFeedbackQuestion, sleep } from "../utils";
+import { ActionContext, FeedbackQuestion } from "./types";
 import { selectOrganizationAndCourse } from "./webview";
 import { closeExercises } from "./workspace";
 
@@ -63,6 +63,7 @@ export async function logout(
 export async function testExercise(id: number, actions: ActionContext): Promise<void> {
     const { ui, resources, tmc, workspaceManager } = actions;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
+
     if (exerciseDetails.err) {
         vscode.window.showErrorMessage(
             `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`,
@@ -70,19 +71,20 @@ export async function testExercise(id: number, actions: ActionContext): Promise<
         return;
     }
     const exerciseName = exerciseDetails.val.name;
+
     const temp = new TemporaryWebview(
         resources,
         ui,
         "TMC Test Results",
-        async (msg: { setToBackground?: boolean; submit?: boolean; exerciseId?: number }) => {
-            if (msg.setToBackground) {
+        async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
+            if (msg.type == "setToBackground") {
                 temp.dispose();
-            }
-            if (msg.submit && msg.exerciseId) {
-                submitExercise(msg.exerciseId, actions, temp);
+            } else if (msg.type == "submitToServer" && msg.data) {
+                submitExercise(msg.data.exerciseId as number, actions, temp);
             }
         },
     );
+
     temp.setContent("running-tests", { exerciseName });
     ui.setStatusBar(`Running tests for ${exerciseName}`);
     const testResult = await tmc.runTests(id);
@@ -119,29 +121,19 @@ export async function submitExercise(
     const temp = tempView || new TemporaryWebview(resources, ui, "", () => {});
 
     temp.setMessageHandler(
-        async (msg: {
-            runInBackground?: boolean;
-            showInBrowser?: boolean;
-            showSolutionInBrowser?: boolean;
-            solutionUrl?: string;
-            submissionFeedback?: boolean;
-            url?: string;
-            feedback?: SubmissionFeedback;
-        }): Promise<void> => {
-            if (
-                msg.submissionFeedback &&
-                msg.feedback &&
-                msg.url &&
-                msg.feedback.status.length > 0
-            ) {
-                await tmc.submitSubmissionFeedback(msg.url, msg.feedback);
-            } else if (msg.runInBackground) {
+        async (msg: { data?: { [key: string]: unknown }; type?: string }): Promise<void> => {
+            if (msg.type == "feedback" && msg.data) {
+                await tmc.submitSubmissionFeedback(
+                    msg.data.url as string,
+                    msg.data.feedback as SubmissionFeedback,
+                );
+            } else if (msg.type == "setToBackgroundInSubmission") {
                 ui.setStatusBar("Waiting for results from server.");
                 temp.dispose();
-            } else if (msg.showInBrowser) {
+            } else if (msg.type == "showInBrowser") {
                 vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
-            } else if (msg.showSolutionInBrowser && msg.solutionUrl) {
-                vscode.env.openExternal(vscode.Uri.parse(msg.solutionUrl));
+            } else if (msg.type == "showSolutionInBrowser" && msg.data) {
+                vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
             }
         },
     );
@@ -160,13 +152,7 @@ export async function submitExercise(
         const statusData = statusResult.val;
         if (statusResult.val.status !== "processing") {
             ui.setStatusBar("Tests finished, see result", 5000);
-            const feedbackQuestions: Array<{
-                id: number;
-                kind: string;
-                lower?: number;
-                upper?: number;
-                question: string;
-            }> = [];
+            let feedbackQuestions: FeedbackQuestion[] = [];
             if (statusData.status === "ok" && statusData.all_tests_passed) {
                 userData.setPassed(
                     userData.getCourseByName(
@@ -175,34 +161,17 @@ export async function submitExercise(
                     id,
                 );
                 if (statusData.feedback_questions) {
-                    statusData.feedback_questions.forEach((x) => {
-                        const kindRangeMatch = x.kind.match("intrange\\[(-?[0-9]+)..(-?[0-9]+)\\]");
-                        if (kindRangeMatch && kindRangeMatch[0] === x.kind) {
-                            feedbackQuestions.push({
-                                id: x.id,
-                                kind: "intrange",
-                                lower: parseInt(kindRangeMatch[1], 10),
-                                question: x.question,
-                                upper: parseInt(kindRangeMatch[2], 10),
-                            });
-                        } else if (x.kind === "text") {
-                            feedbackQuestions.push({
-                                id: x.id,
-                                kind: "text",
-                                question: x.question,
-                            });
-                        } else {
-                            console.log("Unexpected feedback question type:", x.kind);
-                        }
-                    });
+                    feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
                 }
             }
             temp.setContent("submission-result", { statusData, feedbackQuestions });
             break;
         }
+
         if (!temp.disposed) {
             temp.setContent("submission-status", statusData);
         }
+
         await sleep(2500);
         timeWaited = timeWaited + 2500;
 

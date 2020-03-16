@@ -1,5 +1,6 @@
 import Storage from "./storage";
 import { Err, Ok, Result } from "ts-results";
+import { LocalCourseData } from "./types";
 
 export class UserData {
     private courses: Map<number, LocalCourseData>;
@@ -95,14 +96,3 @@ export class UserData {
         return this.storage.updateUserData({ courses: Array.from(this.courses.values()) });
     }
 }
-
-export type LocalCourseData = {
-    id: number;
-    name: string;
-    description: string;
-    organization: string;
-    exercises: Array<{
-        id: number;
-        passed: boolean;
-    }>;
-};

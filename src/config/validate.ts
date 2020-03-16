@@ -3,12 +3,12 @@ import Storage from "./storage";
 
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
-import { CourseDetails, LocalExerciseData } from "../api/types";
+import { CourseDetails } from "../api/types";
 import { ApiError, ConnectionError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
 import Resources from "./resources";
-import { LocalCourseData } from "./userdata";
+import { LocalCourseData, LocalExerciseData } from "./types";
 
 export async function validateAndFix(
     storage: Storage,

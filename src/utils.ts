@@ -9,6 +9,8 @@ import { is } from "typescript-is";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import { ConnectionError } from "./errors";
+import { SubmissionFeedbackQuestion } from "./api/types";
+import { FeedbackQuestion } from "./actions/types";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
@@ -132,8 +134,8 @@ export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number
  * Creates a date object from string
  * @param deadline Deadline as string from API
  */
-export function parseDeadline(deadline: string): Date {
-    const inMillis = Date.parse(deadline);
+export function parseDate(dateAsString: string): Date {
+    const inMillis = Date.parse(dateAsString);
     const date = new Date(inMillis);
     return date;
 }
@@ -155,4 +157,29 @@ export async function askForConfirmation(prompt: string): Promise<boolean> {
     };
     const success = (await vscode.window.showInputBox(options))?.toLowerCase() === "yes";
     return success;
+}
+
+export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): FeedbackQuestion[] {
+    const feedbackQuestions: FeedbackQuestion[] = [];
+    questions.forEach((x) => {
+        const kindRangeMatch = x.kind.match("intrange\\[(-?[0-9]+)..(-?[0-9]+)\\]");
+        if (kindRangeMatch && kindRangeMatch[0] === x.kind) {
+            feedbackQuestions.push({
+                id: x.id,
+                kind: "intrange",
+                lower: parseInt(kindRangeMatch[1], 10),
+                question: x.question,
+                upper: parseInt(kindRangeMatch[2], 10),
+            });
+        } else if (x.kind === "text") {
+            feedbackQuestions.push({
+                id: x.id,
+                kind: "text",
+                question: x.question,
+            });
+        } else {
+            console.log("Unexpected feedback question type:", x.kind);
+        }
+    });
+    return feedbackQuestions;
 }

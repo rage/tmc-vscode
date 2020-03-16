@@ -111,7 +111,10 @@
             } else {
                 feedbackNotification.innerText = "No feedback given.";
             }
-            vscode.postMessage({ feedback: { status: feedback }, url: feedback_url });
+            vscode.postMessage({
+                type: "feedback",
+                data: { feedback: { status: feedback }, url: feedback_url },
+            });
         }
 
         function showValue(slider, id) {
@@ -120,7 +123,10 @@
         }
 
         function viewModelSolution() {
-            vscode.postMessage({ showSolutionInBrowser: true, solutionUrl: solution_url });
+            vscode.postMessage({
+                type: "showSolutionInBrowser",
+                data: { solutionUrl: solution_url },
+            });
         }
     </script>
 </html>

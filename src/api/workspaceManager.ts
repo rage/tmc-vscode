@@ -7,7 +7,8 @@ import { Err, Ok, Result } from "ts-results";
 
 import Resources from "../config/resources";
 import Storage from "../config/storage";
-import { ExerciseDetails, LocalExerciseData } from "./types";
+import { ExerciseDetails } from "./types";
+import { LocalExerciseData } from "../config/types";
 
 /**
  * Class for managing, opening and closing of exercises on disk.

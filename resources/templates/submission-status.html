@@ -37,10 +37,10 @@
             const vscode = acquireVsCodeApi();
 
             function runInBackground() {
-                vscode.postMessage({ runInBackground: true });
+                vscode.postMessage({ type: "setToBackgroundInSubmission" });
             }
             function showInBrowser() {
-                vscode.postMessage({ showInBrowser: true });
+                vscode.postMessage({ type: "showInBrowser" });
             }
         </script>
     </body>

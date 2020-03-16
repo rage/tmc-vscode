@@ -1,8 +1,6 @@
 import * as oauth2 from "client-oauth2";
 import * as vscode from "vscode";
-import { LocalExerciseData } from "../api/types";
-
-import { LocalCourseData } from "./userdata";
+import { LocalCourseData, LocalExerciseData } from "./types";
 
 /**
  * Interface class for accessing stored TMC configuration and data.

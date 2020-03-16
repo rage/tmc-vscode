@@ -169,14 +169,3 @@ export type SubmissionFeedback = {
 };
 
 export type SubmissionStatusReport = SubmissionProcessingReport | SubmissionResultReport;
-
-export type LocalExerciseData = {
-    id: number;
-    name: string;
-    course: string;
-    organization: string;
-    path: string;
-    checksum: string;
-    isOpen: boolean;
-    deadline: string | null;
-};

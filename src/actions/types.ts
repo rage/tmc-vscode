@@ -11,3 +11,11 @@ export type ActionContext = {
     workspaceManager: WorkspaceManager;
     userData: UserData;
 };
+
+export type FeedbackQuestion = {
+    id: number;
+    kind: string;
+    lower?: number;
+    upper?: number;
+    question: string;
+};
