@@ -6,7 +6,7 @@
 
 import { Err, Ok, Result } from "ts-results";
 import TemporaryWebview from "../ui/temporaryWebview";
-import { dateToString, parseDate } from "../utils";
+import { dateToString, findNextDateAfter, parseDate } from "../utils";
 import { ActionContext } from "./types";
 
 /**
@@ -14,16 +14,6 @@ import { ActionContext } from "./types";
  */
 export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
     const { userData, tmc, ui } = actionContext;
-    const now = new Date();
-    const nextFutureDeadline = (nextDeadline: Date | null, next: Date | null): Date | null => {
-        if (!next) {
-            return nextDeadline;
-        }
-        if (!nextDeadline) {
-            return next;
-        }
-        return now < next && next < nextDeadline ? next : nextDeadline;
-    };
 
     const courses = userData.getCourses().map((course) => {
         const passedLength = course.exercises.filter((e) => e.passed === true);
@@ -32,7 +22,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
     });
 
     // Display the page immediatedly before fetching any data from API.
-    await ui.webview.setContentFromTemplate("index", { courses });
+    await ui.webview.setContentFromTemplate("index", { courses, disableActions: true });
 
     const apiCourses = await Promise.all(
         courses.map(async (course) => {
@@ -44,9 +34,13 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
                     return { ...exercise, deadline };
                 }),
             );
-            const nextDeadlineObject = exercises
-                .map((exercise) => exercise.deadline)
-                .reduce(nextFutureDeadline, null);
+
+            const nextDeadlineObject = findNextDateAfter(
+                new Date(),
+                exercises
+                    .filter((exercise) => !exercise.passed)
+                    .map((exercise) => exercise.deadline),
+            );
             const nextDeadline = nextDeadlineObject
                 ? dateToString(nextDeadlineObject)
                 : "Unavailable";

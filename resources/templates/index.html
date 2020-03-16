@@ -31,7 +31,16 @@
                     </button>
                     <h3>{{this.name}} <small class="text-muted">{{this.organization}}</small></h3>
                     <p>{{this.description}}</p>
-                    <p>Next deadline: {{this.nextDeadline}}</p>
+
+                    <p>
+                        Next deadline: {{#if this.nextDeadline}} {{this.nextDeadline}} {{else}}
+                        <span
+                            class="spinner-border spinner-border-sm"
+                            role="status"
+                            aria-hidden="true"
+                        ></span>
+                        {{/if}}
+                    </p>
                     <div>
                         Course progress:
                         <div class="progress">
@@ -63,6 +72,12 @@
         </div>
 
         <script>
+            {{#if disableActions}}
+            const disableActions = true;
+            {{else}}
+            const disableActions = false;
+            {{/if}}
+
             const vscode = acquireVsCodeApi();
 
             function addCourse() {
@@ -71,11 +86,11 @@
 
             function removeCourse(event, id) {
                 event.stopPropagation(); // Don't send onclick event upwards
-                vscode.postMessage({ type: "removeCourse", id });
+                disableActions || vscode.postMessage({ type: "removeCourse", id });
             }
 
             function fetchCourseDetails(id) {
-                vscode.postMessage({ type: "courseDetails", id: id });
+                disableActions || vscode.postMessage({ type: "courseDetails", id: id });
             }
         </script>
     </body>
