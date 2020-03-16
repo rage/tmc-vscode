@@ -11,7 +11,7 @@ import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
 import { askForConfirmation, isWorkspaceOpen, parseFeedbackQuestion, sleep } from "../utils";
 import { ActionContext, FeedbackQuestion } from "./types";
-import { selectOrganizationAndCourse } from "./webview";
+import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import { closeExercises } from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
@@ -256,9 +256,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         organization: orgAndCourse.val.organization,
     };
     userData.addCourse(localData);
-    await actionContext.ui.webview.setContentFromTemplate("index", {
-        courses: userData.getCourses(),
-    });
+    await displayUserCourses(actionContext);
     return Ok.EMPTY;
 }
 

@@ -31,6 +31,22 @@
                     </button>
                     <h3>{{this.name}} <small class="text-muted">{{this.organization}}</small></h3>
                     <p>{{this.description}}</p>
+                    <p>Next deadline: {{this.nextDeadline}}</p>
+                    <div>
+                        Course progress:
+                        <div class="progress">
+                            <div
+                                class="progress-bar bg-success"
+                                role="progressbar"
+                                style="width: {{this.completedPrc}}%"
+                                aria-valuenow="{{this.completedPrc}}"
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                            >
+                                {{this.completedPrc}} %
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             {{/each}} {{else}}

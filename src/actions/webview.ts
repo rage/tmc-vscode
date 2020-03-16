@@ -14,7 +14,13 @@ import { ActionContext } from "./types";
  */
 export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
     const { userData, ui } = actionContext;
-    await ui.webview.setContentFromTemplate("index", { courses: userData.getCourses() });
+    let courses = userData.getCourses();
+    courses = courses.map((course) => {
+        const passedLength = course.exercises.filter((e) => e.passed === true);
+        const completed = Math.floor((passedLength.length / course.exercises.length) * 100);
+        return { ...course, completedPrc: completed };
+    });
+    await ui.webview.setContentFromTemplate("index", { courses });
 }
 
 /**
