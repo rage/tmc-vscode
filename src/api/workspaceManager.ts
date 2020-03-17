@@ -53,7 +53,12 @@ export default class WorkspaceManager {
         exerciseDetails: ExerciseDetails,
     ): Result<string, Error> {
         if (this.idToData.has(exerciseDetails.exercise_id)) {
-            return new Err(new Error("Exercise already downloaded."));
+            const data = this.idToData.get(exerciseDetails.exercise_id);
+            if (data?.status !== ExerciseStatus.MISSING) {
+                return new Err(new Error("Exercise already downloaded"));
+            }
+            this.deleteExercise(exerciseDetails.exercise_id);
+            this.removeFromWatcherTree(data);
         }
         const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
         const exercisePath = path.join(
@@ -151,9 +156,7 @@ export default class WorkspaceManager {
         const data = this.idToData.get(id);
         if (data && data.status === ExerciseStatus.CLOSED) {
             if (!fs.existsSync(this.getClosedPath(id))) {
-                data.status = ExerciseStatus.MISSING;
-                this.idToData.set(id, data);
-                this.updatePersistentData();
+                this.setMissing(id);
                 return new Err(new Error("Exercise data missing"));
             }
             fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
@@ -181,9 +184,7 @@ export default class WorkspaceManager {
         const data = this.idToData.get(id);
         if (data && data.status === ExerciseStatus.OPEN) {
             if (!fs.existsSync(data.path)) {
-                data.status = ExerciseStatus.MISSING;
-                this.idToData.set(id, data);
-                this.updatePersistentData();
+                this.setMissing(id);
                 return new Err(new Error("Exercise data missing"));
             }
             del.sync(this.getClosedPath(id), { force: true });
@@ -364,21 +365,79 @@ export default class WorkspaceManager {
         });
     }
 
+    private setMissing(id: number): void {
+        const data = this.idToData.get(id);
+        if (data) {
+            data.status = ExerciseStatus.MISSING;
+            this.idToData.set(id, data);
+            this.updatePersistentData();
+            this.removeFromWatcherTree(data);
+        }
+    }
+
     /**
-     * Concept: mark exercise status as missing if deleted by user or other actor
-     * Requires exercise status rework (isOpen -> status)
+     * Marks exercise data as missing if deleted, missing exercises are treated the same
+     * as closed exercises by the watcher
      */
     private watcherDeleteAction(targetPath: string): void {
         const rootFilePath = path.join(this.resources.tmcExercisesFolderPath, ".tmc-root");
 
         if (path.relative(rootFilePath, targetPath) === "") {
             fs.writeFileSync(targetPath, "Dummy data", { encoding: "utf-8" });
+            return;
         }
-        // Otherwise check if target path corresponds to an *open* exercise, mark as missing if so
+
+        const relation = path
+            .relative(this.resources.tmcExercisesFolderPath, targetPath)
+            .toString()
+            .split(path.sep, 3);
+
+        if (relation[0] === "..") {
+            return;
+        }
+        if (relation.length == 1 && this.watcherTree.has(relation[0])) {
+            for (const [id, data] of this.idToData.entries()) {
+                if (data.organization === relation[0] && data.status === ExerciseStatus.OPEN) {
+                    this.setMissing(id);
+                }
+            }
+            return;
+        }
+        if (relation.length == 2 && this.watcherTree.get(relation[0])?.has(relation[1])) {
+            for (const [id, data] of this.idToData.entries()) {
+                if (
+                    data.organization == relation[0] &&
+                    data.course == relation[1] &&
+                    data.status === ExerciseStatus.OPEN
+                ) {
+                    this.setMissing(id);
+                }
+            }
+            return;
+        }
+        if (
+            relation.length == 3 &&
+            this.watcherTree
+                .get(relation[0])
+                ?.get(relation[1])
+                ?.has(relation[2])
+        ) {
+            for (const [id, data] of this.idToData.entries()) {
+                if (
+                    data.organization == relation[0] &&
+                    data.course == relation[1] &&
+                    data.name == relation[2] &&
+                    data.status === ExerciseStatus.OPEN
+                ) {
+                    this.setMissing(id);
+                }
+            }
+            return;
+        }
     }
 
     /**
-     * Concept: ignore all changes except those to the root file
+     * Keeps the workspace root file in order
      */
     private watcherChangeAction(targetPath: string): void {
         const rootFilePath = path.join(this.resources.tmcExercisesFolderPath, ".tmc-root");

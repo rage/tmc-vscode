@@ -253,7 +253,10 @@ export async function displayCourseDownloads(
     }
     const exerciseDetails = details.exercises.map((x) => ({
         exercise: x,
-        downloaded: workspaceManager.getExerciseDataById(x.id).ok,
+        downloaded: workspaceManager
+            .getExerciseDataById(x.id)
+            .map((x) => x.status !== ExerciseStatus.MISSING)
+            .mapErr(() => false).val,
     }));
     const sortedExercises = exerciseDetails.sort((x, y) => {
         return x.downloaded === y.downloaded ? 0 : x.downloaded ? 1 : -1;
