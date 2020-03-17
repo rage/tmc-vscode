@@ -255,14 +255,12 @@ export async function displayCourseDownloads(
     const sortedExercises = exerciseDetails.sort((x, y) => {
         return x.downloaded === y.downloaded ? 0 : x.downloaded ? 1 : -1;
     });
-    const workspaceEmpty = workspaceManager.getExercisesByCourseName(details.name).length === 0;
     const data = {
         courseId,
         courseName: result.val.course.name,
         details,
         organizationSlug,
         sortedExercises,
-        workspaceEmpty,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
     return Ok.EMPTY;
