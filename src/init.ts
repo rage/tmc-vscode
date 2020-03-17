@@ -226,8 +226,12 @@ export async function firstTimeInitialization(
 
     if (!fs.existsSync(tmcExercisesFolderPath)) {
         fs.mkdirSync(tmcExercisesFolderPath);
-        fs.writeFileSync(path.join(tmcExercisesFolderPath, ".tmc-root"), "DO NOT DELETE!");
         console.log("Created tmc exercise directory at", tmcExercisesFolderPath);
+    }
+
+    if (!fs.existsSync(path.join(tmcExercisesFolderPath, ".tmc-root"))) {
+        fs.writeFileSync(path.join(tmcExercisesFolderPath, ".tmc-root"), "DO NOT DELETE!");
+        console.log("Wrote tmc root file at", tmcExercisesFolderPath);
     }
 
     if (!fs.existsSync(tmcClosedExercisesFolderPath)) {

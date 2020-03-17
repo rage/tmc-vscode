@@ -254,7 +254,7 @@ export default class WorkspaceManager {
                     this.watcherTree.delete(organization);
                 }
             }
-            this.watcherAction(exercisePath);
+            this.watcherCreateAction(exercisePath);
         }
     }
 
@@ -267,7 +267,7 @@ export default class WorkspaceManager {
         }
     }
 
-    private watcherAction(targetPath: string): void {
+    private watcherCreateAction(targetPath: string): void {
         const relation = path
             .relative(this.resources.tmcExercisesFolderPath, targetPath)
             .toString()
@@ -275,7 +275,11 @@ export default class WorkspaceManager {
         if (relation[0] === "..") {
             return;
         }
-        if (relation.length > 0 && !this.watcherTree.has(relation[0])) {
+        if (
+            relation.length > 0 &&
+            !this.watcherTree.has(relation[0]) &&
+            relation[0] !== ".tmc-root"
+        ) {
             del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0]), {
                 force: true,
             });
@@ -301,12 +305,99 @@ export default class WorkspaceManager {
         }
     }
 
+    private watcherSweep(): void {
+        const basedir = this.resources.tmcExercisesFolderPath;
+
+        fs.readdirSync(basedir, { withFileTypes: true }).forEach((organization) => {
+            if (organization.isFile() && organization.name === ".tmc-root") {
+                return;
+            } else if (!(organization.isDirectory() && this.watcherTree.has(organization.name))) {
+                del.sync(path.join(basedir, organization.name), { force: true });
+            } else {
+                fs.readdirSync(path.join(basedir, organization.name), {
+                    withFileTypes: true,
+                }).forEach((course) => {
+                    if (
+                        !(
+                            this.watcherTree.get(organization.name)?.has(course.name) &&
+                            course.isDirectory()
+                        )
+                    ) {
+                        del.sync(path.join(basedir, organization.name, course.name), {
+                            force: true,
+                        });
+                    } else {
+                        fs.readdirSync(path.join(basedir, organization.name, course.name), {
+                            withFileTypes: true,
+                        }).forEach((exercise) => {
+                            if (
+                                !(
+                                    this.watcherTree
+                                        .get(organization.name)
+                                        ?.get(course.name)
+                                        ?.has(exercise.name) && exercise.isDirectory()
+                                )
+                            ) {
+                                del.sync(
+                                    path.join(
+                                        basedir,
+                                        organization.name,
+                                        course.name,
+                                        exercise.name,
+                                    ),
+                                    { force: true },
+                                );
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    }
+
+    /**
+     * Concept: mark exercise status as missing if deleted by user or other actor
+     * Requires exercise status rework (isOpen -> status)
+     */
+    private watcherDeleteAction(targetPath: string): void {
+        const rootFilePath = path.join(this.resources.tmcExercisesFolderPath, ".tmc-root");
+
+        if (path.relative(rootFilePath, targetPath) === "") {
+            fs.writeFileSync(targetPath, "Dummy data", { encoding: "utf-8" });
+        }
+        // Otherwise check if target path corresponds to an *open* exercise, mark as missing if so
+    }
+
+    /**
+     * Concept: ignore all changes except those to the root file
+     */
+    private watcherChangeAction(targetPath: string): void {
+        const rootFilePath = path.join(this.resources.tmcExercisesFolderPath, ".tmc-root");
+
+        if (path.relative(rootFilePath, targetPath) === "") {
+            if (fs.readFileSync(rootFilePath, { encoding: "utf-8" }) !== "Dummy data") {
+                fs.writeFileSync(targetPath, "Dummy data", { encoding: "utf-8" });
+            }
+        }
+    }
+
     private startWatcher(): void {
         this.initializeWatcherData();
-        const watcher = vscode.workspace.createFileSystemWatcher("**", false, true, true);
+        this.watcherSweep();
+        const watcher = vscode.workspace.createFileSystemWatcher("**", false, false, false);
         watcher.onDidCreate((x) => {
             if (x.scheme === "file") {
-                this.watcherAction(x.path);
+                this.watcherCreateAction(x.path);
+            }
+        });
+        watcher.onDidDelete((x) => {
+            if (x.scheme === "file") {
+                this.watcherDeleteAction(x.path);
+            }
+        });
+        watcher.onDidChange((x) => {
+            if (x.scheme === "file") {
+                this.watcherChangeAction(x.path);
             }
         });
     }
