@@ -38,6 +38,7 @@ export default class WorkspaceManager {
             this.idToData = new Map();
             this.pathToId = new Map();
         }
+        this.workspaceIntegrityCheck();
         this.startWatcher();
     }
 
@@ -232,6 +233,29 @@ export default class WorkspaceManager {
 
     private getClosedPath(id: number): string {
         return path.join(this.resources.tmcClosedExercisesFolderPath, id.toString());
+    }
+
+    /**
+     * Checks to make sure all the folders are in place,
+     * should be run at startup before the watcher is initialized
+     */
+    private workspaceIntegrityCheck(): void {
+        for (const data of Array.from(this.idToData.values())) {
+            const isOpen = fs.existsSync(data.path);
+            const isClosed = fs.existsSync(this.getClosedPath(data.id));
+            if (isOpen) {
+                data.status = ExerciseStatus.OPEN;
+                if (isClosed) {
+                    del.sync(this.getClosedPath(data.id), { force: true });
+                }
+            } else if (isClosed) {
+                data.status = ExerciseStatus.CLOSED;
+            } else {
+                data.status = ExerciseStatus.MISSING;
+            }
+            this.idToData.set(data.id, data);
+        }
+        this.updatePersistentData();
     }
 
     private addToWatcherTree({ organization, course, name }: LocalExerciseData): void {
