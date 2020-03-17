@@ -1,6 +1,10 @@
 # Change Log
 
-## [Unreleased]
+## [0.1.1] - 2020-03-17
+
+### Updated
+- Fix: Slow deadline fetch in My Courses-view
+- Fix: Missing breadcrumb in Exercise Download-view
 
 ## [0.1.0] - 2020-03-17
 
