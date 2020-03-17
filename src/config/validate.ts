@@ -8,7 +8,7 @@ import { ApiError, ConnectionError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
 import Resources from "./resources";
-import { LocalCourseData, LocalExerciseData } from "./types";
+import { ExerciseStatus, LocalCourseData, LocalExerciseData } from "./types";
 
 export async function validateAndFix(
     storage: Storage,
@@ -27,23 +27,27 @@ export async function validateAndFix(
         for (const ex of exerciseData) {
             if (
                 !is<{
-                    isOpen: boolean;
                     organization: string;
                     path: string;
                     checksum: string;
-                    course?: string;
-                    id?: number;
+                    id: number;
+                    course: string;
+                    isOpen?: boolean;
+                    status?: ExerciseStatus;
                     [key: string]: unknown;
                 }>(ex) ||
-                (ex.course === undefined && ex.id === undefined)
+                (ex.isOpen === undefined && ex.status === undefined)
             ) {
                 continue;
             }
 
-            // TypeScript can't quite determine that either ex.id or ex.course must exist
-            const details = await (ex.id !== undefined
-                ? tmc.getCourseDetails(ex.id)
-                : getCourseDetails(tmc, ex.organization, ex.course as string));
+            const exerciseStatus =
+                ex.isOpen !== undefined
+                    ? ex.isOpen
+                        ? ExerciseStatus.OPEN
+                        : ExerciseStatus.CLOSED
+                    : (ex.status as ExerciseStatus);
+            const details = await getCourseDetails(tmc, ex.organization, ex.course);
 
             if (details.err) {
                 if (details.val instanceof ApiError) {
@@ -60,7 +64,7 @@ export async function validateAndFix(
                     course: details.val.course.name,
                     deadline: exerciseDetails.deadline,
                     id: exerciseDetails.id,
-                    isOpen: ex.isOpen,
+                    status: exerciseStatus,
                     name: exerciseDetails.name,
                     organization: ex.organization,
                     path: ex.path,

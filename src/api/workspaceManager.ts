@@ -8,7 +8,7 @@ import { Err, Ok, Result } from "ts-results";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { ExerciseDetails } from "./types";
-import { LocalExerciseData } from "../config/types";
+import { ExerciseStatus, LocalExerciseData } from "../config/types";
 
 /**
  * Class for managing, opening and closing of exercises on disk.
@@ -68,7 +68,7 @@ export default class WorkspaceManager {
             course: exerciseDetails.course_name,
             deadline: exerciseDetails.deadline,
             id: exerciseDetails.exercise_id,
-            isOpen: false,
+            status: ExerciseStatus.CLOSED,
             name: exerciseDetails.exercise_name,
             organization: organizationSlug,
             path: exercisePath,
@@ -146,15 +146,17 @@ export default class WorkspaceManager {
     /**
      * Opens exercise by moving it to workspace folder.
      * @param id Exercise ID to open
-     * @param clearFolder Force remove the folder and it's contents, before opening from closed path.
      */
-    public openExercise(id: number, clearFolder?: boolean): Result<string, Error> {
+    public openExercise(id: number): Result<string, Error> {
         const data = this.idToData.get(id);
-        if (data && !data.isOpen) {
-            fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
-            if (clearFolder) {
-                del.sync(data.path, { force: true });
+        if (data && data.status === ExerciseStatus.CLOSED) {
+            if (!fs.existsSync(this.getClosedPath(id))) {
+                data.status = ExerciseStatus.MISSING;
+                this.idToData.set(id, data);
+                this.updatePersistentData();
+                return new Err(new Error("Exercise data missing"));
             }
+            fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
             this.addToWatcherTree(data);
             try {
                 fs.renameSync(this.getClosedPath(id), data.path);
@@ -162,7 +164,7 @@ export default class WorkspaceManager {
                 this.removeFromWatcherTree(data);
                 return new Err(new Error("Folder move operation failed."));
             }
-            data.isOpen = true;
+            data.status = ExerciseStatus.OPEN;
             this.idToData.set(id, data);
             this.updatePersistentData();
             return new Ok(data.path);
@@ -177,9 +179,16 @@ export default class WorkspaceManager {
      */
     public closeExercise(id: number): Result<void, Error> {
         const data = this.idToData.get(id);
-        if (data && data.isOpen) {
+        if (data && data.status === ExerciseStatus.OPEN) {
+            if (!fs.existsSync(data.path)) {
+                data.status = ExerciseStatus.MISSING;
+                this.idToData.set(id, data);
+                this.updatePersistentData();
+                return new Err(new Error("Exercise data missing"));
+            }
+            del.sync(this.getClosedPath(id), { force: true });
             fs.renameSync(data.path, this.getClosedPath(id));
-            data.isOpen = false;
+            data.status = ExerciseStatus.CLOSED;
             this.idToData.set(id, data);
             this.removeFromWatcherTree(data);
             this.updatePersistentData();
@@ -261,7 +270,7 @@ export default class WorkspaceManager {
     private initializeWatcherData(): void {
         this.watcherTree.clear();
         for (const data of this.idToData.values()) {
-            if (data.isOpen) {
+            if (data.status === ExerciseStatus.OPEN) {
                 this.addToWatcherTree(data);
             }
         }

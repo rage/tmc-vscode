@@ -121,11 +121,13 @@
                             <span class="badge badge-primary" onclick="closeExercise({{this.id}})"
                                 >open</span
                             >
-                            {{else}}
+                            {{else}} {{#if this.isClosed}}
                             <span class="badge badge-secondary" onclick="openExercise({{this.id}})"
                                 >closed</span
                             >
-                            {{/if}}
+                            {{else}}
+                            <span class="badge badge-secondary">missing</span>
+                            {{/if}} {{/if}}
                         </td>
                     </tr>
                     {{/each}}
