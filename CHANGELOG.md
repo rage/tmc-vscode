@@ -1,11 +1,12 @@
 # Change Log
 
-## [Unreleased]
+## [0.1.1] - 2020-03-17
 
-### Added
-- Course overview with a progress bar and next deadline.
+### Updated
+- Fix: Slow deadline fetch in My Courses-view
+- Fix: Missing breadcrumb in Exercise Download-view
 
-## [0.1.0] - 2020-03-13
+## [0.1.0] - 2020-03-17
 
 ### Added
 - Logging in with TMC account.
@@ -16,3 +17,4 @@
 - Running exercise tests locally.
 - Submitting a solution to TMC server.
 - Resetting current active exercise.
+- Course overview with a progress bar and next deadline.

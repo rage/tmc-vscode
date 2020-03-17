@@ -26,20 +26,25 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
 
     const apiCourses = await Promise.all(
         courses.map(async (course) => {
-            const exercises = await Promise.all(
-                course.exercises.map(async (exercise) => {
-                    const result = await tmc.getExerciseDetails(exercise.id);
-                    const deadline =
-                        result.ok && result.val.deadline ? parseDate(result.val.deadline) : null;
-                    return { ...exercise, deadline };
-                }),
-            );
+            const exerciseResult = await tmc.getCourseDetails(course.id);
+            const deadlines = new Map<number, Date>();
+            if (exerciseResult.ok) {
+                exerciseResult.val.course.exercises.forEach((ex) => {
+                    if (ex.deadline) {
+                        deadlines.set(ex.id, parseDate(ex.deadline));
+                    }
+                });
+            }
 
+            const exercises = course.exercises.map((ex) => ({
+                ...ex,
+                deadline: deadlines.get(ex.id),
+            }));
             const nextDeadlineObject = findNextDateAfter(
                 new Date(),
                 exercises
                     .filter((exercise) => !exercise.passed)
-                    .map((exercise) => exercise.deadline),
+                    .map((exercise) => (exercise.deadline ? exercise.deadline : null)),
             );
             const nextDeadline = nextDeadlineObject
                 ? dateToString(nextDeadlineObject)
@@ -250,14 +255,12 @@ export async function displayCourseDownloads(
     const sortedExercises = exerciseDetails.sort((x, y) => {
         return x.downloaded === y.downloaded ? 0 : x.downloaded ? 1 : -1;
     });
-    const workspaceEmpty = workspaceManager.getExercisesByCourseName(details.name).length === 0;
     const data = {
         courseId,
         courseName: result.val.course.name,
         details,
         organizationSlug,
         sortedExercises,
-        workspaceEmpty,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
     return Ok.EMPTY;
