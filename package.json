@@ -12,6 +12,10 @@
 	"categories": [
 		"Other"
 	],
+	"keywords": [
+		"tmc",
+		"test my code"
+	],
 	"activationEvents": [
 		"workspaceContains:**/.tmc-root",
 		"onView:tmcView",
