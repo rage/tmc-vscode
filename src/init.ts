@@ -6,8 +6,17 @@ import UI from "./ui/ui";
 
 import { Err, Ok, Result } from "ts-results";
 import {
-    addNewCourse, closeExercises, displayCourseDownloads, displayLocalCourseDetails,
-    displayUserCourses, downloadExercises, login, logout, openExercises, openWorkspace, removeCourse,
+    addNewCourse,
+    closeExercises,
+    displayCourseDownloads,
+    displayLocalCourseDetails,
+    displayUserCourses,
+    downloadExercises,
+    login,
+    logout,
+    openExercises,
+    openWorkspace,
+    removeCourse,
 } from "./actions";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
@@ -22,13 +31,19 @@ import { askForConfirmation, downloadFile, isJavaPresent, isWorkspaceOpen } from
  * @param tmc The TMC API object
  */
 export function registerUiActions(
-    ui: UI, storage: Storage, tmc: TMC, workspaceManager: WorkspaceManager, resources: Resources, userData: UserData,
-) {
+    ui: UI,
+    storage: Storage,
+    tmc: TMC,
+    workspaceManager: WorkspaceManager,
+    resources: Resources,
+    userData: UserData,
+): void {
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
 
     const visibilityGroups = {
-        LOGGED_IN, WORKSPACE_OPEN,
+        LOGGED_IN,
+        WORKSPACE_OPEN,
     };
 
     // Register UI actions
@@ -48,50 +63,108 @@ export function registerUiActions(
     });
 
     // Register webview handlers
-    ui.webview.registerHandler("login", async (msg: { type: "login", username: string, password: string }) => {
-        const result = await login(actionContext, msg.username, msg.password, visibilityGroups);
+    ui.webview.registerHandler(
+        "login",
+        async (msg: { type?: "login"; username?: string; password?: string }) => {
+            if (!(msg.type && msg.username && msg.password)) {
+                return;
+            }
+            const result = await login(actionContext, msg.username, msg.password, visibilityGroups);
+            if (result.err) {
+                ui.webview.setContentFromTemplate("login", { error: result.val.message }, true);
+                return;
+            }
+            displayUserCourses(actionContext);
+        },
+    );
+    ui.webview.registerHandler("myCourses", () => {
+        displayUserCourses(actionContext);
+    });
+    ui.webview.registerHandler(
+        "downloadExercises",
+        (msg: {
+            type?: "downloadExercises";
+            ids?: number[];
+            courseName?: string;
+            organizationSlug?: string;
+            courseId?: number;
+        }) => {
+            if (!(msg.type && msg.ids && msg.courseName && msg.organizationSlug && msg.courseId)) {
+                return;
+            }
+            downloadExercises(
+                actionContext,
+                msg.ids,
+                msg.organizationSlug,
+                msg.courseName,
+                msg.courseId,
+            );
+        },
+    );
+    ui.webview.registerHandler("addCourse", async () => {
+        const result = await addNewCourse(actionContext);
         if (result.err) {
-            ui.webview.setContentFromTemplate("login", { error: result.val.message }, true);
+            vscode.window.showErrorMessage(result.val.message);
+        }
+    });
+    ui.webview.registerHandler(
+        "exerciseDownloads",
+        async (msg: { type?: "exerciseDownloads"; id?: number }) => {
+            if (!(msg.type && msg.id)) {
+                return;
+            }
+            const res = await displayCourseDownloads(msg.id, actionContext);
+            if (res.err) {
+                vscode.window.showErrorMessage(`Can't display downloads: ${res.val.message}`);
+            }
+        },
+    );
+    ui.webview.registerHandler(
+        "removeCourse",
+        async (msg: { type?: "removeCourse"; id?: number }) => {
+            if (!(msg.type && msg.id)) {
+                return;
+            }
+            const course = actionContext.userData.getCourse(msg.id);
+            if (
+                await askForConfirmation(
+                    `Do you want to remove ${course.name} from your courses? This won't delete your downloaded exercises.`,
+                )
+            ) {
+                await removeCourse(msg.id, actionContext);
+                await displayUserCourses(actionContext);
+                vscode.window.showInformationMessage(`${course.name} was removed from courses.`);
+            }
+        },
+    );
+    ui.webview.registerHandler("courseDetails", (msg: { type?: "courseDetails"; id?: number }) => {
+        if (!(msg.type && msg.id)) {
             return;
         }
-        displayUserCourses(actionContext);
-    });
-    ui.webview.registerHandler("myCourses", (msg: { type: "myCourses" }) => {
-        displayUserCourses(actionContext);
-    });
-    ui.webview.registerHandler("downloadExercises", (msg: {
-        type: "downloadExercises", ids: number[], courseName: string,
-        organizationSlug: string, courseId: number,
-    }) => {
-        downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseName, msg.courseId);
-    });
-    ui.webview.registerHandler("addCourse", (msg: { type: "addCourse" }) => {
-        addNewCourse(actionContext);
-    });
-    ui.webview.registerHandler("exerciseDownloads", async (msg: { type: "exerciseDownloads", id: number }) => {
-        const res = await displayCourseDownloads(msg.id, actionContext);
-        if (res.err) { vscode.window.showErrorMessage(`Can't display downloads: ${res.val.message}`); }
-    });
-    ui.webview.registerHandler("removeCourse", async (msg: { type: "removeCourse", id: number }) => {
-        const course = actionContext.userData.getCourse(msg.id);
-        if (await askForConfirmation(`Do you want to remove ${course.name} from your courses? This won't delete your downloaded exercises.`)) {
-            await removeCourse(msg.id, actionContext);
-            displayUserCourses(actionContext);
-        }
-    });
-    ui.webview.registerHandler("courseDetails", (msg: { type: "courseDetails", id: number }) => {
         displayLocalCourseDetails(msg.id, actionContext);
     });
-    ui.webview.registerHandler("openSelected", async (msg: { type: "openSelected", ids: number[], id: number }) => {
-        actionContext.ui.webview.setContentFromTemplate("loading");
-        await openExercises(msg.ids, actionContext);
-        displayLocalCourseDetails(msg.id, actionContext);
-    });
-    ui.webview.registerHandler("closeSelected", async (msg: { type: "closeSelected", ids: number[], id: number }) => {
-        actionContext.ui.webview.setContentFromTemplate("loading");
-        await closeExercises(msg.ids, actionContext);
-        displayLocalCourseDetails(msg.id, actionContext);
-    });
+    ui.webview.registerHandler(
+        "openSelected",
+        async (msg: { type?: "openSelected"; ids?: number[]; id?: number }) => {
+            if (!(msg.type && msg.ids && msg.id)) {
+                return;
+            }
+            actionContext.ui.webview.setContentFromTemplate("loading");
+            await openExercises(msg.ids, actionContext);
+            displayLocalCourseDetails(msg.id, actionContext);
+        },
+    );
+    ui.webview.registerHandler(
+        "closeSelected",
+        async (msg: { type?: "closeSelected"; ids?: number[]; id?: number }) => {
+            if (!(msg.type && msg.ids && msg.id)) {
+                return;
+            }
+            actionContext.ui.webview.setContentFromTemplate("loading");
+            await closeExercises(msg.ids, actionContext);
+            displayLocalCourseDetails(msg.id, actionContext);
+        },
+    );
 }
 
 /**
@@ -99,14 +172,15 @@ export function registerUiActions(
  *
  * @param extensionContext Extension context
  */
-export async function firstTimeInitialization(extensionContext: vscode.ExtensionContext):
-    Promise<Result<Resources, Error>> {
-
+export async function firstTimeInitialization(
+    extensionContext: vscode.ExtensionContext,
+): Promise<Result<Resources, Error>> {
     if (!(await isJavaPresent())) {
         return new Err(new Error("Java not found or improperly configured."));
     }
 
-    const extensionVersion = vscode.extensions.getExtension("tmc-vscode-temporary.tmc-vscode")?.packageJSON.version;
+    const extensionVersion = vscode.extensions.getExtension("tmc-vscode-temporary.tmc-vscode")
+        ?.packageJSON.version;
 
     const cssPath = extensionContext.asAbsolutePath("resources/styles");
     const htmlPath = extensionContext.asAbsolutePath("resources/templates");
@@ -137,7 +211,16 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
     }
 
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
-        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ folders: [{ path: "Exercises" }], settings: { "workbench.editor.closeOnFileDelete": true, "files.autoSave": "onFocusChange" } }));
+        fs.writeFileSync(
+            tmcWorkspaceFilePath,
+            JSON.stringify({
+                folders: [{ path: "Exercises" }],
+                settings: {
+                    "workbench.editor.closeOnFileDelete": true,
+                    "files.autoSave": "onFocusChange",
+                },
+            }),
+        );
         console.log("Created tmc workspace file at", tmcWorkspaceFilePath);
     }
 
@@ -156,9 +239,15 @@ export async function firstTimeInitialization(extensionContext: vscode.Extension
         const tmcLangsResult = await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: "TestMyCode" },
             async (p) => {
-                return downloadFile("https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
-                    tmcLangsPath, undefined, (progress: number, increment: number) =>
-                    p.report({ message: `(${progress}%) Downloading required files`, increment }),
+                return downloadFile(
+                    "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
+                    tmcLangsPath,
+                    undefined,
+                    (progress: number, increment: number) =>
+                        p.report({
+                            message: `(${progress}%) Downloading required files`,
+                            increment,
+                        }),
                 );
             },
         );

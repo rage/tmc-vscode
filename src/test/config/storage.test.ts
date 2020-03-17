@@ -27,13 +27,16 @@ suite("Storage tests", () => {
      * @param hardcodedKey Hardcoded key used internally within the Storage object
      * @param checkForValue Value that was stored with updater
      */
-    function assertUpdater<T>(updater: () => void, hardcodedKey: string, checkForValue: T) {
+    function assertUpdater<T>(updater: () => void, hardcodedKey: string, checkForValue: T): void {
         mockMemento.verify(
             (x) => x.update(TypeMoq.It.isAny(), TypeMoq.It.isAny()),
             TypeMoq.Times.never(),
         );
         updater();
-        mockMemento.verify((x) => x.update(TypeMoq.It.isAny(), TypeMoq.It.isAny()), TypeMoq.Times.once());
+        mockMemento.verify(
+            (x) => x.update(TypeMoq.It.isAny(), TypeMoq.It.isAny()),
+            TypeMoq.Times.once(),
+        );
         mockMemento.verify(
             (x) => x.update(TypeMoq.It.isValue(hardcodedKey), TypeMoq.It.isValue(checkForValue)),
             TypeMoq.Times.once(),
@@ -45,7 +48,7 @@ suite("Storage tests", () => {
      * @param getter Storage method for getting some data
      * @param hardcodedKey Hardcoded key used internally within the Storage object
      */
-    function assertGetter<T>(getter: () => T, hardcodedKey: string) {
+    function assertGetter<T>(getter: () => T, hardcodedKey: string): void {
         mockMemento.verify((x) => x.get(TypeMoq.It.isAny()), TypeMoq.Times.never());
         getter();
         mockMemento.verify((x) => x.get(TypeMoq.It.isAny()), TypeMoq.Times.once());
@@ -54,7 +57,11 @@ suite("Storage tests", () => {
 
     test("Authentication token updater uses ExtensionContext correctly", () => {
         const tokenData: oauth2.Data = { type: "bearer", scope: "public" };
-        assertUpdater(() => storage.updateAuthenticationToken(tokenData), AUTHENTICATION_TOKEN_KEY, tokenData);
+        assertUpdater(
+            () => storage.updateAuthenticationToken(tokenData),
+            AUTHENTICATION_TOKEN_KEY,
+            tokenData,
+        );
     });
 
     test("Authentication token getter uses ExtensionContext correctly", () => {
@@ -62,9 +69,23 @@ suite("Storage tests", () => {
     });
 
     test("Exercise data updater uses ExtensionContext correctly", () => {
-        const exerciseData = [{ checksum: "asd", course: "HY-jtkt", deadline: "2020-03-21", id: 1337, isOpen: true,
-            name: "hello-world", organization: "HY", path: "/tmp"}];
-        assertUpdater(() => storage.updateExerciseData(exerciseData), EXERCISE_DATA_KEY, exerciseData);
+        const exerciseData = [
+            {
+                checksum: "asd",
+                course: "HY-jtkt",
+                deadline: "2020-03-21",
+                id: 1337,
+                isOpen: true,
+                name: "hello-world",
+                organization: "HY",
+                path: "/tmp",
+            },
+        ];
+        assertUpdater(
+            () => storage.updateExerciseData(exerciseData),
+            EXERCISE_DATA_KEY,
+            exerciseData,
+        );
     });
 
     test("Exercise data getter uses ExtensionContext correctly", () => {

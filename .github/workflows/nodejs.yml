@@ -20,10 +20,7 @@ jobs:
     - name: Lint source
       run: |
         npm ci
-        # compile typescript
-        npm run compile
-        # check codestyle
-        npm run tslint
+        npm run lint
     - name: Run tests
       run: |
         # use xvfb to render into virtual framebuffer and run tests
@@ -48,10 +45,7 @@ jobs:
     - name: Lint source
       run: |
         npm ci
-        # compile typescript
-        npm run compile
-        # check codestyle
-        npm run tslint
+        npm run eslint
     - name: Run tests
       run: |
         npm test
@@ -73,10 +67,7 @@ jobs:
     - name: Lint source
       run: |
         npm ci
-        # compile typescript
-        npm run compile
-        # check codestyle
-        npm run tslint
+        npm run lint
     - name: Run tests
       run: |
         npm test
@@ -100,7 +91,6 @@ jobs:
     - name: Package extension
       run: |
         npm ci
-        npm run compile
         npm install -g vsce
         vsce package
         # move packaged extension from project root to own release folder

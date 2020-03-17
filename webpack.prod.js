@@ -1,13 +1,14 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
 //@ts-check
 
-'use strict';
+"use strict";
 
-const merge = require('webpack-merge');
-const common = require('./webpack.common');
+const merge = require("webpack-merge");
+const common = require("./webpack.common");
 
 /**@type {import('webpack').Configuration}*/
 const devConfig = {
-    mode: 'production',
+    mode: "production",
     module: {
         rules: [
             {
@@ -15,16 +16,16 @@ const devConfig = {
                 exclude: /node_modules/,
                 use: [
                     {
-                        loader: 'ts-loader',
+                        loader: "ts-loader",
                         options: {
-                            compiler: 'ttypescript',
-                            configFile: 'tsconfig.production.json' // Use extended tsconfig settings for production
-                        }
-                    }
-                ]
-            }
-        ]
-    }
-}
+                            compiler: "ttypescript",
+                            configFile: "tsconfig.production.json", // Use extended tsconfig settings for production
+                        },
+                    },
+                ],
+            },
+        ],
+    },
+};
 
 module.exports = merge(common, devConfig);

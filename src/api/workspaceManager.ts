@@ -7,7 +7,8 @@ import { Err, Ok, Result } from "ts-results";
 
 import Resources from "../config/resources";
 import Storage from "../config/storage";
-import { ExerciseDetails, LocalExerciseData } from "./types";
+import { ExerciseDetails } from "./types";
+import { LocalExerciseData } from "../config/types";
 
 /**
  * Class for managing, opening and closing of exercises on disk.
@@ -31,8 +32,8 @@ export default class WorkspaceManager {
         this.resources = resources;
         const storedData = this.storage.getExerciseData();
         if (storedData) {
-            this.idToData = new Map(storedData.map((x) => ([x.id, x])));
-            this.pathToId = new Map(storedData.map((x) => ([x.path, x.id])));
+            this.idToData = new Map(storedData.map((x) => [x.id, x]));
+            this.pathToId = new Map(storedData.map((x) => [x.path, x.id]));
         } else {
             this.idToData = new Map();
             this.pathToId = new Map();
@@ -47,22 +48,33 @@ export default class WorkspaceManager {
      * @param exerciseDetails Exercise details used in the creation of exercise path
      */
     public createExerciseDownloadPath(
-        organizationSlug: string, checksum: string, exerciseDetails: ExerciseDetails,
+        organizationSlug: string,
+        checksum: string,
+        exerciseDetails: ExerciseDetails,
     ): Result<string, Error> {
         if (this.idToData.has(exerciseDetails.exercise_id)) {
             return new Err(new Error("Exercise already downloaded."));
         }
         const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
-        const { course_name, exercise_name, exercise_id, deadline } = exerciseDetails;
-        const exercisePath = path.join(exerciseFolderPath, organizationSlug, course_name, exercise_name);
-        this.pathToId.set(exercisePath, exercise_id);
-        this.idToData.set(exercise_id, {
-            checksum, course: exerciseDetails.course_name, deadline,
-            id: exercise_id, isOpen: false, name: exerciseDetails.exercise_name, organization: organizationSlug,
+        const exercisePath = path.join(
+            exerciseFolderPath,
+            organizationSlug,
+            exerciseDetails.course_name,
+            exerciseDetails.exercise_name,
+        );
+        this.pathToId.set(exercisePath, exerciseDetails.exercise_id);
+        this.idToData.set(exerciseDetails.exercise_id, {
+            checksum,
+            course: exerciseDetails.course_name,
+            deadline: exerciseDetails.deadline,
+            id: exerciseDetails.exercise_id,
+            isOpen: false,
+            name: exerciseDetails.exercise_name,
+            organization: organizationSlug,
             path: exercisePath,
         });
         this.updatePersistentData();
-        return new Ok(this.getClosedPath(exercise_id));
+        return new Ok(this.getClosedPath(exerciseDetails.exercise_id));
     }
 
     /**
@@ -105,7 +117,9 @@ export default class WorkspaceManager {
      */
     public getExerciseIdByPath(exerciseFolder: string): Result<number, Error> {
         const id = this.pathToId.get(exerciseFolder);
-        return (id !== undefined) ? new Ok(id) : new Err(new Error(`Exercise ID not found for ${exerciseFolder}`));
+        return id !== undefined
+            ? new Ok(id)
+            : new Err(new Error(`Exercise ID not found for ${exerciseFolder}`));
     }
 
     /**
@@ -120,7 +134,8 @@ export default class WorkspaceManager {
             return undefined;
         }
         const idResult = this.getExerciseIdByPath(
-            path.join(exerciseFolderPath, ...relation.split(path.sep, 3).slice(0, 3)));
+            path.join(exerciseFolderPath, ...relation.split(path.sep, 3).slice(0, 3)),
+        );
 
         if (idResult.err) {
             return undefined;
@@ -137,7 +152,9 @@ export default class WorkspaceManager {
         const data = this.idToData.get(id);
         if (data && !data.isOpen) {
             fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
-            if (clearFolder) { del.sync(data.path, { force: true }); }
+            if (clearFolder) {
+                del.sync(data.path, { force: true });
+            }
             this.addToWatcherTree(data);
             try {
                 fs.renameSync(this.getClosedPath(id), data.path);
@@ -190,7 +207,7 @@ export default class WorkspaceManager {
         this.clearExerciseData(exerciseId);
     }
 
-    private clearExerciseData(id: number) {
+    private clearExerciseData(id: number): void {
         const exercisePath = this.idToData.get(id)?.path;
         if (exercisePath) {
             this.idToData.delete(id);
@@ -199,27 +216,38 @@ export default class WorkspaceManager {
         }
     }
 
-    private updatePersistentData() {
+    private updatePersistentData(): void {
         this.storage.updateExerciseData(Array.from(this.idToData.values()));
     }
 
-    private getClosedPath(id: number) {
+    private getClosedPath(id: number): string {
         return path.join(this.resources.tmcClosedExercisesFolderPath, id.toString());
     }
 
-    private addToWatcherTree({organization, course, name}: LocalExerciseData) {
+    private addToWatcherTree({ organization, course, name }: LocalExerciseData): void {
         if (!this.watcherTree.has(organization)) {
             this.watcherTree.set(organization, new Map());
         }
         if (!this.watcherTree.get(organization)?.has(course)) {
             this.watcherTree.get(organization)?.set(course, new Set());
         }
-        this.watcherTree.get(organization)?.get(course)?.add(name);
+        this.watcherTree
+            .get(organization)
+            ?.get(course)
+            ?.add(name);
     }
 
-    private removeFromWatcherTree({organization, course, name, path: exercisePath}: LocalExerciseData) {
+    private removeFromWatcherTree({
+        organization,
+        course,
+        name,
+        path: exercisePath,
+    }: LocalExerciseData): void {
         if (this.watcherTree.get(organization)?.has(course)) {
-            this.watcherTree.get(organization)?.get(course)?.delete(name);
+            this.watcherTree
+                .get(organization)
+                ?.get(course)
+                ?.delete(name);
             if (this.watcherTree.get(organization)?.get(course)?.size === 0) {
                 this.watcherTree.get(organization)?.delete(course);
                 if (this.watcherTree.get(organization)?.size === 0) {
@@ -230,7 +258,7 @@ export default class WorkspaceManager {
         }
     }
 
-    private initializeWatcherData() {
+    private initializeWatcherData(): void {
         this.watcherTree.clear();
         for (const data of this.idToData.values()) {
             if (data.isOpen) {
@@ -239,26 +267,41 @@ export default class WorkspaceManager {
         }
     }
 
-    private watcherAction(targetPath: string) {
-        const relation = path.relative(this.resources.tmcExercisesFolderPath, targetPath).toString().split(path.sep, 3);
+    private watcherAction(targetPath: string): void {
+        const relation = path
+            .relative(this.resources.tmcExercisesFolderPath, targetPath)
+            .toString()
+            .split(path.sep, 3);
         if (relation[0] === "..") {
             return;
         }
         if (relation.length > 0 && !this.watcherTree.has(relation[0])) {
-            del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0]), { force: true });
+            del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0]), {
+                force: true,
+            });
             return;
         }
         if (relation.length > 1 && !this.watcherTree.get(relation[0])?.has(relation[1])) {
-            del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0], relation[1]), { force: true });
+            del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0], relation[1]), {
+                force: true,
+            });
             return;
         }
-        if (relation.length > 2 && !this.watcherTree.get(relation[0])?.get(relation[1])?.has(relation[2])) {
-            del.sync(path.join(this.resources.tmcExercisesFolderPath, ...relation), { force: true });
+        if (
+            relation.length > 2 &&
+            !this.watcherTree
+                .get(relation[0])
+                ?.get(relation[1])
+                ?.has(relation[2])
+        ) {
+            del.sync(path.join(this.resources.tmcExercisesFolderPath, ...relation), {
+                force: true,
+            });
             return;
         }
     }
 
-    private startWatcher() {
+    private startWatcher(): void {
         this.initializeWatcherData();
         const watcher = vscode.workspace.createFileSystemWatcher("**", false, true, true);
         watcher.onDidCreate((x) => {
@@ -266,6 +309,5 @@ export default class WorkspaceManager {
                 this.watcherAction(x.path);
             }
         });
-
     }
 }

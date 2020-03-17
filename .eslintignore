@@ -1,0 +1,4 @@
+# Paths ESLint should never check
+dist
+node_modules
+out

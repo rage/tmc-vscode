@@ -7,14 +7,14 @@ export class Visibility {
     private idsByGroup = new Map<string, string[]>();
     private groupsById = new Map<string, string[]>();
     private enabledSet = new Set<string>();
-    private nextId: number = 0;
+    private nextId = 0;
 
-    public createGroup(visible: boolean) {
+    public createGroup(visible: boolean): VisibilityGroup {
         const groupId = "_" + this.nextId++;
         this.idsByGroup.set(groupId, []);
         this.idsByGroup.set(this.negate(groupId), []);
         this.enabledSet.add(visible ? groupId : this.negate(groupId));
-        return {_id: groupId, not: {_id: this.negate(groupId)}};
+        return { _id: groupId, not: { _id: this.negate(groupId) } };
     }
 
     /**
@@ -23,7 +23,7 @@ export class Visibility {
      * @param group Name of group
      * @param visible Should the group be active
      */
-    public registerGroup(group: string, visible: boolean) {
+    public registerGroup(group: string, visible: boolean): void {
         if (group.startsWith("!")) {
             throw new Error("Visibility group name may not start with a exclamation mark");
         }
@@ -40,7 +40,10 @@ export class Visibility {
      * @param id Id of the action
      * @param groups Names of the associated groups, possibly negated
      */
-    public registerAction(id: string, groups: Array<VisibilityGroup | VisibilityGroupNegated>) {
+    public registerAction(
+        id: string,
+        groups: Array<VisibilityGroup | VisibilityGroupNegated>,
+    ): void {
         if (this.groupsById.has(id)) {
             throw new Error("Action already registered");
         }
@@ -53,7 +56,10 @@ export class Visibility {
                 group.push(id);
             }
         });
-        this.groupsById.set(id, groups.map((x) => x._id));
+        this.groupsById.set(
+            id,
+            groups.map((x) => x._id),
+        );
     }
 
     /**
@@ -61,7 +67,9 @@ export class Visibility {
      * @param group Name of the group, can be negated
      * @returns List of ids and states for modified action visibilities
      */
-    public setGroupVisible(group: VisibilityGroup | VisibilityGroupNegated): Array<[string, boolean]> {
+    public setGroupVisible(
+        group: VisibilityGroup | VisibilityGroupNegated,
+    ): Array<[string, boolean]> {
         const groupId = group._id;
         if (this.enabledSet.has(groupId)) {
             return [];
@@ -74,7 +82,9 @@ export class Visibility {
         }
 
         const ids = idsEnabled.concat(idsDisabled);
-        const currentVisibility = new Map<string, boolean>(ids.map((id) => [id, this.getVisible(id)]));
+        const currentVisibility = new Map<string, boolean>(
+            ids.map((id) => [id, this.getVisible(id)]),
+        );
 
         this.enabledSet.add(groupId);
         this.enabledSet.delete(this.negate(groupId));

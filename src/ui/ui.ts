@@ -7,7 +7,6 @@ import TmcWebview from "./webview";
  * A class for interacting with the user through graphical means
  */
 export default class UI {
-
     /**
      * A TmcTDP object for interacting with the treeview panel
      */
@@ -24,34 +23,40 @@ export default class UI {
      * Creates an UI object and (temporarily) initializes it with login-related content
      * @param extensionContext VSCode extension content
      */
-    constructor(extensionContext: vscode.ExtensionContext, resources: Resources, statusbaritem: vscode.StatusBarItem) {
+    constructor(
+        extensionContext: vscode.ExtensionContext,
+        resources: Resources,
+        statusbaritem: vscode.StatusBarItem,
+    ) {
         this.webview = new TmcWebview(extensionContext, resources);
         this.treeDP = new TmcMenuTree("tmcView");
         this.statusbar = statusbaritem;
-        this.statusBarTimeout = setTimeout(() => { }, 0);
+        this.statusBarTimeout = setTimeout(() => {}, 0);
     }
 
     /**
      * @return A handler callback for the tmcView.activateEntry command
      */
     public createUiActionHandler(): (onClick: () => void) => void {
-        return (onClick: () => void) => {
+        return (onClick: () => void): void => {
             onClick();
         };
     }
 
-    public setStatusBar(text: string, timeout?: number) {
+    public setStatusBar(text: string, timeout?: number): void {
         clearTimeout(this.statusBarTimeout);
         if (timeout) {
             this.statusbar.text = `${text}`;
-            this.statusBarTimeout = setTimeout(() => { this.statusbar.hide(); }, timeout);
+            this.statusBarTimeout = setTimeout(() => {
+                this.statusbar.hide();
+            }, timeout);
         } else {
             this.statusbar.text = `${text}`;
         }
         this.statusbar.show();
     }
 
-    public hideStatusBar() {
+    public hideStatusBar(): void {
         this.statusbar.hide();
     }
 }

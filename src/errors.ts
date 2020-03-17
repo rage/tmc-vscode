@@ -1,4 +1,3 @@
-
 class BaseError implements Error {
     public readonly name: string = "BaseError";
     public message: string;

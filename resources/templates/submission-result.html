@@ -1,57 +1,52 @@
 <html>
+    <head>
+        <style>
+            {{{cssBlob}}}
+        </style>
+    </head>
 
-<head>
-    <style>{{{cssBlob}}}</style>
-</head>
-
-<body>
-    <div class="container">
-        <div class="row py-2">
-            <div class="py-2">
-                {{{submission_status statusData}}}
+    <body>
+        <div class="container">
+            <div class="row py-2">
+                <div class="py-2">
+                    {{{submission_status statusData}}}
+                </div>
             </div>
-        </div>
-        {{#with statusData}}
-            {{#if test_cases}}
-                <div class="row my-1">
-                    {{#if points}}
-                        <h3>Points gained: {{points}}</h3>
-                    {{else}}
-                        <h3>Points gained: -</h3>
-                    {{/if}}
-                </div>
-                <div class="row my-1">
-                    {{{progress_bar test_cases}}}
-                </div>
-            {{/if}}
-        {{/with}}
-        {{#if feedbackQuestions}}
-        <div id="feedbacknotification"></div>
-        <div id="feedback" class="my-5">
-            <h4>Anna palautetta</h4>
-            <form>
-                {{#each feedbackQuestions}}
+            {{#with statusData}} {{#if test_cases}}
+            <div class="row my-1">
+                {{#if points}}
+                <h3>Points gained: {{points}}</h3>
+                {{else}}
+                <h3>Points gained: -</h3>
+                {{/if}}
+            </div>
+            <div class="row my-1">
+                {{{progress_bar test_cases}}}
+            </div>
+            {{/if}} {{/with}} {{#if feedbackQuestions}}
+            <div id="feedbacknotification"></div>
+            <div id="feedback" class="my-5">
+                <h4>Anna palautetta</h4>
+                <form>
+                    {{#each feedbackQuestions}}
                     <div>
                         <span>{{this.question}}</span>
                         <div class="row">
                             {{{feedback_question this}}}
                         </div>
                     </div>
-                {{/each}}
-                <div>
-                    <button class="btn-primary" onclick="submitFeedback()">Lähetä palaute</button>
-                </div>
-            </form>
-        </div>
-        {{/if}}
-        {{#with statusData}}
-        <div>
-            {{#each test_cases}}
-            {{#if this.successful}}
-            <div class="row passed my-2">
-                {{else}}
-                <div class="row failed my-2">
-                    {{/if}}
+                    {{/each}}
+                    <div>
+                        <button class="btn-primary" onclick="submitFeedback()">
+                            Lähetä palaute
+                        </button>
+                    </div>
+                </form>
+            </div>
+            {{/if}} {{#with statusData}}
+            <div>
+                {{#each test_cases}}
+                <div class="row {{#if this.successful}}passed{{else}}failed{{/if}} my-2">
                     <div class="col">
                         <div class="row">
                             {{#if this.successful}}
@@ -76,51 +71,62 @@
                 </div>
                 {{/each}}
             </div>
+            {{/with}}
         </div>
-        {{/with}}
-</body>
+    </body>
 
-<script>
-    const vscode = acquireVsCodeApi();
-    const feedback_url = "{{statusData.feedback_answer_url}}";
-    const solution_url = "{{statusData.solution_url}}";
+    <script>
+        const vscode = acquireVsCodeApi();
+        const feedback_url = "{{statusData.feedback_answer_url}}";
+        const solution_url = "{{statusData.solution_url}}";
 
-    const feedbackNotification = document.getElementById("feedbacknotification");
-    const feedbackFormContainer = document.getElementById("feedback");
+        const feedbackNotification = document.getElementById("feedbacknotification");
+        const feedbackFormContainer = document.getElementById("feedback");
 
-    function submitFeedback() {
-        const feedback = [];
-        const sliders = document.querySelectorAll("input[type=range]");
-        for (slider of sliders) {
-            if (slider.value !== slider.min) {
-                feedback.push({ question_id: parseInt(slider.dataset.questionid, 10), answer: slider.value })
+        function submitFeedback() {
+            const feedback = [];
+            const sliders = document.querySelectorAll("input[type=range]");
+            for (slider of sliders) {
+                if (slider.value !== slider.min) {
+                    feedback.push({
+                        question_id: parseInt(slider.dataset.questionid, 10),
+                        answer: slider.value,
+                    });
+                }
             }
-        }
-        const textareas = document.querySelectorAll("textarea");
-        for (textarea of textareas) {
-            if (textarea.value !== "") {
-                feedback.push({ question_id: parseInt(textarea.dataset.questionid, 10), answer: textarea.value })
+            const textareas = document.querySelectorAll("textarea");
+            for (textarea of textareas) {
+                if (textarea.value !== "") {
+                    feedback.push({
+                        question_id: parseInt(textarea.dataset.questionid, 10),
+                        answer: textarea.value,
+                    });
+                }
             }
+
+            feedbackFormContainer.style.display = "none";
+            feedbackNotification.classList = "my-5 alert alert-success";
+            if (feedback.length > 0) {
+                feedbackNotification.innerText = "Feedback sent! Thank you.";
+            } else {
+                feedbackNotification.innerText = "No feedback given.";
+            }
+            vscode.postMessage({
+                type: "feedback",
+                data: { feedback: { status: feedback }, url: feedback_url },
+            });
         }
 
-        feedbackFormContainer.style.display = "none";
-        feedbackNotification.classList = "my-5 alert alert-success";
-        if (feedback.length > 0) {
-            feedbackNotification.innerText = "Feedback sent! Thank you.";
-        } else {
-            feedbackNotification.innerText = "No feedback given.";
+        function showValue(slider, id) {
+            document.getElementById(id).innerHTML =
+                slider.value === slider.min ? "-" : slider.value;
         }
-        vscode.postMessage({ feedback: { status: feedback }, url: feedback_url });
-    }
 
-    function showValue(slider, id) {
-        document.getElementById(id).innerHTML = slider.value === slider.min ? "-" : slider.value;
-    }
-
-    function viewModelSolution() {
-        vscode.postMessage({ showSolutionInBrowser: true, solutionUrl: solution_url });
-    }
-
-</script>
-
+        function viewModelSolution() {
+            vscode.postMessage({
+                type: "showSolutionInBrowser",
+                data: { solutionUrl: solution_url },
+            });
+        }
+    </script>
 </html>

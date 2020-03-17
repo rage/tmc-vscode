@@ -1,60 +1,57 @@
 <html>
+    <head>
+        <style>
+            {{{cssBlob}}}
+        </style>
+    </head>
 
-<head>
-    <style>{{{cssBlob}}}</style>
-</head>
-
-<body>
-    <div class="container">
-        <div class="row">
-            <div class="py-2">
-                {{{ check_test_status testResultVal.status testResultVal.logs }}}
-            </div>
-        </div>
-        <div class="row">
-            {{#if testResultVal.testResults}}
-                {{{progress_bar testResultVal.testResults}}}
-            {{/if}}
-        </div>
-        {{#each testResultVal.testResults}}
-
-        {{#if this.successful}}
-        <div class="row passed my-2">
-        {{else}}
-        <div class="row failed my-2">
-        {{/if}}
-            <div class="col">
-                <div class="row">
-                    {{#if this.successful}}
-                    <div class="col-md-1 passed-header">
-                        PASS:
-                    </div>
-                    {{else}}
-                    <div class="col-md-1 failed-header">
-                        FAIL:
-                    </div>
-                    {{/if}}
-                    <div class="col-md">
-                        <span>{{this.name}}</span>
-                    </div>
+    <body>
+        <div class="container">
+            <div class="row">
+                <div class="py-2">
+                    {{{ check_test_status testResultVal.status testResultVal.logs }}}
                 </div>
-                <div class="row">
-                    <div class="col">
-                        <pre>{{this.message}}</pre>
+            </div>
+            <div class="row">
+                {{#if testResultVal.testResults}} {{{progress_bar testResultVal.testResults}}}
+                {{/if}}
+            </div>
+            {{#each testResultVal.testResults}}
+
+            <div class="row {{#if this.successful}}passed{{else}}failed{{/if}} my-2">
+                <div class="col">
+                    <div class="row">
+                        {{#if this.successful}}
+                        <div class="col-md-1 passed-header">
+                            PASS:
+                        </div>
+                        {{else}}
+                        <div class="col-md-1 failed-header">
+                            FAIL:
+                        </div>
+                        {{/if}}
+                        <div class="col-md">
+                            <span>{{this.name}}</span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <pre>{{this.message}}</pre>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div> <!-- close row passed or failed -->
-        {{/each}}
-    </div><!-- close container -->
-    <script>
-        const vscode = acquireVsCodeApi();
-        const exerciseId = {{id}};
+            <!-- close row passed or failed -->
+            {{/each}}
+        </div>
+        <!-- close container -->
+        <script>
+            const vscode = acquireVsCodeApi();
+            const exerciseId = {{id}};
 
-        function submitToServer() {
-            vscode.postMessage({ submit: true, exerciseId: exerciseId });
-        }
-    </script>
-</body>
-
+            function submitToServer() {
+                vscode.postMessage({ type: 'submitToServer', data: { exerciseId: exerciseId } });
+            }
+        </script>
+    </body>
 </html>

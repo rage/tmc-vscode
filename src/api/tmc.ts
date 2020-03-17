@@ -13,9 +13,18 @@ import { createIs, is } from "typescript-is";
 import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
 import { downloadFile } from "../utils";
 import {
-    Course, CourseDetails, ExerciseDetails, Organization, SubmissionFeedback,
-    SubmissionFeedbackResponse, SubmissionResponse, SubmissionStatusReport,
-    TMCApiResponse, TmcLangsAction, TmcLangsResponse, TmcLangsTestResults,
+    Course,
+    CourseDetails,
+    ExerciseDetails,
+    Organization,
+    SubmissionFeedback,
+    SubmissionFeedbackResponse,
+    SubmissionResponse,
+    SubmissionStatusReport,
+    TMCApiResponse,
+    TmcLangsAction,
+    TmcLangsResponse,
+    TmcLangsTestResults,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
 
@@ -23,19 +32,18 @@ import WorkspaceManager from "./workspaceManager";
  * A Class for interacting with the TestMyCode service, including authentication
  */
 export default class TMC {
-
     private readonly oauth2: ClientOauth2;
     private token: ClientOauth2.Token | undefined;
     private readonly storage: Storage;
     private readonly dataPath: string;
     private readonly tmcLangsPath: string;
     private readonly tmcApiUrl: string;
-    private readonly tmcDefaultHeaders: { client: string, client_version: string };
+    private readonly tmcDefaultHeaders: { client: string; client_version: string };
     private readonly workspaceManager: WorkspaceManager;
 
     private readonly cache: Map<string, TMCApiResponse>;
 
-    private nextLangsJsonId: number = 0;
+    private nextLangsJsonId = 0;
 
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
@@ -56,7 +64,11 @@ export default class TMC {
         this.tmcApiUrl = "https://tmc.mooc.fi/api/v8/";
         this.cache = new Map();
         this.workspaceManager = exerciseManager;
-        this.tmcDefaultHeaders = { client: "vscode_plugin", client_version: resources.extensionVersion };
+        this.tmcDefaultHeaders = {
+            client: "vscode_plugin",
+            // eslint-disable-next-line @typescript-eslint/camelcase
+            client_version: resources.extensionVersion,
+        };
     }
 
     /**
@@ -87,7 +99,7 @@ export default class TMC {
     /**
      * Logs out by deleting the authentication token.
      */
-    public deauthenticate() {
+    public deauthenticate(): void {
         this.token = undefined;
         this.storage.updateAuthenticationToken(undefined);
     }
@@ -104,7 +116,10 @@ export default class TMC {
      * @returns a list of organizations
      */
     public getOrganizations(cache?: boolean): Promise<Result<Organization[], Error>> {
-        return this.checkApiResponse(this.tmcApiRequest("org.json", cache), createIs<Organization[]>());
+        return this.checkApiResponse(
+            this.tmcApiRequest("org.json", cache),
+            createIs<Organization[]>(),
+        );
     }
 
     /**
@@ -112,7 +127,10 @@ export default class TMC {
      * @param slug Organization slug/id
      */
     public getOrganization(slug: string, cache?: boolean): Promise<Result<Organization, Error>> {
-        return this.checkApiResponse(this.tmcApiRequest(`org/${slug}.json`, cache), createIs<Organization>());
+        return this.checkApiResponse(
+            this.tmcApiRequest(`org/${slug}.json`, cache),
+            createIs<Organization>(),
+        );
     }
 
     /**
@@ -121,7 +139,8 @@ export default class TMC {
      */
     public getCourses(organization: string, cache?: boolean): Promise<Result<Course[], Error>> {
         return this.checkApiResponse(
-            this.tmcApiRequest(`core/org/${organization}/courses`, cache), createIs<Course[]>(),
+            this.tmcApiRequest(`core/org/${organization}/courses`, cache),
+            createIs<Course[]>(),
         );
     }
 
@@ -130,26 +149,40 @@ export default class TMC {
      * @returns a detailed description for the specified course
      */
     public getCourseDetails(id: number, cache?: boolean): Promise<Result<CourseDetails, Error>> {
-        return this.checkApiResponse(this.tmcApiRequest(`core/courses/${id}`, cache), createIs<CourseDetails>());
+        return this.checkApiResponse(
+            this.tmcApiRequest(`core/courses/${id}`, cache),
+            createIs<CourseDetails>(),
+        );
     }
 
     /**
      * @param id Exercise id
      * @returns A description for the specified exercise
      */
-    public async getExerciseDetails(id: number, cache?: boolean): Promise<Result<ExerciseDetails, Error>> {
-        return this.checkApiResponse(this.tmcApiRequest(`core/exercises/${id}`, cache), createIs<ExerciseDetails>());
+    public async getExerciseDetails(
+        id: number,
+        cache?: boolean,
+    ): Promise<Result<ExerciseDetails, Error>> {
+        return this.checkApiResponse(
+            this.tmcApiRequest(`core/exercises/${id}`, cache),
+            createIs<ExerciseDetails>(),
+        );
     }
 
     /**
      * Get submission status by url
      * @param submissionUrl Submission url
      */
-    public async getSubmissionStatus(submissionUrl: string): Promise<Result<SubmissionStatusReport, Error>> {
+    public async getSubmissionStatus(
+        submissionUrl: string,
+    ): Promise<Result<SubmissionStatusReport, Error>> {
         if (!this.token) {
             throw new Error("User not logged in!");
         }
-        return this.checkApiResponse(this.tmcApiRequest(submissionUrl, false), createIs<SubmissionStatusReport>());
+        return this.checkApiResponse(
+            this.tmcApiRequest(submissionUrl, false),
+            createIs<SubmissionStatusReport>(),
+        );
     }
 
     /**
@@ -159,13 +192,18 @@ export default class TMC {
      * @param reset If the call comes from resetExercise function, this is implemented because we need to be sure that
      * no other extension has generated the folder again.
      */
-    public async downloadExercise(id: number, organizationSlug: string, reset?: boolean ):
-    Promise<Result<string, Error>> {
-
+    public async downloadExercise(
+        id: number,
+        organizationSlug: string,
+        reset?: boolean,
+    ): Promise<Result<string, Error>> {
         const archivePath = `${this.dataPath}/${id}.zip`;
 
-        const result = await downloadFile(`${this.tmcApiUrl}core/exercises/${id}/download`,
-            archivePath, this.tmcDefaultHeaders);
+        const result = await downloadFile(
+            `${this.tmcApiUrl}core/exercises/${id}/download`,
+            archivePath,
+            this.tmcDefaultHeaders,
+        );
         if (result.err) {
             return new Err(result.val);
         }
@@ -189,18 +227,23 @@ export default class TMC {
 
         // TODO: Extract to a different location and handle pass that to ExerciseManager
         const exercisePath = this.workspaceManager.createExerciseDownloadPath(
-            organizationSlug, checksum, detailsResult.val,
+            organizationSlug,
+            checksum,
+            detailsResult.val,
         );
 
         if (exercisePath.err) {
             return new Err(exercisePath.val);
         }
 
-        const extractResult = await this.checkApiResponse(this.executeLangsAction({
-            action: "extract-project",
-            archivePath,
-            exerciseFolderPath: exercisePath.val,
-        }), createIs<string>());
+        const extractResult = await this.checkApiResponse(
+            this.executeLangsAction({
+                action: "extract-project",
+                archivePath,
+                exerciseFolderPath: exercisePath.val,
+            }),
+            createIs<string>(),
+        );
 
         if (extractResult.err) {
             this.workspaceManager.deleteExercise(id);
@@ -228,10 +271,13 @@ export default class TMC {
             return new Err(new Error("???"));
         }
 
-        return this.checkApiResponse(this.executeLangsAction({
-            action: "run-tests",
-            exerciseFolderPath: exerciseFolderPath.val.path,
-        }), createIs<TmcLangsTestResults>());
+        return this.checkApiResponse(
+            this.executeLangsAction({
+                action: "run-tests",
+                exerciseFolderPath: exerciseFolderPath.val.path,
+            }),
+            createIs<TmcLangsTestResults>(),
+        );
     }
 
     /**
@@ -245,19 +291,30 @@ export default class TMC {
             return new Err(new Error("???"));
         }
 
-        const compressResult = await this.checkApiResponse(this.executeLangsAction({
-            action: "compress-project",
-            archivePath: `${this.dataPath}/${id}-new.zip`,
-            exerciseFolderPath: exerciseFolderPath.val.path,
-        }), createIs<string>());
+        const compressResult = await this.checkApiResponse(
+            this.executeLangsAction({
+                action: "compress-project",
+                archivePath: `${this.dataPath}/${id}-new.zip`,
+                exerciseFolderPath: exerciseFolderPath.val.path,
+            }),
+            createIs<string>(),
+        );
         if (compressResult.err) {
             return new Err(compressResult.val);
         }
         const archivePath = compressResult.val;
         const form = new FormData();
         form.append("submission[file]", fs.createReadStream(archivePath));
-        return this.checkApiResponse(this.tmcApiRequest(`core/exercises/${id}/submissions`, false, "post",
-            form, form.getHeaders()), createIs<SubmissionResponse>());
+        return this.checkApiResponse(
+            this.tmcApiRequest(
+                `core/exercises/${id}/submissions`,
+                false,
+                "post",
+                form,
+                form.getHeaders(),
+            ),
+            createIs<SubmissionResponse>(),
+        );
     }
 
     /**
@@ -265,32 +322,44 @@ export default class TMC {
      * @param feedbackUrl Feedback URL to use, from the submission response
      * @param feedback Feedback to submit, shouldn't be empty
      */
-    public async submitSubmissionFeedback(feedbackUrl: string, feedback: SubmissionFeedback):
-        Promise<Result<SubmissionFeedbackResponse, Error>> {
+    public async submitSubmissionFeedback(
+        feedbackUrl: string,
+        feedback: SubmissionFeedback,
+    ): Promise<Result<SubmissionFeedbackResponse, Error>> {
         const params = new url.URLSearchParams();
         feedback.status.forEach((answer, index) => {
             params.append(`answers[${index}][question_id]`, answer.question_id.toString());
             params.append(`answers[${index}][answer]`, answer.answer);
         });
-        return this.checkApiResponse(this.tmcApiRequest(feedbackUrl, false, "post", params),
-                                     createIs<SubmissionFeedbackResponse>());
+        return this.checkApiResponse(
+            this.tmcApiRequest(feedbackUrl, false, "post", params),
+            createIs<SubmissionFeedbackResponse>(),
+        );
     }
 
     /**
      * Executes external tmc-langs process with given arguments.
      * @param tmcLangsAction Tmc-langs command and arguments
      */
-    private async executeLangsAction(tmcLangsAction: TmcLangsAction): Promise<Result<TmcLangsResponse, Error>> {
+    private async executeLangsAction(
+        tmcLangsAction: TmcLangsAction,
+    ): Promise<Result<TmcLangsResponse, Error>> {
         const action = tmcLangsAction.action;
         let exercisePath = "";
         let outputPath = "";
 
         switch (tmcLangsAction.action) {
             case "extract-project":
-                [exercisePath, outputPath] = [tmcLangsAction.archivePath, tmcLangsAction.exerciseFolderPath];
+                [exercisePath, outputPath] = [
+                    tmcLangsAction.archivePath,
+                    tmcLangsAction.exerciseFolderPath,
+                ];
                 break;
             case "compress-project":
-                [outputPath, exercisePath] = [tmcLangsAction.archivePath, tmcLangsAction.exerciseFolderPath];
+                [outputPath, exercisePath] = [
+                    tmcLangsAction.archivePath,
+                    tmcLangsAction.exerciseFolderPath,
+                ];
                 break;
             case "run-tests":
                 exercisePath = tmcLangsAction.exerciseFolderPath;
@@ -298,14 +367,15 @@ export default class TMC {
                 break;
         }
 
-        const arg0 = (exercisePath) ? `--exercisePath="${exercisePath}"` : "";
+        const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
 
         console.log(`java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`);
         try {
-            await new Promise(async (resolve, reject) => {
-                cp.exec(`java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`,
-                    (err) => err ? reject(err) : resolve());
+            await new Promise((resolve, reject) => {
+                cp.exec(`java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`, (err) =>
+                    err ? reject(err) : resolve(),
+                );
             });
         } catch (err) {
             return new Err(err);
@@ -337,11 +407,15 @@ export default class TMC {
      *
      * @returns A type checked response
      */
-    private async checkApiResponse<T, U>(response: Promise<Result<U, Error>>,
-                                         checker: (object: any) => object is T): Promise<Result<T, Error>> {
+    private async checkApiResponse<T, U>(
+        response: Promise<Result<U, Error>>,
+        checker: (object: unknown) => object is T,
+    ): Promise<Result<T, Error>> {
         const result = await response;
         if (result.ok) {
-            return checker(result.val) ? new Ok(result.val) : new Err(new ApiError("Incorrect response type"));
+            return checker(result.val)
+                ? new Ok(result.val)
+                : new Err(new ApiError("Incorrect response type"));
         }
         return new Err(result.val);
     }
@@ -351,11 +425,14 @@ export default class TMC {
      * @param endpoint target API endpoint, can also be complete URL
      * @param method HTTP method, defaults to GET
      */
-    private async tmcApiRequest(endpoint: string, cache: boolean | undefined,
-                                method?: "get" | "post", body?: any, headers?: any):
-        Promise<Result<TMCApiResponse, Error>> {
-
-        method = method || "get";
+    private async tmcApiRequest(
+        endpoint: string,
+        cache: boolean | undefined,
+        method?: "get" | "post",
+        body?: string | FormData | url.URLSearchParams,
+        headers?: { [key: string]: string },
+    ): Promise<Result<TMCApiResponse, Error>> {
+        method = method || "get";
         cache = cache === undefined ? method === "get" : cache;
 
         if (cache) {
@@ -398,7 +475,9 @@ export default class TMC {
                 return new Err(new AuthorizationError("403 - Forbidden"));
             }
             const errorText = await response.text();
-            return new Err(new ApiError(`${response.status} - ${response.statusText} - ${errorText}`));
+            return new Err(
+                new ApiError(`${response.status} - ${response.statusText} - ${errorText}`),
+            );
         } catch (error) {
             return new Err(new ConnectionError("Connection error: " + error.name));
         }

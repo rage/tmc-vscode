@@ -1,6 +1,8 @@
 <html>
     <head>
-        <style>{{{cssBlob}}}</style>
+        <style>
+            {{{cssBlob}}}
+        </style>
 
         <script>
             const vscode = acquireVsCodeApi();
@@ -10,7 +12,11 @@
                 const passwordField = document.getElementById("password");
                 const submitButton = document.getElementById("submit");
                 submitButton.disabled = true;
-                vscode.postMessage({type: "login", username: usernameField.value, password: passwordField.value});
+                vscode.postMessage({
+                    type: "login",
+                    username: usernameField.value,
+                    password: passwordField.value,
+                });
             }
 
             setTimeout(() => {
@@ -26,18 +32,18 @@
 
                     <div id="error">
                         {{#if error}}
-                            <div class="alert alert-danger fade show" role="alert">{{error}}</div>
+                        <div class="alert alert-danger fade show" role="alert">{{error}}</div>
                         {{/if}}
                     </div>
 
                     <form id="loginform" onsubmit="onSubmit()">
                         <div class="form-group">
                             <label for="username">Email or username:</label>
-                            <input type="text" class="form-control" id="username" autofocus><br>
+                            <input type="text" class="form-control" id="username" autofocus /><br />
                             <label for="password">Password:</label>
-                            <input type="password" class="form-control" id="password"><br>
+                            <input type="password" class="form-control" id="password" /><br />
                         </div>
-                        <input type="submit" class="btn btn-primary" id="submit">
+                        <input type="submit" class="btn btn-primary" id="submit" />
                     </form>
                 </div>
             </div>
