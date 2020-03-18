@@ -1,10 +1,13 @@
 # Change Log
 
-## [0.1.1] - 2020-03-17
+## [0.1.1] - 2020-03-18
 
 ### Updated
+- Improved button styles in course details and downloads views
+- Improved exercise status tracking to account for missing exercises
 - Fix: Slow deadline fetch in My Courses-view
 - Fix: Missing breadcrumb in Exercise Download-view
+- Fix: Unlockable exercises couldn't be downloaded
 
 ## [0.1.0] - 2020-03-17
 
