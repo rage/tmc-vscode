@@ -36,17 +36,21 @@
                         </div>
                         <div class="row py-2">
                             <div class="col-sm-3">
+                                <h3 class="mt-2">Select</h3>
                                 <button
                                     class="btn-primary m-1 w-100"
                                     onclick="toggleAll()"
                                     id="togglebutton"
                                 >
-                                    Select all
+                                    ALL
                                 </button>
                             </div>
+                        </div>
+                        <div class="row py-2">
                             <div class="col-sm-3">
+                                <h3 class="mt-2">Action</h3>
                                 <button
-                                    class="btn-primary m-1 w-100"
+                                    class="btn-success m-1 w-100"
                                     onclick="downloadSelectedExercises()"
                                 >
                                     Download selected
@@ -126,10 +130,10 @@
                     checkbox.checked = !deselect;
                 }
                 if (deselect) {
-                    document.querySelector("button#togglebutton").innerHTML = "Select all";
+                    document.querySelector("button#togglebutton").innerHTML = "ALL";
                     selectedCount = 0;
                 } else {
-                    document.querySelector("button#togglebutton").innerHTML = "Deselect all";
+                    document.querySelector("button#togglebutton").innerHTML = "NONE";
                     selectedCount = totalCount;
                 }
             }

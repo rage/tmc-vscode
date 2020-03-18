@@ -8,6 +8,7 @@ import { Err, Ok, Result } from "ts-results";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { dateToString, findNextDateAfter, parseDate } from "../utils";
 import { ActionContext } from "./types";
+import { ExerciseStatus } from "../config/types";
 
 /**
  * Displays a summary page of user's courses.
@@ -74,6 +75,7 @@ export async function displayLocalCourseDetails(
             id: number;
             name: string;
             isOpen: boolean;
+            isClosed: boolean;
             passed: boolean;
             deadlineString: string;
         }
@@ -83,7 +85,8 @@ export async function displayLocalCourseDetails(
         exerciseData.set(x.id, {
             deadlineString: x.deadline ? dateToString(parseDate(x.deadline)) : "-",
             id: x.id,
-            isOpen: x.isOpen,
+            isOpen: x.status === ExerciseStatus.OPEN,
+            isClosed: x.status === ExerciseStatus.CLOSED,
             name: x.name,
             passed: false,
         }),
@@ -250,7 +253,10 @@ export async function displayCourseDownloads(
     }
     const exerciseDetails = details.exercises.map((x) => ({
         exercise: x,
-        downloaded: workspaceManager.getExerciseDataById(x.id).ok,
+        downloaded: workspaceManager
+            .getExerciseDataById(x.id)
+            .map((x) => x.status !== ExerciseStatus.MISSING)
+            .mapErr(() => false).val,
     }));
     const sortedExercises = exerciseDetails.sort((x, y) => {
         return x.downloaded === y.downloaded ? 0 : x.downloaded ? 1 : -1;

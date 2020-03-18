@@ -75,7 +75,7 @@ suite("Storage tests", () => {
                 course: "HY-jtkt",
                 deadline: "2020-03-21",
                 id: 1337,
-                isOpen: true,
+                status: 0,
                 name: "hello-world",
                 organization: "HY",
                 path: "/tmp",

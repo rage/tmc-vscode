@@ -226,8 +226,12 @@ export async function firstTimeInitialization(
 
     if (!fs.existsSync(tmcExercisesFolderPath)) {
         fs.mkdirSync(tmcExercisesFolderPath);
-        fs.writeFileSync(path.join(tmcExercisesFolderPath, ".tmc-root"), "DO NOT DELETE!");
         console.log("Created tmc exercise directory at", tmcExercisesFolderPath);
+    }
+
+    if (!fs.existsSync(path.join(tmcExercisesFolderPath, ".tmc-root"))) {
+        fs.writeFileSync(path.join(tmcExercisesFolderPath, ".tmc-root"), "DO NOT DELETE!");
+        console.log("Wrote tmc root file at", tmcExercisesFolderPath);
     }
 
     if (!fs.existsSync(tmcClosedExercisesFolderPath)) {
@@ -242,6 +246,7 @@ export async function firstTimeInitialization(
                 return downloadFile(
                     "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
                     tmcLangsPath,
+                    undefined,
                     undefined,
                     (progress: number, increment: number) =>
                         p.report({

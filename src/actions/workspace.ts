@@ -117,7 +117,7 @@ export async function resetExercise(
 
     const slug = exerciseData.val.organization;
     workspaceManager.deleteExercise(id);
-    await tmc.downloadExercise(id, slug, true);
+    await tmc.downloadExercise(id, slug);
     ui.setStatusBar(`Exercise ${exerciseData.val.name} resetted successfully`, 10000);
     return Ok.EMPTY;
 }

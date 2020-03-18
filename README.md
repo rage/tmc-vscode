@@ -1,3 +1,7 @@
+# ATTENTION!
+
+**this extension is still in development and the team would like to know your thoughts on overall functionality of the extension or hear, if you've encountered any problems while using this extension. You can submit your overall thoughts about extension via [google form](https://docs.google.com/forms/d/1oDCFVNgi5rDSh5iqeINX7qEpc72VnHKmFzuj-jzxtcA/viewform?edit_requested=true) (goods, bads, from the middle...) or you can open an issue to github project [https://github.com/rage/tmc-vscode/issues](https://github.com/rage/tmc-vscode/issues) about encountered problems/bugs.**
+
 # TestMyCode for Visual Studio Code
 
 This extension provides [TestMyCode](https://tmc.mooc.fi/) integration for Visual Studio Code.

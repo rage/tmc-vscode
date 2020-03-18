@@ -195,7 +195,6 @@ export default class TMC {
     public async downloadExercise(
         id: number,
         organizationSlug: string,
-        reset?: boolean,
     ): Promise<Result<string, Error>> {
         const archivePath = `${this.dataPath}/${id}.zip`;
 
@@ -203,6 +202,7 @@ export default class TMC {
             `${this.tmcApiUrl}core/exercises/${id}/download`,
             archivePath,
             this.tmcDefaultHeaders,
+            this.token,
         );
         if (result.err) {
             return new Err(result.val);
@@ -252,7 +252,7 @@ export default class TMC {
         del.sync(archivePath, { force: true });
 
         // TODO: Return closed path and call open elsewhere
-        const openResult = this.workspaceManager.openExercise(id, reset);
+        const openResult = this.workspaceManager.openExercise(id);
 
         if (openResult.err) {
             console.log("Opening failed");

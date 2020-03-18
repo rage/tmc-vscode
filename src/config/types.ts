@@ -16,6 +16,12 @@ export type LocalExerciseData = {
     organization: string;
     path: string;
     checksum: string;
-    isOpen: boolean;
+    status: ExerciseStatus;
     deadline: string | null;
 };
+
+export enum ExerciseStatus {
+    OPEN,
+    CLOSED,
+    MISSING,
+}
