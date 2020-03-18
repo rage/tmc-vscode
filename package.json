@@ -17,7 +17,7 @@
 		"test my code"
 	],
 	"activationEvents": [
-		"workspaceContains:**/.tmc-root",
+		"workspaceContains:**/TMC-Readme.txt",
 		"onView:tmcView",
 		"onCommand:closeExercise",
 		"onCommand:runTests",
