@@ -414,7 +414,7 @@ export default class WorkspaceManager {
         const relation = path
             .relative(this.resources.tmcExercisesFolderPath, targetPath)
             .toString()
-            .split(path.sep, 3);
+            .split(path.sep, 4);
 
         if (relation[0] === "..") {
             return;
