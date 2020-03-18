@@ -26,10 +26,10 @@
                         <span>{{course.description}}</span>
                     </div>
                 </div>
-                <div class="row">
+                <div class="row mt-2">
                     <div class="col-sm-3">
                         <button
-                            class="btn-primary m-1 w-100"
+                            class="btn-info m-1 w-100"
                             onclick="downloadView( {{courseId}} )"
                         >
                             Download exercises
@@ -42,11 +42,11 @@
                         <div class="row">
                             <div class="col-sm-3">
                                 <button
-                                    class="btn-secondary m-1 w-100"
+                                    class="btn-primary m-1 w-100"
                                     onclick="toggleAll()"
                                     id="togglebutton"
                                 >
-                                    All
+                                ALL
                                 </button>
                             </div>
                             <div class="col-sm-3">
@@ -69,21 +69,26 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="col-sm-3">
-                        <button
-                            class="btn-primary m-1 w-100"
-                            onclick="handleSelected('openSelected')"
-                        >
-                            Open selected
-                        </button>
-                    </div>
-                    <div class="col-sm-3">
-                        <button
-                            class="btn-primary m-1 w-100"
-                            onclick="handleSelected('closeSelected')"
-                        >
-                            Close selected
-                        </button>
+                    <div class="col">
+                        <h3 class="mt-2">Action</h3>
+                        <div class="row">
+                            <div class="col-sm-3">
+                                <button
+                                    class="btn-success m-1 w-100 h-75"
+                                    onclick="handleSelected('openSelected')"
+                                >
+                                    Open selected
+                                </button>
+                            </div>
+                            <div class="col-sm-3">
+                                <button
+                                    class="btn-success m-1 w-100 h-75"
+                                    onclick="handleSelected('closeSelected')"
+                                >
+                                    Close selected
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -168,9 +173,9 @@
                 }
 
                 if (selectedCount === totalCount) {
-                    document.querySelector("button#togglebutton").innerHTML = "None";
+                    document.querySelector("button#togglebutton").innerHTML = "NONE";
                 } else if (selectedCount === totalCount - 1) {
-                    document.querySelector("button#togglebutton").innerHTML = "All";
+                    document.querySelector("button#togglebutton").innerHTML = "ALL";
                 }
             }
 
@@ -191,10 +196,10 @@
                     checkbox.checked = !deselect;
                 }
                 if (deselect) {
-                    document.querySelector("button#togglebutton").innerHTML = "All";
+                    document.querySelector("button#togglebutton").innerHTML = "ALL";
                     selectedCount = 0;
                 } else {
-                    document.querySelector("button#togglebutton").innerHTML = "None";
+                    document.querySelector("button#togglebutton").innerHTML = "NONE";
                     selectedCount = totalCount;
                 }
             }
