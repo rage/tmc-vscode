@@ -247,6 +247,7 @@ export async function firstTimeInitialization(
                     "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
                     tmcLangsPath,
                     undefined,
+                    undefined,
                     (progress: number, increment: number) =>
                         p.report({
                             message: `(${progress}%) Downloading required files`,

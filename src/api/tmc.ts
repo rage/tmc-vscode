@@ -202,6 +202,7 @@ export default class TMC {
             `${this.tmcApiUrl}core/exercises/${id}/download`,
             archivePath,
             this.tmcDefaultHeaders,
+            this.token,
         );
         if (result.err) {
             return new Err(result.val);

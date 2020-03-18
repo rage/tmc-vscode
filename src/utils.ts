@@ -11,6 +11,7 @@ import Resources from "./config/resources";
 import { ConnectionError } from "./errors";
 import { SubmissionFeedbackQuestion } from "./api/types";
 import { FeedbackQuestion } from "./actions/types";
+import ClientOAuth2 = require("client-oauth2");
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
@@ -22,13 +23,18 @@ export async function downloadFile(
     url: string,
     filePath: string,
     headers?: { [key: string]: string },
+    authToken?: ClientOAuth2.Token,
     progressCallback?: (downloadedPct: number, increment: number) => void,
 ): Promise<Result<void, Error>> {
     fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
 
     let response: fetch.Response;
     try {
-        response = await fetch.default(url, { method: "get", headers });
+        let request = { url, method: "get", headers };
+        if (authToken) {
+            request = authToken.sign(request);
+        }
+        response = await fetch.default(request.url, request);
         const sizeString = response.headers.get("content-length");
         if (sizeString && progressCallback) {
             let downloaded = 0;
