@@ -117,13 +117,12 @@
 		"watch": "ttsc -watch -p ./",
 		"pretest": "npm run compile",
 		"test": "node ./out/test/runTest.js",
-		"eslint": "eslint . --ext .js,.ts",
-		"eslint:fix": "eslint --fix . --ext .js,.ts",
-		"lint": "npm run eslint && npm run prettier",
-		"lint:fix": "npm run eslint:fix && npm run prettier:fix",
+		"eslint-check": "eslint . --ext .js,.ts",
+		"eslint": "eslint --fix . --ext .js,.ts",
+		"lint-check": "npm run eslint-check && npm run prettier-check",
 		"postinstall": "babel node_modules/ts-results --out-dir node_modules/ts-results --plugins=@babel/plugin-transform-modules-commonjs",
-		"prettier": "prettier --check --ignore-path \"./.eslintignore\" \"./**/*.{html,js,ts}\"",
-		"prettier:fix": "prettier --write --ignore-path \"./.eslintignore\" \"./**/*.{html,js,ts}\"",
+		"prettier-check": "prettier --check --ignore-path \"./.eslintignore\" \"./**/*.{html,js,ts}\"",
+		"prettier": "prettier --write --ignore-path \"./.eslintignore\" \"./**/*.{html,js,ts}\"",
 		"webpack": "webpack --config webpack.dev.js",
 		"webpack:watch": "webpack --config webpack.dev.js --watch --info-verbosity verbose"
 	},
@@ -177,9 +176,9 @@
 		}
 	},
 	"lint-staged": {
-		"*.{js,ts}": [
-			"prettier --write",
-			"eslint --cache --fix --max-warnings 0"
+		"*.{html,js,ts}": [
+			"prettier --check",
+			"eslint --cache --max-warnings 0"
 		]
 	}
 }
