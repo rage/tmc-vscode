@@ -9,6 +9,7 @@ import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { ExerciseDetails } from "./types";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
+import { WORKSPACE_ROOT_FILE, WORKSPACE_ROOT_FILE_TEXT } from "../config/constants";
 
 /**
  * Class for managing, opening and closing of exercises on disk.
@@ -49,6 +50,7 @@ export default class WorkspaceManager {
      * @param exerciseDetails Exercise details used in the creation of exercise path
      */
     public createExerciseDownloadPath(
+        softDeadline: string | null,
         organizationSlug: string,
         checksum: string,
         exerciseDetails: ExerciseDetails,
@@ -78,6 +80,7 @@ export default class WorkspaceManager {
             name: exerciseDetails.exercise_name,
             organization: organizationSlug,
             path: exercisePath,
+            softDeadline: softDeadline,
         });
         this.updatePersistentData();
         return new Ok(this.getClosedPath(exerciseDetails.exercise_id));
@@ -312,7 +315,7 @@ export default class WorkspaceManager {
         if (
             relation.length > 0 &&
             !this.watcherTree.has(relation[0]) &&
-            relation[0] !== ".tmc-root"
+            relation[0] !== WORKSPACE_ROOT_FILE
         ) {
             del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0]), {
                 force: true,
@@ -343,7 +346,7 @@ export default class WorkspaceManager {
         const basedir = this.resources.tmcExercisesFolderPath;
 
         fs.readdirSync(basedir, { withFileTypes: true }).forEach((organization) => {
-            if (organization.isFile() && organization.name === ".tmc-root") {
+            if (organization.isFile() && organization.name === WORKSPACE_ROOT_FILE) {
                 return;
             } else if (!(organization.isDirectory() && this.watcherTree.has(organization.name))) {
                 del.sync(path.join(basedir, organization.name), { force: true });
@@ -404,10 +407,10 @@ export default class WorkspaceManager {
      * as closed exercises by the watcher
      */
     private watcherDeleteAction(targetPath: string): void {
-        const rootFilePath = path.join(this.resources.tmcExercisesFolderPath, ".tmc-root");
+        const rootFilePath = path.join(this.resources.tmcExercisesFolderPath, WORKSPACE_ROOT_FILE);
 
         if (path.relative(rootFilePath, targetPath) === "") {
-            fs.writeFileSync(targetPath, "Dummy data", { encoding: "utf-8" });
+            fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
             return;
         }
 
@@ -464,11 +467,11 @@ export default class WorkspaceManager {
      * Keeps the workspace root file in order
      */
     private watcherChangeAction(targetPath: string): void {
-        const rootFilePath = path.join(this.resources.tmcExercisesFolderPath, ".tmc-root");
+        const rootFilePath = path.join(this.resources.tmcExercisesFolderPath, WORKSPACE_ROOT_FILE);
 
         if (path.relative(rootFilePath, targetPath) === "") {
-            if (fs.readFileSync(rootFilePath, { encoding: "utf-8" }) !== "Dummy data") {
-                fs.writeFileSync(targetPath, "Dummy data", { encoding: "utf-8" });
+            if (fs.readFileSync(rootFilePath, { encoding: "utf-8" }) !== WORKSPACE_ROOT_FILE_TEXT) {
+                fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
             }
         }
     }

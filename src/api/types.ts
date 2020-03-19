@@ -2,7 +2,7 @@ export type Course = {
     id: number;
     name: string;
     title: string;
-    description: string;
+    description: string | null;
     details_url: string;
     unlock_url: string;
     reviews_url: string;

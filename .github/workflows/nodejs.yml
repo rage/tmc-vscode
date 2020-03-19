@@ -20,7 +20,7 @@ jobs:
     - name: Lint source
       run: |
         npm ci
-        npm run lint
+        npm run lint-check
     - name: Run tests
       run: |
         # use xvfb to render into virtual framebuffer and run tests
@@ -45,7 +45,7 @@ jobs:
     - name: Lint source
       run: |
         npm ci
-        npm run eslint
+        npm run eslint-check
     - name: Run tests
       run: |
         npm test
@@ -67,7 +67,7 @@ jobs:
     - name: Lint source
       run: |
         npm ci
-        npm run lint
+        npm run lint-check
     - name: Run tests
       run: |
         npm test

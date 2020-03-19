@@ -23,6 +23,12 @@ import Resources from "./config/resources";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { askForConfirmation, downloadFile, isJavaPresent, isWorkspaceOpen } from "./utils";
+import {
+    TMC_JAR,
+    WORKSPACE_ROOT_FILE,
+    WORKSPACE_ROOT_FILE_TEXT,
+    WORKSPACE_SETTINGS,
+} from "./config/constants";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -211,16 +217,7 @@ export async function firstTimeInitialization(
     }
 
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
-        fs.writeFileSync(
-            tmcWorkspaceFilePath,
-            JSON.stringify({
-                folders: [{ path: "Exercises" }],
-                settings: {
-                    "workbench.editor.closeOnFileDelete": true,
-                    "files.autoSave": "onFocusChange",
-                },
-            }),
-        );
+        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
         console.log("Created tmc workspace file at", tmcWorkspaceFilePath);
     }
 
@@ -229,8 +226,11 @@ export async function firstTimeInitialization(
         console.log("Created tmc exercise directory at", tmcExercisesFolderPath);
     }
 
-    if (!fs.existsSync(path.join(tmcExercisesFolderPath, ".tmc-root"))) {
-        fs.writeFileSync(path.join(tmcExercisesFolderPath, ".tmc-root"), "DO NOT DELETE!");
+    if (!fs.existsSync(path.join(tmcExercisesFolderPath, WORKSPACE_ROOT_FILE))) {
+        fs.writeFileSync(
+            path.join(tmcExercisesFolderPath, WORKSPACE_ROOT_FILE),
+            WORKSPACE_ROOT_FILE_TEXT,
+        );
         console.log("Wrote tmc root file at", tmcExercisesFolderPath);
     }
 
@@ -244,7 +244,7 @@ export async function firstTimeInitialization(
             { location: vscode.ProgressLocation.Notification, title: "TestMyCode" },
             async (p) => {
                 return downloadFile(
-                    "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar",
+                    TMC_JAR,
                     tmcLangsPath,
                     undefined,
                     undefined,

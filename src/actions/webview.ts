@@ -9,6 +9,7 @@ import TemporaryWebview from "../ui/temporaryWebview";
 import { dateToString, findNextDateAfter, parseDate } from "../utils";
 import { ActionContext } from "./types";
 import { ExerciseStatus } from "../config/types";
+// import { Exercise } from "../api/types";
 
 /**
  * Displays a summary page of user's courses.
@@ -34,6 +35,10 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
                     if (ex.deadline) {
                         deadlines.set(ex.id, parseDate(ex.deadline));
                     }
+                    //const chosenDeadline = chooseDeadline(ex);
+                    /*if (chosenDeadline.date) {
+                        deadlines.set(ex.id, chosenDeadline.date);
+                    }*/
                 });
             }
 
@@ -78,11 +83,13 @@ export async function displayLocalCourseDetails(
             isClosed: boolean;
             passed: boolean;
             deadlineString: string;
+            softDeadlineString: string | null;
         }
     >();
 
     workspaceExercises?.forEach((x) =>
         exerciseData.set(x.id, {
+            softDeadlineString: x.softDeadline,
             deadlineString: x.deadline ? dateToString(parseDate(x.deadline)) : "-",
             id: x.id,
             isOpen: x.status === ExerciseStatus.OPEN,
@@ -271,3 +278,12 @@ export async function displayCourseDownloads(
     await ui.webview.setContentFromTemplate("download-exercises", data);
     return Ok.EMPTY;
 }
+
+/*
+function chooseDeadline(ex: Exercise): { date: Date | null; isHard: boolean } {
+    const softDeadline = ex.soft_deadline ? parseDate(ex.soft_deadline) : null;
+    const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
+    const next = findNextDateAfter(new Date(), [softDeadline, hardDeadline]);
+    return { date: next, isHard: next === hardDeadline };
+}
+*/

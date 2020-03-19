@@ -6,7 +6,10 @@ node_modules/**
 out/**
 src/**
 
+**/.gitattributes
 **/.gitignore
+**/.eslintignore
+**/.eslintrc.json
 **/tsconfig.json
 **/tsconfig.production.json
 **/tslint.json

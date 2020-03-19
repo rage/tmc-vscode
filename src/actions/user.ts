@@ -249,7 +249,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
     const courseDetails = courseDetailsResult.val.course;
 
     const localData: LocalCourseData = {
-        description: courseDetails.description,
+        description: courseDetails.description || "",
         exercises: courseDetails.exercises.map((e) => ({ id: e.id, passed: e.completed })),
         id: courseDetails.id,
         name: courseDetails.name,

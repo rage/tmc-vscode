@@ -63,6 +63,7 @@ export async function validateAndFix(
                     checksum: ex.checksum,
                     course: details.val.course.name,
                     deadline: exerciseDetails.deadline,
+                    softDeadline: exerciseDetails.soft_deadline,
                     id: exerciseDetails.id,
                     status: exerciseStatus,
                     name: exerciseDetails.name,
@@ -108,7 +109,7 @@ export async function validateAndFix(
                 }
                 const courseData = courseDetails.val.course;
                 userDataFixed.courses.push({
-                    description: courseData.description,
+                    description: courseData.description || "",
                     exercises: courseData.exercises.map((x) => ({ id: x.id, passed: x.completed })),
                     id: courseData.id,
                     name: courseData.name,
