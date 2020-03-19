@@ -27,6 +27,7 @@ import {
     TmcLangsTestResults,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
+import { ACCESS_TOKEN_URI, CLIENT_ID, CLIENT_SECRET, TMC_API_URL } from "../config/constants";
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -50,9 +51,9 @@ export default class TMC {
      */
     constructor(exerciseManager: WorkspaceManager, storage: Storage, resources: Resources) {
         this.oauth2 = new ClientOauth2({
-            accessTokenUri: "https://tmc.mooc.fi/oauth/token",
-            clientId: "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0",
-            clientSecret: "3e6c4df1992e4031d316ea1933e350e9658326a67efb2e65a5b15207bdc09ee8",
+            accessTokenUri: ACCESS_TOKEN_URI,
+            clientId: CLIENT_ID,
+            clientSecret: CLIENT_SECRET,
         });
         this.storage = storage;
         const authToken = storage.getAuthenticationToken();
@@ -61,7 +62,7 @@ export default class TMC {
         }
         this.dataPath = resources.tmcDataFolder;
         this.tmcLangsPath = resources.tmcLangsPath;
-        this.tmcApiUrl = "https://tmc.mooc.fi/api/v8/";
+        this.tmcApiUrl = TMC_API_URL;
         this.cache = new Map();
         this.workspaceManager = exerciseManager;
         this.tmcDefaultHeaders = {
@@ -189,8 +190,6 @@ export default class TMC {
      * Downloads exercise with given id and extracts it to the exercise folder.
      * @param id Id of the exercise to download
      * @param organizationSlug Slug for the organization this exercise belongs to.
-     * @param reset If the call comes from resetExercise function, this is implemented because we need to be sure that
-     * no other extension has generated the folder again.
      */
     public async downloadExercise(
         id: number,

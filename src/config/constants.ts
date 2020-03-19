@@ -1,5 +1,8 @@
 export const TMC_JAR = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar";
-
+export const TMC_API_URL = "https://tmc.mooc.fi/api/v8/";
+export const ACCESS_TOKEN_URI = "https://tmc.mooc.fi/oauth/token";
+export const CLIENT_ID = "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0";
+export const CLIENT_SECRET = "3e6c4df1992e4031d316ea1933e350e9658326a67efb2e65a5b15207bdc09ee8";
 export const WORKSPACE_SETTINGS = {
     folders: [{ path: "Exercises" }],
     settings: {
