@@ -9,7 +9,7 @@ import TemporaryWebview from "../ui/temporaryWebview";
 import { dateToString, findNextDateAfter, parseDate } from "../utils";
 import { ActionContext } from "./types";
 import { ExerciseStatus } from "../config/types";
-import { Exercise } from "../api/types";
+// import { Exercise } from "../api/types";
 
 /**
  * Displays a summary page of user's courses.
@@ -32,10 +32,13 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
             const deadlines = new Map<number, Date>();
             if (exerciseResult.ok) {
                 exerciseResult.val.course.exercises.forEach((ex) => {
-                    const chosenDeadline = chooseDeadline(ex);
-                    if (chosenDeadline.date) {
-                        deadlines.set(ex.id, chosenDeadline.date);
+                    if (ex.deadline) {
+                        deadlines.set(ex.id, parseDate(ex.deadline));
                     }
+                    //const chosenDeadline = chooseDeadline(ex);
+                    /*if (chosenDeadline.date) {
+                        deadlines.set(ex.id, chosenDeadline.date);
+                    }*/
                 });
             }
 
@@ -276,9 +279,11 @@ export async function displayCourseDownloads(
     return Ok.EMPTY;
 }
 
+/*
 function chooseDeadline(ex: Exercise): { date: Date | null; isHard: boolean } {
     const softDeadline = ex.soft_deadline ? parseDate(ex.soft_deadline) : null;
     const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
     const next = findNextDateAfter(new Date(), [softDeadline, hardDeadline]);
     return { date: next, isHard: next === hardDeadline };
 }
+*/
