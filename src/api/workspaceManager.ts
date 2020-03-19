@@ -50,6 +50,7 @@ export default class WorkspaceManager {
      * @param exerciseDetails Exercise details used in the creation of exercise path
      */
     public createExerciseDownloadPath(
+        softDeadline: string | null,
         organizationSlug: string,
         checksum: string,
         exerciseDetails: ExerciseDetails,
@@ -79,6 +80,7 @@ export default class WorkspaceManager {
             name: exerciseDetails.exercise_name,
             organization: organizationSlug,
             path: exercisePath,
+            softDeadline: softDeadline,
         });
         this.updatePersistentData();
         return new Ok(this.getClosedPath(exerciseDetails.exercise_id));

@@ -219,13 +219,18 @@ export default class TMC {
         }
 
         const checksum = courseResult.val.course.exercises.find((x) => x.id === id)?.checksum;
-
+        let softDeadline = courseResult.val.course.exercises.find((x) => x.id === id)
+            ?.soft_deadline;
+        if (softDeadline == null) {
+            softDeadline = null;
+        }
         if (!checksum) {
             return new Err(new Error("Exercise somehow missing from course"));
         }
 
         // TODO: Extract to a different location and handle pass that to ExerciseManager
         const exercisePath = this.workspaceManager.createExerciseDownloadPath(
+            softDeadline,
             organizationSlug,
             checksum,
             detailsResult.val,

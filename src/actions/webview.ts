@@ -80,11 +80,13 @@ export async function displayLocalCourseDetails(
             isClosed: boolean;
             passed: boolean;
             deadlineString: string;
+            softDeadlineString: string | null;
         }
     >();
 
     workspaceExercises?.forEach((x) =>
         exerciseData.set(x.id, {
+            softDeadlineString: x.softDeadline,
             deadlineString: x.deadline ? dateToString(parseDate(x.deadline)) : "-",
             id: x.id,
             isOpen: x.status === ExerciseStatus.OPEN,

@@ -18,6 +18,7 @@ export type LocalExerciseData = {
     checksum: string;
     status: ExerciseStatus;
     deadline: string | null;
+    softDeadline: string | null;
 };
 
 export enum ExerciseStatus {
