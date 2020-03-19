@@ -277,20 +277,8 @@ export async function displayCourseDownloads(
 }
 
 function chooseDeadline(ex: Exercise): { date: Date | null; isHard: boolean } {
-    const now = new Date();
     const softDeadline = ex.soft_deadline ? parseDate(ex.soft_deadline) : null;
     const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
-    const next = findNextDateAfter(now, [softDeadline, hardDeadline]);
-    let chosen = null;
-    let isHard = true;
-
-    if (next) {
-        if (next === softDeadline) {
-            isHard = false;
-            chosen = softDeadline;
-        } else {
-            chosen = hardDeadline;
-        }
-    }
-    return { date: chosen, isHard };
+    const next = findNextDateAfter(new Date(), [softDeadline, hardDeadline]);
+    return { date: next, isHard: next === hardDeadline };
 }

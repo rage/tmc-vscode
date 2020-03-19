@@ -74,6 +74,7 @@ suite("Storage tests", () => {
                 checksum: "asd",
                 course: "HY-jtkt",
                 deadline: "2020-03-21",
+                softDeadline: "2020-03-19",
                 id: 1337,
                 status: 0,
                 name: "hello-world",
