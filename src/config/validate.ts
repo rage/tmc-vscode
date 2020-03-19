@@ -108,7 +108,7 @@ export async function validateAndFix(
                 }
                 const courseData = courseDetails.val.course;
                 userDataFixed.courses.push({
-                    description: courseData.description,
+                    description: courseData.description || "",
                     exercises: courseData.exercises.map((x) => ({ id: x.id, passed: x.completed })),
                     id: courseData.id,
                     name: courseData.name,
