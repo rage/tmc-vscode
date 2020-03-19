@@ -1,9 +1,13 @@
 # Change Log
 
-#### [Unreleased]
+## [0.1.2] - 2020-03-19
 
-### Updated
-- Added TMC-Readme.txt to TMC workspace root folder
+### Added
+- TMC-Readme.txt in the TMC workspace
+- Marketplace icon
+
+## Updated
+- Fix: Fix data validation issue with very old courses in the HY organization
 
 ## [0.1.1] - 2020-03-18
 
