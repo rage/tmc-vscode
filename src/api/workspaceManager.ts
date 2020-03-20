@@ -482,17 +482,17 @@ export default class WorkspaceManager {
         const watcher = vscode.workspace.createFileSystemWatcher("**", false, false, false);
         watcher.onDidCreate((x) => {
             if (x.scheme === "file") {
-                this.watcherCreateAction(x.path);
+                this.watcherCreateAction(x.fsPath);
             }
         });
         watcher.onDidDelete((x) => {
             if (x.scheme === "file") {
-                this.watcherDeleteAction(x.path);
+                this.watcherDeleteAction(x.fsPath);
             }
         });
         watcher.onDidChange((x) => {
             if (x.scheme === "file") {
-                this.watcherChangeAction(x.path);
+                this.watcherChangeAction(x.fsPath);
             }
         });
     }
