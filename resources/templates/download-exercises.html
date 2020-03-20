@@ -74,14 +74,14 @@
                     {{#each sortedExercises}}
                     <tr>
                         <td class="text-center">
-                            {{#if this.downloaded}} - {{/if}} {{#unless this.downloaded}}
+                            {{#if this.downloaded}} - {{else}}
                             <input
                                 class="checkbox-xl"
                                 type="checkbox"
                                 value="{{this.exercise.id}}"
                                 onchange="updateCount(this)"
                             />
-                            {{/unless}}
+                            {{/if}}
                         </td>
                         <td>{{this.exercise.name}}</td>
                     </tr>

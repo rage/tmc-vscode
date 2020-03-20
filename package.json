@@ -177,7 +177,9 @@
 	},
 	"lint-staged": {
 		"*.{html,js,ts}": [
-			"prettier --check",
+			"prettier --check"
+		],
+		"*.{js,ts}": [
 			"eslint --cache --max-warnings 0"
 		]
 	}
