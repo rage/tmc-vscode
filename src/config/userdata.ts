@@ -73,7 +73,11 @@ export class UserData {
         return Ok.EMPTY;
     }
 
-    public async setPassed(courseId: number, exerciseId: number): Promise<Result<void, Error>> {
+    public async setPassed(
+        courseId: number,
+        exerciseId: number,
+        awardedPoints: number,
+    ): Promise<Result<void, Error>> {
         const courseData = this.courses.get(courseId);
         if (!courseData) {
             return new Err(new Error("Data missing"));
@@ -82,6 +86,7 @@ export class UserData {
             id: x.id,
             passed: exerciseId === x.id ? true : x.passed,
         }));
+        courseData.awardedPoints += awardedPoints;
         this.passedExercises.add(exerciseId);
         this.courses.set(courseId, courseData);
         await this.updatePersistentData();

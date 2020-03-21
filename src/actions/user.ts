@@ -159,7 +159,9 @@ export async function submitExercise(
                         workspaceManager.getExerciseDataById(id).unwrap().course,
                     ).id,
                     id,
+                    statusData.points.length,
                 );
+
                 if (statusData.feedback_questions) {
                     feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
                 }
@@ -242,11 +244,23 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
 
     const { tmc, userData } = actionContext;
     const courseDetailsResult = await tmc.getCourseDetails(orgAndCourse.val.course);
+    const courseExercises = await tmc.getCourseExercises(orgAndCourse.val.course);
     if (courseDetailsResult.err) {
         return new Err(courseDetailsResult.val);
     }
+    if (courseExercises.err) {
+        return new Err(courseExercises.val);
+    }
 
     const courseDetails = courseDetailsResult.val.course;
+    const exercises = courseExercises.val;
+
+    let availablePoints = 0;
+    let awardedPoints = 0;
+    exercises.forEach((x) => {
+        availablePoints += x.available_points.length;
+        awardedPoints += x.awarded_points.length;
+    });
 
     const localData: LocalCourseData = {
         description: courseDetails.description || "",
@@ -254,6 +268,8 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         id: courseDetails.id,
         name: courseDetails.name,
         organization: orgAndCourse.val.organization,
+        availablePoints: availablePoints,
+        awardedPoints: awardedPoints,
     };
     userData.addCourse(localData);
     await displayUserCourses(actionContext);

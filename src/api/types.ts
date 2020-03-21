@@ -44,6 +44,26 @@ export type Exercise = {
     solution_zip_url?: string;
 };
 
+export type CourseExercise = {
+    id: number;
+    available_points: point[];
+    awarded_points: string[];
+    name: string;
+    publish_time: string | null;
+    solution_visible_after: string | null;
+    deadline: string | null;
+    soft_deadline: string | null;
+    disabled: boolean;
+    unlocked: boolean;
+};
+
+export type point = {
+    id: number;
+    exercise_id: number;
+    name: string;
+    requires_review: boolean;
+};
+
 export type Organization = {
     name: string;
     information: string;
@@ -78,6 +98,7 @@ export type SubmissionFeedbackResponse = {
 export type TMCApiResponse =
     | Course[]
     | CourseDetails
+    | CourseExercise[]
     | Organization[]
     | Organization
     | ExerciseDetails

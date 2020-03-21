@@ -15,6 +15,7 @@ import { downloadFile } from "../utils";
 import {
     Course,
     CourseDetails,
+    CourseExercise,
     ExerciseDetails,
     Organization,
     SubmissionFeedback,
@@ -153,6 +154,21 @@ export default class TMC {
         return this.checkApiResponse(
             this.tmcApiRequest(`core/courses/${id}`, cache),
             createIs<CourseDetails>(),
+        );
+    }
+
+    /**
+     *
+     * @param id course id
+     * @returns return list of courses exercises. Each exercise carry info about available points that can be gained from an exercise
+     */
+    public getCourseExercises(
+        id: number,
+        cache?: boolean,
+    ): Promise<Result<CourseExercise[], Error>> {
+        return this.checkApiResponse(
+            this.tmcApiRequest(`courses/${id}/exercises`, cache),
+            createIs<CourseExercise[]>(),
         );
     }
 

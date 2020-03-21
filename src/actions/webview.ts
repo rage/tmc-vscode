@@ -18,12 +18,11 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
     const { userData, tmc, ui } = actionContext;
 
     const courses = userData.getCourses().map((course) => {
-        const passedLength = course.exercises.filter((e) => e.passed === true);
-        const completedPrc = Math.floor((passedLength.length / course.exercises.length) * 100);
+        const completedPrc = ((course.awardedPoints / course.availablePoints) * 100).toFixed(2);
         return { ...course, completedPrc };
     });
 
-    // Display the page immediatedly before fetching any data from API.
+    // Display the page immediatedly before fetching any data from API
     await ui.webview.setContentFromTemplate("index", { courses, disableActions: true });
 
     const apiCourses = await Promise.all(
