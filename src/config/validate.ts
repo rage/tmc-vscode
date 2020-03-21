@@ -124,8 +124,8 @@ export async function validateAndFix(
                 let awardedPoints = 0;
                 let availablePoints = 0;
                 exerciseData.forEach((x) => {
-                    awardedPoints = x.awarded_points.length;
-                    availablePoints = x.available_points.length;
+                    awardedPoints += x.awarded_points.length;
+                    availablePoints += x.available_points.length;
                 });
                 userDataFixed.courses.push({
                     description: courseData.description || "",
