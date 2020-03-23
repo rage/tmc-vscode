@@ -69,7 +69,7 @@ export async function displayLocalCourseDetails(
     courseId: number,
     actionContext: ActionContext,
 ): Promise<void> {
-    const { ui, userData, workspaceManager } = actionContext;
+    const { tmc, ui, userData, workspaceManager } = actionContext;
     const course = userData.getCourse(courseId);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
 
@@ -85,6 +85,15 @@ export async function displayLocalCourseDetails(
             softDeadlineString: string | null;
         }
     >();
+
+    const result = await tmc.getCourseDetails(courseId, false);
+    if (result.ok) {
+        const details = result.val.course;
+        userData.updateCompletedExercises(
+            courseId,
+            details.exercises.filter((x) => x.completed).map((x) => x.id),
+        );
+    }
 
     workspaceExercises?.forEach((x) =>
         exerciseData.set(x.id, {
@@ -242,7 +251,7 @@ export async function displayCourseDownloads(
     actionContext: ActionContext,
 ): Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
-    const result = await tmc.getCourseDetails(courseId);
+    const result = await tmc.getCourseDetails(courseId, false);
     if (result.err) {
         return new Err(new Error("Course details not found"));
     }
