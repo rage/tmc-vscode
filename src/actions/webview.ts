@@ -69,26 +69,7 @@ export async function displayLocalCourseDetails(
     courseId: number,
     actionContext: ActionContext,
 ): Promise<void> {
-    const { tmc, ui, userData, workspaceManager } = actionContext;
-
-    const courseDetailsResult = await tmc.getCourseDetails(courseId, false);
-    if (courseDetailsResult.ok) {
-        const details = courseDetailsResult.val.course;
-        userData.updateCompletedExercises(
-            courseId,
-            details.exercises.filter((x) => x.completed).map((x) => x.id),
-        );
-    }
-
-    const courseExercisesResult = await tmc.getCourseExercises(courseId, false);
-    if (courseExercisesResult.ok) {
-        const exercises = courseExercisesResult.val;
-        const [available, awarded] = exercises.reduce(
-            (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
-            [0, 0],
-        );
-        userData.updatePoints(courseId, awarded, available);
-    }
+    const { ui, userData, workspaceManager } = actionContext;
 
     const course = userData.getCourse(courseId);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);

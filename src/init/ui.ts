@@ -19,6 +19,7 @@ import {
     openExercises,
     openWorkspace,
     removeCourse,
+    updateCourse,
 } from "../actions";
 
 /**
@@ -138,7 +139,14 @@ export function registerUiActions(
         if (!(msg.type && msg.id)) {
             return;
         }
+        const courseId: number = msg.id;
         displayLocalCourseDetails(msg.id, actionContext);
+        const uiState = ui.webview.getStateId();
+        updateCourse(courseId, actionContext).then(() =>
+            uiState === ui.webview.getStateId()
+                ? displayLocalCourseDetails(courseId, actionContext)
+                : {},
+        );
     });
     ui.webview.registerHandler(
         "openSelected",

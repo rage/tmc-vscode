@@ -309,3 +309,26 @@ export async function removeCourse(id: number, actionContext: ActionContext): Pr
     );
     actionContext.userData.deleteCourse(id);
 }
+
+export async function updateCourse(id: number, actionContext: ActionContext): Promise<void> {
+    const { tmc, userData } = actionContext;
+    return Promise.all([tmc.getCourseDetails(id, false), tmc.getCourseExercises(id, false)]).then(
+        ([courseDetailsResult, courseExercisesResult]) => {
+            if (courseDetailsResult.ok) {
+                const details = courseDetailsResult.val.course;
+                userData.updateCompletedExercises(
+                    id,
+                    details.exercises.filter((x) => x.completed).map((x) => x.id),
+                );
+            }
+            if (courseExercisesResult.ok) {
+                const exercises = courseExercisesResult.val;
+                const [available, awarded] = exercises.reduce(
+                    (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
+                    [0, 0],
+                );
+                userData.updatePoints(id, awarded, available);
+            }
+        },
+    );
+}
