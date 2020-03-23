@@ -12,6 +12,7 @@ import { ConnectionError } from "./errors";
 import { SubmissionFeedbackQuestion } from "./api/types";
 import { FeedbackQuestion } from "./actions/types";
 import ClientOAuth2 = require("client-oauth2");
+import { LocalExerciseData } from "./config/types";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
@@ -134,6 +135,25 @@ export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number
         return undefined;
     }
     return workspaceManager.getExercisePath(editorPath);
+}
+
+/**
+ * Get the Exercise data for the currently open text editor
+ */
+export function getCurrentExerciseData(
+    workspaceManager: WorkspaceManager,
+): Result<LocalExerciseData, Error> {
+    const editorPath = vscode.window.activeTextEditor?.document.fileName;
+    if (!editorPath) {
+        return new Err(
+            new Error("No open editors. Please open a TMC exercise from the workspace."),
+        );
+    }
+    const id = workspaceManager.getExercisePath(editorPath);
+    if (!id) {
+        return new Err(new Error("Currently open editor is not part of a TMC exercise"));
+    }
+    return workspaceManager.getExerciseDataById(id);
 }
 
 /**

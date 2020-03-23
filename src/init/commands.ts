@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ActionContext } from "../actions/types";
-import { askForConfirmation, getCurrentExerciseId } from "../utils";
+import { askForConfirmation, getCurrentExerciseData, getCurrentExerciseId } from "../utils";
 import {
     pasteExercise,
     resetExercise,
@@ -21,12 +21,12 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("selectAction", async () => {
-            const exerciseId = getCurrentExerciseId(workspaceManager);
-            exerciseId
-                ? selectAction(actionContext, exerciseId)
-                : vscode.window.showErrorMessage(
-                      "Currently open editor is not part of a TMC exercise",
-                  );
+            const exerciseData = getCurrentExerciseData(workspaceManager);
+            if (exerciseData.err) {
+                vscode.window.showErrorMessage(exerciseData.val.message);
+                return;
+            }
+            selectAction(actionContext, exerciseData.val);
         }),
     );
 
