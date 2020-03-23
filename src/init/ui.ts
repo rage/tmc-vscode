@@ -166,7 +166,7 @@ export function registerUiActions(
                 return;
             }
             actionContext.ui.webview.setContentFromTemplate("loading");
-            await closeExercises(msg.ids, actionContext);
+            await closeExercises(actionContext, msg.ids);
             displayLocalCourseDetails(msg.id, actionContext);
         },
     );

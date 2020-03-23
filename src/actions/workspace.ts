@@ -89,8 +89,8 @@ export async function downloadExercises(
  * @param id ID of the exercise to reset
  */
 export async function resetExercise(
-    id: number,
     actionContext: ActionContext,
+    id: number,
 ): Promise<Result<void, Error>> {
     const { ui, tmc, workspaceManager } = actionContext;
 
@@ -135,7 +135,7 @@ export async function openExercises(ids: number[], actionContext: ActionContext)
  * Closes given exercises, hiding them in TMC workspace.
  * @param ids Array of exercise IDs
  */
-export async function closeExercises(ids: number[], actionContext: ActionContext): Promise<void> {
+export async function closeExercises(actionContext: ActionContext, ids: number[]): Promise<void> {
     const { workspaceManager } = actionContext;
     ids.forEach((id) => workspaceManager.closeExercise(id));
 }

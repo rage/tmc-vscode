@@ -39,6 +39,10 @@
 				"title": "Activate"
 			},
 			{
+				"command": "selectAction",
+				"title": "TMC - Menu"
+			},
+			{
 				"command": "closeExercise",
 				"title": "TMC - Close exercise"
 			},
@@ -79,12 +83,16 @@
 			"editor/title": [
 				{
 					"command": "runTests",
-					"group": "navigation",
+					"group": "navigation@0",
+					"when": "resourceScheme == file && tmcWorkspaceActive"
+				},
+				{
+					"command": "selectAction",
+					"group": "navigation@1",
 					"when": "resourceScheme == file && tmcWorkspaceActive"
 				},
 				{
 					"command": "uploadArchive",
-					"group": "navigation",
 					"when": "resourceScheme == file && tmcWorkspaceActive"
 				},
 				{

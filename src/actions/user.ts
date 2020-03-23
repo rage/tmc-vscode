@@ -60,8 +60,8 @@ export async function logout(
 /**
  * Tests an exercise while keeping the user informed
  */
-export async function testExercise(id: number, actions: ActionContext): Promise<void> {
-    const { ui, resources, tmc, workspaceManager } = actions;
+export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
+    const { ui, resources, tmc, workspaceManager } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
 
     if (exerciseDetails.err) {
@@ -80,7 +80,7 @@ export async function testExercise(id: number, actions: ActionContext): Promise<
             if (msg.type == "setToBackground") {
                 temp.dispose();
             } else if (msg.type == "submitToServer" && msg.data) {
-                submitExercise(msg.data.exerciseId as number, actions, temp);
+                submitExercise(actionContext, msg.data.exerciseId as number, temp);
             }
         },
     );
@@ -105,8 +105,8 @@ export async function testExercise(id: number, actions: ActionContext): Promise<
  * @param tempView Existing TemporaryWebview to use if any
  */
 export async function submitExercise(
-    id: number,
     actionContext: ActionContext,
+    id: number,
     tempView?: TemporaryWebview,
 ): Promise<void> {
     const { ui, resources, tmc } = actionContext;
@@ -193,7 +193,7 @@ export async function submitExercise(
  * Sends the exercise to the TMC Paste server.
  * @param id Exercise ID
  */
-export async function pasteExercise(id: number, actionContext: ActionContext): Promise<void> {
+export async function pasteExercise(actionContext: ActionContext, id: number): Promise<void> {
     const { tmc } = actionContext;
     const params = new Map<string, string>();
     params.set("paste", "1");
@@ -304,8 +304,8 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
 export async function removeCourse(id: number, actionContext: ActionContext): Promise<void> {
     const course = actionContext.userData.getCourse(id);
     await closeExercises(
-        course.exercises.map((e) => e.id),
         actionContext,
+        course.exercises.map((e) => e.id),
     );
     actionContext.userData.deleteCourse(id);
 }
