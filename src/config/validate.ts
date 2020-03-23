@@ -121,12 +121,10 @@ export async function validateAndFix(
                 }
                 const courseData = courseDetails.val.course;
                 const exerciseData = courseExercises.val;
-                let awardedPoints = 0;
-                let availablePoints = 0;
-                exerciseData.forEach((x) => {
-                    awardedPoints += x.awarded_points.length;
-                    availablePoints += x.available_points.length;
-                });
+                const [availablePoints, awardedPoints] = exerciseData.reduce(
+                    (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
+                    [0, 0],
+                );
                 userDataFixed.courses.push({
                     description: courseData.description || "",
                     exercises: courseData.exercises.map((x) => ({ id: x.id, passed: x.completed })),

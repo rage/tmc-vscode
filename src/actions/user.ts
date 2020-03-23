@@ -109,7 +109,7 @@ export async function submitExercise(
     actionContext: ActionContext,
     tempView?: TemporaryWebview,
 ): Promise<void> {
-    const { userData, ui, resources, tmc, workspaceManager } = actionContext;
+    const { ui, resources, tmc } = actionContext;
     const submitResult = await tmc.submitExercise(id);
 
     if (submitResult.err) {
@@ -154,14 +154,6 @@ export async function submitExercise(
             ui.setStatusBar("Tests finished, see result", 5000);
             let feedbackQuestions: FeedbackQuestion[] = [];
             if (statusData.status === "ok" && statusData.all_tests_passed) {
-                userData.setPassed(
-                    userData.getCourseByName(
-                        workspaceManager.getExerciseDataById(id).unwrap().course,
-                    ).id,
-                    id,
-                    statusData.points.length,
-                );
-
                 if (statusData.feedback_questions) {
                     feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
                 }

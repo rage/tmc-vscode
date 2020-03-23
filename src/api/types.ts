@@ -46,7 +46,7 @@ export type Exercise = {
 
 export type CourseExercise = {
     id: number;
-    available_points: point[];
+    available_points: ExercisePoint[];
     awarded_points: string[];
     name: string;
     publish_time: string | null;
@@ -57,7 +57,7 @@ export type CourseExercise = {
     unlocked: boolean;
 };
 
-export type point = {
+export type ExercisePoint = {
     id: number;
     exercise_id: number;
     name: string;
