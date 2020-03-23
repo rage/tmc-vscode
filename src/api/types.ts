@@ -1,3 +1,20 @@
+/**
+ * TMC Api Response types
+ */
+export type TMCApiResponse =
+    | Course[]
+    | CourseDetails
+    | CourseExercise[]
+    | Organization[]
+    | Organization
+    | ExerciseDetails
+    | SubmissionResponse
+    | SubmissionFeedbackResponse
+    | SubmissionStatusReport;
+
+/**
+ * GET /api/v8/core/org/{organization_slug}/courses
+ */
 export type Course = {
     id: number;
     name: string;
@@ -10,6 +27,9 @@ export type Course = {
     spyware_urls: string[];
 };
 
+/**
+ * GET /api/v8/core/courses/{course_id}
+ */
 export type CourseDetails = {
     course: Course & {
         unlockables: string[];
@@ -44,6 +64,9 @@ export type Exercise = {
     solution_zip_url?: string;
 };
 
+/**
+ * GET /api/v8/courses/{course_id}/exercises
+ */
 export type CourseExercise = {
     id: number;
     available_points: ExercisePoint[];
@@ -64,6 +87,10 @@ export type ExercisePoint = {
     requires_review: boolean;
 };
 
+/**
+ * GET /api/v8/org.json
+ * GET /api/v8/org/{organization_slug}.json
+ */
 export type Organization = {
     name: string;
     information: string;
@@ -72,6 +99,9 @@ export type Organization = {
     pinned: boolean;
 };
 
+/**
+ * GET /api/v8/core/exercises/{exercise_id}
+ */
 export type ExerciseDetails = {
     course_name: string;
     course_id: number;
@@ -84,6 +114,9 @@ export type ExerciseDetails = {
     submissions: unknown;
 };
 
+/**
+ * POST /api/v8/core/exercises/{exercise_id}/submissions
+ */
 export type SubmissionResponse = {
     submission_url: string;
     paste_url: string;
@@ -95,47 +128,10 @@ export type SubmissionFeedbackResponse = {
     status: "ok";
 };
 
-export type TMCApiResponse =
-    | Course[]
-    | CourseDetails
-    | CourseExercise[]
-    | Organization[]
-    | Organization
-    | ExerciseDetails
-    | SubmissionResponse
-    | SubmissionFeedbackResponse
-    | SubmissionStatusReport;
-
-export type TmcLangsAction =
-    | {
-          action: "extract-project" | "compress-project";
-          archivePath: string;
-          exerciseFolderPath: string;
-      }
-    | {
-          action: "run-tests";
-          exerciseFolderPath: string;
-      };
-
-export type TmcLangsTestResult = {
-    name: string;
-    successful: boolean;
-    message: string;
-    valgrindFailed: boolean;
-    points: string[];
-    exception: string[];
-};
-
-export type TmcLangsTestResults = {
-    status: string;
-    testResults: TmcLangsTestResult[];
-    logs: {
-        stdout?: number[];
-        stderr?: number[];
-    };
-};
-
-export type TmcLangsResponse = string | TmcLangsTestResults;
+/**
+ * GET /api/v8/core/submissions/{submission_id}
+ */
+export type SubmissionStatusReport = SubmissionProcessingReport | SubmissionResultReport;
 
 export type SubmissionProcessingReport = {
     status: "processing";
@@ -180,13 +176,48 @@ export type SubmissionFeedbackQuestion = {
     kind: string;
 };
 
+/**
+ * POST /api/v8/core/submissions/{submission_id}/feedback
+ */
+export type SubmissionFeedback = {
+    status: SubmissionFeedbackAnswer[];
+};
+
 export type SubmissionFeedbackAnswer = {
     question_id: number;
     answer: string;
 };
 
-export type SubmissionFeedback = {
-    status: SubmissionFeedbackAnswer[];
+/**
+ * TMC-langs.jar Actions
+ */
+export type TmcLangsAction =
+    | {
+          action: "extract-project" | "compress-project";
+          archivePath: string;
+          exerciseFolderPath: string;
+      }
+    | {
+          action: "run-tests";
+          exerciseFolderPath: string;
+      };
+
+export type TmcLangsTestResult = {
+    name: string;
+    successful: boolean;
+    message: string;
+    valgrindFailed: boolean;
+    points: string[];
+    exception: string[];
 };
 
-export type SubmissionStatusReport = SubmissionProcessingReport | SubmissionResultReport;
+export type TmcLangsTestResults = {
+    status: string;
+    testResults: TmcLangsTestResult[];
+    logs: {
+        stdout?: number[];
+        stderr?: number[];
+    };
+};
+
+export type TmcLangsResponse = string | TmcLangsTestResults;
