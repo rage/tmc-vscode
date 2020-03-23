@@ -23,7 +23,9 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
     });
 
     // Display the page immediatedly before fetching any data from API
-    await ui.webview.setContentFromTemplate("index", { courses, disableActions: true });
+    await ui.webview.setContentFromTemplate("index", { courses });
+
+    const uiState = ui.webview.getStateId();
 
     const apiCourses = await Promise.all(
         courses.map(async (course) => {
@@ -58,8 +60,9 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
             return { ...course, exercises, nextDeadline };
         }),
     );
-
-    await ui.webview.setContentFromTemplate("index", { courses: apiCourses });
+    if (uiState === ui.webview.getStateId()) {
+        await ui.webview.setContentFromTemplate("index", { courses: apiCourses });
+    }
 }
 
 /**
