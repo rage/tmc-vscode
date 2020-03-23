@@ -47,6 +47,10 @@
 				"title": "TMC - Submit solution"
 			},
 			{
+				"command": "pasteExercise",
+				"title": "TMC - Paste exercise"
+			},
+			{
 				"command": "resetExercise",
 				"title": "TMC - Reset exercise"
 			},
@@ -89,6 +93,10 @@
 				},
 				{
 					"command": "resetExercise",
+					"when": "resourceScheme == file && tmcWorkspaceActive"
+				},
+				{
+					"command": "pasteExercise",
 					"when": "resourceScheme == file && tmcWorkspaceActive"
 				}
 			]

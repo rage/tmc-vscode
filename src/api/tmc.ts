@@ -299,7 +299,10 @@ export default class TMC {
      * Archives and submits the specified exercise to the TMC server
      * @param id Exercise id
      */
-    public async submitExercise(id: number): Promise<Result<SubmissionResponse, Error>> {
+    public async submitExercise(
+        id: number,
+        params?: Map<string, string>,
+    ): Promise<Result<SubmissionResponse, Error>> {
         const exerciseFolderPath = this.workspaceManager.getExerciseDataById(id);
 
         if (exerciseFolderPath.err) {
@@ -319,6 +322,11 @@ export default class TMC {
         }
         const archivePath = compressResult.val;
         const form = new FormData();
+        if (params) {
+            params.forEach((value: string, key: string) => {
+                form.append(key as string, value);
+            });
+        }
         form.append("submission[file]", fs.createReadStream(archivePath));
         return this.checkApiResponse(
             this.tmcApiRequest(
@@ -437,6 +445,8 @@ export default class TMC {
 
     /**
      * Performs an HTTP request to the hardcoded TMC server
+     * By default returns from cache if method === get & cache === undefined and data exists in cache.
+     *
      * @param endpoint target API endpoint, can also be complete URL
      * @param method HTTP method, defaults to GET
      */

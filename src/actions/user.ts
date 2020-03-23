@@ -198,6 +198,35 @@ export async function submitExercise(
 }
 
 /**
+ * Sends the exercise to the TMC Paste server.
+ * @param id Exercise ID
+ */
+export async function pasteExercise(id: number, actionContext: ActionContext): Promise<void> {
+    const { tmc } = actionContext;
+    const params = new Map<string, string>();
+    params.set("paste", "1");
+    const submitResult = await tmc.submitExercise(id, params);
+
+    if (submitResult.err) {
+        vscode.window.showErrorMessage(`Failed to paste exercise to server: \
+                ${submitResult.val.name} - ${submitResult.val.message}`);
+        return;
+    }
+
+    vscode.window
+        .showInformationMessage(
+            `Paste to TMC Server successful: \
+            ${submitResult.val.paste_url}`,
+            ...["Open URL"],
+        )
+        .then((selection) => {
+            if (selection == "Open URL") {
+                vscode.env.openExternal(vscode.Uri.parse(submitResult.val.paste_url));
+            }
+        });
+}
+
+/**
  * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
  */
 export async function openWorkspace(actionContext: ActionContext): Promise<void> {

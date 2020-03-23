@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as init from "./init";
 
-import { resetExercise, submitExercise, testExercise } from "./actions";
+import { pasteExercise, resetExercise, submitExercise, testExercise } from "./actions";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import Storage from "./config/storage";
@@ -66,6 +66,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const exerciseId = getCurrentExerciseId(workspaceManager);
             exerciseId
                 ? submitExercise(exerciseId, actionContext)
+                : vscode.window.showErrorMessage(
+                      "Currently open editor is not part of a TMC exercise",
+                  );
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("pasteExercise", async () => {
+            const exerciseId = getCurrentExerciseId(workspaceManager);
+            exerciseId
+                ? pasteExercise(exerciseId, actionContext)
                 : vscode.window.showErrorMessage(
                       "Currently open editor is not part of a TMC exercise",
                   );
