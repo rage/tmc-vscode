@@ -1,12 +1,24 @@
 # Change Log
 
+## Unreleased
+
+### Added
+- Send code to TMC Paste
+- Dropdown menu for TMC Commands
+- Limited download concurrency when downloading many exercises
+
+### Updated
+- Calculate course progress based on points
+- Fix: Workspace watcher path error on Windows
+- Fix: Error on exercise completion checking
+
 ## [0.1.2] - 2020-03-19
 
 ### Added
 - TMC-Readme.txt in the TMC workspace
 - Marketplace icon
 
-## Updated
+### Updated
 - Fix: Fix data validation issue with very old courses in the HY organization
 
 ## [0.1.1] - 2020-03-18
