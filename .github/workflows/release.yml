@@ -1,0 +1,23 @@
+
+name: Release
+
+on: [push]
+
+jobs:
+  make_release:
+    needs: [build_and_upload]
+    runs-on: [ubuntu-latest]
+    strategy:
+      matrix:
+        node-version: [10.x]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v1
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: Dummy
+      run: |
+        npm ci
