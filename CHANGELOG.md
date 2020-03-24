@@ -1,34 +1,43 @@
-# Change Log
+# Changelog
 
 ## Unreleased
 
 ### Added
-- Send code to TMC Paste
-- Dropdown menu for TMC Commands
-- Limited download concurrency when downloading many exercises
+- Send code to TMC Paste.
+- Dropdown menu for TMC Commands.
+
+### Changed
+- Limited download concurrency when downloading many exercises.
+
+### Fixed
+- Workspace watcher path error on Windows.
+- Error on exercise completion checking.
 
 ### Updated
-- Calculate course progress based on points
-- Fix: Workspace watcher path error on Windows
-- Fix: Error on exercise completion checking
+- Calculate course progress based on points.
+- Show Soft deadline for exercises.
 
 ## [0.1.2] - 2020-03-19
 
 ### Added
-- TMC-Readme.txt in the TMC workspace
-- Marketplace icon
+- TMC-Readme.txt in the TMC workspace.
+- Marketplace icon.
 
-### Updated
-- Fix: Fix data validation issue with very old courses in the HY organization
+### Fixed
+- Data validation issue with very old courses in the HY organization.
 
 ## [0.1.1] - 2020-03-18
 
+### Changed
+- Slow deadline fetch in My Courses-view.
+
+### Fixed
+- Missing breadcrumb in Exercise Download-view.
+- Unlockable exercises couldn't be downloaded.
+
 ### Updated
-- Improved button styles in course details and downloads views
-- Improved exercise status tracking to account for missing exercises
-- Fix: Slow deadline fetch in My Courses-view
-- Fix: Missing breadcrumb in Exercise Download-view
-- Fix: Unlockable exercises couldn't be downloaded
+- Improved button styles in course details and downloads views.
+- Improved exercise status tracking to account for missing exercises.
 
 ## [0.1.0] - 2020-03-17
 
