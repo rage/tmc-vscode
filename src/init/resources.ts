@@ -6,6 +6,7 @@ import { Err, Ok, Result } from "ts-results";
 import Resources from "../config/resources";
 import { downloadFile, isJavaPresent } from "../utils";
 import {
+    EXTENSION_ID,
     TMC_JAR,
     WORKSPACE_ROOT_FILE,
     WORKSPACE_ROOT_FILE_TEXT,
@@ -23,8 +24,7 @@ export async function resourceInitialization(
         return new Err(new Error("Java not found or improperly configured."));
     }
 
-    const extensionVersion = vscode.extensions.getExtension("tmc-vscode-temporary.tmc-vscode")
-        ?.packageJSON.version;
+    const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
 
     const cssPath = extensionContext.asAbsolutePath("resources/styles");
     const htmlPath = extensionContext.asAbsolutePath("resources/templates");
