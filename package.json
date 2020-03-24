@@ -21,7 +21,9 @@
 	],
 	"keywords": [
 		"tmc",
-		"test my code"
+		"test", 
+		"my",
+		"code"
 	],
 	"activationEvents": [
 		"workspaceContains:**/TMC-Readme.txt",
