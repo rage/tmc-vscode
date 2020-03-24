@@ -25,22 +25,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const storage = new Storage(context);
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
 
-    // Uncomment this to test the new reconstruction functionality
-    /*
-    storage.updateExerciseData(storage.getExerciseData()?.map((x) => {
-        x.deadline = undefined as unknown as string;
-        return x;
-    }));
-
-    const userd = storage.getUserData();
-    if (userd) {
-        userd.courses = userd.courses.map((x) => ({id: x.id, organization: x.organization} as LocalCourseData));
-        storage.updateUserData(userd);
-    }
-    */
-
-    const tmcTemp = new TMC((undefined as unknown) as WorkspaceManager, storage, resources);
-    const validationResult = await validateAndFix(storage, tmcTemp, ui, resources);
+    const tmc = new TMC(storage, resources);
+    const validationResult = await validateAndFix(storage, tmc, ui, resources);
     if (validationResult.err) {
         vscode.window.showErrorMessage(
             "Data reconstruction failed: " + validationResult.val.message,
@@ -49,7 +35,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const workspaceManager = new WorkspaceManager(storage, resources);
-    const tmc = new TMC(workspaceManager, storage, resources);
+    tmc.setWorkspaceManager(workspaceManager);
     const userData = new UserData(storage);
 
     init.registerUiActions(ui, storage, tmc, workspaceManager, resources, userData);

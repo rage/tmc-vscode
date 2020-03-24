@@ -209,6 +209,12 @@ export async function askForConfirmation(prompt: string): Promise<boolean> {
     return success;
 }
 
+export function displayProgrammerError(description: string): void {
+    vscode.window.showErrorMessage(
+        (isProductionBuild() ? "" : "Programmer ") + "Error: " + description,
+    );
+}
+
 /**
  * Prompts a selection to the user for multiple different options and returns its associated generic type.
  */

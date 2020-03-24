@@ -11,7 +11,7 @@ import Storage from "../config/storage";
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
-import { downloadFile } from "../utils";
+import { displayProgrammerError, downloadFile } from "../utils";
 import {
     Course,
     CourseDetails,
@@ -41,7 +41,7 @@ export default class TMC {
     private readonly tmcLangsPath: string;
     private readonly tmcApiUrl: string;
     private readonly tmcDefaultHeaders: { client: string; client_version: string };
-    private readonly workspaceManager: WorkspaceManager;
+    private workspaceManager?: WorkspaceManager;
 
     private readonly cache: Map<string, TMCApiResponse>;
 
@@ -50,7 +50,7 @@ export default class TMC {
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(exerciseManager: WorkspaceManager, storage: Storage, resources: Resources) {
+    constructor(storage: Storage, resources: Resources) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: ACCESS_TOKEN_URI,
             clientId: CLIENT_ID,
@@ -65,12 +65,18 @@ export default class TMC {
         this.tmcLangsPath = resources.tmcLangsPath;
         this.tmcApiUrl = TMC_API_URL;
         this.cache = new Map();
-        this.workspaceManager = exerciseManager;
         this.tmcDefaultHeaders = {
             client: "vscode_plugin",
             // eslint-disable-next-line @typescript-eslint/camelcase
             client_version: resources.extensionVersion,
         };
+    }
+
+    public setWorkspaceManager(workspaceManager: WorkspaceManager): void {
+        if (this.workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager already assigned");
+        }
+        this.workspaceManager = workspaceManager;
     }
 
     /**
@@ -211,6 +217,9 @@ export default class TMC {
         id: number,
         organizationSlug: string,
     ): Promise<Result<string, Error>> {
+        if (!this.workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
+        }
         const archivePath = `${this.dataPath}/${id}.zip`;
 
         const result = await downloadFile(
@@ -281,6 +290,9 @@ export default class TMC {
      * @param id Id of the exercise
      */
     public async runTests(id: number): Promise<Result<TmcLangsTestResults, Error>> {
+        if (!this.workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
+        }
         const exerciseFolderPath = this.workspaceManager.getExerciseDataById(id);
         if (exerciseFolderPath.err) {
             return new Err(new Error("???"));
@@ -303,6 +315,9 @@ export default class TMC {
         id: number,
         params?: Map<string, string>,
     ): Promise<Result<SubmissionResponse, Error>> {
+        if (!this.workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
+        }
         const exerciseFolderPath = this.workspaceManager.getExerciseDataById(id);
 
         if (exerciseFolderPath.err) {
