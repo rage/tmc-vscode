@@ -1,23 +1,24 @@
 
 name: Release
 
-on: [push]
+#on:
+#  create:
+#    ref_type: 'tag'
+
+# Temp check pushes instead of having to create tags
+on:
+  push:
+    branches:
+      tag-release
 
 jobs:
-  make_release:
-    needs: [build_and_upload]
-    runs-on: [ubuntu-latest]
-    strategy:
-      matrix:
-        node-version: [10.x]
-    
+  hello:
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
       uses: actions/checkout@v1
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
-      with:
-        node-version: ${{ matrix.node-version }}
-    - name: Dummy
+    - name: Validate release
       run: |
-        npm ci
+        chmod +x bin/validateRelease.sh
+        # Temp simulated pass / ${{ github.ref }}
+        bin/validateRelease.sh refs/tags/v0.1.2
