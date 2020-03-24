@@ -114,7 +114,18 @@
                             />
                         </td>
                         <td>{{this.name}}</td>
+                        {{#if this.isHard}}
                         <td>{{this.deadlineString}}</td>
+                        {{else}}
+                        <td>
+                            {{this.deadlineString}}
+                            <span
+                                title="Soft deadlines can be exceeded. Exercises can be submitted after the soft deadline has passed, but you  receive only 75% of the exercise points. Hard deadline for this exercise is:{{this.hardDeadlineString}}.Hard deadline can not be exceeded."
+                            >
+                                &#9432;
+                            </span>
+                        </td>
+                        {{/if}}
                         <td class="text-center">
                             {{#if this.passed}} &#10004; {{else}} &#10060; {{/if}}
                         </td>

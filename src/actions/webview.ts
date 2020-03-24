@@ -86,21 +86,45 @@ export async function displayLocalCourseDetails(
             isClosed: boolean;
             passed: boolean;
             deadlineString: string;
-            softDeadlineString: string | null;
+            hardDeadlineString: string;
+            isHard: boolean;
         }
     >();
 
-    workspaceExercises?.forEach((x) =>
-        exerciseData.set(x.id, {
-            softDeadlineString: x.softDeadline,
-            deadlineString: x.deadline ? dateToString(parseDate(x.deadline)) : "-",
-            id: x.id,
-            isOpen: x.status === ExerciseStatus.OPEN,
-            isClosed: x.status === ExerciseStatus.CLOSED,
-            name: x.name,
+    // workspaceExercises?.forEach((x) =>
+    //     exerciseData.set(x.id, {
+    //         softDeadlineString: x.softDeadline,
+    //         deadlineString: x.deadline ? dateToString(parseDate(x.deadline)) : "-",
+    //         id: x.id,
+    //         isOpen: x.status === ExerciseStatus.OPEN,
+    //         isClosed: x.status === ExerciseStatus.CLOSED,
+    //         name: x.name,
+    //         passed: false,
+    //     }),
+    // );
+
+    workspaceExercises.forEach((ex) => {
+        const date = new Date();
+        let deadline = "-";
+        let hard = true;
+        if (ex.softDeadline != null && date < parseDate(ex.softDeadline)) {
+            deadline = dateToString(parseDate(ex.softDeadline));
+            hard = false;
+        } else if (ex.deadline) {
+            deadline = dateToString(parseDate(ex.deadline));
+        }
+
+        exerciseData.set(ex.id, {
+            deadlineString: deadline,
+            isHard: hard,
+            hardDeadlineString: ex.deadline ? dateToString(parseDate(ex.deadline)) : "-",
+            id: ex.id,
+            isOpen: ex.status === ExerciseStatus.OPEN,
+            isClosed: ex.status === ExerciseStatus.CLOSED,
+            name: ex.name,
             passed: false,
-        }),
-    );
+        });
+    });
 
     course.exercises.forEach((x) => {
         const data = exerciseData.get(x.id);
@@ -113,7 +137,7 @@ export async function displayLocalCourseDetails(
     const sortedExercises = Array.from(exerciseData.values()).sort((a, b) =>
         a.deadlineString === b.deadlineString
             ? a.name.localeCompare(b.name)
-            : a.deadlineString.localeCompare(b.deadlineString),
+            : compareDates(parseDate(a.deadlineString), parseDate(b.deadlineString)),
     );
 
     await ui.webview.setContentFromTemplate(
@@ -121,6 +145,14 @@ export async function displayLocalCourseDetails(
         { exerciseData: sortedExercises, course, courseId: course.id },
         true,
     );
+}
+
+function compareDates(a: Date, b: Date): number {
+    if (a > b) {
+        return 1;
+    } else {
+        return -1;
+    }
 }
 
 /**
