@@ -6,6 +6,7 @@ exitCode=0
 tagVersion=`echo $1 | cut -d'v' -f 2`
 if [[ ! $tagVersion =~ ^[0-9]+.[0-9]+.[0-9]+ ]]
 then
+    echo "::set-env name=RELEASE_TAG::"$tagVersion
     echo "Error: Version tag must match the format vX.Y.Z."
     exitCode=1
 fi

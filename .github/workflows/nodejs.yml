@@ -1,10 +1,7 @@
 
 name: Node CI
 
-on: 
-  push:
-    branches-ignore:
-      tag-release
+on: [push]
 
 jobs:
   test_linux:
@@ -12,7 +9,7 @@ jobs:
     strategy:
       matrix:
         node-version: [10.x]
-        
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v1
@@ -54,6 +51,7 @@ jobs:
         npm test
       env:
         CI: true
+
   test_macos:
     runs-on: macos-latest
     strategy:
@@ -106,3 +104,9 @@ jobs:
       with:
         name: packaged-extension
         path: extension/
+    - name: Publish if ${{ github.ref }} is a tag
+      if: startsWith( github.ref, 'refs/tags/v' )
+      run: |
+        chmod +x bin/validateRelease.sh
+        bin/validateRelease.sh ${{ github.ref }}
+        vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} --packagePath extension/*.vsix
