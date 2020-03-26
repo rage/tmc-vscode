@@ -24,8 +24,8 @@ import {
     SubmissionStatusReport,
     TMCApiResponse,
     TmcLangsAction,
+    TmcLangsPath,
     TmcLangsResponse,
-    TmcLangsResponseTypes,
     TmcLangsTestResults,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
@@ -261,14 +261,14 @@ export default class TMC {
             return new Err(exercisePath.val);
         }
 
-        const extractResult = await this.executeLangsAction({
-            action: "extract-project",
-            archivePath,
-            exerciseFolderPath: exercisePath.val,
-        });
-        if (extractResult.ok && !is<string>(extractResult.val.response)) {
-            return new Err(new ApiError("Incorrect response type"));
-        }
+        const extractResult = await this.checkApiResponse(
+            this.executeLangsAction({
+                action: "extract-project",
+                archivePath,
+                exerciseFolderPath: exercisePath.val,
+            }),
+            createIs<TmcLangsPath>(),
+        );
 
         if (extractResult.err) {
             this.workspaceManager.deleteExercise(id);
@@ -290,9 +290,7 @@ export default class TMC {
      * Runs tests locally for an exercise
      * @param id Id of the exercise
      */
-    public async runTests(
-        id: number,
-    ): Promise<Result<TmcLangsResponse<TmcLangsTestResults>, Error>> {
+    public async runTests(id: number): Promise<Result<TmcLangsTestResults, Error>> {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
@@ -301,14 +299,13 @@ export default class TMC {
             return new Err(new Error("???"));
         }
 
-        const testResult = await this.executeLangsAction({
-            action: "run-tests",
-            exerciseFolderPath: exerciseFolderPath.val.path,
-        });
-        if (testResult.ok && !is<TmcLangsTestResults>(testResult.val.response)) {
-            return new Err(new ApiError("Incorrect response type"));
-        }
-        return testResult as Result<TmcLangsResponse<TmcLangsTestResults>, Error>;
+        return this.checkApiResponse(
+            this.executeLangsAction({
+                action: "run-tests",
+                exerciseFolderPath: exerciseFolderPath.val.path,
+            }),
+            createIs<TmcLangsTestResults>(),
+        );
     }
 
     /**
@@ -328,16 +325,16 @@ export default class TMC {
             return new Err(new Error("???"));
         }
 
-        const compressResult = await this.executeLangsAction({
-            action: "compress-project",
-            archivePath: `${this.dataPath}/${id}-new.zip`,
-            exerciseFolderPath: exerciseFolderPath.val.path,
-        });
+        const compressResult = await this.checkApiResponse(
+            this.executeLangsAction({
+                action: "compress-project",
+                archivePath: `${this.dataPath}/${id}-new.zip`,
+                exerciseFolderPath: exerciseFolderPath.val.path,
+            }),
+            createIs<TmcLangsPath>(),
+        );
         if (compressResult.err) {
             return new Err(compressResult.val);
-        }
-        if (compressResult.ok && !is<string>(compressResult.val.response)) {
-            return new Err(new ApiError("Incorrect response type"));
         }
 
         const archivePath = compressResult.val.response as string;
@@ -386,7 +383,7 @@ export default class TMC {
      */
     private async executeLangsAction(
         tmcLangsAction: TmcLangsAction,
-    ): Promise<Result<TmcLangsResponse<TmcLangsResponseTypes>, Error>> {
+    ): Promise<Result<TmcLangsResponse, Error>> {
         const action = tmcLangsAction.action;
         let exercisePath = "";
         let outputPath = "";
@@ -438,7 +435,7 @@ export default class TMC {
 
         const result = { response: JSON.parse(fs.readFileSync(outputPath, "utf8")), logs };
         del.sync(outputPath, { force: true });
-        if (is<TmcLangsResponseTypes>(result.response)) {
+        if (is<TmcLangsResponse>(result)) {
             return new Ok(result);
         }
 

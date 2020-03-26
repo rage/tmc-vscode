@@ -202,6 +202,13 @@ export type TmcLangsAction =
           exerciseFolderPath: string;
       };
 
+export type TmcLangsLogs = {
+    logs: {
+        stdout: string;
+        stderr: string;
+    };
+};
+
 export type TmcLangsTestResult = {
     name: string;
     successful: boolean;
@@ -212,20 +219,18 @@ export type TmcLangsTestResult = {
 };
 
 export type TmcLangsTestResults = {
-    status: string;
-    testResults: TmcLangsTestResult[];
-    logs: {
-        stdout?: number[];
-        stderr?: number[];
+    response: {
+        status: string;
+        testResults: TmcLangsTestResult[];
+        logs: {
+            stdout?: number[];
+            stderr?: number[];
+        };
     };
-};
+} & TmcLangsLogs;
 
-export type TmcLangsResponseTypes = string | TmcLangsTestResults;
+export type TmcLangsPath = {
+    response: string;
+} & TmcLangsLogs;
 
-export type TmcLangsResponse<T extends TmcLangsResponseTypes> = {
-    response: T;
-    logs: {
-        stdout: string;
-        stderr: string;
-    };
-};
+export type TmcLangsResponse = TmcLangsPath | TmcLangsTestResults;
