@@ -91,7 +91,6 @@
                         {{/if}}
                     </tr>
                 </thead>
-                {{#if this.showDeadline}}
                 <tbody>
                     {{#each this.exercises}}
                     <tr>
@@ -100,35 +99,18 @@
                             <input
                                 class="checkbox-xl"
                                 type="checkbox"
-                                value="{{this.id}}"
+                                value="{{this.exercise.id}}"
                                 onchange="updateCount(this)"
                             />
                             {{else}} - {{/if}}
                         </td>
                         <td>{{this.exercise.name}}</td>
+                        {{#if ../showDeadline}}
                         <td>{{this.correctDeadline}}</td>
+                        {{/if}}
                     </tr>
                     {{/each}}
                 </tbody>
-                {{else}}
-                <tbody>
-                    {{#each this.exercises}}
-                    <tr>
-                        <td class="text-center">
-                            {{#if ../downloadable}}
-                            <input
-                                class="checkbox-xl"
-                                type="checkbox"
-                                value="{{this.id}}"
-                                onchange="updateCount(this)"
-                            />
-                            {{else}} - {{/if}}
-                        </td>
-                        <td>{{this.exercise.name}}</td>
-                    </tr>
-                    {{/each}}
-                </tbody>
-                {{/if}}
             </table>
         </div>
         {{/each}}
@@ -173,7 +155,6 @@
             }
 
             function downloadSelectedExercises() {
-                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
                 const ids = [];
                 for (const checkbox of checkboxes) {
                     if (checkbox.checked) {
