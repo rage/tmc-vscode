@@ -27,15 +27,15 @@
                 </div>
                 <div class="row">
                     <div class="col">
-                        <div class="py-2">
-                            <h1>{{details.title}}</h1>
-                        </div>
-                        <div class="row p-2">
-                            <span>{{details.description}}</span>
-                        </div>
-                        <div class="row py-2">
-                            <div class="col-sm-3">
-                                <h3 class="mt-2">Select</h3>
+                        <h1>{{details.title}}</h1>
+                        <p>{{details.description}}</p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h3>Select</h3>
                                 <button
                                     class="btn-primary m-1 w-100"
                                     onclick="toggleAll()"
@@ -45,9 +45,9 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="row py-2">
-                            <div class="col-sm-3">
-                                <h3 class="mt-2">Action</h3>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h3>Action</h3>
                                 <button
                                     class="btn-success m-1 w-100"
                                     onclick="downloadSelectedExercises()"
@@ -56,22 +56,20 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
+                    <div class="col-md-6">
                         <div class="row">
-                            <div class="col">
-                                <h3 class="mt-2">Show</h3>
-                                <div class="row">
-                                    {{#each exerciseLists}}
-                                    <div class="col-sm-3">
-                                        <button
-                                            class="btn-primary m-1 w-100"
-                                            id="show{{this.id}}"
-                                            onclick="showList('{{this.id}}')"
-                                        >
-                                            {{this.button}} ({{this.exercises.length}})
-                                        </button>
-                                    </div>
-                                    {{/each}}
-                                </div>
+                            <div class="col-md-6">
+                                <h3>Show</h3>
+                                {{#each exerciseLists}}
+                                <button
+                                    class="btn-primary m-1 w-100"
+                                    id="show{{this.id}}"
+                                    onclick="showList('{{this.id}}')"
+                                >
+                                    {{this.button}} ({{this.exercises.length}})
+                                </button>
+                                {{/each}}
                             </div>
                         </div>
                     </div>
