@@ -90,13 +90,13 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
     const testResult = await tmc.runTests(id);
     if (testResult.err) {
         ui.setStatusBar(`Running tests for ${exerciseName} failed`, 5000);
+        temp.setContent("error", { error: testResult.val });
         vscode.window.showErrorMessage(`Exercise test run failed: \
        ${testResult.val.name} - ${testResult.val.message}`);
         return;
     }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
-    const testResultVal = testResult.val;
-    const data = { testResultVal, id, exerciseName };
+    const data = { testResult: testResult.val.response, id, exerciseName };
     temp.setContent("test-result", data);
 }
 

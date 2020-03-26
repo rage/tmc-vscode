@@ -220,4 +220,12 @@ export type TmcLangsTestResults = {
     };
 };
 
-export type TmcLangsResponse = string | TmcLangsTestResults;
+export type TmcLangsResponseTypes = string | TmcLangsTestResults;
+
+export type TmcLangsResponse<T extends TmcLangsResponseTypes> = {
+    response: T;
+    logs: {
+        stdout: string;
+        stderr: string;
+    };
+};

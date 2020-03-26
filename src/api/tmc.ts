@@ -25,6 +25,7 @@ import {
     TMCApiResponse,
     TmcLangsAction,
     TmcLangsResponse,
+    TmcLangsResponseTypes,
     TmcLangsTestResults,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
@@ -266,7 +267,7 @@ export default class TMC {
                 archivePath,
                 exerciseFolderPath: exercisePath.val,
             }),
-            createIs<string>(),
+            createIs<TmcLangsResponse<string>>(),
         );
 
         if (extractResult.err) {
@@ -289,7 +290,9 @@ export default class TMC {
      * Runs tests locally for an exercise
      * @param id Id of the exercise
      */
-    public async runTests(id: number): Promise<Result<TmcLangsTestResults, Error>> {
+    public async runTests(
+        id: number,
+    ): Promise<Result<TmcLangsResponse<TmcLangsTestResults>, Error>> {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
@@ -303,7 +306,7 @@ export default class TMC {
                 action: "run-tests",
                 exerciseFolderPath: exerciseFolderPath.val.path,
             }),
-            createIs<TmcLangsTestResults>(),
+            createIs<TmcLangsResponse<TmcLangsTestResults>>(),
         );
     }
 
@@ -330,12 +333,12 @@ export default class TMC {
                 archivePath: `${this.dataPath}/${id}-new.zip`,
                 exerciseFolderPath: exerciseFolderPath.val.path,
             }),
-            createIs<string>(),
+            createIs<TmcLangsResponse<string>>(),
         );
         if (compressResult.err) {
             return new Err(compressResult.val);
         }
-        const archivePath = compressResult.val;
+        const archivePath = compressResult.val.response;
         const form = new FormData();
         if (params) {
             params.forEach((value: string, key: string) => {
@@ -381,7 +384,7 @@ export default class TMC {
      */
     private async executeLangsAction(
         tmcLangsAction: TmcLangsAction,
-    ): Promise<Result<TmcLangsResponse, Error>> {
+    ): Promise<Result<TmcLangsResponse<TmcLangsResponseTypes>, Error>> {
         const action = tmcLangsAction.action;
         let exercisePath = "";
         let outputPath = "";
@@ -409,23 +412,31 @@ export default class TMC {
         const arg1 = `--outputPath="${outputPath}"`;
 
         console.log(`java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`);
+
+        let [stdout, stderr] = ["", ""];
         try {
-            await new Promise((resolve, reject) => {
-                cp.exec(`java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`, (err) =>
-                    err ? reject(err) : resolve(),
+            [stdout, stderr] = await new Promise((resolve, reject) => {
+                cp.exec(
+                    `java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`,
+                    (err, stdout, stderr) => (err ? reject(err) : resolve([stdout, stderr])),
                 );
             });
         } catch (err) {
             return new Err(err);
         }
 
+        const logs = {
+            stdout,
+            stderr,
+        };
+
         if (action === "extract-project" || action === "compress-project") {
-            return new Ok(outputPath);
+            return new Ok({ response: outputPath, logs });
         }
 
-        const result = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+        const result = { response: JSON.parse(fs.readFileSync(outputPath, "utf8")), logs };
         del.sync(outputPath, { force: true });
-        if (is<TmcLangsResponse>(result)) {
+        if (is<TmcLangsResponse<TmcLangsResponseTypes>>(result)) {
             return new Ok(result);
         }
 

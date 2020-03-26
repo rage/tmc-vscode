@@ -9,14 +9,13 @@
         <div class="container">
             <div class="row">
                 <div class="py-2">
-                    {{{ check_test_status testResultVal.status testResultVal.logs }}}
+                    {{{ check_test_status testResult.status testResult.logs }}}
                 </div>
             </div>
             <div class="row">
-                {{#if testResultVal.testResults}} {{{progress_bar testResultVal.testResults}}}
-                {{/if}}
+                {{#if testResult.testResults}} {{{progress_bar testResult.testResults}}} {{/if}}
             </div>
-            {{#each testResultVal.testResults}}
+            {{#each testResult.testResults}}
 
             <div class="row {{#if this.successful}}passed{{else}}failed{{/if}} my-2">
                 <div class="col">
