@@ -16,7 +16,6 @@ export async function downloadExercises(
     actionContext: ActionContext,
     ids: number[],
     organizationSlug: string,
-    //courseName: string,
     courseId: number,
 ): Promise<void> {
     const { tmc, ui } = actionContext;

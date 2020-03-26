@@ -261,14 +261,14 @@ export default class TMC {
             return new Err(exercisePath.val);
         }
 
-        const extractResult = await this.checkApiResponse(
-            this.executeLangsAction({
-                action: "extract-project",
-                archivePath,
-                exerciseFolderPath: exercisePath.val,
-            }),
-            createIs<TmcLangsResponse<string>>(),
-        );
+        const extractResult = await this.executeLangsAction({
+            action: "extract-project",
+            archivePath,
+            exerciseFolderPath: exercisePath.val,
+        });
+        if (extractResult.ok && !is<string>(extractResult.val.response)) {
+            return new Err(new ApiError("Incorrect response type"));
+        }
 
         if (extractResult.err) {
             this.workspaceManager.deleteExercise(id);
@@ -301,13 +301,14 @@ export default class TMC {
             return new Err(new Error("???"));
         }
 
-        return this.checkApiResponse(
-            this.executeLangsAction({
-                action: "run-tests",
-                exerciseFolderPath: exerciseFolderPath.val.path,
-            }),
-            createIs<TmcLangsResponse<TmcLangsTestResults>>(),
-        );
+        const testResult = await this.executeLangsAction({
+            action: "run-tests",
+            exerciseFolderPath: exerciseFolderPath.val.path,
+        });
+        if (testResult.ok && !is<TmcLangsTestResults>(testResult.val.response)) {
+            return new Err(new ApiError("Incorrect response type"));
+        }
+        return testResult as Result<TmcLangsResponse<TmcLangsTestResults>, Error>;
     }
 
     /**
@@ -327,18 +328,19 @@ export default class TMC {
             return new Err(new Error("???"));
         }
 
-        const compressResult = await this.checkApiResponse(
-            this.executeLangsAction({
-                action: "compress-project",
-                archivePath: `${this.dataPath}/${id}-new.zip`,
-                exerciseFolderPath: exerciseFolderPath.val.path,
-            }),
-            createIs<TmcLangsResponse<string>>(),
-        );
+        const compressResult = await this.executeLangsAction({
+            action: "compress-project",
+            archivePath: `${this.dataPath}/${id}-new.zip`,
+            exerciseFolderPath: exerciseFolderPath.val.path,
+        });
         if (compressResult.err) {
             return new Err(compressResult.val);
         }
-        const archivePath = compressResult.val.response;
+        if (compressResult.ok && !is<string>(compressResult.val.response)) {
+            return new Err(new ApiError("Incorrect response type"));
+        }
+
+        const archivePath = compressResult.val.response as string;
         const form = new FormData();
         if (params) {
             params.forEach((value: string, key: string) => {
@@ -436,7 +438,7 @@ export default class TMC {
 
         const result = { response: JSON.parse(fs.readFileSync(outputPath, "utf8")), logs };
         del.sync(outputPath, { force: true });
-        if (is<TmcLangsResponse<TmcLangsResponseTypes>>(result)) {
+        if (is<TmcLangsResponseTypes>(result.response)) {
             return new Ok(result);
         }
 

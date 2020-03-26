@@ -88,13 +88,7 @@ export function registerUiActions(
             if (!(msg.type && msg.ids && msg.courseName && msg.organizationSlug && msg.courseId)) {
                 return;
             }
-            downloadExercises(
-                actionContext,
-                msg.ids,
-                msg.organizationSlug,
-                msg.courseName,
-                msg.courseId,
-            );
+            downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseId);
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
