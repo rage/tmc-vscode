@@ -60,51 +60,17 @@
                             <div class="col">
                                 <h3 class="mt-2">Show</h3>
                                 <div class="row">
-                                    <div class="col-sm-3">
-                                        <button
-                                            class="btn-secondary m-1 w-100"
-                                            id="showUncompleted"
-                                            onclick="showList('uncompletedExercises')"
-                                        >
-                                            Uncompleted ({{uncompletedExercises.length}})
-                                        </button>
-                                    </div>
+                                    {{#each exerciseLists}}
                                     <div class="col-sm-3">
                                         <button
                                             class="btn-primary m-1 w-100"
-                                            id="showCompleted"
-                                            onclick="showList('completedExercises')"
+                                            id="show{{this.id}}"
+                                            onclick="showList('{{this.id}}')"
                                         >
-                                            Completed ({{completedExercises.length}})
+                                            {{this.button}} ({{this.exercises.length}})
                                         </button>
                                     </div>
-                                    <div class="col-sm-3">
-                                        <button
-                                            class="btn-primary m-1 w-100"
-                                            id="showDownloaded"
-                                            onclick="showList('downloadedExercises')"
-                                        >
-                                            Downloaded ({{downloadedExercises.length}})
-                                        </button>
-                                    </div>
-                                    <div class="col-sm-3">
-                                        <button
-                                            class="btn-primary m-1 w-100"
-                                            id="showLocked"
-                                            onclick="showList('lockedExercises')"
-                                        >
-                                            Locked ({{lockedExercises.length}})
-                                        </button>
-                                    </div>
-                                    <div class="col-sm-3">
-                                        <button
-                                            class="btn-primary m-1 w-100"
-                                            id="showUpdated"
-                                            onclick="showList('updatedExercises')"
-                                        >
-                                            Updateable ({{updatedExercises.length}})
-                                        </button>
-                                    </div>
+                                    {{/each}}
                                 </div>
                             </div>
                         </div>
@@ -112,8 +78,9 @@
                 </div>
             </div>
         </div>
-        <div class="container" id="uncompletedExercises" style="display:block">
-            <h4>Uncompleted exercises</h4>
+        {{#each exerciseLists}}
+        <div class="container" id="{{this.id}}" style="display:none">
+            <h4>{{this.title}}</h4>
             <table class="table table-striped">
                 <thead>
                     <tr>
@@ -122,15 +89,17 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {{#each uncompletedExercises}}
+                    {{#each this.exercises}}
                     <tr>
                         <td class="text-center">
+                            {{#if ../downloadable}}
                             <input
                                 class="checkbox-xl"
                                 type="checkbox"
                                 value="{{this.id}}"
                                 onchange="updateCount(this)"
                             />
+                            {{else}} - {{/if}}
                         </td>
                         <td>{{this.name}}</td>
                     </tr>
@@ -138,122 +107,28 @@
                 </tbody>
             </table>
         </div>
-        <div class="container" id="completedExercises" style="display:none">
-            <h4>Completed exercises</h4>
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th scope="col">Select</th>
-                        <th scope="col">Exercise name</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{#each completedExercises}}
-                    <tr>
-                        <td class="text-center">
-                            <input
-                                class="checkbox-xl"
-                                type="checkbox"
-                                value="{{this.id}}"
-                                onchange="updateCount(this)"
-                            />
-                        </td>
-                        <td>{{this.name}}</td>
-                    </tr>
-                    {{/each}}
-                </tbody>
-            </table>
-        </div>
-        <div class="container" id="downloadedExercises" style="display:none">
-            <h4>Downloaded exercises</h4>
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th scope="col">Select</th>
-                        <th scope="col">Exercise name</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{#each downloadedExercises}}
-                    <tr>
-                        <td class="text-center">
-                            -
-                        </td>
-                        <td>{{this.name}}</td>
-                    </tr>
-                    {{/each}}
-                </tbody>
-            </table>
-        </div>
-        <div class="container" id="lockedExercises" style="display:none">
-            <h4>Locked exercises</h4>
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th scope="col">Select</th>
-                        <th scope="col">Exercise name</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{#each lockedExercises}}
-                    <tr>
-                        <td class="text-center">
-                            -
-                        </td>
-                        <td>{{this.name}}</td>
-                    </tr>
-                    {{/each}}
-                </tbody>
-            </table>
-        </div>
-        <div class="container" id="updatedExercises" style="display:none">
-            <h4>Updateable exercises</h4>
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th scope="col">Select</th>
-                        <th scope="col">Exercise name</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{#each updatedExercises}}
-                    <tr>
-                        <td class="text-center">
-                            <input
-                                class="checkbox-xl"
-                                type="checkbox"
-                                value="{{this.id}}"
-                                onchange="updateCount(this)"
-                            />
-                        </td>
-                        <td>{{this.name}}</td>
-                    </tr>
-                    {{/each}}
-                </tbody>
-            </table>
-        </div>
+        {{/each}}
 
         <script>
             const vscode = acquireVsCodeApi();
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            const checkboxesByContainer = {
-                completedExercises: document.getElementById("completedExercises").querySelectorAll('input[type="checkbox"]'),
-                uncompletedExercises: document.getElementById("uncompletedExercises").querySelectorAll('input[type="checkbox"]'),
-                lockedExercises: [],
-                downloadedExercises: [],
-                updatedExercises: document.getElementById("updatedExercises").querySelectorAll('input[type="checkbox"]'),
-            };
-            const buttonsByContainer = {
-                completedExercises: document.getElementById("showCompleted"),
-                uncompletedExercises: document.getElementById("showUncompleted"),
-                lockedExercises: document.getElementById("showLocked"),
-                downloadedExercises: document.getElementById("showDownloaded"),
-                updatedExercises: document.getElementById("showUpdated"),
+            const containers = [
+            {{#each exerciseLists}} "{{this.id}}", {{/each}}
+            ];
+            const checkboxesByContainer = {};
+            const buttonsByContainer = {};
+            for (const id of containers) {
+                checkboxesByContainer[id] = document.getElementById(id).querySelectorAll('input[type="checkbox"]');
+                buttonsByContainer[id] = document.getElementById("show"+id);
             };
             const toggleButton = document.querySelector("button#togglebutton");
-            let currentContainer = "uncompletedExercises";
+            let currentContainer = containers[0];
             let selectedCount = 0;
             let totalCount = checkboxesByContainer[currentContainer].length;
+
+            buttonsByContainer[currentContainer].classList.remove('btn-primary');
+            buttonsByContainer[currentContainer].classList.add('btn-secondary');
+            document.getElementById(currentContainer).style.display="block";
 
             function showList(id) {
                 if (currentContainer !== id) {

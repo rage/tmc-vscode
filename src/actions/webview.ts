@@ -309,16 +309,48 @@ export async function displayCourseDownloads(
         [[], [], [], [], []],
     );
 
+    const exerciseLists = [
+        {
+            id: "uncompletedExercises",
+            exercises: uncompletedExercises,
+            button: "Uncompleted",
+            title: "Uncompleted exercises",
+            downloadable: true,
+        },
+        {
+            id: "completedExercises",
+            exercises: completedExercises,
+            button: "Completed",
+            title: "Completed exercises",
+            downloadable: true,
+        },
+        {
+            id: "downloadedExercises",
+            exercises: downloadedExercises,
+            button: "Downloaded",
+            title: "Downloaded exercises",
+        },
+        {
+            id: "lockedExercises",
+            exercises: lockedExercises,
+            button: "Locked",
+            title: "Locked exercises",
+        },
+        {
+            id: "updatedExercises",
+            exercises: updatedExercises,
+            button: "Updateable",
+            title: "Updateable exercises",
+            downloadable: true,
+        },
+    ];
+
     const data = {
         courseId,
         courseName: result.val.course.name,
         details,
         organizationSlug,
-        uncompletedExercises,
-        completedExercises,
-        lockedExercises,
-        downloadedExercises,
-        updatedExercises,
+        exerciseLists,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
     return Ok.EMPTY;
