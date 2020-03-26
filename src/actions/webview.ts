@@ -275,31 +275,49 @@ export async function displayCourseDownloads(
         return new Err(new Error("Course data not found"));
     }
 
+    const allExercises: { exercise: Exercise; correctDeadline: string }[] = [];
+    details.exercises.forEach((ex) => {
+        let deadline = "-";
+        if (ex.deadline) {
+            deadline = dateToString(parseDate(ex.deadline));
+        }
+        const data = { exercise: ex, correctDeadline: deadline };
+        allExercises.push(data);
+    });
+
     const [
         uncompletedExercises,
         completedExercises,
         lockedExercises,
         downloadedExercises,
         updatedExercises,
-    ] = details.exercises.reduce<[Exercise[], Exercise[], Exercise[], Exercise[], Exercise[]]>(
+    ] = allExercises.reduce<
+        [
+            { exercise: Exercise; correctDeadline: string }[],
+            { exercise: Exercise; correctDeadline: string }[],
+            { exercise: Exercise; correctDeadline: string }[],
+            { exercise: Exercise; correctDeadline: string }[],
+            { exercise: Exercise; correctDeadline: string }[],
+        ]
+    >(
         (a, x) => {
             if (
                 workspaceManager
-                    .getExerciseDataById(x.id)
+                    .getExerciseDataById(x.exercise.id)
                     .map((x) => x.updateAvailable)
                     .mapErr(() => false).val
             ) {
                 a[4].push(x);
             } else if (
                 workspaceManager
-                    .getExerciseDataById(x.id)
+                    .getExerciseDataById(x.exercise.id)
                     .map((x) => x.status !== ExerciseStatus.MISSING)
                     .mapErr(() => false).val
             ) {
                 a[3].push(x);
-            } else if (x.locked) {
+            } else if (x.exercise.locked) {
                 a[2].push(x);
-            } else if (x.completed) {
+            } else if (x.exercise.completed) {
                 a[1].push(x);
             } else {
                 a[0].push(x);
@@ -316,6 +334,7 @@ export async function displayCourseDownloads(
             button: "Uncompleted",
             title: "Uncompleted exercises",
             downloadable: true,
+            showDeadline: true,
         },
         {
             id: "completedExercises",
@@ -342,6 +361,7 @@ export async function displayCourseDownloads(
             button: "Updateable",
             title: "Updateable exercises",
             downloadable: true,
+            showDeadline: true,
         },
     ];
 

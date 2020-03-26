@@ -86,8 +86,12 @@
                     <tr>
                         <th scope="col">Select</th>
                         <th scope="col">Exercise name</th>
+                        {{#if this.showDeadline}}
+                        <th scope="col">Deadline</th>
+                        {{/if}}
                     </tr>
                 </thead>
+                {{#if this.showDeadline}}
                 <tbody>
                     {{#each this.exercises}}
                     <tr>
@@ -101,10 +105,30 @@
                             />
                             {{else}} - {{/if}}
                         </td>
-                        <td>{{this.name}}</td>
+                        <td>{{this.exercise.name}}</td>
+                        <td>{{this.correctDeadline}}</td>
                     </tr>
                     {{/each}}
                 </tbody>
+                {{else}}
+                <tbody>
+                    {{#each this.exercises}}
+                    <tr>
+                        <td class="text-center">
+                            {{#if ../downloadable}}
+                            <input
+                                class="checkbox-xl"
+                                type="checkbox"
+                                value="{{this.id}}"
+                                onchange="updateCount(this)"
+                            />
+                            {{else}} - {{/if}}
+                        </td>
+                        <td>{{this.exercise.name}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+                {{/if}}
             </table>
         </div>
         {{/each}}
