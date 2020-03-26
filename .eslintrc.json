@@ -18,7 +18,6 @@
         "@typescript-eslint",
         "prettier"
     ],
-    "ignorePatterns": ["!.github/**"],
     "rules": {
         "@typescript-eslint/no-use-before-define": [
             "error",

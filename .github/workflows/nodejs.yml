@@ -4,37 +4,15 @@ name: Node CI
 on: [push]
 
 jobs:
-  test_linux:
-    runs-on: ubuntu-latest
+  extension_tests:
+    name: Extensions tests
+    env:
+      CI: true
     strategy:
       matrix:
-        node-version: [10.x]
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v1
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
-      with:
-        node-version: ${{ matrix.node-version }}
-    - name: Lint source
-      run: |
-        npm ci
-        npm run lint-check
-    - name: Run tests
-      run: |
-        # use xvfb to render into virtual framebuffer and run tests
-        sudo apt-get install xvfb
-        xvfb-run --auto-servernum npm test
-      env:
-        CI: true
-
-  test_windows:
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        node-version: [10.x]
-        
+        node-version: [12.x]
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v1
@@ -46,42 +24,21 @@ jobs:
       run: |
         npm ci
         npm run eslint-check
+    - name: Run prettier if not Windows
+      if: matrix.os != 'windows-latest'
+      run: npm run prettier-check
     - name: Run tests
-      run: |
-        npm test
-      env:
-        CI: true
-
-  test_macos:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        node-version: [10.x]
-        
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v1
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: GabrielBB/xvfb-action@v1.0
       with:
-        node-version: ${{ matrix.node-version }}
-    - name: Lint source
-      run: |
-        npm ci
-        npm run lint-check
-    - name: Run tests
-      run: |
-        npm test
-      env:
-        CI: true
-   
+        run: npm test
+
   build_and_upload:
-    needs: [test_linux, test_windows, test_macos]
+    name: Build and upload
+    needs: [extension_tests]
     runs-on: [ubuntu-latest]
     strategy:
       matrix:
-        node-version: [10.x]
-    
+        node-version: [12.x]    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v1
@@ -105,7 +62,7 @@ jobs:
         name: packaged-extension
         path: extension/
     - name: Publish if ${{ github.ref }} is a tag
-      if: startsWith( github.ref, 'refs/tags/v' )
+      if: success() && startsWith( github.ref, 'refs/tags/v' )
       run: |
         chmod +x bin/validateRelease.sh
         bin/validateRelease.sh ${{ github.ref }}
