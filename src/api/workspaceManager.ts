@@ -43,6 +43,20 @@ export default class WorkspaceManager {
         this.startWatcher();
     }
 
+    public updateExerciseData(
+        id: number,
+        softDeadline: string | null,
+        hardDeadline: string | null,
+    ): void {
+        const data = this.idToData.get(id);
+        if (data) {
+            data.deadline = hardDeadline;
+            data.softDeadline = softDeadline;
+            this.idToData.set(id, data);
+            this.updatePersistentData();
+        }
+    }
+
     /**
      * Creates a unique human-readable directory path for an exercise and persistently manages its relation
      * to exercise's actual id.

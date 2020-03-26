@@ -311,7 +311,7 @@ export async function removeCourse(id: number, actionContext: ActionContext): Pr
 }
 
 export async function updateCourse(id: number, actionContext: ActionContext): Promise<void> {
-    const { tmc, userData } = actionContext;
+    const { tmc, userData, workspaceManager } = actionContext;
     return Promise.all([tmc.getCourseDetails(id, false), tmc.getCourseExercises(id, false)]).then(
         ([courseDetailsResult, courseExercisesResult]) => {
             if (courseDetailsResult.ok) {
@@ -328,6 +328,9 @@ export async function updateCourse(id: number, actionContext: ActionContext): Pr
                     [0, 0],
                 );
                 userData.updatePoints(id, awarded, available);
+                exercises.forEach((x) =>
+                    workspaceManager.updateExerciseData(x.id, x.soft_deadline, x.deadline),
+                );
             }
         },
     );
