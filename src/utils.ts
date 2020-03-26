@@ -9,7 +9,7 @@ import { is } from "typescript-is";
 import WorkspaceManager from "./api/workspaceManager";
 import Resources from "./config/resources";
 import { ConnectionError } from "./errors";
-import { SubmissionFeedbackQuestion } from "./api/types";
+import { Exercise, SubmissionFeedbackQuestion } from "./api/types";
 import { FeedbackQuestion } from "./actions/types";
 import ClientOAuth2 = require("client-oauth2");
 import { LocalExerciseData } from "./config/types";
@@ -143,13 +143,7 @@ export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number
 export function getCurrentExerciseData(
     workspaceManager: WorkspaceManager,
 ): Result<LocalExerciseData, Error> {
-    const editorPath = vscode.window.activeTextEditor?.document.fileName;
-    if (!editorPath) {
-        return new Err(
-            new Error("No open editors. Please open a TMC exercise from the workspace."),
-        );
-    }
-    const id = workspaceManager.getExercisePath(editorPath);
+    const id = getCurrentExerciseId(workspaceManager);
     if (!id) {
         return new Err(new Error("Currently open editor is not part of a TMC exercise"));
     }
@@ -258,4 +252,23 @@ export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): 
         }
     });
     return feedbackQuestions;
+}
+
+export function compareDates(a: Date, b: Date): number {
+    if (a > b) {
+        return 1;
+    } else {
+        return -1;
+    }
+}
+
+/**
+ * Selects proper deadline from soft and hard deadline
+ * @returns Soft deadline and/or Hard deadline for exercise
+ */
+export function chooseDeadline(ex: Exercise): { date: Date | null; isHard: boolean } {
+    const softDeadline = ex.soft_deadline ? parseDate(ex.soft_deadline) : null;
+    const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
+    const next = findNextDateAfter(new Date(), [softDeadline, hardDeadline]);
+    return { date: next, isHard: next === hardDeadline };
 }

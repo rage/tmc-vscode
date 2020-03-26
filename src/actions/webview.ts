@@ -5,10 +5,9 @@
  */
 
 import { Err, Ok, Result } from "ts-results";
-import { Exercise } from "../api/types";
 import { ExerciseStatus } from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
-import { dateToString, findNextDateAfter, parseDate } from "../utils";
+import { chooseDeadline, compareDates, dateToString, findNextDateAfter, parseDate } from "../utils";
 import { ActionContext } from "./types";
 
 /**
@@ -133,14 +132,6 @@ export async function displayLocalCourseDetails(
         { exerciseData: sortedExercises, course, courseId: course.id },
         true,
     );
-}
-
-function compareDates(a: Date, b: Date): number {
-    if (a > b) {
-        return 1;
-    } else {
-        return -1;
-    }
 }
 
 /**
@@ -300,14 +291,4 @@ export async function displayCourseDownloads(
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
     return Ok.EMPTY;
-}
-
-/**
- *Selects proper deadline from soft and hard deadline
- */
-function chooseDeadline(ex: Exercise): { date: Date | null; isHard: boolean } {
-    const softDeadline = ex.soft_deadline ? parseDate(ex.soft_deadline) : null;
-    const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
-    const next = findNextDateAfter(new Date(), [softDeadline, hardDeadline]);
-    return { date: next, isHard: next === hardDeadline };
 }
