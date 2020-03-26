@@ -13,6 +13,10 @@
 		"url": "https://github.com/rage/tmc-vscode/issues"
 	},
 	"icon": "media/TMC.png",
+	"galleryBanner": {
+		"color": "#ffab0e",
+		"theme": "light"
+	},
 	"engines": {
 		"vscode": "^1.43.0"
 	},
