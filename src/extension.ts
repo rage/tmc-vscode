@@ -38,7 +38,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tmc.setWorkspaceManager(workspaceManager);
     const userData = new UserData(storage);
 
-    init.registerUiActions(ui, storage, tmc, workspaceManager, resources, userData);
+    init.registerUiActions(ui, tmc, workspaceManager, resources, userData);
     const actionContext = { ui, resources, workspaceManager, tmc, userData };
     init.registerCommands(context, actionContext);
 }

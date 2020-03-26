@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 
 import UI from "../ui/ui";
-import Storage from "../config/storage";
 import TMC from "../api/tmc";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
@@ -30,7 +29,6 @@ import {
  */
 export function registerUiActions(
     ui: UI,
-    storage: Storage,
     tmc: TMC,
     workspaceManager: WorkspaceManager,
     resources: Resources,
