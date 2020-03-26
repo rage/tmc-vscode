@@ -9,6 +9,7 @@ import { ExerciseStatus } from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { chooseDeadline, compareDates, dateToString, findNextDateAfter, parseDate } from "../utils";
 import { ActionContext } from "./types";
+import { Exercise } from "../api/types";
 
 /**
  * Displays a summary page of user's courses.
@@ -257,6 +258,7 @@ export async function displayCourseDownloads(
     actionContext: ActionContext,
 ): Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
+    await ui.webview.setContentFromTemplate("loading");
     const result = await tmc.getCourseDetails(courseId, false);
     if (result.err) {
         return new Err(new Error("Course details not found"));
@@ -272,22 +274,42 @@ export async function displayCourseDownloads(
     if (!organizationSlug) {
         return new Err(new Error("Course data not found"));
     }
-    const exerciseDetails = details.exercises.map((x) => ({
-        exercise: x,
-        downloaded: workspaceManager
-            .getExerciseDataById(x.id)
-            .map((x) => x.status !== ExerciseStatus.MISSING)
-            .mapErr(() => false).val,
-    }));
-    const sortedExercises = exerciseDetails.sort((x, y) => {
-        return x.downloaded === y.downloaded ? 0 : x.downloaded ? 1 : -1;
-    });
+
+    const [
+        uncompletedExercises,
+        completedExercises,
+        lockedExercises,
+        downloadedExercises,
+    ] = details.exercises.reduce<[Exercise[], Exercise[], Exercise[], Exercise[]]>(
+        (a, x) => {
+            if (
+                workspaceManager
+                    .getExerciseDataById(x.id)
+                    .map((x) => x.status !== ExerciseStatus.MISSING)
+                    .mapErr(() => false).val
+            ) {
+                a[3].push(x);
+            } else if (x.locked) {
+                a[2].push(x);
+            } else if (x.completed) {
+                a[1].push(x);
+            } else {
+                a[0].push(x);
+            }
+            return a;
+        },
+        [[], [], [], []],
+    );
+
     const data = {
         courseId,
         courseName: result.val.course.name,
         details,
         organizationSlug,
-        sortedExercises,
+        uncompletedExercises,
+        completedExercises,
+        lockedExercises,
+        downloadedExercises,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
     return Ok.EMPTY;
