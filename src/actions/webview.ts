@@ -280,9 +280,17 @@ export async function displayCourseDownloads(
         completedExercises,
         lockedExercises,
         downloadedExercises,
-    ] = details.exercises.reduce<[Exercise[], Exercise[], Exercise[], Exercise[]]>(
+        updatedExercises,
+    ] = details.exercises.reduce<[Exercise[], Exercise[], Exercise[], Exercise[], Exercise[]]>(
         (a, x) => {
             if (
+                workspaceManager
+                    .getExerciseDataById(x.id)
+                    .map((x) => x.updateAvailable)
+                    .mapErr(() => false).val
+            ) {
+                a[4].push(x);
+            } else if (
                 workspaceManager
                     .getExerciseDataById(x.id)
                     .map((x) => x.status !== ExerciseStatus.MISSING)
@@ -298,7 +306,7 @@ export async function displayCourseDownloads(
             }
             return a;
         },
-        [[], [], [], []],
+        [[], [], [], [], []],
     );
 
     const data = {
@@ -310,6 +318,7 @@ export async function displayCourseDownloads(
         completedExercises,
         lockedExercises,
         downloadedExercises,
+        updatedExercises,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
     return Ok.EMPTY;

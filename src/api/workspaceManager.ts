@@ -47,11 +47,15 @@ export default class WorkspaceManager {
         id: number,
         softDeadline: string | null,
         hardDeadline: string | null,
+        latestChecksum: string,
     ): void {
         const data = this.idToData.get(id);
         if (data) {
             data.deadline = hardDeadline;
             data.softDeadline = softDeadline;
+            if (data.checksum !== latestChecksum) {
+                data.updateAvailable = true;
+            }
             this.idToData.set(id, data);
             this.updatePersistentData();
         }
@@ -71,11 +75,19 @@ export default class WorkspaceManager {
     ): Result<string, Error> {
         if (this.idToData.has(exerciseDetails.exercise_id)) {
             const data = this.idToData.get(exerciseDetails.exercise_id);
-            if (data?.status !== ExerciseStatus.MISSING) {
+            if (!data) {
+                return new Err(new Error("Data integrity error"));
+            }
+            if (data.status === ExerciseStatus.MISSING) {
+                this.deleteExercise(exerciseDetails.exercise_id);
+                this.removeFromWatcherTree(data);
+            } else if (data.checksum !== checksum) {
+                if (data.status === ExerciseStatus.OPEN) {
+                    this.closeExercise(exerciseDetails.exercise_id);
+                }
+            } else {
                 return new Err(new Error("Exercise already downloaded"));
             }
-            this.deleteExercise(exerciseDetails.exercise_id);
-            this.removeFromWatcherTree(data);
         }
         const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
         const exercisePath = path.join(
@@ -95,6 +107,7 @@ export default class WorkspaceManager {
             organization: organizationSlug,
             path: exercisePath,
             softDeadline: softDeadline,
+            updateAvailable: false,
         });
         this.updatePersistentData();
         return new Ok(this.getClosedPath(exerciseDetails.exercise_id));

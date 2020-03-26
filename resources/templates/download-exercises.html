@@ -96,6 +96,15 @@
                                             Locked ({{lockedExercises.length}})
                                         </button>
                                     </div>
+                                    <div class="col-sm-3">
+                                        <button
+                                            class="btn-primary m-1 w-100"
+                                            id="showUpdated"
+                                            onclick="showList('updatedExercises')"
+                                        >
+                                            Updateable ({{updatedExercises.length}})
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -197,6 +206,32 @@
                 </tbody>
             </table>
         </div>
+        <div class="container" id="updatedExercises" style="display:none">
+            <h4>Updateable exercises</h4>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th scope="col">Select</th>
+                        <th scope="col">Exercise name</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each updatedExercises}}
+                    <tr>
+                        <td class="text-center">
+                            <input
+                                class="checkbox-xl"
+                                type="checkbox"
+                                value="{{this.id}}"
+                                onchange="updateCount(this)"
+                            />
+                        </td>
+                        <td>{{this.name}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+        </div>
 
         <script>
             const vscode = acquireVsCodeApi();
@@ -206,12 +241,14 @@
                 uncompletedExercises: document.getElementById("uncompletedExercises").querySelectorAll('input[type="checkbox"]'),
                 lockedExercises: [],
                 downloadedExercises: [],
+                updatedExercises: document.getElementById("updatedExercises").querySelectorAll('input[type="checkbox"]'),
             };
             const buttonsByContainer = {
                 completedExercises: document.getElementById("showCompleted"),
                 uncompletedExercises: document.getElementById("showUncompleted"),
                 lockedExercises: document.getElementById("showLocked"),
                 downloadedExercises: document.getElementById("showDownloaded"),
+                updatedExercises: document.getElementById("showUpdated"),
             };
             const toggleButton = document.querySelector("button#togglebutton");
             let currentContainer = "uncompletedExercises";

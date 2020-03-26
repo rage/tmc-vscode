@@ -15,7 +15,7 @@ import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import { closeExercises } from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
-import { SubmissionFeedback } from "../api/types";
+import { CourseExercise, Exercise, SubmissionFeedback } from "../api/types";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -328,9 +328,34 @@ export async function updateCourse(id: number, actionContext: ActionContext): Pr
                     [0, 0],
                 );
                 userData.updatePoints(id, awarded, available);
-                exercises.forEach((x) =>
-                    workspaceManager.updateExerciseData(x.id, x.soft_deadline, x.deadline),
-                );
+            }
+
+            if (courseExercisesResult.ok && courseDetailsResult.ok) {
+                const details = courseDetailsResult.val.course;
+                const exercises = courseExercisesResult.val;
+                const combinedDetails: Map<
+                    number,
+                    { c?: CourseExercise; e?: Exercise }
+                > = new Map();
+                details.exercises.forEach((x) => {
+                    combinedDetails.set(x.id, { e: x });
+                });
+                exercises.forEach((x) => {
+                    let d = combinedDetails.get(x.id);
+                    if (d) d.c = x;
+                    else d = { c: x };
+                    combinedDetails.set(x.id, d);
+                });
+                for (const x of combinedDetails.values()) {
+                    if (x.c && x.e) {
+                        workspaceManager.updateExerciseData(
+                            x.c.id,
+                            x.c.soft_deadline,
+                            x.c.deadline,
+                            x.e.checksum,
+                        );
+                    }
+                }
             }
         },
     );

@@ -80,6 +80,7 @@ suite("Storage tests", () => {
                 name: "hello-world",
                 organization: "HY",
                 path: "/tmp",
+                updateAvailable: false,
             },
         ];
         assertUpdater(

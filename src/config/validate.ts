@@ -69,6 +69,7 @@ export async function validateAndFix(
                     name: exerciseDetails.name,
                     organization: ex.organization,
                     path: ex.path,
+                    updateAvailable: false,
                 });
             }
         }
