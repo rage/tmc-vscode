@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 
 import { Err, Ok, Result } from "ts-results";
 import Resources from "../config/resources";
-import { downloadFile, isJavaPresent } from "../utils";
+import { downloadFile, isJavaPresent } from "../utils/utils";
 import {
     EXTENSION_ID,
     TMC_JAR,

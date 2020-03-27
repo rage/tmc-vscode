@@ -7,7 +7,13 @@
 import { Err, Ok, Result } from "ts-results";
 import { ExerciseStatus } from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
-import { chooseDeadline, compareDates, dateToString, findNextDateAfter, parseDate } from "../utils";
+import {
+    chooseDeadline,
+    compareDates,
+    dateToString,
+    findNextDateAfter,
+    parseDate,
+} from "../utils/dateDeadline";
 import { ActionContext } from "./types";
 import { Exercise } from "../api/types";
 

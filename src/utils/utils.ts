@@ -6,13 +6,13 @@ import * as vscode from "vscode";
 
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
-import WorkspaceManager from "./api/workspaceManager";
-import Resources from "./config/resources";
-import { ConnectionError } from "./errors";
-import { Exercise, SubmissionFeedbackQuestion } from "./api/types";
-import { FeedbackQuestion } from "./actions/types";
+import WorkspaceManager from "../api/workspaceManager";
+import Resources from "../config/resources";
+import { ConnectionError } from "../errors";
+import { SubmissionFeedbackQuestion } from "../api/types";
+import { FeedbackQuestion } from "../actions/types";
 import ClientOAuth2 = require("client-oauth2");
-import { LocalExerciseData } from "./config/types";
+import { LocalExerciseData } from "../config/types";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
@@ -151,40 +151,6 @@ export function getCurrentExerciseData(
 }
 
 /**
- * Creates a date object from string
- * @param deadline Deadline as string from API
- */
-export function parseDate(dateAsString: string): Date {
-    const inMillis = Date.parse(dateAsString);
-    const date = new Date(inMillis);
-    return date;
-}
-
-/**
- * Returns a trimmed string presentation of a date.
- */
-export function dateToString(date: Date): string {
-    return date.toString().split("(", 1)[0];
-}
-
-/**
- * Finds the next date after initial date, or null if can't find any.
- */
-export function findNextDateAfter(after: Date, dates: Array<Date | null>): Date | null {
-    const nextDate = (currentDate: Date | null, nextDate: Date | null): Date | null => {
-        if (!nextDate || after >= nextDate) {
-            return currentDate;
-        }
-        if (!currentDate) {
-            return nextDate;
-        }
-        return nextDate < currentDate ? nextDate : currentDate;
-    };
-
-    return dates.reduce(nextDate, null);
-}
-
-/**
  * Return bootstrap striped, animated progress bar div as string
  * @param percentDone How much done of the progress
  */
@@ -252,23 +218,4 @@ export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): 
         }
     });
     return feedbackQuestions;
-}
-
-export function compareDates(a: Date, b: Date): number {
-    if (a > b) {
-        return 1;
-    } else {
-        return -1;
-    }
-}
-
-/**
- * Selects proper deadline from soft and hard deadline
- * @returns Soft deadline and/or Hard deadline for exercise
- */
-export function chooseDeadline(ex: Exercise): { date: Date | null; isHard: boolean } {
-    const softDeadline = ex.soft_deadline ? parseDate(ex.soft_deadline) : null;
-    const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
-    const next = findNextDateAfter(new Date(), [softDeadline, hardDeadline]);
-    return { date: next, isHard: next === hardDeadline };
 }

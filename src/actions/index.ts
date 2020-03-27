@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ActionContext } from "./types";
-import { askForItem } from "../utils";
+import { askForItem } from "../utils/utils";
 import { pasteExercise, submitExercise, testExercise } from "./user";
 import { LocalExerciseData } from "../config/types";
 

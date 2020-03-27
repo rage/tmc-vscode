@@ -5,7 +5,7 @@ import TMC from "../api/tmc";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import { UserData } from "../config/userdata";
-import { askForConfirmation, isWorkspaceOpen } from "../utils";
+import { askForConfirmation, isWorkspaceOpen } from "../utils/utils";
 import {
     addNewCourse,
     closeExercises,

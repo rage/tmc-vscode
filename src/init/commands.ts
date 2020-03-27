@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ActionContext } from "../actions/types";
-import { askForConfirmation, getCurrentExerciseData, getCurrentExerciseId } from "../utils";
+import { askForConfirmation, getCurrentExerciseData, getCurrentExerciseId } from "../utils/utils";
 import {
     pasteExercise,
     resetExercise,

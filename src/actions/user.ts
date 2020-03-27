@@ -9,7 +9,7 @@ import * as vscode from "vscode";
 import { LocalCourseData } from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
-import { askForConfirmation, isWorkspaceOpen, parseFeedbackQuestion, sleep } from "../utils";
+import { askForConfirmation, isWorkspaceOpen, parseFeedbackQuestion, sleep } from "../utils/utils";
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import { closeExercises } from "./workspace";

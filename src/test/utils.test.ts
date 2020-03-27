@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { findNextDateAfter } from "../utils";
+import { findNextDateAfter } from "../utils/utils";
 
 suite("Date utils", () => {
     test("findNextDateAfter", () => {
