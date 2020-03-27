@@ -285,8 +285,14 @@ export async function displayCourseDownloads(
         allExercises.push(data);
     });
 
-    const [uncompletedExercises, completedExercises, updatedExercises] = allExercises.reduce<
+    const [
+        uncompletedExercises,
+        completedExercises,
+        downloadedExercises,
+        updatedExercises,
+    ] = allExercises.reduce<
         [
+            { exercise: Exercise; correctDeadline: string }[],
             { exercise: Exercise; correctDeadline: string }[],
             { exercise: Exercise; correctDeadline: string }[],
             { exercise: Exercise; correctDeadline: string }[],
@@ -299,15 +305,22 @@ export async function displayCourseDownloads(
                     .map((x) => x.updateAvailable)
                     .mapErr(() => false).val
             ) {
+                a[3].push(x);
+            } else if (
+                workspaceManager
+                    .getExerciseDataById(x.exercise.id)
+                    .map((x) => x.status !== ExerciseStatus.MISSING)
+                    .mapErr(() => false).val
+            ) {
                 a[2].push(x);
             } else if (x.exercise.completed) {
                 a[1].push(x);
-            } else {
+            } else if (!x.exercise.locked) {
                 a[0].push(x);
             }
             return a;
         },
-        [[], [], []],
+        [[], [], [], []],
     );
 
     const exerciseLists = [
@@ -325,6 +338,12 @@ export async function displayCourseDownloads(
             button: "Completed",
             title: "Completed exercises",
             downloadable: true,
+        },
+        {
+            id: "downloadedExercises",
+            exercises: downloadedExercises,
+            button: "Downloaded",
+            title: "Downloaded exercises",
         },
         {
             id: "updatedExercises",
