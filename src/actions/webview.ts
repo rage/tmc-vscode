@@ -281,14 +281,31 @@ export async function displayCourseDownloads(
         return new Err(new Error("Course data not found"));
     }
 
-    const allExercises: { exercise: Exercise; correctDeadline: string }[] = [];
+    const allExercises: {
+        exercise: Exercise;
+        correctDeadline: string;
+        isHard: boolean;
+        hardDeadlineString: string;
+    }[] = [];
     details.exercises.forEach((ex) => {
-        let deadline = "-";
-        if (ex.deadline) {
-            deadline = dateToString(parseDate(ex.deadline));
+        const deadline = chooseDeadline(ex);
+        if (deadline.date && !deadline.isHard) {
+            const data = {
+                exercise: ex,
+                correctDeadline: dateToString(deadline.date),
+                isHard: deadline.isHard,
+                hardDeadlineString: ex.deadline ? dateToString(parseDate(ex.deadline)) : "-",
+            };
+            allExercises.push(data);
+        } else {
+            const data = {
+                exercise: ex,
+                correctDeadline: ex.deadline ? dateToString(parseDate(ex.deadline)) : "-",
+                isHard: true,
+                hardDeadlineString: ex.deadline ? dateToString(parseDate(ex.deadline)) : "-",
+            };
+            allExercises.push(data);
         }
-        const data = { exercise: ex, correctDeadline: deadline };
-        allExercises.push(data);
     });
 
     const [
@@ -298,10 +315,30 @@ export async function displayCourseDownloads(
         updatedExercises,
     ] = allExercises.reduce<
         [
-            { exercise: Exercise; correctDeadline: string }[],
-            { exercise: Exercise; correctDeadline: string }[],
-            { exercise: Exercise; correctDeadline: string }[],
-            { exercise: Exercise; correctDeadline: string }[],
+            {
+                exercise: Exercise;
+                correctDeadline: string;
+                isHard: boolean;
+                hardDeadlineString: string;
+            }[],
+            {
+                exercise: Exercise;
+                correctDeadline: string;
+                isHard: boolean;
+                hardDeadlineString: string;
+            }[],
+            {
+                exercise: Exercise;
+                correctDeadline: string;
+                isHard: boolean;
+                hardDeadlineString: string;
+            }[],
+            {
+                exercise: Exercise;
+                correctDeadline: string;
+                isHard: boolean;
+                hardDeadlineString: string;
+            }[],
         ]
     >(
         (a, x) => {
