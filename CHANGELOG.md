@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.2.0] - 2020-03-30
 
 ### Added
 - Send code to TMC Pastebin.
@@ -9,7 +9,8 @@
 ### Changed
 - Limited download concurrency when downloading many exercises.
 - Calculate course progress based on points.
-- Show soft deadline for exercises.
+- Show soft deadline for exercises if exists.
+- Show errors related to user actions in webview panel.
 - More convenient yes/no dialog for most prompts.
 
 ### Fixed
