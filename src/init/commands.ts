@@ -1,6 +1,11 @@
 import * as vscode from "vscode";
 import { ActionContext } from "../actions/types";
-import { askForConfirmation, getCurrentExerciseData, getCurrentExerciseId } from "../utils/utils";
+import {
+    askForConfirmation,
+    askForExplicitConfirmation,
+    getCurrentExerciseData,
+    getCurrentExerciseId,
+} from "../utils/utils";
 import {
     pasteExercise,
     resetExercise,
@@ -78,7 +83,7 @@ export function registerCommands(
                 return;
             }
 
-            (await askForConfirmation(
+            (await askForExplicitConfirmation(
                 `Are you sure you want to reset exercise ${exerciseData.val.name}?`,
             ))
                 ? resetExercise(actionContext, exerciseId)

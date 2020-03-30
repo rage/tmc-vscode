@@ -3,19 +3,18 @@
 ## Unreleased
 
 ### Added
-- Send code to TMC Paste.
-- Dropdown menu for TMC Commands.
+- Send code to TMC Pastebin.
+- Dropdown menu for TMC Commands next to run tests button.
 
 ### Changed
 - Limited download concurrency when downloading many exercises.
+- Calculate course progress based on points.
+- Show soft deadline for exercises.
+- More convenient yes/no dialog for most prompts.
 
 ### Fixed
 - Workspace watcher path error on Windows.
 - Error on exercise completion checking.
-
-### Updated
-- Calculate course progress based on points.
-- Show Soft deadline for exercises.
 
 ## [0.1.2] - 2020-03-19
 
@@ -29,15 +28,13 @@
 ## [0.1.1] - 2020-03-18
 
 ### Changed
-- Slow deadline fetch in My Courses-view.
+- Faster deadline fetch in My Courses-view.
+- Improved button styles in course details and downloads views.
+- Improved exercise status tracking to account for missing exercises.
 
 ### Fixed
 - Missing breadcrumb in Exercise Download-view.
 - Unlockable exercises couldn't be downloaded.
-
-### Updated
-- Improved button styles in course details and downloads views.
-- Improved exercise status tracking to account for missing exercises.
 
 ## [0.1.0] - 2020-03-17
 

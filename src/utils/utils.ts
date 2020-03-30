@@ -160,19 +160,34 @@ export function getProgressBar(percentDone: number): string {
     </div>`;
 }
 
+export function displayProgrammerError(description: string): void {
+    vscode.window.showErrorMessage(
+        (isProductionBuild() ? "" : "Programmer ") + "Error: " + description,
+    );
+}
+
+/**
+ * Prompts the user with a yes/no dialog.
+ */
 export async function askForConfirmation(prompt: string): Promise<boolean> {
+    return (
+        (await askForItem<boolean>(prompt, [
+            ["yes", true],
+            ["no", false],
+        ])) || false
+    );
+}
+
+/**
+ * Prompts the user with a yes/no dialog. This version requires user to explicitely write "yes" for the answer to count as true.
+ */
+export async function askForExplicitConfirmation(prompt: string): Promise<boolean> {
     const options: vscode.InputBoxOptions = {
         placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
         prompt,
     };
     const success = (await vscode.window.showInputBox(options))?.toLowerCase() === "yes";
     return success;
-}
-
-export function displayProgrammerError(description: string): void {
-    vscode.window.showErrorMessage(
-        (isProductionBuild() ? "" : "Programmer ") + "Error: " + description,
-    );
 }
 
 /**
