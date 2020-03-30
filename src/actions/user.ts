@@ -117,13 +117,15 @@ export async function submitExercise(
     const { ui, resources, tmc } = actionContext;
     const submitResult = await tmc.submitExercise(id);
 
+    const temp = tempView || new TemporaryWebview(resources, ui, "", () => {});
+    temp.setTitle("TMC Server Submission");
+
     if (submitResult.err) {
+        temp.setContent("error", { error: submitResult.val });
         vscode.window.showErrorMessage(`Exercise submission failed: \
             ${submitResult.val.name} - ${submitResult.val.message}`);
         return;
     }
-
-    const temp = tempView || new TemporaryWebview(resources, ui, "", () => {});
 
     temp.setMessageHandler(
         async (msg: { data?: { [key: string]: unknown }; type?: string }): Promise<void> => {
@@ -142,7 +144,6 @@ export async function submitExercise(
             }
         },
     );
-    temp.setTitle("TMC Server Submission");
 
     let timeWaited = 0;
     let getStatus = true;
