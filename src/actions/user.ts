@@ -96,7 +96,12 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         return;
     }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
-    const data = { testResult: testResult.val.response, id, exerciseName };
+    const data = {
+        testResult: testResult.val.response,
+        id,
+        exerciseName,
+        tmcLogs: testResult.val.logs,
+    };
     temp.setContent("test-result", data);
 }
 

@@ -434,7 +434,7 @@ export default class TMC {
         }
 
         const result = { response: JSON.parse(fs.readFileSync(outputPath, "utf8")), logs };
-        del.sync(outputPath, { force: true });
+        // del.sync(outputPath, { force: true });
         if (is<TmcLangsResponse>(result)) {
             return new Ok(result);
         }

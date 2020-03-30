@@ -7,13 +7,14 @@
 
     <body>
         <div class="container">
+            {{#if testResult.testResults}}
             <div class="row">
                 <div class="py-2">
                     {{{ check_test_status testResult.status testResult.logs }}}
                 </div>
             </div>
             <div class="row">
-                {{#if testResult.testResults}} {{{progress_bar testResult.testResults}}} {{/if}}
+                {{{ progress_bar testResult.testResults}}}
             </div>
             {{#each testResult.testResults}}
 
@@ -41,7 +42,9 @@
                 </div>
             </div>
             <!-- close row passed or failed -->
-            {{/each}}
+            {{/each}} {{else}} {{{ check_test_status testResult.status testResult.logs tmcLogs }}}
+            {{/if}}
+            <!-- close if testResulsts array empty -->
         </div>
         <!-- close container -->
         <script>
