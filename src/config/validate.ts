@@ -3,7 +3,7 @@ import Storage from "./storage";
 
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
-import { CourseDetails } from "../api/types";
+import { CourseDetails, CourseExercise } from "../api/types";
 import { ApiError, ConnectionError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
@@ -69,6 +69,7 @@ export async function validateAndFix(
                     name: exerciseDetails.name,
                     organization: ex.organization,
                     path: ex.path,
+                    updateAvailable: false,
                 });
             }
         }
@@ -96,7 +97,7 @@ export async function validateAndFix(
                 ) {
                     continue;
                 }
-                // See comment above
+
                 const courseDetails = await (course.id !== undefined
                     ? tmc.getCourseDetails(course.id)
                     : getCourseDetails(tmc, course.organization, course.name as string));
@@ -107,13 +108,32 @@ export async function validateAndFix(
                     }
                     return new Err(courseDetails.val);
                 }
+
+                const courseExercises = await (course.id !== undefined
+                    ? tmc.getCourseExercises(course.id)
+                    : getCourseExercises(tmc, course.organization, course.name as string));
+
+                if (courseExercises.err) {
+                    if (courseDetails.val instanceof ApiError) {
+                        console.log("Skipping bad userdata:", JSON.stringify(course));
+                        continue;
+                    }
+                    return new Err(courseExercises.val);
+                }
                 const courseData = courseDetails.val.course;
+                const exerciseData = courseExercises.val;
+                const [availablePoints, awardedPoints] = exerciseData.reduce(
+                    (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
+                    [0, 0],
+                );
                 userDataFixed.courses.push({
                     description: courseData.description || "",
                     exercises: courseData.exercises.map((x) => ({ id: x.id, passed: x.completed })),
                     id: courseData.id,
                     name: courseData.name,
                     organization: course.organization,
+                    awardedPoints: awardedPoints,
+                    availablePoints: availablePoints,
                 });
             }
         }
@@ -139,6 +159,23 @@ async function getCourseDetails(
         return new Err(new ApiError("No such course in response"));
     }
     return tmc.getCourseDetails(courseId);
+}
+
+async function getCourseExercises(
+    tmc: TMC,
+    org: string,
+    course: string,
+): Promise<Result<CourseExercise[], Error>> {
+    const coursesResult = await tmc.getCourses(org);
+    if (coursesResult.err) {
+        return new Err(coursesResult.val);
+    }
+
+    const courseId = coursesResult.val.find((x) => x.name === course)?.id;
+    if (!courseId) {
+        return new Err(new ApiError("No such course in response"));
+    }
+    return tmc.getCourseExercises(courseId);
 }
 
 async function ensureLogin(

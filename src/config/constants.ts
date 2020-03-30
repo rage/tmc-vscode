@@ -1,3 +1,4 @@
+export const EXTENSION_ID = "moocfi.test-my-code";
 export const TMC_JAR = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar";
 export const TMC_API_URL = "https://tmc.mooc.fi/api/v8/";
 export const ACCESS_TOKEN_URI = "https://tmc.mooc.fi/oauth/token";
@@ -36,16 +37,24 @@ Workspace:
 These commands can be executed for the TMC exercise that is currently open and active in the VSCode editor.
 
 Commands (VSCode command hotkey: CTRL + SHIFT + P):
+    TMC - Menu
     TMC - Run tests
     TMC - Submit solution
     TMC - Reset exercise
     TMC - Close exercise
+    TMC - Paste exercise
+
+    TMC - Menu (hotkey: CTRL + SHIFT + A):
+        A list of all available commands can also be found under the TMC Menu.
 
     TMC - Run tests (hotkey: CTRL + SHIFT + T):
         Run exercise tests on your computer.
 
     TMC - Submit solution
         Send the exercise to the TMC server for testing and grading.
+
+    TMC - Paste exercise
+        Send the TMC exercise code to the TMC Pastebin.
 
     TMC - Reset exercise
         Send the exercise files to the TMC server (for backup) and delete all the exercise files on your computer. 

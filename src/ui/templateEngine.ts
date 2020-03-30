@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
-import { getProgressBar, numbersToString } from "../utils";
+import { getProgressBar, numbersToString } from "../utils/utils";
 
 export default class TemplateEngine {
     private cssPath: string;
@@ -34,7 +34,19 @@ export default class TemplateEngine {
          */
         handlebars.registerHelper(
             "check_test_status",
-            (status: string, logs: { stdout: number[]; stderr: number[] }) => {
+            (
+                status: string,
+                logs: { stdout: number[]; stderr: number[] },
+                tmcLogs?: { stdout: string; stderr: string },
+            ) => {
+                // Java langs 'run tests' returns: PASSED, TESTS_FAILED; COMPILE_FAILED and own logs
+                // Python langs 'run tests' returns: PASSED, TESTS_FAILED, but not COMPILE_FAILED
+                // 'tmcLogs' are the tmc-langs.jar generated stdout/stderr
+                // 'logs' are the logs returned within TmcLangsTestResults type (if any)
+                if (tmcLogs?.stdout && status !== "COMPILE_FAILED") {
+                    return `<h1>0 TESTS RUN, SEE LOGS FOR INFO</h1><h2>stdout:</h2><pre>${tmcLogs.stdout}</pre><h2>stderr:</h2><pre>${tmcLogs.stderr}</pre>`;
+                }
+
                 if (status === "PASSED") {
                     return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
                 } else if (status === "TESTS_FAILED") {

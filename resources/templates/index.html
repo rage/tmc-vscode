@@ -72,12 +72,6 @@
         </div>
 
         <script>
-            {{#if disableActions}}
-            const disableActions = true;
-            {{else}}
-            const disableActions = false;
-            {{/if}}
-
             const vscode = acquireVsCodeApi();
 
             function addCourse() {
@@ -86,11 +80,11 @@
 
             function removeCourse(event, id) {
                 event.stopPropagation(); // Don't send onclick event upwards
-                disableActions || vscode.postMessage({ type: "removeCourse", id });
+                vscode.postMessage({ type: "removeCourse", id });
             }
 
             function fetchCourseDetails(id) {
-                disableActions || vscode.postMessage({ type: "courseDetails", id: id });
+                vscode.postMessage({ type: "courseDetails", id: id });
             }
         </script>
     </body>

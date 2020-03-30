@@ -5,11 +5,17 @@
  */
 
 import { Err, Ok, Result } from "ts-results";
-import TemporaryWebview from "../ui/temporaryWebview";
-import { dateToString, findNextDateAfter, parseDate } from "../utils";
-import { ActionContext } from "./types";
 import { ExerciseStatus } from "../config/types";
-// import { Exercise } from "../api/types";
+import TemporaryWebview from "../ui/temporaryWebview";
+import {
+    chooseDeadline,
+    compareDates,
+    dateToString,
+    findNextDateAfter,
+    parseDate,
+} from "../utils/dateDeadline";
+import { ActionContext } from "./types";
+import { Exercise } from "../api/types";
 
 /**
  * Displays a summary page of user's courses.
@@ -18,13 +24,14 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
     const { userData, tmc, ui } = actionContext;
 
     const courses = userData.getCourses().map((course) => {
-        const passedLength = course.exercises.filter((e) => e.passed === true);
-        const completedPrc = Math.floor((passedLength.length / course.exercises.length) * 100);
+        const completedPrc = ((course.awardedPoints / course.availablePoints) * 100).toFixed(2);
         return { ...course, completedPrc };
     });
 
-    // Display the page immediatedly before fetching any data from API.
-    await ui.webview.setContentFromTemplate("index", { courses, disableActions: true });
+    // Display the page immediatedly before fetching any data from API
+    await ui.webview.setContentFromTemplate("index", { courses });
+
+    const uiState = ui.webview.getStateId();
 
     const apiCourses = await Promise.all(
         courses.map(async (course) => {
@@ -35,10 +42,10 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
                     if (ex.deadline) {
                         deadlines.set(ex.id, parseDate(ex.deadline));
                     }
-                    //const chosenDeadline = chooseDeadline(ex);
-                    /*if (chosenDeadline.date) {
+                    const chosenDeadline = chooseDeadline(ex);
+                    if (chosenDeadline.date) {
                         deadlines.set(ex.id, chosenDeadline.date);
-                    }*/
+                    }
                 });
             }
 
@@ -59,8 +66,9 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
             return { ...course, exercises, nextDeadline };
         }),
     );
-
-    await ui.webview.setContentFromTemplate("index", { courses: apiCourses });
+    if (uiState === ui.webview.getStateId()) {
+        await ui.webview.setContentFromTemplate("index", { courses: apiCourses });
+    }
 }
 
 /**
@@ -71,6 +79,7 @@ export async function displayLocalCourseDetails(
     actionContext: ActionContext,
 ): Promise<void> {
     const { ui, userData, workspaceManager } = actionContext;
+
     const course = userData.getCourse(courseId);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
 
@@ -83,21 +92,33 @@ export async function displayLocalCourseDetails(
             isClosed: boolean;
             passed: boolean;
             deadlineString: string;
-            softDeadlineString: string | null;
+            hardDeadlineString: string;
+            isHard: boolean;
         }
     >();
 
-    workspaceExercises?.forEach((x) =>
-        exerciseData.set(x.id, {
-            softDeadlineString: x.softDeadline,
-            deadlineString: x.deadline ? dateToString(parseDate(x.deadline)) : "-",
-            id: x.id,
-            isOpen: x.status === ExerciseStatus.OPEN,
-            isClosed: x.status === ExerciseStatus.CLOSED,
-            name: x.name,
+    workspaceExercises.forEach((ex) => {
+        const date = new Date();
+        let deadline = "-";
+        let hard = true;
+        if (ex.softDeadline != null && date < parseDate(ex.softDeadline)) {
+            deadline = dateToString(parseDate(ex.softDeadline));
+            hard = false;
+        } else if (ex.deadline) {
+            deadline = dateToString(parseDate(ex.deadline));
+        }
+
+        exerciseData.set(ex.id, {
+            deadlineString: deadline,
+            isHard: hard,
+            hardDeadlineString: ex.deadline ? dateToString(parseDate(ex.deadline)) : "-",
+            id: ex.id,
+            isOpen: ex.status === ExerciseStatus.OPEN,
+            isClosed: ex.status === ExerciseStatus.CLOSED,
+            name: ex.name,
             passed: false,
-        }),
-    );
+        });
+    });
 
     course.exercises.forEach((x) => {
         const data = exerciseData.get(x.id);
@@ -110,7 +131,7 @@ export async function displayLocalCourseDetails(
     const sortedExercises = Array.from(exerciseData.values()).sort((a, b) =>
         a.deadlineString === b.deadlineString
             ? a.name.localeCompare(b.name)
-            : a.deadlineString.localeCompare(b.deadlineString),
+            : compareDates(parseDate(a.deadlineString), parseDate(b.deadlineString)),
     );
 
     await ui.webview.setContentFromTemplate(
@@ -243,7 +264,8 @@ export async function displayCourseDownloads(
     actionContext: ActionContext,
 ): Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
-    const result = await tmc.getCourseDetails(courseId);
+    await ui.webview.setContentFromTemplate("loading");
+    const result = await tmc.getCourseDetails(courseId, false);
     if (result.err) {
         return new Err(new Error("Course details not found"));
     }
@@ -258,32 +280,131 @@ export async function displayCourseDownloads(
     if (!organizationSlug) {
         return new Err(new Error("Course data not found"));
     }
-    const exerciseDetails = details.exercises.map((x) => ({
-        exercise: x,
-        downloaded: workspaceManager
-            .getExerciseDataById(x.id)
-            .map((x) => x.status !== ExerciseStatus.MISSING)
-            .mapErr(() => false).val,
-    }));
-    const sortedExercises = exerciseDetails.sort((x, y) => {
-        return x.downloaded === y.downloaded ? 0 : x.downloaded ? 1 : -1;
+
+    const allExercises: {
+        exercise: Exercise;
+        correctDeadline: string;
+        isHard: boolean;
+        hardDeadlineString: string;
+    }[] = [];
+    details.exercises.forEach((ex) => {
+        const deadline = chooseDeadline(ex);
+        if (deadline.date && !deadline.isHard) {
+            const data = {
+                exercise: ex,
+                correctDeadline: dateToString(deadline.date),
+                isHard: deadline.isHard,
+                hardDeadlineString: ex.deadline ? dateToString(parseDate(ex.deadline)) : "-",
+            };
+            allExercises.push(data);
+        } else {
+            const data = {
+                exercise: ex,
+                correctDeadline: ex.deadline ? dateToString(parseDate(ex.deadline)) : "-",
+                isHard: true,
+                hardDeadlineString: ex.deadline ? dateToString(parseDate(ex.deadline)) : "-",
+            };
+            allExercises.push(data);
+        }
     });
+
+    const [
+        uncompletedExercises,
+        completedExercises,
+        downloadedExercises,
+        updatedExercises,
+    ] = allExercises.reduce<
+        [
+            {
+                exercise: Exercise;
+                correctDeadline: string;
+                isHard: boolean;
+                hardDeadlineString: string;
+            }[],
+            {
+                exercise: Exercise;
+                correctDeadline: string;
+                isHard: boolean;
+                hardDeadlineString: string;
+            }[],
+            {
+                exercise: Exercise;
+                correctDeadline: string;
+                isHard: boolean;
+                hardDeadlineString: string;
+            }[],
+            {
+                exercise: Exercise;
+                correctDeadline: string;
+                isHard: boolean;
+                hardDeadlineString: string;
+            }[],
+        ]
+    >(
+        (a, x) => {
+            if (
+                workspaceManager
+                    .getExerciseDataById(x.exercise.id)
+                    .map((x) => x.updateAvailable)
+                    .mapErr(() => false).val
+            ) {
+                a[3].push(x);
+            } else if (
+                workspaceManager
+                    .getExerciseDataById(x.exercise.id)
+                    .map((x) => x.status !== ExerciseStatus.MISSING)
+                    .mapErr(() => false).val
+            ) {
+                a[2].push(x);
+            } else if (x.exercise.completed) {
+                a[1].push(x);
+            } else if (!x.exercise.locked) {
+                a[0].push(x);
+            }
+            return a;
+        },
+        [[], [], [], []],
+    );
+
+    const exerciseLists = [
+        {
+            id: "uncompletedExercises",
+            exercises: uncompletedExercises,
+            button: "Uncompleted",
+            title: "Uncompleted exercises",
+            downloadable: true,
+            showDeadline: true,
+        },
+        {
+            id: "completedExercises",
+            exercises: completedExercises,
+            button: "Completed",
+            title: "Completed exercises",
+            downloadable: true,
+        },
+        {
+            id: "downloadedExercises",
+            exercises: downloadedExercises,
+            button: "Downloaded",
+            title: "Downloaded exercises",
+        },
+        {
+            id: "updatedExercises",
+            exercises: updatedExercises,
+            button: "Updateable",
+            title: "Updateable exercises",
+            downloadable: true,
+            showDeadline: true,
+        },
+    ];
+
     const data = {
         courseId,
         courseName: result.val.course.name,
         details,
         organizationSlug,
-        sortedExercises,
+        exerciseLists,
     };
     await ui.webview.setContentFromTemplate("download-exercises", data);
     return Ok.EMPTY;
 }
-
-/*
-function chooseDeadline(ex: Exercise): { date: Date | null; isHard: boolean } {
-    const softDeadline = ex.soft_deadline ? parseDate(ex.soft_deadline) : null;
-    const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
-    const next = findNextDateAfter(new Date(), [softDeadline, hardDeadline]);
-    return { date: next, isHard: next === hardDeadline };
-}
-*/

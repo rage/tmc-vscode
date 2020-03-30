@@ -29,8 +29,8 @@ export class UserData {
     }
 
     public getCourse(id: number): LocalCourseData {
-        const course = this.getCourses().filter((x) => x.id === id);
-        return course[0];
+        const course = this.courses.get(id);
+        return course as LocalCourseData;
     }
 
     public getCourseByName(name: string): LocalCourseData {
@@ -73,16 +73,17 @@ export class UserData {
         return Ok.EMPTY;
     }
 
-    public async setPassed(courseId: number, exerciseId: number): Promise<Result<void, Error>> {
+    public async updatePoints(
+        courseId: number,
+        awardedPoints: number,
+        availablePoints: number,
+    ): Promise<Result<void, Error>> {
         const courseData = this.courses.get(courseId);
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
-        courseData.exercises = courseData.exercises.map((x) => ({
-            id: x.id,
-            passed: exerciseId === x.id ? true : x.passed,
-        }));
-        this.passedExercises.add(exerciseId);
+        courseData.awardedPoints = awardedPoints;
+        courseData.availablePoints = availablePoints;
         this.courses.set(courseId, courseData);
         await this.updatePersistentData();
         return Ok.EMPTY;

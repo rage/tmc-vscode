@@ -7,6 +7,8 @@ export type LocalCourseData = {
         id: number;
         passed: boolean;
     }>;
+    availablePoints: number;
+    awardedPoints: number;
 };
 
 export type LocalExerciseData = {
@@ -16,6 +18,7 @@ export type LocalExerciseData = {
     organization: string;
     path: string;
     checksum: string;
+    updateAvailable: boolean;
     status: ExerciseStatus;
     deadline: string | null;
     softDeadline: string | null;

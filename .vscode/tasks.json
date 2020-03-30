@@ -1,36 +1,36 @@
 // See https://go.microsoft.com/fwlink/?LinkId=733558
 // for the documentation about the tasks.json format
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "testBuild",
-			"type": "npm",
-			"script": "watch",
-			"problemMatcher": "$tsc-watch",
-			"isBackground": true,
-			"presentation": {
-				"reveal": "never"
-			},
-			"group": "build"
-		},
-		{
-			"label": "webpackBuild",
-			"type": "npm",
-			"script": "webpack:watch",
-			"problemMatcher": {
-				"base": "$tsc-watch",
-				"background": {
-					"activeOnStart": true,
-					"beginsPattern": "^Compilation  starting…",
-					"endsPattern": "^Compilation  finished"
-				}
-			},
-			"isBackground": true,
-			"presentation": {
-				"reveal": "never"
-			},
-			"group": "build"
-		}
-	]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "testBuild",
+            "type": "npm",
+            "script": "watch",
+            "problemMatcher": "$tsc-watch",
+            "isBackground": true,
+            "presentation": {
+                "reveal": "never"
+            },
+            "group": "build"
+        },
+        {
+            "label": "webpackBuild",
+            "type": "npm",
+            "script": "webpack:watch",
+            "problemMatcher": {
+                "base": "$tsc-watch",
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^Compilation  starting…",
+                    "endsPattern": "^Compilation  finished"
+                }
+            },
+            "isBackground": true,
+            "presentation": {
+                "reveal": "never"
+            },
+            "group": "build"
+        }
+    ]
 }

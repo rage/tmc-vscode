@@ -11,10 +11,11 @@ import Storage from "../config/storage";
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
-import { downloadFile } from "../utils";
+import { displayProgrammerError, downloadFile } from "../utils/utils";
 import {
     Course,
     CourseDetails,
+    CourseExercise,
     ExerciseDetails,
     Organization,
     SubmissionFeedback,
@@ -23,6 +24,7 @@ import {
     SubmissionStatusReport,
     TMCApiResponse,
     TmcLangsAction,
+    TmcLangsPath,
     TmcLangsResponse,
     TmcLangsTestResults,
 } from "./types";
@@ -40,7 +42,7 @@ export default class TMC {
     private readonly tmcLangsPath: string;
     private readonly tmcApiUrl: string;
     private readonly tmcDefaultHeaders: { client: string; client_version: string };
-    private readonly workspaceManager: WorkspaceManager;
+    private workspaceManager?: WorkspaceManager;
 
     private readonly cache: Map<string, TMCApiResponse>;
 
@@ -49,7 +51,7 @@ export default class TMC {
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(exerciseManager: WorkspaceManager, storage: Storage, resources: Resources) {
+    constructor(storage: Storage, resources: Resources) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: ACCESS_TOKEN_URI,
             clientId: CLIENT_ID,
@@ -64,12 +66,18 @@ export default class TMC {
         this.tmcLangsPath = resources.tmcLangsPath;
         this.tmcApiUrl = TMC_API_URL;
         this.cache = new Map();
-        this.workspaceManager = exerciseManager;
         this.tmcDefaultHeaders = {
             client: "vscode_plugin",
             // eslint-disable-next-line @typescript-eslint/camelcase
             client_version: resources.extensionVersion,
         };
+    }
+
+    public setWorkspaceManager(workspaceManager: WorkspaceManager): void {
+        if (this.workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager already assigned");
+        }
+        this.workspaceManager = workspaceManager;
     }
 
     /**
@@ -157,6 +165,21 @@ export default class TMC {
     }
 
     /**
+     *
+     * @param id course id
+     * @returns return list of courses exercises. Each exercise carry info about available points that can be gained from an exercise
+     */
+    public getCourseExercises(
+        id: number,
+        cache?: boolean,
+    ): Promise<Result<CourseExercise[], Error>> {
+        return this.checkApiResponse(
+            this.tmcApiRequest(`courses/${id}/exercises`, cache),
+            createIs<CourseExercise[]>(),
+        );
+    }
+
+    /**
      * @param id Exercise id
      * @returns A description for the specified exercise
      */
@@ -195,6 +218,9 @@ export default class TMC {
         id: number,
         organizationSlug: string,
     ): Promise<Result<string, Error>> {
+        if (!this.workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
+        }
         const archivePath = `${this.dataPath}/${id}.zip`;
 
         const result = await downloadFile(
@@ -241,7 +267,7 @@ export default class TMC {
                 archivePath,
                 exerciseFolderPath: exercisePath.val,
             }),
-            createIs<string>(),
+            createIs<TmcLangsPath>(),
         );
 
         if (extractResult.err) {
@@ -265,6 +291,9 @@ export default class TMC {
      * @param id Id of the exercise
      */
     public async runTests(id: number): Promise<Result<TmcLangsTestResults, Error>> {
+        if (!this.workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
+        }
         const exerciseFolderPath = this.workspaceManager.getExerciseDataById(id);
         if (exerciseFolderPath.err) {
             return new Err(new Error("???"));
@@ -283,7 +312,13 @@ export default class TMC {
      * Archives and submits the specified exercise to the TMC server
      * @param id Exercise id
      */
-    public async submitExercise(id: number): Promise<Result<SubmissionResponse, Error>> {
+    public async submitExercise(
+        id: number,
+        params?: Map<string, string>,
+    ): Promise<Result<SubmissionResponse, Error>> {
+        if (!this.workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
+        }
         const exerciseFolderPath = this.workspaceManager.getExerciseDataById(id);
 
         if (exerciseFolderPath.err) {
@@ -296,13 +331,19 @@ export default class TMC {
                 archivePath: `${this.dataPath}/${id}-new.zip`,
                 exerciseFolderPath: exerciseFolderPath.val.path,
             }),
-            createIs<string>(),
+            createIs<TmcLangsPath>(),
         );
         if (compressResult.err) {
             return new Err(compressResult.val);
         }
-        const archivePath = compressResult.val;
+
+        const archivePath = compressResult.val.response as string;
         const form = new FormData();
+        if (params) {
+            params.forEach((value: string, key: string) => {
+                form.append(key as string, value);
+            });
+        }
         form.append("submission[file]", fs.createReadStream(archivePath));
         return this.checkApiResponse(
             this.tmcApiRequest(
@@ -370,22 +411,30 @@ export default class TMC {
         const arg1 = `--outputPath="${outputPath}"`;
 
         console.log(`java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`);
+
+        let [stdout, stderr] = ["", ""];
         try {
-            await new Promise((resolve, reject) => {
-                cp.exec(`java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`, (err) =>
-                    err ? reject(err) : resolve(),
+            [stdout, stderr] = await new Promise((resolve, reject) => {
+                cp.exec(
+                    `java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`,
+                    (err, stdout, stderr) => (err ? reject(err) : resolve([stdout, stderr])),
                 );
             });
         } catch (err) {
             return new Err(err);
         }
 
+        const logs = {
+            stdout,
+            stderr,
+        };
+
         if (action === "extract-project" || action === "compress-project") {
-            return new Ok(outputPath);
+            return new Ok({ response: outputPath, logs });
         }
 
-        const result = JSON.parse(fs.readFileSync(outputPath, "utf8"));
-        del.sync(outputPath, { force: true });
+        const result = { response: JSON.parse(fs.readFileSync(outputPath, "utf8")), logs };
+        // del.sync(outputPath, { force: true });
         if (is<TmcLangsResponse>(result)) {
             return new Ok(result);
         }
@@ -421,6 +470,8 @@ export default class TMC {
 
     /**
      * Performs an HTTP request to the hardcoded TMC server
+     * By default returns from cache if method === get & cache === undefined and data exists in cache.
+     *
      * @param endpoint target API endpoint, can also be complete URL
      * @param method HTTP method, defaults to GET
      */

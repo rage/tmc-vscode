@@ -62,7 +62,7 @@
                     </div>
                 </div>
             </div>
-            <table>
+            <table cellpadding="3">
                 {{#each exercises}}
                 <tr>
                     <td>{{this.name}}</td>
@@ -72,6 +72,7 @@
                     <td style="color: red">Download failed: {{this.error}}</td>
                     {{else}}
                     <td>
+                        {{this.status}}
                         <div
                             class="spinner-border spinner-border-sm ml-auto"
                             role="status"

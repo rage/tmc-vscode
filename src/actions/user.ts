@@ -9,13 +9,13 @@ import * as vscode from "vscode";
 import { LocalCourseData } from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
-import { askForConfirmation, isWorkspaceOpen, parseFeedbackQuestion, sleep } from "../utils";
+import { askForConfirmation, isWorkspaceOpen, parseFeedbackQuestion, sleep } from "../utils/utils";
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import { closeExercises } from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
-import { SubmissionFeedback } from "../api/types";
+import { CourseExercise, Exercise, SubmissionFeedback } from "../api/types";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -60,8 +60,8 @@ export async function logout(
 /**
  * Tests an exercise while keeping the user informed
  */
-export async function testExercise(id: number, actions: ActionContext): Promise<void> {
-    const { ui, resources, tmc, workspaceManager } = actions;
+export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
+    const { ui, resources, tmc, workspaceManager } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
 
     if (exerciseDetails.err) {
@@ -80,7 +80,7 @@ export async function testExercise(id: number, actions: ActionContext): Promise<
             if (msg.type == "setToBackground") {
                 temp.dispose();
             } else if (msg.type == "submitToServer" && msg.data) {
-                submitExercise(msg.data.exerciseId as number, actions, temp);
+                submitExercise(actionContext, msg.data.exerciseId as number, temp);
             }
         },
     );
@@ -90,13 +90,18 @@ export async function testExercise(id: number, actions: ActionContext): Promise<
     const testResult = await tmc.runTests(id);
     if (testResult.err) {
         ui.setStatusBar(`Running tests for ${exerciseName} failed`, 5000);
+        temp.setContent("error", { error: testResult.val });
         vscode.window.showErrorMessage(`Exercise test run failed: \
        ${testResult.val.name} - ${testResult.val.message}`);
         return;
     }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
-    const testResultVal = testResult.val;
-    const data = { testResultVal, id, exerciseName };
+    const data = {
+        testResult: testResult.val.response,
+        id,
+        exerciseName,
+        tmcLogs: testResult.val.logs,
+    };
     temp.setContent("test-result", data);
 }
 
@@ -105,20 +110,22 @@ export async function testExercise(id: number, actions: ActionContext): Promise<
  * @param tempView Existing TemporaryWebview to use if any
  */
 export async function submitExercise(
-    id: number,
     actionContext: ActionContext,
+    id: number,
     tempView?: TemporaryWebview,
 ): Promise<void> {
-    const { userData, ui, resources, tmc, workspaceManager } = actionContext;
+    const { ui, resources, tmc } = actionContext;
     const submitResult = await tmc.submitExercise(id);
 
+    const temp = tempView || new TemporaryWebview(resources, ui, "", () => {});
+    temp.setTitle("TMC Server Submission");
+
     if (submitResult.err) {
+        temp.setContent("error", { error: submitResult.val });
         vscode.window.showErrorMessage(`Exercise submission failed: \
             ${submitResult.val.name} - ${submitResult.val.message}`);
         return;
     }
-
-    const temp = tempView || new TemporaryWebview(resources, ui, "", () => {});
 
     temp.setMessageHandler(
         async (msg: { data?: { [key: string]: unknown }; type?: string }): Promise<void> => {
@@ -137,7 +144,6 @@ export async function submitExercise(
             }
         },
     );
-    temp.setTitle("TMC Server Submission");
 
     let timeWaited = 0;
     let getStatus = true;
@@ -154,12 +160,6 @@ export async function submitExercise(
             ui.setStatusBar("Tests finished, see result", 5000);
             let feedbackQuestions: FeedbackQuestion[] = [];
             if (statusData.status === "ok" && statusData.all_tests_passed) {
-                userData.setPassed(
-                    userData.getCourseByName(
-                        workspaceManager.getExerciseDataById(id).unwrap().course,
-                    ).id,
-                    id,
-                );
                 if (statusData.feedback_questions) {
                     feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
                 }
@@ -193,6 +193,35 @@ export async function submitExercise(
                 });
         }
     }
+}
+
+/**
+ * Sends the exercise to the TMC Paste server.
+ * @param id Exercise ID
+ */
+export async function pasteExercise(actionContext: ActionContext, id: number): Promise<void> {
+    const { tmc } = actionContext;
+    const params = new Map<string, string>();
+    params.set("paste", "1");
+    const submitResult = await tmc.submitExercise(id, params);
+
+    if (submitResult.err) {
+        vscode.window.showErrorMessage(`Failed to paste exercise to server: \
+                ${submitResult.val.name} - ${submitResult.val.message}`);
+        return;
+    }
+
+    vscode.window
+        .showInformationMessage(
+            `Paste to TMC Server successful: \
+            ${submitResult.val.paste_url}`,
+            ...["Open URL"],
+        )
+        .then((selection) => {
+            if (selection == "Open URL") {
+                vscode.env.openExternal(vscode.Uri.parse(submitResult.val.paste_url));
+            }
+        });
 }
 
 /**
@@ -242,11 +271,23 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
 
     const { tmc, userData } = actionContext;
     const courseDetailsResult = await tmc.getCourseDetails(orgAndCourse.val.course);
+    const courseExercises = await tmc.getCourseExercises(orgAndCourse.val.course);
     if (courseDetailsResult.err) {
         return new Err(courseDetailsResult.val);
     }
+    if (courseExercises.err) {
+        return new Err(courseExercises.val);
+    }
 
     const courseDetails = courseDetailsResult.val.course;
+    const exercises = courseExercises.val;
+
+    let availablePoints = 0;
+    let awardedPoints = 0;
+    exercises.forEach((x) => {
+        availablePoints += x.available_points.length;
+        awardedPoints += x.awarded_points.length;
+    });
 
     const localData: LocalCourseData = {
         description: courseDetails.description || "",
@@ -254,6 +295,8 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         id: courseDetails.id,
         name: courseDetails.name,
         organization: orgAndCourse.val.organization,
+        availablePoints: availablePoints,
+        awardedPoints: awardedPoints,
     };
     userData.addCourse(localData);
     await displayUserCourses(actionContext);
@@ -267,8 +310,59 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
 export async function removeCourse(id: number, actionContext: ActionContext): Promise<void> {
     const course = actionContext.userData.getCourse(id);
     await closeExercises(
-        course.exercises.map((e) => e.id),
         actionContext,
+        course.exercises.map((e) => e.id),
     );
     actionContext.userData.deleteCourse(id);
+}
+
+export async function updateCourse(id: number, actionContext: ActionContext): Promise<void> {
+    const { tmc, userData, workspaceManager } = actionContext;
+    return Promise.all([tmc.getCourseDetails(id, false), tmc.getCourseExercises(id, false)]).then(
+        ([courseDetailsResult, courseExercisesResult]) => {
+            if (courseDetailsResult.ok) {
+                const details = courseDetailsResult.val.course;
+                userData.updateCompletedExercises(
+                    id,
+                    details.exercises.filter((x) => x.completed).map((x) => x.id),
+                );
+            }
+            if (courseExercisesResult.ok) {
+                const exercises = courseExercisesResult.val;
+                const [available, awarded] = exercises.reduce(
+                    (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
+                    [0, 0],
+                );
+                userData.updatePoints(id, awarded, available);
+            }
+
+            if (courseExercisesResult.ok && courseDetailsResult.ok) {
+                const details = courseDetailsResult.val.course;
+                const exercises = courseExercisesResult.val;
+                const combinedDetails: Map<
+                    number,
+                    { c?: CourseExercise; e?: Exercise }
+                > = new Map();
+                details.exercises.forEach((x) => {
+                    combinedDetails.set(x.id, { e: x });
+                });
+                exercises.forEach((x) => {
+                    let d = combinedDetails.get(x.id);
+                    if (d) d.c = x;
+                    else d = { c: x };
+                    combinedDetails.set(x.id, d);
+                });
+                for (const x of combinedDetails.values()) {
+                    if (x.c && x.e) {
+                        workspaceManager.updateExerciseData(
+                            x.c.id,
+                            x.c.soft_deadline,
+                            x.c.deadline,
+                            x.e.checksum,
+                        );
+                    }
+                }
+            }
+        },
+    );
 }

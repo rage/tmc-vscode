@@ -1,43 +1,59 @@
 # ATTENTION!
 
-**this extension is still in development and the team would like to know your thoughts on overall functionality of the extension or hear, if you've encountered any problems while using this extension. You can submit your overall thoughts about extension via [google form](https://docs.google.com/forms/d/1oDCFVNgi5rDSh5iqeINX7qEpc72VnHKmFzuj-jzxtcA/viewform?edit_requested=true) (goods, bads, from the middle...) or you can open an issue to github project [https://github.com/rage/tmc-vscode/issues](https://github.com/rage/tmc-vscode/issues) about encountered problems/bugs.**
+**This extension is under development.**  
+The VSCode team would like to hear if you've encountered any problems while using this extension. You can submit your ideas and/or issues via our [google form](https://docs.google.com/forms/d/1oDCFVNgi5rDSh5iqeINX7qEpc72VnHKmFzuj-jzxtcA/viewform?edit_requested=true) or open an issue in our Github repository [https://github.com/rage/tmc-vscode/issues](https://github.com/rage/tmc-vscode/issues).
 
 # TestMyCode for Visual Studio Code
 
 This extension provides [TestMyCode](https://tmc.mooc.fi/) integration for Visual Studio Code.
 Students of its various organizations can download, complete and return course exercises directly from the editor.
 
-To use extension you will need
+## Prerequisites
+
 * [TestMyCode](https://tmc.mooc.fi/) account
 * [Java](https://www.java.com/) runtime (for packing/unpacking and testing exercises)
-* Course-specific system environment
+* Course-specific system environment   
+  * For _Java courses_, use same version of JDK and JRE
 
 ## Getting started
 
-1. Install this extension.
-2. Select the TMC icon on the left side bar.
-   * **First time initialization will take some time!** Please pay attention to the bottom bar during this time.
-3. Select *Log in* from the TestMyCode menu.
-4. Enter your credentials and log in.
+1. Start Visual Studio Code
+2. In the ```Extension``` tab (Four squares), look for ```TestMyCode``` and install
+3. Select the TMC icon on the left sidebar.
+   * **First time initialization will take some time!**  
+      Please pay attention to the VSCode notifications
+4. Select *Log in* from the TestMyCode menu.
+5. Enter your TMC credentials and log in.
+6. Add a course from ```My courses``` and download exercises
+7. Select ```Open exercise workspace``` from TestMyCode menu.
 
-![Getting started](media/README_getting_started.png)
+## Workspace and Editor usage
 
-* Now you can add courses to "My courses" list.
-* By selecting a course afterwards, you may select exercises you want to download.
-
-## Editor usage
-
-Downloaded exercises appear on the Explorer:
+Exercises that are downloaded and opened via the TMC extension appear in the Explorer:
 
 ![Explorer button](media/README_click_Explorer.png)
 
-### Testing a solution
-When you want to test your solution, click the "TMC - Run tests". It is located in the top right corner of the screen. It is highlighted as blue in the following picture.
+### Commands
 
-### Submitting a solution
-If your solution passes tests, click the "TMC - Submit solutions" in the top right corner. It is highlighted as red in the following picture. 
+All predefined commands are related to the currently open and active exercise file in the editor. A list of available commands can be found under the `TMC Menu` button located at the top right for an active editor.
 
-### Resetting an exercise
-If you want to reset your active exercise, you can open a dropdown menu by clicking the button highlighted as green in the following image. It is located in the top right corner. Click "TMC - Reset exercise" from the dropdown menu.
+#### Test exercise
 
-![TestSubmitReset](media/README_submit_test_reset.png)
+When you wish to test your solution, click the `TMC - Run tests` or alternatively choose `Run tests``` from the TMC Menu.
+
+#### Submit exercise
+
+If your solution pass the tests, click the `Submit to server` button in the webview or alternatively choose `Submit to server` from the TMC Menu.
+
+#### Upload to TMC Pastebin
+
+You can upload your exercise code to the TMC Pastebin by choosing `Upload to TMC Pastebin` from the TMC Menu.
+
+#### Reset exercise
+
+If you want to reset an exercise to its original state, you can choose `Reset exercise` from the TMC Menu.  
+This will submit the exercise data to the TMC Server before resetting the exercise.
+
+#### Close exercise
+
+You can close the active exercise from the VSCode explorer view by choosing `Close exercise` from the TMC Menu.

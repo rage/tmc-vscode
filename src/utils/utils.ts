@@ -6,12 +6,13 @@ import * as vscode from "vscode";
 
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
-import WorkspaceManager from "./api/workspaceManager";
-import Resources from "./config/resources";
-import { ConnectionError } from "./errors";
-import { SubmissionFeedbackQuestion } from "./api/types";
-import { FeedbackQuestion } from "./actions/types";
+import WorkspaceManager from "../api/workspaceManager";
+import Resources from "../config/resources";
+import { ConnectionError } from "../errors";
+import { SubmissionFeedbackQuestion } from "../api/types";
+import { FeedbackQuestion } from "../actions/types";
 import ClientOAuth2 = require("client-oauth2");
+import { LocalExerciseData } from "../config/types";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
@@ -137,37 +138,16 @@ export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number
 }
 
 /**
- * Creates a date object from string
- * @param deadline Deadline as string from API
+ * Get the Exercise data for the currently open text editor
  */
-export function parseDate(dateAsString: string): Date {
-    const inMillis = Date.parse(dateAsString);
-    const date = new Date(inMillis);
-    return date;
-}
-
-/**
- * Returns a trimmed string presentation of a date.
- */
-export function dateToString(date: Date): string {
-    return date.toString().split("(", 1)[0];
-}
-
-/**
- * Finds the next date after initial date, or null if can't find any.
- */
-export function findNextDateAfter(after: Date, dates: Array<Date | null>): Date | null {
-    const nextDate = (currentDate: Date | null, nextDate: Date | null): Date | null => {
-        if (!nextDate || after >= nextDate) {
-            return currentDate;
-        }
-        if (!currentDate) {
-            return nextDate;
-        }
-        return nextDate < currentDate ? nextDate : currentDate;
-    };
-
-    return dates.reduce(nextDate, null);
+export function getCurrentExerciseData(
+    workspaceManager: WorkspaceManager,
+): Result<LocalExerciseData, Error> {
+    const id = getCurrentExerciseId(workspaceManager);
+    if (!id) {
+        return new Err(new Error("Currently open editor is not part of a TMC exercise"));
+    }
+    return workspaceManager.getExerciseDataById(id);
 }
 
 /**
@@ -180,13 +160,54 @@ export function getProgressBar(percentDone: number): string {
     </div>`;
 }
 
+export function displayProgrammerError(description: string): void {
+    vscode.window.showErrorMessage(
+        (isProductionBuild() ? "" : "Programmer ") + "Error: " + description,
+    );
+}
+
+/**
+ * Prompts the user with a yes/no dialog.
+ */
 export async function askForConfirmation(prompt: string): Promise<boolean> {
+    return (
+        (await askForItem<boolean>(prompt, [
+            ["yes", true],
+            ["no", false],
+        ])) || false
+    );
+}
+
+/**
+ * Prompts the user with a yes/no dialog. This version requires user to explicitely write "yes" for the answer to count as true.
+ */
+export async function askForExplicitConfirmation(prompt: string): Promise<boolean> {
     const options: vscode.InputBoxOptions = {
         placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
         prompt,
     };
     const success = (await vscode.window.showInputBox(options))?.toLowerCase() === "yes";
     return success;
+}
+
+/**
+ * Prompts a selection to the user for multiple different options and returns its associated generic type.
+ */
+export async function askForItem<T>(
+    prompt: string,
+    items: Array<[string, T]>,
+    multiple?: boolean,
+): Promise<T | undefined> {
+    const options: vscode.QuickPickOptions = {
+        canPickMany: multiple || false,
+        placeHolder: prompt,
+    };
+
+    const selection = await vscode.window.showQuickPick(
+        items.map((i) => i[0]),
+        options,
+    );
+    return items.find((item) => item[0] === selection)?.[1];
 }
 
 export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): FeedbackQuestion[] {

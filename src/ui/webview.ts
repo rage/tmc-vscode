@@ -21,6 +21,8 @@ export default class TmcWebview {
 
     private readonly resources: Resources;
 
+    private stateId = 0;
+
     /**
      * Creates a TmcWebview object used by the UI class
      * @param extensionContext The VSCode extension context, required for path resolution for the CSS stylesheet
@@ -29,18 +31,6 @@ export default class TmcWebview {
         this.extensionContext = extensionContext;
         this.templateEngine = new TemplateEngine(resources);
         this.resources = resources;
-    }
-
-    /**
-     * Sets the HTML content of the webview and brings it to the front
-     * Deprecated, use [[setContentFromTemplate]] instead
-     *
-     * @param html A string containing a full HTML document
-     */
-    public setContent(html: string): void {
-        const panel = this.getPanel();
-        panel.webview.html = html;
-        panel.reveal();
     }
 
     /**
@@ -53,6 +43,7 @@ export default class TmcWebview {
         data?: { [key: string]: unknown },
         forceUpdate = false,
     ): Promise<void> {
+        this.stateId++;
         const panel = this.getPanel();
         const html = await this.templateEngine.getTemplate(panel.webview, templateName, data);
         if (forceUpdate) {
@@ -118,5 +109,9 @@ export default class TmcWebview {
             this.panel.iconPath = vscode.Uri.file(`${this.resources.mediaFolder}/TMC.svg`);
         }
         return this.panel;
+    }
+
+    public getStateId(): number {
+        return this.stateId;
     }
 }

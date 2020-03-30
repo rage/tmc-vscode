@@ -15,7 +15,7 @@
             {{#with statusData}} {{#if test_cases}}
             <div class="row my-1">
                 {{#if points}}
-                <h3>Points gained: {{points}}</h3>
+                <h3>Points gained: {{#each points}} "{{this}}" {{/each}}</h3>
                 {{else}}
                 <h3>Points gained: -</h3>
                 {{/if}}
