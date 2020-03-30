@@ -1,5 +1,6 @@
 # Paths ESLint should never check
+!.github
 dist
-node_modules
+**/node_modules
 out
 .vscode-test/
