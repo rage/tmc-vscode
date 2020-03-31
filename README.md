@@ -39,7 +39,7 @@ All predefined commands are related to the currently open and active exercise fi
 
 #### Test exercise
 
-When you wish to test your solution, click the `TMC - Run tests` or alternatively choose `Run tests``` from the TMC Menu.
+When you wish to test your solution, click the `TMC - Run tests` or alternatively choose `Run tests` from the TMC Menu.
 
 #### Submit exercise
 
