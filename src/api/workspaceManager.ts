@@ -374,6 +374,17 @@ export default class WorkspaceManager {
 
         fs.readdirSync(basedir, { withFileTypes: true }).forEach((organization) => {
             if (organization.isFile() && organization.name === WORKSPACE_ROOT_FILE) {
+                if (
+                    fs.readFileSync(path.join(basedir, organization.name), {
+                        encoding: "utf-8",
+                    }) !== WORKSPACE_ROOT_FILE_TEXT
+                ) {
+                    fs.writeFileSync(
+                        path.join(basedir, organization.name),
+                        WORKSPACE_ROOT_FILE_TEXT,
+                        { encoding: "utf-8" },
+                    );
+                }
                 return;
             } else if (!(organization.isDirectory() && this.watcherTree.has(organization.name))) {
                 del.sync(path.join(basedir, organization.name), { force: true });
