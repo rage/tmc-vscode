@@ -226,7 +226,7 @@ export type TmcLangsTestResults = {
             stdout?: number[];
             stderr?: number[];
         };
-    };
+    } | null;
 } & TmcLangsLogs;
 
 export type TmcLangsPath = {
