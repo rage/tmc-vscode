@@ -13,7 +13,7 @@ import {
     dateToString,
     findNextDateAfter,
     parseDate,
-} from "../utils/dateDeadline";
+} from "../utils/";
 import { ActionContext } from "./types";
 import { Exercise } from "../api/types";
 

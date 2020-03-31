@@ -5,7 +5,7 @@ import {
     askForExplicitConfirmation,
     getCurrentExerciseData,
     getCurrentExerciseId,
-} from "../utils/utils";
+} from "../utils/";
 import {
     pasteExercise,
     resetExercise,

@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
-import { getProgressBar, numbersToString } from "../utils/utils";
+import { getProgressBar, numbersToString } from "../utils/";
 
 export default class TemplateEngine {
     private cssPath: string;

@@ -11,7 +11,7 @@ import Storage from "../config/storage";
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
-import { displayProgrammerError, downloadFile } from "../utils/utils";
+import { displayProgrammerError, downloadFile } from "../utils/";
 import {
     Course,
     CourseDetails,

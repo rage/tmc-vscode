@@ -7,7 +7,7 @@ import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
-import { isProductionBuild } from "./utils/utils";
+import { isProductionBuild } from "./utils/";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const productionMode = isProductionBuild();
