@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as handlebars from "handlebars";
 import * as path from "path";
+import * as vscode from "vscode";
 
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
@@ -164,7 +165,11 @@ export default class TemplateEngine {
      *
      * @returns The HTML document as a string
      */
-    public async getTemplate(name: string, data?: { [key: string]: unknown }): Promise<string> {
+    public async getTemplate(
+        webview: vscode.Webview,
+        name: string,
+        data?: { [key: string]: unknown },
+    ): Promise<string> {
         const p = path.join(this.htmlPath, `${name}.html`);
         let template: HandlebarsTemplateDelegate<unknown>;
         const cacheResult = this.cache.get(name);
@@ -176,6 +181,9 @@ export default class TemplateEngine {
         if (!data) {
             data = {};
         }
+
+        data.cspBlob = `<meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; img-src https:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';" />`;
         data.cssBlob = this.cssBlob;
 
         return template(data);
