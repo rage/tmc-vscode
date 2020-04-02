@@ -77,10 +77,12 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         ui,
         "TMC Test Results",
         async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
-            if (msg.type == "setToBackground") {
+            if (msg.type == "closeWindow") {
                 temp.dispose();
             } else if (msg.type == "submitToServer" && msg.data) {
                 submitExercise(actionContext, msg.data.exerciseId as number, temp);
+            } else if (msg.type == "sendToPaste" && msg.data) {
+                pasteExercise(actionContext, msg.data.exerciseId as number);
             }
         },
     );
@@ -134,8 +136,7 @@ export async function submitExercise(
                     msg.data.url as string,
                     msg.data.feedback as SubmissionFeedback,
                 );
-            } else if (msg.type == "setToBackgroundInSubmission") {
-                ui.setStatusBar("Waiting for results from server.");
+            } else if (msg.type == "closeWindow") {
                 temp.dispose();
             } else if (msg.type == "showInBrowser") {
                 vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));

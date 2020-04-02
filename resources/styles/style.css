@@ -40,6 +40,10 @@ body.vscode-high-contrast {
     color: red;
 }
 
+.close {
+    color: inherit;
+}
+
 /*
     Course and organization view
 */
