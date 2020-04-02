@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as handlebars from "handlebars";
 import * as path from "path";
-import * as vscode from "vscode";
 
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
@@ -160,17 +159,12 @@ export default class TemplateEngine {
     /**
      * Creates an HTML document from a template, with a default CSS applied
      *
-     * @param extensionContext
      * @param name Name of the template file to user
      * @param data Must contain all the variables used in the template
      *
      * @returns The HTML document as a string
      */
-    public async getTemplate(
-        webview: vscode.Webview,
-        name: string,
-        data?: { [key: string]: unknown },
-    ): Promise<string> {
+    public async getTemplate(name: string, data?: { [key: string]: unknown }): Promise<string> {
         const p = path.join(this.htmlPath, `${name}.html`);
         let template: HandlebarsTemplateDelegate<unknown>;
         const cacheResult = this.cache.get(name);

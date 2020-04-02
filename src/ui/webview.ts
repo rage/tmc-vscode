@@ -45,7 +45,7 @@ export default class TmcWebview {
     ): Promise<void> {
         this.stateId++;
         const panel = this.getPanel();
-        const html = await this.templateEngine.getTemplate(panel.webview, templateName, data);
+        const html = await this.templateEngine.getTemplate(templateName, data);
         if (forceUpdate) {
             panel.webview.html = html + " ";
         }

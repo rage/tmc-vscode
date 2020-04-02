@@ -45,7 +45,6 @@ export default class TemporaryWebview {
             this.disposed = false;
         }
         this.panel.webview.html = await this.ui.webview.templateEngine.getTemplate(
-            this.panel.webview,
             templateName,
             data,
         );
