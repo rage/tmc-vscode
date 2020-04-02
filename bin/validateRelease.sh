@@ -4,18 +4,25 @@ exitCode=0
 
 # Tag must match the version scheme
 tagVersion=`echo $1 | cut -d'v' -f 2`
-if [[ ! $tagVersion =~ ^[0-9]+.[0-9]+.[0-9]+ ]]
+if [[ ! $tagVersion =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]
 then
-    echo "::set-env name=RELEASE_TAG::"$tagVersion
-    echo "Error: Version tag must match the format vX.Y.Z."
+    echo "Error: Version tag must match the format vX.Y.Z"
     exitCode=1
 fi
 
 # Version in package.json must match with tag version
 packageVersion=`grep -Eo '"version":.+$' package.json`
-if [[ ! $packageVersion == '"version": "'$tagVersion'",' ]]
+if [[ ! $packageVersion =~ '"version": "'$tagVersion'".*$' ]]
 then
-    echo "Error: The version in package.json doen't match with the tag."
+    echo "Error: The version in package.json doesn't match with the tag."
+    exitCode=1
+fi
+
+# Make sure that the package-lock.json version also matches
+packageLockVersion=`grep -Eo '"version":.+$' package-lock.json`
+if [[ ! $packageLockVersion =~ '"version": "'$tagVersion'".*$' ]]
+then
+    echo "Error: The version in package-lock.json doesn't match with the tag. Did you forget to run npm install?"
     exitCode=1
 fi
 
