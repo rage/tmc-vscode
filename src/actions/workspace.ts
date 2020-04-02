@@ -110,6 +110,35 @@ export async function downloadExercises(
 }
 
 /**
+ * Checks all user's courses for exercise updates and download them.
+ */
+export async function updateExercises(actionContext: ActionContext): Promise<void> {
+    const { tmc, userData, workspaceManager } = actionContext;
+
+    userData.getCourses().forEach(async (course) => {
+        const organizationSlug = course.organization;
+        const result = await tmc.getCourseDetails(course.id);
+
+        if (result.err) {
+            return;
+        }
+
+        const updateIds: number[] = [];
+        result.val.course.exercises.forEach((exercise) => {
+            const localExercise = workspaceManager.getExerciseDataById(exercise.id);
+            if (localExercise.ok && localExercise.val.checksum !== exercise.checksum) {
+                updateIds.push(exercise.id);
+            }
+        });
+
+        if (updateIds.length > 0) {
+            console.log(`Updating exercises: ${updateIds}`);
+            downloadExercises(actionContext, updateIds, organizationSlug, course.id);
+        }
+    });
+}
+
+/**
  * Sends given exercise to the server and resets it to initial state.
  * @param id ID of the exercise to reset
  */

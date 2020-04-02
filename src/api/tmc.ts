@@ -30,6 +30,7 @@ import {
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
 import { ACCESS_TOKEN_URI, CLIENT_ID, CLIENT_SECRET, TMC_API_URL } from "../config/constants";
+import { ExerciseStatus } from "../config/types";
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -250,6 +251,11 @@ export default class TMC {
         }
 
         // TODO: Extract to a different location and handle pass that to ExerciseManager
+        const isOpen = this.workspaceManager
+            .getExerciseDataById(id)
+            .map((x) => x.status === ExerciseStatus.OPEN)
+            .mapErr(() => true).val;
+
         const exercisePath = this.workspaceManager.createExerciseDownloadPath(
             exercise.soft_deadline,
             organizationSlug,
@@ -275,6 +281,10 @@ export default class TMC {
         }
 
         del.sync(archivePath, { force: true });
+
+        if (!isOpen) {
+            return new Ok("Closed exercise not opened.");
+        }
 
         // TODO: Return closed path and call open elsewhere
         const openResult = this.workspaceManager.openExercise(id);
