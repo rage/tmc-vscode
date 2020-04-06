@@ -9,7 +9,13 @@ import * as vscode from "vscode";
 import { LocalCourseData } from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
-import { askForConfirmation, isWorkspaceOpen, parseFeedbackQuestion, sleep } from "../utils/";
+import {
+    askForConfirmation,
+    isWorkspaceOpen,
+    parseFeedbackQuestion,
+    showNotification,
+    sleep,
+} from "../utils/";
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import { checkForExerciseUpdates, closeExercises } from "./workspace";
@@ -48,12 +54,12 @@ export async function logout(
     visibility: VisibilityGroups,
     actionContext: ActionContext,
 ): Promise<void> {
-    if (await askForConfirmation("Are you sure you want to log out?")) {
+    if (await askForConfirmation("Are you sure you want to log out?", true)) {
         const { tmc, ui } = actionContext;
         tmc.deauthenticate();
         ui.webview.dispose();
         ui.treeDP.updateVisibility([visibility.LOGGED_IN.not]);
-        vscode.window.showInformationMessage("Logged out from TestMyCode.");
+        showNotification("Logged out from TestMyCode.");
     }
 }
 
@@ -146,6 +152,7 @@ export async function submitExercise(
         },
     );
 
+    let notified = false;
     let timeWaited = 0;
     let getStatus = true;
     while (getStatus) {
@@ -177,22 +184,23 @@ export async function submitExercise(
         await sleep(2500);
         timeWaited = timeWaited + 2500;
 
-        if (timeWaited === 120000) {
-            vscode.window
-                .showInformationMessage(
-                    `This seems to be taking a long time — consider continuing to the next exercise while this is running. \
+        if (timeWaited >= 120000 && !notified) {
+            notified = true;
+            showNotification(
+                `This seems to be taking a long time — consider continuing to the next exercise while this is running. \
                 Your submission will still be graded. Check the results later at ${submitResult.val.show_submission_url}`,
-                    ...["Open URL and move on...", "No, I'll wait"],
-                )
-                .then((selection) => {
-                    if (selection === "Open URL and move on...") {
+                [
+                    "Open URL and move on...",
+                    (): void => {
                         vscode.env.openExternal(
                             vscode.Uri.parse(submitResult.val.show_submission_url),
                         );
                         getStatus = false;
                         temp.dispose();
-                    }
-                });
+                    },
+                ],
+                ["No, I'll wait", (): void => {}],
+            );
         }
     }
 }
@@ -213,17 +221,11 @@ export async function pasteExercise(actionContext: ActionContext, id: number): P
         return;
     }
 
-    vscode.window
-        .showInformationMessage(
-            `Paste to TMC Server successful: \
-            ${submitResult.val.paste_url}`,
-            ...["Open URL"],
-        )
-        .then((selection) => {
-            if (selection == "Open URL") {
-                vscode.env.openExternal(vscode.Uri.parse(submitResult.val.paste_url));
-            }
-        });
+    showNotification(`Paste to TMC Server successful: ${submitResult.val.paste_url}`, [
+        "Open URL",
+        (): Thenable<boolean> =>
+            vscode.env.openExternal(vscode.Uri.parse(submitResult.val.paste_url)),
+    ]);
 }
 
 /**

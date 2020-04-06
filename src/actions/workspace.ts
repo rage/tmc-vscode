@@ -157,10 +157,11 @@ export async function checkForExerciseUpdates(actionContext: ActionContext): Pro
     }
 
     if (count > 0) {
-        showNotification(`Found updates for ${count} exercises. Do you wish to download them?`, [
+        showNotification(
+            `Found updates for ${count} exercises. Do you wish to download them?`,
             ["Download", (): Promise<void> => downloadExercises(actionContext, coursesToUpdate)],
             ["Later", (): void => {}],
-        ]);
+        );
     }
 }
 
@@ -192,7 +193,7 @@ export async function resetExercise(
         return new Err(submitResult.val);
     }
 
-    vscode.window.showInformationMessage(`Resetting exercise ${exerciseData.val.name}`);
+    showNotification(`Resetting exercise ${exerciseData.val.name}`);
     ui.setStatusBar(`Resetting exercise ${exerciseData.val.name}`);
 
     const slug = exerciseData.val.organization;

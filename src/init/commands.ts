@@ -2,9 +2,9 @@ import * as vscode from "vscode";
 import { ActionContext } from "../actions/types";
 import {
     askForConfirmation,
-    askForExplicitConfirmation,
     getCurrentExerciseData,
     getCurrentExerciseId,
+    showNotification,
 } from "../utils/";
 import {
     pasteExercise,
@@ -83,13 +83,12 @@ export function registerCommands(
                 return;
             }
 
-            (await askForExplicitConfirmation(
+            (await askForConfirmation(
                 `Are you sure you want to reset exercise ${exerciseData.val.name}?`,
+                true,
             ))
                 ? resetExercise(actionContext, exerciseId)
-                : vscode.window.showInformationMessage(
-                      `Reset canceled for exercise ${exerciseData.val.name}.`,
-                  );
+                : showNotification(`Reset canceled for exercise ${exerciseData.val.name}.`);
         }),
     );
 
@@ -115,9 +114,7 @@ export function registerCommands(
                 `Are you sure you want to close uncompleted exercise ${exerciseData.val.name}?`,
             ))
                 ? workspaceManager.closeExercise(exerciseId)
-                : vscode.window.showInformationMessage(
-                      `Close canceled for exercise ${exerciseData.val.name}.`,
-                  );
+                : showNotification(`Close canceled for exercise ${exerciseData.val.name}.`);
         }),
     );
 

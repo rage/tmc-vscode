@@ -5,7 +5,7 @@ import TMC from "../api/tmc";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import { UserData } from "../config/userdata";
-import { askForExplicitConfirmation, isWorkspaceOpen } from "../utils/";
+import { askForConfirmation, isWorkspaceOpen, showNotification } from "../utils/";
 import {
     addNewCourse,
     closeExercises,
@@ -126,13 +126,14 @@ export function registerUiActions(
             }
             const course = actionContext.userData.getCourse(msg.id);
             if (
-                await askForExplicitConfirmation(
+                await askForConfirmation(
                     `Do you want to remove ${course.name} from your courses? This won't delete your downloaded exercises.`,
+                    true,
                 )
             ) {
                 await removeCourse(msg.id, actionContext);
                 await displayUserCourses(actionContext);
-                vscode.window.showInformationMessage(`${course.name} was removed from courses.`);
+                showNotification(`${course.name} was removed from courses.`);
             }
         },
     );

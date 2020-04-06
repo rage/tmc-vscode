@@ -166,64 +166,6 @@ export function displayProgrammerError(description: string): void {
     );
 }
 
-/**
- * Prompts the user with a yes/no dialog.
- */
-export async function askForConfirmation(prompt: string): Promise<boolean> {
-    return (
-        (await askForItem<boolean>(prompt, [
-            ["yes", true],
-            ["no", false],
-        ])) || false
-    );
-}
-
-/**
- * Prompts the user with a yes/no dialog. This version requires user to explicitely write "yes" for the answer to count as true.
- */
-export async function askForExplicitConfirmation(prompt: string): Promise<boolean> {
-    const options: vscode.InputBoxOptions = {
-        placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
-        prompt,
-    };
-    const success = (await vscode.window.showInputBox(options))?.toLowerCase() === "yes";
-    return success;
-}
-
-/**
- * Prompts a selection to the user for multiple different options and returns its associated generic type.
- */
-export async function askForItem<T>(
-    prompt: string,
-    items: Array<[string, T]>,
-    multiple?: boolean,
-): Promise<T | undefined> {
-    const options: vscode.QuickPickOptions = {
-        canPickMany: multiple || false,
-        placeHolder: prompt,
-    };
-
-    const selection = await vscode.window.showQuickPick(
-        items.map((i) => i[0]),
-        options,
-    );
-    return items.find((item) => item[0] === selection)?.[1];
-}
-
-/**
- * Wrapper for vscode.window.showInformationMessage that resolves optional items to a generic types.
- */
-export async function showNotification(
-    message: string,
-    items?: Array<[string, () => void]>,
-): Promise<void> {
-    vscode.window
-        .showInformationMessage(`TestMyCode: ${message}`, ...(items?.map((item) => item[0]) || []))
-        .then((selection) => {
-            items?.find((item) => item[0] === selection)?.[1]();
-        });
-}
-
 export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): FeedbackQuestion[] {
     const feedbackQuestions: FeedbackQuestion[] = [];
     questions.forEach((x) => {
