@@ -287,7 +287,7 @@ export default class TMC {
         }
 
         // TODO: Return closed path and call open elsewhere
-        const openResult = this.workspaceManager.openExercise(id);
+        const openResult = this.workspaceManager.openExercise(id)[0];
 
         if (openResult.err) {
             console.log("Opening failed");

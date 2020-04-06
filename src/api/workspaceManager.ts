@@ -1,7 +1,6 @@
 import * as del from "del";
 import * as fs from "fs";
 import * as path from "path";
-import * as vscode from "vscode";
 
 import { Err, Ok, Result } from "ts-results";
 
@@ -9,7 +8,7 @@ import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { ExerciseDetails } from "./types";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
-import { WORKSPACE_ROOT_FILE, WORKSPACE_ROOT_FILE_TEXT } from "../config/constants";
+import WorkspaceWatcher from "./workspaceWatcher";
 
 /**
  * Class for managing, opening and closing of exercises on disk.
@@ -21,7 +20,7 @@ export default class WorkspaceManager {
     private readonly resources: Resources;
 
     // Data for the workspace filesystem event watcher
-    private readonly watcherTree: Map<string, Map<string, Set<string>>> = new Map();
+    private readonly watcher: WorkspaceWatcher;
 
     /**
      * Creates a new instance of the WorkspaceManager class.
@@ -40,7 +39,8 @@ export default class WorkspaceManager {
             this.pathToId = new Map();
         }
         this.workspaceIntegrityCheck();
-        this.startWatcher();
+        this.watcher = new WorkspaceWatcher(this, resources);
+        this.watcher.start();
     }
 
     public updateExerciseData(
@@ -80,7 +80,6 @@ export default class WorkspaceManager {
             }
             if (data.status === ExerciseStatus.MISSING) {
                 this.deleteExercise(exerciseDetails.exercise_id);
-                this.removeFromWatcherTree(data);
             } else if (data.checksum !== checksum) {
                 if (data.status === ExerciseStatus.OPEN) {
                     this.closeExercise(exerciseDetails.exercise_id);
@@ -183,76 +182,103 @@ export default class WorkspaceManager {
      * Opens exercise by moving it to workspace folder.
      * @param id Exercise ID to open
      */
-    public openExercise(id: number): Result<string, Error> {
-        const data = this.idToData.get(id);
-        if (data && data.status === ExerciseStatus.CLOSED) {
-            if (!fs.existsSync(this.getClosedPath(id))) {
-                this.setMissing(id);
-                return new Err(new Error("Exercise data missing"));
+    public openExercise(...ids: number[]): Result<string, Error>[] {
+        const results: Result<string, Error>[] = [];
+
+        this.watcher.stop();
+
+        for (const id of ids) {
+            const data = this.idToData.get(id);
+            if (data && data.status === ExerciseStatus.CLOSED) {
+                if (!fs.existsSync(this.getClosedPath(id))) {
+                    this.setMissing(id);
+                    results.push(new Err(new Error("Exercise data missing")));
+                    continue;
+                }
+                fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
+                try {
+                    fs.renameSync(this.getClosedPath(id), data.path);
+                } catch (err) {
+                    results.push(new Err(new Error("Folder move operation failed.")));
+                    continue;
+                }
+                this.watcher.watch(data);
+                data.status = ExerciseStatus.OPEN;
+                this.idToData.set(id, data);
+                results.push(new Ok(data.path));
+            } else if (!data) {
+                results.push(new Err(new Error("Invalid ID")));
+                continue;
             }
-            fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
-            this.addToWatcherTree(data);
-            try {
-                fs.renameSync(this.getClosedPath(id), data.path);
-            } catch (err) {
-                this.removeFromWatcherTree(data);
-                return new Err(new Error("Folder move operation failed."));
-            }
-            data.status = ExerciseStatus.OPEN;
-            this.idToData.set(id, data);
-            this.updatePersistentData();
-            return new Ok(data.path);
-        } else {
-            return new Err(new Error("Invalid ID or unable to open."));
         }
+        this.updatePersistentData();
+        this.watcher.start();
+        return results;
     }
 
     /**
      * Closes exercise by moving it away from workspace.
      * @param id Exercise ID to close
      */
-    public closeExercise(id: number): Result<void, Error> {
-        const data = this.idToData.get(id);
-        if (data && data.status === ExerciseStatus.OPEN) {
-            if (!fs.existsSync(data.path)) {
-                this.setMissing(id);
-                return new Err(new Error("Exercise data missing"));
+    public closeExercise(...ids: number[]): Result<void, Error>[] {
+        const results: Result<void, Error>[] = [];
+
+        this.watcher.stop();
+
+        for (const id of ids) {
+            const data = this.idToData.get(id);
+            if (data && data.status === ExerciseStatus.OPEN) {
+                if (!fs.existsSync(data.path)) {
+                    this.setMissing(id);
+                    results.push(new Err(new Error("Exercise data missing")));
+                    continue;
+                }
+                this.watcher.unwatch(data);
+                del.sync(this.getClosedPath(id), { force: true });
+                fs.renameSync(data.path, this.getClosedPath(id));
+
+                data.status = ExerciseStatus.CLOSED;
+                this.idToData.set(id, data);
+                results.push(Ok.EMPTY);
+            } else if (!data) {
+                results.push(new Err(new Error("Invalid ID")));
+                continue;
             }
-            del.sync(this.getClosedPath(id), { force: true });
-            fs.renameSync(data.path, this.getClosedPath(id));
-            data.status = ExerciseStatus.CLOSED;
-            this.idToData.set(id, data);
-            this.removeFromWatcherTree(data);
-            this.updatePersistentData();
-            return Ok.EMPTY;
-        } else {
-            return new Err(new Error("Invalid ID or unable to close."));
         }
+        this.updatePersistentData();
+        this.watcher.start();
+        return results;
     }
 
     /**
      * Deletes exercise from disk if present and clears all data related to it.
      * @param exerciseId Exercise ID to delete
      */
-    public deleteExercise(exerciseId: number): void {
-        const workspacePath = this.idToData.get(exerciseId)?.path;
-        if (workspacePath) {
-            del.sync(workspacePath, { force: true });
+    public deleteExercise(...ids: number[]): void {
+        this.watcher.stop();
+        for (const id of ids) {
+            const data = this.idToData.get(id);
+            if (data) {
+                this.watcher.unwatch(data);
+                del.sync(data.path, { force: true });
+                del.sync(this.getClosedPath(id), { force: true });
+                this.pathToId.delete(data.path);
+                this.idToData.delete(id);
+            }
         }
-
-        const closedPath = this.getClosedPath(exerciseId);
-        if (closedPath) {
-            del.sync(closedPath, { force: true });
-        }
-
-        this.clearExerciseData(exerciseId);
+        this.updatePersistentData();
+        this.watcher.start();
     }
 
-    private clearExerciseData(id: number): void {
-        const exercisePath = this.idToData.get(id)?.path;
-        if (exercisePath) {
-            this.idToData.delete(id);
-            this.pathToId.delete(exercisePath);
+    public getAllExercises(): LocalExerciseData[] {
+        return Array.from(this.idToData.values());
+    }
+
+    public setMissing(id: number): void {
+        const data = this.idToData.get(id);
+        if (data) {
+            data.status = ExerciseStatus.MISSING;
+            this.idToData.set(id, data);
             this.updatePersistentData();
         }
     }
@@ -286,252 +312,5 @@ export default class WorkspaceManager {
             this.idToData.set(data.id, data);
         }
         this.updatePersistentData();
-    }
-
-    private addToWatcherTree({ organization, course, name }: LocalExerciseData): void {
-        if (!this.watcherTree.has(organization)) {
-            this.watcherTree.set(organization, new Map());
-        }
-        if (!this.watcherTree.get(organization)?.has(course)) {
-            this.watcherTree.get(organization)?.set(course, new Set());
-        }
-        this.watcherTree
-            .get(organization)
-            ?.get(course)
-            ?.add(name);
-    }
-
-    private removeFromWatcherTree({
-        organization,
-        course,
-        name,
-        path: exercisePath,
-    }: LocalExerciseData): void {
-        if (this.watcherTree.get(organization)?.has(course)) {
-            this.watcherTree
-                .get(organization)
-                ?.get(course)
-                ?.delete(name);
-            if (this.watcherTree.get(organization)?.get(course)?.size === 0) {
-                this.watcherTree.get(organization)?.delete(course);
-                if (this.watcherTree.get(organization)?.size === 0) {
-                    this.watcherTree.delete(organization);
-                }
-            }
-            this.watcherCreateAction(exercisePath);
-        }
-    }
-
-    private initializeWatcherData(): void {
-        this.watcherTree.clear();
-        for (const data of this.idToData.values()) {
-            if (data.status === ExerciseStatus.OPEN) {
-                this.addToWatcherTree(data);
-            }
-        }
-    }
-
-    private watcherCreateAction(targetPath: string): void {
-        const relation = path
-            .relative(this.resources.tmcExercisesFolderPath, targetPath)
-            .toString()
-            .split(path.sep, 3);
-        if (relation[0] === "..") {
-            return;
-        }
-        if (
-            relation.length > 0 &&
-            !this.watcherTree.has(relation[0]) &&
-            relation[0] !== WORKSPACE_ROOT_FILE
-        ) {
-            del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0]), {
-                force: true,
-            });
-            return;
-        }
-        if (relation.length > 1 && !this.watcherTree.get(relation[0])?.has(relation[1])) {
-            del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0], relation[1]), {
-                force: true,
-            });
-            return;
-        }
-        if (
-            relation.length > 2 &&
-            !this.watcherTree
-                .get(relation[0])
-                ?.get(relation[1])
-                ?.has(relation[2])
-        ) {
-            del.sync(path.join(this.resources.tmcExercisesFolderPath, ...relation), {
-                force: true,
-            });
-            return;
-        }
-    }
-
-    private watcherSweep(): void {
-        const basedir = this.resources.tmcExercisesFolderPath;
-
-        fs.readdirSync(basedir, { withFileTypes: true }).forEach((organization) => {
-            if (organization.isFile() && organization.name === WORKSPACE_ROOT_FILE) {
-                if (
-                    fs.readFileSync(path.join(basedir, organization.name), {
-                        encoding: "utf-8",
-                    }) !== WORKSPACE_ROOT_FILE_TEXT
-                ) {
-                    fs.writeFileSync(
-                        path.join(basedir, organization.name),
-                        WORKSPACE_ROOT_FILE_TEXT,
-                        { encoding: "utf-8" },
-                    );
-                }
-                return;
-            } else if (!(organization.isDirectory() && this.watcherTree.has(organization.name))) {
-                del.sync(path.join(basedir, organization.name), { force: true });
-            } else {
-                fs.readdirSync(path.join(basedir, organization.name), {
-                    withFileTypes: true,
-                }).forEach((course) => {
-                    if (
-                        !(
-                            this.watcherTree.get(organization.name)?.has(course.name) &&
-                            course.isDirectory()
-                        )
-                    ) {
-                        del.sync(path.join(basedir, organization.name, course.name), {
-                            force: true,
-                        });
-                    } else {
-                        fs.readdirSync(path.join(basedir, organization.name, course.name), {
-                            withFileTypes: true,
-                        }).forEach((exercise) => {
-                            if (
-                                !(
-                                    this.watcherTree
-                                        .get(organization.name)
-                                        ?.get(course.name)
-                                        ?.has(exercise.name) && exercise.isDirectory()
-                                )
-                            ) {
-                                del.sync(
-                                    path.join(
-                                        basedir,
-                                        organization.name,
-                                        course.name,
-                                        exercise.name,
-                                    ),
-                                    { force: true },
-                                );
-                            }
-                        });
-                    }
-                });
-            }
-        });
-    }
-
-    private setMissing(id: number): void {
-        const data = this.idToData.get(id);
-        if (data) {
-            data.status = ExerciseStatus.MISSING;
-            this.idToData.set(id, data);
-            this.updatePersistentData();
-            this.removeFromWatcherTree(data);
-        }
-    }
-
-    /**
-     * Marks exercise data as missing if deleted, missing exercises are treated the same
-     * as closed exercises by the watcher
-     */
-    private watcherDeleteAction(targetPath: string): void {
-        const rootFilePath = path.join(this.resources.tmcExercisesFolderPath, WORKSPACE_ROOT_FILE);
-
-        if (path.relative(rootFilePath, targetPath) === "") {
-            fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
-            return;
-        }
-
-        const relation = path
-            .relative(this.resources.tmcExercisesFolderPath, targetPath)
-            .toString()
-            .split(path.sep, 4);
-
-        if (relation[0] === "..") {
-            return;
-        }
-        if (relation.length == 1 && this.watcherTree.has(relation[0])) {
-            for (const [id, data] of this.idToData.entries()) {
-                if (data.organization === relation[0] && data.status === ExerciseStatus.OPEN) {
-                    this.setMissing(id);
-                }
-            }
-            return;
-        }
-        if (relation.length == 2 && this.watcherTree.get(relation[0])?.has(relation[1])) {
-            for (const [id, data] of this.idToData.entries()) {
-                if (
-                    data.organization == relation[0] &&
-                    data.course == relation[1] &&
-                    data.status === ExerciseStatus.OPEN
-                ) {
-                    this.setMissing(id);
-                }
-            }
-            return;
-        }
-        if (
-            relation.length == 3 &&
-            this.watcherTree
-                .get(relation[0])
-                ?.get(relation[1])
-                ?.has(relation[2])
-        ) {
-            for (const [id, data] of this.idToData.entries()) {
-                if (
-                    data.organization == relation[0] &&
-                    data.course == relation[1] &&
-                    data.name == relation[2] &&
-                    data.status === ExerciseStatus.OPEN
-                ) {
-                    this.setMissing(id);
-                }
-            }
-            return;
-        }
-    }
-
-    /**
-     * Keeps the workspace root file in order
-     */
-    private watcherChangeAction(targetPath: string): void {
-        const rootFilePath = path.join(this.resources.tmcExercisesFolderPath, WORKSPACE_ROOT_FILE);
-
-        if (path.relative(rootFilePath, targetPath) === "") {
-            if (fs.readFileSync(rootFilePath, { encoding: "utf-8" }) !== WORKSPACE_ROOT_FILE_TEXT) {
-                fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
-            }
-        }
-    }
-
-    private startWatcher(): void {
-        this.initializeWatcherData();
-        this.watcherSweep();
-        const watcher = vscode.workspace.createFileSystemWatcher("**", false, false, false);
-        watcher.onDidCreate((x) => {
-            if (x.scheme === "file") {
-                this.watcherCreateAction(x.fsPath);
-            }
-        });
-        watcher.onDidDelete((x) => {
-            if (x.scheme === "file") {
-                this.watcherDeleteAction(x.fsPath);
-            }
-        });
-        watcher.onDidChange((x) => {
-            if (x.scheme === "file") {
-                this.watcherChangeAction(x.fsPath);
-            }
-        });
     }
 }

@@ -182,7 +182,7 @@ export async function resetExercise(
  */
 export async function openExercises(ids: number[], actionContext: ActionContext): Promise<void> {
     const { workspaceManager } = actionContext;
-    ids.forEach((id) => workspaceManager.openExercise(id));
+    workspaceManager.openExercise(...ids);
 }
 
 /**
@@ -191,5 +191,5 @@ export async function openExercises(ids: number[], actionContext: ActionContext)
  */
 export async function closeExercises(actionContext: ActionContext, ids: number[]): Promise<void> {
     const { workspaceManager } = actionContext;
-    ids.forEach((id) => workspaceManager.closeExercise(id));
+    workspaceManager.closeExercise(...ids);
 }
