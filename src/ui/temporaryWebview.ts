@@ -82,9 +82,6 @@ export default class TemporaryWebview {
         panel.onDidDispose(() => {
             this.disposed = true;
         });
-        panel.onDidDispose(() => {
-            this.disposed = true;
-        });
         panel.webview.onDidReceiveMessage(this.messageHandler);
         panel.iconPath = this.iconPath;
         panel.webview.html = EMPTY_HTML_DOCUMENT;

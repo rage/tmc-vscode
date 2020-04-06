@@ -57,6 +57,9 @@ export function registerUiActions(
     ui.treeDP.registerAction("Open exercise workspace", [WORKSPACE_OPEN.not], () => {
         openWorkspace(actionContext);
     });
+    ui.treeDP.registerAction("Settings", [], () => {
+        vscode.commands.executeCommand("workbench.action.openSettings", "TestMyCode");
+    });
 
     // Register webview handlers
     ui.webview.registerHandler(
