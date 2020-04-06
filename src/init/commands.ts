@@ -120,4 +120,22 @@ export function registerCommands(
                   );
         }),
     );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("MoveExercises", async () => {
+            (await askForConfirmation(
+                `Do you want to change download path to ${vscode.workspace
+                    .getConfiguration("tmc")
+                    .get("exerciseDownloadPath")}?`,
+            ))
+                ? console.log(
+                      "Moving exercises to",
+                      vscode.workspace.getConfiguration("tmc").get("exerciseDownloadPath"),
+                  )
+                : console.log(
+                      "Canceled Moving exercises to",
+                      vscode.workspace.getConfiguration("tmc").get("exerciseDownloadPath"),
+                  );
+        }),
+    );
 }

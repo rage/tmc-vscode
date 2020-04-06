@@ -13,6 +13,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const productionMode = isProductionBuild();
     console.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
 
+    vscode.workspace.onDidChangeConfiguration((settings) => {
+        console.log("Asetuksia muutettiin");
+        if (settings.affectsConfiguration("tmc.exerciseDownloadPath")) {
+            vscode.commands.executeCommand("MoveExercises");
+        }
+    });
+
     const result = await init.resourceInitialization(context);
     if (result.err) {
         vscode.window.showErrorMessage("TestMyCode Initialization failed: " + result.val.message);

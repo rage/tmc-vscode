@@ -84,6 +84,26 @@
                 "key": "ctrl+shift+a"
             }
         ],
+        "configuration": [
+            {
+                "type": "object",
+                "title": "TestMyCode",
+                "properties": {
+                    "tmc.exerciseDownloadPath": {
+                        "type": "string",
+                        "scope": "resource",
+                        "default": "",
+                        "description": "Defines where downloaded exercises are stored in windows environment."
+                    },
+                    "tmc.showInfoMessages": {
+                        "type": "boolean",
+                        "scope": "window",
+                        "default": true,
+                        "description": "If false, pop up messages won't show"
+                    }
+                }
+            }
+        ],
         "menus": {
             "commandPalette": [
                 {
