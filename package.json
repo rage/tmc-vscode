@@ -36,7 +36,8 @@
         "onCommand:runTests",
         "onCommand:resetExercise",
         "onCommand:uploadArchive",
-        "onCommand:selectAction"
+        "onCommand:selectAction",
+        "onCommand:workbench.action.openSettings"
     ],
     "main": "./dist/extension",
     "contributes": {
@@ -89,17 +90,17 @@
                 "type": "object",
                 "title": "TestMyCode",
                 "properties": {
-                    "tmc.exerciseDownloadPath": {
+                    "TMC.exercisePath.exerciseDownloadPath": {
                         "type": "string",
-                        "scope": "resource",
+                        "scope": "application",
                         "default": "",
-                        "description": "Defines where downloaded exercises are stored in windows environment."
+                        "description": "This is the path where your exercises are stored."
                     },
-                    "tmc.showInfoMessages": {
+                    "TMC.exercisePath.changeExerciseDownloadPath": {
                         "type": "boolean",
-                        "scope": "window",
-                        "default": true,
-                        "description": "If false, pop up messages won't show"
+                        "scope": "application",
+                        "default": false,
+                        "description": "Check this if you wish to define the exercise download path using file explorer."
                     }
                 }
             }

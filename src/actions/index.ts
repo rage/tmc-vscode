@@ -30,6 +30,10 @@ export async function selectAction(
     ];
 
     (
-        await askForItem<() => Promise<unknown>>(`Select TMC Action for ${exercise.name}`, options)
+        await askForItem<() => Promise<unknown>>(
+            `Select TMC Action for ${exercise.name}`,
+            false,
+            ...options,
+        )
     )?.();
 }

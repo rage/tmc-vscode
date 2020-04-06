@@ -15,9 +15,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     console.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
 
     vscode.workspace.onDidChangeConfiguration((settings) => {
-        console.log("Asetuksia muutettiin");
-        if (settings.affectsConfiguration("tmc.exerciseDownloadPath")) {
-            vscode.commands.executeCommand("MoveExercises");
+        if (settings.affectsConfiguration("TMC.exercisePath.changeExerciseDownloadPath")) {
+            if (
+                vscode.workspace
+                    .getConfiguration()
+                    .get("TMC.exercisePath.changeExerciseDownloadPath")
+            ) {
+                vscode.commands.executeCommand("moveExercises");
+            }
+        } else if (settings.affectsConfiguration("TMC.exercisePath.exerciseDownloadPath")) {
+            console.log("Moving exercises to new path.");
         }
     });
 

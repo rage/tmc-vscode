@@ -119,20 +119,21 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("MoveExercises", async () => {
-            (await askForConfirmation(
-                `Do you want to change download path to ${vscode.workspace
-                    .getConfiguration("tmc")
-                    .get("exerciseDownloadPath")}?`,
-            ))
-                ? console.log(
-                      "Moving exercises to",
-                      vscode.workspace.getConfiguration("tmc").get("exerciseDownloadPath"),
-                  )
-                : console.log(
-                      "Canceled Moving exercises to",
-                      vscode.workspace.getConfiguration("tmc").get("exerciseDownloadPath"),
-                  );
+        vscode.commands.registerCommand("moveExercises", async () => {
+            const options: vscode.OpenDialogOptions = {
+                canSelectFiles: false,
+                canSelectFolders: true,
+                canSelectMany: false,
+                openLabel: "Select folder",
+            };
+            vscode.window.showOpenDialog(options).then((url) => {
+                const conf = vscode.workspace.getConfiguration();
+                if (url) {
+                    console.log(url[0].path);
+                    conf.update("TMC.exercisePath.exerciseDownloadPath", url[0].path, true);
+                }
+                conf.update("TMC.exercisePath.changeExerciseDownloadPath", false, true);
+            });
         }),
     );
 }

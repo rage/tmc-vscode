@@ -46,7 +46,20 @@ export async function resourceInitialization(
 
     if (!fs.existsSync(tmcDataPath)) {
         fs.mkdirSync(tmcDataPath);
+        vscode.workspace
+            .getConfiguration()
+            .update("TMC.exercisePath.exerciseDownloadPath", tmcDataPath, true);
         console.log("Created tmc data directory at", tmcDataPath);
+    }
+
+    /**
+     * Check if VSCode exercise path has been changed while the extension was deactivated.
+     */
+    if (
+        vscode.workspace.getConfiguration().get("TMC.exercisePath.exerciseDownloadPath") !==
+        tmcDataPath
+    ) {
+        console.log("Move files if data path changed while extension was de-activated.");
     }
 
     if (!fs.existsSync(tmcWorkspacePath)) {
