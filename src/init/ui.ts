@@ -20,6 +20,7 @@ import {
     removeCourse,
     updateCourse,
 } from "../actions";
+import { CourseExerciseDownloads } from "../actions/types";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -91,7 +92,12 @@ export function registerUiActions(
             if (!(msg.type && msg.ids && msg.courseName && msg.organizationSlug && msg.courseId)) {
                 return;
             }
-            downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseId);
+            const downloads: CourseExerciseDownloads = {
+                courseId: msg.courseId,
+                exerciseIds: msg.ids,
+                organizationSlug: msg.organizationSlug,
+            };
+            downloadExercises(actionContext, [downloads], msg.courseId);
         },
     );
     ui.webview.registerHandler("addCourse", async () => {

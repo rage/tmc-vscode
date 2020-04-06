@@ -6,98 +6,115 @@
 
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
-import { ActionContext } from "./types";
+import { ActionContext, CourseExerciseDownloads } from "./types";
 import pLimit from "p-limit";
+import { showNotification } from "../utils";
 
 /**
  * Downloads given exercises and opens them in TMC workspace.
  */
 export async function downloadExercises(
     actionContext: ActionContext,
-    ids: number[],
-    organizationSlug: string,
-    courseId: number,
+    courseExerciseDownloads: CourseExerciseDownloads[],
+    returnToCourse?: number,
 ): Promise<void> {
     const { tmc, ui } = actionContext;
 
-    const courseDetails = await tmc.getCourseDetails(courseId, false);
-    if (courseDetails.err) {
-        vscode.window.showErrorMessage(`Could not download exercises, course details not found: \
-                                        ${courseDetails.val.name} - ${courseDetails.val.message}`);
-        return;
-    }
-
     const exerciseStatus = new Map<
         number,
-        { name: string; downloaded: boolean; failed: boolean; error: string; status: string }
-    >(
-        courseDetails.val.course.exercises
-            .filter((x) => ids.includes(x.id))
-            .map((x) => [
-                x.id,
-                { name: x.name, downloaded: false, failed: false, error: "", status: "In queue" },
-            ]),
-    );
+        {
+            name: string;
+            organizationSlug: string;
+            downloaded: boolean;
+            failed: boolean;
+            error: string;
+            status: string;
+        }
+    >();
 
+    for (const ced of courseExerciseDownloads) {
+        const courseDetails = await tmc.getCourseDetails(ced.courseId, false);
+        if (courseDetails.ok) {
+            courseDetails.val.course.exercises
+                .filter((x) => ced.exerciseIds.includes(x.id))
+                .forEach((x) =>
+                    exerciseStatus.set(x.id, {
+                        name: x.name,
+                        organizationSlug: ced.organizationSlug,
+                        downloaded: false,
+                        failed: false,
+                        error: "",
+                        status: "In queue",
+                    }),
+                );
+        } else {
+            vscode.window.showErrorMessage(
+                `Could not download exercises, course details not found: \
+                ${courseDetails.val.name} - ${courseDetails.val.message}`,
+            );
+        }
+    }
+
+    const downloadCount = exerciseStatus.size;
     let successful = 0;
     let failed = 0;
 
     ui.webview.setContentFromTemplate("downloading-exercises", {
-        courseId,
+        returnToCourse,
         exercises: exerciseStatus.values(),
         failed,
-        failedPct: Math.round((100 * failed) / ids.length),
-        remaining: ids.length - successful - failed,
+        failedPct: Math.round((100 * failed) / downloadCount),
+        remaining: downloadCount - successful - failed,
         successful,
-        successfulPct: Math.round((100 * successful) / ids.length),
-        total: ids.length,
+        successfulPct: Math.round((100 * successful) / downloadCount),
+        total: downloadCount,
     });
 
     const limit = pLimit(3);
 
     await Promise.all(
-        ids.map<Promise<Result<string, Error>>>((x) =>
+        Array.from(exerciseStatus.entries()).map<Promise<Result<string, Error>>>(([id, data]) =>
             limit(
                 () =>
                     new Promise((resolve) => {
-                        const d = exerciseStatus.get(x);
-                        if (d) {
-                            d.status = "Downloading";
-                            exerciseStatus.set(x, d);
+                        if (data) {
+                            data.status = "Downloading";
+                            exerciseStatus.set(id, data);
                             ui.webview.setContentFromTemplate("downloading-exercises", {
-                                courseId,
+                                returnToCourse,
                                 exercises: exerciseStatus.values(),
                                 failed,
-                                failedPct: Math.round((100 * failed) / ids.length),
-                                remaining: ids.length - successful - failed,
+                                failedPct: Math.round((100 * failed) / downloadCount),
+                                remaining: downloadCount - successful - failed,
                                 successful,
-                                successfulPct: Math.round((100 * successful) / ids.length),
-                                total: ids.length,
+                                successfulPct: Math.round((100 * successful) / downloadCount),
+                                total: downloadCount,
                             });
                         }
 
-                        tmc.downloadExercise(x, organizationSlug).then(
+                        tmc.downloadExercise(id, data.organizationSlug).then(
                             (res: Result<string, Error>) => {
-                                const d = exerciseStatus.get(x);
-                                if (d) {
+                                if (data) {
                                     if (res.ok) {
                                         successful += 1;
-                                        d.downloaded = true;
+                                        data.downloaded = true;
                                     } else {
                                         failed += 1;
-                                        d.failed = true;
-                                        d.error = res.val.message;
+                                        data.failed = true;
+                                        data.error = res.val.message;
                                     }
-                                    exerciseStatus.set(x, d);
+                                    exerciseStatus.set(id, data);
                                     ui.webview.setContentFromTemplate("downloading-exercises", {
-                                        courseId,
+                                        returnToCourse,
                                         exercises: exerciseStatus.values(),
                                         failed,
-                                        failedPct: Math.round((100 * failed) / ids.length),
-                                        remaining: ids.length - successful - failed,
+                                        failedPct: Math.round((100 * failed) / downloadCount),
+                                        remaining: downloadCount - successful - failed,
                                         successful,
-                                        successfulPct: Math.round((100 * successful) / ids.length),
-                                        total: ids.length,
+                                        successfulPct: Math.round(
+                                            (100 * successful) / downloadCount,
+                                        ),
+                                        total: downloadCount,
                                     });
                                 }
                                 resolve(res);
@@ -112,30 +129,39 @@ export async function downloadExercises(
 /**
  * Checks all user's courses for exercise updates and download them.
  */
-export async function updateExercises(actionContext: ActionContext): Promise<void> {
+export async function checkForExerciseUpdates(actionContext: ActionContext): Promise<void> {
     const { tmc, userData, workspaceManager } = actionContext;
 
-    userData.getCourses().forEach(async (course) => {
+    const coursesToUpdate: CourseExerciseDownloads[] = [];
+    let count = 0;
+    for (const course of userData.getCourses()) {
         const organizationSlug = course.organization;
-        const result = await tmc.getCourseDetails(course.id);
 
+        const result = await tmc.getCourseDetails(course.id);
         if (result.err) {
             return;
         }
 
-        const updateIds: number[] = [];
+        const exerciseIds: number[] = [];
         result.val.course.exercises.forEach((exercise) => {
             const localExercise = workspaceManager.getExerciseDataById(exercise.id);
             if (localExercise.ok && localExercise.val.checksum !== exercise.checksum) {
-                updateIds.push(exercise.id);
+                exerciseIds.push(exercise.id);
             }
         });
 
-        if (updateIds.length > 0) {
-            console.log(`Updating exercises: ${updateIds}`);
-            downloadExercises(actionContext, updateIds, organizationSlug, course.id);
+        if (exerciseIds.length > 0) {
+            coursesToUpdate.push({ courseId: course.id, exerciseIds, organizationSlug });
+            count += exerciseIds.length;
         }
-    });
+    }
+
+    if (count > 0) {
+        showNotification(`Found updates for ${count} exercises. Do you wish to download them?`, [
+            ["Download", (): Promise<void> => downloadExercises(actionContext, coursesToUpdate)],
+            ["Later", (): void => {}],
+        ]);
+    }
 }
 
 /**

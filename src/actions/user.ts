@@ -12,7 +12,7 @@ import { VisibilityGroups } from "../ui/treeview/types";
 import { askForConfirmation, isWorkspaceOpen, parseFeedbackQuestion, sleep } from "../utils/";
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
-import { closeExercises } from "./workspace";
+import { checkForExerciseUpdates, closeExercises } from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
 import { CourseExercise, Exercise, SubmissionFeedback } from "../api/types";
@@ -158,6 +158,7 @@ export async function submitExercise(
         }
         const statusData = statusResult.val;
         if (statusResult.val.status !== "processing") {
+            checkForExerciseUpdates(actionContext);
             ui.setStatusBar("Tests finished, see result", 5000);
             let feedbackQuestions: FeedbackQuestion[] = [];
             if (statusData.status === "ok" && statusData.all_tests_passed) {

@@ -210,6 +210,20 @@ export async function askForItem<T>(
     return items.find((item) => item[0] === selection)?.[1];
 }
 
+/**
+ * Wrapper for vscode.window.showInformationMessage that resolves optional items to a generic types.
+ */
+export async function showNotification(
+    message: string,
+    items?: Array<[string, () => void]>,
+): Promise<void> {
+    vscode.window
+        .showInformationMessage(`TestMyCode: ${message}`, ...(items?.map((item) => item[0]) || []))
+        .then((selection) => {
+            items?.find((item) => item[0] === selection)?.[1]();
+        });
+}
+
 export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): FeedbackQuestion[] {
     const feedbackQuestions: FeedbackQuestion[] = [];
     questions.forEach((x) => {

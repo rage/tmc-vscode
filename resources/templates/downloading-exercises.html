@@ -25,17 +25,18 @@
                         <h1>Download complete</h1>
                     </div>
                 </div>
+                {{#if returnToCourse}}
                 <div class="row py-1">
                     <div class="col">
                         <button
                             class="btn btn-primary"
-                            onclick="vscode.postMessage({type: 'courseDetails', id: {{courseId}} })"
+                            onclick="vscode.postMessage({type: 'courseDetails', id: {{returnToCourse}} })"
                         >
                             Return to course details
                         </button>
                     </div>
                 </div>
-                {{/if}}
+                {{/if}} {{/if}}
                 <div class="row py-1">
                     <div class="col">
                         <div class="progress" style="width: 100%">

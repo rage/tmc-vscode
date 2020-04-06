@@ -8,6 +8,7 @@ import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
 import { isProductionBuild } from "./utils/";
+import { checkForExerciseUpdates } from "./actions";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const productionMode = isProductionBuild();
@@ -48,6 +49,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     init.registerUiActions(ui, tmc, workspaceManager, resources, userData);
     const actionContext = { ui, resources, workspaceManager, tmc, userData };
     init.registerCommands(context, actionContext);
+
+    checkForExerciseUpdates(actionContext);
 }
 
 export function deactivate(): void {}
