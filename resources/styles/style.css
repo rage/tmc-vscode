@@ -135,3 +135,28 @@ body.vscode-high-contrast {
     color: red;
     font-weight: bold;
 }
+
+.collapsible {
+    background-color: inherit;
+    color: inherit;
+    cursor: pointer;
+    padding: 10px;
+    width: 100%;
+    border: none;
+    text-align: left;
+    outline: none;
+    border: 1px solid yellowgreen;
+    border-radius: 5px;
+}
+
+.active, .collapsible:hover {
+    background-color: rgb(119, 119, 119);
+}
+
+.content-collapsible {
+    padding: 5px 18px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+    background-color: inherit;
+}

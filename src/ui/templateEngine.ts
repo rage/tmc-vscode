@@ -51,11 +51,12 @@ export default class TemplateEngine {
                     return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
                 } else if (status === "TESTS_FAILED") {
                     return `<h1>TESTS FAILED</h1>
-                    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi efficitur faucibus placerat. 
-                    Donec at iaculis est, id fringilla purus. Nulla efficitur quam ut ornare eleifend. 
-                    Mauris consectetur diam quis risus tincidunt dignissim. Ut accumsan odio sem, ut mollis leo feugiat ut. Quisque eget nulla nisl. 
-                    Duis lobortis velit sit amet neque interdum pretium. Aenean porta convallis lectus, id dignissim lacus finibus non.</p>
-                    <input type='button' value='Submit to TMC Paste' class='btn-primary' onclick='sendToPaste()' />`;
+                    <button class="collapsible">Need help?</button>
+                    <div class="content-collapsible">
+                        <h5>Submit to TMC Paste</h5>
+                        <p>You can submit your code to TMC Paste and share the link to the course discussion channel and ask for help.</p>
+                        <input type='button' value='Submit to TMC Paste' class='btn-primary' onclick='sendToPaste()' />
+                    </div>`;
                 } else if (status === "COMPILE_FAILED") {
                     return `<h1>COMPILE FAILED</h1><pre>${numbersToString(logs.stdout)}</pre>`;
                 } else {
