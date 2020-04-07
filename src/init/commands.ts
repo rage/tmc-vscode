@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { ActionContext } from "../actions/types";
 import {
     askForConfirmation,
@@ -13,7 +14,6 @@ import {
     submitExercise,
     testExercise,
 } from "../actions";
-import * as fs from "fs";
 
 export function registerCommands(
     context: vscode.ExtensionContext,
@@ -132,14 +132,12 @@ export function registerCommands(
             };
             vscode.window.showOpenDialog(options).then((url) => {
                 const conf = vscode.workspace.getConfiguration();
-                if (url != undefined && old != undefined) {
-                    try {
-                        console.log("Moving files");
-                        fs.renameSync(old, url[0].path);
-                    } catch (err) {
-                        console.log("Something went wrong: ", err);
-                    }
-                    conf.update("TMC.exercisePath.exerciseDownloadPath", url[0].path, true);
+                const os = process.platform;
+                if (url && old) {
+                    let newPath = path.join(url[0].path, "/tmcdata");
+                    newPath = os.includes("win") ? newPath.slice(1) : newPath;
+                    workspaceManager.moveFolder(old, newPath);
+                    conf.update("TMC.exercisePath.exerciseDownloadPath", newPath, true);
                 }
                 conf.update("TMC.exercisePath.changeExerciseDownloadPath", false, true);
             });

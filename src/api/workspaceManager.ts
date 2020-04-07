@@ -178,6 +178,21 @@ export default class WorkspaceManager {
         return idResult.val;
     }
 
+    public moveFolder(oldPath: string, newPath: string): void {
+        this.watcher.stop();
+        if (!fs.existsSync(newPath)) {
+            fs.mkdirSync(newPath);
+        }
+        try {
+            console.log("Moving files");
+            fs.renameSync(oldPath, newPath);
+        } catch (err) {
+            console.log("Something went wrong: ", err);
+        }
+        this.updatePersistentData();
+        this.watcher.start();
+    }
+
     /**
      * Opens exercise by moving it to workspace folder.
      * @param id Exercise ID to open
