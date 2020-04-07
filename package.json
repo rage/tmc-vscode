@@ -94,7 +94,7 @@
                         "type": "string",
                         "scope": "application",
                         "default": "",
-                        "description": "This is the path where your exercises are stored."
+                        "description": "This is the path where your exercises are stored. If you want to change save location, please use checkmark above."
                     },
                     "TMC.exercisePath.changeExerciseDownloadPath": {
                         "type": "boolean",

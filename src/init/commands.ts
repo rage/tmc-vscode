@@ -13,6 +13,7 @@ import {
     submitExercise,
     testExercise,
 } from "../actions";
+import * as fs from "fs";
 
 export function registerCommands(
     context: vscode.ExtensionContext,
@@ -120,6 +121,9 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("moveExercises", async () => {
+            const old = vscode.workspace
+                .getConfiguration()
+                .get("TMC.exercisePath.exerciseDownloadPath") as string;
             const options: vscode.OpenDialogOptions = {
                 canSelectFiles: false,
                 canSelectFolders: true,
@@ -128,8 +132,13 @@ export function registerCommands(
             };
             vscode.window.showOpenDialog(options).then((url) => {
                 const conf = vscode.workspace.getConfiguration();
-                if (url) {
-                    console.log(url[0].path);
+                if (url != undefined && old != undefined) {
+                    try {
+                        console.log("Moving files");
+                        fs.renameSync(old, url[0].path);
+                    } catch (err) {
+                        console.log("Something went wrong: ", err);
+                    }
                     conf.update("TMC.exercisePath.exerciseDownloadPath", url[0].path, true);
                 }
                 conf.update("TMC.exercisePath.changeExerciseDownloadPath", false, true);
