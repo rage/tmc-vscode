@@ -19,7 +19,7 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
 ): void {
-    const { ui, workspaceManager, userData } = actionContext;
+    const { ui, workspaceManager, userData, resources } = actionContext;
 
     context.subscriptions.push(
         vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
@@ -121,9 +121,7 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("moveExercises", async () => {
-            const old = vscode.workspace
-                .getConfiguration()
-                .get("TMC.exercisePath.exerciseDownloadPath") as string;
+            const old = resources.tmcDataFolder;
             const options: vscode.OpenDialogOptions = {
                 canSelectFiles: false,
                 canSelectFolders: true,
@@ -132,14 +130,20 @@ export function registerCommands(
             };
             vscode.window.showOpenDialog(options).then((url) => {
                 const conf = vscode.workspace.getConfiguration();
-                const os = process.platform;
                 if (url && old) {
-                    let newPath = path.join(url[0].path, "/tmcdata");
-                    newPath = os.includes("win") ? newPath.slice(1) : newPath;
-                    workspaceManager.moveFolder(old, newPath);
-                    conf.update("TMC.exercisePath.exerciseDownloadPath", newPath, true);
+                    const newPath = path.join(url[0].path, "/tmcdata");
+                    const res = workspaceManager.moveFolder(old, newPath);
+                    if (res.ok) {
+                        conf.update("TMC.exercisePath.exerciseDownloadPath", newPath, true);
+                        vscode.commands.executeCommand(
+                            "vscode.openFolder",
+                            vscode.Uri.file(
+                                path.join(newPath, "TMC workspace", "TMC Exercises.code-workspace"),
+                            ),
+                        );
+                    }
+                    conf.update("TMC.exercisePath.changeExerciseDownloadPath", false, true);
                 }
-                conf.update("TMC.exercisePath.changeExerciseDownloadPath", false, true);
             });
         }),
     );

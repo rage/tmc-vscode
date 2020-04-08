@@ -30,8 +30,11 @@ export async function resourceInitialization(
     const htmlPath = extensionContext.asAbsolutePath("resources/templates");
     const mediaPath = extensionContext.asAbsolutePath("media");
 
-    const basePath = extensionContext.globalStoragePath;
-    const tmcDataPath = path.join(basePath, "tmcdata");
+    const tmcDataPath =
+        (vscode.workspace
+            .getConfiguration()
+            .get("TMC.exercisePath.exerciseDownloadPath") as string) ||
+        path.join(extensionContext.globalStoragePath, "tmcdata");
     const tmcWorkspacePath = path.join(tmcDataPath, "TMC workspace");
     const tmcWorkspaceFilePath = path.join(tmcWorkspacePath, "TMC Exercises.code-workspace");
     const tmcExercisesFolderPath = path.join(tmcWorkspacePath, "Exercises");
@@ -39,27 +42,12 @@ export async function resourceInitialization(
 
     const tmcLangsPath = path.join(tmcDataPath, "tmc-langs.jar");
 
-    if (!fs.existsSync(basePath)) {
-        fs.mkdirSync(basePath);
-        console.log("Created global storage directory at", basePath);
-    }
-
     if (!fs.existsSync(tmcDataPath)) {
-        fs.mkdirSync(tmcDataPath);
+        fs.mkdirSync(tmcDataPath, { recursive: true });
         vscode.workspace
             .getConfiguration()
             .update("TMC.exercisePath.exerciseDownloadPath", tmcDataPath, true);
         console.log("Created tmc data directory at", tmcDataPath);
-    }
-
-    /**
-     * Check if VSCode exercise path has been changed while the extension was deactivated.
-     */
-    if (
-        vscode.workspace.getConfiguration().get("TMC.exercisePath.exerciseDownloadPath") !==
-        tmcDataPath
-    ) {
-        console.log("Move files if data path changed while extension was de-activated.");
     }
 
     if (!fs.existsSync(tmcWorkspacePath)) {

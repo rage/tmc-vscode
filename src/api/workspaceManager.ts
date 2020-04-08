@@ -194,7 +194,6 @@ export default class WorkspaceManager {
             return new Err(new Error("Folder move operation failed"));
         }
         this.updatePersistentData();
-        this.watcher.start();
         return Ok.EMPTY;
     }
 
