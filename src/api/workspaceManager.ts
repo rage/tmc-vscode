@@ -177,19 +177,25 @@ export default class WorkspaceManager {
         return idResult.val;
     }
 
-    public moveFolder(oldPath: string, newPath: string): void {
+    public moveFolder(oldPath: string, newPath: string): Result<void, Error> {
         this.watcher.stop();
-        if (!fs.existsSync(newPath)) {
-            fs.mkdirSync(newPath);
+        const newParent = path.resolve(newPath, "..");
+        if (!fs.existsSync(newParent)) {
+            fs.mkdirSync(newParent);
+        }
+        if (fs.existsSync(newPath)) {
+            return new Err(new Error("Target folder already exists"));
         }
         try {
             console.log("Moving files");
             fs.renameSync(oldPath, newPath);
         } catch (err) {
             console.log("Something went wrong: ", err);
+            return new Err(new Error("Folder move operation failed"));
         }
         this.updatePersistentData();
         this.watcher.start();
+        return Ok.EMPTY;
     }
 
     /**
