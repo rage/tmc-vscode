@@ -33,7 +33,7 @@ export default class WorkspaceManager {
         const storedData = this.storage.getExerciseData();
         if (storedData) {
             this.idToData = new Map(storedData.map((x) => [x.id, x]));
-            this.pathToId = new Map(storedData.map((x) => [x.path, x.id]));
+            this.pathToId = new Map(storedData.map((x) => [this.getOpenPath(x), x.id]));
         } else {
             this.idToData = new Map();
             this.pathToId = new Map();
@@ -104,7 +104,6 @@ export default class WorkspaceManager {
             status: ExerciseStatus.CLOSED,
             name: exerciseDetails.exercise_name,
             organization: organizationSlug,
-            path: exercisePath,
             softDeadline: softDeadline,
             updateAvailable: false,
         });
@@ -210,9 +209,10 @@ export default class WorkspaceManager {
                     results.push(new Err(new Error("Exercise data missing")));
                     continue;
                 }
-                fs.mkdirSync(path.resolve(data.path, ".."), { recursive: true });
+                const openPath = this.getOpenPath(data);
+                fs.mkdirSync(path.resolve(openPath, ".."), { recursive: true });
                 try {
-                    fs.renameSync(this.getClosedPath(id), data.path);
+                    fs.renameSync(this.getClosedPath(id), openPath);
                 } catch (err) {
                     results.push(new Err(new Error("Folder move operation failed.")));
                     continue;
@@ -220,7 +220,7 @@ export default class WorkspaceManager {
                 this.watcher.watch(data);
                 data.status = ExerciseStatus.OPEN;
                 this.idToData.set(id, data);
-                results.push(new Ok(data.path));
+                results.push(new Ok(openPath));
             } else if (!data) {
                 results.push(new Err(new Error("Invalid ID")));
                 continue;
@@ -243,14 +243,15 @@ export default class WorkspaceManager {
         for (const id of ids) {
             const data = this.idToData.get(id);
             if (data && data.status === ExerciseStatus.OPEN) {
-                if (!fs.existsSync(data.path)) {
+                const openPath = this.getOpenPath(data);
+                if (!fs.existsSync(openPath)) {
                     this.setMissing(id);
                     results.push(new Err(new Error("Exercise data missing")));
                     continue;
                 }
                 this.watcher.unwatch(data);
                 del.sync(this.getClosedPath(id), { force: true });
-                fs.renameSync(data.path, this.getClosedPath(id));
+                fs.renameSync(openPath, this.getClosedPath(id));
 
                 data.status = ExerciseStatus.CLOSED;
                 this.idToData.set(id, data);
@@ -275,9 +276,10 @@ export default class WorkspaceManager {
             const data = this.idToData.get(id);
             if (data) {
                 this.watcher.unwatch(data);
-                del.sync(data.path, { force: true });
+                const openPath = this.getOpenPath(data);
+                del.sync(openPath, { force: true });
                 del.sync(this.getClosedPath(id), { force: true });
-                this.pathToId.delete(data.path);
+                this.pathToId.delete(openPath);
                 this.idToData.delete(id);
             }
         }
@@ -298,6 +300,21 @@ export default class WorkspaceManager {
         }
     }
 
+    public getExercisePathById(id: number): Result<string, Error> {
+        const data = this.idToData.get(id);
+        if (!data) {
+            return new Err(new Error("Invalid exercise ID"));
+        }
+        switch (data.status) {
+            case ExerciseStatus.OPEN:
+                return new Ok(this.getOpenPath(data));
+            case ExerciseStatus.CLOSED:
+                return new Ok(this.getClosedPath(data.id));
+            default:
+                return new Err(new Error("Exercise data missing"));
+        }
+    }
+
     private updatePersistentData(): void {
         this.storage.updateExerciseData(Array.from(this.idToData.values()));
     }
@@ -306,13 +323,22 @@ export default class WorkspaceManager {
         return path.join(this.resources.tmcClosedExercisesFolderPath, id.toString());
     }
 
+    private getOpenPath(exerciseData: LocalExerciseData): string {
+        return path.join(
+            this.resources.tmcExercisesFolderPath,
+            exerciseData.organization,
+            exerciseData.course,
+            exerciseData.name,
+        );
+    }
+
     /**
      * Checks to make sure all the folders are in place,
      * should be run at startup before the watcher is initialized
      */
     private workspaceIntegrityCheck(): void {
         for (const data of Array.from(this.idToData.values())) {
-            const isOpen = fs.existsSync(data.path);
+            const isOpen = fs.existsSync(this.getOpenPath(data));
             const isClosed = fs.existsSync(this.getClosedPath(data.id));
             if (isOpen) {
                 data.status = ExerciseStatus.OPEN;

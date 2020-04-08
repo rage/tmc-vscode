@@ -79,7 +79,6 @@ suite("Storage tests", () => {
                 status: 0,
                 name: "hello-world",
                 organization: "HY",
-                path: "/tmp",
                 updateAvailable: false,
             },
         ];

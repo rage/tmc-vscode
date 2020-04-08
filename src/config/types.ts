@@ -16,7 +16,6 @@ export type LocalExerciseData = {
     name: string;
     course: string;
     organization: string;
-    path: string;
     checksum: string;
     updateAvailable: boolean;
     status: ExerciseStatus;

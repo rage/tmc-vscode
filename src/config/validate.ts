@@ -28,7 +28,6 @@ export async function validateAndFix(
             if (
                 !is<{
                     organization: string;
-                    path: string;
                     checksum: string;
                     id: number;
                     course: string;
@@ -68,7 +67,6 @@ export async function validateAndFix(
                     status: exerciseStatus,
                     name: exerciseDetails.name,
                     organization: ex.organization,
-                    path: ex.path,
                     updateAvailable: false,
                 });
             }

@@ -304,7 +304,7 @@ export default class TMC {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
-        const exerciseFolderPath = this.workspaceManager.getExerciseDataById(id);
+        const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
         if (exerciseFolderPath.err) {
             return new Err(new Error("???"));
         }
@@ -312,7 +312,7 @@ export default class TMC {
         return this.checkApiResponse(
             this.executeLangsAction({
                 action: "run-tests",
-                exerciseFolderPath: exerciseFolderPath.val.path,
+                exerciseFolderPath: exerciseFolderPath.val,
             }),
             createIs<TmcLangsTestResults>(),
         );
@@ -329,7 +329,7 @@ export default class TMC {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
-        const exerciseFolderPath = this.workspaceManager.getExerciseDataById(id);
+        const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
 
         if (exerciseFolderPath.err) {
             return new Err(new Error("???"));
@@ -339,7 +339,7 @@ export default class TMC {
             this.executeLangsAction({
                 action: "compress-project",
                 archivePath: `${this.dataPath}/${id}-new.zip`,
-                exerciseFolderPath: exerciseFolderPath.val.path,
+                exerciseFolderPath: exerciseFolderPath.val,
             }),
             createIs<TmcLangsPath>(),
         );
