@@ -63,4 +63,10 @@ Commands (VSCode command hotkey: CTRL + SHIFT + P):
         Downloads the exercise template from the TMC Server and opens it to the TMC Workspace.
 
     TMC - Close exercise (hotkey: CTRL + SHIFT + C)
-        Closes the exercise folder from the TMC workspace.`;
+        Closes the exercise folder from the TMC workspace.
+    
+    Settings in settings view(Settings button in activity bar):
+    
+    Change exercise download location:
+        You can determine where downloaded exercises are stored in the settings view by pressing "Change path" button.
+        Current download path is shown in the view. You should restart code after setting up the new download path.`;

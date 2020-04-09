@@ -10,6 +10,7 @@ Students of its various organizations can download, complete and return course e
 
 ## Prerequisites
 
+* Visual Studio Code version 1.43.xx or above
 * [TestMyCode](https://tmc.mooc.fi/) account
 * [Java](https://www.java.com/) runtime (for packing/unpacking and testing exercises)
 * Course-specific system environment   
@@ -57,3 +58,15 @@ This will submit the exercise data to the TMC Server before resetting the exerci
 #### Close exercise
 
 You can close the active exercise from the VSCode explorer view by choosing `Close exercise` from the TMC Menu.
+
+#### Change exercise download location
+
+You can determine in the settings view where downloaded exercises are stored. You can open the settings view by pressing settings button in the TMC Menu.
+
+![Settings in TMC Menu](media/tmc-settings.png)
+
+In the settings view you can change the download path by pressing "Change path" button. This will opens a file explorer, where you can choose the new location for the exercises.
+
+![Settings view](media/settings-view.png)
+
+After you have chosen the new location you should restart Code to ensure the download path has changed accordingly.

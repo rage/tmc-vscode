@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0] - 2020-xx-xx
+
+#### Added
+- Settings view
+    * Can change exercises download path
+- Exercises are kept up to date
+    * Checks updates and new exercises on startup and after submission
+
 ## [0.2.0] - 2020-03-30
 
 ### Added
