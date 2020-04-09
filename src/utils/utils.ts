@@ -1,11 +1,9 @@
-import * as cp from "child_process";
 import * as fs from "fs";
 import * as fetch from "node-fetch";
 import * as path from "path";
 import * as vscode from "vscode";
 
 import { Err, Ok, Result } from "ts-results";
-import { is } from "typescript-is";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import { ConnectionError } from "../errors";
@@ -13,6 +11,7 @@ import { SubmissionFeedbackQuestion } from "../api/types";
 import { FeedbackQuestion } from "../actions/types";
 import ClientOAuth2 = require("client-oauth2");
 import { LocalExerciseData } from "../config/types";
+import { superfluousPropertiesEnabled } from "./env";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
@@ -67,41 +66,6 @@ export async function downloadFile(
     }
 
     return Ok.EMPTY;
-}
-
-/**
- * Check if calling java programs is possible.
- */
-export async function isJavaPresent(): Promise<boolean> {
-    let result = false;
-    await new Promise((resolve) =>
-        cp.exec("java -version", (error) => {
-            result = error === null;
-            resolve();
-        }),
-    );
-
-    return result;
-}
-
-/**
- * Checks whether the extension is running in a development or production environment.
- */
-export function isProductionBuild(): boolean {
-    // Use configuration properties to see whether superflous object properties are enabled in tsconfig.
-    // In the code this feature is used when fetched API data is being parsed.
-    // For configuration, see tsconfig.json used by webpack.dev.json
-    // and tsconfig.production.json used by webpack.prod.json
-    type TestType = {
-        strict: boolean;
-    };
-
-    const testObject = {
-        strict: true,
-        superflous: "a superfluous property",
-    };
-
-    return is<TestType>(testObject);
 }
 
 export function isWorkspaceOpen(resources: Resources): boolean {
@@ -162,7 +126,7 @@ export function getProgressBar(percentDone: number): string {
 
 export function displayProgrammerError(description: string): void {
     vscode.window.showErrorMessage(
-        (isProductionBuild() ? "" : "Programmer ") + "Error: " + description,
+        (superfluousPropertiesEnabled() ? "" : "Programmer ") + "Error: " + description,
     );
 }
 

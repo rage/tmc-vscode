@@ -7,11 +7,11 @@ import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
-import { isProductionBuild } from "./utils/";
+import { superfluousPropertiesEnabled } from "./utils/";
 import { checkForExerciseUpdates } from "./actions";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    const productionMode = isProductionBuild();
+    const productionMode = superfluousPropertiesEnabled();
     console.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
 
     const result = await init.resourceInitialization(context);
