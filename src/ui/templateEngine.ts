@@ -147,11 +147,11 @@ export default class TemplateEngine {
                     question.upper !== undefined
                 ) {
                     return `<div class="col-md-10">
-                            <input data-questionID="${
-                                question.id
-                            }" type="range" class="custom-range" min="${question.lower - 1}"
-                                max="${question.upper}" step="1" value="${question.lower -
-                        1}" oninput='showValue(this, "text-id-${question.id}")' />
+                            <input
+                                data-questionID="${question.id}"
+                                type="range" class="custom-range" min="${question.lower - 1}"
+                                max="${question.upper}" step="1" value="${question.lower - 1}"
+                                oninput='showValue(this, "text-id-${question.id}")' />
                             </div>
                             <div class="col-md-2">
                                 <span class="font-weight-bold" id="text-id-${question.id}">-</span>

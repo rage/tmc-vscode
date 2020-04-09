@@ -39,7 +39,7 @@
                 {{/if}} {{/if}}
                 <div class="row py-1">
                     <div class="col">
-                        <div class="progress" style="width: 100%">
+                        <div class="progress" style="width: 100%;">
                             <div
                                 class="progress-bar bg-success"
                                 role="progressbar"
@@ -69,9 +69,9 @@
                 <tr>
                     <td>{{this.name}}</td>
                     {{#if this.downloaded}}
-                    <td style="color: greenyellow">Downloaded!</td>
+                    <td style="color: greenyellow;">Downloaded!</td>
                     {{else}} {{#if this.failed}}
-                    <td style="color: red">Download failed: {{this.error}}</td>
+                    <td style="color: red;">Download failed: {{this.error}}</td>
                     {{else}}
                     <td>
                         {{this.status}}
