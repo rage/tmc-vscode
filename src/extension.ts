@@ -8,7 +8,7 @@ import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
 import { superfluousPropertiesEnabled } from "./utils/";
-import { checkForExerciseUpdates } from "./actions";
+import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const productionMode = superfluousPropertiesEnabled();
@@ -44,6 +44,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     init.registerCommands(context, actionContext);
 
     checkForExerciseUpdates(actionContext);
+    checkForNewExercises(actionContext);
 }
 
 export function deactivate(): void {}

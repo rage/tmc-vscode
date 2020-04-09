@@ -114,7 +114,7 @@ export function registerUiActions(
             if (!(msg.type && msg.id)) {
                 return;
             }
-            const res = await displayCourseDownloads(msg.id, actionContext);
+            const res = await displayCourseDownloads(actionContext, msg.id);
             if (res.err) {
                 vscode.window.showErrorMessage(`Can't display downloads: ${res.val.message}`);
             }

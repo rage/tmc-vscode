@@ -17,7 +17,7 @@ import {
     sleep,
 } from "../utils/";
 import { ActionContext, FeedbackQuestion } from "./types";
-import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
+import { displayCourseDownloads, displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import { checkForExerciseUpdates, closeExercises } from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
@@ -166,6 +166,7 @@ export async function submitExercise(
         const statusData = statusResult.val;
         if (statusResult.val.status !== "processing") {
             checkForExerciseUpdates(actionContext);
+            checkForNewExercises(actionContext);
             ui.setStatusBar("Tests finished, see result", 5000);
             let feedbackQuestions: FeedbackQuestion[] = [];
             if (statusData.status === "ok" && statusData.all_tests_passed) {
@@ -226,6 +227,40 @@ export async function pasteExercise(actionContext: ActionContext, id: number): P
         (): Thenable<boolean> =>
             vscode.env.openExternal(vscode.Uri.parse(submitResult.val.paste_url)),
     ]);
+}
+
+/**
+ * Finds new exercises for all user's courses and prompts to go download them.
+ */
+export async function checkForNewExercises(actionContext: ActionContext): Promise<void> {
+    const { tmc, userData } = actionContext;
+    const courses = userData.getCourses();
+    for (const course of courses) {
+        const result = await tmc.getCourseExercises(course.id);
+
+        if (result.err) {
+            continue;
+        }
+
+        const newExercises = result.val.filter(
+            (exercise) =>
+                exercise.unlocked &&
+                !exercise.disabled &&
+                !course.exercises.find((e) => e.id === exercise.id),
+        );
+        if (newExercises.length > 0) {
+            showNotification(
+                `${newExercises.length} new exercises found for ${course.name}. Do you wish to move to the downloads page?`,
+                [
+                    "Go to downloads",
+                    (): void => {
+                        displayCourseDownloads(actionContext, course.id);
+                    },
+                ],
+                ["Later", (): void => {}],
+            );
+        }
+    }
 }
 
 /**

@@ -260,8 +260,8 @@ export async function selectOrganizationAndCourse(
  * Displays the course exercise list view
  */
 export async function displayCourseDownloads(
-    courseId: number,
     actionContext: ActionContext,
+    courseId: number,
 ): Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
     await ui.webview.setContentFromTemplate("loading");
