@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as path from "path";
 import { ActionContext } from "../actions/types";
 import {
     askForConfirmation,
@@ -19,7 +18,7 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
 ): void {
-    const { ui, workspaceManager, userData, resources } = actionContext;
+    const { ui, workspaceManager, userData } = actionContext;
 
     context.subscriptions.push(
         vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
@@ -116,35 +115,6 @@ export function registerCommands(
             ))
                 ? workspaceManager.closeExercise(exerciseId)
                 : showNotification(`Close canceled for exercise ${exerciseData.val.name}.`);
-        }),
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand("moveExercises", async () => {
-            const old = resources.tmcDataFolder;
-            const options: vscode.OpenDialogOptions = {
-                canSelectFiles: false,
-                canSelectFolders: true,
-                canSelectMany: false,
-                openLabel: "Select folder",
-            };
-            vscode.window.showOpenDialog(options).then((url) => {
-                const conf = vscode.workspace.getConfiguration();
-                if (url && old) {
-                    const newPath = path.join(url[0].path, "/tmcdata");
-                    const res = workspaceManager.moveFolder(old, newPath);
-                    if (res.ok) {
-                        conf.update("TMC.exercisePath.exerciseDownloadPath", newPath, true);
-                        vscode.commands.executeCommand(
-                            "vscode.openFolder",
-                            vscode.Uri.file(
-                                path.join(newPath, "TMC workspace", "TMC Exercises.code-workspace"),
-                            ),
-                        );
-                    }
-                    conf.update("TMC.exercisePath.changeExerciseDownloadPath", false, true);
-                }
-            });
         }),
     );
 }

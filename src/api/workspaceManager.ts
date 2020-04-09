@@ -177,6 +177,11 @@ export default class WorkspaceManager {
         return idResult.val;
     }
 
+    /**
+     * Moves a folder and all content from one location to another.
+     * @param oldPath
+     * @param newPath
+     */
     public moveFolder(oldPath: string, newPath: string): Result<void, Error> {
         this.watcher.stop();
         const newParent = path.resolve(newPath, "..");

@@ -14,20 +14,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const productionMode = isProductionBuild();
     console.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
 
-    vscode.workspace.onDidChangeConfiguration((settings) => {
-        if (settings.affectsConfiguration("TMC.exercisePath.changeExerciseDownloadPath")) {
-            if (
-                vscode.workspace
-                    .getConfiguration()
-                    .get("TMC.exercisePath.changeExerciseDownloadPath")
-            ) {
-                vscode.commands.executeCommand("moveExercises");
-            }
-        } else if (settings.affectsConfiguration("TMC.exercisePath.exerciseDownloadPath")) {
-            console.log("Moving exercises to new path.");
-        }
-    });
-
     const result = await init.resourceInitialization(context);
     if (result.err) {
         vscode.window.showErrorMessage("TestMyCode Initialization failed: " + result.val.message);

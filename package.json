@@ -36,8 +36,7 @@
         "onCommand:runTests",
         "onCommand:resetExercise",
         "onCommand:uploadArchive",
-        "onCommand:selectAction",
-        "onCommand:workbench.action.openSettings"
+        "onCommand:selectAction"
     ],
     "main": "./dist/extension",
     "contributes": {
@@ -83,26 +82,6 @@
             {
                 "command": "selectAction",
                 "key": "ctrl+shift+a"
-            }
-        ],
-        "configuration": [
-            {
-                "type": "object",
-                "title": "TestMyCode",
-                "properties": {
-                    "TMC.exercisePath.exerciseDownloadPath": {
-                        "type": "string",
-                        "scope": "application",
-                        "default": "",
-                        "description": "This is the path where your exercises are stored. If you want to change save location, please use checkmark above."
-                    },
-                    "TMC.exercisePath.changeExerciseDownloadPath": {
-                        "type": "boolean",
-                        "scope": "application",
-                        "default": false,
-                        "description": "Check this if you wish to define the exercise download path using file explorer."
-                    }
-                }
             }
         ],
         "menus": {

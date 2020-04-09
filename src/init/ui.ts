@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 
 import UI from "../ui/ui";
 import TMC from "../api/tmc";
@@ -16,6 +17,7 @@ import {
     login,
     logout,
     openExercises,
+    openSettings,
     openWorkspace,
     removeCourse,
     updateCourse,
@@ -59,7 +61,7 @@ export function registerUiActions(
         openWorkspace(actionContext);
     });
     ui.treeDP.registerAction("Settings", [], () => {
-        vscode.commands.executeCommand("workbench.action.openSettings", "TestMyCode");
+        openSettings(actionContext);
     });
 
     // Register webview handlers
@@ -172,4 +174,30 @@ export function registerUiActions(
             displayLocalCourseDetails(msg.id, actionContext);
         },
     );
+    ui.webview.registerHandler("changeTmcDataPath", async (msg: { type?: "changeTmcDataPath" }) => {
+        if (!msg.type) {
+            return;
+        }
+        const old = resources.tmcDataFolder;
+        const options: vscode.OpenDialogOptions = {
+            canSelectFiles: false,
+            canSelectFolders: true,
+            canSelectMany: false,
+            openLabel: "Select folder",
+        };
+        vscode.window.showOpenDialog(options).then((url) => {
+            if (url && old) {
+                const newPath = path.join(url[0].fsPath, "/tmcdata");
+                const res = workspaceManager.moveFolder(old, newPath);
+                if (res.ok) {
+                    vscode.commands.executeCommand(
+                        "vscode.openFolder",
+                        vscode.Uri.file(
+                            path.join(newPath, "TMC workspace", "TMC Exercises.code-workspace"),
+                        ),
+                    );
+                }
+            }
+        });
+    });
 }

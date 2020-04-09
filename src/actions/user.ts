@@ -264,6 +264,14 @@ export async function openWorkspace(actionContext: ActionContext): Promise<void>
 }
 
 /**
+ * Settings webview
+ */
+export async function openSettings(actionContext: ActionContext): Promise<void> {
+    const { ui, resources } = actionContext;
+    ui.webview.setContentFromTemplate("settings", { tmcData: resources.tmcDataFolder });
+}
+
+/**
  * Adds a new course to user's courses.
  */
 export async function addNewCourse(actionContext: ActionContext): Promise<Result<void, Error>> {

@@ -145,7 +145,7 @@ body.vscode-high-contrast {
     border: none;
     text-align: left;
     outline: none;
-    border: 1px solid yellowgreen;
+    border: 1px solid currentColor;
     border-radius: 5px;
 }
 
@@ -159,4 +159,13 @@ body.vscode-high-contrast {
     overflow: hidden;
     transition: max-height 0.2s ease-out;
     background-color: inherit;
+}
+
+/*
+    Other
+*/
+
+.border-color {
+    border: 1px solid currentColor;
+    border-radius: 5px;
 }
