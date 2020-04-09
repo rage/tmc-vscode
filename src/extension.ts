@@ -14,16 +14,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const productionMode = superfluousPropertiesEnabled();
     console.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
 
-    const result = await init.resourceInitialization(context);
-    if (result.err) {
-        vscode.window.showErrorMessage("TestMyCode Initialization failed: " + result.val.message);
+    const storage = new Storage(context);
+    const resourcesResult = await init.resourceInitialization(context, storage);
+    if (resourcesResult.err) {
+        vscode.window.showErrorMessage(
+            "TestMyCode Initialization failed: " + resourcesResult.val.message,
+        );
         return;
     }
 
     await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
-    const resources = result.val;
-    const storage = new Storage(context);
+    const resources = resourcesResult.val;
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
 
     const tmc = new TMC(storage, resources);

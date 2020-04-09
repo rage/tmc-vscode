@@ -12,6 +12,7 @@ import {
     WORKSPACE_ROOT_FILE_TEXT,
     WORKSPACE_SETTINGS,
 } from "../config/constants";
+import Storage from "../config/storage";
 
 /**
  * Checks if Java is present and performs resource initialization on extension activation
@@ -19,6 +20,7 @@ import {
  */
 export async function resourceInitialization(
     extensionContext: vscode.ExtensionContext,
+    storage: Storage,
 ): Promise<Result<Resources, Error>> {
     if (!(await isJavaPresent())) {
         return new Err(new Error("Java not found or improperly configured."));
@@ -31,35 +33,36 @@ export async function resourceInitialization(
     const mediaPath = extensionContext.asAbsolutePath("media");
 
     const tmcDataPath =
-        (vscode.workspace
-            .getConfiguration()
-            .get("TMC.exercisePath.exerciseDownloadPath") as string) ||
+        storage.getExtensionSettings()?.dataPath ||
         path.join(extensionContext.globalStoragePath, "tmcdata");
-    const tmcWorkspacePath = path.join(tmcDataPath, "TMC workspace");
-    const tmcWorkspaceFilePath = path.join(tmcWorkspacePath, "TMC Exercises.code-workspace");
-    const tmcExercisesFolderPath = path.join(tmcWorkspacePath, "Exercises");
-    const tmcClosedExercisesFolderPath = path.join(tmcDataPath, "closed-exercises");
 
-    const tmcLangsPath = path.join(tmcDataPath, "tmc-langs.jar");
+    const tmcWorkspacePathRelative = "TMC workspace";
+    const tmcWorkspaceFilePathRelative = path.join("TMC workspace", "TMC Exercises.code-workspace");
+    const tmcExercisesFolderPathRelative = path.join("TMC workspace", "Exercises");
+    const tmcClosedExercisesFolderPathRelative = "closed-exercises";
+    const tmcLangsPathRelative = "tmc-langs.jar";
 
     if (!fs.existsSync(tmcDataPath)) {
         fs.mkdirSync(tmcDataPath, { recursive: true });
-        vscode.workspace
-            .getConfiguration()
-            .update("TMC.exercisePath.exerciseDownloadPath", tmcDataPath, true);
+        const settings = storage.getExtensionSettings() || { dataPath: "" };
+        settings.dataPath = tmcDataPath;
+        storage.updateExtensionSettings(settings);
         console.log("Created tmc data directory at", tmcDataPath);
     }
 
+    const tmcWorkspacePath = path.join(tmcDataPath, tmcWorkspacePathRelative);
     if (!fs.existsSync(tmcWorkspacePath)) {
         fs.mkdirSync(tmcWorkspacePath);
         console.log("Created tmc workspace directory at", tmcWorkspacePath);
     }
 
+    const tmcWorkspaceFilePath = path.join(tmcDataPath, tmcWorkspaceFilePathRelative);
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
         fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
         console.log("Created tmc workspace file at", tmcWorkspaceFilePath);
     }
 
+    const tmcExercisesFolderPath = path.join(tmcDataPath, tmcExercisesFolderPathRelative);
     if (!fs.existsSync(tmcExercisesFolderPath)) {
         fs.mkdirSync(tmcExercisesFolderPath);
         console.log("Created tmc exercise directory at", tmcExercisesFolderPath);
@@ -73,11 +76,16 @@ export async function resourceInitialization(
         console.log("Wrote tmc root file at", tmcExercisesFolderPath);
     }
 
+    const tmcClosedExercisesFolderPath = path.join(
+        tmcDataPath,
+        tmcClosedExercisesFolderPathRelative,
+    );
     if (!fs.existsSync(tmcClosedExercisesFolderPath)) {
         fs.mkdirSync(tmcClosedExercisesFolderPath);
         console.log("Created tmc closed exercise directory at", tmcClosedExercisesFolderPath);
     }
 
+    const tmcLangsPath = path.join(tmcDataPath, tmcLangsPathRelative);
     if (!fs.existsSync(tmcLangsPath)) {
         const tmcLangsResult = await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: "TestMyCode" },
@@ -103,16 +111,17 @@ export async function resourceInitialization(
     }
 
     const resources: Resources = new Resources(
+        storage,
         cssPath,
         extensionVersion,
         htmlPath,
-        tmcDataPath,
-        tmcLangsPath,
-        tmcWorkspacePath,
-        tmcWorkspaceFilePath,
-        tmcExercisesFolderPath,
-        tmcClosedExercisesFolderPath,
         mediaPath,
+        tmcDataPath,
+        tmcLangsPathRelative,
+        tmcWorkspacePathRelative,
+        tmcWorkspaceFilePathRelative,
+        tmcExercisesFolderPathRelative,
+        tmcClosedExercisesFolderPathRelative,
     );
 
     return new Ok(resources);

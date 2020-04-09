@@ -4,6 +4,7 @@ import * as del from "del";
 import * as FormData from "form-data";
 import * as fs from "fs";
 import * as fetch from "node-fetch";
+import * as path from "path";
 import * as url from "url";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
@@ -39,8 +40,7 @@ export default class TMC {
     private readonly oauth2: ClientOauth2;
     private token: ClientOauth2.Token | undefined;
     private readonly storage: Storage;
-    private readonly dataPath: string;
-    private readonly tmcLangsPath: string;
+    private readonly resources: Resources;
     private readonly tmcApiUrl: string;
     private readonly tmcDefaultHeaders: { client: string; client_version: string };
     private workspaceManager?: WorkspaceManager;
@@ -63,8 +63,7 @@ export default class TMC {
         if (authToken) {
             this.token = new ClientOauth2.Token(this.oauth2, authToken);
         }
-        this.dataPath = resources.tmcDataFolder;
-        this.tmcLangsPath = resources.tmcLangsPath;
+        this.resources = resources;
         this.tmcApiUrl = TMC_API_URL;
         this.cache = new Map();
         this.tmcDefaultHeaders = {
@@ -222,7 +221,7 @@ export default class TMC {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
-        const archivePath = `${this.dataPath}/${id}.zip`;
+        const archivePath = path.join(`${this.resources.getDataPath()}`, `${id}.zip`);
 
         const result = await downloadFile(
             `${this.tmcApiUrl}core/exercises/${id}/download`,
@@ -338,7 +337,7 @@ export default class TMC {
         const compressResult = await this.checkApiResponse(
             this.executeLangsAction({
                 action: "compress-project",
-                archivePath: `${this.dataPath}/${id}-new.zip`,
+                archivePath: path.join(`${this.resources.getDataPath()}`, `${id}-new.zip`),
                 exerciseFolderPath: exerciseFolderPath.val,
             }),
             createIs<TmcLangsPath>(),
@@ -413,20 +412,23 @@ export default class TMC {
                 break;
             case "run-tests":
                 exercisePath = tmcLangsAction.exerciseFolderPath;
-                outputPath = `${this.dataPath}/temp_${this.nextLangsJsonId++}.json`;
+                outputPath = path.join(
+                    this.resources.getDataPath(),
+                    `temp_${this.nextLangsJsonId++}.json`,
+                );
                 break;
         }
 
         const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
 
-        console.log(`java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`);
+        console.log(`java -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`);
 
         let [stdout, stderr] = ["", ""];
         try {
             [stdout, stderr] = await new Promise((resolve, reject) => {
                 cp.exec(
-                    `java -jar "${this.tmcLangsPath}" ${action} ${arg0} ${arg1}`,
+                    `java -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`,
                     (err, stdout, stderr) => (err ? reject(err) : resolve([stdout, stderr])),
                 );
             });

@@ -178,7 +178,7 @@ export function registerUiActions(
         if (!msg.type) {
             return;
         }
-        const old = resources.tmcDataFolder;
+        const old = resources.getDataPath();
         const options: vscode.OpenDialogOptions = {
             canSelectFiles: false,
             canSelectFolders: true,
@@ -190,12 +190,14 @@ export function registerUiActions(
                 const newPath = path.join(url[0].fsPath, "/tmcdata");
                 const res = workspaceManager.moveFolder(old, newPath);
                 if (res.ok) {
+                    resources.setDataPath(newPath);
                     vscode.commands.executeCommand(
                         "vscode.openFolder",
                         vscode.Uri.file(
                             path.join(newPath, "TMC workspace", "TMC Exercises.code-workspace"),
                         ),
                     );
+                    workspaceManager.restartWatcher();
                 }
             }
         });

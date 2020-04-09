@@ -28,3 +28,7 @@ export enum ExerciseStatus {
     CLOSED,
     MISSING,
 }
+
+export type ExtensionSettings = {
+    dataPath: string;
+};

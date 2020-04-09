@@ -27,7 +27,12 @@ export default class WorkspaceWatcher {
     public start(): void {
         this.sweep();
         if (!this.watcher) {
-            this.watcher = vscode.workspace.createFileSystemWatcher("**", false, false, false);
+            this.watcher = vscode.workspace.createFileSystemWatcher(
+                this.resources.getExercisesFolderPath() + "/**",
+                false,
+                false,
+                false,
+            );
             this.watcher.onDidCreate((x) => {
                 if (x.scheme === "file") {
                     this.fileCreateAction(x.fsPath);
@@ -80,7 +85,7 @@ export default class WorkspaceWatcher {
     }
 
     private sweep(): void {
-        const basedir = this.resources.tmcExercisesFolderPath;
+        const basedir = this.resources.getExercisesFolderPath();
 
         fs.readdirSync(basedir, { withFileTypes: true }).forEach((organization) => {
             if (organization.isFile() && organization.name === WORKSPACE_ROOT_FILE) {
@@ -141,8 +146,9 @@ export default class WorkspaceWatcher {
     }
 
     private fileCreateAction(targetPath: string): void {
+        const basedir = this.resources.getExercisesFolderPath();
         const relation = path
-            .relative(this.resources.tmcExercisesFolderPath, targetPath)
+            .relative(basedir, targetPath)
             .toString()
             .split(path.sep, 3);
         if (relation[0] === "..") {
@@ -153,13 +159,13 @@ export default class WorkspaceWatcher {
             !this.folderTree.has(relation[0]) &&
             relation[0] !== WORKSPACE_ROOT_FILE
         ) {
-            del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0]), {
+            del.sync(path.join(basedir, relation[0]), {
                 force: true,
             });
             return;
         }
         if (relation.length > 1 && !this.folderTree.get(relation[0])?.has(relation[1])) {
-            del.sync(path.join(this.resources.tmcExercisesFolderPath, relation[0], relation[1]), {
+            del.sync(path.join(basedir, relation[0], relation[1]), {
                 force: true,
             });
             return;
@@ -171,7 +177,7 @@ export default class WorkspaceWatcher {
                 ?.get(relation[1])
                 ?.has(relation[2])
         ) {
-            del.sync(path.join(this.resources.tmcExercisesFolderPath, ...relation), {
+            del.sync(path.join(basedir, ...relation), {
                 force: true,
             });
             return;
@@ -183,7 +189,8 @@ export default class WorkspaceWatcher {
      * as closed exercises by the watcher
      */
     private fileDeleteAction(targetPath: string): void {
-        const rootFilePath = path.join(this.resources.tmcExercisesFolderPath, WORKSPACE_ROOT_FILE);
+        const basedir = this.resources.getExercisesFolderPath();
+        const rootFilePath = path.join(basedir, WORKSPACE_ROOT_FILE);
 
         if (path.relative(rootFilePath, targetPath) === "") {
             fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
@@ -191,7 +198,7 @@ export default class WorkspaceWatcher {
         }
 
         const relation = path
-            .relative(this.resources.tmcExercisesFolderPath, targetPath)
+            .relative(basedir, targetPath)
             .toString()
             .split(path.sep, 4);
 
@@ -251,7 +258,10 @@ export default class WorkspaceWatcher {
      * Keeps the workspace root file in order
      */
     private fileChangeAction(targetPath: string): void {
-        const rootFilePath = path.join(this.resources.tmcExercisesFolderPath, WORKSPACE_ROOT_FILE);
+        const rootFilePath = path.join(
+            this.resources.getExercisesFolderPath(),
+            WORKSPACE_ROOT_FILE,
+        );
 
         if (path.relative(rootFilePath, targetPath) === "") {
             if (fs.readFileSync(rootFilePath, { encoding: "utf-8" }) !== WORKSPACE_ROOT_FILE_TEXT) {

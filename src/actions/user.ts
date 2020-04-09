@@ -269,7 +269,7 @@ export async function checkForNewExercises(actionContext: ActionContext): Promis
 export async function openWorkspace(actionContext: ActionContext): Promise<void> {
     const { resources } = actionContext;
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
-    const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
+    const tmcWorkspaceFile = vscode.Uri.file(resources.getWorkspaceFilePath());
 
     if (!isWorkspaceOpen(resources)) {
         console.log("Current workspace:", currentWorkspaceFile);
@@ -303,7 +303,7 @@ export async function openWorkspace(actionContext: ActionContext): Promise<void>
  */
 export async function openSettings(actionContext: ActionContext): Promise<void> {
     const { ui, resources } = actionContext;
-    ui.webview.setContentFromTemplate("settings", { tmcData: resources.tmcDataFolder });
+    ui.webview.setContentFromTemplate("settings", { tmcData: resources.getDataPath() });
 }
 
 /**

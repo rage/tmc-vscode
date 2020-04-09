@@ -8,7 +8,7 @@ import { ApiError, ConnectionError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
 import Resources from "./resources";
-import { ExerciseStatus, LocalCourseData, LocalExerciseData } from "./types";
+import { ExerciseStatus, ExtensionSettings, LocalCourseData, LocalExerciseData } from "./types";
 
 export async function validateAndFix(
     storage: Storage,
@@ -137,6 +137,14 @@ export async function validateAndFix(
         }
         storage.updateUserData(userDataFixed);
         console.log("Userdata fixed");
+    }
+
+    const settings = storage.getExtensionSettings();
+    if (!is<ExtensionSettings | undefined>(settings)) {
+        console.log("Fixing extension settings");
+        const settingsFixed = undefined;
+        storage.updateExtensionSettings(settingsFixed);
+        console.log("Extension settings fixed");
     }
 
     return Ok.EMPTY;

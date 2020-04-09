@@ -70,7 +70,7 @@ export async function downloadFile(
 
 export function isWorkspaceOpen(resources: Resources): boolean {
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
-    const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
+    const tmcWorkspaceFile = vscode.Uri.file(resources.getWorkspaceFilePath());
     return currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString();
 }
 

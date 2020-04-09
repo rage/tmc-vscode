@@ -88,7 +88,7 @@ export default class WorkspaceManager {
                 return new Err(new Error("Exercise already downloaded"));
             }
         }
-        const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
+        const exerciseFolderPath = this.resources.getExercisesFolderPath();
         const exercisePath = path.join(
             exerciseFolderPath,
             organizationSlug,
@@ -161,7 +161,7 @@ export default class WorkspaceManager {
      * @param filePath
      */
     public getExercisePath(filePath: string): number | undefined {
-        const exerciseFolderPath = this.resources.tmcExercisesFolderPath;
+        const exerciseFolderPath = this.resources.getExercisesFolderPath();
         const relation = path.relative(exerciseFolderPath, filePath);
 
         if (relation.startsWith("..")) {
@@ -310,6 +310,11 @@ export default class WorkspaceManager {
         }
     }
 
+    public restartWatcher(): void {
+        this.watcher.stop();
+        this.watcher.start();
+    }
+
     public getExercisePathById(id: number): Result<string, Error> {
         const data = this.idToData.get(id);
         if (!data) {
@@ -330,12 +335,12 @@ export default class WorkspaceManager {
     }
 
     private getClosedPath(id: number): string {
-        return path.join(this.resources.tmcClosedExercisesFolderPath, id.toString());
+        return path.join(this.resources.getClosedExercisesFolderPath(), id.toString());
     }
 
     private getOpenPath(exerciseData: LocalExerciseData): string {
         return path.join(
-            this.resources.tmcExercisesFolderPath,
+            this.resources.getExercisesFolderPath(),
             exerciseData.organization,
             exerciseData.course,
             exerciseData.name,
