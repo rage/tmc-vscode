@@ -63,18 +63,12 @@ export default class WorkspaceWatcher {
         if (!this.folderTree.get(organization)?.has(course)) {
             this.folderTree.get(organization)?.set(course, new Set());
         }
-        this.folderTree
-            .get(organization)
-            ?.get(course)
-            ?.add(name);
+        this.folderTree.get(organization)?.get(course)?.add(name);
     }
 
     public unwatch({ organization, course, name }: LocalExerciseData): void {
         if (this.folderTree.get(organization)?.has(course)) {
-            this.folderTree
-                .get(organization)
-                ?.get(course)
-                ?.delete(name);
+            this.folderTree.get(organization)?.get(course)?.delete(name);
             if (this.folderTree.get(organization)?.get(course)?.size === 0) {
                 this.folderTree.get(organization)?.delete(course);
                 if (this.folderTree.get(organization)?.size === 0) {
@@ -147,10 +141,7 @@ export default class WorkspaceWatcher {
 
     private fileCreateAction(targetPath: string): void {
         const basedir = this.resources.getExercisesFolderPath();
-        const relation = path
-            .relative(basedir, targetPath)
-            .toString()
-            .split(path.sep, 3);
+        const relation = path.relative(basedir, targetPath).toString().split(path.sep, 3);
         if (relation[0] === "..") {
             return;
         }
@@ -172,10 +163,7 @@ export default class WorkspaceWatcher {
         }
         if (
             relation.length > 2 &&
-            !this.folderTree
-                .get(relation[0])
-                ?.get(relation[1])
-                ?.has(relation[2])
+            !this.folderTree.get(relation[0])?.get(relation[1])?.has(relation[2])
         ) {
             del.sync(path.join(basedir, ...relation), {
                 force: true,
@@ -197,10 +185,7 @@ export default class WorkspaceWatcher {
             return;
         }
 
-        const relation = path
-            .relative(basedir, targetPath)
-            .toString()
-            .split(path.sep, 4);
+        const relation = path.relative(basedir, targetPath).toString().split(path.sep, 4);
 
         if (relation[0] === "..") {
             return;
@@ -232,10 +217,7 @@ export default class WorkspaceWatcher {
         }
         if (
             relation.length == 3 &&
-            this.folderTree
-                .get(relation[0])
-                ?.get(relation[1])
-                ?.has(relation[2])
+            this.folderTree.get(relation[0])?.get(relation[1])?.has(relation[2])
         ) {
             this.workspaceManager
                 .getAllExercises()
