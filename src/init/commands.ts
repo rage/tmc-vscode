@@ -7,6 +7,7 @@ import {
     showNotification,
 } from "../utils/";
 import {
+    getOldSubmissions,
     pasteExercise,
     resetExercise,
     selectAction,
@@ -94,7 +95,8 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("downloadOldSubmission", async () => {
-            console.log("old submissions here");
+            const response = getOldSubmissions(actionContext);
+            console.log(response);
         }),
     );
 

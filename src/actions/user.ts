@@ -206,6 +206,15 @@ export async function submitExercise(
     }
 }
 
+export async function getOldSubmissions(actionContext: ActionContext): Promise<void> {
+    const courses = actionContext.userData.getCourses();
+
+    courses.forEach(async (course) => {
+        const response = await actionContext.tmc.fetchOldSubmissionIds(course.id);
+        console.log("old submissions for course ", course.name, ": ", response);
+    });
+}
+
 /**
  * Sends the exercise to the TMC Paste server.
  * @param id Exercise ID

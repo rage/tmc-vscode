@@ -10,7 +10,8 @@ export type TMCApiResponse =
     | ExerciseDetails
     | SubmissionResponse
     | SubmissionFeedbackResponse
-    | SubmissionStatusReport;
+    | SubmissionStatusReport
+    | OldSubmission[];
 
 /**
  * GET /api/v8/core/org/{organization_slug}/courses
@@ -186,6 +187,33 @@ export type SubmissionFeedback = {
 export type SubmissionFeedbackAnswer = {
     question_id: number;
     answer: string;
+};
+
+export type OldSubmission = {
+    id: number;
+    user_id: number;
+    pretest_error: string | null;
+    created_at: string;
+    exercise_name: string;
+    course_id: number;
+    processed: boolean;
+    all_tests_passed: boolean;
+    points: string | null;
+    processing_tried_at: string;
+    processing_began_at: string;
+    processing_completed_at: string;
+    times_sent_to_sandbox: number;
+    processing_attempts_started_at: string;
+    params_json: string | null;
+    requires_review: boolean;
+    requests_review: boolean;
+    reviewed: boolean;
+    message_for_reviewer: string;
+    newer_submission_reviewed: boolean;
+    review_dismissed: boolean;
+    paste_available: boolean;
+    message_for_paste: string;
+    paste_key: string | null;
 };
 
 /**

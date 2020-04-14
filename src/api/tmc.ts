@@ -18,6 +18,7 @@ import {
     CourseDetails,
     CourseExercise,
     ExerciseDetails,
+    OldSubmission,
     Organization,
     SubmissionFeedback,
     SubmissionFeedbackResponse,
@@ -331,7 +332,7 @@ export default class TMC {
         const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
 
         if (exerciseFolderPath.err) {
-            return new Err(new Error("???"));
+            return new Err(new Error("Couldn't get the exercise path"));
         }
 
         const compressResult = await this.checkApiResponse(
@@ -383,6 +384,17 @@ export default class TMC {
         return this.checkApiResponse(
             this.tmcApiRequest(feedbackUrl, false, "post", params),
             createIs<SubmissionFeedbackResponse>(),
+        );
+    }
+
+    /**function which returns old submissions as list from the server
+     *
+     * @param courseId
+     */
+    public async fetchOldSubmissionIds(courseId: number): Promise<Result<OldSubmission[], Error>> {
+        return this.checkApiResponse(
+            this.tmcApiRequest(`courses/${courseId}/users/current/submissions`, false),
+            createIs<OldSubmission[]>(),
         );
     }
 
