@@ -10,7 +10,7 @@ Students of its various organizations can download, complete and return course e
 
 ## Prerequisites
 
-* Visual Studio Code version 1.43.xx or above
+* Visual Studio Code version 1.44.xx or above
 * [TestMyCode](https://tmc.mooc.fi/) account
 * [Java](https://www.java.com/) runtime (for packing/unpacking and testing exercises)
 * Course-specific system environment   
