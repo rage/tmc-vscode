@@ -93,6 +93,12 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand("downloadOldSubmission", async () => {
+            console.log("old submissions here");
+        }),
+    );
+
+    context.subscriptions.push(
         vscode.commands.registerCommand("closeExercise", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
             if (!exerciseId) {

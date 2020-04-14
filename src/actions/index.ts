@@ -27,6 +27,11 @@ export async function selectAction(
             "Reset exercise",
             async (): Promise<void> => await vscode.commands.executeCommand("resetExercise"),
         ],
+        [
+            "Download old submission",
+            async (): Promise<void> =>
+                await vscode.commands.executeCommand("downloadOldSubmission"),
+        ],
     ];
 
     (
