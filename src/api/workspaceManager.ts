@@ -106,6 +106,7 @@ export default class WorkspaceManager {
             organization: organizationSlug,
             softDeadline: softDeadline,
             updateAvailable: false,
+            oldSubmissions: [],
         });
         this.updatePersistentData();
         return new Ok(this.getClosedPath(exerciseDetails.exercise_id));

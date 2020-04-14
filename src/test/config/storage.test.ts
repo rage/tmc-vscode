@@ -81,6 +81,7 @@ suite("Storage tests", () => {
                 name: "hello-world",
                 organization: "HY",
                 updateAvailable: false,
+                oldSubmissions: [],
             },
         ];
         assertUpdater(

@@ -21,7 +21,7 @@ export type LocalExerciseData = {
     status: ExerciseStatus;
     deadline: string | null;
     softDeadline: string | null;
-    oldSubmissions: [];
+    oldSubmissions: number[];
 };
 
 export enum ExerciseStatus {
