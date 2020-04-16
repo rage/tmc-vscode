@@ -7,7 +7,7 @@ import {
     showNotification,
 } from "../utils/";
 import {
-    getOldSubmissions,
+    listAndSelectOldSubmissions,
     pasteExercise,
     resetExercise,
     selectAction,
@@ -95,12 +95,7 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("downloadOldSubmission", async () => {
-            const response = getOldSubmissions(actionContext);
-
-            if (!response) {
-                vscode.window.showErrorMessage("No previous submissions from this course");
-            }
-            console.log(response);
+            listAndSelectOldSubmissions(actionContext);
         }),
     );
 

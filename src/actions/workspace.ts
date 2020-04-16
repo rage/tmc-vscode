@@ -8,7 +8,9 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 import { ActionContext, CourseExerciseDownloads } from "./types";
 import pLimit from "p-limit";
-import { showNotification } from "../utils";
+import { askForItem, showNotification } from "../utils";
+import { getOldSubmissions } from "./user";
+import { OldSubmission } from "../api/types";
 
 /**
  * Downloads given exercises and opens them in TMC workspace.
@@ -219,4 +221,31 @@ export async function openExercises(ids: number[], actionContext: ActionContext)
 export async function closeExercises(actionContext: ActionContext, ids: number[]): Promise<void> {
     const { workspaceManager } = actionContext;
     workspaceManager.closeExercise(...ids);
+}
+
+export async function listAndSelectOldSubmissions(actionContext: ActionContext): Promise<void> {
+    const { tmc } = actionContext;
+    const response = await getOldSubmissions(actionContext);
+    if (response.err) {
+        vscode.window.showErrorMessage("No previous submissions from this course");
+        return;
+    }
+    const submission = await askForItem<OldSubmission>(
+        "select submission",
+        false,
+        ...response.val.map(
+            (a) => [a.processing_attempts_started_at, a] as [string, OldSubmission],
+        ),
+    );
+
+    //lataa zip
+    if (submission?.id !== undefined) {
+        const oldSub = await tmc.downloadOldExercise(submission.id);
+        console.log(oldSub);
+        if (!oldSub.err) {
+            vscode.window.showInformationMessage(oldSub.val);
+        }
+    }
+
+    //pura päälle
 }

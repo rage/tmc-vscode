@@ -296,6 +296,62 @@ export default class TMC {
         return openResult;
     }
 
+    public async downloadOldExercise(submissionId: number): Promise<Result<string, Error>> {
+        if (!this.workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
+        }
+        const archivePath = path.join(`${this.resources.getDataPath()}`, `${submissionId}.zip`);
+
+        const result = await downloadFile(
+            `${this.tmcApiUrl}core/submissions/${submissionId}/download`,
+            archivePath,
+            this.tmcDefaultHeaders,
+            this.token,
+        );
+        if (result.err) {
+            return new Err(result.val);
+        }
+
+        const detailsResult = await this.getExerciseDetails(submissionId);
+        if (detailsResult.err) {
+            return new Err(detailsResult.val);
+        }
+
+        const courseResult = await this.getCourseDetails(detailsResult.val.course_id);
+
+        if (courseResult.err) {
+            return new Err(courseResult.val);
+        }
+
+        const exercise = courseResult.val.course.exercises.find((x) => x.id === submissionId);
+        if (!exercise) {
+            return new Err(new Error("Exercise somehow missing from course"));
+        }
+
+        const exercisePath = path.join(
+            this.resources.getOldSubmissionFolderPath(),
+            submissionId.toString(),
+        );
+        //testaa toimiiko?
+
+        const extractResult = await this.checkApiResponse(
+            this.executeLangsAction({
+                action: "extract-project",
+                archivePath,
+                exerciseFolderPath: exercisePath,
+            }),
+            createIs<TmcLangsPath>(),
+        );
+
+        if (extractResult.err) {
+            this.workspaceManager.deleteExercise(submissionId);
+        }
+
+        del.sync(archivePath, { force: true });
+
+        return new Ok("Old submission downloaded succesfully");
+    }
+
     /**
      * Runs tests locally for an exercise
      * @param id Id of the exercise
