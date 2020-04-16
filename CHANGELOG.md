@@ -8,7 +8,7 @@
 - Exercises are kept up to date
     * Checks updates and new exercises on startup and after submission
 - Old submissions can be downloaded
-    * You can select from "TMC - Menu" to download old submissions
+    * You can select from TMC Menu to download old submissions
 
 ## [0.2.0] - 2020-03-30
 
