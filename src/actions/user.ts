@@ -223,10 +223,10 @@ export async function getOldSubmissions(
     if (result.err) {
         return new Err(new Error("couldn't fetch old submissions"));
     }
-
-    const exerciseSubmissions = result.val.filter((e) => {
-        e.exercise_name === currentExercise.val.name;
-    });
+    const currentExerciseName = currentExercise.val.name;
+    console.log(currentExerciseName);
+    console.log(result.val);
+    const exerciseSubmissions = result.val.filter((e) => e.exercise_name === currentExerciseName);
 
     console.log(exerciseSubmissions);
     return new Ok(exerciseSubmissions);
