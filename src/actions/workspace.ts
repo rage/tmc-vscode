@@ -8,9 +8,10 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 import { ActionContext, CourseExerciseDownloads } from "./types";
 import pLimit from "p-limit";
-import { askForItem, showNotification } from "../utils";
+import { askForItem, getCurrentExerciseData, showNotification } from "../utils";
 import { getOldSubmissions } from "./user";
 import { OldSubmission } from "../api/types";
+import { dateToString, parseDate } from "../utils/dateDeadline";
 
 /**
  * Downloads given exercises and opens them in TMC workspace.
@@ -224,28 +225,48 @@ export async function closeExercises(actionContext: ActionContext, ids: number[]
 }
 
 export async function listAndSelectOldSubmissions(actionContext: ActionContext): Promise<void> {
-    const { tmc } = actionContext;
+    const { tmc, workspaceManager, userData } = actionContext;
+    const exercise = getCurrentExerciseData(workspaceManager);
+    if (exercise.err) {
+        showNotification("currently open exercise is not part of the TMC exercises");
+        return;
+    }
+    const course = userData.getCourseByName(exercise.val.course);
     const response = await getOldSubmissions(actionContext);
     if (response.err) {
-        vscode.window.showErrorMessage("No previous submissions from this course");
+        showNotification(
+            "something went wrong while fetching oldsubmissions: " + response.val.message,
+        );
         return;
     }
     const submission = await askForItem<OldSubmission>(
-        "select submission",
+        exercise.val.name + ": select a submission",
         false,
         ...response.val.map(
-            (a) => [a.processing_attempts_started_at, a] as [string, OldSubmission],
+            (a) =>
+                [
+                    dateToString(parseDate(a.processing_attempts_started_at)) +
+                        "| " +
+                        (a.all_tests_passed ? "Passed" : "Failed"),
+                    a,
+                ] as [string, OldSubmission],
         ),
     );
 
-    //lataa zip
     if (submission?.id !== undefined) {
-        const oldSub = await tmc.downloadOldExercise(submission.id);
-        console.log(oldSub);
-        if (!oldSub.err) {
-            vscode.window.showInformationMessage(oldSub.val);
+        const oldSub = await tmc.downloadOldExercise(
+            submission.id,
+            submission.exercise_name,
+            exercise.val.course,
+            course.organization,
+            dateToString(parseDate(submission.processing_attempts_started_at)),
+        );
+        if (oldSub.ok) {
+            showNotification(oldSub.val);
+        } else {
+            showNotification(
+                "Something went wrong while downloading old submission for exercise: " + oldSub.val,
+            );
         }
     }
-
-    //pura päälle
 }
