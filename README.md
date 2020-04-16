@@ -59,13 +59,13 @@ This will submit the exercise data to the TMC Server before resetting the exerci
 
 You can close the active exercise from the VSCode explorer view by choosing `Close exercise` from the TMC Menu.
 
-#### Change exercise download location
-
-You can determine in the settings view where downloaded exercises are stored. You can open the settings view by pressing settings button in the TMC Menu.
-
 #### Download old submissions
 
 You can download old submissions by choosing `Download old submissions` from the TMC Menu.
+
+#### Change exercise download location
+
+You can determine in the settings view where downloaded exercises are stored. You can open the settings view by pressing settings button in the TMC Menu.
 
 ![Settings in TMC Menu](media/tmc-settings.png)
 
