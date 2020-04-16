@@ -49,3 +49,17 @@ export async function showNotification(
             items.find((item) => item[0] === selection)?.[1]();
         });
 }
+
+/**
+ * Wrapper for vscode.window.showErrorMessage that resolves optional items to associated callbacks.
+ */
+export async function showError(
+    error: string,
+    ...items: Array<[string, () => void]>
+): Promise<void> {
+    vscode.window
+        .showErrorMessage(`TestMyCode: ${error}`, ...items.map((item) => item[0]))
+        .then((selection) => {
+            items.find((item) => item[0] === selection)?.[1]();
+        });
+}

@@ -214,12 +214,17 @@ export default class WorkspaceManager {
         const newParent = path.resolve(newPath, "..");
         fs.ensureDirSync(newParent);
         if (fs.existsSync(newPath)) {
-            return new Err(new Error("Target folder already exists"));
+            return new Err(new Error("Target folder already exists."));
         }
         try {
             fs.moveSync(oldPath, newPath);
         } catch (err) {
-            return new Err(new Error("Folder move operation failed"));
+            // TODO: Compare and safely delete/recover files from destination.
+            return new Err(
+                new Error(
+                    "Folder move operation failed, please try closing the workspace and make sure that any files are not in use.",
+                ),
+            );
         }
         this.updatePersistentData();
         return Ok.EMPTY;
