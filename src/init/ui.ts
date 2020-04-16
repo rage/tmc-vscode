@@ -6,7 +6,7 @@ import TMC from "../api/tmc";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import { UserData } from "../config/userdata";
-import { askForConfirmation, isWorkspaceOpen, showNotification } from "../utils/";
+import { askForConfirmation, isWorkspaceOpen, showError, showNotification } from "../utils/";
 import {
     addNewCourse,
     closeExercises,
@@ -178,6 +178,9 @@ export function registerUiActions(
         if (!msg.type) {
             return;
         }
+
+        const open = isWorkspaceOpen(resources);
+
         const old = resources.getDataPath();
         const options: vscode.OpenDialogOptions = {
             canSelectFiles: false,
@@ -185,20 +188,30 @@ export function registerUiActions(
             canSelectMany: false,
             openLabel: "Select folder",
         };
-        vscode.window.showOpenDialog(options).then((url) => {
-            if (url && old) {
-                const newPath = path.join(url[0].fsPath, "/tmcdata");
+        vscode.window.showOpenDialog(options).then((uri) => {
+            if (uri && old) {
+                const newPath = path.join(uri[0].fsPath, "/tmcdata");
+                if (newPath === old) {
+                    return;
+                }
                 const res = workspaceManager.moveFolder(old, newPath);
                 if (res.ok) {
+                    console.log(`Moved workspace folder from ${old} to ${newPath}`);
                     resources.setDataPath(newPath);
-                    vscode.commands.executeCommand(
-                        "vscode.openFolder",
-                        vscode.Uri.file(
-                            path.join(newPath, "TMC workspace", "TMC Exercises.code-workspace"),
-                        ),
-                    );
-                    workspaceManager.restartWatcher();
+                    if (open) {
+                        // Opening a workspace restarts VSCode (v1.44)
+                        vscode.commands.executeCommand(
+                            "vscode.openFolder",
+                            vscode.Uri.file(
+                                path.join(newPath, "TMC workspace", "TMC Exercises.code-workspace"),
+                            ),
+                        );
+                    }
+                } else {
+                    showError(res.val.message);
                 }
+                workspaceManager.restartWatcher();
+                openSettings(actionContext);
             }
         });
     });
