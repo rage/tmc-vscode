@@ -7,13 +7,11 @@ import { Err, Ok, Result } from "ts-results";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import { ConnectionError } from "../errors";
-import { OldSubmission, SubmissionFeedbackQuestion } from "../api/types";
+import { SubmissionFeedbackQuestion } from "../api/types";
 import { FeedbackQuestion } from "../actions/types";
 import ClientOAuth2 = require("client-oauth2");
 import { LocalExerciseData } from "../config/types";
 import { superfluousPropertiesEnabled } from "./env";
-import { UserData } from "../config/userdata";
-import TMC from "../api/tmc";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
@@ -155,19 +153,4 @@ export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): 
         }
     });
     return feedbackQuestions;
-}
-
-export function getAllCoursesSubmissions(userdata: UserData, tmc: TMC): Promise<OldSubmission[]> {
-    return new Promise((resolve) => {
-        const courses = userdata.getCourses();
-        const allSubmissions: OldSubmission[] = [];
-        courses.forEach(async (c) => {
-            const result = await tmc.fetchOldSubmissionIds(c.id);
-            console.log(result);
-            if (result.ok) {
-                allSubmissions.concat(result.val);
-            }
-        });
-        resolve(allSubmissions);
-    });
 }

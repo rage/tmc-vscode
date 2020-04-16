@@ -11,7 +11,7 @@ import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
 import {
     askForConfirmation,
-    getAllCoursesSubmissions,
+    getCurrentExerciseData,
     isWorkspaceOpen,
     parseFeedbackQuestion,
     showNotification,
@@ -22,7 +22,7 @@ import { displayCourseDownloads, displayUserCourses, selectOrganizationAndCourse
 import { checkForExerciseUpdates, closeExercises } from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
-import { CourseExercise, Exercise, SubmissionFeedback } from "../api/types";
+import { CourseExercise, Exercise, OldSubmission, SubmissionFeedback } from "../api/types";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -210,12 +210,26 @@ export async function submitExercise(
  * Gets all submission ids from currently selected courses and maps them to corresponding exercises
  *
  */
-export async function getOldSubmissions(actionContext: ActionContext): Promise<void> {
-    const submissions = await getAllCoursesSubmissions(actionContext.userData, actionContext.tmc);
-    console.log(submissions);
+export async function getOldSubmissions(
+    actionContext: ActionContext,
+): Promise<Result<OldSubmission[], Error>> {
+    const { userData, tmc, workspaceManager } = actionContext;
+    const currentExercise = getCurrentExerciseData(workspaceManager);
+    if (currentExercise.err) {
+        return new Err(new Error("Exercise not found in workspacemanager"));
+    }
+    const course = userData.getCourseByName(currentExercise.val.course);
+    const result = await tmc.fetchOldSubmissionIds(course.id);
+    if (result.err) {
+        return new Err(new Error("couldn't fetch old submissions"));
+    }
 
-    console.log("All submissions for current courses ", submissions);
-    actionContext.workspaceManager.addSubmissionsToLocalExerciseData(submissions);
+    const exerciseSubmissions = result.val.filter((e) => {
+        e.exercise_name === currentExercise.val.name;
+    });
+
+    console.log(exerciseSubmissions);
+    return new Ok(exerciseSubmissions);
 }
 
 /**
