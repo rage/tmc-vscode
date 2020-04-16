@@ -6,7 +6,7 @@ import { Err, Ok, Result } from "ts-results";
 
 import Resources from "../config/resources";
 import Storage from "../config/storage";
-import { ExerciseDetails } from "./types";
+import { ExerciseDetails, OldSubmission } from "./types";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
 import WorkspaceWatcher from "./workspaceWatcher";
 
@@ -122,6 +122,32 @@ export default class WorkspaceManager {
             return new Err(new Error(`Exercise ID not found for ${exerciseFolder}`));
         }
         return this.getExerciseDataById(id);
+    }
+
+    public addSubmissionsToLocalExerciseData(submissions: OldSubmission[]): void {
+        const exercises = this.getAllExercises();
+        const submissionMap = new Map<string, number[]>();
+
+        console.log("HEP");
+        console.log("Submissions: ", submissions);
+
+        submissions.forEach((s) => {
+            if (s.exercise_name in submissionMap) {
+                submissionMap.get(s.exercise_name)?.push(s.id);
+            } else {
+                submissionMap.set(s.exercise_name, [s.id]);
+            }
+        });
+
+        exercises.forEach((e) => {
+            if (e.name in submissionMap) {
+                const submissions = submissionMap.get(e.name) as number[];
+                e.oldSubmissions = submissions;
+                this.idToData.set(e.id, e);
+            }
+        });
+
+        this.updatePersistentData();
     }
 
     /**

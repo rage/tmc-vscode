@@ -11,6 +11,7 @@ import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/treeview/types";
 import {
     askForConfirmation,
+    getAllCoursesSubmissions,
     isWorkspaceOpen,
     parseFeedbackQuestion,
     showNotification,
@@ -205,14 +206,16 @@ export async function submitExercise(
         }
     }
 }
-
+/**
+ * Gets all submission ids from currently selected courses and maps them to corresponding exercises
+ *
+ */
 export async function getOldSubmissions(actionContext: ActionContext): Promise<void> {
-    const courses = actionContext.userData.getCourses();
+    const submissions = await getAllCoursesSubmissions(actionContext.userData, actionContext.tmc);
+    console.log(submissions);
 
-    courses.forEach(async (course) => {
-        const response = await actionContext.tmc.fetchOldSubmissionIds(course.id);
-        console.log("old submissions for course ", course.name, ": ", response);
-    });
+    console.log("All submissions for current courses ", submissions);
+    actionContext.workspaceManager.addSubmissionsToLocalExerciseData(submissions);
 }
 
 /**
