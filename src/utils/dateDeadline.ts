@@ -56,3 +56,11 @@ export function chooseDeadline(ex: Exercise): { date: Date | null; isHard: boole
     const next = findNextDateAfter(new Date(), [softDeadline, hardDeadline]);
     return { date: next, isHard: next === hardDeadline };
 }
+
+/**
+ * Make date pathable. Removes ":"" and replace with "-" and removes GMT.
+ */
+export function dateInPath(date: string): string {
+    const fixedDate = date.replace(/:/g, "-");
+    return fixedDate.split(" GMT")[0];
+}

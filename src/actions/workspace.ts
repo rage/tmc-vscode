@@ -224,23 +224,23 @@ export async function closeExercises(actionContext: ActionContext, ids: number[]
     workspaceManager.closeExercise(...ids);
 }
 
-export async function listAndSelectOldSubmissions(actionContext: ActionContext): Promise<void> {
+export async function downloadOldSubmissions(actionContext: ActionContext): Promise<void> {
     const { tmc, workspaceManager, userData } = actionContext;
     const exercise = getCurrentExerciseData(workspaceManager);
     if (exercise.err) {
-        showNotification("currently open exercise is not part of the TMC exercises");
+        showNotification("Currently open exercise is not part of the TMC exercises");
         return;
     }
     const course = userData.getCourseByName(exercise.val.course);
     const response = await getOldSubmissions(actionContext);
     if (response.err) {
         showNotification(
-            "something went wrong while fetching oldsubmissions: " + response.val.message,
+            "Something went wrong while fetching old submissions: " + response.val.message,
         );
         return;
     }
     const submission = await askForItem<OldSubmission>(
-        exercise.val.name + ": select a submission",
+        exercise.val.name + ": Select a submission",
         false,
         ...response.val.map(
             (a) =>

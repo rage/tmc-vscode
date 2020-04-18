@@ -12,7 +12,7 @@ import Storage from "../config/storage";
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
-import { displayProgrammerError, downloadFile } from "../utils/";
+import { dateInPath, displayProgrammerError, downloadFile } from "../utils/";
 import {
     Course,
     CourseDetails,
@@ -323,7 +323,7 @@ export default class TMC {
             orgName,
             courseName,
             exerciseName,
-            date,
+            dateInPath(date),
         );
 
         const extractResult = await this.checkApiResponse(
@@ -336,7 +336,7 @@ export default class TMC {
         );
 
         if (extractResult.err) {
-            this.workspaceManager.deleteExercise(submissionId);
+            return new Err(new Error("Something went wrong while extracting the submission."));
         }
 
         del.sync(archivePath, { force: true });
@@ -435,9 +435,8 @@ export default class TMC {
         );
     }
 
-    /**function which returns old submissions as list from the server
-     *
-     * @param courseId
+    /**
+     * Function which returns old submissions as list from the server
      */
     public async fetchOldSubmissionIds(courseId: number): Promise<Result<OldSubmission[], Error>> {
         return this.checkApiResponse(

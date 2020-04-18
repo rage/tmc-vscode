@@ -7,7 +7,7 @@ import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
-import { superfluousPropertiesEnabled } from "./utils/";
+import { isWorkspaceOpen, superfluousPropertiesEnabled } from "./utils/";
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -26,6 +26,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
     const resources = resourcesResult.val;
+
+    /**
+     * Checks wether the necessary folders are open in the workspace and opens them if they aren't.
+     */
+    if (isWorkspaceOpen(resources)) {
+        vscode.workspace.updateWorkspaceFolders(
+            vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders.length : 0,
+            null,
+            { uri: vscode.Uri.file(resources.getExercisesFolderPath()) },
+        );
+        vscode.workspace.updateWorkspaceFolders(
+            vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders.length : 0,
+            null,
+            {
+                name: "Old submissions",
+                uri: vscode.Uri.file(resources.getOldSubmissionFolderPath()),
+            },
+        );
+    }
+
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
 
     const tmc = new TMC(storage, resources);

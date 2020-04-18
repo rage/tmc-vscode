@@ -5,7 +5,7 @@ export const ACCESS_TOKEN_URI = "https://tmc.mooc.fi/oauth/token";
 export const CLIENT_ID = "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0";
 export const CLIENT_SECRET = "3e6c4df1992e4031d316ea1933e350e9658326a67efb2e65a5b15207bdc09ee8";
 export const WORKSPACE_SETTINGS = {
-    folders: [{ path: "Exercises" }, { path: "old-submissions" }],
+    folders: [{ path: "Exercises" }, { name: "Old submissions", path: "old-submissions" }],
     settings: {
         "workbench.editor.closeOnFileDelete": true,
         "files.autoSave": "onFocusChange",

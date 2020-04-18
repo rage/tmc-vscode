@@ -166,8 +166,6 @@ export async function submitExercise(
         }
         const statusData = statusResult.val;
         if (statusResult.val.status !== "processing") {
-            checkForExerciseUpdates(actionContext);
-            checkForNewExercises(actionContext);
             ui.setStatusBar("Tests finished, see result", 5000);
             let feedbackQuestions: FeedbackQuestion[] = [];
             if (statusData.status === "ok" && statusData.all_tests_passed) {
@@ -176,6 +174,8 @@ export async function submitExercise(
                 }
             }
             temp.setContent("submission-result", { statusData, feedbackQuestions });
+            checkForExerciseUpdates(actionContext);
+            checkForNewExercises(actionContext);
             break;
         }
 
@@ -221,14 +221,11 @@ export async function getOldSubmissions(
     const course = userData.getCourseByName(currentExercise.val.course);
     const result = await tmc.fetchOldSubmissionIds(course.id);
     if (result.err) {
-        return new Err(new Error("couldn't fetch old submissions"));
+        return new Err(new Error("Couldn't fetch old submissions"));
     }
     const currentExerciseName = currentExercise.val.name;
-    console.log(currentExerciseName);
-    console.log(result.val);
     const exerciseSubmissions = result.val.filter((e) => e.exercise_name === currentExerciseName);
 
-    console.log(exerciseSubmissions);
     return new Ok(exerciseSubmissions);
 }
 
