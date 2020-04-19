@@ -95,7 +95,14 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("downloadOldSubmission", async () => {
-            downloadOldSubmissions(actionContext);
+            const exerciseId = getCurrentExerciseId(workspaceManager);
+            if (!exerciseId) {
+                vscode.window.showErrorMessage(
+                    "Currently open editor is not part of a TMC exercise",
+                );
+                return;
+            }
+            downloadOldSubmissions(exerciseId, actionContext);
         }),
     );
 

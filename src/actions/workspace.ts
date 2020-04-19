@@ -8,7 +8,7 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 import { ActionContext, CourseExerciseDownloads } from "./types";
 import pLimit from "p-limit";
-import { askForItem, getCurrentExerciseData, showNotification } from "../utils";
+import { askForItem, showError, showNotification } from "../utils";
 import { getOldSubmissions } from "./user";
 import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
@@ -224,36 +224,39 @@ export async function closeExercises(actionContext: ActionContext, ids: number[]
     workspaceManager.closeExercise(...ids);
 }
 
-export async function downloadOldSubmissions(actionContext: ActionContext): Promise<void> {
+export async function downloadOldSubmissions(
+    exerciseId: number,
+    actionContext: ActionContext,
+): Promise<void> {
     const { tmc, workspaceManager, userData } = actionContext;
-    const exercise = getCurrentExerciseData(workspaceManager);
+    const exercise = workspaceManager.getExerciseDataById(exerciseId);
     if (exercise.err) {
-        showNotification("Currently open exercise is not part of the TMC exercises");
+        showError("Exercise data missing");
         return;
     }
     const course = userData.getCourseByName(exercise.val.course);
     const response = await getOldSubmissions(actionContext);
     if (response.err) {
-        showNotification(
-            "Something went wrong while fetching old submissions: " + response.val.message,
-        );
+        showError("Something went wrong while fetching old submissions: " + response.val.message);
         return;
     }
-    const submission = await askForItem<OldSubmission>(
+    if (response.val.length === 0) {
+        showNotification("No previous submissions found for this exercise.");
+        return;
+    }
+
+    const submission = await askForItem(
         exercise.val.name + ": Select a submission",
         false,
-        ...response.val.map(
-            (a) =>
-                [
-                    dateToString(parseDate(a.processing_attempts_started_at)) +
-                        "| " +
-                        (a.all_tests_passed ? "Passed" : "Failed"),
-                    a,
-                ] as [string, OldSubmission],
-        ),
+        ...response.val.map<[string, OldSubmission]>((a) => [
+            dateToString(parseDate(a.processing_attempts_started_at)) +
+                "| " +
+                (a.all_tests_passed ? "Passed" : "Not passed"),
+            a,
+        ]),
     );
 
-    if (submission?.id !== undefined) {
+    if (submission !== undefined) {
         const oldSub = await tmc.downloadOldExercise(
             submission.id,
             submission.exercise_name,
@@ -261,12 +264,12 @@ export async function downloadOldSubmissions(actionContext: ActionContext): Prom
             course.organization,
             dateToString(parseDate(submission.processing_attempts_started_at)),
         );
-        if (oldSub.ok) {
-            showNotification(oldSub.val);
-        } else {
-            showNotification(
+        if (oldSub.err) {
+            showError(
                 "Something went wrong while downloading old submission for exercise: " + oldSub.val,
             );
+            return;
         }
+        showNotification(oldSub.val);
     }
 }
