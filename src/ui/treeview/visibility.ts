@@ -1,4 +1,4 @@
-import { VisibilityGroup, VisibilityGroupNegated } from "./types";
+import { VisibilityGroup, VisibilityGroupNegated } from "../types";
 
 /**
  * Logic class for managing visibility of treeview actions

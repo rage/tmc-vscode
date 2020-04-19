@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import Resources from "../config/resources";
 import UI from "./ui";
 import { EMPTY_HTML_DOCUMENT } from "../config/constants";
+import { TemplateName } from "./types";
 
 /**
  * A class for temporary webviews
@@ -40,7 +41,7 @@ export default class TemporaryWebview {
      * @param recreate Whether the view should be recreated if disposed
      */
     public async setContent(
-        templateName: string,
+        templateName: TemplateName,
         data?: { [key: string]: unknown },
     ): Promise<void> {
         if (this.disposed) {

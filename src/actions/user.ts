@@ -8,7 +8,7 @@ import * as vscode from "vscode";
 
 import { LocalCourseData } from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
-import { VisibilityGroups } from "../ui/treeview/types";
+import { VisibilityGroups } from "../ui/types";
 import {
     askForConfirmation,
     getCurrentExerciseData,

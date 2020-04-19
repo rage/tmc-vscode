@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { VisibilityGroup, VisibilityGroupNegated } from "./types";
+import { VisibilityGroup, VisibilityGroupNegated } from "../types";
 import { Visibility } from "./visibility";
 
 /**

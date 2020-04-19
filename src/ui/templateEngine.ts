@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, numbersToString } from "../utils/";
+import { TemplateName } from "./types";
 
 export default class TemplateEngine {
     private cssPath: string;
@@ -173,7 +174,7 @@ export default class TemplateEngine {
      */
     public async getTemplate(
         webview: vscode.Webview,
-        name: string,
+        name: TemplateName,
         data?: { [key: string]: unknown },
     ): Promise<string> {
         const p = path.join(this.htmlPath, `${name}.html`);

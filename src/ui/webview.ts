@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import Resources from "../config/resources";
 import TemplateEngine from "./templateEngine";
 import { EMPTY_HTML_DOCUMENT } from "../config/constants";
+import { TemplateName } from "./types";
 
 /**
  * A class for managing the Webview component of the plugin UI, to be used through the UI class
@@ -41,7 +42,7 @@ export default class TmcWebview {
      * @param data Any data to be passed to the template
      */
     public async setContentFromTemplate(
-        templateName: string,
+        templateName: TemplateName,
         data?: { [key: string]: unknown },
         forceUpdate = false,
     ): Promise<void> {
