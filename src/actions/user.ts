@@ -398,9 +398,9 @@ export async function updateCourse(id: number, actionContext: ActionContext): Pr
         ([courseDetailsResult, courseExercisesResult]) => {
             if (courseDetailsResult.ok) {
                 const details = courseDetailsResult.val.course;
-                userData.updateCompletedExercises(
+                userData.updateExercises(
                     id,
-                    details.exercises.filter((x) => x.completed).map((x) => x.id),
+                    details.exercises.map((x) => ({ id: x.id, passed: x.completed })),
                 );
             }
             if (courseExercisesResult.ok) {

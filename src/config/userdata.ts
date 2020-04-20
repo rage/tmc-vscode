@@ -51,22 +51,17 @@ export class UserData {
         this.updatePersistentData();
     }
 
-    public async updateCompletedExercises(
+    public async updateExercises(
         courseId: number,
-        completedExercises: number[],
+        exercises: Array<{ id: number; passed: boolean }>,
     ): Promise<Result<void, Error>> {
         const courseData = this.courses.get(courseId);
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
-        courseData.exercises = courseData.exercises.map((x) => ({
-            id: x.id,
-            passed: completedExercises.includes(x.id),
-        }));
+        courseData.exercises = exercises;
         courseData.exercises.forEach((x) =>
-            completedExercises.includes(x.id)
-                ? this.passedExercises.add(x.id)
-                : this.passedExercises.delete(x.id),
+            x.passed ? this.passedExercises.add(x.id) : this.passedExercises.delete(x.id),
         );
         this.courses.set(courseId, courseData);
         await this.updatePersistentData();
