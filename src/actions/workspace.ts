@@ -9,7 +9,7 @@ import * as vscode from "vscode";
 import { ActionContext, CourseExerciseDownloads } from "./types";
 import pLimit from "p-limit";
 import { askForItem, showError, showNotification } from "../utils";
-import { getOldSubmissions } from "./user";
+import { getOldSubmissions, notifyLater } from "./user";
 import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 
@@ -142,7 +142,8 @@ export async function checkForExerciseUpdates(
     const coursesToUpdate: CourseExerciseDownloads[] = [];
     let count = 0;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
-    for (const course of courses) {
+    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
+    for (const course of filteredCourses) {
         const organizationSlug = course.organization;
 
         const result = await tmc.getCourseDetails(course.id);
@@ -168,7 +169,12 @@ export async function checkForExerciseUpdates(
         showNotification(
             `Found updates for ${count} exercises. Do you wish to download them?`,
             ["Download", (): Promise<void> => downloadExercises(actionContext, coursesToUpdate)],
-            ["Later", (): void => {}],
+            [
+                "Notify in one hour",
+                (): void => {
+                    notifyLater(actionContext, ...coursesToUpdate.map((course) => course.courseId));
+                },
+            ],
         );
     }
 }

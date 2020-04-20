@@ -81,6 +81,7 @@ export async function validateAndFix(
             return new Err(login.val);
         }
         console.log("Fixing userdata");
+
         const userDataFixed: { courses: LocalCourseData[] } = { courses: [] };
         if (userData.courses !== undefined) {
             for (const course of userData.courses) {
@@ -132,6 +133,7 @@ export async function validateAndFix(
                     organization: course.organization,
                     awardedPoints: awardedPoints,
                     availablePoints: availablePoints,
+                    notifyAfter: 0,
                 });
             }
         }

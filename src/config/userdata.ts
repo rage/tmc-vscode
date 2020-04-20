@@ -51,6 +51,15 @@ export class UserData {
         this.updatePersistentData();
     }
 
+    public updateCourseNotifyAfter(id: number, date: number): void {
+        const data = this.courses.get(id);
+        if (data) {
+            data.notifyAfter = date;
+            this.courses.set(id, data);
+            this.updatePersistentData();
+        }
+    }
+
     public async updateExercises(
         courseId: number,
         exercises: Array<{ id: number; passed: boolean }>,

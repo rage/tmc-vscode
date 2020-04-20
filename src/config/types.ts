@@ -9,6 +9,7 @@ export type LocalCourseData = {
     }>;
     availablePoints: number;
     awardedPoints: number;
+    notifyAfter: number;
 };
 
 export type LocalExerciseData = {

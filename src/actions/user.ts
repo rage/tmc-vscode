@@ -264,7 +264,8 @@ export async function checkForNewExercises(
 ): Promise<void> {
     const { tmc, userData } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
-    for (const course of courses) {
+    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
+    for (const course of filteredCourses) {
         const result = await tmc.getCourseExercises(course.id);
 
         if (result.err) {
@@ -277,6 +278,7 @@ export async function checkForNewExercises(
                 !exercise.disabled &&
                 !course.exercises.find((e) => e.id === exercise.id),
         );
+
         if (newExercises.length > 0) {
             showNotification(
                 `${newExercises.length} new exercises found for ${course.name}. Do you wish to move to the downloads page?`,
@@ -286,7 +288,12 @@ export async function checkForNewExercises(
                         displayCourseDownloads(actionContext, course.id);
                     },
                 ],
-                ["Later", (): void => {}],
+                [
+                    "Notify in one hour",
+                    (): void => {
+                        notifyLater(actionContext, course.id);
+                    },
+                ],
             );
         }
     }
@@ -373,6 +380,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         organization: orgAndCourse.val.organization,
         availablePoints: availablePoints,
         awardedPoints: awardedPoints,
+        notifyAfter: 0,
     };
     userData.addCourse(localData);
     await displayUserCourses(actionContext);
@@ -392,6 +400,11 @@ export async function removeCourse(id: number, actionContext: ActionContext): Pr
     actionContext.userData.deleteCourse(id);
 }
 
+/**
+ * Keeps the user course exercises and course data up to date.
+ * Checks that the course details view is up to date, if user is connected to internet, otherwise shows old data.
+ * @param id Course id
+ */
 export async function updateCourse(id: number, actionContext: ActionContext): Promise<void> {
     const { tmc, userData, workspaceManager } = actionContext;
     return Promise.all([tmc.getCourseDetails(id, false), tmc.getCourseExercises(id, false)]).then(
@@ -441,4 +454,16 @@ export async function updateCourse(id: number, actionContext: ActionContext): Pr
             }
         },
     );
+}
+
+/**
+ * Notify 1 hour later for new exercises or/and updates for a course.
+ */
+export function notifyLater(actionContext: ActionContext, ...courseId: number[]): void {
+    const { userData } = actionContext;
+    const now = Date.now();
+    const notifyAfter = now + 3600 * 1000;
+    for (const id of courseId) {
+        userData.updateCourseNotifyAfter(id, notifyAfter);
+    }
 }

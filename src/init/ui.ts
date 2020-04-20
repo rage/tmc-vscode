@@ -147,6 +147,7 @@ export function registerUiActions(
         const courseId: number = msg.id;
         displayLocalCourseDetails(msg.id, actionContext);
         const uiState = ui.webview.getStateId();
+        // Try to fetch updates from API
         updateCourse(courseId, actionContext).then(() =>
             uiState === ui.webview.getStateId()
                 ? displayLocalCourseDetails(courseId, actionContext)
