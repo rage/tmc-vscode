@@ -62,9 +62,10 @@ export async function downloadExercises(
     let successful = 0;
     let failed = 0;
 
-    ui.webview.setContentFromTemplate("downloading-exercises", {
+    ui.webview.setContentFromTemplate({
+        templateName: "downloading-exercises",
         returnToCourse,
-        exercises: exerciseStatus.values(),
+        exercises: Array.from(exerciseStatus.values()),
         failed,
         failedPct: Math.round((100 * failed) / downloadCount),
         remaining: downloadCount - successful - failed,
@@ -83,9 +84,10 @@ export async function downloadExercises(
                         if (data) {
                             data.status = "Downloading";
                             exerciseStatus.set(id, data);
-                            ui.webview.setContentFromTemplate("downloading-exercises", {
+                            ui.webview.setContentFromTemplate({
+                                templateName: "downloading-exercises",
                                 returnToCourse,
-                                exercises: exerciseStatus.values(),
+                                exercises: Array.from(exerciseStatus.values()),
                                 failed,
                                 failedPct: Math.round((100 * failed) / downloadCount),
                                 remaining: downloadCount - successful - failed,
@@ -107,9 +109,10 @@ export async function downloadExercises(
                                         data.error = res.val.message;
                                     }
                                     exerciseStatus.set(id, data);
-                                    ui.webview.setContentFromTemplate("downloading-exercises", {
+                                    ui.webview.setContentFromTemplate({
+                                        templateName: "downloading-exercises",
                                         returnToCourse,
-                                        exercises: exerciseStatus.values(),
+                                        exercises: Array.from(exerciseStatus.values()),
                                         failed,
                                         failedPct: Math.round((100 * failed) / downloadCount),
                                         remaining: downloadCount - successful - failed,

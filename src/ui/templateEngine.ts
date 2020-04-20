@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, numbersToString } from "../utils/";
-import { TemplateName } from "./types";
+import { TemplateData } from "./types";
 
 export default class TemplateEngine {
     private cssPath: string;
@@ -172,11 +172,8 @@ export default class TemplateEngine {
      *
      * @returns The HTML document as a string
      */
-    public async getTemplate(
-        webview: vscode.Webview,
-        name: TemplateName,
-        data?: { [key: string]: unknown },
-    ): Promise<string> {
+    public async getTemplate(webview: vscode.Webview, templateData: TemplateData): Promise<string> {
+        const name = templateData.templateName;
         const p = path.join(this.htmlPath, `${name}.html`);
         let template: HandlebarsTemplateDelegate<unknown>;
         const cacheResult = this.cache.get(name);
@@ -185,14 +182,11 @@ export default class TemplateEngine {
         } else {
             template = handlebars.compile(fs.readFileSync(p, "utf8"));
         }
-        if (!data) {
-            data = {};
-        }
 
-        data.cspBlob = `<meta http-equiv="Content-Security-Policy"
+        const cspBlob = `<meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; img-src https:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';" />`;
-        data.cssBlob = this.cssBlob;
+        const cssBlob = this.cssBlob;
 
-        return template(data);
+        return template({ ...templateData, cspBlob, cssBlob });
     }
 }

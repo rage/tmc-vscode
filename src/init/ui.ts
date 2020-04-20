@@ -52,7 +52,7 @@ export function registerUiActions(
         logout(visibilityGroups, actionContext);
     });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not], () => {
-        ui.webview.setContentFromTemplate("login");
+        ui.webview.setContentFromTemplate({ templateName: "login" });
     });
     ui.treeDP.registerAction("My courses", [LOGGED_IN], () => {
         displayUserCourses(actionContext);
@@ -73,7 +73,10 @@ export function registerUiActions(
             }
             const result = await login(actionContext, msg.username, msg.password, visibilityGroups);
             if (result.err) {
-                ui.webview.setContentFromTemplate("login", { error: result.val.message }, true);
+                ui.webview.setContentFromTemplate(
+                    { templateName: "login", error: result.val.message },
+                    true,
+                );
                 return;
             }
             displayUserCourses(actionContext);
@@ -160,7 +163,7 @@ export function registerUiActions(
             if (!(msg.type && msg.ids && msg.id)) {
                 return;
             }
-            actionContext.ui.webview.setContentFromTemplate("loading");
+            actionContext.ui.webview.setContentFromTemplate({ templateName: "loading" });
             await openExercises(msg.ids, actionContext);
             displayLocalCourseDetails(msg.id, actionContext);
         },
@@ -171,7 +174,7 @@ export function registerUiActions(
             if (!(msg.type && msg.ids && msg.id)) {
                 return;
             }
-            actionContext.ui.webview.setContentFromTemplate("loading");
+            actionContext.ui.webview.setContentFromTemplate({ templateName: "loading" });
             await closeExercises(actionContext, msg.ids);
             displayLocalCourseDetails(msg.id, actionContext);
         },

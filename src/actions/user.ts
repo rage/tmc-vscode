@@ -94,12 +94,12 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         },
     );
 
-    temp.setContent("running-tests", { exerciseName });
+    temp.setContent({ templateName: "running-tests", exerciseName });
     ui.setStatusBar(`Running tests for ${exerciseName}`);
     const testResult = await tmc.runTests(id);
     if (testResult.err) {
         ui.setStatusBar(`Running tests for ${exerciseName} failed`, 5000);
-        temp.setContent("error", { error: testResult.val });
+        temp.setContent({ templateName: "error", error: testResult.val });
         vscode.window.showErrorMessage(`Exercise test run failed: \
        ${testResult.val.name} - ${testResult.val.message}`);
         return;
@@ -111,7 +111,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         exerciseName,
         tmcLogs: testResult.val.logs,
     };
-    temp.setContent("test-result", data);
+    temp.setContent({ templateName: "test-result", ...data });
 }
 
 /**
@@ -130,7 +130,7 @@ export async function submitExercise(
     temp.setTitle("TMC Server Submission");
 
     if (submitResult.err) {
-        temp.setContent("error", { error: submitResult.val });
+        temp.setContent({ templateName: "error", error: submitResult.val });
         vscode.window.showErrorMessage(`Exercise submission failed: \
             ${submitResult.val.name} - ${submitResult.val.message}`);
         return;
@@ -175,14 +175,14 @@ export async function submitExercise(
                 }
                 courseId = userData.getCourseByName(statusData.course).id;
             }
-            temp.setContent("submission-result", { statusData, feedbackQuestions });
+            temp.setContent({ templateName: "submission-result", statusData, feedbackQuestions });
             checkForExerciseUpdates(actionContext, courseId);
             checkForNewExercises(actionContext, courseId);
             break;
         }
 
         if (!temp.disposed) {
-            temp.setContent("submission-status", statusData);
+            temp.setContent({ templateName: "submission-status", statusData });
         }
 
         await sleep(2500);
@@ -339,7 +339,10 @@ export async function openWorkspace(actionContext: ActionContext): Promise<void>
  */
 export async function openSettings(actionContext: ActionContext): Promise<void> {
     const { ui, resources } = actionContext;
-    ui.webview.setContentFromTemplate("settings", { tmcData: resources.getDataPath() });
+    ui.webview.setContentFromTemplate({
+        templateName: "settings",
+        tmcData: resources.getDataPath(),
+    });
 }
 
 /**

@@ -206,7 +206,7 @@ async function ensureLogin(
                     resolve(msg);
                 },
             );
-            temp.setContent("login");
+            temp.setContent({ templateName: "login" });
         });
         if (!loginMsg.username || !loginMsg.password) {
             continue;

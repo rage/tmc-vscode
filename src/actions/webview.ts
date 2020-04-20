@@ -29,7 +29,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
     });
 
     // Display the page immediatedly before fetching any data from API
-    await ui.webview.setContentFromTemplate("index", { courses });
+    await ui.webview.setContentFromTemplate({ templateName: "index", courses });
 
     const uiState = ui.webview.getStateId();
 
@@ -67,7 +67,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
         }),
     );
     if (uiState === ui.webview.getStateId()) {
-        await ui.webview.setContentFromTemplate("index", { courses: apiCourses });
+        await ui.webview.setContentFromTemplate({ templateName: "index", courses: apiCourses });
     }
 }
 
@@ -135,8 +135,12 @@ export async function displayLocalCourseDetails(
     );
 
     await ui.webview.setContentFromTemplate(
-        "course-details",
-        { exerciseData: sortedExercises, course, courseId: course.id },
+        {
+            templateName: "course-details",
+            exerciseData: sortedExercises,
+            course,
+            courseId: course.id,
+        },
         true,
     );
 }
@@ -177,7 +181,7 @@ export async function selectCourse(
             }
             resolve();
         });
-        temp.setContent("course", data);
+        temp.setContent({ templateName: "course", ...data });
     });
     return new Ok({ changeOrg, course });
 }
@@ -213,7 +217,7 @@ export async function selectOrganization(
             }
             resolve();
         });
-        temp.setContent("organization", data);
+        temp.setContent({ templateName: "organization", ...data });
     });
     if (!slug) {
         return new Err(new Error("Couldn't get organization"));
@@ -264,7 +268,7 @@ export async function displayCourseDownloads(
     courseId: number,
 ): Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
-    await ui.webview.setContentFromTemplate("loading");
+    await ui.webview.setContentFromTemplate({ templateName: "loading" });
     const result = await tmc.getCourseDetails(courseId, false);
     if (result.err) {
         return new Err(new Error("Course details not found"));
@@ -405,6 +409,6 @@ export async function displayCourseDownloads(
         organizationSlug,
         exerciseLists,
     };
-    await ui.webview.setContentFromTemplate("download-exercises", data);
+    await ui.webview.setContentFromTemplate({ templateName: "download-exercises", ...data });
     return Ok.EMPTY;
 }

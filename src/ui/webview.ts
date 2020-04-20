@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import Resources from "../config/resources";
 import TemplateEngine from "./templateEngine";
 import { EMPTY_HTML_DOCUMENT } from "../config/constants";
-import { TemplateName } from "./types";
+import { TemplateData } from "./types";
 
 /**
  * A class for managing the Webview component of the plugin UI, to be used through the UI class
@@ -42,13 +42,12 @@ export default class TmcWebview {
      * @param data Any data to be passed to the template
      */
     public async setContentFromTemplate(
-        templateName: TemplateName,
-        data?: { [key: string]: unknown },
+        templateData: TemplateData,
         forceUpdate = false,
     ): Promise<void> {
         this.stateId++;
         const panel = this.getPanel();
-        const html = await this.templateEngine.getTemplate(panel.webview, templateName, data);
+        const html = await this.templateEngine.getTemplate(panel.webview, templateData);
         if (forceUpdate) {
             panel.webview.html = html + " ";
         }
