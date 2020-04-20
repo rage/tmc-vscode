@@ -76,7 +76,7 @@ export async function downloadExercises(
     const limit = pLimit(3);
 
     await Promise.all(
-        Array.from(exerciseStatus.entries()).map<Promise<Result<string, Error>>>(([id, data]) =>
+        Array.from(exerciseStatus.entries()).map<Promise<Result<void, Error>>>(([id, data]) =>
             limit(
                 () =>
                     new Promise((resolve) => {
@@ -96,7 +96,7 @@ export async function downloadExercises(
                         }
 
                         tmc.downloadExercise(id, data.organizationSlug).then(
-                            (res: Result<string, Error>) => {
+                            (res: Result<void, Error>) => {
                                 if (data) {
                                     if (res.ok) {
                                         successful += 1;

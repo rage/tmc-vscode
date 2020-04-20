@@ -100,6 +100,7 @@ export function registerUiActions(
                 organizationSlug: msg.organizationSlug,
             };
             downloadExercises(actionContext, [downloads], msg.courseId);
+            workspaceManager.openExercise(...msg.ids);
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
