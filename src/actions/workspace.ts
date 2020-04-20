@@ -131,13 +131,18 @@ export async function downloadExercises(
 
 /**
  * Checks all user's courses for exercise updates and download them.
+ * @param courseId If given, check only updates for that course.
  */
-export async function checkForExerciseUpdates(actionContext: ActionContext): Promise<void> {
+export async function checkForExerciseUpdates(
+    actionContext: ActionContext,
+    courseId?: number,
+): Promise<void> {
     const { tmc, userData, workspaceManager } = actionContext;
 
     const coursesToUpdate: CourseExerciseDownloads[] = [];
     let count = 0;
-    for (const course of userData.getCourses()) {
+    const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
+    for (const course of courses) {
         const organizationSlug = course.organization;
 
         const result = await tmc.getCourseDetails(course.id);

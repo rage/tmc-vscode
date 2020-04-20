@@ -123,7 +123,7 @@ export async function submitExercise(
     id: number,
     tempView?: TemporaryWebview,
 ): Promise<void> {
-    const { ui, resources, tmc } = actionContext;
+    const { ui, resources, tmc, userData } = actionContext;
     const submitResult = await tmc.submitExercise(id);
 
     const temp = tempView || new TemporaryWebview(resources, ui, "", () => {});
@@ -168,14 +168,16 @@ export async function submitExercise(
         if (statusResult.val.status !== "processing") {
             ui.setStatusBar("Tests finished, see result", 5000);
             let feedbackQuestions: FeedbackQuestion[] = [];
+            let courseId = undefined;
             if (statusData.status === "ok" && statusData.all_tests_passed) {
                 if (statusData.feedback_questions) {
                     feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
                 }
+                courseId = userData.getCourseByName(statusData.course).id;
             }
             temp.setContent("submission-result", { statusData, feedbackQuestions });
-            checkForExerciseUpdates(actionContext);
-            checkForNewExercises(actionContext);
+            checkForExerciseUpdates(actionContext, courseId);
+            checkForNewExercises(actionContext, courseId);
             break;
         }
 
@@ -254,10 +256,14 @@ export async function pasteExercise(actionContext: ActionContext, id: number): P
 
 /**
  * Finds new exercises for all user's courses and prompts to go download them.
+ * @param courseId If given, check only updates for that course.
  */
-export async function checkForNewExercises(actionContext: ActionContext): Promise<void> {
+export async function checkForNewExercises(
+    actionContext: ActionContext,
+    courseId?: number,
+): Promise<void> {
     const { tmc, userData } = actionContext;
-    const courses = userData.getCourses();
+    const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     for (const course of courses) {
         const result = await tmc.getCourseExercises(course.id);
 
