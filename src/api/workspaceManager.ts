@@ -2,6 +2,8 @@ import * as del from "del";
 import * as fs from "fs-extra";
 import * as path from "path";
 
+import du = require("du");
+
 import { Err, Ok, Result } from "ts-results";
 
 import Resources from "../config/resources";
@@ -209,7 +211,7 @@ export default class WorkspaceManager {
      * @param oldPath
      * @param newPath
      */
-    public moveFolder(oldPath: string, newPath: string): Result<void, Error> {
+    public async moveFolder(oldPath: string, newPath: string): Promise<Result<boolean, Error>> {
         this.watcher.stop();
         const newParent = path.resolve(newPath, "..");
         fs.ensureDirSync(newParent);
@@ -219,15 +221,25 @@ export default class WorkspaceManager {
         try {
             fs.moveSync(oldPath, newPath);
         } catch (err) {
-            // TODO: Compare and safely delete/recover files from destination.
+            if ((await du(oldPath)) < (await du(newPath))) {
+                return new Ok(false);
+            }
+            try {
+                fs.removeSync(newPath);
+            } catch (err2) {
+                return new Err(
+                    new Error(
+                        "Folder move operation failed, please try closing the workspace and make sure that any files are not in use. Some files could not be cleaned up from the target directory.",
+                    ),
+                );
+            }
             return new Err(
                 new Error(
                     "Folder move operation failed, please try closing the workspace and make sure that any files are not in use.",
                 ),
             );
         }
-        this.updatePersistentData();
-        return Ok.EMPTY;
+        return new Ok(true);
     }
 
     /**

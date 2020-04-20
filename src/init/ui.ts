@@ -188,31 +188,37 @@ export function registerUiActions(
             canSelectMany: false,
             openLabel: "Select folder",
         };
-        vscode.window.showOpenDialog(options).then((uri) => {
-            if (uri && old) {
-                const newPath = path.join(uri[0].fsPath, "/tmcdata");
-                if (newPath === old) {
-                    return;
-                }
-                const res = workspaceManager.moveFolder(old, newPath);
-                if (res.ok) {
-                    console.log(`Moved workspace folder from ${old} to ${newPath}`);
-                    resources.setDataPath(newPath);
-                    if (open) {
-                        // Opening a workspace restarts VSCode (v1.44)
-                        vscode.commands.executeCommand(
-                            "vscode.openFolder",
-                            vscode.Uri.file(
-                                path.join(newPath, "TMC workspace", "TMC Exercises.code-workspace"),
-                            ),
-                        );
-                    }
-                } else {
-                    showError(res.val.message);
-                }
-                workspaceManager.restartWatcher();
-                openSettings(actionContext);
+        const uri = await vscode.window.showOpenDialog(options);
+        if (uri && old) {
+            const newPath = path.join(uri[0].fsPath, "/tmcdata");
+            if (newPath === old) {
+                return;
             }
-        });
+            const res = await workspaceManager.moveFolder(old, newPath);
+            if (res.ok) {
+                console.log(`Moved workspace folder from ${old} to ${newPath}`);
+                if (!res.val) {
+                    await showNotification(
+                        `Some files could not be removed from the previous workspace directory. They will have to be removed manually. ${old}`,
+                        ["OK", (): void => {}],
+                    );
+                }
+
+                resources.setDataPath(newPath);
+                if (open) {
+                    // Opening a workspace restarts VSCode (v1.44)
+                    vscode.commands.executeCommand(
+                        "vscode.openFolder",
+                        vscode.Uri.file(
+                            path.join(newPath, "TMC workspace", "TMC Exercises.code-workspace"),
+                        ),
+                    );
+                }
+            } else {
+                showError(res.val.message);
+            }
+            workspaceManager.restartWatcher();
+            openSettings(actionContext);
+        }
     });
 }

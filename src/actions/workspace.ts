@@ -256,20 +256,22 @@ export async function downloadOldSubmissions(
         ]),
     );
 
-    if (submission !== undefined) {
-        const oldSub = await tmc.downloadOldExercise(
-            submission.id,
-            submission.exercise_name,
-            exercise.val.course,
-            course.organization,
-            dateToString(parseDate(submission.processing_attempts_started_at)),
-        );
-        if (oldSub.err) {
-            showError(
-                "Something went wrong while downloading old submission for exercise: " + oldSub.val,
-            );
-            return;
-        }
-        showNotification(oldSub.val);
+    if (submission === undefined) {
+        return;
     }
+
+    const oldSub = await tmc.downloadOldExercise(
+        submission.id,
+        submission.exercise_name,
+        exercise.val.course,
+        course.organization,
+        dateToString(parseDate(submission.processing_attempts_started_at)),
+    );
+    if (oldSub.err) {
+        showError(
+            "Something went wrong while downloading old submission for exercise: " + oldSub.val,
+        );
+        return;
+    }
+    showNotification(oldSub.val);
 }
