@@ -84,7 +84,7 @@ export function registerUiActions(
     });
     ui.webview.registerHandler(
         "downloadExercises",
-        (msg: {
+        async (msg: {
             type?: "downloadExercises";
             ids?: number[];
             courseName?: string;
@@ -99,7 +99,7 @@ export function registerUiActions(
                 exerciseIds: msg.ids,
                 organizationSlug: msg.organizationSlug,
             };
-            downloadExercises(actionContext, [downloads], msg.courseId);
+            await downloadExercises(actionContext, [downloads], msg.courseId);
             workspaceManager.openExercise(...msg.ids);
         },
     );
