@@ -7,12 +7,14 @@ import Resources from "../config/resources";
 import { downloadFile, isJavaPresent } from "../utils/";
 import {
     EXTENSION_ID,
-    TMC_JAR,
+    TMC_JAR_NAME,
+    TMC_JAR_URL,
     WORKSPACE_ROOT_FILE,
     WORKSPACE_ROOT_FILE_TEXT,
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Storage from "../config/storage";
+import del = require("del");
 
 /**
  * Checks if Java is present and performs resource initialization on extension activation
@@ -40,7 +42,7 @@ export async function resourceInitialization(
     const tmcWorkspaceFilePathRelative = path.join("TMC workspace", "TMC Exercises.code-workspace");
     const tmcExercisesFolderPathRelative = path.join("TMC workspace", "Exercises");
     const tmcClosedExercisesFolderPathRelative = "closed-exercises";
-    const tmcLangsPathRelative = "tmc-langs.jar";
+    const tmcLangsPathRelative = TMC_JAR_NAME;
     const tmcOldSubmissionFolderPathRelative = path.join("TMC workspace", "old-submissions");
 
     if (!fs.existsSync(tmcDataPath)) {
@@ -95,11 +97,12 @@ export async function resourceInitialization(
 
     const tmcLangsPath = path.join(tmcDataPath, tmcLangsPathRelative);
     if (!fs.existsSync(tmcLangsPath)) {
+        del.sync(path.join(tmcDataPath, "*.jar"), { force: true });
         const tmcLangsResult = await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: "TestMyCode" },
             async (p) => {
                 return downloadFile(
-                    TMC_JAR,
+                    TMC_JAR_URL,
                     tmcLangsPath,
                     undefined,
                     undefined,

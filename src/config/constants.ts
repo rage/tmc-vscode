@@ -1,5 +1,6 @@
 export const EXTENSION_ID = "moocfi.test-my-code";
-export const TMC_JAR = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar";
+export const TMC_JAR_URL = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar";
+export const TMC_JAR_NAME = "tmc-langs-cli-0.7.16-SNAPSHOT.jar";
 export const TMC_API_URL = "https://tmc.mooc.fi/api/v8/";
 export const ACCESS_TOKEN_URI = "https://tmc.mooc.fi/oauth/token";
 export const CLIENT_ID = "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0";
