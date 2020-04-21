@@ -194,7 +194,7 @@ export default class WorkspaceManager {
         try {
             fs.moveSync(oldPath, newPath);
         } catch (err) {
-            if ((await du(oldPath)) < (await du(newPath))) {
+            if (fs.existsSync(newPath) && (await du(oldPath)) < (await du(newPath))) {
                 return new Ok(false);
             }
             try {
