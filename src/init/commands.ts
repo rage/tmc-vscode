@@ -15,6 +15,8 @@ import {
     testExercise,
 } from "../actions";
 
+const errorMessage = "Currently open editor is not part of a TMC exercise";
+
 export function registerCommands(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
@@ -41,9 +43,7 @@ export function registerCommands(
             const exerciseId = getCurrentExerciseId(workspaceManager);
             exerciseId
                 ? submitExercise(actionContext, exerciseId)
-                : vscode.window.showErrorMessage(
-                      "Currently open editor is not part of a TMC exercise",
-                  );
+                : vscode.window.showErrorMessage(errorMessage);
         }),
     );
 
@@ -52,9 +52,7 @@ export function registerCommands(
             const exerciseId = getCurrentExerciseId(workspaceManager);
             exerciseId
                 ? pasteExercise(actionContext, exerciseId)
-                : vscode.window.showErrorMessage(
-                      "Currently open editor is not part of a TMC exercise",
-                  );
+                : vscode.window.showErrorMessage(errorMessage);
         }),
     );
 
@@ -63,9 +61,7 @@ export function registerCommands(
             const exerciseId = getCurrentExerciseId(workspaceManager);
             exerciseId
                 ? testExercise(actionContext, exerciseId)
-                : vscode.window.showErrorMessage(
-                      "Currently open editor is not part of a TMC exercise",
-                  );
+                : vscode.window.showErrorMessage(errorMessage);
         }),
     );
 
@@ -73,9 +69,7 @@ export function registerCommands(
         vscode.commands.registerCommand("resetExercise", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
             if (!exerciseId) {
-                vscode.window.showErrorMessage(
-                    "Currently open editor is not part of a TMC exercise",
-                );
+                vscode.window.showErrorMessage(errorMessage);
                 return;
             }
             const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
@@ -97,9 +91,7 @@ export function registerCommands(
         vscode.commands.registerCommand("downloadOldSubmission", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
             if (!exerciseId) {
-                vscode.window.showErrorMessage(
-                    "Currently open editor is not part of a TMC exercise",
-                );
+                vscode.window.showErrorMessage(errorMessage);
                 return;
             }
             downloadOldSubmissions(exerciseId, actionContext);
@@ -110,9 +102,7 @@ export function registerCommands(
         vscode.commands.registerCommand("closeExercise", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
             if (!exerciseId) {
-                vscode.window.showErrorMessage(
-                    "Currently open editor is not part of a TMC exercise",
-                );
+                vscode.window.showErrorMessage(errorMessage);
                 return;
             }
             const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
