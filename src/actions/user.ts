@@ -183,8 +183,11 @@ export async function submitExercise(
                 courseId = userData.getCourseByName(statusData.course).id;
             }
             temp.setContent({ templateName: "submission-result", statusData, feedbackQuestions });
-            checkForExerciseUpdates(actionContext, courseId);
-            checkForNewExercises(actionContext, courseId);
+            // Check for new exercises if exercise passed.
+            if (courseId) {
+                checkForNewExercises(actionContext, courseId);
+            }
+            checkForExerciseUpdates(actionContext);
             break;
         }
 
@@ -268,7 +271,7 @@ export async function checkForNewExercises(
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
     for (const course of filteredCourses) {
-        const result = await tmc.getCourseExercises(course.id);
+        const result = await tmc.getCourseExercises(course.id, false);
 
         if (result.err) {
             continue;

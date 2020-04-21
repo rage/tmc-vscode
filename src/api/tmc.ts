@@ -524,10 +524,10 @@ export default class TMC {
 
     /**
      * Performs an HTTP request to the hardcoded TMC server
-     * By default returns from cache if method === get & cache === undefined and data exists in cache.
      *
      * @param endpoint target API endpoint, can also be complete URL
      * @param method HTTP method, defaults to GET
+     * @param cache By default returns from cache if method === get & cache === undefined and data exists in cache
      */
     private async tmcApiRequest(
         endpoint: string,

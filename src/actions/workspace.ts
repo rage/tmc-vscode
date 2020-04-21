@@ -149,7 +149,7 @@ export async function checkForExerciseUpdates(
     for (const course of filteredCourses) {
         const organizationSlug = course.organization;
 
-        const result = await tmc.getCourseDetails(course.id);
+        const result = await tmc.getCourseDetails(course.id, false);
         if (result.err) {
             return;
         }
