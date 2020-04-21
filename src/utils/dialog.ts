@@ -43,7 +43,7 @@ export async function showNotification(
     message: string,
     ...items: Array<[string, () => void]>
 ): Promise<void> {
-    vscode.window
+    return vscode.window
         .showInformationMessage(`TestMyCode: ${message}`, ...items.map((item) => item[0]))
         .then((selection) => {
             items.find((item) => item[0] === selection)?.[1]();
@@ -57,7 +57,7 @@ export async function showError(
     error: string,
     ...items: Array<[string, () => void]>
 ): Promise<void> {
-    vscode.window
+    return vscode.window
         .showErrorMessage(`TestMyCode: ${error}`, ...items.map((item) => item[0]))
         .then((selection) => {
             items.find((item) => item[0] === selection)?.[1]();
