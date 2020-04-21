@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ActionContext } from "./types";
-import { askForItem } from "../utils";
+import { askForItem, showNotification } from "../utils";
 import { pasteExercise, submitExercise, testExercise } from "./user";
 import { LocalExerciseData } from "../config/types";
 
@@ -18,7 +18,16 @@ export async function selectAction(
             (): Promise<void> => testExercise(actionContext, exercise.id),
         ],
         ["Submit to server", (): Promise<void> => submitExercise(actionContext, exercise.id)],
-        ["Upload to TMC Pastebin", (): Promise<void> => pasteExercise(actionContext, exercise.id)],
+        [
+            "Upload to TMC Pastebin",
+            async (): Promise<void> => {
+                const link = await pasteExercise(actionContext, exercise.id);
+                showNotification(`Paste to TMC Server successful: ${link}`, [
+                    "Open URL",
+                    (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link)),
+                ]);
+            },
+        ],
         [
             "Close exercise (CTRL + SHIFT + C)",
             async (): Promise<void> => await vscode.commands.executeCommand("closeExercise"),

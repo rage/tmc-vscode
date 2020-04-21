@@ -50,9 +50,15 @@ export function registerCommands(
     context.subscriptions.push(
         vscode.commands.registerCommand("pasteExercise", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
-            exerciseId
-                ? pasteExercise(actionContext, exerciseId)
-                : vscode.window.showErrorMessage(errorMessage);
+            if (exerciseId) {
+                const link = await pasteExercise(actionContext, exerciseId);
+                showNotification(`Paste to TMC Server successful: ${link}`, [
+                    "Open URL",
+                    (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link)),
+                ]);
+            } else {
+                vscode.window.showErrorMessage(errorMessage);
+            }
         }),
     );
 

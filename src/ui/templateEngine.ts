@@ -39,6 +39,7 @@ export default class TemplateEngine {
                 status: string,
                 logs: { stdout: number[]; stderr: number[] },
                 tmcLogs?: { stdout: string; stderr: string },
+                pasteLink?: string,
             ) => {
                 // Java langs 'run tests' returns: PASSED, TESTS_FAILED; COMPILE_FAILED and own logs
                 // Python langs 'run tests' returns: PASSED, TESTS_FAILED, but not COMPILE_FAILED
@@ -51,11 +52,17 @@ export default class TemplateEngine {
                 if (status === "PASSED") {
                     return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
                 } else if (status === "TESTS_FAILED") {
+                    let pasteLinkHTML = "";
+                    if (pasteLink) {
+                        pasteLinkHTML = `<p><input type="text" value="${pasteLink}" id="copyPasteLink">
+                                        <button class='btn-primary' onclick="copyText()">Copy text</button><span class='ml-1' id="copied"></span></p>`;
+                    }
                     return `<h1>TESTS FAILED</h1>
                     <button class="collapsible">Need help?</button>
                     <div class="content-collapsible">
                         <h5>Submit to TMC Paste</h5>
                         <p>You can submit your code to TMC Paste and share the link to the course discussion channel and ask for help.</p>
+                        ${pasteLinkHTML}
                         <input type='button' value='Submit to TMC Paste' class='btn-primary' onclick='sendToPaste()' />
                     </div>`;
                 } else if (status === "COMPILE_FAILED") {
@@ -127,6 +134,11 @@ export default class TemplateEngine {
                 return `${getProgressBar(percentDone)}
                         <div>Submission sent to server.</div>`;
             }
+        });
+
+        handlebars.registerHelper("collect", (...properties) => {
+            console.log(properties);
+            return properties;
         });
 
         handlebars.registerHelper(

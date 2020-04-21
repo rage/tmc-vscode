@@ -134,4 +134,5 @@ export type TestResultData = {
         stdout?: string;
         stderr?: string;
     };
+    pasteLink?: string;
 };

@@ -86,10 +86,6 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
             if (msg.type == "closeWindow") {
                 temp.dispose();
-            } else if (msg.type == "submitToServer" && msg.data) {
-                submitExercise(actionContext, msg.data.exerciseId as number, temp);
-            } else if (msg.type == "sendToPaste" && msg.data) {
-                pasteExercise(actionContext, msg.data.exerciseId as number);
             }
         },
     );
@@ -105,12 +101,23 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         return;
     }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
+
     const data = {
         testResult: testResult.val.response,
         id,
         exerciseName,
         tmcLogs: testResult.val.logs,
     };
+
+    // Set test-result handlers.
+    temp.setMessageHandler(async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
+        if (msg.type === "submitToServer" && msg.data) {
+            submitExercise(actionContext, msg.data.exerciseId as number, temp);
+        } else if (msg.type === "sendToPaste" && msg.data) {
+            const pasteLink = await pasteExercise(actionContext, msg.data.exerciseId as number);
+            temp.setContent({ templateName: "test-result", ...data, pasteLink });
+        }
+    });
     temp.setContent({ templateName: "test-result", ...data });
 }
 
@@ -235,7 +242,7 @@ export async function getOldSubmissions(
  * Sends the exercise to the TMC Paste server.
  * @param id Exercise ID
  */
-export async function pasteExercise(actionContext: ActionContext, id: number): Promise<void> {
+export async function pasteExercise(actionContext: ActionContext, id: number): Promise<string> {
     const { tmc } = actionContext;
     const params = new Map<string, string>();
     params.set("paste", "1");
@@ -244,14 +251,9 @@ export async function pasteExercise(actionContext: ActionContext, id: number): P
     if (submitResult.err) {
         vscode.window.showErrorMessage(`Failed to paste exercise to server: \
                 ${submitResult.val.name} - ${submitResult.val.message}`);
-        return;
+        return "";
     }
-
-    showNotification(`Paste to TMC Server successful: ${submitResult.val.paste_url}`, [
-        "Open URL",
-        (): Thenable<boolean> =>
-            vscode.env.openExternal(vscode.Uri.parse(submitResult.val.paste_url)),
-    ]);
+    return submitResult.val.paste_url;
 }
 
 /**
