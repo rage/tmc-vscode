@@ -65,9 +65,14 @@ Commands (VSCode command hotkey: CTRL + SHIFT + P):
 
     TMC - Close exercise (hotkey: CTRL + SHIFT + C)
         Closes the exercise folder from the TMC workspace.
+
+    TMC - Get exercise submissions
+        You can download old submissions by choosing 'Download old submissions' from the TMC Menu.
+        Downloaded old submission can be found in the TMC workspace 'Old submissions' folder.
     
-    Settings in settings view(Settings button in activity bar):
-    
-    Change exercise download location:
-        You can determine where downloaded exercises are stored in the settings view by pressing "Change path" button.
-        Current download path is shown in the view. You should restart code after setting up the new download path.`;
+TMC Extension settings
+    You can open the TMC extension settings by pressing the TMC icon on the left sidebar and choose 'Settings' in the TestMyCode extension menu.
+
+    TMC Data
+    This is the location where all TMC extension data is saved.  
+    Changing the location will create a 'tmcdata' folder to your chosen location and move all the TMC data to the new location.`;

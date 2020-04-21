@@ -10,7 +10,7 @@ Students of its various organizations can download, complete and return course e
 
 ## Prerequisites
 
-* Visual Studio Code version 1.44.xx or above
+* Visual Studio Code version 1.40.xx or above
 * [TestMyCode](https://tmc.mooc.fi/) account
 * [Java](https://www.java.com/) runtime (for packing/unpacking and testing exercises)
 * Course-specific system environment   
@@ -26,7 +26,7 @@ Students of its various organizations can download, complete and return course e
 4. Select *Log in* from the TestMyCode menu.
 5. Enter your TMC credentials and log in.
 6. Add a course from ```My courses``` and download exercises
-7. Select ```Open exercise workspace``` from TestMyCode menu.
+7. Select ```Open exercise workspace``` from TestMyCode extension menu.
 
 ## Workspace and Editor usage
 
@@ -61,16 +61,14 @@ You can close the active exercise from the VSCode explorer view by choosing `Clo
 
 #### Download old submissions
 
-You can download old submissions by choosing `Download old submissions` from the TMC Menu.
+You can download old submissions by choosing `Download old submissions` from the TMC Menu.  
+Downloaded old submission can be found in the TMC workspace `Old submissions` folder.
 
-#### Change exercise download location
+## Extension settings
 
-You can determine in the settings view where downloaded exercises are stored. You can open the settings view by pressing settings button in the TMC Menu.
+You can open the TMC extension settings by pressing the TMC icon on the left sidebar and choose `Settings` in the TestMyCode extension menu.
 
-![Settings in TMC Menu](media/tmc-settings.png)
+### TMC Data
 
-In the settings view you can change the download path by pressing "Change path" button. This will opens a file explorer, where you can choose the new location for the exercises.
-
-![Settings view](media/settings-view.png)
-
-After you have chosen the new location you should restart Code to ensure the download path has changed accordingly.
+This is the location where all TMC extension data is saved.  
+Changing the location will create a `tmcdata` folder to your chosen location and move all the TMC data to the new location.

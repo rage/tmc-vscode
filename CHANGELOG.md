@@ -1,14 +1,13 @@
 # Changelog
 
-## [0.3.0] - 2020-xx-xx
+## [0.3.0] - 2020-04-21
 
 #### Added
-- Settings view
-    * Can change exercises download path
-- Exercises are kept up to date
-    * Checks updates and new exercises on startup and after submission
-- Old submissions can be downloaded
-    * You can select from TMC Menu to download old submissions
+- Can change TMC data path in extension settings.
+- Checks and informs if exercises are updated for user's courses.
+- Checks and informs if new exercises available for user's courses.
+- Old submissions for exercises can be downloaded.
+- Offer help to user if some local tests fail.
 
 ## [0.2.0] - 2020-03-30
 
