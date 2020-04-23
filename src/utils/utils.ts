@@ -93,15 +93,22 @@ export function numbersToString(array: number[]): string {
 export function formatSizeInBytes(size: number, precision = 3): string {
     let suffix = "B";
     let cSize = size;
+    const targetPrecision = Math.min(
+        size === 0 ? 1 : Math.floor(Math.log10(size) + 1),
+        21,
+        precision,
+    );
+
     for (const s of ["kB", "MB", "GB", "TB", "EB"]) {
-        if (cSize > 1000) {
+        if (Number.parseFloat(cSize.toPrecision(targetPrecision)) >= 1000) {
             cSize /= 1000;
             suffix = s;
         } else {
             break;
         }
     }
-    return `${cSize.toPrecision(precision)} ${suffix}`;
+
+    return `${cSize.toPrecision(targetPrecision)} ${suffix}`;
 }
 
 /**
