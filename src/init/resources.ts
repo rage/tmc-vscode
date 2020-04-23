@@ -1,12 +1,15 @@
 import * as fs from "fs";
+import * as glob from "glob";
 import * as path from "path";
 import * as vscode from "vscode";
+import * as unzipper from "unzipper";
 
 import { Err, Ok, Result } from "ts-results";
 import Resources from "../config/resources";
-import { downloadFile, isJavaPresent } from "../utils/";
+import { downloadFile, getPlatform, isJavaPresent } from "../utils/";
 import {
     EXTENSION_ID,
+    JAVA_ZIP_URLS,
     TMC_JAR_NAME,
     TMC_JAR_URL,
     WORKSPACE_ROOT_FILE,
@@ -43,8 +46,37 @@ export async function resourceInitialization(
         if (!fs.existsSync(javaDownloadPath)) {
             fs.mkdirSync(javaDownloadPath, { recursive: true });
         }
-        // Maybe download java (ask user first)
-        return new Err(new Error("Java not found or improperly configured."));
+        const javaUrl = Object.entries(JAVA_ZIP_URLS)
+            .filter((x) => x[0] === getPlatform())
+            .map((x) => x[1])
+            .pop();
+        if (javaUrl === undefined) {
+            return new Err(new Error("Java not found or improperly configured."));
+        }
+
+        const javaBinary = getPlatform().startsWith("windows") ? "java.exe" : "java";
+        let paths = glob.sync(path.join(javaDownloadPath, "**", javaBinary));
+
+        if (paths.length === 0) {
+            const archivePath = path.join(javaDownloadPath, "java.zip");
+            if (!fs.existsSync(archivePath)) {
+                console.log("Downloading java from", javaUrl, "to", archivePath);
+                await downloadFile(javaUrl, archivePath);
+                console.log("Java archive downloaded");
+            }
+            await fs
+                .createReadStream(archivePath)
+                .pipe(unzipper.Extract({ path: javaDownloadPath }))
+                .promise();
+            del.sync(archivePath, { force: true });
+            console.log("Java archive extracted");
+            paths = glob.sync(path.join(javaDownloadPath, "**", "java"));
+        }
+        if (paths.length === 0) {
+            return new Err(new Error("Java not found or improperly configured."));
+        }
+        javaPath = paths[0];
+        fs.chmodSync(javaPath, "755");
     }
 
     const tmcWorkspacePathRelative = "TMC workspace";

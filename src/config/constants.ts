@@ -1,6 +1,12 @@
 export const EXTENSION_ID = "moocfi.test-my-code";
 export const TMC_JAR_URL = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.17-SNAPSHOT.jar";
 export const TMC_JAR_NAME = "tmc-langs-cli-0.7.17-SNAPSHOT.jar";
+export const JAVA_ZIP_URLS = {
+    windows64:
+        "https://github.com/AdoptOpenJDK/openjdk8-binaries/releases/download/jdk8u212-b04/OpenJDK8U-jdk_x64_windows_hotspot_8u212b04.zip",
+    windows32:
+        "https://github.com/AdoptOpenJDK/openjdk8-binaries/releases/download/jdk8u242-b08_openj9-0.18.1/OpenJDK8U-jdk_x86-32_windows_openj9_8u242b08_openj9-0.18.1.zip",
+};
 export const TMC_API_URL = "https://tmc.mooc.fi/api/v8/";
 export const ACCESS_TOKEN_URI = "https://tmc.mooc.fi/oauth/token";
 export const CLIENT_ID = "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0";

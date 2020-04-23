@@ -16,6 +16,17 @@ export async function isJavaPresent(): Promise<boolean> {
     return result;
 }
 
+export function getPlatform(): "linux32" | "linux64" | "windows32" | "windows64" | "other" {
+    const platform = process.platform;
+    const arch = process.arch;
+    if (platform === "linux") {
+        return arch === "x64" ? "linux64" : "linux32";
+    } else if (platform === "win32") {
+        return arch === "x64" ? "windows64" : "windows32";
+    }
+    return "other";
+}
+
 /**
  * Runs a test to see whether or not superfluous properties are enabled within typescript-is properties.
  */
