@@ -38,11 +38,12 @@ export async function resourceInitialization(
         path.join(extensionContext.globalStoragePath, "tmcdata");
 
     let javaPath: string;
+    const javaDownloadPath = path.join(tmcDataPath, "java");
 
     if (await isJavaPresent()) {
         javaPath = "java";
+        del.sync(path.join(javaDownloadPath, "**"), { force: true });
     } else {
-        const javaDownloadPath = path.join(tmcDataPath, "java");
         if (!fs.existsSync(javaDownloadPath)) {
             fs.mkdirSync(javaDownloadPath, { recursive: true });
         }
