@@ -24,10 +24,6 @@ export async function resourceInitialization(
     extensionContext: vscode.ExtensionContext,
     storage: Storage,
 ): Promise<Result<Resources, Error>> {
-    if (!(await isJavaPresent())) {
-        return new Err(new Error("Java not found or improperly configured."));
-    }
-
     const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
 
     const cssPath = extensionContext.asAbsolutePath("resources/styles");
@@ -37,6 +33,19 @@ export async function resourceInitialization(
     const tmcDataPath =
         storage.getExtensionSettings()?.dataPath ||
         path.join(extensionContext.globalStoragePath, "tmcdata");
+
+    let javaPath: string;
+
+    if (await isJavaPresent()) {
+        javaPath = "java";
+    } else {
+        const javaDownloadPath = path.join(tmcDataPath, "java");
+        if (!fs.existsSync(javaDownloadPath)) {
+            fs.mkdirSync(javaDownloadPath, { recursive: true });
+        }
+        // Maybe download java (ask user first)
+        return new Err(new Error("Java not found or improperly configured."));
+    }
 
     const tmcWorkspacePathRelative = "TMC workspace";
     const tmcWorkspaceFilePathRelative = path.join("TMC workspace", "TMC Exercises.code-workspace");
@@ -134,6 +143,7 @@ export async function resourceInitialization(
         tmcExercisesFolderPathRelative,
         tmcClosedExercisesFolderPathRelative,
         tmcOldSubmissionFolderPathRelative,
+        javaPath,
     );
 
     return new Ok(resources);

@@ -7,6 +7,7 @@ export default class Resources {
     public readonly mediaFolder: string;
     public readonly extensionVersion: string;
     private tmcDataFolder: string;
+    private javaPath: string;
 
     private readonly tmcLangsPathRelative: string;
     private readonly tmcWorkspaceFolderPathRelative: string;
@@ -29,6 +30,7 @@ export default class Resources {
         tmcExercisesFolderPathRelative: string,
         tmcClosedExercisesFolderPathRelative: string,
         tmcOldSubmissionsFolderPathRelative: string,
+        javaPath: string,
     ) {
         this.storage = storage;
         this.cssFolder = cssFolder;
@@ -42,6 +44,7 @@ export default class Resources {
         this.tmcExercisesFolderPathRelative = tmcExercisesFolderPathRelative;
         this.tmcClosedExercisesFolderPathRelative = tmcClosedExercisesFolderPathRelative;
         this.tmcOldSubmissionsFolderPathRelative = tmcOldSubmissionsFolderPathRelative;
+        this.javaPath = javaPath;
     }
 
     public setDataPath(dataPath: string): void {
@@ -77,5 +80,13 @@ export default class Resources {
 
     public getOldSubmissionFolderPath(): string {
         return path.join(this.tmcDataFolder, this.tmcOldSubmissionsFolderPathRelative);
+    }
+
+    public getJavaPath(): string {
+        return this.javaPath;
+    }
+
+    public setJavaPath(javaPath: string): void {
+        this.javaPath = javaPath;
     }
 }

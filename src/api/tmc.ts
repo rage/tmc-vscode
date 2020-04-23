@@ -464,14 +464,15 @@ export default class TMC {
         const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
 
-        console.log(`java -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`);
+        const command = `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
+
+        console.log(command);
 
         let [stdout, stderr] = ["", ""];
         try {
             [stdout, stderr] = await new Promise((resolve, reject) => {
-                cp.exec(
-                    `java -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`,
-                    (err, stdout, stderr) => (err ? reject(err) : resolve([stdout, stderr])),
+                cp.exec(command, (err, stdout, stderr) =>
+                    err ? reject(err) : resolve([stdout, stderr]),
                 );
             });
         } catch (err) {
