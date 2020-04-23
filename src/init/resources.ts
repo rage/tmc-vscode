@@ -85,7 +85,6 @@ export async function resourceInitialization(
     const tmcExercisesFolderPathRelative = path.join("TMC workspace", "Exercises");
     const tmcClosedExercisesFolderPathRelative = "closed-exercises";
     const tmcLangsPathRelative = TMC_JAR_NAME;
-    const tmcOldSubmissionFolderPathRelative = path.join("TMC workspace", "old-submissions");
 
     if (!fs.existsSync(tmcDataPath)) {
         fs.mkdirSync(tmcDataPath, { recursive: true });
@@ -130,13 +129,6 @@ export async function resourceInitialization(
         console.log("Created tmc closed exercise directory at", tmcClosedExercisesFolderPath);
     }
 
-    const tmcOldSubmissionFolderPath = path.join(tmcDataPath, tmcOldSubmissionFolderPathRelative);
-
-    if (!fs.existsSync(tmcOldSubmissionFolderPath)) {
-        fs.mkdirSync(tmcOldSubmissionFolderPath);
-        console.log("Created tmc old submissions directory at", tmcOldSubmissionFolderPath);
-    }
-
     const tmcLangsPath = path.join(tmcDataPath, tmcLangsPathRelative);
     if (!fs.existsSync(tmcLangsPath)) {
         del.sync(path.join(tmcDataPath, "*.jar"), { force: true });
@@ -175,7 +167,6 @@ export async function resourceInitialization(
         tmcWorkspaceFilePathRelative,
         tmcExercisesFolderPathRelative,
         tmcClosedExercisesFolderPathRelative,
-        tmcOldSubmissionFolderPathRelative,
         javaPath,
     );
 

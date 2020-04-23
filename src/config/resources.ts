@@ -15,7 +15,6 @@ export default class Resources {
     private readonly tmcExercisesFolderPathRelative: string;
     private readonly tmcClosedExercisesFolderPathRelative: string;
     private readonly storage: Storage;
-    private readonly tmcOldSubmissionsFolderPathRelative: string;
 
     constructor(
         storage: Storage,
@@ -29,7 +28,6 @@ export default class Resources {
         tmcWorkspaceFilePathRelative: string,
         tmcExercisesFolderPathRelative: string,
         tmcClosedExercisesFolderPathRelative: string,
-        tmcOldSubmissionsFolderPathRelative: string,
         javaPath: string,
     ) {
         this.storage = storage;
@@ -43,7 +41,6 @@ export default class Resources {
         this.tmcWorkspaceFilePathRelative = tmcWorkspaceFilePathRelative;
         this.tmcExercisesFolderPathRelative = tmcExercisesFolderPathRelative;
         this.tmcClosedExercisesFolderPathRelative = tmcClosedExercisesFolderPathRelative;
-        this.tmcOldSubmissionsFolderPathRelative = tmcOldSubmissionsFolderPathRelative;
         this.javaPath = javaPath;
     }
 
@@ -76,10 +73,6 @@ export default class Resources {
 
     public getDataPath(): string {
         return this.tmcDataFolder;
-    }
-
-    public getOldSubmissionFolderPath(): string {
-        return path.join(this.tmcDataFolder, this.tmcOldSubmissionsFolderPathRelative);
     }
 
     public getJavaPath(): string {

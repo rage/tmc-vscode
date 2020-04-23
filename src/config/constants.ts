@@ -12,7 +12,7 @@ export const ACCESS_TOKEN_URI = "https://tmc.mooc.fi/oauth/token";
 export const CLIENT_ID = "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0";
 export const CLIENT_SECRET = "3e6c4df1992e4031d316ea1933e350e9658326a67efb2e65a5b15207bdc09ee8";
 export const WORKSPACE_SETTINGS = {
-    folders: [{ path: "Exercises" }, { name: "Old submissions", path: "old-submissions" }],
+    folders: [{ path: "Exercises" }],
     settings: {
         "workbench.editor.closeOnFileDelete": true,
         "files.autoSave": "onFocusChange",
@@ -74,7 +74,6 @@ Commands (VSCode command hotkey: CTRL + SHIFT + P):
 
     TMC - Get exercise submissions
         You can download old submissions by choosing 'Download old submissions' from the TMC Menu.
-        Downloaded old submission can be found in the TMC workspace 'Old submissions' folder.
     
 TMC Extension settings
     You can open the TMC extension settings by pressing the TMC icon on the left sidebar and choose 'Settings' in the TestMyCode extension menu.

@@ -28,7 +28,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const resources = resourcesResult.val;
 
     /**
-     * Checks wether the necessary folders are open in the workspace and opens them if they aren't.
+     * Checks whether the necessary folders are open in the workspace and opens them if they aren't.
      */
     if (isWorkspaceOpen(resources)) {
         vscode.workspace.updateWorkspaceFolders(
@@ -36,14 +36,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             null,
             { uri: vscode.Uri.file(resources.getExercisesFolderPath()) },
         );
-        vscode.workspace.updateWorkspaceFolders(
-            vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders.length : 0,
-            null,
-            {
-                name: "Old submissions",
-                uri: vscode.Uri.file(resources.getOldSubmissionFolderPath()),
-            },
-        );
+        // vscode.workspace.updateWorkspaceFolders(
+        //     vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders.length : 0,
+        //     null,
+        //     {
+        //         name: "Old submissions",
+        //         uri: vscode.Uri.file(resources.getOldSubmissionFolderPath()),
+        //     },
+        // );
     }
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());

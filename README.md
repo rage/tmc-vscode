@@ -62,7 +62,6 @@ You can close the active exercise from the VSCode explorer view by choosing `Clo
 #### Download old submissions
 
 You can download old submissions by choosing `Download old submissions` from the TMC Menu.  
-Downloaded old submission can be found in the TMC workspace `Old submissions` folder.
 
 ## Extension settings
 
