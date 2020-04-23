@@ -115,6 +115,7 @@ export type RunningTestsData = {
 
 export type SettingsData = {
     tmcData: string;
+    tmcDataSize: string;
 };
 
 export type SubmissionResultData = {

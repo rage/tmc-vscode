@@ -11,6 +11,7 @@ import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/types";
 import {
     askForConfirmation,
+    formatSizeInBytes,
     getCurrentExerciseData,
     isWorkspaceOpen,
     parseFeedbackQuestion,
@@ -23,6 +24,7 @@ import { checkForExerciseUpdates, closeExercises } from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
 import { CourseExercise, Exercise, OldSubmission, SubmissionFeedback } from "../api/types";
+import du = require("du");
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -347,6 +349,7 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
     ui.webview.setContentFromTemplate({
         templateName: "settings",
         tmcData: resources.getDataPath(),
+        tmcDataSize: formatSizeInBytes(await du(resources.getDataPath())),
     });
 }
 

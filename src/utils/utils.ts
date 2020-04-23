@@ -90,6 +90,20 @@ export function numbersToString(array: number[]): string {
     return String.fromCharCode(...array);
 }
 
+export function formatSizeInBytes(size: number, precision = 3): string {
+    let suffix = "B";
+    let cSize = size;
+    for (const s of ["kB", "MB", "GB", "TB", "EB"]) {
+        if (cSize > 1000) {
+            cSize /= 1000;
+            suffix = s;
+        } else {
+            break;
+        }
+    }
+    return `${cSize.toPrecision(precision)} ${suffix}`;
+}
+
 /**
  * Get the Exercise ID for the currently open text editor
  */
