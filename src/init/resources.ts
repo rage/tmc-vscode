@@ -64,19 +64,54 @@ export async function resourceInitialization(
                     return new Err(new Error("Java not found or improperly configured."));
                 }
                 console.log("Downloading java from", javaUrl, "to", archivePath);
-                await downloadFile(javaUrl, archivePath);
-                console.log("Java archive downloaded");
+                await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Notification,
+                        title: "(0%) Java not found, downloading...",
+                    },
+                    async (p) =>
+                        downloadFile(
+                            javaUrl,
+                            archivePath,
+                            undefined,
+                            undefined,
+                            (progress: number, increment: number) =>
+                                p.report({
+                                    message: `(${progress}%) Java not found, downloading...`,
+                                    increment,
+                                }),
+                        ),
+                );
             }
-            await fs
-                .createReadStream(archivePath)
-                .pipe(unzipper.Extract({ path: javaDownloadPath }))
-                .promise();
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: "(0%) Extracting Java...",
+                },
+                async (p) => {
+                    const totalSize = fs.statSync(archivePath).size;
+                    let totalExtracted = 0;
+                    return fs
+                        .createReadStream(archivePath)
+                        .addListener("data", (c) => {
+                            totalExtracted += c.length;
+                            p.report({
+                                message: `(${Math.round(
+                                    (100 * totalExtracted) / totalSize,
+                                )}%) Extracting Java...`,
+                                increment: (100 * c.length) / totalSize,
+                            });
+                        })
+                        .pipe(unzipper.Extract({ path: javaDownloadPath }))
+                        .promise();
+                },
+            );
+
             del.sync(archivePath, { force: true });
-            console.log("Java archive extracted");
             paths = glob.sync(javaBinaryGlob);
-        }
-        if (paths.length === 0) {
-            return new Err(new Error("Java not found or improperly configured."));
+            if (paths.length === 0) {
+                return new Err(new Error("Couldn't find Java binary after extraction"));
+            }
         }
         javaPath = paths[0];
         fs.chmodSync(javaPath, "755");
@@ -135,9 +170,12 @@ export async function resourceInitialization(
     if (!fs.existsSync(tmcLangsPath)) {
         del.sync(path.join(tmcDataPath, "*.jar"), { force: true });
         const tmcLangsResult = await vscode.window.withProgress(
-            { location: vscode.ProgressLocation.Notification, title: "TestMyCode" },
-            async (p) => {
-                return downloadFile(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: "(0%) Downloading required files",
+            },
+            async (p) =>
+                downloadFile(
                     TMC_JAR_URL,
                     tmcLangsPath,
                     undefined,
@@ -147,8 +185,7 @@ export async function resourceInitialization(
                             message: `(${progress}%) Downloading required files`,
                             increment,
                         }),
-                );
-            },
+                ),
         );
 
         if (tmcLangsResult.err) {
