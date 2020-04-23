@@ -12,7 +12,7 @@ import Storage from "../config/storage";
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
-import { dateInPath, displayProgrammerError, downloadFile } from "../utils/";
+import { displayProgrammerError, downloadFile } from "../utils/";
 import {
     Course,
     CourseDetails,
@@ -26,12 +26,15 @@ import {
     SubmissionStatusReport,
     TMCApiResponse,
     TmcLangsAction,
+    TmcLangsFilePath,
     TmcLangsPath,
     TmcLangsResponse,
     TmcLangsTestResults,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
 import { ACCESS_TOKEN_URI, CLIENT_ID, CLIENT_SECRET, TMC_API_URL } from "../config/constants";
+import { resetExercise } from "../actions";
+import { ActionContext } from "../actions/types";
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -280,40 +283,54 @@ export default class TMC {
     }
 
     public async downloadOldExercise(
+        context: ActionContext,
+        exerciseId: number,
         submissionId: number,
-        exerciseName: string,
-        courseName: string,
-        orgName: string,
-        date: string,
     ): Promise<Result<string, Error>> {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
+
         const archivePath = path.join(`${this.resources.getDataPath()}`, `${submissionId}.zip`);
 
-        const result = await downloadFile(
+        const exercisePath = this.workspaceManager.getExercisePathById(exerciseId);
+
+        if (exercisePath.err) {
+            return new Err(new Error("Couldn't find exercise path for exercise"));
+        }
+
+        const exPath = exercisePath.val + "/";
+
+        const userFilePaths = await this.checkApiResponse(
+            this.executeLangsAction({
+                action: "get-exercise-packaging-configuration",
+                exerciseFolderPath: exPath,
+            }),
+            createIs<TmcLangsFilePath>(),
+        );
+
+        if (userFilePaths.err) {
+            return new Err(new Error("Couldn't resolve userfiles from exercisefiles"));
+        }
+
+        const downloadResult = await downloadFile(
             `${this.tmcApiUrl}core/submissions/${submissionId}/download`,
             archivePath,
             this.tmcDefaultHeaders,
             this.token,
         );
-        if (result.err) {
-            return new Err(result.val);
+
+        if (downloadResult.err) {
+            return new Err(downloadResult.val);
         }
 
-        const oldSubmissionPath = path.join(
-            this.resources.getOldSubmissionFolderPath(),
-            orgName,
-            courseName,
-            exerciseName,
-            dateInPath(date),
-        );
+        const oldSubmissionTempPath = path.join(this.resources.getDataPath(), "temp");
 
         const extractResult = await this.checkApiResponse(
             this.executeLangsAction({
                 action: "extract-project",
                 archivePath,
-                exerciseFolderPath: oldSubmissionPath,
+                exerciseFolderPath: oldSubmissionTempPath,
             }),
             createIs<TmcLangsPath>(),
         );
@@ -322,7 +339,30 @@ export default class TMC {
             return new Err(new Error("Something went wrong while extracting the submission."));
         }
 
+        const resetResult = await resetExercise(context, exerciseId);
+
+        if (resetResult.err) {
+            return new Err(new Error("Couldn't reset exercise"));
+        }
+
+        const closedExPath = this.workspaceManager.getExercisePathById(exerciseId);
+
+        if (closedExPath.err) {
+            return new Err(new Error("?????"));
+        }
+
+        userFilePaths.val.response.studentFilePaths.forEach((dataPath) => {
+            del.sync(path.join(closedExPath.val, dataPath), { force: true });
+            fs.renameSync(
+                path.join(oldSubmissionTempPath, dataPath),
+                path.join(closedExPath.val, dataPath),
+            );
+        });
+
+        this.workspaceManager.openExercise(exerciseId);
+
         del.sync(archivePath, { force: true });
+        del.sync(oldSubmissionTempPath, { force: true });
 
         return new Ok("Old submission downloaded succesfully");
     }
@@ -459,8 +499,16 @@ export default class TMC {
                     `temp_${this.nextLangsJsonId++}.json`,
                 );
                 break;
+            case "get-exercise-packaging-configuration":
+                exercisePath = tmcLangsAction.exerciseFolderPath;
+                outputPath = path.join(
+                    this.resources.getDataPath(),
+                    `temp_${this.nextLangsJsonId++}.json`,
+                );
+                break;
         }
 
+        console.log(outputPath);
         const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
 

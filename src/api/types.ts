@@ -228,6 +228,10 @@ export type TmcLangsAction =
     | {
           action: "run-tests";
           exerciseFolderPath: string;
+      }
+    | {
+          action: "get-exercise-packaging-configuration";
+          exerciseFolderPath: string;
       };
 
 export type TmcLangsLogs = {
@@ -261,4 +265,11 @@ export type TmcLangsPath = {
     response: string;
 } & TmcLangsLogs;
 
-export type TmcLangsResponse = TmcLangsPath | TmcLangsTestResults;
+export type TmcLangsFilePath = {
+    response: {
+        studentFilePaths: string[];
+        exerciseFilePaths: string[];
+    };
+} & TmcLangsLogs;
+
+export type TmcLangsResponse = TmcLangsPath | TmcLangsTestResults | TmcLangsFilePath;

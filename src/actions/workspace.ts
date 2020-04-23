@@ -8,7 +8,7 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 import { ActionContext, CourseExerciseDownloads } from "./types";
 import pLimit from "p-limit";
-import { askForItem, showError, showNotification } from "../utils";
+import { askForConfirmation, askForItem, showError, showNotification } from "../utils";
 import { getOldSubmissions, notifyLater } from "./user";
 import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
@@ -199,15 +199,22 @@ export async function resetExercise(
         return new Err(exerciseData.val);
     }
 
-    const submitResult = await tmc.submitExercise(id);
-    if (submitResult.err) {
-        vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
-       ${submitResult.val.name} - ${submitResult.val.message}`);
-        ui.setStatusBar(
-            `Something went wrong while resetting exercise ${exerciseData.val.name}`,
-            10000,
-        );
-        return new Err(submitResult.val);
+    const saveOrNo = await askForConfirmation(
+        "Do you want to save current state of the exercise?",
+        true,
+    );
+
+    if (saveOrNo) {
+        const submitResult = await tmc.submitExercise(id);
+        if (submitResult.err) {
+            vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
+           ${submitResult.val.name} - ${submitResult.val.message}`);
+            ui.setStatusBar(
+                `Something went wrong while resetting exercise ${exerciseData.val.name}`,
+                10000,
+            );
+            return new Err(submitResult.val);
+        }
     }
 
     showNotification(`Resetting exercise ${exerciseData.val.name}`);
@@ -238,17 +245,22 @@ export async function closeExercises(actionContext: ActionContext, ids: number[]
     workspaceManager.closeExercise(...ids);
 }
 
+/**
+ * Downloads an oldsubmission of a currently open exercise and submits current code to server if user wants it
+ * @param exerciseId exercise which older submission will be downloaded
+ * @param actionContext
+ */
+
 export async function downloadOldSubmissions(
     exerciseId: number,
     actionContext: ActionContext,
 ): Promise<void> {
-    const { tmc, workspaceManager, userData } = actionContext;
+    const { tmc, workspaceManager } = actionContext;
     const exercise = workspaceManager.getExerciseDataById(exerciseId);
     if (exercise.err) {
         showError("Exercise data missing");
         return;
     }
-    const course = userData.getCourseByName(exercise.val.course);
     const response = await getOldSubmissions(actionContext);
     if (response.err) {
         showError("Something went wrong while fetching old submissions: " + response.val.message);
@@ -274,13 +286,7 @@ export async function downloadOldSubmissions(
         return;
     }
 
-    const oldSub = await tmc.downloadOldExercise(
-        submission.id,
-        submission.exercise_name,
-        exercise.val.course,
-        course.organization,
-        dateToString(parseDate(submission.processing_attempts_started_at)),
-    );
+    const oldSub = await tmc.downloadOldExercise(actionContext, exercise.val.id, submission.id);
     if (oldSub.err) {
         showError(
             "Something went wrong while downloading old submission for exercise: " + oldSub.val,
