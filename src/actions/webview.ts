@@ -274,10 +274,11 @@ export async function displayCourseDownloads(
         return new Err(new Error("Course details not found"));
     }
     const details = result.val.course;
-    userData.updateExercises(
+    await userData.updateExercises(
         courseId,
         details.exercises.map((x) => ({ id: x.id, passed: x.completed })),
     );
+    await userData.clearNewExercises(courseId);
 
     const organizationSlug = userData.getCourses().find((course) => course.id === courseId)
         ?.organization;

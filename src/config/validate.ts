@@ -134,6 +134,7 @@ export async function validateAndFix(
                     awardedPoints: awardedPoints,
                     availablePoints: availablePoints,
                     notifyAfter: 0,
+                    newExercises: [],
                 });
             }
         }

@@ -25,6 +25,7 @@ import { checkForExerciseUpdates, closeExercises } from "./workspace";
 import { Err, Ok, Result } from "ts-results";
 import { CourseExercise, Exercise, OldSubmission, SubmissionFeedback } from "../api/types";
 import du = require("du");
+import { NOTIFICATION_DELAY } from "../config/constants";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -269,26 +270,20 @@ export async function checkForNewExercises(
     actionContext: ActionContext,
     courseId?: number,
 ): Promise<void> {
-    const { tmc, userData } = actionContext;
+    const { userData } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
+
+    const updatedCourses: LocalCourseData[] = [];
     for (const course of filteredCourses) {
-        const result = await tmc.getCourseExercises(course.id, false);
+        await updateCourse(course.id, actionContext);
+        updatedCourses.push(userData.getCourse(course.id));
+    }
 
-        if (result.err) {
-            continue;
-        }
-
-        const newExercises = result.val.filter(
-            (exercise) =>
-                exercise.unlocked &&
-                !exercise.disabled &&
-                !course.exercises.find((e) => e.id === exercise.id),
-        );
-
-        if (newExercises.length > 0) {
+    for (const course of updatedCourses) {
+        if (course.newExercises.length > 0) {
             showNotification(
-                `${newExercises.length} new exercises found for ${course.name}. Do you wish to move to the downloads page?`,
+                `${course.newExercises.length} new exercises found for ${course.name}. Do you wish to move to the downloads page?`,
                 [
                     "Go to downloads",
                     (): void => {
@@ -296,9 +291,9 @@ export async function checkForNewExercises(
                     },
                 ],
                 [
-                    "Notify in one hour",
+                    "Remind me later",
                     (): void => {
-                        notifyLater(actionContext, course.id);
+                        userData.setNotifyDate(course.id, Date.now() + NOTIFICATION_DELAY);
                     },
                 ],
             );
@@ -391,6 +386,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         organization: orgAndCourse.val.organization,
         availablePoints: availablePoints,
         awardedPoints: awardedPoints,
+        newExercises: [],
         notifyAfter: 0,
     };
     userData.addCourse(localData);
@@ -465,16 +461,4 @@ export async function updateCourse(id: number, actionContext: ActionContext): Pr
             }
         },
     );
-}
-
-/**
- * Notify 1 hour later for new exercises or/and updates for a course.
- */
-export function notifyLater(actionContext: ActionContext, ...courseId: number[]): void {
-    const { userData } = actionContext;
-    const now = Date.now();
-    const notifyAfter = now + 3600 * 1000;
-    for (const id of courseId) {
-        userData.updateCourseNotifyAfter(id, notifyAfter);
-    }
 }

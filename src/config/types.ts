@@ -3,13 +3,16 @@ export type LocalCourseData = {
     name: string;
     description: string;
     organization: string;
-    exercises: Array<{
-        id: number;
-        passed: boolean;
-    }>;
+    exercises: LocalCourseExercise[];
     availablePoints: number;
     awardedPoints: number;
+    newExercises: number[];
     notifyAfter: number;
+};
+
+export type LocalCourseExercise = {
+    id: number;
+    passed: boolean;
 };
 
 export type LocalExerciseData = {

@@ -19,6 +19,11 @@ export const WORKSPACE_SETTINGS = {
     },
 };
 
+/**
+ * Delay for notifications that offer a "remind me later" option.
+ */
+export const NOTIFICATION_DELAY = 30 * 60 * 1000;
+
 export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Security-Policy"}" content="default-src 'none';" /></head></html>`;
 
 /**

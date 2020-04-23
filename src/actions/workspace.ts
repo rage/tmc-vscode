@@ -9,9 +9,10 @@ import * as vscode from "vscode";
 import { ActionContext, CourseExerciseDownloads } from "./types";
 import pLimit from "p-limit";
 import { askForConfirmation, askForItem, showError, showNotification } from "../utils";
-import { getOldSubmissions, notifyLater } from "./user";
+import { getOldSubmissions } from "./user";
 import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
+import { NOTIFICATION_DELAY } from "../config/constants";
 
 /**
  * Downloads given exercises and opens them in TMC workspace.
@@ -142,7 +143,7 @@ export async function checkForExerciseUpdates(
 ): Promise<void> {
     const { tmc, userData, workspaceManager } = actionContext;
 
-    const coursesToUpdate: CourseExerciseDownloads[] = [];
+    const coursesToUpdate: Map<number, CourseExerciseDownloads> = new Map();
     let count = 0;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
@@ -163,7 +164,7 @@ export async function checkForExerciseUpdates(
         });
 
         if (exerciseIds.length > 0) {
-            coursesToUpdate.push({ courseId: course.id, exerciseIds, organizationSlug });
+            coursesToUpdate.set(course.id, { courseId: course.id, exerciseIds, organizationSlug });
             count += exerciseIds.length;
         }
     }
@@ -171,11 +172,17 @@ export async function checkForExerciseUpdates(
     if (count > 0) {
         showNotification(
             `Found updates for ${count} exercises. Do you wish to download them?`,
-            ["Download", (): Promise<void> => downloadExercises(actionContext, coursesToUpdate)],
             [
-                "Notify in one hour",
+                "Download",
+                (): Promise<void> =>
+                    downloadExercises(actionContext, Array.from(coursesToUpdate.values())),
+            ],
+            [
+                "Remind me later",
                 (): void => {
-                    notifyLater(actionContext, ...coursesToUpdate.map((course) => course.courseId));
+                    coursesToUpdate.forEach((course) =>
+                        userData.setNotifyDate(course.courseId, Date.now() + NOTIFICATION_DELAY),
+                    );
                 },
             ],
         );
