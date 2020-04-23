@@ -47,20 +47,22 @@ export async function resourceInitialization(
         if (!fs.existsSync(javaDownloadPath)) {
             fs.mkdirSync(javaDownloadPath, { recursive: true });
         }
-        const javaUrl = Object.entries(JAVA_ZIP_URLS)
-            .filter((x) => x[0] === getPlatform())
-            .map((x) => x[1])
-            .pop();
-        if (javaUrl === undefined) {
-            return new Err(new Error("Java not found or improperly configured."));
-        }
-
-        const javaBinary = getPlatform().startsWith("windows") ? "java.exe" : "java";
-        let paths = glob.sync(path.join(javaDownloadPath, "**", javaBinary));
+        // Glob patterns should use / as separator on all platforms
+        const javaBinaryGlob =
+            javaDownloadPath.split(path.sep).join("/") +
+            (getPlatform().startsWith("windows") ? "/**/java.exe" : "/**/java");
+        let paths = glob.sync(javaBinaryGlob);
 
         if (paths.length === 0) {
             const archivePath = path.join(javaDownloadPath, "java.zip");
             if (!fs.existsSync(archivePath)) {
+                const javaUrl = Object.entries(JAVA_ZIP_URLS)
+                    .filter((x) => x[0] === getPlatform())
+                    .map((x) => x[1])
+                    .pop();
+                if (javaUrl === undefined) {
+                    return new Err(new Error("Java not found or improperly configured."));
+                }
                 console.log("Downloading java from", javaUrl, "to", archivePath);
                 await downloadFile(javaUrl, archivePath);
                 console.log("Java archive downloaded");
@@ -71,7 +73,7 @@ export async function resourceInitialization(
                 .promise();
             del.sync(archivePath, { force: true });
             console.log("Java archive extracted");
-            paths = glob.sync(path.join(javaDownloadPath, "**", "java"));
+            paths = glob.sync(javaBinaryGlob);
         }
         if (paths.length === 0) {
             return new Err(new Error("Java not found or improperly configured."));
