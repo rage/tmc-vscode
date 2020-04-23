@@ -16,6 +16,7 @@ import {
 } from "../utils/";
 import { ActionContext } from "./types";
 import { Exercise } from "../api/types";
+import { updateCourse } from "./user";
 
 /**
  * Displays a summary page of user's courses.
@@ -35,7 +36,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
 
     const apiCourses = await Promise.all(
         courses.map(async (course) => {
-            const exerciseResult = await tmc.getCourseDetails(course.id);
+            const exerciseResult = await tmc.getCourseDetails(course.id, false);
             const deadlines = new Map<number, Date>();
             if (exerciseResult.ok) {
                 exerciseResult.val.course.exercises.forEach((ex) => {
@@ -48,6 +49,13 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
                     }
                 });
             }
+
+            await updateCourse(course.id, actionContext);
+            const updatedCourse = userData.getCourse(course.id);
+            const completedPrc = (
+                (updatedCourse.awardedPoints / updatedCourse.availablePoints) *
+                100
+            ).toFixed(2);
 
             const exercises = course.exercises.map((ex) => ({
                 ...ex,
@@ -63,7 +71,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
                 ? dateToString(nextDeadlineObject)
                 : "Unavailable";
 
-            return { ...course, exercises, nextDeadline };
+            return { ...course, exercises, nextDeadline, completedPrc };
         }),
     );
     if (uiState === ui.webview.getStateId()) {

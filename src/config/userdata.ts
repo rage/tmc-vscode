@@ -68,7 +68,7 @@ export class UserData {
                     (newExerciseId) => !courseData.exercises.find((e) => e.id === newExerciseId),
                 ),
             );
-        console.log(`Hello my frind I am ${courseData.name} and rush b`, courseData.newExercises);
+
         courseData.exercises = exercises;
         courseData.exercises.forEach((x) =>
             x.passed ? this.passedExercises.add(x.id) : this.passedExercises.delete(x.id),
