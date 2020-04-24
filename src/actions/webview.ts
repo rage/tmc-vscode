@@ -13,6 +13,7 @@ import {
     dateToString,
     findNextDateAfter,
     parseDate,
+    showNotification,
 } from "../utils/";
 import { ActionContext } from "./types";
 import { Exercise } from "../api/types";
@@ -23,7 +24,7 @@ import { updateCourse } from "./user";
  */
 export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
     const { userData, tmc, ui } = actionContext;
-
+    console.log("Displaying My courses view");
     const courses = userData.getCourses().map((course) => {
         const completedPrc = ((course.awardedPoints / course.availablePoints) * 100).toFixed(2);
         return { ...course, completedPrc };
@@ -56,7 +57,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
                 (updatedCourse.awardedPoints / updatedCourse.availablePoints) *
                 100
             ).toFixed(2);
-
+            const newExercises = updatedCourse.newExercises;
             const exercises = course.exercises.map((ex) => ({
                 ...ex,
                 deadline: deadlines.get(ex.id),
@@ -71,7 +72,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
                 ? dateToString(nextDeadlineObject)
                 : "Unavailable";
 
-            return { ...course, exercises, nextDeadline, completedPrc };
+            return { ...course, exercises, nextDeadline, completedPrc, newExercises };
         }),
     );
     if (uiState === ui.webview.getStateId()) {
@@ -89,6 +90,7 @@ export async function displayLocalCourseDetails(
     const { ui, userData, workspaceManager } = actionContext;
 
     const course = userData.getCourse(courseId);
+    console.log(`Display course view for ${course.name}`);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
 
     const exerciseData = new Map<
@@ -244,14 +246,15 @@ export async function selectOrganizationAndCourse(
     const tempView = new TemporaryWebview(resources, ui, "", () => {});
 
     let organizationSlug: string | undefined;
-    let courseID: number | undefined;
+    let courseId: number | undefined;
 
-    while (!(organizationSlug && courseID)) {
+    while (!(organizationSlug && courseId)) {
         const orgResult = await selectOrganization(actionContext, tempView);
         if (orgResult.err) {
             tempView.dispose();
             return new Err(orgResult.val);
         }
+        console.log(`Organization slug ${orgResult.val} selected`);
         organizationSlug = orgResult.val;
         const courseResult = await selectCourse(organizationSlug, actionContext, tempView);
         if (courseResult.err) {
@@ -261,11 +264,11 @@ export async function selectOrganizationAndCourse(
         if (courseResult.val.changeOrg) {
             continue;
         }
-        courseID = courseResult.val.course;
+        courseId = courseResult.val.course;
     }
-
+    console.log(`Course with id ${courseId} selected`);
     tempView.dispose();
-    return new Ok({ organization: organizationSlug, course: courseID });
+    return new Ok({ organization: organizationSlug, course: courseId });
 }
 
 /**
@@ -286,7 +289,14 @@ export async function displayCourseDownloads(
         courseId,
         details.exercises.map((x) => ({ id: x.id, passed: x.completed })),
     );
-    await userData.clearNewExercises(courseId);
+    const newExercisesLength = userData.getCourse(courseId).newExercises.length;
+    if (newExercisesLength > 0) {
+        showNotification(
+            `Please download the ${newExercisesLength} new exercises, in the future you will not be notified about them again.`,
+            ["OK", (): void => {}],
+        );
+        await userData.clearNewExercises(courseId);
+    }
 
     const organizationSlug = userData.getCourses().find((course) => course.id === courseId)
         ?.organization;

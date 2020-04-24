@@ -21,6 +21,7 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
 ): void {
+    console.log("Registering TMC VSCode commands");
     const { ui, workspaceManager, userData } = actionContext;
 
     context.subscriptions.push(
@@ -84,12 +85,17 @@ export function registerCommands(
                 return;
             }
 
-            (await askForConfirmation(
-                `Are you sure you want to reset exercise ${exerciseData.val.name}?`,
-                true,
-            ))
-                ? resetExercise(actionContext, exerciseId)
-                : showNotification(`Reset canceled for exercise ${exerciseData.val.name}.`);
+            if (
+                await askForConfirmation(
+                    `Are you sure you want to reset exercise ${exerciseData.val.name}?`,
+                    false,
+                )
+            ) {
+                await resetExercise(actionContext, exerciseId);
+                workspaceManager.openExercise(exerciseId);
+            } else {
+                showNotification(`Reset canceled for exercise ${exerciseData.val.name}.`);
+            }
         }),
     );
 

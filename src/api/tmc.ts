@@ -310,7 +310,7 @@ export default class TMC {
         );
 
         if (userFilePaths.err) {
-            return new Err(new Error("Couldn't resolve userfiles from exercisefiles"));
+            return new Err(new Error("Couldn't resolve userfiles from exercise files"));
         }
 
         const downloadResult = await downloadFile(
@@ -508,7 +508,6 @@ export default class TMC {
                 break;
         }
 
-        console.log(outputPath);
         const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
 

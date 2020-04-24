@@ -37,6 +37,7 @@ export function registerUiActions(
     resources: Resources,
     userData: UserData,
 ): void {
+    console.log("Initializing UI Actions");
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
 
@@ -102,6 +103,7 @@ export function registerUiActions(
                 exerciseIds: msg.ids,
                 organizationSlug: msg.organizationSlug,
             };
+            await actionContext.userData.clearNewExercises(msg.courseId);
             await downloadExercises(actionContext, [downloads], msg.courseId);
             workspaceManager.openExercise(...msg.ids);
         },

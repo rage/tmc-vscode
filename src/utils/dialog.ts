@@ -13,7 +13,7 @@ export async function askForConfirmation(prompt: string, explicit?: boolean): Pr
 
     return explicit
         ? (await vscode.window.showInputBox(explicitOptions))?.toLowerCase() === "yes"
-        : (await askForItem<boolean>(prompt, false, ["yes", true], ["no", false])) || false;
+        : (await askForItem<boolean>(prompt, false, ["Yes", true], ["No", false])) || false;
 }
 
 /**

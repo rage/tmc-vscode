@@ -147,6 +147,7 @@ export async function checkForExerciseUpdates(
     let count = 0;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
+    console.log(`Checking for exercise updates for courses ${filteredCourses.map((c) => c.name)}`);
     for (const course of filteredCourses) {
         const organizationSlug = course.organization;
 
@@ -207,7 +208,7 @@ export async function resetExercise(
     }
 
     const saveOrNo = await askForConfirmation(
-        "Do you want to save current state of the exercise?",
+        "Do you want to save the current state of the exercise by submitting it to TMC Server?",
         true,
     );
 

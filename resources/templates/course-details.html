@@ -33,6 +33,11 @@
                             Download exercises
                         </button>
                     </div>
+                    <div class="col-sm-3">
+                        {{#if course.newExercises}}
+                        <span>{{course.newExercises.length}} new exercises to be downloaded.</span>
+                        {{/if}}
+                    </div>
                 </div>
                 <div class="row">
                     <div class="col">

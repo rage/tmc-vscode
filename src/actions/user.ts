@@ -81,7 +81,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         return;
     }
     const exerciseName = exerciseDetails.val.name;
-
+    console.log(`Running local tests for ${exerciseName}`);
     const temp = new TemporaryWebview(
         resources,
         ui,
@@ -104,7 +104,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         return;
     }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
-
+    console.log(`Tests finished for ${exerciseName}`);
     const data = {
         testResult: testResult.val.response,
         id,
@@ -133,7 +133,10 @@ export async function submitExercise(
     id: number,
     tempView?: TemporaryWebview,
 ): Promise<void> {
-    const { ui, resources, tmc, userData } = actionContext;
+    const { ui, resources, tmc, userData, workspaceManager } = actionContext;
+    console.log(
+        `Submitting exercise ${workspaceManager.getExerciseDataById(id).val.name} to server`,
+    );
     const submitResult = await tmc.submitExercise(id);
 
     const temp = tempView || new TemporaryWebview(resources, ui, "", () => {});
@@ -273,7 +276,7 @@ export async function checkForNewExercises(
     const { userData } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
-
+    console.log(`Checking for new exercises for courses ${filteredCourses.map((c) => c.name)}`);
     const updatedCourses: LocalCourseData[] = [];
     for (const course of filteredCourses) {
         await updateCourse(course.id, actionContext);
@@ -341,6 +344,7 @@ export async function openWorkspace(actionContext: ActionContext): Promise<void>
  */
 export async function openSettings(actionContext: ActionContext): Promise<void> {
     const { ui, resources } = actionContext;
+    console.log("Display extension settings");
     ui.webview.setContentFromTemplate({
         templateName: "settings",
         tmcData: resources.getDataPath(),
@@ -352,6 +356,7 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
  * Adds a new course to user's courses.
  */
 export async function addNewCourse(actionContext: ActionContext): Promise<Result<void, Error>> {
+    console.log("Adding new course");
     const orgAndCourse = await selectOrganizationAndCourse(actionContext);
 
     if (orgAndCourse.err) {
@@ -400,6 +405,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
  */
 export async function removeCourse(id: number, actionContext: ActionContext): Promise<void> {
     const course = actionContext.userData.getCourse(id);
+    console.log(`Closing exercises for ${course.name} and removing course data from userData`);
     await closeExercises(
         actionContext,
         course.exercises.map((e) => e.id),
@@ -408,14 +414,16 @@ export async function removeCourse(id: number, actionContext: ActionContext): Pr
 }
 
 /**
- * Keeps the user course exercises and course data up to date.
- * Checks that the course details view is up to date, if user is connected to internet, otherwise shows old data.
+ * Keeps the user course exercises, points and course data up to date.
  * @param id Course id
  */
 export async function updateCourse(id: number, actionContext: ActionContext): Promise<void> {
     const { tmc, userData, workspaceManager } = actionContext;
     return Promise.all([tmc.getCourseDetails(id, false), tmc.getCourseExercises(id, false)]).then(
         ([courseDetailsResult, courseExercisesResult]) => {
+            console.log(
+                `Refreshing exercise data for course ${userData.getCourse(id).name} from API`,
+            );
             if (courseDetailsResult.ok) {
                 const details = courseDetailsResult.val.course;
                 userData.updateExercises(

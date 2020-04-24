@@ -42,6 +42,7 @@ export class UserData {
         if (this.courses.has(data.id)) {
             throw new Error("Trying to add an already existing course");
         }
+        console.log(`Adding course ${data.name} to My courses`);
         this.courses.set(data.id, data);
         this.updatePersistentData();
     }
@@ -68,7 +69,11 @@ export class UserData {
                     (newExerciseId) => !courseData.exercises.find((e) => e.id === newExerciseId),
                 ),
             );
-
+        courseData.newExercises.length > 0
+            ? console.log(
+                  `Found ${courseData.newExercises.length} new exercises for ${courseData.name}`,
+              )
+            : {};
         courseData.exercises = exercises;
         courseData.exercises.forEach((x) =>
             x.passed ? this.passedExercises.add(x.id) : this.passedExercises.delete(x.id),
@@ -106,6 +111,7 @@ export class UserData {
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
+        console.log(`Clearing new exercises for ${courseData.name}`);
         courseData.newExercises = [];
         await this.updatePersistentData();
         return Ok.EMPTY;
@@ -122,6 +128,11 @@ export class UserData {
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
+        console.log(
+            `Notifying user for course ${courseData.name} again at ${new Date(
+                dateInMillis,
+            ).toString()}`,
+        );
         courseData.notifyAfter = dateInMillis;
         await this.updatePersistentData();
         return Ok.EMPTY;

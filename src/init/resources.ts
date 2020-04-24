@@ -191,7 +191,7 @@ export async function resourceInitialization(
         if (tmcLangsResult.err) {
             return new Err(tmcLangsResult.val);
         }
-        console.log("tmc-langs.jar downloaded");
+        console.log(`${TMC_JAR_URL} downloaded`);
     }
 
     const resources: Resources = new Resources(

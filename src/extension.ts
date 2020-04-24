@@ -36,14 +36,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             null,
             { uri: vscode.Uri.file(resources.getExercisesFolderPath()) },
         );
-        // vscode.workspace.updateWorkspaceFolders(
-        //     vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders.length : 0,
-        //     null,
-        //     {
-        //         name: "Old submissions",
-        //         uri: vscode.Uri.file(resources.getOldSubmissionFolderPath()),
-        //     },
-        // );
     }
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
