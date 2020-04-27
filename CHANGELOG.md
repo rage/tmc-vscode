@@ -1,5 +1,22 @@
 # Changelog
 
+## Unpublished
+
+#### Added
+- Download and use standalone Java if java is missing from system.
+
+## [0.3.0] - 2020-04-27
+
+#### Added
+- Can change location of TMC data in settings.
+- Checks if new exercises or updates are available for user's courses.
+- Can download old submissions for exercises.
+- Offer help to user if some local tests fail.
+
+#### Changed
+- TMC Langs executable version bumped to 0.7.17.
+- Downgraded required VSCode version to 1.40.
+
 ## [0.2.0] - 2020-03-30
 
 ### Added

@@ -1,11 +1,12 @@
 import * as vscode from "vscode";
+import * as path from "path";
 
 import UI from "../ui/ui";
 import TMC from "../api/tmc";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import { UserData } from "../config/userdata";
-import { askForExplicitConfirmation, isWorkspaceOpen } from "../utils/utils";
+import { askForConfirmation, isWorkspaceOpen, showError, showNotification } from "../utils/";
 import {
     addNewCourse,
     closeExercises,
@@ -16,10 +17,12 @@ import {
     login,
     logout,
     openExercises,
+    openSettings,
     openWorkspace,
     removeCourse,
     updateCourse,
 } from "../actions";
+import { CourseExerciseDownloads } from "../actions/types";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -34,6 +37,7 @@ export function registerUiActions(
     resources: Resources,
     userData: UserData,
 ): void {
+    console.log("Initializing UI Actions");
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
 
@@ -49,13 +53,16 @@ export function registerUiActions(
         logout(visibilityGroups, actionContext);
     });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not], () => {
-        ui.webview.setContentFromTemplate("login");
+        ui.webview.setContentFromTemplate({ templateName: "login" });
     });
     ui.treeDP.registerAction("My courses", [LOGGED_IN], () => {
         displayUserCourses(actionContext);
     });
     ui.treeDP.registerAction("Open exercise workspace", [WORKSPACE_OPEN.not], () => {
         openWorkspace(actionContext);
+    });
+    ui.treeDP.registerAction("Settings", [], () => {
+        openSettings(actionContext);
     });
 
     // Register webview handlers
@@ -67,7 +74,10 @@ export function registerUiActions(
             }
             const result = await login(actionContext, msg.username, msg.password, visibilityGroups);
             if (result.err) {
-                ui.webview.setContentFromTemplate("login", { error: result.val.message }, true);
+                ui.webview.setContentFromTemplate(
+                    { templateName: "login", error: result.val.message },
+                    true,
+                );
                 return;
             }
             displayUserCourses(actionContext);
@@ -78,7 +88,7 @@ export function registerUiActions(
     });
     ui.webview.registerHandler(
         "downloadExercises",
-        (msg: {
+        async (msg: {
             type?: "downloadExercises";
             ids?: number[];
             courseName?: string;
@@ -88,7 +98,14 @@ export function registerUiActions(
             if (!(msg.type && msg.ids && msg.courseName && msg.organizationSlug && msg.courseId)) {
                 return;
             }
-            downloadExercises(actionContext, msg.ids, msg.organizationSlug, msg.courseId);
+            const downloads: CourseExerciseDownloads = {
+                courseId: msg.courseId,
+                exerciseIds: msg.ids,
+                organizationSlug: msg.organizationSlug,
+            };
+            await actionContext.userData.clearNewExercises(msg.courseId);
+            await downloadExercises(actionContext, [downloads], msg.courseId);
+            workspaceManager.openExercise(...msg.ids);
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
@@ -103,7 +120,7 @@ export function registerUiActions(
             if (!(msg.type && msg.id)) {
                 return;
             }
-            const res = await displayCourseDownloads(msg.id, actionContext);
+            const res = await displayCourseDownloads(actionContext, msg.id);
             if (res.err) {
                 vscode.window.showErrorMessage(`Can't display downloads: ${res.val.message}`);
             }
@@ -117,13 +134,14 @@ export function registerUiActions(
             }
             const course = actionContext.userData.getCourse(msg.id);
             if (
-                await askForExplicitConfirmation(
+                await askForConfirmation(
                     `Do you want to remove ${course.name} from your courses? This won't delete your downloaded exercises.`,
+                    true,
                 )
             ) {
                 await removeCourse(msg.id, actionContext);
                 await displayUserCourses(actionContext);
-                vscode.window.showInformationMessage(`${course.name} was removed from courses.`);
+                showNotification(`${course.name} was removed from courses.`);
             }
         },
     );
@@ -134,6 +152,7 @@ export function registerUiActions(
         const courseId: number = msg.id;
         displayLocalCourseDetails(msg.id, actionContext);
         const uiState = ui.webview.getStateId();
+        // Try to fetch updates from API
         updateCourse(courseId, actionContext).then(() =>
             uiState === ui.webview.getStateId()
                 ? displayLocalCourseDetails(courseId, actionContext)
@@ -146,7 +165,7 @@ export function registerUiActions(
             if (!(msg.type && msg.ids && msg.id)) {
                 return;
             }
-            actionContext.ui.webview.setContentFromTemplate("loading");
+            actionContext.ui.webview.setContentFromTemplate({ templateName: "loading" });
             await openExercises(msg.ids, actionContext);
             displayLocalCourseDetails(msg.id, actionContext);
         },
@@ -157,9 +176,59 @@ export function registerUiActions(
             if (!(msg.type && msg.ids && msg.id)) {
                 return;
             }
-            actionContext.ui.webview.setContentFromTemplate("loading");
+            actionContext.ui.webview.setContentFromTemplate({ templateName: "loading" });
             await closeExercises(actionContext, msg.ids);
             displayLocalCourseDetails(msg.id, actionContext);
         },
     );
+    ui.webview.registerHandler("changeTmcDataPath", async (msg: { type?: "changeTmcDataPath" }) => {
+        if (!msg.type) {
+            return;
+        }
+
+        const open = isWorkspaceOpen(resources);
+
+        const old = resources.getDataPath();
+        const options: vscode.OpenDialogOptions = {
+            canSelectFiles: false,
+            canSelectFolders: true,
+            canSelectMany: false,
+            openLabel: "Select folder",
+        };
+        const uri = await vscode.window.showOpenDialog(options);
+        if (uri && old) {
+            const newPath = path.join(uri[0].fsPath, "/tmcdata");
+            if (newPath === old) {
+                return;
+            }
+            const res = await workspaceManager.moveFolder(old, newPath);
+            if (res.ok) {
+                console.log(`Moved workspace folder from ${old} to ${newPath}`);
+                if (!res.val) {
+                    await showNotification(
+                        `Some files could not be removed from the previous workspace directory. They will have to be removed manually. ${old}`,
+                        ["OK", (): void => {}],
+                    );
+                }
+                await showNotification(`TMC Data was successfully moved to ${newPath}`, [
+                    "OK",
+                    (): void => {},
+                ]);
+                resources.setDataPath(newPath);
+                if (open) {
+                    // Opening a workspace restarts VSCode (v1.44)
+                    vscode.commands.executeCommand(
+                        "vscode.openFolder",
+                        vscode.Uri.file(
+                            path.join(newPath, "TMC workspace", "TMC Exercises.code-workspace"),
+                        ),
+                    );
+                }
+            } else {
+                showError(res.val.message);
+            }
+            workspaceManager.restartWatcher();
+            openSettings(actionContext);
+        }
+    });
 }

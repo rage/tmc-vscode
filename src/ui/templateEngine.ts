@@ -5,7 +5,8 @@ import * as vscode from "vscode";
 
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
-import { getProgressBar, numbersToString } from "../utils/utils";
+import { getProgressBar, numbersToString } from "../utils/";
+import { TemplateData } from "./types";
 
 export default class TemplateEngine {
     private cssPath: string;
@@ -38,6 +39,7 @@ export default class TemplateEngine {
                 status: string,
                 logs: { stdout: number[]; stderr: number[] },
                 tmcLogs?: { stdout: string; stderr: string },
+                pasteLink?: string,
             ) => {
                 // Java langs 'run tests' returns: PASSED, TESTS_FAILED; COMPILE_FAILED and own logs
                 // Python langs 'run tests' returns: PASSED, TESTS_FAILED, but not COMPILE_FAILED
@@ -50,7 +52,19 @@ export default class TemplateEngine {
                 if (status === "PASSED") {
                     return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
                 } else if (status === "TESTS_FAILED") {
-                    return "<h1>TESTS FAILED</h1>";
+                    let pasteLinkHTML = "";
+                    if (pasteLink) {
+                        pasteLinkHTML = `<p><input type="text" value="${pasteLink}" id="copyPasteLink">
+                                        <button class='btn-primary' onclick="copyText()">Copy text</button><span class='ml-1' id="copied"></span></p>`;
+                    }
+                    return `<h1>TESTS FAILED</h1>
+                    <button class="collapsible">Need help?</button>
+                    <div class="content-collapsible">
+                        <h5>Submit to TMC Paste</h5>
+                        <p>You can submit your code to TMC Paste and share the link to the course discussion channel and ask for help.</p>
+                        ${pasteLinkHTML}
+                        <input type='button' value='Submit to TMC Paste' class='btn-primary' onclick='sendToPaste()' />
+                    </div>`;
                 } else if (status === "COMPILE_FAILED") {
                     return `<h1>COMPILE FAILED</h1><pre>${numbersToString(logs.stdout)}</pre>`;
                 } else {
@@ -122,6 +136,11 @@ export default class TemplateEngine {
             }
         });
 
+        handlebars.registerHelper("collect", (...properties) => {
+            console.log(properties);
+            return properties;
+        });
+
         handlebars.registerHelper(
             "feedback_question",
             (question: {
@@ -141,11 +160,11 @@ export default class TemplateEngine {
                     question.upper !== undefined
                 ) {
                     return `<div class="col-md-10">
-                            <input data-questionID="${
-                                question.id
-                            }" type="range" class="custom-range" min="${question.lower - 1}"
-                                max="${question.upper}" step="1" value="${question.lower -
-                        1}" oninput='showValue(this, "text-id-${question.id}")' />
+                            <input
+                                data-questionID="${question.id}"
+                                type="range" class="custom-range" min="${question.lower - 1}"
+                                max="${question.upper}" step="1" value="${question.lower - 1}"
+                                oninput='showValue(this, "text-id-${question.id}")' />
                             </div>
                             <div class="col-md-2">
                                 <span class="font-weight-bold" id="text-id-${question.id}">-</span>
@@ -160,17 +179,13 @@ export default class TemplateEngine {
     /**
      * Creates an HTML document from a template, with a default CSS applied
      *
-     * @param extensionContext
      * @param name Name of the template file to user
      * @param data Must contain all the variables used in the template
      *
      * @returns The HTML document as a string
      */
-    public async getTemplate(
-        webview: vscode.Webview,
-        name: string,
-        data?: { [key: string]: unknown },
-    ): Promise<string> {
+    public async getTemplate(webview: vscode.Webview, templateData: TemplateData): Promise<string> {
+        const name = templateData.templateName;
         const p = path.join(this.htmlPath, `${name}.html`);
         let template: HandlebarsTemplateDelegate<unknown>;
         const cacheResult = this.cache.get(name);
@@ -179,11 +194,11 @@ export default class TemplateEngine {
         } else {
             template = handlebars.compile(fs.readFileSync(p, "utf8"));
         }
-        if (!data) {
-            data = {};
-        }
-        data.cssBlob = this.cssBlob;
 
-        return template(data);
+        const cspBlob = `<meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; img-src https:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';" />`;
+        const cssBlob = this.cssBlob;
+
+        return template({ ...templateData, cspBlob, cssBlob });
     }
 }

@@ -1,5 +1,6 @@
 <html>
     <head>
+        {{{cspBlob}}}
         <style>
             {{{cssBlob}}}
         </style>
@@ -56,6 +57,18 @@
                             </div>
                         </div>
                     </div>
+                    {{#if this.newExercises}}
+                    <div class="alert alert-info mt-2" role="alert">
+                        <span>{{newExercises.length}} new exercises found for this course.</span>
+                        <button
+                            type="button"
+                            class="btn btn-success ml-1"
+                            onclick="downloadNewExercises(event, '{{this.newExercises}}', '{{this.name}}', '{{this.organization}}', {{this.id}})"
+                        >
+                            Download them!
+                        </button>
+                    </div>
+                    {{/if}}
                 </div>
             </div>
             {{/each}} {{else}}
@@ -81,6 +94,18 @@
             function removeCourse(event, id) {
                 event.stopPropagation(); // Don't send onclick event upwards
                 vscode.postMessage({ type: "removeCourse", id });
+            }
+
+            function downloadNewExercises(event, ids, courseName, organizationSlug, courseId) {
+                event.stopPropagation(); // Don't send onclick event upwards
+                const splitToNumbers = ids.split(",").map(Number);
+                vscode.postMessage({
+                    type: "downloadExercises",
+                    ids: splitToNumbers,
+                    courseName,
+                    organizationSlug,
+                    courseId,
+                });
             }
 
             function fetchCourseDetails(id) {

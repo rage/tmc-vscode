@@ -1,5 +1,12 @@
 export const EXTENSION_ID = "moocfi.test-my-code";
-export const TMC_JAR = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.16-SNAPSHOT.jar";
+export const TMC_JAR_URL = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.17-SNAPSHOT.jar";
+export const TMC_JAR_NAME = "tmc-langs-cli-0.7.17-SNAPSHOT.jar";
+export const JAVA_ZIP_URLS: {
+    linux32?: string;
+    linux64?: string;
+    windows32?: string;
+    windows64?: string;
+} = {};
 export const TMC_API_URL = "https://tmc.mooc.fi/api/v8/";
 export const ACCESS_TOKEN_URI = "https://tmc.mooc.fi/oauth/token";
 export const CLIENT_ID = "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0";
@@ -11,6 +18,13 @@ export const WORKSPACE_SETTINGS = {
         "files.autoSave": "onFocusChange",
     },
 };
+
+/**
+ * Delay for notifications that offer a "remind me later" option.
+ */
+export const NOTIFICATION_DELAY = 30 * 60 * 1000;
+
+export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Security-Policy"}" content="default-src 'none';" /></head></html>`;
 
 /**
  * If changed WORKSPACEROOTFILE is changed, remember to update
@@ -61,4 +75,14 @@ Commands (VSCode command hotkey: CTRL + SHIFT + P):
         Downloads the exercise template from the TMC Server and opens it to the TMC Workspace.
 
     TMC - Close exercise (hotkey: CTRL + SHIFT + C)
-        Closes the exercise folder from the TMC workspace.`;
+        Closes the exercise folder from the TMC workspace.
+
+    TMC - Get exercise submissions
+        You can download old submissions by choosing 'Download old submissions' from the TMC Menu.
+    
+TMC Extension settings
+    You can open the TMC extension settings by pressing the TMC icon on the left sidebar and choose 'Settings' in the TestMyCode extension menu.
+
+    TMC Data
+    This is the location where all TMC extension data is saved.  
+    Changing the location will create a 'tmcdata' folder to your chosen location and move all the TMC data to the new location.`;

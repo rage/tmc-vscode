@@ -3,12 +3,16 @@ export type LocalCourseData = {
     name: string;
     description: string;
     organization: string;
-    exercises: Array<{
-        id: number;
-        passed: boolean;
-    }>;
+    exercises: LocalCourseExercise[];
     availablePoints: number;
     awardedPoints: number;
+    newExercises: number[];
+    notifyAfter: number;
+};
+
+export type LocalCourseExercise = {
+    id: number;
+    passed: boolean;
 };
 
 export type LocalExerciseData = {
@@ -16,7 +20,6 @@ export type LocalExerciseData = {
     name: string;
     course: string;
     organization: string;
-    path: string;
     checksum: string;
     updateAvailable: boolean;
     status: ExerciseStatus;
@@ -29,3 +32,7 @@ export enum ExerciseStatus {
     CLOSED,
     MISSING,
 }
+
+export type ExtensionSettings = {
+    dataPath: string;
+};

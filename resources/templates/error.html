@@ -1,5 +1,6 @@
 <html>
     <head>
+        {{{cspBlob}}}
         <style>
             {{{cssBlob}}}
         </style>
@@ -7,6 +8,9 @@
 
     <body>
         <div class="container d-flex">
+            <button type="button" class="close" aria-label="Close" onclick="closeWindow()">
+                <span aria-hidden="true">&times;</span>
+            </button>
             <div class="row">
                 <div class="col-md">
                     <div class="row">
@@ -19,5 +23,12 @@
                 </div>
             </div>
         </div>
+        <script>
+            const vscode = acquireVsCodeApi();
+
+            function closeWindow() {
+                vscode.postMessage({ type: "closeWindow" });
+            }
+        </script>
     </body>
 </html>

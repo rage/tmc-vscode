@@ -13,29 +13,31 @@ import {
     dateToString,
     findNextDateAfter,
     parseDate,
-} from "../utils/dateDeadline";
+    showNotification,
+} from "../utils/";
 import { ActionContext } from "./types";
 import { Exercise } from "../api/types";
+import { updateCourse } from "./user";
 
 /**
  * Displays a summary page of user's courses.
  */
 export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
     const { userData, tmc, ui } = actionContext;
-
+    console.log("Displaying My courses view");
     const courses = userData.getCourses().map((course) => {
         const completedPrc = ((course.awardedPoints / course.availablePoints) * 100).toFixed(2);
         return { ...course, completedPrc };
     });
 
     // Display the page immediatedly before fetching any data from API
-    await ui.webview.setContentFromTemplate("index", { courses });
+    await ui.webview.setContentFromTemplate({ templateName: "index", courses });
 
     const uiState = ui.webview.getStateId();
 
     const apiCourses = await Promise.all(
         courses.map(async (course) => {
-            const exerciseResult = await tmc.getCourseDetails(course.id);
+            const exerciseResult = await tmc.getCourseDetails(course.id, false);
             const deadlines = new Map<number, Date>();
             if (exerciseResult.ok) {
                 exerciseResult.val.course.exercises.forEach((ex) => {
@@ -49,6 +51,13 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
                 });
             }
 
+            await updateCourse(course.id, actionContext);
+            const updatedCourse = userData.getCourse(course.id);
+            const completedPrc = (
+                (updatedCourse.awardedPoints / updatedCourse.availablePoints) *
+                100
+            ).toFixed(2);
+            const newExercises = updatedCourse.newExercises;
             const exercises = course.exercises.map((ex) => ({
                 ...ex,
                 deadline: deadlines.get(ex.id),
@@ -63,11 +72,11 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
                 ? dateToString(nextDeadlineObject)
                 : "Unavailable";
 
-            return { ...course, exercises, nextDeadline };
+            return { ...course, exercises, nextDeadline, completedPrc, newExercises };
         }),
     );
     if (uiState === ui.webview.getStateId()) {
-        await ui.webview.setContentFromTemplate("index", { courses: apiCourses });
+        await ui.webview.setContentFromTemplate({ templateName: "index", courses: apiCourses });
     }
 }
 
@@ -81,6 +90,7 @@ export async function displayLocalCourseDetails(
     const { ui, userData, workspaceManager } = actionContext;
 
     const course = userData.getCourse(courseId);
+    console.log(`Display course view for ${course.name}`);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
 
     const exerciseData = new Map<
@@ -135,8 +145,12 @@ export async function displayLocalCourseDetails(
     );
 
     await ui.webview.setContentFromTemplate(
-        "course-details",
-        { exerciseData: sortedExercises, course, courseId: course.id },
+        {
+            templateName: "course-details",
+            exerciseData: sortedExercises,
+            course,
+            courseId: course.id,
+        },
         true,
     );
 }
@@ -177,7 +191,7 @@ export async function selectCourse(
             }
             resolve();
         });
-        temp.setContent("course", data);
+        temp.setContent({ templateName: "course", ...data });
     });
     return new Ok({ changeOrg, course });
 }
@@ -213,7 +227,7 @@ export async function selectOrganization(
             }
             resolve();
         });
-        temp.setContent("organization", data);
+        temp.setContent({ templateName: "organization", ...data });
     });
     if (!slug) {
         return new Err(new Error("Couldn't get organization"));
@@ -232,14 +246,15 @@ export async function selectOrganizationAndCourse(
     const tempView = new TemporaryWebview(resources, ui, "", () => {});
 
     let organizationSlug: string | undefined;
-    let courseID: number | undefined;
+    let courseId: number | undefined;
 
-    while (!(organizationSlug && courseID)) {
+    while (!(organizationSlug && courseId)) {
         const orgResult = await selectOrganization(actionContext, tempView);
         if (orgResult.err) {
             tempView.dispose();
             return new Err(orgResult.val);
         }
+        console.log(`Organization slug ${orgResult.val} selected`);
         organizationSlug = orgResult.val;
         const courseResult = await selectCourse(organizationSlug, actionContext, tempView);
         if (courseResult.err) {
@@ -249,31 +264,39 @@ export async function selectOrganizationAndCourse(
         if (courseResult.val.changeOrg) {
             continue;
         }
-        courseID = courseResult.val.course;
+        courseId = courseResult.val.course;
     }
-
+    console.log(`Course with id ${courseId} selected`);
     tempView.dispose();
-    return new Ok({ organization: organizationSlug, course: courseID });
+    return new Ok({ organization: organizationSlug, course: courseId });
 }
 
 /**
  * Displays the course exercise list view
  */
 export async function displayCourseDownloads(
-    courseId: number,
     actionContext: ActionContext,
+    courseId: number,
 ): Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
-    await ui.webview.setContentFromTemplate("loading");
+    await ui.webview.setContentFromTemplate({ templateName: "loading" });
     const result = await tmc.getCourseDetails(courseId, false);
     if (result.err) {
         return new Err(new Error("Course details not found"));
     }
     const details = result.val.course;
-    userData.updateCompletedExercises(
+    await userData.updateExercises(
         courseId,
-        details.exercises.filter((x) => x.completed).map((x) => x.id),
+        details.exercises.map((x) => ({ id: x.id, passed: x.completed })),
     );
+    const newExercisesLength = userData.getCourse(courseId).newExercises.length;
+    if (newExercisesLength > 0) {
+        showNotification(
+            `Please download the ${newExercisesLength} new exercises, in the future you will not be notified about them again.`,
+            ["OK", (): void => {}],
+        );
+        await userData.clearNewExercises(courseId);
+    }
 
     const organizationSlug = userData.getCourses().find((course) => course.id === courseId)
         ?.organization;
@@ -405,6 +428,6 @@ export async function displayCourseDownloads(
         organizationSlug,
         exerciseLists,
     };
-    await ui.webview.setContentFromTemplate("download-exercises", data);
+    await ui.webview.setContentFromTemplate({ templateName: "download-exercises", ...data });
     return Ok.EMPTY;
 }

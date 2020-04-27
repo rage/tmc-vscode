@@ -7,22 +7,37 @@ import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
-import { isProductionBuild } from "./utils/utils";
+import { isWorkspaceOpen, superfluousPropertiesEnabled } from "./utils/";
+import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    const productionMode = isProductionBuild();
+    const productionMode = superfluousPropertiesEnabled();
     console.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
 
-    const result = await init.resourceInitialization(context);
-    if (result.err) {
-        vscode.window.showErrorMessage("TestMyCode Initialization failed: " + result.val.message);
+    const storage = new Storage(context);
+    const resourcesResult = await init.resourceInitialization(context, storage);
+    if (resourcesResult.err) {
+        vscode.window.showErrorMessage(
+            "TestMyCode Initialization failed: " + resourcesResult.val.message,
+        );
         return;
     }
 
     await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
-    const resources = result.val;
-    const storage = new Storage(context);
+    const resources = resourcesResult.val;
+
+    /**
+     * Checks whether the necessary folders are open in the workspace and opens them if they aren't.
+     */
+    if (isWorkspaceOpen(resources)) {
+        vscode.workspace.updateWorkspaceFolders(
+            vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders.length : 0,
+            null,
+            { uri: vscode.Uri.file(resources.getExercisesFolderPath()) },
+        );
+    }
+
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
 
     const tmc = new TMC(storage, resources);
@@ -41,6 +56,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     init.registerUiActions(ui, tmc, workspaceManager, resources, userData);
     const actionContext = { ui, resources, workspaceManager, tmc, userData };
     init.registerCommands(context, actionContext);
+
+    checkForExerciseUpdates(actionContext);
+    checkForNewExercises(actionContext);
 }
 
 export function deactivate(): void {}

@@ -1,5 +1,6 @@
 <html>
     <head>
+        {{{cspBlob}}}
         <style>
             {{{cssBlob}}}
         </style>
@@ -7,10 +8,13 @@
 
     <body>
         <div class="container">
+            <button type="button" class="close" aria-label="Close" onclick="closeWindow()">
+                <span aria-hidden="true">&times;</span>
+            </button>
             {{#if testResult.testResults}}
             <div class="row">
                 <div class="py-2">
-                    {{{ check_test_status testResult.status testResult.logs }}}
+                    {{{ check_test_status testResult.status testResult.logs undefined pasteLink }}}
                 </div>
             </div>
             <div class="row">
@@ -50,9 +54,43 @@
         <script>
             const vscode = acquireVsCodeApi();
             const exerciseId = {{id}};
+            {{#if pasteLink}}
+                const triggerPaste = true;
+            {{else}}
+                const triggerPaste = false;
+            {{/if}}
 
             function submitToServer() {
                 vscode.postMessage({ type: 'submitToServer', data: { exerciseId: exerciseId } });
+            }
+            function closeWindow() {
+                vscode.postMessage({ type: "closeWindow" });
+            }
+            function sendToPaste() {
+                vscode.postMessage({ type: 'sendToPaste', data: { exerciseId } });
+            }
+
+            const coll = document.getElementsByClassName("collapsible");
+            coll[0].addEventListener("click", function() {
+                this.classList.toggle("active");
+                let content = this.nextElementSibling;
+                if (content.style.maxHeight){
+                    content.style.maxHeight = null;
+                } else {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                }
+            });
+
+            function copyText() {
+                const copyText = document.getElementById("copyPasteLink");
+                copyText.select();
+                document.execCommand("copy");
+                const copied = document.getElementById("copied");
+                copied.innerHTML = "Copied!";
+            }
+
+            if (triggerPaste) {
+                coll[0].click();
             }
         </script>
     </body>

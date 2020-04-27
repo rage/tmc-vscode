@@ -1,6 +1,6 @@
 import Storage from "./storage";
 import { Err, Ok, Result } from "ts-results";
-import { LocalCourseData } from "./types";
+import { LocalCourseData, LocalCourseExercise } from "./types";
 
 export class UserData {
     private courses: Map<number, LocalCourseData>;
@@ -42,6 +42,7 @@ export class UserData {
         if (this.courses.has(data.id)) {
             throw new Error("Trying to add an already existing course");
         }
+        console.log(`Adding course ${data.name} to My courses`);
         this.courses.set(data.id, data);
         this.updatePersistentData();
     }
@@ -51,22 +52,31 @@ export class UserData {
         this.updatePersistentData();
     }
 
-    public async updateCompletedExercises(
+    public async updateExercises(
         courseId: number,
-        completedExercises: number[],
+        exercises: LocalCourseExercise[],
     ): Promise<Result<void, Error>> {
         const courseData = this.courses.get(courseId);
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
-        courseData.exercises = courseData.exercises.map((x) => ({
-            id: x.id,
-            passed: completedExercises.includes(x.id),
-        }));
+        const exerciseIds = exercises.map((exercise) => exercise.id);
+        // Filter out "new" exercises that no longer were in the API, and then append new data
+        courseData.newExercises = courseData.newExercises
+            .filter((exerciseId) => exerciseIds.includes(exerciseId))
+            .concat(
+                exerciseIds.filter(
+                    (newExerciseId) => !courseData.exercises.find((e) => e.id === newExerciseId),
+                ),
+            );
+        courseData.newExercises.length > 0
+            ? console.log(
+                  `Found ${courseData.newExercises.length} new exercises for ${courseData.name}`,
+              )
+            : {};
+        courseData.exercises = exercises;
         courseData.exercises.forEach((x) =>
-            completedExercises.includes(x.id)
-                ? this.passedExercises.add(x.id)
-                : this.passedExercises.delete(x.id),
+            x.passed ? this.passedExercises.add(x.id) : this.passedExercises.delete(x.id),
         );
         this.courses.set(courseId, courseData);
         await this.updatePersistentData();
@@ -91,6 +101,41 @@ export class UserData {
 
     public getPassed(exerciseId: number): boolean {
         return this.passedExercises.has(exerciseId);
+    }
+
+    /**
+     * Clears the list of new exercises for a given course.
+     */
+    public async clearNewExercises(courseId: number): Promise<Result<void, Error>> {
+        const courseData = this.courses.get(courseId);
+        if (!courseData) {
+            return new Err(new Error("Data missing"));
+        }
+        console.log(`Clearing new exercises for ${courseData.name}`);
+        courseData.newExercises = [];
+        await this.updatePersistentData();
+        return Ok.EMPTY;
+    }
+
+    /**
+     * Sets the notification timestamp for when the user should be notified of the given course next time.
+     */
+    public async setNotifyDate(
+        courseId: number,
+        dateInMillis: number,
+    ): Promise<Result<void, Error>> {
+        const courseData = this.courses.get(courseId);
+        if (!courseData) {
+            return new Err(new Error("Data missing"));
+        }
+        console.log(
+            `Notifying user for course ${courseData.name} again at ${new Date(
+                dateInMillis,
+            ).toString()}`,
+        );
+        courseData.notifyAfter = dateInMillis;
+        await this.updatePersistentData();
+        return Ok.EMPTY;
     }
 
     private updatePersistentData(): Promise<void> {

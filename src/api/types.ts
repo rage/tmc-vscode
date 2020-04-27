@@ -10,7 +10,8 @@ export type TMCApiResponse =
     | ExerciseDetails
     | SubmissionResponse
     | SubmissionFeedbackResponse
-    | SubmissionStatusReport;
+    | SubmissionStatusReport
+    | OldSubmission[];
 
 /**
  * GET /api/v8/core/org/{organization_slug}/courses
@@ -188,6 +189,33 @@ export type SubmissionFeedbackAnswer = {
     answer: string;
 };
 
+export type OldSubmission = {
+    id: number;
+    user_id: number;
+    pretest_error: string | null;
+    created_at: string;
+    exercise_name: string;
+    course_id: number;
+    processed: boolean;
+    all_tests_passed: boolean;
+    points: string | null;
+    processing_tried_at: string;
+    processing_began_at: string;
+    processing_completed_at: string;
+    times_sent_to_sandbox: number;
+    processing_attempts_started_at: string;
+    params_json: string | null;
+    requires_review: boolean;
+    requests_review: boolean;
+    reviewed: boolean;
+    message_for_reviewer: string;
+    newer_submission_reviewed: boolean;
+    review_dismissed: boolean;
+    paste_available: boolean;
+    message_for_paste: string;
+    paste_key: string | null;
+};
+
 /**
  * TMC-langs.jar Actions
  */
@@ -199,6 +227,10 @@ export type TmcLangsAction =
       }
     | {
           action: "run-tests";
+          exerciseFolderPath: string;
+      }
+    | {
+          action: "get-exercise-packaging-configuration";
           exerciseFolderPath: string;
       };
 
@@ -226,11 +258,18 @@ export type TmcLangsTestResults = {
             stdout?: number[];
             stderr?: number[];
         };
-    };
+    } | null;
 } & TmcLangsLogs;
 
 export type TmcLangsPath = {
     response: string;
 } & TmcLangsLogs;
 
-export type TmcLangsResponse = TmcLangsPath | TmcLangsTestResults;
+export type TmcLangsFilePath = {
+    response: {
+        studentFilePaths: string[];
+        exerciseFilePaths: string[];
+    };
+} & TmcLangsLogs;
+
+export type TmcLangsResponse = TmcLangsPath | TmcLangsTestResults | TmcLangsFilePath;

@@ -1,5 +1,6 @@
 <html>
     <head>
+        {{{cspBlob}}}
         <style>
             {{{cssBlob}}}
         </style>
@@ -7,6 +8,9 @@
 
     <body>
         <div class="container">
+            <button type="button" class="close" aria-label="Close" onclick="closeWindow()">
+                <span aria-hidden="true">&times;</span>
+            </button>
             <div class="row py-2">
                 <div class="py-2">
                     {{{submission_status statusData}}}
@@ -26,7 +30,7 @@
             {{/if}} {{/with}} {{#if feedbackQuestions}}
             <div id="feedbacknotification"></div>
             <div id="feedback" class="my-5">
-                <h4>Anna palautetta</h4>
+                <h4>Give feedback</h4>
                 <form>
                     {{#each feedbackQuestions}}
                     <div>
@@ -38,7 +42,7 @@
                     {{/each}}
                     <div>
                         <button class="btn-primary" onclick="submitFeedback()">
-                            Lähetä palaute
+                            Submit feedback
                         </button>
                     </div>
                 </form>
@@ -127,6 +131,10 @@
                 type: "showSolutionInBrowser",
                 data: { solutionUrl: solution_url },
             });
+        }
+
+        function closeWindow() {
+            vscode.postMessage({ type: "closeWindow" });
         }
     </script>
 </html>

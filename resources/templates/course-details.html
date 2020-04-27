@@ -1,5 +1,6 @@
 <html>
     <head>
+        {{{cspBlob}}}
         <style>
             {{{cssBlob}}}
         </style>
@@ -31,6 +32,11 @@
                         <button class="btn-info m-1 w-100" onclick="downloadView( {{courseId}} )">
                             Download exercises
                         </button>
+                    </div>
+                    <div class="col-sm-3">
+                        {{#if course.newExercises}}
+                        <span>{{course.newExercises.length}} new exercises to be downloaded.</span>
+                        {{/if}}
                     </div>
                 </div>
                 <div class="row">

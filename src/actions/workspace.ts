@@ -6,98 +6,122 @@
 
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
-import { ActionContext } from "./types";
+import { ActionContext, CourseExerciseDownloads } from "./types";
 import pLimit from "p-limit";
+import { askForConfirmation, askForItem, showError, showNotification } from "../utils";
+import { getOldSubmissions } from "./user";
+import { OldSubmission } from "../api/types";
+import { dateToString, parseDate } from "../utils/dateDeadline";
+import { NOTIFICATION_DELAY } from "../config/constants";
 
 /**
  * Downloads given exercises and opens them in TMC workspace.
  */
 export async function downloadExercises(
     actionContext: ActionContext,
-    ids: number[],
-    organizationSlug: string,
-    courseId: number,
+    courseExerciseDownloads: CourseExerciseDownloads[],
+    returnToCourse?: number,
 ): Promise<void> {
     const { tmc, ui } = actionContext;
 
-    const courseDetails = await tmc.getCourseDetails(courseId, false);
-    if (courseDetails.err) {
-        vscode.window.showErrorMessage(`Could not download exercises, course details not found: \
-                                        ${courseDetails.val.name} - ${courseDetails.val.message}`);
-        return;
-    }
-
     const exerciseStatus = new Map<
         number,
-        { name: string; downloaded: boolean; failed: boolean; error: string; status: string }
-    >(
-        courseDetails.val.course.exercises
-            .filter((x) => ids.includes(x.id))
-            .map((x) => [
-                x.id,
-                { name: x.name, downloaded: false, failed: false, error: "", status: "In queue" },
-            ]),
-    );
+        {
+            name: string;
+            organizationSlug: string;
+            downloaded: boolean;
+            failed: boolean;
+            error: string;
+            status: string;
+        }
+    >();
 
+    for (const ced of courseExerciseDownloads) {
+        const courseDetails = await tmc.getCourseDetails(ced.courseId, false);
+        if (courseDetails.ok) {
+            courseDetails.val.course.exercises
+                .filter((x) => ced.exerciseIds.includes(x.id))
+                .forEach((x) =>
+                    exerciseStatus.set(x.id, {
+                        name: x.name,
+                        organizationSlug: ced.organizationSlug,
+                        downloaded: false,
+                        failed: false,
+                        error: "",
+                        status: "In queue",
+                    }),
+                );
+        } else {
+            vscode.window.showErrorMessage(
+                `Could not download exercises, course details not found: \
+                ${courseDetails.val.name} - ${courseDetails.val.message}`,
+            );
+        }
+    }
+
+    const downloadCount = exerciseStatus.size;
     let successful = 0;
     let failed = 0;
 
-    ui.webview.setContentFromTemplate("downloading-exercises", {
-        courseId,
-        exercises: exerciseStatus.values(),
+    ui.webview.setContentFromTemplate({
+        templateName: "downloading-exercises",
+        returnToCourse,
+        exercises: Array.from(exerciseStatus.values()),
         failed,
-        failedPct: Math.round((100 * failed) / ids.length),
-        remaining: ids.length - successful - failed,
+        failedPct: Math.round((100 * failed) / downloadCount),
+        remaining: downloadCount - successful - failed,
         successful,
-        successfulPct: Math.round((100 * successful) / ids.length),
-        total: ids.length,
+        successfulPct: Math.round((100 * successful) / downloadCount),
+        total: downloadCount,
     });
 
     const limit = pLimit(3);
 
     await Promise.all(
-        ids.map<Promise<Result<string, Error>>>((x) =>
+        Array.from(exerciseStatus.entries()).map<Promise<Result<void, Error>>>(([id, data]) =>
             limit(
                 () =>
                     new Promise((resolve) => {
-                        const d = exerciseStatus.get(x);
-                        if (d) {
-                            d.status = "Downloading";
-                            exerciseStatus.set(x, d);
-                            ui.webview.setContentFromTemplate("downloading-exercises", {
-                                courseId,
-                                exercises: exerciseStatus.values(),
+                        if (data) {
+                            data.status = "Downloading";
+                            exerciseStatus.set(id, data);
+                            ui.webview.setContentFromTemplate({
+                                templateName: "downloading-exercises",
+                                returnToCourse,
+                                exercises: Array.from(exerciseStatus.values()),
                                 failed,
-                                failedPct: Math.round((100 * failed) / ids.length),
-                                remaining: ids.length - successful - failed,
+                                failedPct: Math.round((100 * failed) / downloadCount),
+                                remaining: downloadCount - successful - failed,
                                 successful,
-                                successfulPct: Math.round((100 * successful) / ids.length),
-                                total: ids.length,
+                                successfulPct: Math.round((100 * successful) / downloadCount),
+                                total: downloadCount,
                             });
                         }
 
-                        tmc.downloadExercise(x, organizationSlug).then(
-                            (res: Result<string, Error>) => {
-                                const d = exerciseStatus.get(x);
-                                if (d) {
+                        tmc.downloadExercise(id, data.organizationSlug).then(
+                            (res: Result<void, Error>) => {
+                                if (data) {
                                     if (res.ok) {
                                         successful += 1;
-                                        d.downloaded = true;
+                                        data.downloaded = true;
                                     } else {
                                         failed += 1;
-                                        d.failed = true;
-                                        d.error = res.val.message;
+                                        data.failed = true;
+                                        data.error = res.val.message;
                                     }
-                                    exerciseStatus.set(x, d);
-                                    ui.webview.setContentFromTemplate("downloading-exercises", {
-                                        courseId,
-                                        exercises: exerciseStatus.values(),
+                                    exerciseStatus.set(id, data);
+                                    ui.webview.setContentFromTemplate({
+                                        templateName: "downloading-exercises",
+                                        returnToCourse,
+                                        exercises: Array.from(exerciseStatus.values()),
                                         failed,
-                                        failedPct: Math.round((100 * failed) / ids.length),
-                                        remaining: ids.length - successful - failed,
+                                        failedPct: Math.round((100 * failed) / downloadCount),
+                                        remaining: downloadCount - successful - failed,
                                         successful,
-                                        successfulPct: Math.round((100 * successful) / ids.length),
-                                        total: ids.length,
+                                        successfulPct: Math.round(
+                                            (100 * successful) / downloadCount,
+                                        ),
+                                        total: downloadCount,
                                     });
                                 }
                                 resolve(res);
@@ -107,6 +131,63 @@ export async function downloadExercises(
             ),
         ),
     );
+}
+
+/**
+ * Checks all user's courses for exercise updates and download them.
+ * @param courseId If given, check only updates for that course.
+ */
+export async function checkForExerciseUpdates(
+    actionContext: ActionContext,
+    courseId?: number,
+): Promise<void> {
+    const { tmc, userData, workspaceManager } = actionContext;
+
+    const coursesToUpdate: Map<number, CourseExerciseDownloads> = new Map();
+    let count = 0;
+    const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
+    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
+    console.log(`Checking for exercise updates for courses ${filteredCourses.map((c) => c.name)}`);
+    for (const course of filteredCourses) {
+        const organizationSlug = course.organization;
+
+        const result = await tmc.getCourseDetails(course.id, false);
+        if (result.err) {
+            return;
+        }
+
+        const exerciseIds: number[] = [];
+        result.val.course.exercises.forEach((exercise) => {
+            const localExercise = workspaceManager.getExerciseDataById(exercise.id);
+            if (localExercise.ok && localExercise.val.checksum !== exercise.checksum) {
+                exerciseIds.push(exercise.id);
+            }
+        });
+
+        if (exerciseIds.length > 0) {
+            coursesToUpdate.set(course.id, { courseId: course.id, exerciseIds, organizationSlug });
+            count += exerciseIds.length;
+        }
+    }
+
+    if (count > 0) {
+        showNotification(
+            `Found updates for ${count} exercises. Do you wish to download them?`,
+            [
+                "Download",
+                (): Promise<void> =>
+                    downloadExercises(actionContext, Array.from(coursesToUpdate.values())),
+            ],
+            [
+                "Remind me later",
+                (): void => {
+                    coursesToUpdate.forEach((course) =>
+                        userData.setNotifyDate(course.courseId, Date.now() + NOTIFICATION_DELAY),
+                    );
+                },
+            ],
+        );
+    }
 }
 
 /**
@@ -126,18 +207,25 @@ export async function resetExercise(
         return new Err(exerciseData.val);
     }
 
-    const submitResult = await tmc.submitExercise(id);
-    if (submitResult.err) {
-        vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
-       ${submitResult.val.name} - ${submitResult.val.message}`);
-        ui.setStatusBar(
-            `Something went wrong while resetting exercise ${exerciseData.val.name}`,
-            10000,
-        );
-        return new Err(submitResult.val);
+    const saveOrNo = await askForConfirmation(
+        "Do you want to save the current state of the exercise by submitting it to TMC Server?",
+        true,
+    );
+
+    if (saveOrNo) {
+        const submitResult = await tmc.submitExercise(id);
+        if (submitResult.err) {
+            vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
+           ${submitResult.val.name} - ${submitResult.val.message}`);
+            ui.setStatusBar(
+                `Something went wrong while resetting exercise ${exerciseData.val.name}`,
+                10000,
+            );
+            return new Err(submitResult.val);
+        }
     }
 
-    vscode.window.showInformationMessage(`Resetting exercise ${exerciseData.val.name}`);
+    showNotification(`Resetting exercise ${exerciseData.val.name}`);
     ui.setStatusBar(`Resetting exercise ${exerciseData.val.name}`);
 
     const slug = exerciseData.val.organization;
@@ -153,7 +241,7 @@ export async function resetExercise(
  */
 export async function openExercises(ids: number[], actionContext: ActionContext): Promise<void> {
     const { workspaceManager } = actionContext;
-    ids.forEach((id) => workspaceManager.openExercise(id));
+    workspaceManager.openExercise(...ids);
 }
 
 /**
@@ -162,5 +250,56 @@ export async function openExercises(ids: number[], actionContext: ActionContext)
  */
 export async function closeExercises(actionContext: ActionContext, ids: number[]): Promise<void> {
     const { workspaceManager } = actionContext;
-    ids.forEach((id) => workspaceManager.closeExercise(id));
+    workspaceManager.closeExercise(...ids);
+}
+
+/**
+ * Downloads an oldsubmission of a currently open exercise and submits current code to server if user wants it
+ * @param exerciseId exercise which older submission will be downloaded
+ * @param actionContext
+ */
+
+export async function downloadOldSubmissions(
+    exerciseId: number,
+    actionContext: ActionContext,
+): Promise<void> {
+    const { tmc, workspaceManager } = actionContext;
+    const exercise = workspaceManager.getExerciseDataById(exerciseId);
+    if (exercise.err) {
+        showError("Exercise data missing");
+        return;
+    }
+    const response = await getOldSubmissions(actionContext);
+    if (response.err) {
+        showError("Something went wrong while fetching old submissions: " + response.val.message);
+        return;
+    }
+    if (response.val.length === 0) {
+        showNotification("No previous submissions found for this exercise.");
+        return;
+    }
+
+    const submission = await askForItem(
+        exercise.val.name + ": Select a submission",
+        false,
+        ...response.val.map<[string, OldSubmission]>((a) => [
+            dateToString(parseDate(a.processing_attempts_started_at)) +
+                "| " +
+                (a.all_tests_passed ? "Passed" : "Not passed"),
+            a,
+        ]),
+    );
+
+    if (submission === undefined) {
+        return;
+    }
+
+    const oldSub = await tmc.downloadOldExercise(actionContext, exercise.val.id, submission.id);
+    if (oldSub.err) {
+        showError(
+            "Something went wrong while downloading old submission for exercise: " + oldSub.val,
+        );
+        return;
+    }
+    showNotification(oldSub.val);
 }

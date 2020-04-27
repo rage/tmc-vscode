@@ -1,11 +1,9 @@
-import * as cp from "child_process";
 import * as fs from "fs";
 import * as fetch from "node-fetch";
 import * as path from "path";
 import * as vscode from "vscode";
 
 import { Err, Ok, Result } from "ts-results";
-import { is } from "typescript-is";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import { ConnectionError } from "../errors";
@@ -13,6 +11,7 @@ import { SubmissionFeedbackQuestion } from "../api/types";
 import { FeedbackQuestion } from "../actions/types";
 import ClientOAuth2 = require("client-oauth2");
 import { LocalExerciseData } from "../config/types";
+import { superfluousPropertiesEnabled } from "./env";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
@@ -69,44 +68,9 @@ export async function downloadFile(
     return Ok.EMPTY;
 }
 
-/**
- * Check if calling java programs is possible.
- */
-export async function isJavaPresent(): Promise<boolean> {
-    let result = false;
-    await new Promise((resolve) =>
-        cp.exec("java -version", (error) => {
-            result = error === null;
-            resolve();
-        }),
-    );
-
-    return result;
-}
-
-/**
- * Checks whether the extension is running in a development or production environment.
- */
-export function isProductionBuild(): boolean {
-    // Use configuration properties to see whether superflous object properties are enabled in tsconfig.
-    // In the code this feature is used when fetched API data is being parsed.
-    // For configuration, see tsconfig.json used by webpack.dev.json
-    // and tsconfig.production.json used by webpack.prod.json
-    type TestType = {
-        strict: boolean;
-    };
-
-    const testObject = {
-        strict: true,
-        superflous: "a superfluous property",
-    };
-
-    return is<TestType>(testObject);
-}
-
 export function isWorkspaceOpen(resources: Resources): boolean {
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
-    const tmcWorkspaceFile = vscode.Uri.file(resources.tmcWorkspaceFilePath);
+    const tmcWorkspaceFile = vscode.Uri.file(resources.getWorkspaceFilePath());
     return currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString();
 }
 
@@ -124,6 +88,27 @@ export function sleep(millis: number): Promise<void> {
  */
 export function numbersToString(array: number[]): string {
     return String.fromCharCode(...array);
+}
+
+export function formatSizeInBytes(size: number, precision = 3): string {
+    let suffix = "B";
+    let cSize = size;
+    const targetPrecision = Math.min(
+        size === 0 ? 1 : Math.floor(Math.log10(size) + 1),
+        21,
+        precision,
+    );
+
+    for (const s of ["kB", "MB", "GB", "TB", "EB"]) {
+        if (Number.parseFloat(cSize.toPrecision(targetPrecision)) >= 1000) {
+            cSize /= 1000;
+            suffix = s;
+        } else {
+            break;
+        }
+    }
+
+    return `${cSize.toPrecision(targetPrecision)} ${suffix}`;
 }
 
 /**
@@ -162,52 +147,8 @@ export function getProgressBar(percentDone: number): string {
 
 export function displayProgrammerError(description: string): void {
     vscode.window.showErrorMessage(
-        (isProductionBuild() ? "" : "Programmer ") + "Error: " + description,
+        (superfluousPropertiesEnabled() ? "" : "Programmer ") + "Error: " + description,
     );
-}
-
-/**
- * Prompts the user with a yes/no dialog.
- */
-export async function askForConfirmation(prompt: string): Promise<boolean> {
-    return (
-        (await askForItem<boolean>(prompt, [
-            ["yes", true],
-            ["no", false],
-        ])) || false
-    );
-}
-
-/**
- * Prompts the user with a yes/no dialog. This version requires user to explicitely write "yes" for the answer to count as true.
- */
-export async function askForExplicitConfirmation(prompt: string): Promise<boolean> {
-    const options: vscode.InputBoxOptions = {
-        placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
-        prompt,
-    };
-    const success = (await vscode.window.showInputBox(options))?.toLowerCase() === "yes";
-    return success;
-}
-
-/**
- * Prompts a selection to the user for multiple different options and returns its associated generic type.
- */
-export async function askForItem<T>(
-    prompt: string,
-    items: Array<[string, T]>,
-    multiple?: boolean,
-): Promise<T | undefined> {
-    const options: vscode.QuickPickOptions = {
-        canPickMany: multiple || false,
-        placeHolder: prompt,
-    };
-
-    const selection = await vscode.window.showQuickPick(
-        items.map((i) => i[0]),
-        options,
-    );
-    return items.find((item) => item[0] === selection)?.[1];
 }
 
 export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): FeedbackQuestion[] {

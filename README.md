@@ -1,7 +1,8 @@
 # ATTENTION!
 
 **This extension is under development.**  
-The VSCode team would like to hear if you've encountered any problems while using this extension. You can submit your ideas and/or issues via our [google form](https://docs.google.com/forms/d/1oDCFVNgi5rDSh5iqeINX7qEpc72VnHKmFzuj-jzxtcA/viewform?edit_requested=true) or open an issue in our Github repository [https://github.com/rage/tmc-vscode/issues](https://github.com/rage/tmc-vscode/issues).
+The VSCode team would like to hear if you've encountered any problems while using this extension.  
+You can submit your ideas or issues to the GitHub repository [https://github.com/rage/tmc-vscode/issues](https://github.com/rage/tmc-vscode/issues).
 
 # TestMyCode for Visual Studio Code
 
@@ -10,6 +11,7 @@ Students of its various organizations can download, complete and return course e
 
 ## Prerequisites
 
+* Visual Studio Code version 1.40.xx or above
 * [TestMyCode](https://tmc.mooc.fi/) account
 * [Java](https://www.java.com/) runtime (for packing/unpacking and testing exercises)
 * Course-specific system environment   
@@ -25,7 +27,7 @@ Students of its various organizations can download, complete and return course e
 4. Select *Log in* from the TestMyCode menu.
 5. Enter your TMC credentials and log in.
 6. Add a course from ```My courses``` and download exercises
-7. Select ```Open exercise workspace``` from TestMyCode menu.
+7. Select ```Open exercise workspace``` from TestMyCode extension menu.
 
 ## Workspace and Editor usage
 
@@ -39,7 +41,7 @@ All predefined commands are related to the currently open and active exercise fi
 
 #### Test exercise
 
-When you wish to test your solution, click the `TMC - Run tests` or alternatively choose `Run tests``` from the TMC Menu.
+When you wish to test your solution, click the `TMC - Run tests` or alternatively choose `Run tests` from the TMC Menu.
 
 #### Submit exercise
 
@@ -57,3 +59,16 @@ This will submit the exercise data to the TMC Server before resetting the exerci
 #### Close exercise
 
 You can close the active exercise from the VSCode explorer view by choosing `Close exercise` from the TMC Menu.
+
+#### Download old submissions
+
+You can download old submissions by choosing `Download old submissions` from the TMC Menu.  
+
+## Extension settings
+
+You can open the TMC extension settings by pressing the TMC icon on the left sidebar and choose `Settings` in the TestMyCode extension menu.
+
+### TMC Data
+
+This is the location where all TMC extension data is saved.  
+Changing the location will create a `tmcdata` folder to your chosen location and move all the TMC data to the new location.

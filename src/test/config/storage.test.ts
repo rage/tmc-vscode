@@ -20,6 +20,7 @@ suite("Storage tests", () => {
     // We "magically" know them also here to remind you that changing these may break compatibility between releases.
     const AUTHENTICATION_TOKEN_KEY = "token";
     const EXERCISE_DATA_KEY = "exerciseData";
+    const EXTENSION_SETTINGS_KEY = "extensionSettings";
 
     /**
      * Helper function for running similar mock tests to multiple storage's updaters.
@@ -79,7 +80,6 @@ suite("Storage tests", () => {
                 status: 0,
                 name: "hello-world",
                 organization: "HY",
-                path: "/tmp",
                 updateAvailable: false,
             },
         ];
@@ -92,5 +92,20 @@ suite("Storage tests", () => {
 
     test("Exercise data getter uses ExtensionContext correctly", () => {
         assertGetter(() => storage.getExerciseData(), EXERCISE_DATA_KEY);
+    });
+
+    test("Extension settings updater uses ExtensionContext correctly", () => {
+        const extensionSettings = {
+            dataPath: "/tmp/tmcdata",
+        };
+        assertUpdater(
+            () => storage.updateExtensionSettings(extensionSettings),
+            EXTENSION_SETTINGS_KEY,
+            extensionSettings,
+        );
+    });
+
+    test("Extension settings getter uses ExtensionContext correctly", () => {
+        assertGetter(() => storage.getExtensionSettings(), EXTENSION_SETTINGS_KEY);
     });
 });

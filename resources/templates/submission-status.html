@@ -1,5 +1,6 @@
 <html>
     <head>
+        {{{cspBlob}}}
         <style>
             {{{cssBlob}}}
         </style>
@@ -26,7 +27,7 @@
                     />
                 </div>
                 <div>
-                    {{#check_submission_status sandbox_status}}
+                    {{#check_submission_status statusData.sandbox_status}}
                     <h3>{{status}}</h3>
                     {{/check_submission_status}}
                 </div>
@@ -37,7 +38,7 @@
             const vscode = acquireVsCodeApi();
 
             function runInBackground() {
-                vscode.postMessage({ type: "setToBackgroundInSubmission" });
+                vscode.postMessage({ type: "closeWindow" });
             }
             function showInBrowser() {
                 vscode.postMessage({ type: "showInBrowser" });

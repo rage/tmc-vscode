@@ -12,6 +12,12 @@ export type ActionContext = {
     userData: UserData;
 };
 
+export type CourseExerciseDownloads = {
+    courseId: number;
+    exerciseIds: number[];
+    organizationSlug: string;
+};
+
 export type FeedbackQuestion = {
     id: number;
     kind: string;

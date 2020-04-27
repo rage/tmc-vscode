@@ -1,5 +1,6 @@
 <html>
     <head>
+        {{{cspBlob}}}
         <style>
             {{{cssBlob}}}
         </style>
@@ -37,7 +38,7 @@
             const vscode = acquireVsCodeApi();
 
             function runInBackground() {
-                vscode.postMessage({ type: "setToBackground" });
+                vscode.postMessage({ type: "closeWindow" });
             }
         </script>
     </body>

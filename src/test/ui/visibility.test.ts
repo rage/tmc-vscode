@@ -1,7 +1,7 @@
 import * as assert from "assert";
 
 import { Visibility } from "../../ui/treeview/visibility";
-import { VisibilityGroup } from "../../ui/treeview/types";
+import { VisibilityGroup } from "../../ui/types";
 
 suite("Treeview Visibility tests", () => {
     function before(): {

@@ -8,7 +8,7 @@ import { ApiError, ConnectionError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
 import Resources from "./resources";
-import { ExerciseStatus, LocalCourseData, LocalExerciseData } from "./types";
+import { ExerciseStatus, ExtensionSettings, LocalCourseData, LocalExerciseData } from "./types";
 
 export async function validateAndFix(
     storage: Storage,
@@ -28,7 +28,6 @@ export async function validateAndFix(
             if (
                 !is<{
                     organization: string;
-                    path: string;
                     checksum: string;
                     id: number;
                     course: string;
@@ -68,7 +67,6 @@ export async function validateAndFix(
                     status: exerciseStatus,
                     name: exerciseDetails.name,
                     organization: ex.organization,
-                    path: ex.path,
                     updateAvailable: false,
                 });
             }
@@ -83,6 +81,7 @@ export async function validateAndFix(
             return new Err(login.val);
         }
         console.log("Fixing userdata");
+
         const userDataFixed: { courses: LocalCourseData[] } = { courses: [] };
         if (userData.courses !== undefined) {
             for (const course of userData.courses) {
@@ -134,11 +133,21 @@ export async function validateAndFix(
                     organization: course.organization,
                     awardedPoints: awardedPoints,
                     availablePoints: availablePoints,
+                    notifyAfter: 0,
+                    newExercises: [],
                 });
             }
         }
         storage.updateUserData(userDataFixed);
         console.log("Userdata fixed");
+    }
+
+    const settings = storage.getExtensionSettings();
+    if (!is<ExtensionSettings | undefined>(settings)) {
+        console.log("Fixing extension settings");
+        const settingsFixed = undefined;
+        storage.updateExtensionSettings(settingsFixed);
+        console.log("Extension settings fixed");
     }
 
     return Ok.EMPTY;
@@ -198,7 +207,7 @@ async function ensureLogin(
                     resolve(msg);
                 },
             );
-            temp.setContent("login");
+            temp.setContent({ templateName: "login" });
         });
         if (!loginMsg.username || !loginMsg.password) {
             continue;

@@ -1,0 +1,43 @@
+<html>
+    <head>
+        {{{cspBlob}}}
+        <style>
+            {{{cssBlob}}}
+        </style>
+    </head>
+
+    <body>
+        <div class="container">
+            <div class="row">
+                <div class="col">
+                    <h1>TMC Settings</h1>
+                    <p>Here you can change TMC extension settings.</p>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col">
+                    <div class="card-transparent border-color">
+                        <div class="card-body">
+                            <h5 class="card-title">TMC Data</h5>
+                            <p class="card-text">
+                                Currently your TMC data ({{tmcDataSize}}) is located at: <br />
+                                {{tmcData}}
+                            </p>
+                            <button class="btn btn-primary" onclick="changeTmcDataPath()">
+                                Change path
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+            const vscode = acquireVsCodeApi();
+
+            function changeTmcDataPath() {
+                vscode.postMessage({ type: "changeTmcDataPath" });
+            }
+        </script>
+    </body>
+</html>
