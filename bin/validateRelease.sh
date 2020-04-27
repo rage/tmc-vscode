@@ -12,7 +12,7 @@ fi
 
 # Version in package.json must match with tag version
 packageVersion=`grep -Eo '"version":.+$' package.json`
-if [[ ! $packageVersion =~ '"version": "'$tagVersion'".*$' ]]
+if [[ ! $packageVersion =~ '"version": "'$tagVersion'",' ]]
 then
     echo "Error: The version in package.json doesn't match with the tag."
     exitCode=1
@@ -20,7 +20,7 @@ fi
 
 # Make sure that the package-lock.json version also matches
 packageLockVersion=`grep -Eo '"version":.+$' package-lock.json`
-if [[ ! $packageLockVersion =~ '"version": "'$tagVersion'".*$' ]]
+if [[ ! $packageLockVersion =~ '"version": "'$tagVersion'",' ]]
 then
     echo "Error: The version in package-lock.json doesn't match with the tag. Did you forget to run npm install?"
     exitCode=1
