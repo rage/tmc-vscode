@@ -58,7 +58,7 @@ export async function logout(
     visibility: VisibilityGroups,
     actionContext: ActionContext,
 ): Promise<void> {
-    if (await askForConfirmation("Are you sure you want to log out?", true)) {
+    if (await askForConfirmation("Are you sure you want to log out?")) {
         const { tmc, ui } = actionContext;
         tmc.deauthenticate();
         ui.webview.dispose();

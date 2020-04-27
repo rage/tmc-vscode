@@ -67,7 +67,7 @@ export async function resourceInitialization(
                 await vscode.window.withProgress(
                     {
                         location: vscode.ProgressLocation.Notification,
-                        title: "(0%) Java not found, downloading...",
+                        title: "TestMyCode",
                     },
                     async (p) =>
                         downloadFile(
@@ -77,7 +77,7 @@ export async function resourceInitialization(
                             undefined,
                             (progress: number, increment: number) =>
                                 p.report({
-                                    message: `(${progress}%) Java not found, downloading...`,
+                                    message: `Java not found. Downloading... (${progress}%)`,
                                     increment,
                                 }),
                         ),
@@ -86,7 +86,7 @@ export async function resourceInitialization(
             await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
-                    title: "(0%) Extracting Java...",
+                    title: "TestMyCode",
                 },
                 async (p) => {
                     const totalSize = fs.statSync(archivePath).size;
@@ -96,9 +96,9 @@ export async function resourceInitialization(
                         .addListener("data", (c) => {
                             totalExtracted += c.length;
                             p.report({
-                                message: `(${Math.round(
+                                message: `Extracting Java... (${Math.round(
                                     (100 * totalExtracted) / totalSize,
-                                )}%) Extracting Java...`,
+                                )}%)`,
                                 increment: (100 * c.length) / totalSize,
                             });
                         })
@@ -172,7 +172,7 @@ export async function resourceInitialization(
         const tmcLangsResult = await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: "(0%) Downloading required files",
+                title: "TestMyCode",
             },
             async (p) =>
                 downloadFile(
@@ -182,7 +182,7 @@ export async function resourceInitialization(
                     undefined,
                     (progress: number, increment: number) =>
                         p.report({
-                            message: `(${progress}%) Downloading required files`,
+                            message: `Downloading required files... (${progress}%)`,
                             increment,
                         }),
                 ),
