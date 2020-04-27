@@ -210,7 +210,10 @@ export function registerUiActions(
                         ["OK", (): void => {}],
                     );
                 }
-
+                await showNotification(`TMC Data was successfully moved to ${newPath}`, [
+                    "OK",
+                    (): void => {},
+                ]);
                 resources.setDataPath(newPath);
                 if (open) {
                     // Opening a workspace restarts VSCode (v1.44)

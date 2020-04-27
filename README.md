@@ -1,7 +1,8 @@
 # ATTENTION!
 
 **This extension is under development.**  
-The VSCode team would like to hear if you've encountered any problems while using this extension. You can submit your ideas and/or issues via our [google form](https://docs.google.com/forms/d/1oDCFVNgi5rDSh5iqeINX7qEpc72VnHKmFzuj-jzxtcA/viewform?edit_requested=true) or open an issue in our Github repository [https://github.com/rage/tmc-vscode/issues](https://github.com/rage/tmc-vscode/issues).
+The VSCode team would like to hear if you've encountered any problems while using this extension.  
+You can submit your ideas or issues to the GitHub repository [https://github.com/rage/tmc-vscode/issues](https://github.com/rage/tmc-vscode/issues).
 
 # TestMyCode for Visual Studio Code
 
