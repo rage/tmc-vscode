@@ -1,4 +1,4 @@
-import * as fs from "fs";
+import * as fs from "fs-extra";
 import * as glob from "glob";
 import * as path from "path";
 import * as vscode from "vscode";
@@ -39,14 +39,14 @@ export async function resourceInitialization(
 
     let javaPath: string;
     const javaDownloadPath = path.join(tmcDataPath, "java");
+    const javaDownloadPathTemp = path.join(tmcDataPath, "javaTemp");
+    del.sync(path.join(javaDownloadPathTemp), { force: true });
 
     if (await isJavaPresent()) {
         javaPath = "java";
-        del.sync(path.join(javaDownloadPath, "**"), { force: true });
+        del.sync(javaDownloadPath.split(path.sep).join("/"), { force: true });
     } else {
-        if (!fs.existsSync(javaDownloadPath)) {
-            fs.mkdirSync(javaDownloadPath, { recursive: true });
-        }
+        fs.mkdirSync(javaDownloadPathTemp, { recursive: true });
         // Glob patterns should use / as separator on all platforms
         const javaBinaryGlob =
             javaDownloadPath.split(path.sep).join("/") +
@@ -54,7 +54,7 @@ export async function resourceInitialization(
         let paths = glob.sync(javaBinaryGlob);
 
         if (paths.length === 0) {
-            const archivePath = path.join(javaDownloadPath, "java.zip");
+            const archivePath = path.join(tmcDataPath, "java.zip");
             if (!fs.existsSync(archivePath)) {
                 const javaUrl = Object.entries(JAVA_ZIP_URLS)
                     .filter((x) => x[0] === getPlatform())
@@ -102,12 +102,14 @@ export async function resourceInitialization(
                                 increment: (100 * c.length) / totalSize,
                             });
                         })
-                        .pipe(unzipper.Extract({ path: javaDownloadPath }))
+                        .pipe(unzipper.Extract({ path: javaDownloadPathTemp }))
                         .promise();
                 },
             );
-
+            del.sync(javaDownloadPath, { force: true });
+            fs.renameSync(javaDownloadPathTemp, javaDownloadPath);
             del.sync(archivePath, { force: true });
+
             paths = glob.sync(javaBinaryGlob);
             if (paths.length === 0) {
                 return new Err(new Error("Couldn't find Java binary after extraction"));
