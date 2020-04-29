@@ -6,7 +6,12 @@ export const JAVA_ZIP_URLS: {
     linux64?: string;
     windows32?: string;
     windows64?: string;
-} = {};
+} = {
+    linux64: "https://download.mooc.fi/tmc-vscode/OpenJDK8U-jre_x64_linux_hotspot_8u252b09.zip",
+    windows32:
+        "https://download.mooc.fi/tmc-vscode/OpenJDK8U-jre_x86-32_windows_hotspot_8u252b09.zip",
+    windows64: "https://download.mooc.fi/tmc-vscode/OpenJDK8U-jre_x64_windows_hotspot_8u252b09.zip",
+};
 export const TMC_API_URL = "https://tmc.mooc.fi/api/v8/";
 export const ACCESS_TOKEN_URI = "https://tmc.mooc.fi/oauth/token";
 export const CLIENT_ID = "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0";

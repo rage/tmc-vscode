@@ -29,6 +29,10 @@ Students of its various organizations can download, complete and return course e
 6. Add a course from ```My courses``` and download exercises
 7. Select ```Open exercise workspace``` from TestMyCode extension menu.
 
+## JRE source
+
+The plugin may download an OpenJDK Java Runtime Environment if no JRE is found on the system. The source code for this JRE distribution can be found [here](https://github.com/AdoptOpenJDK/openjdk-jdk8u/tree/eb3c58ad18052eca4d3e969f95154ab065d025bb).
+
 ## Workspace and Editor usage
 
 Exercises that are downloaded and opened via the TMC extension appear in the Explorer:
