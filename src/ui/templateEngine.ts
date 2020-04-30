@@ -53,13 +53,17 @@ export default class TemplateEngine {
                     return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
                 } else if (status === "TESTS_FAILED") {
                     let pasteLinkHTML = "";
+                    let collapsed = `<button id='collapsible' class="collapsible">Need help?</button>
+                                    <div id='content-collapsible' class="content-collapsible">`;
                     if (pasteLink) {
-                        pasteLinkHTML = `<p><input type="text" value="${pasteLink}" id="copyPasteLink">
+                        pasteLinkHTML = `<p><input style='width: 65%!important;' type="text" value="${pasteLink}" id="copyPasteLink">
                                         <button class='btn-primary' onclick="copyText()">Copy text</button><span class='ml-1' id="copied"></span></p>`;
+                        collapsed = `<button id='collapsible' class="collapsible active">Need help?</button>
+                                    <div id='content-collapsible' style="max-height: 250px;" class="content-collapsible">`;
                     }
+
                     return `<h1>TESTS FAILED</h1>
-                    <button class="collapsible">Need help?</button>
-                    <div class="content-collapsible">
+                    ${collapsed}
                         <h5>Submit to TMC Paste</h5>
                         <p>You can submit your code to TMC Paste and share the link to the course discussion channel and ask for help.</p>
                         ${pasteLinkHTML}

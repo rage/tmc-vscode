@@ -54,11 +54,6 @@
         <script>
             const vscode = acquireVsCodeApi();
             const exerciseId = {{id}};
-            {{#if pasteLink}}
-                const triggerPaste = true;
-            {{else}}
-                const triggerPaste = false;
-            {{/if}}
 
             function submitToServer() {
                 vscode.postMessage({ type: 'submitToServer', data: { exerciseId: exerciseId } });
@@ -87,10 +82,6 @@
                 document.execCommand("copy");
                 const copied = document.getElementById("copied");
                 copied.innerHTML = "Copied!";
-            }
-
-            if (triggerPaste) {
-                coll[0].click();
             }
         </script>
     </body>
