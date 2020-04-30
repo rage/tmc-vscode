@@ -7,7 +7,12 @@ import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
-import { isWorkspaceOpen, superfluousPropertiesEnabled } from "./utils/";
+import {
+    checkFreeDiskSpace,
+    isWorkspaceOpen,
+    showNotification,
+    superfluousPropertiesEnabled,
+} from "./utils/";
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -59,6 +64,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     checkForExerciseUpdates(actionContext);
     checkForNewExercises(actionContext);
+    const freeSpace = await checkFreeDiskSpace(actionContext.resources.getDataPath());
+    console.log(freeSpace);
+
+    if (freeSpace.err) {
+        showNotification(freeSpace.val.message);
+    } else {
+        if (freeSpace.val < 1000000000) {
+            showNotification(
+                "WARNING! Currently available space less than 1Gb. Available space: " +
+                    (freeSpace.val / 1000000000).toFixed(2) +
+                    "Gb",
+            );
+        } else {
+            showNotification(
+                "Currently available space: " + (freeSpace.val / 1000000000).toFixed(2) + "Gb",
+            );
+        }
+    }
 }
 
 export function deactivate(): void {}
