@@ -419,7 +419,7 @@ export async function removeCourse(id: number, actionContext: ActionContext): Pr
  */
 export async function updateCourse(id: number, actionContext: ActionContext): Promise<void> {
     const { tmc, userData, workspaceManager } = actionContext;
-    return Promise.all([tmc.getCourseDetails(id, false), tmc.getCourseExercises(id, false)]).then(
+    return Promise.all([tmc.getCourseDetails(id), tmc.getCourseExercises(id)]).then(
         ([courseDetailsResult, courseExercisesResult]) => {
             console.log(
                 `Refreshing exercise data for course ${userData.getCourse(id).name} from API`,

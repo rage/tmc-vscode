@@ -127,7 +127,7 @@ export default class TMC {
     /**
      * @returns a list of organizations
      */
-    public getOrganizations(cache?: boolean): Promise<Result<Organization[], Error>> {
+    public getOrganizations(cache = false): Promise<Result<Organization[], Error>> {
         return this.checkApiResponse(
             this.tmcApiRequest("org.json", cache),
             createIs<Organization[]>(),
@@ -138,7 +138,7 @@ export default class TMC {
      * @returns one Organization information
      * @param slug Organization slug/id
      */
-    public getOrganization(slug: string, cache?: boolean): Promise<Result<Organization, Error>> {
+    public getOrganization(slug: string, cache = false): Promise<Result<Organization, Error>> {
         return this.checkApiResponse(
             this.tmcApiRequest(`org/${slug}.json`, cache),
             createIs<Organization>(),
@@ -149,7 +149,7 @@ export default class TMC {
      * Requires an organization to be selected
      * @returns a list of courses belonging to the currently selected organization
      */
-    public getCourses(organization: string, cache?: boolean): Promise<Result<Course[], Error>> {
+    public getCourses(organization: string, cache = false): Promise<Result<Course[], Error>> {
         return this.checkApiResponse(
             this.tmcApiRequest(`core/org/${organization}/courses`, cache),
             createIs<Course[]>(),
@@ -160,7 +160,7 @@ export default class TMC {
      * @param id course id
      * @returns a detailed description for the specified course
      */
-    public getCourseDetails(id: number, cache?: boolean): Promise<Result<CourseDetails, Error>> {
+    public getCourseDetails(id: number, cache = false): Promise<Result<CourseDetails, Error>> {
         return this.checkApiResponse(
             this.tmcApiRequest(`core/courses/${id}`, cache),
             createIs<CourseDetails>(),
@@ -172,10 +172,7 @@ export default class TMC {
      * @param id course id
      * @returns return list of courses exercises. Each exercise carry info about available points that can be gained from an exercise
      */
-    public getCourseExercises(
-        id: number,
-        cache?: boolean,
-    ): Promise<Result<CourseExercise[], Error>> {
+    public getCourseExercises(id: number, cache = false): Promise<Result<CourseExercise[], Error>> {
         return this.checkApiResponse(
             this.tmcApiRequest(`courses/${id}/exercises`, cache),
             createIs<CourseExercise[]>(),
@@ -188,7 +185,7 @@ export default class TMC {
      */
     public async getExerciseDetails(
         id: number,
-        cache?: boolean,
+        cache = false,
     ): Promise<Result<ExerciseDetails, Error>> {
         return this.checkApiResponse(
             this.tmcApiRequest(`core/exercises/${id}`, cache),
@@ -207,7 +204,7 @@ export default class TMC {
             throw new Error("User not logged in!");
         }
         return this.checkApiResponse(
-            this.tmcApiRequest(submissionUrl, false),
+            this.tmcApiRequest(submissionUrl),
             createIs<SubmissionStatusReport>(),
         );
     }
@@ -222,7 +219,7 @@ export default class TMC {
         organizationSlug: string,
     ): Promise<Result<void, Error>> {
         if (!this.workspaceManager) {
-            throw displayProgrammerError("WorkspaceManager not assinged");
+            throw displayProgrammerError("WorkspaceManager not assigned");
         }
         const archivePath = path.join(`${this.resources.getDataPath()}`, `${id}.zip`);
 
@@ -236,7 +233,7 @@ export default class TMC {
             return new Err(result.val);
         }
 
-        const detailsResult = await this.getExerciseDetails(id);
+        const detailsResult = await this.getExerciseDetails(id, true);
         if (detailsResult.err) {
             return new Err(detailsResult.val);
         }
@@ -579,14 +576,11 @@ export default class TMC {
      */
     private async tmcApiRequest(
         endpoint: string,
-        cache: boolean | undefined,
-        method?: "get" | "post",
+        cache = false,
+        method: "get" | "post" = "get",
         body?: string | FormData | url.URLSearchParams,
-        headers?: { [key: string]: string },
+        headers: { [key: string]: string } = {},
     ): Promise<Result<TMCApiResponse, Error>> {
-        method = method || "get";
-        cache = cache === undefined ? method === "get" : cache;
-
         if (cache) {
             const cacheResult = this.cache.get(method + endpoint);
             if (cacheResult) {
@@ -596,8 +590,8 @@ export default class TMC {
 
         let request = {
             body,
-            headers: headers ? headers : {},
-            method: method ? method : "get",
+            headers,
+            method,
             url: endpoint.startsWith("https://") ? endpoint : this.tmcApiUrl + endpoint,
         };
 
@@ -613,7 +607,9 @@ export default class TMC {
                 try {
                     const responseObject = await response.json();
                     if (is<TMCApiResponse>(responseObject)) {
-                        this.cache.set(method + endpoint, responseObject);
+                        if (cache) {
+                            this.cache.set(method + endpoint, responseObject);
+                        }
                         return new Ok(responseObject);
                     }
                     console.error("Unexpected TMC response type: ");

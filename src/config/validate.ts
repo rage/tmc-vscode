@@ -98,7 +98,7 @@ export async function validateAndFix(
                 }
 
                 const courseDetails = await (course.id !== undefined
-                    ? tmc.getCourseDetails(course.id)
+                    ? tmc.getCourseDetails(course.id, true)
                     : getCourseDetails(tmc, course.organization, course.name as string));
                 if (courseDetails.err) {
                     if (courseDetails.val instanceof ApiError) {
@@ -109,7 +109,7 @@ export async function validateAndFix(
                 }
 
                 const courseExercises = await (course.id !== undefined
-                    ? tmc.getCourseExercises(course.id)
+                    ? tmc.getCourseExercises(course.id, true)
                     : getCourseExercises(tmc, course.organization, course.name as string));
 
                 if (courseExercises.err) {
@@ -158,7 +158,7 @@ async function getCourseDetails(
     organization: string,
     course: string,
 ): Promise<Result<CourseDetails, Error>> {
-    const coursesResult = await tmc.getCourses(organization);
+    const coursesResult = await tmc.getCourses(organization, true);
     if (coursesResult.err) {
         return new Err(coursesResult.val);
     }
@@ -167,7 +167,7 @@ async function getCourseDetails(
     if (!courseId) {
         return new Err(new ApiError("No such course in response"));
     }
-    return tmc.getCourseDetails(courseId);
+    return tmc.getCourseDetails(courseId, true);
 }
 
 async function getCourseExercises(
@@ -175,7 +175,7 @@ async function getCourseExercises(
     org: string,
     course: string,
 ): Promise<Result<CourseExercise[], Error>> {
-    const coursesResult = await tmc.getCourses(org);
+    const coursesResult = await tmc.getCourses(org, true);
     if (coursesResult.err) {
         return new Err(coursesResult.val);
     }
@@ -184,7 +184,7 @@ async function getCourseExercises(
     if (!courseId) {
         return new Err(new ApiError("No such course in response"));
     }
-    return tmc.getCourseExercises(courseId);
+    return tmc.getCourseExercises(courseId, true);
 }
 
 async function ensureLogin(
