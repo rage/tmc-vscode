@@ -9,6 +9,7 @@ import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
 import {
     checkFreeDiskSpace,
+    formatSizeInBytes,
     isWorkspaceOpen,
     showNotification,
     superfluousPropertiesEnabled,
@@ -64,22 +65,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     checkForExerciseUpdates(actionContext);
     checkForNewExercises(actionContext);
+
     const freeSpace = await checkFreeDiskSpace(actionContext.resources.getDataPath());
-    console.log(freeSpace);
 
     if (freeSpace.err) {
         showNotification(freeSpace.val.message);
     } else {
+        const formatted = formatSizeInBytes(freeSpace.val);
         if (freeSpace.val < 1000000000) {
             showNotification(
-                "WARNING! Currently available space less than 1Gb. Available space: " +
-                    (freeSpace.val / 1000000000).toFixed(2) +
-                    "Gb",
+                "WARNING! Currently available space less than 1Gb. Available space: " + formatted,
             );
         } else {
-            showNotification(
-                "Currently available space: " + (freeSpace.val / 1000000000).toFixed(2) + "Gb",
-            );
+            showNotification("Currently available space: " + formatted);
         }
     }
 }
