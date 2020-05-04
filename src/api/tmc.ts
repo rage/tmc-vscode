@@ -4,6 +4,7 @@ import * as del from "del";
 import * as FormData from "form-data";
 import * as fs from "fs";
 import * as fetch from "node-fetch";
+import * as kill from "tree-kill";
 import * as path from "path";
 import * as url from "url";
 import Resources from "../config/resources";
@@ -11,7 +12,13 @@ import Storage from "../config/storage";
 
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
-import { ApiError, AuthenticationError, AuthorizationError, ConnectionError } from "../errors";
+import {
+    ApiError,
+    AuthenticationError,
+    AuthorizationError,
+    ConnectionError,
+    RuntimeError,
+} from "../errors";
 import { displayProgrammerError, downloadFile } from "../utils/";
 import {
     Course,
@@ -32,7 +39,13 @@ import {
     TmcLangsTestResults,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
-import { ACCESS_TOKEN_URI, CLIENT_ID, CLIENT_SECRET, TMC_API_URL } from "../config/constants";
+import {
+    ACCESS_TOKEN_URI,
+    CLIENT_ID,
+    CLIENT_SECRET,
+    TMC_API_URL,
+    TMC_LANGS_TIMEOUT,
+} from "../config/constants";
 import { resetExercise } from "../actions";
 import { ActionContext } from "../actions/types";
 
@@ -515,9 +528,32 @@ export default class TMC {
         let [stdout, stderr] = ["", ""];
         try {
             [stdout, stderr] = await new Promise((resolve, reject) => {
-                cp.exec(command, (err, stdout, stderr) =>
-                    err ? reject(err) : resolve([stdout, stderr]),
-                );
+                let active = true;
+                let timeouted = false;
+                const process = cp.exec(command, (err, stdout, stderr) => {
+                    if (!err) {
+                        resolve([stdout, stderr]);
+                    } else if (timeouted) {
+                        reject(
+                            new RuntimeError(
+                                "Process didn't seem to finish or was taking a really long time.",
+                            ),
+                        );
+                    } else {
+                        reject(err);
+                    }
+                });
+                process.on("exit", (code) => {
+                    console.log(`TMC-Langs exited with code ${code}`);
+                    active = false;
+                });
+                setTimeout(() => {
+                    if (active) {
+                        console.log(`Killing timeouted TMC-Langs process ${process.pid}`);
+                        timeouted = true;
+                        kill(process.pid);
+                    }
+                }, TMC_LANGS_TIMEOUT);
             });
         } catch (err) {
             return new Err(err);

@@ -24,6 +24,9 @@ export const WORKSPACE_SETTINGS = {
     },
 };
 
+/** Delay for when TMC-Langs process should be killed. */
+export const TMC_LANGS_TIMEOUT = 90 * 1000;
+
 /**
  * Delay for notifications that offer a "remind me later" option.
  */

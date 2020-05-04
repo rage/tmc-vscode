@@ -213,6 +213,7 @@
         "mocha": "^7.1.1",
         "node-fetch": "^2.6.0",
         "p-limit": "^2.3.0",
+        "tree-kill": "^1.2.2",
         "ts-results": "^2.0.1",
         "typescript-is": "^0.15.0",
         "unzipper": "^0.10.11"
