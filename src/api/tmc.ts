@@ -17,6 +17,7 @@ import {
     AuthenticationError,
     AuthorizationError,
     ConnectionError,
+    RuntimeError,
     TimeoutError,
 } from "../errors";
 import { displayProgrammerError, downloadFile } from "../utils/";
@@ -526,6 +527,7 @@ export default class TMC {
 
         let active = true;
         let error: cp.ExecException | undefined;
+        let interrupted = false;
         const process = cp.exec(command, (err) => {
             active = false;
             if (err) {
@@ -537,6 +539,7 @@ export default class TMC {
             if (active) {
                 console.log(`Killing TMC-Langs process ${process.pid}`);
                 kill(process.pid);
+                interrupted = true;
             }
         };
 
@@ -557,6 +560,8 @@ export default class TMC {
                 clearTimeout(timeout);
                 if (error) {
                     return resolve(new Err(error));
+                } else if (interrupted) {
+                    return resolve(new Err(new RuntimeError("TMC-Langs process was killed.")));
                 } else if (code !== null && code > 0) {
                     return resolve(new Err(new Error("Unknown error")));
                 }
@@ -588,7 +593,7 @@ export default class TMC {
                         response: JSON.parse(fs.readFileSync(outputPath, "utf8")),
                         logs,
                     };
-                    del.sync(outputPath, { force: true });
+                    // del.sync(outputPath, { force: true });
                     if (is<TmcLangsResponse>(readResult)) {
                         return resolve(new Ok(readResult));
                     }
