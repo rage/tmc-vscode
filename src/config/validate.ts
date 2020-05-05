@@ -130,6 +130,7 @@ export async function validateAndFix(
                     exercises: courseData.exercises.map((x) => ({ id: x.id, passed: x.completed })),
                     id: courseData.id,
                     name: courseData.name,
+                    title: courseData.title,
                     organization: course.organization,
                     awardedPoints: awardedPoints,
                     availablePoints: availablePoints,

@@ -1,6 +1,7 @@
 export type LocalCourseData = {
     id: number;
     name: string;
+    title: string;
     description: string;
     organization: string;
     exercises: LocalCourseExercise[];

@@ -76,3 +76,18 @@ You can open the TMC extension settings by pressing the TMC icon on the left sid
 
 This is the location where all TMC extension data is saved.  
 Changing the location will create a `tmcdata` folder to your chosen location and move all the TMC data to the new location.
+
+## Credits
+
+The project started as a Software Engineering Lab project at the [University of Helsinki CS Dept.](https://www.cs.helsinki.fi/home/).  
+Currently it is being maintained by the [Agile Education Research group](https://www.cs.helsinki.fi/en/rage/).
+
+### Original developers
+  * Samuli Ahlqvist [samp3](https://github.com/samp3)
+  * Jesse Anttila [jesseanttila-cai](https://github.com/jesseanttila-cai)
+  * Jori Lampi [jolampi](https://github.com/jolampi)
+  * Heikki Pulli [hegepi](https://github.com/hegepi)
+  * Sebastian Sergelius [sebazai](https://github.com/sebazai)
+
+### Client
+  * Henrik Nygren [nygrenh](https://github.com/nygrenh)

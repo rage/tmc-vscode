@@ -1,9 +1,15 @@
 # Changelog
 
-## Unpublished
+## [0.4.0] - 2020-05-xx
 
 #### Added
-- Download and use standalone Java if java is missing from system.
+- Download and use standalone Java in Windows and Linux if java is missing from system.
+- User can abort running TMC test process.
+- Abort running TMC test process after 180 seconds.
+
+#### Changed
+- My courses now shows proper course name.
+- Course details now shows proper course name.
 
 ## [0.3.0] - 2020-04-27
 

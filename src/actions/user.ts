@@ -403,6 +403,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         exercises: courseDetails.exercises.map((e) => ({ id: e.id, passed: e.completed })),
         id: courseDetails.id,
         name: courseDetails.name,
+        title: courseDetails.title,
         organization: orgAndCourse.val.organization,
         availablePoints: availablePoints,
         awardedPoints: awardedPoints,
