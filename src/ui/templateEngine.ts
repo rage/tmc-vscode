@@ -119,24 +119,28 @@ export default class TemplateEngine {
          */
         handlebars.registerHelper("check_submission_status", (status: string) => {
             let percentDone = 0;
+            const miniSpinner = `<div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="sr-only">Loading...</span>
+                                </div>`;
             if (status === "created") {
                 percentDone = 30;
                 return `${getProgressBar(percentDone)}
-                        <div>&#10004; Submission received. Waiting for it to be processed.</div>`;
+                        <div>&#10004; Submission received.</div>
+                        <div>${miniSpinner} Waiting for it to be processed.</div>`;
             } else if (status === "sending_to_sandbox") {
                 percentDone = 45;
                 return `${getProgressBar(percentDone)}
-                        <div>&#10004; Submission received. Waiting for it to be processed.</div>
-                        <div>Submission queued for processing.</div>`;
+                        <div>&#10004; Submission received.</div>
+                        <div>${miniSpinner} Submission queued for processing.</div>`;
             } else if (status === "processing_on_sandbox") {
                 percentDone = 75;
                 return `${getProgressBar(percentDone)}
-                        <div>&#10004; Submission received. Waiting for it to be processed.</div>
+                        <div>&#10004; Submission received.</div>
                         <div>&#10004; Submission in queue for processing.</div>
-                        <div>Testing submission.</div>`;
+                        <div>${miniSpinner} Testing submission.</div>`;
             } else {
                 return `${getProgressBar(percentDone)}
-                        <div>Submission sent to server.</div>`;
+                        <div>${miniSpinner} Submission sent to server.</div>`;
             }
         });
 

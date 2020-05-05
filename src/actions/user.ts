@@ -115,7 +115,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         }
         temp.setContent({ templateName: "error", error: testResult.val });
         vscode.window.showErrorMessage(`Exercise test run failed: \
-       ${testResult.val.name} - ${testResult.val.message}`);
+                                        ${testResult.val.name} - ${testResult.val.message}`);
         return;
     }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
@@ -154,7 +154,13 @@ export async function submitExercise(
     );
     const submitResult = await tmc.submitExercise(id);
 
-    const temp = tempView || new TemporaryWebview(resources, ui, "", () => {});
+    const temp =
+        tempView ||
+        new TemporaryWebview(resources, ui, "", async (msg: { type?: string }) => {
+            if (msg.type == "closeWindow") {
+                temp.dispose();
+            }
+        });
     temp.setTitle("TMC Server Submission");
 
     if (submitResult.err) {
