@@ -25,3 +25,7 @@ export class AuthorizationError extends BaseError {
 export class RuntimeError extends BaseError {
     public readonly name = "RuntimeError";
 }
+
+export class TimeoutError extends BaseError {
+    public readonly name = "TimeoutError";
+}

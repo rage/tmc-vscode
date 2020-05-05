@@ -17,7 +17,7 @@ import {
     AuthenticationError,
     AuthorizationError,
     ConnectionError,
-    RuntimeError,
+    TimeoutError,
 } from "../errors";
 import { displayProgrammerError, downloadFile } from "../utils/";
 import {
@@ -279,7 +279,7 @@ export default class TMC {
                 action: "extract-project",
                 archivePath,
                 exerciseFolderPath: exercisePath.val,
-            }),
+            })[0],
             createIs<TmcLangsPath>(),
         );
 
@@ -315,7 +315,7 @@ export default class TMC {
             this.executeLangsAction({
                 action: "get-exercise-packaging-configuration",
                 exerciseFolderPath: exPath,
-            }),
+            })[0],
             createIs<TmcLangsFilePath>(),
         );
 
@@ -341,7 +341,7 @@ export default class TMC {
                 action: "extract-project",
                 archivePath,
                 exerciseFolderPath: oldSubmissionTempPath,
-            }),
+            })[0],
             createIs<TmcLangsPath>(),
         );
 
@@ -381,22 +381,21 @@ export default class TMC {
      * Runs tests locally for an exercise
      * @param id Id of the exercise
      */
-    public async runTests(id: number): Promise<Result<TmcLangsTestResults, Error>> {
+    public runTests(id: number): [Promise<Result<TmcLangsTestResults, Error>>, () => void] {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
         const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
         if (exerciseFolderPath.err) {
-            return new Err(new Error("???"));
+            return [Promise.resolve(new Err(new Error("???"))), (): void => {}];
         }
 
-        return this.checkApiResponse(
-            this.executeLangsAction({
-                action: "run-tests",
-                exerciseFolderPath: exerciseFolderPath.val,
-            }),
-            createIs<TmcLangsTestResults>(),
-        );
+        const [testRunner, interrupt] = this.executeLangsAction({
+            action: "run-tests",
+            exerciseFolderPath: exerciseFolderPath.val,
+        });
+
+        return [this.checkApiResponse(testRunner, createIs<TmcLangsTestResults>()), interrupt];
     }
 
     /**
@@ -421,7 +420,7 @@ export default class TMC {
                 action: "compress-project",
                 archivePath: path.join(`${this.resources.getDataPath()}`, `${id}-new.zip`),
                 exerciseFolderPath: exerciseFolderPath.val,
-            }),
+            })[0],
             createIs<TmcLangsPath>(),
         );
         if (compressResult.err) {
@@ -482,9 +481,9 @@ export default class TMC {
      * Executes external tmc-langs process with given arguments.
      * @param tmcLangsAction Tmc-langs command and arguments
      */
-    private async executeLangsAction(
+    private executeLangsAction(
         tmcLangsAction: TmcLangsAction,
-    ): Promise<Result<TmcLangsResponse, Error>> {
+    ): [Promise<Result<TmcLangsResponse, Error>>, () => void] {
         const action = tmcLangsAction.action;
         let exercisePath = "";
         let outputPath = "";
@@ -525,58 +524,81 @@ export default class TMC {
 
         console.log(command);
 
-        let [stdout, stderr] = ["", ""];
-        try {
-            [stdout, stderr] = await new Promise((resolve, reject) => {
-                let active = true;
-                let timeouted = false;
-                const process = cp.exec(command, (err, stdout, stderr) => {
-                    if (!err) {
-                        resolve([stdout, stderr]);
-                    } else if (timeouted) {
-                        reject(
-                            new RuntimeError(
-                                "Process didn't seem to finish or was taking a really long time.",
-                            ),
-                        );
-                    } else {
-                        reject(err);
-                    }
-                });
-                process.on("exit", (code) => {
-                    console.log(`TMC-Langs exited with code ${code}`);
-                    active = false;
-                });
-                setTimeout(() => {
-                    if (active) {
-                        console.log(`Killing timeouted TMC-Langs process ${process.pid}`);
-                        timeouted = true;
-                        kill(process.pid);
-                    }
-                }, TMC_LANGS_TIMEOUT);
-            });
-        } catch (err) {
-            return new Err(err);
-        }
+        let active = true;
+        let error: cp.ExecException | undefined;
+        const process = cp.exec(command, (err) => {
+            active = false;
+            if (err) {
+                error = err;
+            }
+        });
 
-        const logs = {
-            stdout,
-            stderr,
+        const interrupt = (): void => {
+            if (active) {
+                console.log(`Killing TMC-Langs process ${process.pid}`);
+                kill(process.pid);
+            }
         };
 
-        if (action === "extract-project" || action === "compress-project") {
-            return new Ok({ response: outputPath, logs });
-        }
+        const processResult: Promise<Result<[string, string], Error>> = new Promise((resolve) => {
+            let error: Error | undefined;
+            const timeout = setTimeout(() => {
+                interrupt();
+                return resolve(
+                    new Err(
+                        new TimeoutError(
+                            "Process didn't seem to finish or was taking a really long time.",
+                        ),
+                    ),
+                );
+            }, TMC_LANGS_TIMEOUT);
 
-        const result = { response: JSON.parse(fs.readFileSync(outputPath, "utf8")), logs };
-        // del.sync(outputPath, { force: true });
-        if (is<TmcLangsResponse>(result)) {
-            return new Ok(result);
-        }
+            process.on("exit", (code) => {
+                clearTimeout(timeout);
+                if (error) {
+                    return resolve(new Err(error));
+                } else if (code !== null && code > 0) {
+                    return resolve(new Err(new Error("Unknown error")));
+                }
+                const stdout = (process.stdout?.read() || "stdout missing") as string;
+                const stderr = (process.stderr?.read() || "stderr missing") as string;
+                return resolve(new Ok([stdout, stderr]));
+            });
+        });
 
-        console.error(result);
+        return [
+            new Promise((resolve) => {
+                processResult.then((result) => {
+                    if (error) {
+                        return resolve(new Err(error));
+                    }
 
-        return new Err(new Error("Unexpected response JSON type"));
+                    if (result.err) {
+                        return resolve(new Err(result.val));
+                    }
+
+                    const [stdout, stderr] = result.val;
+                    const logs = { stdout, stderr };
+
+                    if (action === "extract-project" || action === "compress-project") {
+                        return resolve(new Ok({ response: outputPath, logs }));
+                    }
+
+                    const readResult = {
+                        response: JSON.parse(fs.readFileSync(outputPath, "utf8")),
+                        logs,
+                    };
+                    del.sync(outputPath, { force: true });
+                    if (is<TmcLangsResponse>(readResult)) {
+                        return resolve(new Ok(readResult));
+                    }
+
+                    console.error(result);
+                    return resolve(new Err(new Error("Unexpected response JSON type")));
+                });
+            }),
+            interrupt,
+        ];
     }
 
     /**

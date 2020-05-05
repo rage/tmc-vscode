@@ -29,6 +29,12 @@
                                 class="btn-primary"
                                 value="Run in background"
                             />
+                            <input
+                                type="button"
+                                onclick="abortTests()"
+                                class="btn-primary"
+                                value="Abort"
+                            />
                         </div>
                     </div>
                 </div>
@@ -39,6 +45,10 @@
 
             function runInBackground() {
                 vscode.postMessage({ type: "closeWindow" });
+            }
+
+            function abortTests() {
+                vscode.postMessage({ type: "abortTests" });
             }
         </script>
     </body>

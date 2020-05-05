@@ -93,11 +93,26 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         },
     );
 
+    const [testRunner, interrupt] = tmc.runTests(id);
+    let aborted = false;
+    temp.setMessageHandler((msg: { type?: string }) => {
+        if (msg.type === "abortTests") {
+            interrupt();
+            aborted = true;
+        }
+    });
     temp.setContent({ templateName: "running-tests", exerciseName });
     ui.setStatusBar(`Running tests for ${exerciseName}`);
-    const testResult = await tmc.runTests(id);
+    const testResult = await testRunner;
     if (testResult.err) {
-        ui.setStatusBar(`Running tests for ${exerciseName} failed`, 5000);
+        ui.setStatusBar(
+            `Running tests for ${exerciseName} ${aborted ? "aborted" : "failed"}`,
+            5000,
+        );
+        if (aborted) {
+            temp.dispose();
+            return;
+        }
         temp.setContent({ templateName: "error", error: testResult.val });
         vscode.window.showErrorMessage(`Exercise test run failed: \
        ${testResult.val.name} - ${testResult.val.message}`);
