@@ -73,36 +73,33 @@ export async function logout(
 export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
     const { ui, resources, tmc, workspaceManager } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
-
     if (exerciseDetails.err) {
         vscode.window.showErrorMessage(
             `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`,
         );
         return;
     }
-    const exerciseName = exerciseDetails.val.name;
-    console.log(`Running local tests for ${exerciseName}`);
+
+    const [testRunner, interrupt] = tmc.runTests(id);
+    let aborted = false;
     const temp = new TemporaryWebview(
         resources,
         ui,
         "TMC Test Results",
         async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
-            if (msg.type == "closeWindow") {
+            if (msg.type === "closeWindow") {
                 temp.dispose();
+            } else if (msg.type === "abortTests") {
+                interrupt();
+                aborted = true;
             }
         },
     );
-
-    const [testRunner, interrupt] = tmc.runTests(id);
-    let aborted = false;
-    temp.setMessageHandler((msg: { type?: string }) => {
-        if (msg.type === "abortTests") {
-            interrupt();
-            aborted = true;
-        }
-    });
+    const exerciseName = exerciseDetails.val.name;
     temp.setContent({ templateName: "running-tests", exerciseName });
     ui.setStatusBar(`Running tests for ${exerciseName}`);
+    console.log(`Running local tests for ${exerciseName}`);
+
     const testResult = await testRunner;
     if (testResult.err) {
         ui.setStatusBar(
