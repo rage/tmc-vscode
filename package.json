@@ -2,7 +2,7 @@
     "name": "test-my-code",
     "displayName": "TestMyCode",
     "description": "TestMyCode extension for Visual Studio Code",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "license": "MIT",
     "publisher": "moocfi",
     "repository": {
@@ -205,6 +205,7 @@
     "dependencies": {
         "client-oauth2": "^4.2.5",
         "del": "^5.1.0",
+        "diskusage-ng": "^0.2.4",
         "du": "^1.0.0",
         "form-data": "^3.0.0",
         "fs-extra": "^9.0.0",
@@ -212,6 +213,7 @@
         "mocha": "^7.1.1",
         "node-fetch": "^2.6.0",
         "p-limit": "^2.3.0",
+        "tree-kill": "^1.2.2",
         "ts-results": "^2.0.1",
         "typescript-is": "^0.15.0",
         "unzipper": "^0.10.11"

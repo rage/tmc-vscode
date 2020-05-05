@@ -21,3 +21,11 @@ export class ApiError extends BaseError {
 export class AuthorizationError extends BaseError {
     public readonly name = "AuthorizationError";
 }
+
+export class RuntimeError extends BaseError {
+    public readonly name = "RuntimeError";
+}
+
+export class TimeoutError extends BaseError {
+    public readonly name = "TimeoutError";
+}

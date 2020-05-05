@@ -53,13 +53,17 @@ export default class TemplateEngine {
                     return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
                 } else if (status === "TESTS_FAILED") {
                     let pasteLinkHTML = "";
+                    let collapsed = `<button id='collapsible' class="collapsible">Need help?</button>
+                                    <div id='content-collapsible' class="content-collapsible">`;
                     if (pasteLink) {
-                        pasteLinkHTML = `<p><input type="text" value="${pasteLink}" id="copyPasteLink">
+                        pasteLinkHTML = `<p><input style='width: 65%!important;' type="text" value="${pasteLink}" id="copyPasteLink">
                                         <button class='btn-primary' onclick="copyText()">Copy text</button><span class='ml-1' id="copied"></span></p>`;
+                        collapsed = `<button id='collapsible' class="collapsible active">Need help?</button>
+                                    <div id='content-collapsible' style="max-height: 250px;" class="content-collapsible">`;
                     }
+
                     return `<h1>TESTS FAILED</h1>
-                    <button class="collapsible">Need help?</button>
-                    <div class="content-collapsible">
+                    ${collapsed}
                         <h5>Submit to TMC Paste</h5>
                         <p>You can submit your code to TMC Paste and share the link to the course discussion channel and ask for help.</p>
                         ${pasteLinkHTML}
@@ -115,24 +119,28 @@ export default class TemplateEngine {
          */
         handlebars.registerHelper("check_submission_status", (status: string) => {
             let percentDone = 0;
+            const miniSpinner = `<div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="sr-only">Loading...</span>
+                                </div>`;
             if (status === "created") {
                 percentDone = 30;
                 return `${getProgressBar(percentDone)}
-                        <div>&#10004; Submission received. Waiting for it to be processed.</div>`;
+                        <div>&#10004; Submission received.</div>
+                        <div>${miniSpinner} Waiting for it to be processed.</div>`;
             } else if (status === "sending_to_sandbox") {
                 percentDone = 45;
                 return `${getProgressBar(percentDone)}
-                        <div>&#10004; Submission received. Waiting for it to be processed.</div>
-                        <div>Submission queued for processing.</div>`;
+                        <div>&#10004; Submission received.</div>
+                        <div>${miniSpinner} Submission queued for processing.</div>`;
             } else if (status === "processing_on_sandbox") {
                 percentDone = 75;
                 return `${getProgressBar(percentDone)}
-                        <div>&#10004; Submission received. Waiting for it to be processed.</div>
+                        <div>&#10004; Submission received.</div>
                         <div>&#10004; Submission in queue for processing.</div>
-                        <div>Testing submission.</div>`;
+                        <div>${miniSpinner} Testing submission.</div>`;
             } else {
                 return `${getProgressBar(percentDone)}
-                        <div>Submission sent to server.</div>`;
+                        <div>${miniSpinner} Submission sent to server.</div>`;
             }
         });
 

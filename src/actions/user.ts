@@ -73,34 +73,46 @@ export async function logout(
 export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
     const { ui, resources, tmc, workspaceManager } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
-
     if (exerciseDetails.err) {
         vscode.window.showErrorMessage(
             `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`,
         );
         return;
     }
-    const exerciseName = exerciseDetails.val.name;
-    console.log(`Running local tests for ${exerciseName}`);
+
+    const [testRunner, interrupt] = tmc.runTests(id);
+    let aborted = false;
     const temp = new TemporaryWebview(
         resources,
         ui,
         "TMC Test Results",
         async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
-            if (msg.type == "closeWindow") {
+            if (msg.type === "closeWindow") {
                 temp.dispose();
+            } else if (msg.type === "abortTests") {
+                interrupt();
+                aborted = true;
             }
         },
     );
-
+    const exerciseName = exerciseDetails.val.name;
     temp.setContent({ templateName: "running-tests", exerciseName });
     ui.setStatusBar(`Running tests for ${exerciseName}`);
-    const testResult = await tmc.runTests(id);
+    console.log(`Running local tests for ${exerciseName}`);
+
+    const testResult = await testRunner;
     if (testResult.err) {
-        ui.setStatusBar(`Running tests for ${exerciseName} failed`, 5000);
+        ui.setStatusBar(
+            `Running tests for ${exerciseName} ${aborted ? "aborted" : "failed"}`,
+            5000,
+        );
+        if (aborted) {
+            temp.dispose();
+            return;
+        }
         temp.setContent({ templateName: "error", error: testResult.val });
         vscode.window.showErrorMessage(`Exercise test run failed: \
-       ${testResult.val.name} - ${testResult.val.message}`);
+                                        ${testResult.val.name} - ${testResult.val.message}`);
         return;
     }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
@@ -139,7 +151,13 @@ export async function submitExercise(
     );
     const submitResult = await tmc.submitExercise(id);
 
-    const temp = tempView || new TemporaryWebview(resources, ui, "", () => {});
+    const temp =
+        tempView ||
+        new TemporaryWebview(resources, ui, "", async (msg: { type?: string }) => {
+            if (msg.type == "closeWindow") {
+                temp.dispose();
+            }
+        });
     temp.setTitle("TMC Server Submission");
 
     if (submitResult.err) {
@@ -388,6 +406,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         exercises: courseDetails.exercises.map((e) => ({ id: e.id, passed: e.completed })),
         id: courseDetails.id,
         name: courseDetails.name,
+        title: courseDetails.title,
         organization: orgAndCourse.val.organization,
         availablePoints: availablePoints,
         awardedPoints: awardedPoints,
@@ -419,7 +438,7 @@ export async function removeCourse(id: number, actionContext: ActionContext): Pr
  */
 export async function updateCourse(id: number, actionContext: ActionContext): Promise<void> {
     const { tmc, userData, workspaceManager } = actionContext;
-    return Promise.all([tmc.getCourseDetails(id, false), tmc.getCourseExercises(id, false)]).then(
+    return Promise.all([tmc.getCourseDetails(id), tmc.getCourseExercises(id)]).then(
         ([courseDetailsResult, courseExercisesResult]) => {
             console.log(
                 `Refreshing exercise data for course ${userData.getCourse(id).name} from API`,

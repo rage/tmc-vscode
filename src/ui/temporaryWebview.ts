@@ -35,9 +35,7 @@ export default class TemporaryWebview {
 
     /**
      * Sets the content of the webview using an HTML template
-     *
      * @param templateData Data to be displayed in template
-     * @param recreate Whether the view should be recreated if disposed
      */
     public async setContent(templateData: TemplateData): Promise<void> {
         if (this.disposed) {
@@ -53,6 +51,10 @@ export default class TemporaryWebview {
 
     public setMessageHandler(messageHandler: (msg: { [key: string]: unknown }) => void): void {
         this.messageHandler = messageHandler;
+        if (this.disposed) {
+            this.panel = this.createPanel();
+            this.disposed = false;
+        }
         this.panel.webview.onDidReceiveMessage(messageHandler);
     }
 

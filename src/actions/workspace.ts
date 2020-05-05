@@ -37,7 +37,7 @@ export async function downloadExercises(
     >();
 
     for (const ced of courseExerciseDownloads) {
-        const courseDetails = await tmc.getCourseDetails(ced.courseId, false);
+        const courseDetails = await tmc.getCourseDetails(ced.courseId);
         if (courseDetails.ok) {
             courseDetails.val.course.exercises
                 .filter((x) => ced.exerciseIds.includes(x.id))
@@ -151,7 +151,7 @@ export async function checkForExerciseUpdates(
     for (const course of filteredCourses) {
         const organizationSlug = course.organization;
 
-        const result = await tmc.getCourseDetails(course.id, false);
+        const result = await tmc.getCourseDetails(course.id);
         if (result.err) {
             return;
         }

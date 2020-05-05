@@ -37,7 +37,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
 
     const apiCourses = await Promise.all(
         courses.map(async (course) => {
-            const exerciseResult = await tmc.getCourseDetails(course.id, false);
+            const exerciseResult = await tmc.getCourseDetails(course.id);
             const deadlines = new Map<number, Date>();
             if (exerciseResult.ok) {
                 exerciseResult.val.course.exercises.forEach((ex) => {
@@ -280,7 +280,7 @@ export async function displayCourseDownloads(
 ): Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
     await ui.webview.setContentFromTemplate({ templateName: "loading" });
-    const result = await tmc.getCourseDetails(courseId, false);
+    const result = await tmc.getCourseDetails(courseId);
     if (result.err) {
         return new Err(new Error("Course details not found"));
     }
