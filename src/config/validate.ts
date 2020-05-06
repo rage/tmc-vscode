@@ -92,7 +92,7 @@ export async function validateAndFix(
                         name?: string;
                         [key: string]: unknown;
                     }>(course) ||
-                    (course.id === undefined && course.name == undefined)
+                    (course.id === undefined && course.name === undefined)
                 ) {
                     continue;
                 }

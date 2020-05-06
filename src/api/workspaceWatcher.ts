@@ -190,7 +190,7 @@ export default class WorkspaceWatcher {
         if (relation[0] === "..") {
             return;
         }
-        if (relation.length == 1 && this.folderTree.has(relation[0])) {
+        if (relation.length === 1 && this.folderTree.has(relation[0])) {
             this.workspaceManager
                 .getAllExercises()
                 .filter((x) => x.organization === relation[0] && x.status === ExerciseStatus.OPEN)
@@ -200,7 +200,7 @@ export default class WorkspaceWatcher {
                 });
             return;
         }
-        if (relation.length == 2 && this.folderTree.get(relation[0])?.has(relation[1])) {
+        if (relation.length === 2 && this.folderTree.get(relation[0])?.has(relation[1])) {
             this.workspaceManager
                 .getAllExercises()
                 .filter(
@@ -216,7 +216,7 @@ export default class WorkspaceWatcher {
             return;
         }
         if (
-            relation.length == 3 &&
+            relation.length === 3 &&
             this.folderTree.get(relation[0])?.get(relation[1])?.has(relation[2])
         ) {
             this.workspaceManager

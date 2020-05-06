@@ -13,7 +13,7 @@ export default class TemporaryWebview {
 
     private panel: vscode.WebviewPanel;
     private ui: UI;
-    private messageHandler: (msg: { [key: string]: unknown }) => void;
+    private messageHandlers: Array<(msg: { [key: string]: unknown }) => void>;
     private iconPath: vscode.Uri;
     private title: string;
     private cssPath: string;
@@ -25,7 +25,7 @@ export default class TemporaryWebview {
         messageHandler: (msg: { [key: string]: unknown }) => void,
     ) {
         this.ui = ui;
-        this.messageHandler = messageHandler;
+        this.messageHandlers = [messageHandler];
         this.title = title;
         this.cssPath = resources.cssFolder;
         this.iconPath = vscode.Uri.file(`${resources.mediaFolder}/TMC.svg`);
@@ -49,12 +49,19 @@ export default class TemporaryWebview {
         this.panel.reveal(undefined, true);
     }
 
-    public setMessageHandler(messageHandler: (msg: { [key: string]: unknown }) => void): void {
-        this.messageHandler = messageHandler;
+    /**
+     * Adds new messagehandler to this temporary webview.
+     *
+     * Note that previous message handlers will still be in effect.
+     *
+     * @param messageHandler New messagehandler to add
+     */
+    public addMessageHandler(messageHandler: (msg: { [key: string]: unknown }) => void): void {
         if (this.disposed) {
             this.panel = this.createPanel();
             this.disposed = false;
         }
+        this.messageHandlers = this.messageHandlers.concat(messageHandler);
         this.panel.webview.onDidReceiveMessage(messageHandler);
     }
 
@@ -80,7 +87,7 @@ export default class TemporaryWebview {
         panel.onDidDispose(() => {
             this.disposed = true;
         });
-        panel.webview.onDidReceiveMessage(this.messageHandler);
+        this.messageHandlers.forEach((handler) => panel.webview.onDidReceiveMessage(handler));
         panel.iconPath = this.iconPath;
         panel.webview.html = EMPTY_HTML_DOCUMENT;
         return panel;
