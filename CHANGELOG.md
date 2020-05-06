@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Closing temporary webview didn't work in some instances.
+- Some areas were not reflecting the previous displayed course name change.
+
 ## [0.4.0] - 2020-05-05
 
 ### Added

@@ -111,7 +111,7 @@ export async function displayLocalCourseDetails(
         const date = new Date();
         let deadline = "-";
         let hard = true;
-        if (ex.softDeadline != null && date < parseDate(ex.softDeadline)) {
+        if (ex.softDeadline !== null && date < parseDate(ex.softDeadline)) {
             deadline = dateToString(parseDate(ex.softDeadline));
             hard = false;
         } else if (ex.deadline) {
@@ -178,7 +178,7 @@ export async function selectCourse(
     await new Promise((resolve) => {
         const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
         temp.setTitle("Select course");
-        temp.setMessageHandler((msg: { type?: string; id?: number }) => {
+        temp.addMessageHandler((msg: { type?: string; id?: number }) => {
             if (msg.type === "setCourse") {
                 course = msg.id;
             } else if (msg.type === "changeOrg") {
@@ -217,7 +217,7 @@ export async function selectOrganization(
     await new Promise((resolve) => {
         const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
         temp.setTitle("Select organization");
-        temp.setMessageHandler((msg: { type?: string; slug?: string }) => {
+        temp.addMessageHandler((msg: { type?: string; slug?: string }) => {
             if (msg.type !== "setOrganization") {
                 return;
             }

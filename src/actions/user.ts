@@ -125,7 +125,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
     };
 
     // Set test-result handlers.
-    temp.setMessageHandler(async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
+    temp.addMessageHandler(async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
         if (msg.type === "submitToServer" && msg.data) {
             submitExercise(actionContext, msg.data.exerciseId as number, temp);
         } else if (msg.type === "sendToPaste" && msg.data) {
@@ -154,7 +154,7 @@ export async function submitExercise(
     const temp =
         tempView ||
         new TemporaryWebview(resources, ui, "", async (msg: { type?: string }) => {
-            if (msg.type == "closeWindow") {
+            if (msg.type === "closeWindow") {
                 temp.dispose();
             }
         });
@@ -167,18 +167,16 @@ export async function submitExercise(
         return;
     }
 
-    temp.setMessageHandler(
+    temp.addMessageHandler(
         async (msg: { data?: { [key: string]: unknown }; type?: string }): Promise<void> => {
-            if (msg.type == "feedback" && msg.data) {
+            if (msg.type === "feedback" && msg.data) {
                 await tmc.submitSubmissionFeedback(
                     msg.data.url as string,
                     msg.data.feedback as SubmissionFeedback,
                 );
-            } else if (msg.type == "closeWindow") {
-                temp.dispose();
-            } else if (msg.type == "showInBrowser") {
+            } else if (msg.type === "showInBrowser") {
                 vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
-            } else if (msg.type == "showSolutionInBrowser" && msg.data) {
+            } else if (msg.type === "showSolutionInBrowser" && msg.data) {
                 vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
             }
         },
