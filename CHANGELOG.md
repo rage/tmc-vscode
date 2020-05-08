@@ -1,9 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.1] - 2020-05-08
+
+### Changed
+- Remove data of missing exercises when deleting course from My courses.
 
 ### Fixed
-- Closing temporary webview didn't work in some instances.
+- Closing temporary webview didn't work properly in some cases.
 - Some areas were not reflecting the previous displayed course name change.
 
 ## [0.4.0] - 2020-05-05
