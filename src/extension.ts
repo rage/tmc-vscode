@@ -9,17 +9,16 @@ import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
 import { isWorkspaceOpen, superfluousPropertiesEnabled } from "./utils/";
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
+import Logger from "./utils/logger";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const productionMode = superfluousPropertiesEnabled();
-    console.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
-
+    const logger = new Logger();
+    logger.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
     const storage = new Storage(context);
-    const resourcesResult = await init.resourceInitialization(context, storage);
+    const resourcesResult = await init.resourceInitialization(context, storage, logger);
     if (resourcesResult.err) {
-        vscode.window.showErrorMessage(
-            "TestMyCode Initialization failed: " + resourcesResult.val.message,
-        );
+        logger.showError("TestMyCode Initialization failed: " + resourcesResult.val.message);
         return;
     }
 
@@ -40,21 +39,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
 
-    const tmc = new TMC(storage, resources);
-    const validationResult = await validateAndFix(storage, tmc, ui, resources);
+    const tmc = new TMC(storage, resources, logger);
+    const validationResult = await validateAndFix(storage, tmc, ui, resources, logger);
     if (validationResult.err) {
-        vscode.window.showErrorMessage(
-            "Data reconstruction failed: " + validationResult.val.message,
-        );
+        logger.showError("Data reconstruction failed: " + validationResult.val.message);
         return;
     }
 
     const workspaceManager = new WorkspaceManager(storage, resources);
     tmc.setWorkspaceManager(workspaceManager);
-    const userData = new UserData(storage);
+    const userData = new UserData(storage, logger);
+    const actionContext = { ui, resources, workspaceManager, tmc, userData, logger };
 
-    init.registerUiActions(ui, tmc, workspaceManager, resources, userData);
-    const actionContext = { ui, resources, workspaceManager, tmc, userData };
+    init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
 
     checkForExerciseUpdates(actionContext);

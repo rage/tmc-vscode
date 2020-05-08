@@ -1,12 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 
-import UI from "../ui/ui";
-import TMC from "../api/tmc";
-import WorkspaceManager from "../api/workspaceManager";
-import Resources from "../config/resources";
-import { UserData } from "../config/userdata";
-import { askForConfirmation, isWorkspaceOpen, showError, showNotification } from "../utils/";
+import { askForConfirmation, isWorkspaceOpen, showNotification } from "../utils/";
 import {
     addNewCourse,
     closeExercises,
@@ -22,7 +17,7 @@ import {
     removeCourse,
     updateCourse,
 } from "../actions";
-import { CourseExerciseDownloads } from "../actions/types";
+import { ActionContext, CourseExerciseDownloads } from "../actions/types";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -30,14 +25,9 @@ import { CourseExerciseDownloads } from "../actions/types";
  * @param ui The User Interface object
  * @param tmc The TMC API object
  */
-export function registerUiActions(
-    ui: UI,
-    tmc: TMC,
-    workspaceManager: WorkspaceManager,
-    resources: Resources,
-    userData: UserData,
-): void {
-    console.log("Initializing UI Actions");
+export function registerUiActions(actionContext: ActionContext): void {
+    const { tmc, workspaceManager, ui, resources, logger } = actionContext;
+    logger.log("Initializing UI Actions");
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
 
@@ -46,9 +36,7 @@ export function registerUiActions(
         WORKSPACE_OPEN,
     };
 
-    // Register UI actions
-    const actionContext = { tmc, workspaceManager, ui, resources, userData };
-
+    // Register UI actionS
     ui.treeDP.registerAction("Log out", [LOGGED_IN], () => {
         logout(visibilityGroups, actionContext);
     });
@@ -111,7 +99,7 @@ export function registerUiActions(
     ui.webview.registerHandler("addCourse", async () => {
         const result = await addNewCourse(actionContext);
         if (result.err) {
-            vscode.window.showErrorMessage(result.val.message);
+            logger.showError(result.val.message);
         }
     });
     ui.webview.registerHandler(
@@ -122,7 +110,7 @@ export function registerUiActions(
             }
             const res = await displayCourseDownloads(actionContext, msg.id);
             if (res.err) {
-                vscode.window.showErrorMessage(`Can't display downloads: ${res.val.message}`);
+                logger.showError(`Can't display downloads: ${res.val.message}`);
             }
         },
     );
@@ -203,7 +191,7 @@ export function registerUiActions(
             }
             const res = await workspaceManager.moveFolder(old, newPath);
             if (res.ok) {
-                console.log(`Moved workspace folder from ${old} to ${newPath}`);
+                logger.log(`Moved workspace folder from ${old} to ${newPath}`);
                 if (!res.val) {
                     await showNotification(
                         `Some files could not be removed from the previous workspace directory. They will have to be removed manually. ${old}`,
@@ -225,7 +213,7 @@ export function registerUiActions(
                     );
                 }
             } else {
-                showError(res.val.message);
+                logger.showError(res.val.message);
             }
             workspaceManager.restartWatcher();
             openSettings(actionContext);

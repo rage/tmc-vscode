@@ -145,7 +145,6 @@ export default class TemplateEngine {
         });
 
         handlebars.registerHelper("collect", (...properties) => {
-            console.log(properties);
             return properties;
         });
 

@@ -3,6 +3,7 @@ import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import { UserData } from "../config/userdata";
 import UI from "../ui/ui";
+import Logger from "../utils/logger";
 
 export type ActionContext = {
     tmc: TMC;
@@ -10,6 +11,7 @@ export type ActionContext = {
     resources: Resources;
     workspaceManager: WorkspaceManager;
     userData: UserData;
+    logger: Logger;
 };
 
 export type CourseExerciseDownloads = {

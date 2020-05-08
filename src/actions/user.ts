@@ -71,10 +71,10 @@ export async function logout(
  * Tests an exercise while keeping the user informed
  */
 export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, resources, tmc, workspaceManager } = actionContext;
+    const { ui, resources, tmc, workspaceManager, logger } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
-        vscode.window.showErrorMessage(
+        logger.showError(
             `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`,
         );
         return;
@@ -98,7 +98,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
     const exerciseName = exerciseDetails.val.name;
     temp.setContent({ templateName: "running-tests", exerciseName });
     ui.setStatusBar(`Running tests for ${exerciseName}`);
-    console.log(`Running local tests for ${exerciseName}`);
+    logger.log(`Running local tests for ${exerciseName}`);
 
     const testResult = await testRunner;
     if (testResult.err) {
@@ -111,12 +111,12 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             return;
         }
         temp.setContent({ templateName: "error", error: testResult.val });
-        vscode.window.showErrorMessage(`Exercise test run failed: \
+        logger.showError(`Exercise test run failed: \
                                         ${testResult.val.name} - ${testResult.val.message}`);
         return;
     }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
-    console.log(`Tests finished for ${exerciseName}`);
+    logger.log(`Tests finished for ${exerciseName}`);
     const data = {
         testResult: testResult.val.response,
         id,
@@ -145,8 +145,8 @@ export async function submitExercise(
     id: number,
     tempView?: TemporaryWebview,
 ): Promise<void> {
-    const { ui, resources, tmc, userData, workspaceManager } = actionContext;
-    console.log(
+    const { ui, resources, tmc, userData, workspaceManager, logger } = actionContext;
+    logger.log(
         `Submitting exercise ${workspaceManager.getExerciseDataById(id).val.name} to server`,
     );
     const submitResult = await tmc.submitExercise(id);
@@ -162,7 +162,7 @@ export async function submitExercise(
 
     if (submitResult.err) {
         temp.setContent({ templateName: "error", error: submitResult.val });
-        vscode.window.showErrorMessage(`Exercise submission failed: \
+        logger.showError(`Exercise submission failed: \
             ${submitResult.val.name} - ${submitResult.val.message}`);
         return;
     }
@@ -188,7 +188,7 @@ export async function submitExercise(
     while (getStatus) {
         const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
         if (statusResult.err) {
-            vscode.window.showErrorMessage(
+            logger.showError(
                 `Failed getting submission status: ${statusResult.val.name} - ${statusResult.val.message}`,
             );
             break;
@@ -268,13 +268,13 @@ export async function getOldSubmissions(
  * @param id Exercise ID
  */
 export async function pasteExercise(actionContext: ActionContext, id: number): Promise<string> {
-    const { tmc } = actionContext;
+    const { tmc, logger } = actionContext;
     const params = new Map<string, string>();
     params.set("paste", "1");
     const submitResult = await tmc.submitExercise(id, params);
 
     if (submitResult.err) {
-        vscode.window.showErrorMessage(`Failed to paste exercise to server: \
+        logger.showError(`Failed to paste exercise to server: \
                 ${submitResult.val.name} - ${submitResult.val.message}`);
         return "";
     }
@@ -289,10 +289,10 @@ export async function checkForNewExercises(
     actionContext: ActionContext,
     courseId?: number,
 ): Promise<void> {
-    const { userData } = actionContext;
+    const { userData, logger } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
-    console.log(`Checking for new exercises for courses ${filteredCourses.map((c) => c.name)}`);
+    logger.log(`Checking for new exercises for courses ${filteredCourses.map((c) => c.name)}`);
     const updatedCourses: LocalCourseData[] = [];
     for (const course of filteredCourses) {
         await updateCourse(course.id, actionContext);
@@ -324,13 +324,13 @@ export async function checkForNewExercises(
  * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
  */
 export async function openWorkspace(actionContext: ActionContext): Promise<void> {
-    const { resources } = actionContext;
+    const { resources, logger } = actionContext;
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
     const tmcWorkspaceFile = vscode.Uri.file(resources.getWorkspaceFilePath());
 
     if (!isWorkspaceOpen(resources)) {
-        console.log("Current workspace:", currentWorkspaceFile);
-        console.log("TMC workspace:", tmcWorkspaceFile);
+        logger.log(`Current workspace: ${currentWorkspaceFile}`);
+        logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
         if (
             !currentWorkspaceFile ||
             (await askForConfirmation(
@@ -359,8 +359,8 @@ export async function openWorkspace(actionContext: ActionContext): Promise<void>
  * Settings webview
  */
 export async function openSettings(actionContext: ActionContext): Promise<void> {
-    const { ui, resources } = actionContext;
-    console.log("Display extension settings");
+    const { ui, resources, logger } = actionContext;
+    logger.log("Display extension settings");
     ui.webview.setContentFromTemplate({
         templateName: "settings",
         tmcData: resources.getDataPath(),
@@ -372,14 +372,14 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
  * Adds a new course to user's courses.
  */
 export async function addNewCourse(actionContext: ActionContext): Promise<Result<void, Error>> {
-    console.log("Adding new course");
+    const { tmc, userData, logger } = actionContext;
+    logger.log("Adding new course");
     const orgAndCourse = await selectOrganizationAndCourse(actionContext);
 
     if (orgAndCourse.err) {
         return new Err(orgAndCourse.val);
     }
 
-    const { tmc, userData } = actionContext;
     const courseDetailsResult = await tmc.getCourseDetails(orgAndCourse.val.course);
     const courseExercises = await tmc.getCourseExercises(orgAndCourse.val.course);
     if (courseDetailsResult.err) {
@@ -422,7 +422,9 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
  */
 export async function removeCourse(id: number, actionContext: ActionContext): Promise<void> {
     const course = actionContext.userData.getCourse(id);
-    console.log(`Closing exercises for ${course.name} and removing course data from userData`);
+    actionContext.logger.log(
+        `Closing exercises for ${course.name} and removing course data from userData`,
+    );
     await closeExercises(
         actionContext,
         course.exercises.map((e) => e.id),
@@ -435,10 +437,10 @@ export async function removeCourse(id: number, actionContext: ActionContext): Pr
  * @param id Course id
  */
 export async function updateCourse(id: number, actionContext: ActionContext): Promise<void> {
-    const { tmc, userData, workspaceManager } = actionContext;
+    const { tmc, userData, workspaceManager, logger } = actionContext;
     return Promise.all([tmc.getCourseDetails(id), tmc.getCourseExercises(id)]).then(
         ([courseDetailsResult, courseExercisesResult]) => {
-            console.log(
+            logger.log(
                 `Refreshing exercise data for course ${userData.getCourse(id).name} from API`,
             );
             if (courseDetailsResult.ok) {

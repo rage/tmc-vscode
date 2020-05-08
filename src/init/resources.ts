@@ -18,6 +18,7 @@ import {
 } from "../config/constants";
 import Storage from "../config/storage";
 import del = require("del");
+import Logger from "../utils/logger";
 
 /**
  * Checks if Java is present and performs resource initialization on extension activation
@@ -26,6 +27,7 @@ import del = require("del");
 export async function resourceInitialization(
     extensionContext: vscode.ExtensionContext,
     storage: Storage,
+    logger: Logger,
 ): Promise<Result<Resources, Error>> {
     const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
 
@@ -63,7 +65,7 @@ export async function resourceInitialization(
                 if (javaUrl === undefined) {
                     return new Err(new Error("Java not found or improperly configured."));
                 }
-                console.log("Downloading java from", javaUrl, "to", archivePath);
+                logger.log(`Downloading java from ${javaUrl} to ${archivePath}`);
                 await vscode.window.withProgress(
                     {
                         location: vscode.ProgressLocation.Notification,
@@ -130,25 +132,25 @@ export async function resourceInitialization(
         const settings = storage.getExtensionSettings() || { dataPath: "" };
         settings.dataPath = tmcDataPath;
         storage.updateExtensionSettings(settings);
-        console.log("Created tmc data directory at", tmcDataPath);
+        logger.log(`Created tmc data directory at ${tmcDataPath}`);
     }
 
     const tmcWorkspacePath = path.join(tmcDataPath, tmcWorkspacePathRelative);
     if (!fs.existsSync(tmcWorkspacePath)) {
         fs.mkdirSync(tmcWorkspacePath);
-        console.log("Created tmc workspace directory at", tmcWorkspacePath);
+        logger.log(`Created tmc workspace directory at ${tmcWorkspacePath}`);
     }
 
     const tmcWorkspaceFilePath = path.join(tmcDataPath, tmcWorkspaceFilePathRelative);
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
         fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
-        console.log("Created tmc workspace file at", tmcWorkspaceFilePath);
+        logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
     }
 
     const tmcExercisesFolderPath = path.join(tmcDataPath, tmcExercisesFolderPathRelative);
     if (!fs.existsSync(tmcExercisesFolderPath)) {
         fs.mkdirSync(tmcExercisesFolderPath);
-        console.log("Created tmc exercise directory at", tmcExercisesFolderPath);
+        logger.log(`Created tmc exercise directory at ${tmcExercisesFolderPath}`);
     }
 
     if (!fs.existsSync(path.join(tmcExercisesFolderPath, WORKSPACE_ROOT_FILE))) {
@@ -156,7 +158,7 @@ export async function resourceInitialization(
             path.join(tmcExercisesFolderPath, WORKSPACE_ROOT_FILE),
             WORKSPACE_ROOT_FILE_TEXT,
         );
-        console.log("Wrote tmc root file at", tmcExercisesFolderPath);
+        logger.log(`Wrote tmc root file at ${tmcExercisesFolderPath}`);
     }
 
     const tmcClosedExercisesFolderPath = path.join(
@@ -165,7 +167,7 @@ export async function resourceInitialization(
     );
     if (!fs.existsSync(tmcClosedExercisesFolderPath)) {
         fs.mkdirSync(tmcClosedExercisesFolderPath);
-        console.log("Created tmc closed exercise directory at", tmcClosedExercisesFolderPath);
+        logger.log(`Created tmc closed exercise directory at ${tmcClosedExercisesFolderPath}`);
     }
 
     const tmcLangsPath = path.join(tmcDataPath, tmcLangsPathRelative);
@@ -193,7 +195,7 @@ export async function resourceInitialization(
         if (tmcLangsResult.err) {
             return new Err(tmcLangsResult.val);
         }
-        console.log(`${TMC_JAR_URL} downloaded`);
+        logger.log(`${TMC_JAR_URL} downloaded`);
     }
 
     const resources: Resources = new Resources(
