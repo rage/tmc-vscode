@@ -6,7 +6,7 @@
 
 import * as vscode from "vscode";
 
-import { LocalCourseData } from "../config/types";
+import { ExerciseStatus, LocalCourseData } from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/types";
 import {
@@ -421,13 +421,20 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
  * @param id ID of the course to remove
  */
 export async function removeCourse(id: number, actionContext: ActionContext): Promise<void> {
-    const course = actionContext.userData.getCourse(id);
+    const { userData, workspaceManager } = actionContext;
+    const course = userData.getCourse(id);
     console.log(`Closing exercises for ${course.name} and removing course data from userData`);
     await closeExercises(
         actionContext,
         course.exercises.map((e) => e.id),
     );
-    actionContext.userData.deleteCourse(id);
+    const exercises = workspaceManager.getExercisesByCourseName(course.name);
+    const missingIds = exercises
+        .filter((e) => e.status === ExerciseStatus.MISSING)
+        .map((e) => e.id);
+    console.log(`Removing ${missingIds.length} exercise data with Missing status`);
+    workspaceManager.deleteExercise(...missingIds);
+    userData.deleteCourse(id);
 }
 
 /**
