@@ -7,7 +7,7 @@
 import { Err, Ok, Result } from "ts-results";
 import { ActionContext, CourseExerciseDownloads } from "./types";
 import pLimit from "p-limit";
-import { askForConfirmation, askForItem, showNotification } from "../utils";
+import { askForConfirmation, askForItem, showError, showNotification } from "../utils";
 import { getOldSubmissions } from "./user";
 import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
@@ -51,10 +51,9 @@ export async function downloadExercises(
                     }),
                 );
         } else {
-            logger.showError(
-                `Could not download exercises, course details not found: \
-                ${courseDetails.val.name} - ${courseDetails.val.message}`,
-            );
+            const message = `Could not download exercises, course details not found: ${courseDetails.val.name} - ${courseDetails.val.message}`;
+            logger.log(message);
+            showError(message);
         }
     }
 
@@ -202,7 +201,9 @@ export async function resetExercise(
     const exerciseData = workspaceManager.getExerciseDataById(id);
 
     if (exerciseData.err) {
-        logger.showError("The data for this exercise seems to be missing");
+        const message = "The data for this exercise seems to be missing";
+
+        showError(message);
         return new Err(exerciseData.val);
     }
 
@@ -214,8 +215,9 @@ export async function resetExercise(
     if (saveOrNo) {
         const submitResult = await tmc.submitExercise(id);
         if (submitResult.err) {
-            logger.showError(`Reset canceled, failed to submit exercise: \
-           ${submitResult.val.name} - ${submitResult.val.message}`);
+            const message = `Reset canceled, failed to submit exercise: ${submitResult.val.name} - ${submitResult.val.message}`;
+            logger.error(message);
+            showError(message);
             ui.setStatusBar(
                 `Something went wrong while resetting exercise ${exerciseData.val.name}`,
                 10000,
@@ -265,14 +267,15 @@ export async function downloadOldSubmissions(
     const { tmc, workspaceManager, logger } = actionContext;
     const exercise = workspaceManager.getExerciseDataById(exerciseId);
     if (exercise.err) {
-        logger.showError("Exercise data missing");
+        logger.error("Exercise data missing");
+        showError("Exercise data missing");
         return;
     }
     const response = await getOldSubmissions(actionContext);
     if (response.err) {
-        logger.showError(
-            "Something went wrong while fetching old submissions: " + response.val.message,
-        );
+        const message = `Something went wrong while fetching old submissions: ${response.val.message}`;
+        logger.error(message);
+        showError(message);
         return;
     }
     if (response.val.length === 0) {
@@ -297,9 +300,9 @@ export async function downloadOldSubmissions(
 
     const oldSub = await tmc.downloadOldExercise(actionContext, exercise.val.id, submission.id);
     if (oldSub.err) {
-        logger.showError(
-            "Something went wrong while downloading old submission for exercise: " + oldSub.val,
-        );
+        const message = `Something went wrong while downloading old submission for exercise: ${oldSub.val}`;
+        logger.error(message);
+        showError(message);
         return;
     }
     showNotification(oldSub.val);

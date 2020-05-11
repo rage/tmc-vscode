@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 
-import { askForConfirmation, isWorkspaceOpen, showNotification } from "../utils/";
+import { askForConfirmation, isWorkspaceOpen, showError, showNotification } from "../utils/";
 import {
     addNewCourse,
     closeExercises,
@@ -99,7 +99,9 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.webview.registerHandler("addCourse", async () => {
         const result = await addNewCourse(actionContext);
         if (result.err) {
-            logger.showError(result.val.message);
+            const message = `Failed to add new course: ${result.val.message}`;
+            logger.error(message);
+            showError(message);
         }
     });
     ui.webview.registerHandler(
@@ -110,7 +112,9 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             const res = await displayCourseDownloads(actionContext, msg.id);
             if (res.err) {
-                logger.showError(`Can't display downloads: ${res.val.message}`);
+                const message = `Can't display downloads: ${res.val.message}`;
+                logger.error(message);
+                showError(message);
             }
         },
     );
@@ -213,7 +217,8 @@ export function registerUiActions(actionContext: ActionContext): void {
                     );
                 }
             } else {
-                logger.showError(res.val.message);
+                logger.error(res.val.message);
+                showError(res.val.message);
             }
             workspaceManager.restartWatcher();
             openSettings(actionContext);

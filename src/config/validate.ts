@@ -52,8 +52,7 @@ export async function validateAndFix(
 
             if (details.err) {
                 if (details.val instanceof ApiError) {
-                    logger.error(`Skipping bad workspacemanager data: ${JSON.stringify(ex)}`);
-                    logger.error(details.val.message);
+                    logger.warn(`Skipping bad workspacemanager data - ${details.val.message}`, ex);
                     continue;
                 }
                 return new Err(details.val);
@@ -104,7 +103,7 @@ export async function validateAndFix(
                     : getCourseDetails(tmc, course.organization, course.name as string));
                 if (courseDetails.err) {
                     if (courseDetails.val instanceof ApiError) {
-                        logger.error(`Skipping bad userdata: ${JSON.stringify(course)}`);
+                        logger.warn("Skipping bad userdata", course);
                         continue;
                     }
                     return new Err(courseDetails.val);
@@ -116,7 +115,7 @@ export async function validateAndFix(
 
                 if (courseExercises.err) {
                     if (courseDetails.val instanceof ApiError) {
-                        logger.log(`Skipping bad userdata: ${JSON.stringify(course)}`);
+                        logger.warn("Skipping bad userdata", course);
                         continue;
                     }
                     return new Err(courseExercises.val);

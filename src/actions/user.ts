@@ -15,6 +15,7 @@ import {
     getCurrentExerciseData,
     isWorkspaceOpen,
     parseFeedbackQuestion,
+    showError,
     showNotification,
     sleep,
 } from "../utils/";
@@ -26,6 +27,7 @@ import { Err, Ok, Result } from "ts-results";
 import { CourseExercise, Exercise, OldSubmission, SubmissionFeedback } from "../api/types";
 import du = require("du");
 import { NOTIFICATION_DELAY } from "../config/constants";
+import { ConnectionError } from "../errors";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -74,9 +76,9 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
     const { ui, resources, tmc, workspaceManager, logger } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
-        logger.showError(
-            `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`,
-        );
+        const message = `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`;
+        logger.error(message);
+        showError(message);
         return;
     }
 
@@ -111,8 +113,9 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             return;
         }
         temp.setContent({ templateName: "error", error: testResult.val });
-        logger.showError(`Exercise test run failed: \
-                                        ${testResult.val.name} - ${testResult.val.message}`);
+        const message = `Exercise test run failed: ${testResult.val.name} - ${testResult.val.message}`;
+        logger.error(message);
+        showError(message);
         return;
     }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
@@ -162,8 +165,9 @@ export async function submitExercise(
 
     if (submitResult.err) {
         temp.setContent({ templateName: "error", error: submitResult.val });
-        logger.showError(`Exercise submission failed: \
-            ${submitResult.val.name} - ${submitResult.val.message}`);
+        const message = `Exercise submission failed: ${submitResult.val.name} - ${submitResult.val.message}`;
+        logger.error(message);
+        showError(message);
         return;
     }
 
@@ -188,9 +192,9 @@ export async function submitExercise(
     while (getStatus) {
         const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
         if (statusResult.err) {
-            logger.showError(
-                `Failed getting submission status: ${statusResult.val.name} - ${statusResult.val.message}`,
-            );
+            const message = `Failed getting submission status: ${statusResult.val.name} - ${statusResult.val.message}`;
+            logger.error(message);
+            showError(message);
             break;
         }
         const statusData = statusResult.val;
@@ -274,8 +278,9 @@ export async function pasteExercise(actionContext: ActionContext, id: number): P
     const submitResult = await tmc.submitExercise(id, params);
 
     if (submitResult.err) {
-        logger.showError(`Failed to paste exercise to server: \
-                ${submitResult.val.name} - ${submitResult.val.message}`);
+        const message = `Failed to paste exercise to server: ${submitResult.val.name} - ${submitResult.val.message}`;
+        logger.error(message);
+        showError(message);
         return "";
     }
     return submitResult.val.paste_url;
@@ -440,50 +445,66 @@ export async function updateCourse(id: number, actionContext: ActionContext): Pr
     const { tmc, userData, workspaceManager, logger } = actionContext;
     return Promise.all([tmc.getCourseDetails(id), tmc.getCourseExercises(id)]).then(
         ([courseDetailsResult, courseExercisesResult]) => {
-            logger.log(
-                `Refreshing exercise data for course ${userData.getCourse(id).name} from API`,
-            );
-            if (courseDetailsResult.ok) {
-                const details = courseDetailsResult.val.course;
-                userData.updateExercises(
-                    id,
-                    details.exercises.map((x) => ({ id: x.id, passed: x.completed })),
+            if (courseDetailsResult.err) {
+                if (!(courseDetailsResult.val instanceof ConnectionError)) {
+                    const message = `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`;
+                    showError(
+                        `Something went wrong while trying to refresh course data: ${message}`,
+                    );
+                    return;
+                }
+                logger.warn(
+                    `Didn't fetch course updates, working offline: ${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`,
                 );
+                return;
             }
-            if (courseExercisesResult.ok) {
-                const exercises = courseExercisesResult.val;
-                const [available, awarded] = exercises.reduce(
-                    (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
-                    [0, 0],
+            if (courseExercisesResult.err) {
+                if (!(courseExercisesResult.val instanceof ConnectionError)) {
+                    const message = `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`;
+                    showError(
+                        `Something went wrong while trying to refresh course data: ${message}`,
+                    );
+                    return;
+                }
+                logger.warn(
+                    `Didn't fetch course updates, working offline: ${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`,
                 );
-                userData.updatePoints(id, awarded, available);
+                return;
             }
 
-            if (courseExercisesResult.ok && courseDetailsResult.ok) {
-                const details = courseDetailsResult.val.course;
-                const exercises = courseExercisesResult.val;
-                const combinedDetails: Map<
-                    number,
-                    { c?: CourseExercise; e?: Exercise }
-                > = new Map();
-                details.exercises.forEach((x) => {
-                    combinedDetails.set(x.id, { e: x });
-                });
-                exercises.forEach((x) => {
-                    let d = combinedDetails.get(x.id);
-                    if (d) d.c = x;
-                    else d = { c: x };
-                    combinedDetails.set(x.id, d);
-                });
-                for (const x of combinedDetails.values()) {
-                    if (x.c && x.e) {
-                        workspaceManager.updateExerciseData(
-                            x.c.id,
-                            x.c.soft_deadline,
-                            x.c.deadline,
-                            x.e.checksum,
-                        );
-                    }
+            const details = courseDetailsResult.val.course;
+            const exercises = courseExercisesResult.val;
+
+            logger.log(`Refreshing exercise data for course ${details.name} from API`);
+
+            userData.updateExercises(
+                id,
+                details.exercises.map((x) => ({ id: x.id, passed: x.completed })),
+            );
+            const [available, awarded] = exercises.reduce(
+                (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
+                [0, 0],
+            );
+            userData.updatePoints(id, awarded, available);
+
+            const combinedDetails: Map<number, { c?: CourseExercise; e?: Exercise }> = new Map();
+            details.exercises.forEach((x) => {
+                combinedDetails.set(x.id, { e: x });
+            });
+            exercises.forEach((x) => {
+                let d = combinedDetails.get(x.id);
+                if (d) d.c = x;
+                else d = { c: x };
+                combinedDetails.set(x.id, d);
+            });
+            for (const x of combinedDetails.values()) {
+                if (x.c && x.e) {
+                    workspaceManager.updateExerciseData(
+                        x.c.id,
+                        x.c.soft_deadline,
+                        x.c.deadline,
+                        x.e.checksum,
+                    );
                 }
             }
         },

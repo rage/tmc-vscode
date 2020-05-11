@@ -601,10 +601,8 @@ export default class TMC {
                         return resolve(new Ok(readResult));
                     }
 
-                    this.logger.error(
-                        `${result.val[0]} ${result.val[1]}`,
-                        "Unexpected response JSON type",
-                    );
+                    this.logger.error("Unexpected response JSON type", result.val);
+                    this.logger.show();
                     return resolve(new Err(new Error("Unexpected response JSON type")));
                 });
             }),
@@ -681,7 +679,7 @@ export default class TMC {
                         }
                         return new Ok(responseObject);
                     }
-                    this.logger.error(responseObject, "Unexpected TMC response type");
+                    this.logger.error("Unexpected TMC response type", responseObject);
                     this.logger.show();
                     return new Err(new ApiError("Unexpected response type"));
                 } catch (error) {

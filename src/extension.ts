@@ -7,7 +7,7 @@ import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
-import { isWorkspaceOpen, superfluousPropertiesEnabled } from "./utils/";
+import { isWorkspaceOpen, showError, superfluousPropertiesEnabled } from "./utils/";
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import Logger from "./utils/logger";
 
@@ -18,10 +18,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const storage = new Storage(context);
     const resourcesResult = await init.resourceInitialization(context, storage, logger);
     if (resourcesResult.err) {
-        logger.showError("TestMyCode Initialization failed: " + resourcesResult.val.message);
+        const message = `TestMyCode Initialization failed: ${resourcesResult.val}`;
+        logger.error(message);
+        showError(message);
         return;
     }
-
     await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
     const resources = resourcesResult.val;
@@ -42,7 +43,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const tmc = new TMC(storage, resources, logger);
     const validationResult = await validateAndFix(storage, tmc, ui, resources, logger);
     if (validationResult.err) {
-        logger.showError("Data reconstruction failed: " + validationResult.val.message);
+        const message = `Data reconstruction failed: ${validationResult.val.message}`;
+        logger.error(message);
+        showError(message);
         return;
     }
 
