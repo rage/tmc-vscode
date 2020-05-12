@@ -10,6 +10,7 @@ import UI from "./ui/ui";
 import { isWorkspaceOpen, showError, superfluousPropertiesEnabled } from "./utils/";
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import Logger from "./utils/logger";
+import Settings from "./config/settings";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const productionMode = superfluousPropertiesEnabled();
@@ -23,9 +24,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         showError(message);
         return;
     }
-    await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
-
     const resources = resourcesResult.val;
+
+    const settingsResult = await init.settingsInitialization(storage, resources, logger);
+    const settings = new Settings(storage, logger, settingsResult);
+
+    await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
     /**
      * Checks whether the necessary folders are open in the workspace and opens them if they aren't.
@@ -52,7 +56,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const workspaceManager = new WorkspaceManager(storage, resources);
     tmc.setWorkspaceManager(workspaceManager);
     const userData = new UserData(storage, logger);
-    const actionContext = { ui, resources, workspaceManager, tmc, userData, logger };
+    const actionContext = { ui, resources, workspaceManager, tmc, userData, logger, settings };
 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);

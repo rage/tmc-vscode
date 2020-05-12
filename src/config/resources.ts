@@ -46,9 +46,6 @@ export default class Resources {
 
     public setDataPath(dataPath: string): void {
         this.tmcDataFolder = dataPath;
-        const settings = this.storage.getExtensionSettings() || { dataPath: "" };
-        settings.dataPath = dataPath;
-        this.storage.updateExtensionSettings(settings);
     }
 
     public getTmcLangsPath(): string {

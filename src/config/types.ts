@@ -1,3 +1,5 @@
+import { LogLevel } from "../utils/logger";
+
 export type LocalCourseData = {
     id: number;
     name: string;
@@ -36,4 +38,11 @@ export enum ExerciseStatus {
 
 export type ExtensionSettings = {
     dataPath: string;
+    logLevel: LogLevel;
+    hideMetaFiles: boolean;
 };
+
+export type ExtensionSettingsData =
+    | { setting: "dataPath"; value: string }
+    | { setting: "logLevel"; value: LogLevel }
+    | { setting: "hideMetaFiles"; value: boolean };

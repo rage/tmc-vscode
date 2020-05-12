@@ -3,6 +3,7 @@ import * as TypeMoq from "typemoq";
 import * as vscode from "vscode";
 
 import Storage from "../../config/storage";
+import { LogLevel } from "../../utils/logger";
 
 suite("Storage tests", () => {
     let mockContext: TypeMoq.IMock<vscode.ExtensionContext>;
@@ -97,6 +98,8 @@ suite("Storage tests", () => {
     test("Extension settings updater uses ExtensionContext correctly", () => {
         const extensionSettings = {
             dataPath: "/tmp/tmcdata",
+            logLevel: LogLevel.None,
+            hideMetaFiles: true,
         };
         assertUpdater(
             () => storage.updateExtensionSettings(extensionSettings),

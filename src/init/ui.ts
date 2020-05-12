@@ -18,6 +18,7 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
+import { LogLevel } from "../utils/logger";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -26,7 +27,7 @@ import { ActionContext, CourseExerciseDownloads } from "../actions/types";
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { tmc, workspaceManager, ui, resources, logger } = actionContext;
+    const { tmc, workspaceManager, ui, resources, logger, settings } = actionContext;
     logger.log("Initializing UI Actions");
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
@@ -197,16 +198,17 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (res.ok) {
                 logger.log(`Moved workspace folder from ${old} to ${newPath}`);
                 if (!res.val) {
-                    await showNotification(
+                    showNotification(
                         `Some files could not be removed from the previous workspace directory. They will have to be removed manually. ${old}`,
                         ["OK", (): void => {}],
                     );
                 }
-                await showNotification(`TMC Data was successfully moved to ${newPath}`, [
+                showNotification(`TMC Data was successfully moved to ${newPath}`, [
                     "OK",
                     (): void => {},
                 ]);
                 resources.setDataPath(newPath);
+                settings.updateSetting({ setting: "dataPath", value: newPath });
                 if (open) {
                     // Opening a workspace restarts VSCode (v1.44)
                     vscode.commands.executeCommand(
@@ -224,4 +226,15 @@ export function registerUiActions(actionContext: ActionContext): void {
             openSettings(actionContext);
         }
     });
+
+    ui.webview.registerHandler(
+        "changeLogLevel",
+        (msg: { type?: "changeLogLevel"; data?: LogLevel }) => {
+            if (!(msg.type && msg.data)) {
+                return;
+            }
+            settings.updateSetting({ setting: "logLevel", value: msg.data });
+            openSettings(actionContext);
+        },
+    );
 }

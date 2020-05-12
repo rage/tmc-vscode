@@ -129,9 +129,6 @@ export async function resourceInitialization(
 
     if (!fs.existsSync(tmcDataPath)) {
         fs.mkdirSync(tmcDataPath, { recursive: true });
-        const settings = storage.getExtensionSettings() || { dataPath: "" };
-        settings.dataPath = tmcDataPath;
-        storage.updateExtensionSettings(settings);
         logger.log(`Created tmc data directory at ${tmcDataPath}`);
     }
 

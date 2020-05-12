@@ -364,11 +364,17 @@ export async function openWorkspace(actionContext: ActionContext): Promise<void>
  * Settings webview
  */
 export async function openSettings(actionContext: ActionContext): Promise<void> {
-    const { ui, resources, logger } = actionContext;
+    const { ui, resources, logger, settings } = actionContext;
     logger.log("Display extension settings");
+    const extensionSettings = await settings.getExtensionSettings();
+    if (extensionSettings.err) {
+        logger.error("Failed to fetch Settings: ", extensionSettings);
+        showError(`Failed to fetch Settings: ${extensionSettings.val}`);
+        return;
+    }
     ui.webview.setContentFromTemplate({
         templateName: "settings",
-        tmcData: resources.getDataPath(),
+        extensionSettings: extensionSettings.val,
         tmcDataSize: formatSizeInBytes(await du(resources.getDataPath())),
     });
 }

@@ -118,7 +118,7 @@ export default class TMC {
             } else if (err.code === "EUNAVAILABLE") {
                 return new Err(new ConnectionError("Connection error"));
             }
-            console.error(err);
+            this.logger.error("Unknown authentication error:", err);
             return new Err(new Error("Unknown error: " + err.code));
         }
         this.storage.updateAuthenticationToken(this.token.data);
