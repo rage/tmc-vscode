@@ -20,7 +20,8 @@ types/**
 **/vsc-extension-quickstart.md
 
 # No SVG images to releases and only required images
-**/*.svg
+# Test whether can include svg images after all
+# **/*.svg
 **/*.png
 !media/TMC.png
 

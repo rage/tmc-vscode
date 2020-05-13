@@ -47,7 +47,8 @@
             },
             {
                 "command": "selectAction",
-                "title": "TMC - Menu"
+                "title": "TMC - Menu",
+                "icon": "media/menu.svg"
             },
             {
                 "command": "closeExercise",
@@ -67,7 +68,8 @@
             },
             {
                 "command": "runTests",
-                "title": "TMC - Run tests"
+                "title": "TMC - Run tests",
+                "icon": "media/test.svg"
             },
             {
                 "command": "downloadOldSubmission",
