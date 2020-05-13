@@ -240,18 +240,44 @@ export async function resetExercise(
  * Opens given exercises, showing them in TMC workspace.
  * @param ids Array of exercise IDs
  */
-export async function openExercises(ids: number[], actionContext: ActionContext): Promise<void> {
-    const { workspaceManager } = actionContext;
-    workspaceManager.openExercise(...ids);
+export async function openExercises(
+    ids: number[],
+    actionContext: ActionContext,
+): Promise<Result<void, Error>> {
+    const { workspaceManager, logger } = actionContext;
+
+    const result = workspaceManager.openExercise(...ids);
+    const errors = result.filter((file) => file.err);
+
+    if (errors.length !== 0) {
+        errors.forEach((e) =>
+            logger.error("Error when opening file", e.mapErr((err) => err.message).val),
+        );
+        return new Err(new Error("Something went wrong while opening exercises."));
+    }
+    return Ok.EMPTY;
 }
 
 /**
  * Closes given exercises, hiding them in TMC workspace.
  * @param ids Array of exercise IDs
  */
-export async function closeExercises(actionContext: ActionContext, ids: number[]): Promise<void> {
-    const { workspaceManager } = actionContext;
-    workspaceManager.closeExercise(...ids);
+export async function closeExercises(
+    actionContext: ActionContext,
+    ids: number[],
+): Promise<Result<void, Error>> {
+    const { workspaceManager, logger } = actionContext;
+
+    const result = workspaceManager.closeExercise(...ids);
+    const errors = result.filter((file) => file.err);
+
+    if (errors.length !== 0) {
+        errors.forEach((e) =>
+            logger.error("Error when closing file", e.mapErr((err) => err.message).val),
+        );
+        return new Err(new Error("Something went wrong while closing exercises."));
+    }
+    return Ok.EMPTY;
 }
 
 /**

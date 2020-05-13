@@ -7,16 +7,23 @@ import { ExerciseStatus, LocalExerciseData } from "../config/types";
 import Resources from "../config/resources";
 import { WORKSPACE_ROOT_FILE, WORKSPACE_ROOT_FILE_TEXT } from "../config/constants";
 import WorkspaceManager from "./workspaceManager";
+import Logger from "../utils/logger";
+import { showError } from "../utils";
 
 export default class WorkspaceWatcher {
     private readonly folderTree: Map<string, Map<string, Set<string>>> = new Map();
     private readonly resources: Resources;
     private readonly workspaceManager: WorkspaceManager;
+    private readonly logger: Logger;
+    public running: boolean;
     private watcher?: vscode.FileSystemWatcher;
 
-    constructor(workspaceManager: WorkspaceManager, resources: Resources) {
+    constructor(workspaceManager: WorkspaceManager, resources: Resources, logger: Logger) {
         this.resources = resources;
+        this.logger = logger;
         this.workspaceManager = workspaceManager;
+        this.running = false;
+        this.logger.log("WorkspaceWatcher initializing");
         for (const exercise of workspaceManager.getAllExercises()) {
             if (exercise.status === ExerciseStatus.OPEN) {
                 this.watch(exercise);
@@ -25,6 +32,10 @@ export default class WorkspaceWatcher {
     }
 
     public start(): void {
+        if (this.running) {
+            this.logger.warn("WorkspaceWatcher already running.");
+        }
+        this.running = true;
         this.sweep();
         if (!this.watcher) {
             this.watcher = vscode.workspace.createFileSystemWatcher(
@@ -32,6 +43,11 @@ export default class WorkspaceWatcher {
                 false,
                 false,
                 false,
+            );
+            this.logger.log(
+                `Watcher started watching for file changes at ${
+                    this.resources.getExercisesFolderPath() + "/**"
+                }`,
             );
             this.watcher.onDidCreate((x) => {
                 if (x.scheme === "file") {
@@ -52,11 +68,17 @@ export default class WorkspaceWatcher {
     }
 
     public stop(): void {
+        if (!this.running) {
+            this.logger.warn("WorkspaceWatcher already stopped.");
+        }
         this.watcher?.dispose();
         this.watcher = undefined;
+        this.running = false;
+        this.logger.log("Watcher stopped");
     }
 
     public watch({ organization, course, name }: LocalExerciseData): void {
+        this.logger.logVerbose("Watcher watching data for", true, organization, course, name);
         if (!this.folderTree.has(organization)) {
             this.folderTree.set(organization, new Map());
         }
@@ -67,6 +89,7 @@ export default class WorkspaceWatcher {
     }
 
     public unwatch({ organization, course, name }: LocalExerciseData): void {
+        this.logger.logVerbose("Watcher unwatching data for", true, organization, course, name);
         if (this.folderTree.get(organization)?.has(course)) {
             this.folderTree.get(organization)?.get(course)?.delete(name);
             if (this.folderTree.get(organization)?.get(course)?.size === 0) {
@@ -81,65 +104,86 @@ export default class WorkspaceWatcher {
     private sweep(): void {
         const basedir = this.resources.getExercisesFolderPath();
 
-        fs.readdirSync(basedir, { withFileTypes: true }).forEach((organization) => {
-            if (organization.isFile() && organization.name === WORKSPACE_ROOT_FILE) {
-                if (
-                    fs.readFileSync(path.join(basedir, organization.name), {
-                        encoding: "utf-8",
-                    }) !== WORKSPACE_ROOT_FILE_TEXT
-                ) {
-                    fs.writeFileSync(
-                        path.join(basedir, organization.name),
-                        WORKSPACE_ROOT_FILE_TEXT,
-                        { encoding: "utf-8" },
-                    );
-                }
-                return;
-            } else if (!(organization.isDirectory() && this.folderTree.has(organization.name))) {
-                del.sync(path.join(basedir, organization.name), { force: true });
-            } else {
-                fs.readdirSync(path.join(basedir, organization.name), {
-                    withFileTypes: true,
-                }).forEach((course) => {
+        try {
+            this.logger.log("Watcher starting to sweep");
+            fs.readdirSync(basedir, { withFileTypes: true }).forEach((organization) => {
+                if (organization.isFile() && organization.name === WORKSPACE_ROOT_FILE) {
                     if (
-                        !(
-                            this.folderTree.get(organization.name)?.has(course.name) &&
-                            course.isDirectory()
-                        )
+                        fs.readFileSync(path.join(basedir, organization.name), {
+                            encoding: "utf-8",
+                        }) !== WORKSPACE_ROOT_FILE_TEXT
                     ) {
-                        del.sync(path.join(basedir, organization.name, course.name), {
-                            force: true,
-                        });
-                    } else {
-                        fs.readdirSync(path.join(basedir, organization.name, course.name), {
-                            withFileTypes: true,
-                        }).forEach((exercise) => {
-                            if (
-                                !(
-                                    this.folderTree
-                                        .get(organization.name)
-                                        ?.get(course.name)
-                                        ?.has(exercise.name) && exercise.isDirectory()
-                                )
-                            ) {
-                                del.sync(
-                                    path.join(
-                                        basedir,
-                                        organization.name,
-                                        course.name,
-                                        exercise.name,
-                                    ),
-                                    { force: true },
-                                );
-                            }
-                        });
+                        this.logger.log(`Writing ${WORKSPACE_ROOT_FILE} at ${basedir}`);
+                        fs.writeFileSync(
+                            path.join(basedir, organization.name),
+                            WORKSPACE_ROOT_FILE_TEXT,
+                            { encoding: "utf-8" },
+                        );
                     }
-                });
-            }
-        });
+                    return;
+                } else if (
+                    !(organization.isDirectory() && this.folderTree.has(organization.name))
+                ) {
+                    this.logger.warn(
+                        `Unknown item ${organization.name} - Removing from ${basedir}`,
+                    );
+                    del.sync(path.join(basedir, organization.name), { force: true });
+                } else {
+                    fs.readdirSync(path.join(basedir, organization.name), {
+                        withFileTypes: true,
+                    }).forEach((course) => {
+                        if (
+                            !(
+                                this.folderTree.get(organization.name)?.has(course.name) &&
+                                course.isDirectory()
+                            )
+                        ) {
+                            this.logger.warn(
+                                `Course ${course.name} not found in ${organization.name} - Removing form ${basedir}`,
+                            );
+                            del.sync(path.join(basedir, organization.name, course.name), {
+                                force: true,
+                            });
+                        } else {
+                            fs.readdirSync(path.join(basedir, organization.name, course.name), {
+                                withFileTypes: true,
+                            }).forEach((exercise) => {
+                                if (
+                                    !(
+                                        this.folderTree
+                                            .get(organization.name)
+                                            ?.get(course.name)
+                                            ?.has(exercise.name) && exercise.isDirectory()
+                                    )
+                                ) {
+                                    this.logger.warn(
+                                        `Exercise ${exercise.name} not found in ${course.name} - Removing from ${basedir}`,
+                                    );
+                                    del.sync(
+                                        path.join(
+                                            basedir,
+                                            organization.name,
+                                            course.name,
+                                            exercise.name,
+                                        ),
+                                        { force: true },
+                                    );
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+            this.logger.log("Watcher completed sweeping without errors");
+        } catch (error) {
+            this.logger.error("Fatal error while sweeping", error);
+            this.logger.show();
+            showError("External file error, please restart Visual Studio Code to repair.");
+        }
     }
 
     private fileCreateAction(targetPath: string): void {
+        this.logger.log(`File created ${targetPath}`);
         const basedir = this.resources.getExercisesFolderPath();
         const relation = path.relative(basedir, targetPath).toString().split(path.sep, 3);
         if (relation[0] === "..") {
@@ -150,13 +194,17 @@ export default class WorkspaceWatcher {
             !this.folderTree.has(relation[0]) &&
             relation[0] !== WORKSPACE_ROOT_FILE
         ) {
-            del.sync(path.join(basedir, relation[0]), {
+            const pathToRemove = path.join(basedir, relation[0]);
+            this.logger.warn(`Removing ${pathToRemove}`);
+            del.sync(pathToRemove, {
                 force: true,
             });
             return;
         }
         if (relation.length > 1 && !this.folderTree.get(relation[0])?.has(relation[1])) {
-            del.sync(path.join(basedir, relation[0], relation[1]), {
+            const pathToRemove = path.join(basedir, relation[0], relation[1]);
+            this.logger.warn(`Removing ${pathToRemove}`);
+            del.sync(pathToRemove, {
                 force: true,
             });
             return;
@@ -165,7 +213,9 @@ export default class WorkspaceWatcher {
             relation.length > 2 &&
             !this.folderTree.get(relation[0])?.get(relation[1])?.has(relation[2])
         ) {
-            del.sync(path.join(basedir, ...relation), {
+            const pathToRemove = path.join(basedir, ...relation);
+            this.logger.warn(`Removing ${pathToRemove}`);
+            del.sync(pathToRemove, {
                 force: true,
             });
             return;
@@ -177,6 +227,7 @@ export default class WorkspaceWatcher {
      * as closed exercises by the watcher
      */
     private fileDeleteAction(targetPath: string): void {
+        this.logger.log(`File deleted ${targetPath}`);
         const basedir = this.resources.getExercisesFolderPath();
         const rootFilePath = path.join(basedir, WORKSPACE_ROOT_FILE);
 
@@ -195,6 +246,9 @@ export default class WorkspaceWatcher {
                 .getAllExercises()
                 .filter((x) => x.organization === relation[0] && x.status === ExerciseStatus.OPEN)
                 .forEach((x) => {
+                    this.logger.warn(
+                        `Exercise data marked as missing for organization ${x.organization}`,
+                    );
                     this.workspaceManager.setMissing(x.id);
                     this.unwatch(x);
                 });
@@ -210,6 +264,7 @@ export default class WorkspaceWatcher {
                         x.status === ExerciseStatus.OPEN,
                 )
                 .forEach((x) => {
+                    this.logger.warn(`Exercise data marked as missing for course ${x.course}`);
                     this.workspaceManager.setMissing(x.id);
                     this.unwatch(x);
                 });
@@ -229,6 +284,7 @@ export default class WorkspaceWatcher {
                         x.status === ExerciseStatus.OPEN,
                 )
                 .forEach((x) => {
+                    this.logger.warn(`Exercise data marked as missing for exercise ${x.name}`);
                     this.workspaceManager.setMissing(x.id);
                     this.unwatch(x);
                 });
@@ -247,6 +303,7 @@ export default class WorkspaceWatcher {
 
         if (path.relative(rootFilePath, targetPath) === "") {
             if (fs.readFileSync(rootFilePath, { encoding: "utf-8" }) !== WORKSPACE_ROOT_FILE_TEXT) {
+                this.logger.log(`Rewriting ${WORKSPACE_ROOT_FILE_TEXT} at ${targetPath}`);
                 fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
             }
         }

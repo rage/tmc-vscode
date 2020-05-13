@@ -159,7 +159,15 @@ export function registerUiActions(actionContext: ActionContext): void {
                 return;
             }
             actionContext.ui.webview.setContentFromTemplate({ templateName: "loading" });
-            await openExercises(msg.ids, actionContext);
+            const result = await openExercises(msg.ids, actionContext);
+            if (result.err) {
+                logger.error(`Error while opening exercises - ${result.val.message}`);
+                const buttons: Array<[string, () => void]> = [];
+                settings.getLogLevel() !== LogLevel.None
+                    ? buttons.push(["Open logs", (): void => actionContext.logger.show()])
+                    : buttons.push(["Ok", (): void => {}]);
+                showError(`${result.val.name} - ${result.val.message}`, ...buttons);
+            }
             displayLocalCourseDetails(msg.id, actionContext);
         },
     );
@@ -170,7 +178,15 @@ export function registerUiActions(actionContext: ActionContext): void {
                 return;
             }
             actionContext.ui.webview.setContentFromTemplate({ templateName: "loading" });
-            await closeExercises(actionContext, msg.ids);
+            const result = await closeExercises(actionContext, msg.ids);
+            if (result.err) {
+                logger.error(`Error while closing exercises - ${result.val.message}`);
+                const buttons: Array<[string, () => void]> = [];
+                settings.getLogLevel() !== LogLevel.None
+                    ? buttons.push(["Open logs", (): void => actionContext.logger.show()])
+                    : buttons.push(["Ok", (): void => {}]);
+                showError(`${result.val.name} - ${result.val.message}`, ...buttons);
+            }
             displayLocalCourseDetails(msg.id, actionContext);
         },
     );
