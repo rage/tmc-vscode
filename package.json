@@ -2,7 +2,7 @@
     "name": "test-my-code",
     "displayName": "TestMyCode",
     "description": "TestMyCode extension for Visual Studio Code",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "license": "MIT",
     "publisher": "moocfi",
     "repository": {
@@ -47,7 +47,8 @@
             },
             {
                 "command": "selectAction",
-                "title": "TMC - Menu"
+                "title": "TMC - Menu",
+                "icon": "media/menu.svg"
             },
             {
                 "command": "closeExercise",
@@ -67,7 +68,8 @@
             },
             {
                 "command": "runTests",
-                "title": "TMC - Run tests"
+                "title": "TMC - Run tests",
+                "icon": "media/test.svg"
             },
             {
                 "command": "downloadOldSubmission",

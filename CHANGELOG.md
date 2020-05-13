@@ -2,8 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+- Icons for running tests and opening TMC menu.
+- Extension logging in development and production mode.
+- Visual Studio Code output channel for logging in production mode.
+- User able to choose extension logging level in settings (default: Errors).
+
 ### Fixed
-- Closing temporary webview didn't work in some instances.
+- Resolve errors when data was removed externally while the extension was running.
+
+## [0.4.1] - 2020-05-08
+
+### Changed
+- Remove data of missing exercises when deleting course from My courses.
+
+### Fixed
+- Closing temporary webview didn't work properly in some cases.
 - Some areas were not reflecting the previous displayed course name change.
 
 ## [0.4.0] - 2020-05-05
