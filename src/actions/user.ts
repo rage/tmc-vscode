@@ -372,11 +372,14 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
         showError(`Failed to fetch Settings: ${extensionSettings.val}`);
         return;
     }
-    ui.webview.setContentFromTemplate({
-        templateName: "settings",
-        extensionSettings: extensionSettings.val,
-        tmcDataSize: formatSizeInBytes(await du(resources.getDataPath())),
-    });
+    ui.webview.setContentFromTemplate(
+        {
+            templateName: "settings",
+            extensionSettings: extensionSettings.val,
+            tmcDataSize: formatSizeInBytes(await du(resources.getDataPath())),
+        },
+        true,
+    );
 }
 
 /**

@@ -28,7 +28,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const settingsResult = await init.settingsInitialization(storage, resources, logger);
     const settings = new Settings(storage, logger, settingsResult);
-
+    logger.setLogLevel(settings.getLogLevel());
     await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
     /**

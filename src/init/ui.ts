@@ -234,6 +234,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 return;
             }
             settings.updateSetting({ setting: "logLevel", value: msg.data });
+            logger.setLogLevel(msg.data);
             openSettings(actionContext);
         },
     );

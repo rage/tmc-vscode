@@ -1,7 +1,7 @@
 import Storage from "./storage";
 import { ExtensionSettings, ExtensionSettingsData } from "./types";
 import { Err, Ok, Result } from "ts-results";
-import Logger from "../utils/logger";
+import Logger, { LogLevel } from "../utils/logger";
 
 /**
  * Settings class to manage user settings in storage.
@@ -58,5 +58,9 @@ export default class Settings {
         }
         this.logger.log("Updated settings data", data);
         this.updateExtensionSettings(this.settings);
+    }
+
+    public getLogLevel(): LogLevel {
+        return this.settings.logLevel;
     }
 }

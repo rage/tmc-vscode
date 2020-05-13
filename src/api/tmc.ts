@@ -531,9 +531,14 @@ export default class TMC {
         let active = true;
         let error: cp.ExecException | undefined;
         let interrupted = false;
-        const process = cp.exec(command, (err) => {
+        let [stdoutExec, stderrExec] = ["", ""];
+
+        const process = cp.exec(command, (err, stdout, stderr) => {
             active = false;
+            stdoutExec = stdout;
+            stderrExec = stderr;
             if (err) {
+                this.logger.error(`Process raised error: ${command}`, err, stdout, stderr);
                 error = err;
             }
         });
@@ -547,7 +552,6 @@ export default class TMC {
         };
 
         const processResult: Promise<Result<[string, string], Error>> = new Promise((resolve) => {
-            let error: Error | undefined;
             const timeout = setTimeout(() => {
                 interrupt();
                 return resolve(
@@ -568,8 +572,8 @@ export default class TMC {
                 } else if (code !== null && code > 0) {
                     return resolve(new Err(new Error("Unknown error")));
                 }
-                const stdout = (process.stdout?.read() || "stdout missing") as string;
-                const stderr = (process.stderr?.read() || "stderr missing") as string;
+                const stdout = (process.stdout?.read() || "") as string;
+                const stderr = (process.stderr?.read() || "") as string;
                 return resolve(new Ok([stdout, stderr]));
             });
         });
@@ -585,8 +589,11 @@ export default class TMC {
                         return resolve(new Err(result.val));
                     }
 
-                    const [stdout, stderr] = result.val;
+                    const stdout = result.val[0] ? result.val[0] : stdoutExec;
+                    const stderr = result.val[1] ? result.val[1] : stderrExec;
                     const logs = { stdout, stderr };
+
+                    this.logger.logVerbose("Logs", false, stdout, stderr);
 
                     if (action === "extract-project" || action === "compress-project") {
                         return resolve(new Ok({ response: outputPath, logs }));

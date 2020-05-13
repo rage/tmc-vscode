@@ -12,7 +12,6 @@ export enum LogLevel {
 export default class Logger {
     private output: OutputChannel | undefined;
     private productionMode: boolean;
-    // TODO: Get loglevel from settings
     private level: LogLevel = LogLevel.None;
     constructor() {
         this.productionMode = superfluousPropertiesEnabled();
@@ -22,7 +21,7 @@ export default class Logger {
     public log(message: string, ...params: unknown[]): void {
         if (this.level === LogLevel.None && this.productionMode) return;
 
-        if (this.level === LogLevel.Debug) {
+        if (this.level === LogLevel.Debug || !this.productionMode) {
             console.log(`${this.timestamp} INFO: ${message} ${this.toLoggableParams(params)}`);
         }
 
@@ -33,10 +32,27 @@ export default class Logger {
         }
     }
 
+    public logVerbose(message: string, logInDebug: boolean, ...params: unknown[]): void {
+        if (this.level === LogLevel.None && this.productionMode) return;
+
+        if ((this.level === LogLevel.Debug && logInDebug) || !this.productionMode) {
+            console.log(`${this.timestamp} INFO: ${message} ${this.toLoggableParams(params)}`);
+        }
+
+        if (
+            this.output &&
+            (this.level === LogLevel.Verbose || (this.level === LogLevel.Debug && logInDebug))
+        ) {
+            this.output.appendLine(
+                `${this.timestamp} INFO: ${message} ${this.toLoggableParams(params)}`,
+            );
+        }
+    }
+
     public error(message: string, ...params: unknown[]): void {
         if (this.level === LogLevel.None && this.productionMode) return;
 
-        if (this.level === LogLevel.Debug) {
+        if (this.level === LogLevel.Debug || !this.productionMode) {
             console.error(`${this.timestamp} ERROR: ${message} ${this.toLoggableParams(params)}`);
         }
 
@@ -50,7 +66,7 @@ export default class Logger {
     public warn(message: string, ...params: unknown[]): void {
         if (this.level === LogLevel.None && this.productionMode) return;
 
-        if (this.level === LogLevel.Debug) {
+        if (this.level === LogLevel.Debug || !this.productionMode) {
             console.warn(`${this.timestamp} WARNING: ${message} ${this.toLoggableParams(params)}`);
         }
 
@@ -67,6 +83,7 @@ export default class Logger {
 
     public dispose(): void {
         if (this.output) {
+            this.output.clear();
             this.output.dispose();
             this.output = undefined;
         }
@@ -99,7 +116,7 @@ export default class Logger {
             .replace(/\..+/, "")}:${`00${now.getUTCMilliseconds()}`.slice(-3)}]`;
     }
 
-    private setLogLevel(value: LogLevel): void {
+    public setLogLevel(value: LogLevel): void {
         this.level = value;
         if (value === LogLevel.None) {
             this.dispose();
