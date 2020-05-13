@@ -12,8 +12,9 @@ export enum LogLevel {
 export default class Logger {
     private output: OutputChannel | undefined;
     private productionMode: boolean;
-    private level: LogLevel = LogLevel.None;
+    private level: LogLevel;
     constructor() {
+        this.level = LogLevel.Errors;
         this.productionMode = superfluousPropertiesEnabled();
         this.productionMode ? this.setLogLevel(this.level) : this.setLogLevel(LogLevel.Debug);
     }
