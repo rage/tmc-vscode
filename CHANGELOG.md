@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Icons for running tests and opening TMC menu
+
 ## [0.4.1] - 2020-05-08
 
 ### Changed
