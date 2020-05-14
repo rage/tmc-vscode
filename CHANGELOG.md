@@ -1,15 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [0.5.0] - 2020-05-14
 
 ### Added
 - Icons for running tests and opening TMC menu.
-- Extension logging in development and production mode.
-- Visual Studio Code output channel for logging in production mode.
+- Output channel for logging extension status information.
 - User able to choose extension logging level in settings (default: Errors).
 
 ### Fixed
-- Resolve errors when data was removed externally while the extension was running.
+- Resolve errors if data was removed externally while the extension was running.
 
 ## [0.4.1] - 2020-05-08
 
