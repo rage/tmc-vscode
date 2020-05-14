@@ -462,6 +462,7 @@ export async function updateCourse(id: number, actionContext: ActionContext): Pr
             if (courseDetailsResult.err) {
                 if (!(courseDetailsResult.val instanceof ConnectionError)) {
                     const message = `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`;
+                    logger.error(`Error refreshing course data ${message}`, courseDetailsResult);
                     showError(
                         `Something went wrong while trying to refresh course data: ${message}`,
                     );
@@ -475,6 +476,7 @@ export async function updateCourse(id: number, actionContext: ActionContext): Pr
             if (courseExercisesResult.err) {
                 if (!(courseExercisesResult.val instanceof ConnectionError)) {
                     const message = `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`;
+                    logger.error(`Error refreshing course data ${message}`, courseExercisesResult);
                     showError(
                         `Something went wrong while trying to refresh course data: ${message}`,
                     );

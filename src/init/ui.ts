@@ -1,7 +1,13 @@
 import * as vscode from "vscode";
 import * as path from "path";
 
-import { askForConfirmation, isWorkspaceOpen, showError, showNotification } from "../utils/";
+import {
+    LogLevel,
+    askForConfirmation,
+    isWorkspaceOpen,
+    showError,
+    showNotification,
+} from "../utils/";
 import {
     addNewCourse,
     closeExercises,
@@ -18,7 +24,6 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
-import { LogLevel } from "../utils/logger";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.

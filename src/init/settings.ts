@@ -21,7 +21,9 @@ export async function settingsInitialization(
 
     const tmcDataPath = settings?.dataPath || resources.getDataPath();
     const logLevel =
-        is<LogLevel>(settings?.logLevel) && settings?.logLevel ? settings?.logLevel : LogLevel.None;
+        is<LogLevel>(settings?.logLevel) && settings?.logLevel
+            ? settings?.logLevel
+            : LogLevel.Errors;
     const hideMetaFiles = settings?.hideMetaFiles || true;
 
     const fixedSettings: ExtensionSettings = {
