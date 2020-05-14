@@ -12,6 +12,7 @@ import { FeedbackQuestion } from "../actions/types";
 import ClientOAuth2 = require("client-oauth2");
 import { LocalExerciseData } from "../config/types";
 import { superfluousPropertiesEnabled } from "./env";
+import { showNotification } from "./dialog";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
@@ -146,7 +147,7 @@ export function getProgressBar(percentDone: number): string {
 }
 
 export function displayProgrammerError(description: string): void {
-    vscode.window.showErrorMessage(
+    showNotification(
         (superfluousPropertiesEnabled() ? "" : "Programmer ") + "Error: " + description,
     );
 }

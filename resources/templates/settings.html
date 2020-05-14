@@ -11,22 +11,41 @@
             <div class="row">
                 <div class="col">
                     <h1>TMC Settings</h1>
-                    <p>Here you can change TMC extension settings.</p>
+                    <p>
+                        Here you can change TMC extension settings. <br />
+                        Settings are saved automatically.
+                    </p>
                 </div>
             </div>
 
             <div class="row">
                 <div class="col">
-                    <div class="card-transparent border-color">
+                    <div class="card-transparent border-color my-1">
                         <div class="card-body">
                             <h5 class="card-title">TMC Data</h5>
                             <p class="card-text">
                                 Currently your TMC data ({{tmcDataSize}}) is located at: <br />
-                                {{tmcData}}
+                                {{extensionSettings.dataPath}}
                             </p>
                             <button class="btn btn-primary" onclick="changeTmcDataPath()">
                                 Change path
                             </button>
+                        </div>
+                    </div>
+                    <div class="card-transparent border-color my-1">
+                        <div class="card-body">
+                            <h5 class="card-title">Extension logging</h5>
+                            <p class="card-text">
+                                <label for="log-level">Choose log level:</label>
+                                <select id="log-level">
+                                    <option selected>
+                                        Current: {{extensionSettings.logLevel}}
+                                    </option>
+                                    <option value="none">none</option>
+                                    <option value="errors">errors</option>
+                                    <option value="verbose">verbose</option>
+                                </select>
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -38,6 +57,15 @@
             function changeTmcDataPath() {
                 vscode.postMessage({ type: "changeTmcDataPath" });
             }
+
+            const element = document.getElementById("log-level");
+            element.addEventListener("change", function () {
+                const element = document.getElementById("log-level");
+                if (element.selectedIndex !== 0) {
+                    const level = element.options[element.selectedIndex].value;
+                    vscode.postMessage({ type: "changeLogLevel", data: level });
+                }
+            });
         </script>
     </body>
 </html>

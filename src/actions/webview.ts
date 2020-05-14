@@ -23,8 +23,8 @@ import { updateCourse } from "./user";
  * Displays a summary page of user's courses.
  */
 export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
-    const { userData, tmc, ui } = actionContext;
-    console.log("Displaying My courses view");
+    const { userData, tmc, ui, logger } = actionContext;
+    logger.log("Displaying My courses view");
     const courses = userData.getCourses().map((course) => {
         const completedPrc = ((course.awardedPoints / course.availablePoints) * 100).toFixed(2);
         return { ...course, completedPrc };
@@ -87,10 +87,10 @@ export async function displayLocalCourseDetails(
     courseId: number,
     actionContext: ActionContext,
 ): Promise<void> {
-    const { ui, userData, workspaceManager } = actionContext;
+    const { ui, userData, workspaceManager, logger } = actionContext;
 
     const course = userData.getCourse(courseId);
-    console.log(`Display course view for ${course.name}`);
+    logger.log(`Display course view for ${course.name}`);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
 
     const exerciseData = new Map<
@@ -241,7 +241,7 @@ export async function selectOrganization(
 export async function selectOrganizationAndCourse(
     actionContext: ActionContext,
 ): Promise<Result<{ organization: string; course: number }, Error>> {
-    const { resources, ui } = actionContext;
+    const { resources, ui, logger } = actionContext;
 
     const tempView = new TemporaryWebview(resources, ui, "", () => {});
 
@@ -254,7 +254,7 @@ export async function selectOrganizationAndCourse(
             tempView.dispose();
             return new Err(orgResult.val);
         }
-        console.log(`Organization slug ${orgResult.val} selected`);
+        logger.log(`Organization slug ${orgResult.val} selected`);
         organizationSlug = orgResult.val;
         const courseResult = await selectCourse(organizationSlug, actionContext, tempView);
         if (courseResult.err) {
@@ -266,7 +266,7 @@ export async function selectOrganizationAndCourse(
         }
         courseId = courseResult.val.course;
     }
-    console.log(`Course with id ${courseId} selected`);
+    logger.log(`Course with id ${courseId} selected`);
     tempView.dispose();
     return new Ok({ organization: organizationSlug, course: courseId });
 }

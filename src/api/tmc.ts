@@ -49,6 +49,7 @@ import {
 } from "../config/constants";
 import { resetExercise } from "../actions";
 import { ActionContext } from "../actions/types";
+import Logger from "../utils/logger";
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -60,6 +61,7 @@ export default class TMC {
     private readonly resources: Resources;
     private readonly tmcApiUrl: string;
     private readonly tmcDefaultHeaders: { client: string; client_version: string };
+    private logger: Logger;
     private workspaceManager?: WorkspaceManager;
 
     private readonly cache: Map<string, TMCApiResponse>;
@@ -69,13 +71,14 @@ export default class TMC {
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage, resources: Resources) {
+    constructor(storage: Storage, resources: Resources, logger: Logger) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: ACCESS_TOKEN_URI,
             clientId: CLIENT_ID,
             clientSecret: CLIENT_SECRET,
         });
         this.storage = storage;
+        this.logger = logger;
         const authToken = storage.getAuthenticationToken();
         if (authToken) {
             this.token = new ClientOauth2.Token(this.oauth2, authToken);
@@ -115,7 +118,7 @@ export default class TMC {
             } else if (err.code === "EUNAVAILABLE") {
                 return new Err(new ConnectionError("Connection error"));
             }
-            console.error(err);
+            this.logger.error("Unknown authentication error:", err);
             return new Err(new Error("Unknown error: " + err.code));
         }
         this.storage.updateAuthenticationToken(this.token.data);
@@ -523,28 +526,32 @@ export default class TMC {
 
         const command = `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
 
-        console.log(command);
+        this.logger.log(command);
 
         let active = true;
         let error: cp.ExecException | undefined;
         let interrupted = false;
-        const process = cp.exec(command, (err) => {
+        let [stdoutExec, stderrExec] = ["", ""];
+
+        const process = cp.exec(command, (err, stdout, stderr) => {
             active = false;
+            stdoutExec = stdout;
+            stderrExec = stderr;
             if (err) {
+                this.logger.error(`Process raised error: ${command}`, err, stdout, stderr);
                 error = err;
             }
         });
 
         const interrupt = (): void => {
             if (active) {
-                console.log(`Killing TMC-Langs process ${process.pid}`);
+                this.logger.log(`Killing TMC-Langs process ${process.pid}`);
                 kill(process.pid);
                 interrupted = true;
             }
         };
 
         const processResult: Promise<Result<[string, string], Error>> = new Promise((resolve) => {
-            let error: Error | undefined;
             const timeout = setTimeout(() => {
                 interrupt();
                 return resolve(
@@ -565,8 +572,8 @@ export default class TMC {
                 } else if (code !== null && code > 0) {
                     return resolve(new Err(new Error("Unknown error")));
                 }
-                const stdout = (process.stdout?.read() || "stdout missing") as string;
-                const stderr = (process.stderr?.read() || "stderr missing") as string;
+                const stdout = (process.stdout?.read() || "") as string;
+                const stderr = (process.stderr?.read() || "") as string;
                 return resolve(new Ok([stdout, stderr]));
             });
         });
@@ -582,8 +589,11 @@ export default class TMC {
                         return resolve(new Err(result.val));
                     }
 
-                    const [stdout, stderr] = result.val;
+                    const stdout = result.val[0] ? result.val[0] : stdoutExec;
+                    const stderr = result.val[1] ? result.val[1] : stderrExec;
                     const logs = { stdout, stderr };
+
+                    this.logger.logVerbose("Logs", false, stdout, stderr);
 
                     if (action === "extract-project" || action === "compress-project") {
                         return resolve(new Ok({ response: outputPath, logs }));
@@ -598,7 +608,8 @@ export default class TMC {
                         return resolve(new Ok(readResult));
                     }
 
-                    console.error(result);
+                    this.logger.error("Unexpected response JSON type", result.val);
+                    this.logger.show();
                     return resolve(new Err(new Error("Unexpected response JSON type")));
                 });
             }),
@@ -675,8 +686,8 @@ export default class TMC {
                         }
                         return new Ok(responseObject);
                     }
-                    console.error("Unexpected TMC response type: ");
-                    console.error(responseObject);
+                    this.logger.error("Unexpected TMC response type", responseObject);
+                    this.logger.show();
                     return new Err(new ApiError("Unexpected response type"));
                 } catch (error) {
                     return new Err(new ApiError("Response not in JSON format: " + error.name));
@@ -686,6 +697,7 @@ export default class TMC {
                 return new Err(new AuthorizationError("403 - Forbidden"));
             }
             const errorText = await response.text();
+            this.logger.error(`${response.status} - ${response.statusText} - ${errorText}`);
             return new Err(
                 new ApiError(`${response.status} - ${response.statusText} - ${errorText}`),
             );

@@ -8,13 +8,15 @@ import { ApiError, ConnectionError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
 import Resources from "./resources";
-import { ExerciseStatus, ExtensionSettings, LocalCourseData, LocalExerciseData } from "./types";
+import { ExerciseStatus, LocalCourseData, LocalExerciseData } from "./types";
+import Logger from "../utils/logger";
 
 export async function validateAndFix(
     storage: Storage,
     tmc: TMC,
     ui: UI,
     resources: Resources,
+    logger: Logger,
 ): Promise<Result<void, Error>> {
     const exerciseData = storage.getExerciseData() as unknown[];
     if (!is<LocalExerciseData[]>(exerciseData) && is<unknown[]>(exerciseData)) {
@@ -22,7 +24,7 @@ export async function validateAndFix(
         if (login.err) {
             return new Err(login.val);
         }
-        console.log("Fixing workspacemanager data");
+        logger.log("Fixing workspacemanager data");
         const exerciseDataFixed: LocalExerciseData[] = [];
         for (const ex of exerciseData) {
             if (
@@ -50,8 +52,7 @@ export async function validateAndFix(
 
             if (details.err) {
                 if (details.val instanceof ApiError) {
-                    console.log("Skipping bad workspacemanager data:", JSON.stringify(ex));
-                    console.log(details.val);
+                    logger.warn(`Skipping bad workspacemanager data - ${details.val.message}`, ex);
                     continue;
                 }
                 return new Err(details.val);
@@ -72,7 +73,7 @@ export async function validateAndFix(
             }
         }
         storage.updateExerciseData(exerciseDataFixed);
-        console.log("Workspacemanager data fixed");
+        logger.log("Workspacemanager data fixed");
     }
     const userData = storage.getUserData() as { courses: unknown[] };
     if (!is<{ courses: LocalCourseData[] }>(userData) && is<{ courses: unknown[] }>(userData)) {
@@ -80,7 +81,7 @@ export async function validateAndFix(
         if (login.err) {
             return new Err(login.val);
         }
-        console.log("Fixing userdata");
+        logger.log("Fixing userdata");
 
         const userDataFixed: { courses: LocalCourseData[] } = { courses: [] };
         if (userData.courses !== undefined) {
@@ -102,7 +103,7 @@ export async function validateAndFix(
                     : getCourseDetails(tmc, course.organization, course.name as string));
                 if (courseDetails.err) {
                     if (courseDetails.val instanceof ApiError) {
-                        console.log("Skipping bad userdata:", JSON.stringify(course));
+                        logger.warn("Skipping bad userdata", course);
                         continue;
                     }
                     return new Err(courseDetails.val);
@@ -114,7 +115,7 @@ export async function validateAndFix(
 
                 if (courseExercises.err) {
                     if (courseDetails.val instanceof ApiError) {
-                        console.log("Skipping bad userdata:", JSON.stringify(course));
+                        logger.warn("Skipping bad userdata", course);
                         continue;
                     }
                     return new Err(courseExercises.val);
@@ -140,15 +141,7 @@ export async function validateAndFix(
             }
         }
         storage.updateUserData(userDataFixed);
-        console.log("Userdata fixed");
-    }
-
-    const settings = storage.getExtensionSettings();
-    if (!is<ExtensionSettings | undefined>(settings)) {
-        console.log("Fixing extension settings");
-        const settingsFixed = undefined;
-        storage.updateExtensionSettings(settingsFixed);
-        console.log("Extension settings fixed");
+        logger.log("Userdata fixed");
     }
 
     return Ok.EMPTY;

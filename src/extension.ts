@@ -7,25 +7,29 @@ import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
-import { isWorkspaceOpen, superfluousPropertiesEnabled } from "./utils/";
+import { isWorkspaceOpen, showError, superfluousPropertiesEnabled } from "./utils/";
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
+import Logger from "./utils/logger";
+import Settings from "./config/settings";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const productionMode = superfluousPropertiesEnabled();
-    console.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
-
+    const logger = new Logger();
+    logger.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
     const storage = new Storage(context);
-    const resourcesResult = await init.resourceInitialization(context, storage);
+    const resourcesResult = await init.resourceInitialization(context, storage, logger);
     if (resourcesResult.err) {
-        vscode.window.showErrorMessage(
-            "TestMyCode Initialization failed: " + resourcesResult.val.message,
-        );
+        const message = `TestMyCode Initialization failed: ${resourcesResult.val}`;
+        logger.error(message);
+        showError(message);
         return;
     }
-
-    await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
-
     const resources = resourcesResult.val;
+
+    const settingsResult = await init.settingsInitialization(storage, resources, logger);
+    const settings = new Settings(storage, logger, settingsResult);
+    logger.setLogLevel(settings.getLogLevel());
+    await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
     /**
      * Checks whether the necessary folders are open in the workspace and opens them if they aren't.
@@ -40,21 +44,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
 
-    const tmc = new TMC(storage, resources);
-    const validationResult = await validateAndFix(storage, tmc, ui, resources);
+    const tmc = new TMC(storage, resources, logger);
+    const validationResult = await validateAndFix(storage, tmc, ui, resources, logger);
     if (validationResult.err) {
-        vscode.window.showErrorMessage(
-            "Data reconstruction failed: " + validationResult.val.message,
-        );
+        const message = `Data reconstruction failed: ${validationResult.val.message}`;
+        logger.error(message);
+        showError(message);
         return;
     }
 
-    const workspaceManager = new WorkspaceManager(storage, resources);
+    const workspaceManager = new WorkspaceManager(storage, resources, logger);
     tmc.setWorkspaceManager(workspaceManager);
-    const userData = new UserData(storage);
+    const userData = new UserData(storage, logger);
+    const actionContext = { ui, resources, workspaceManager, tmc, userData, logger, settings };
 
-    init.registerUiActions(ui, tmc, workspaceManager, resources, userData);
-    const actionContext = { ui, resources, workspaceManager, tmc, userData };
+    init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
 
     checkForExerciseUpdates(actionContext);

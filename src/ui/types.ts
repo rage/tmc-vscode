@@ -1,7 +1,7 @@
 import TMC from "../api/tmc";
 import Storage from "../config/storage";
 import UI from "./ui";
-import { LocalCourseData } from "../config/types";
+import { ExtensionSettings, LocalCourseData } from "../config/types";
 import { Course, Organization, SubmissionStatusReport } from "../api/types";
 import { FeedbackQuestion } from "../actions/types";
 
@@ -114,7 +114,7 @@ export type RunningTestsData = {
 };
 
 export type SettingsData = {
-    tmcData: string;
+    extensionSettings: ExtensionSettings;
     tmcDataSize: string;
 };
 

@@ -4,6 +4,7 @@ import {
     askForConfirmation,
     getCurrentExerciseData,
     getCurrentExerciseId,
+    showError,
     showNotification,
 } from "../utils/";
 import {
@@ -15,14 +16,15 @@ import {
     testExercise,
 } from "../actions";
 
+// TODO: Fix error handling so user receives better error messages.
 const errorMessage = "Currently open editor is not part of a TMC exercise";
 
 export function registerCommands(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
 ): void {
-    console.log("Registering TMC VSCode commands");
-    const { ui, workspaceManager, userData } = actionContext;
+    const { ui, workspaceManager, userData, logger } = actionContext;
+    logger.log("Registering TMC VSCode commands");
 
     context.subscriptions.push(
         vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
@@ -32,7 +34,8 @@ export function registerCommands(
         vscode.commands.registerCommand("selectAction", async () => {
             const exerciseData = getCurrentExerciseData(workspaceManager);
             if (exerciseData.err) {
-                vscode.window.showErrorMessage(exerciseData.val.message);
+                logger.error(exerciseData.val.message);
+                showError(exerciseData.val.message);
                 return;
             }
             selectAction(actionContext, exerciseData.val);
@@ -42,9 +45,12 @@ export function registerCommands(
     context.subscriptions.push(
         vscode.commands.registerCommand("uploadArchive", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
-            exerciseId
-                ? submitExercise(actionContext, exerciseId)
-                : vscode.window.showErrorMessage(errorMessage);
+            if (!exerciseId) {
+                logger.error(errorMessage);
+                showError(errorMessage);
+                return;
+            }
+            submitExercise(actionContext, exerciseId);
         }),
     );
 
@@ -58,7 +64,8 @@ export function registerCommands(
                     (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link)),
                 ]);
             } else {
-                vscode.window.showErrorMessage(errorMessage);
+                logger.error(errorMessage);
+                showError(errorMessage);
             }
         }),
     );
@@ -66,9 +73,12 @@ export function registerCommands(
     context.subscriptions.push(
         vscode.commands.registerCommand("runTests", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
-            exerciseId
-                ? testExercise(actionContext, exerciseId)
-                : vscode.window.showErrorMessage(errorMessage);
+            if (!exerciseId) {
+                logger.error(errorMessage);
+                showError(errorMessage);
+                return;
+            }
+            testExercise(actionContext, exerciseId);
         }),
     );
 
@@ -76,12 +86,14 @@ export function registerCommands(
         vscode.commands.registerCommand("resetExercise", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
             if (!exerciseId) {
-                vscode.window.showErrorMessage(errorMessage);
+                logger.error(errorMessage);
+                showError(errorMessage);
                 return;
             }
             const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
             if (exerciseData.err) {
-                vscode.window.showErrorMessage("The data for this exercise seems to be missing");
+                logger.error("The data for this exercise seems to be missing");
+                showError("The data for this exercise seems to be missing");
                 return;
             }
 
@@ -103,7 +115,8 @@ export function registerCommands(
         vscode.commands.registerCommand("downloadOldSubmission", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
             if (!exerciseId) {
-                vscode.window.showErrorMessage(errorMessage);
+                logger.error(errorMessage);
+                showError(errorMessage);
                 return;
             }
             downloadOldSubmissions(exerciseId, actionContext);
@@ -114,12 +127,14 @@ export function registerCommands(
         vscode.commands.registerCommand("closeExercise", async () => {
             const exerciseId = getCurrentExerciseId(workspaceManager);
             if (!exerciseId) {
-                vscode.window.showErrorMessage(errorMessage);
+                logger.error(errorMessage);
+                showError(errorMessage);
                 return;
             }
             const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
             if (exerciseData.err) {
-                vscode.window.showErrorMessage("The data for this exercise seems to be missing");
+                logger.error("The data for this exercise seems to be missing");
+                showError("The data for this exercise seems to be missing");
                 return;
             }
             if (userData.getPassed(exerciseId)) {

@@ -5,7 +5,6 @@
  */
 
 import { Err, Ok, Result } from "ts-results";
-import * as vscode from "vscode";
 import { ActionContext, CourseExerciseDownloads } from "./types";
 import pLimit from "p-limit";
 import { askForConfirmation, askForItem, showError, showNotification } from "../utils";
@@ -22,7 +21,7 @@ export async function downloadExercises(
     courseExerciseDownloads: CourseExerciseDownloads[],
     returnToCourse?: number,
 ): Promise<void> {
-    const { tmc, ui } = actionContext;
+    const { tmc, ui, logger } = actionContext;
 
     const exerciseStatus = new Map<
         number,
@@ -52,10 +51,9 @@ export async function downloadExercises(
                     }),
                 );
         } else {
-            vscode.window.showErrorMessage(
-                `Could not download exercises, course details not found: \
-                ${courseDetails.val.name} - ${courseDetails.val.message}`,
-            );
+            const message = `Could not download exercises, course details not found: ${courseDetails.val.name} - ${courseDetails.val.message}`;
+            logger.log(message);
+            showError(message);
         }
     }
 
@@ -141,13 +139,13 @@ export async function checkForExerciseUpdates(
     actionContext: ActionContext,
     courseId?: number,
 ): Promise<void> {
-    const { tmc, userData, workspaceManager } = actionContext;
+    const { tmc, userData, workspaceManager, logger } = actionContext;
 
     const coursesToUpdate: Map<number, CourseExerciseDownloads> = new Map();
     let count = 0;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
-    console.log(`Checking for exercise updates for courses ${filteredCourses.map((c) => c.name)}`);
+    logger.log(`Checking for exercise updates for courses ${filteredCourses.map((c) => c.name)}`);
     for (const course of filteredCourses) {
         const organizationSlug = course.organization;
 
@@ -198,12 +196,14 @@ export async function resetExercise(
     actionContext: ActionContext,
     id: number,
 ): Promise<Result<void, Error>> {
-    const { ui, tmc, workspaceManager } = actionContext;
+    const { ui, tmc, workspaceManager, logger } = actionContext;
 
     const exerciseData = workspaceManager.getExerciseDataById(id);
 
     if (exerciseData.err) {
-        vscode.window.showErrorMessage("The data for this exercise seems to be missing");
+        const message = "The data for this exercise seems to be missing";
+
+        showError(message);
         return new Err(exerciseData.val);
     }
 
@@ -215,8 +215,9 @@ export async function resetExercise(
     if (saveOrNo) {
         const submitResult = await tmc.submitExercise(id);
         if (submitResult.err) {
-            vscode.window.showErrorMessage(`Reset canceled, failed to submit exercise: \
-           ${submitResult.val.name} - ${submitResult.val.message}`);
+            const message = `Reset canceled, failed to submit exercise: ${submitResult.val.name} - ${submitResult.val.message}`;
+            logger.error(message);
+            showError(message);
             ui.setStatusBar(
                 `Something went wrong while resetting exercise ${exerciseData.val.name}`,
                 10000,
@@ -239,18 +240,44 @@ export async function resetExercise(
  * Opens given exercises, showing them in TMC workspace.
  * @param ids Array of exercise IDs
  */
-export async function openExercises(ids: number[], actionContext: ActionContext): Promise<void> {
-    const { workspaceManager } = actionContext;
-    workspaceManager.openExercise(...ids);
+export async function openExercises(
+    ids: number[],
+    actionContext: ActionContext,
+): Promise<Result<void, Error>> {
+    const { workspaceManager, logger } = actionContext;
+
+    const result = workspaceManager.openExercise(...ids);
+    const errors = result.filter((file) => file.err);
+
+    if (errors.length !== 0) {
+        errors.forEach((e) =>
+            logger.error("Error when opening file", e.mapErr((err) => err.message).val),
+        );
+        return new Err(new Error("Something went wrong while opening exercises."));
+    }
+    return Ok.EMPTY;
 }
 
 /**
  * Closes given exercises, hiding them in TMC workspace.
  * @param ids Array of exercise IDs
  */
-export async function closeExercises(actionContext: ActionContext, ids: number[]): Promise<void> {
-    const { workspaceManager } = actionContext;
-    workspaceManager.closeExercise(...ids);
+export async function closeExercises(
+    actionContext: ActionContext,
+    ids: number[],
+): Promise<Result<void, Error>> {
+    const { workspaceManager, logger } = actionContext;
+
+    const result = workspaceManager.closeExercise(...ids);
+    const errors = result.filter((file) => file.err);
+
+    if (errors.length !== 0) {
+        errors.forEach((e) =>
+            logger.error("Error when closing file", e.mapErr((err) => err.message).val),
+        );
+        return new Err(new Error("Something went wrong while closing exercises."));
+    }
+    return Ok.EMPTY;
 }
 
 /**
@@ -263,15 +290,18 @@ export async function downloadOldSubmissions(
     exerciseId: number,
     actionContext: ActionContext,
 ): Promise<void> {
-    const { tmc, workspaceManager } = actionContext;
+    const { tmc, workspaceManager, logger } = actionContext;
     const exercise = workspaceManager.getExerciseDataById(exerciseId);
     if (exercise.err) {
+        logger.error("Exercise data missing");
         showError("Exercise data missing");
         return;
     }
     const response = await getOldSubmissions(actionContext);
     if (response.err) {
-        showError("Something went wrong while fetching old submissions: " + response.val.message);
+        const message = `Something went wrong while fetching old submissions: ${response.val.message}`;
+        logger.error(message);
+        showError(message);
         return;
     }
     if (response.val.length === 0) {
@@ -296,9 +326,9 @@ export async function downloadOldSubmissions(
 
     const oldSub = await tmc.downloadOldExercise(actionContext, exercise.val.id, submission.id);
     if (oldSub.err) {
-        showError(
-            "Something went wrong while downloading old submission for exercise: " + oldSub.val,
-        );
+        const message = `Something went wrong while downloading old submission for exercise: ${oldSub.val}`;
+        logger.error(message);
+        showError(message);
         return;
     }
     showNotification(oldSub.val);

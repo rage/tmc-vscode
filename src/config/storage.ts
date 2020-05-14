@@ -54,7 +54,7 @@ export default class Storage {
         await this.context.globalState.update("userData", userData);
     }
 
-    public async updateExtensionSettings(settings: ExtensionSettings | undefined): Promise<void> {
+    public async updateExtensionSettings(settings: ExtensionSettings): Promise<void> {
         await this.context.globalState.update("extensionSettings", settings);
     }
 }

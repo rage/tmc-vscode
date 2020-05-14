@@ -1,12 +1,13 @@
 import * as vscode from "vscode";
 import * as path from "path";
 
-import UI from "../ui/ui";
-import TMC from "../api/tmc";
-import WorkspaceManager from "../api/workspaceManager";
-import Resources from "../config/resources";
-import { UserData } from "../config/userdata";
-import { askForConfirmation, isWorkspaceOpen, showError, showNotification } from "../utils/";
+import {
+    LogLevel,
+    askForConfirmation,
+    isWorkspaceOpen,
+    showError,
+    showNotification,
+} from "../utils/";
 import {
     addNewCourse,
     closeExercises,
@@ -22,7 +23,7 @@ import {
     removeCourse,
     updateCourse,
 } from "../actions";
-import { CourseExerciseDownloads } from "../actions/types";
+import { ActionContext, CourseExerciseDownloads } from "../actions/types";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -30,14 +31,9 @@ import { CourseExerciseDownloads } from "../actions/types";
  * @param ui The User Interface object
  * @param tmc The TMC API object
  */
-export function registerUiActions(
-    ui: UI,
-    tmc: TMC,
-    workspaceManager: WorkspaceManager,
-    resources: Resources,
-    userData: UserData,
-): void {
-    console.log("Initializing UI Actions");
+export function registerUiActions(actionContext: ActionContext): void {
+    const { tmc, workspaceManager, ui, resources, logger, settings } = actionContext;
+    logger.log("Initializing UI Actions");
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
 
@@ -46,9 +42,7 @@ export function registerUiActions(
         WORKSPACE_OPEN,
     };
 
-    // Register UI actions
-    const actionContext = { tmc, workspaceManager, ui, resources, userData };
-
+    // Register UI actionS
     ui.treeDP.registerAction("Log out", [LOGGED_IN], () => {
         logout(visibilityGroups, actionContext);
     });
@@ -111,7 +105,9 @@ export function registerUiActions(
     ui.webview.registerHandler("addCourse", async () => {
         const result = await addNewCourse(actionContext);
         if (result.err) {
-            vscode.window.showErrorMessage(result.val.message);
+            const message = `Failed to add new course: ${result.val.message}`;
+            logger.error(message);
+            showError(message);
         }
     });
     ui.webview.registerHandler(
@@ -122,7 +118,9 @@ export function registerUiActions(
             }
             const res = await displayCourseDownloads(actionContext, msg.id);
             if (res.err) {
-                vscode.window.showErrorMessage(`Can't display downloads: ${res.val.message}`);
+                const message = `Can't display downloads: ${res.val.message}`;
+                logger.error(message);
+                showError(message);
             }
         },
     );
@@ -166,7 +164,15 @@ export function registerUiActions(
                 return;
             }
             actionContext.ui.webview.setContentFromTemplate({ templateName: "loading" });
-            await openExercises(msg.ids, actionContext);
+            const result = await openExercises(msg.ids, actionContext);
+            if (result.err) {
+                logger.error(`Error while opening exercises - ${result.val.message}`);
+                const buttons: Array<[string, () => void]> = [];
+                settings.getLogLevel() !== LogLevel.None
+                    ? buttons.push(["Open logs", (): void => actionContext.logger.show()])
+                    : buttons.push(["Ok", (): void => {}]);
+                showError(`${result.val.name} - ${result.val.message}`, ...buttons);
+            }
             displayLocalCourseDetails(msg.id, actionContext);
         },
     );
@@ -177,7 +183,15 @@ export function registerUiActions(
                 return;
             }
             actionContext.ui.webview.setContentFromTemplate({ templateName: "loading" });
-            await closeExercises(actionContext, msg.ids);
+            const result = await closeExercises(actionContext, msg.ids);
+            if (result.err) {
+                logger.error(`Error while closing exercises - ${result.val.message}`);
+                const buttons: Array<[string, () => void]> = [];
+                settings.getLogLevel() !== LogLevel.None
+                    ? buttons.push(["Open logs", (): void => actionContext.logger.show()])
+                    : buttons.push(["Ok", (): void => {}]);
+                showError(`${result.val.name} - ${result.val.message}`, ...buttons);
+            }
             displayLocalCourseDetails(msg.id, actionContext);
         },
     );
@@ -203,18 +217,19 @@ export function registerUiActions(
             }
             const res = await workspaceManager.moveFolder(old, newPath);
             if (res.ok) {
-                console.log(`Moved workspace folder from ${old} to ${newPath}`);
+                logger.log(`Moved workspace folder from ${old} to ${newPath}`);
                 if (!res.val) {
-                    await showNotification(
+                    showNotification(
                         `Some files could not be removed from the previous workspace directory. They will have to be removed manually. ${old}`,
                         ["OK", (): void => {}],
                     );
                 }
-                await showNotification(`TMC Data was successfully moved to ${newPath}`, [
+                showNotification(`TMC Data was successfully moved to ${newPath}`, [
                     "OK",
                     (): void => {},
                 ]);
                 resources.setDataPath(newPath);
+                settings.updateSetting({ setting: "dataPath", value: newPath });
                 if (open) {
                     // Opening a workspace restarts VSCode (v1.44)
                     vscode.commands.executeCommand(
@@ -225,10 +240,23 @@ export function registerUiActions(
                     );
                 }
             } else {
+                logger.error(res.val.message);
                 showError(res.val.message);
             }
             workspaceManager.restartWatcher();
             openSettings(actionContext);
         }
     });
+
+    ui.webview.registerHandler(
+        "changeLogLevel",
+        (msg: { type?: "changeLogLevel"; data?: LogLevel }) => {
+            if (!(msg.type && msg.data)) {
+                return;
+            }
+            settings.updateSetting({ setting: "logLevel", value: msg.data });
+            logger.setLogLevel(msg.data);
+            openSettings(actionContext);
+        },
+    );
 }
