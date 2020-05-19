@@ -175,7 +175,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
      * Triggers a treeview refresh
      */
     public refresh(): void {
-        this.refreshEventEmitter.fire();
+        this.refreshEventEmitter.fire(undefined);
     }
 
     /**

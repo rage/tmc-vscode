@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+- Updated dependencies
+
 ## [0.5.0] - 2020-05-14
 
 ### Added
