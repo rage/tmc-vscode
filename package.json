@@ -164,6 +164,7 @@
         "postinstall": "babel node_modules/ts-results --out-dir node_modules/ts-results --plugins=@babel/plugin-transform-modules-commonjs",
         "prettier-check": "prettier --check --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,ts,yml}\"",
         "prettier": "prettier --write --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,ts,yml}\"",
+        "release": "./bin/publishRelease.sh",
         "webpack": "webpack --config webpack.dev.js",
         "webpack:watch": "webpack --config webpack.dev.js --watch --info-verbosity verbose"
     },
