@@ -144,6 +144,53 @@ export default class TemplateEngine {
             }
         });
 
+        handlebars.registerHelper(
+            "show_test_results",
+            (testResults: TmcLangsTestResult[], showAll: boolean) => {
+                if (!showAll) {
+                    const first = testResults.filter((test) => !test.successful);
+                    if (first.length === 0) {
+                        return undefined;
+                    }
+                    return new handlebars.SafeString(`<div class="row failed my-2 mx-0">
+                            <div class="row m-0">
+                                <div class="col-md-1 failed-header">
+                                    FAIL:
+                                </div>
+                                <div class="col-md">
+                                    <span>${first[0].name}</span>
+                                </div>
+                            </div>
+                            <div class="row m-0">
+                                <div class="col">
+                                    <pre>${first[0].message}</pre>
+                                </div>
+                            </div>
+                        </div>`);
+                }
+                const divs: string[] = [];
+                for (const test of testResults) {
+                    const classStyle = test.successful ? "passed" : "failed";
+                    divs.push(`<div class="row ${classStyle} my-2 mx-0">
+                                <div class="row m-0">
+                                    <div class="col-md-1 ${classStyle}-header">
+                                        ${test.successful ? "PASS:" : "FAIL:"}
+                                    </div>
+                                    <div class="col-md">
+                                        <span>${test.name}</span>
+                                    </div>
+                                </div>
+                                <div class="row m-0">
+                                    <div class="col">
+                                        <pre>${test.message}</pre>
+                                    </div>
+                                </div>
+                            </div>`);
+                }
+                return new handlebars.SafeString(divs.join(""));
+            },
+        );
+
         handlebars.registerHelper("collect", (...properties) => {
             return properties;
         });
