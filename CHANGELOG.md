@@ -2,8 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+- Show first failed test when running tests locally.
+
 ### Security
-- Updated dependencies
+- Updated dependencies.
 
 ## [0.5.0] - 2020-05-14
 

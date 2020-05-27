@@ -12,43 +12,29 @@
                 <span aria-hidden="true">&times;</span>
             </button>
             {{#if testResult.testResults}}
-            <div class="row">
-                <div class="py-2">
+            <div class="row m-0">
+                <div class="col-md-10 pr-0">
                     {{{ check_test_status testResult.status testResult.logs undefined pasteLink }}}
                 </div>
             </div>
-            <div class="row">
-                {{{ progress_bar testResult.testResults}}}
-            </div>
-            {{#each testResult.testResults}}
-
-            <div class="row {{#if this.successful}}passed{{else}}failed{{/if}} my-2">
-                <div class="col">
-                    <div class="row">
-                        {{#if this.successful}}
-                        <div class="col-md-1 passed-header">
-                            PASS:
-                        </div>
-                        {{else}}
-                        <div class="col-md-1 failed-header">
-                            FAIL:
-                        </div>
-                        {{/if}}
-                        <div class="col-md">
-                            <span>{{this.name}}</span>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col">
-                            <pre>{{this.message}}</pre>
-                        </div>
-                    </div>
+            <div class="row m-0" style="line-height: 0;">
+                <div class="col-md-10 py-2">
+                    {{{ progress_bar testResult.testResults}}}
+                </div>
+                <div class="col-md-2 py-2">
+                    <input type="checkbox" id="showAll" name="showAll" style="margin-top: 1px;" />
+                    <label for="showAll">Show all</label>
                 </div>
             </div>
-            <!-- close row passed or failed -->
-            {{/each}} {{else}} {{{ check_test_status testResult.status testResult.logs tmcLogs }}}
-            {{/if}}
-            <!-- close if testResulsts array empty -->
+
+            <div class="row m-0">
+                <div class="col-md-10" id="testResultPlaceholder">
+                    Test results can't be shown.
+                </div>
+            </div>
+
+            {{else}} {{{ check_test_status testResult.status testResult.logs tmcLogs }}} {{/if}}
+            <!-- close if testResults array empty -->
         </div>
         <!-- close container -->
         <script>
@@ -66,14 +52,35 @@
             }
 
             const coll = document.getElementsByClassName("collapsible");
-            coll[0].addEventListener("click", function() {
-                this.classList.toggle("active");
-                let content = this.nextElementSibling;
-                if (content.style.maxHeight){
-                    content.style.maxHeight = null;
-                } else {
-                    content.style.maxHeight = content.scrollHeight + "px";
+            if (coll[0]) {
+                coll[0].addEventListener("click", function() {
+                    this.classList.toggle("active");
+                    let content = this.nextElementSibling;
+                    if (content.style.maxHeight){
+                        content.style.maxHeight = null;
+                    } else {
+                        content.style.maxHeight = content.scrollHeight + "px";
+                    }
+                });
+            }
+
+            const all = `{{{show_test_results testResult.testResults true}}}`;
+            const firstFailed = `{{{show_test_results testResult.testResults false}}}`;
+            const showall = document.getElementById("showAll");
+
+            if (firstFailed) {
+                document.getElementById("testResultPlaceholder").innerHTML = firstFailed;
+            } else {
+                document.getElementById("testResultPlaceholder").innerHTML = all;
+                showall.checked = true;
+            }
+
+            showall.addEventListener("change", function() {
+                if (this.checked) {
+                    document.getElementById("testResultPlaceholder").innerHTML = all;
+                    return;
                 }
+                document.getElementById("testResultPlaceholder").innerHTML = firstFailed;
             });
 
             function copyText() {
