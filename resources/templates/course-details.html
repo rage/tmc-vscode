@@ -111,8 +111,27 @@
             <br />
             {{/each}}
         </div>
+        <div
+            id="contextMenu"
+            class="container fixed-bottom"
+            style="visibility: hidden; background-color: inherit; padding: 0;"
+        >
+            <div class="card border" style="background-color: inherit;">
+                <div class="card-body">
+                    This is a footer.
+                    <div class="row mt-2">
+                        <div class="col-sm-3">
+                            <button class="btn-info m-1 w-100" onclick="clearAll()">
+                                Clear all
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <script>
             const vscode = acquireVsCodeApi();
+            let selectedCount = 0;
 
             function openExercise(id) {
                 vscode.postMessage({ type: 'openSelected', ids: [id], id: {{ courseId }} });
@@ -120,6 +139,20 @@
 
             function closeExercise(id) {
                 vscode.postMessage({ type: 'closeSelected', ids: [id], id: {{ courseId }} });
+            }
+
+            function updateCount(element) {
+                selectedCount += element.checked ? 1 : -1;
+                document.getElementById("contextMenu").style.visibility = (selectedCount === 0) ? "hidden" : "visible";
+            }
+
+            function clearAll() {
+                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                for (const checkbox of checkboxes) {
+                    checkbox.checked = false;
+                }
+                selectedCount = 0;
+                document.getElementById("contextMenu").style.visibility = "hidden";
             }
 
             function backToMyCourses() {
