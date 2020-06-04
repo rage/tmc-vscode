@@ -45,7 +45,12 @@ export type TemplateData =
 export type CourseDetailsData = {
     course: LocalCourseData;
     courseId: number;
-    exerciseData: CourseDetailsExercise[];
+    exerciseData: CourseDetailsExerciseGroup[];
+};
+
+export type CourseDetailsExerciseGroup = {
+    name: string;
+    exercises: CourseDetailsExercise[];
 };
 
 export type CourseDetailsExercise = {

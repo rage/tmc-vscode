@@ -9,7 +9,6 @@ import { ExerciseStatus } from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
 import {
     chooseDeadline,
-    compareDates,
     dateToString,
     findNextDateAfter,
     parseDate,
@@ -93,61 +92,57 @@ export async function displayLocalCourseDetails(
     logger.log(`Display course view for ${course.name}`);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
 
-    const exerciseData = new Map<
-        number,
-        {
-            id: number;
+    type group = {
+        name: string;
+        exercises: Array<{
             name: string;
+            id: number;
             isOpen: boolean;
             isClosed: boolean;
             passed: boolean;
             deadlineString: string;
             hardDeadlineString: string;
             isHard: boolean;
-        }
-    >();
+        }>;
+    };
 
+    const exerciseData = new Map<string, group>();
+
+    const currentDate = new Date();
     workspaceExercises.forEach((ex) => {
-        const date = new Date();
         let deadline = "-";
         let hard = true;
-        if (ex.softDeadline !== null && date < parseDate(ex.softDeadline)) {
+        if (ex.softDeadline !== null && currentDate < parseDate(ex.softDeadline)) {
             deadline = dateToString(parseDate(ex.softDeadline));
             hard = false;
         } else if (ex.deadline) {
             deadline = dateToString(parseDate(ex.deadline));
         }
 
-        exerciseData.set(ex.id, {
+        const name = ex.name.match(/(\w+)-(.+)/);
+
+        const entry = {
             deadlineString: deadline,
             isHard: hard,
             hardDeadlineString: ex.deadline ? dateToString(parseDate(ex.deadline)) : "-",
             id: ex.id,
             isOpen: ex.status === ExerciseStatus.OPEN,
             isClosed: ex.status === ExerciseStatus.CLOSED,
-            name: ex.name,
-            passed: false,
+            name: name?.[2] || ex.name,
+            passed: course.exercises.find((ce) => ce.id === ex.id)?.passed || false,
+        };
+
+        const groupName = name?.[1] || "";
+        exerciseData.set(groupName, {
+            name: groupName,
+            exercises: exerciseData.get(groupName)?.exercises.concat(entry) || [entry],
         });
     });
-
-    course.exercises.forEach((x) => {
-        const data = exerciseData.get(x.id);
-        if (data) {
-            data.passed = x.passed;
-            exerciseData.set(x.id, data);
-        }
-    });
-
-    const sortedExercises = Array.from(exerciseData.values()).sort((a, b) =>
-        a.deadlineString === b.deadlineString
-            ? a.name.localeCompare(b.name)
-            : compareDates(parseDate(a.deadlineString), parseDate(b.deadlineString)),
-    );
 
     await ui.webview.setContentFromTemplate(
         {
             templateName: "course-details",
-            exerciseData: sortedExercises,
+            exerciseData: Array.from(exerciseData.values()),
             course,
             courseId: course.id,
         },

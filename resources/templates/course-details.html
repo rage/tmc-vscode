@@ -35,84 +35,36 @@
                             Download exercises
                         </button>
                     </div>
-                    <div class="col-sm-3">
-                        {{#if course.newExercises}}
-                        <span>{{course.newExercises.length}} new exercises to be downloaded.</span>
-                        {{/if}}
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col">
-                        <h3 class="mt-2">Select</h3>
-                        <div class="row">
-                            <div class="col-sm-3">
-                                <button
-                                    class="btn-primary m-1 w-100"
-                                    onclick="toggleAll()"
-                                    id="togglebutton"
-                                >
-                                    ALL
-                                </button>
-                            </div>
-                            <div class="col-sm-3">
-                                <button
-                                    class="btn-primary m-1 w-100"
-                                    onclick="toggleAllPassed(false)"
-                                >
-                                    All uncompleted
-                                </button>
-                            </div>
-                            <div class="col-sm-3">
-                                <button
-                                    class="btn-primary m-1 w-100"
-                                    onclick="toggleAllPassed(true)"
-                                >
-                                    All completed
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col">
-                        <h3 class="mt-2">Action</h3>
-                        <div class="row">
-                            <div class="col-sm-3">
-                                <button
-                                    class="btn-success m-1 w-100 h-75"
-                                    onclick="handleSelected('openSelected')"
-                                >
-                                    Open selected
-                                </button>
-                            </div>
-                            <div class="col-sm-3">
-                                <button
-                                    class="btn-success m-1 w-100 h-75"
-                                    onclick="handleSelected('closeSelected')"
-                                >
-                                    Close selected
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
         <div class="container">
-            <table class="table table-striped">
+            {{#each exerciseData}}
+            <h2>
+                {{this.name}}
+            </h2>
+            <table class="table table-striped table-borderless">
                 <thead>
-                    <tr>
-                        <th scope="col"></th>
-                        <th scope="col">Exercise name</th>
-                        <th scope="col">Deadline</th>
-                        <th scope="col" class="text-center">Completed</th>
-                        <th scope="col">Status</th>
+                    <tr class="d-flex">
+                        <th class="col-1 text-center" scope="col">
+                            <input
+                                class="checkbox-xl"
+                                type="checkbox"
+                                data-isPassed="{{this.passed}}"
+                                value="{{this.id}}"
+                                onchange="updateCount(this)"
+                            />
+                        </th>
+                        <th class="col-5" scope="col">Exercise</th>
+                        <th class="col-4" scope="col">Deadline</th>
+                        <th class="col-1" scope="col">Completed</th>
+                        <th class="col-1" scope="col">Status</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {{#each exerciseData}}
-                    <tr>
-                        <td class="text-center">
+                    {{#each this.exercises}}
+                    <tr class="d-flex">
+                        <td class="col-1 text-center">
                             <input
                                 class="checkbox-xl"
                                 type="checkbox"
@@ -121,11 +73,11 @@
                                 onchange="updateCount(this)"
                             />
                         </td>
-                        <td>{{this.name}}</td>
+                        <td class="col-5">{{this.name}}</td>
                         {{#if this.isHard}}
-                        <td>{{this.deadlineString}}</td>
+                        <td class="col-4">{{this.deadlineString}}</td>
                         {{else}}
-                        <td>
+                        <td class="col-4">
                             {{this.deadlineString}}
                             <span
                                 class="font-weight-bold"
@@ -135,10 +87,10 @@
                             </span>
                         </td>
                         {{/if}}
-                        <td class="text-center">
+                        <td class="col-1">
                             {{#if this.passed}} &#10004; {{else}} &#10060; {{/if}}
                         </td>
-                        <td>
+                        <td class="col-1">
                             {{#if this.isOpen}}
                             <span class="badge badge-primary" onclick="closeExercise({{this.id}})"
                                 >open</span
@@ -155,25 +107,12 @@
                     {{/each}}
                 </tbody>
             </table>
+            <br />
+            <br />
+            {{/each}}
         </div>
-
         <script>
             const vscode = acquireVsCodeApi();
-            let selectedCount = 0;
-            let totalCount = document.querySelectorAll('input[type="checkbox"]').length;
-
-            function handleSelected(type) {
-                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                const ids = [];
-                for (const checkbox of checkboxes) {
-                    if (checkbox.checked) {
-                        ids.push(parseInt(checkbox.value));
-                    }
-                }
-                if (ids.length > 0) {
-                    vscode.postMessage({ type: type, ids, id: {{ courseId }} });
-                }
-            }
 
             function openExercise(id) {
                 vscode.postMessage({ type: 'openSelected', ids: [id], id: {{ courseId }} });
@@ -181,44 +120,6 @@
 
             function closeExercise(id) {
                 vscode.postMessage({ type: 'closeSelected', ids: [id], id: {{ courseId }} });
-            }
-
-            function updateCount(element) {
-                selectedCount += element.checked ? 1 : -1;
-                if (totalCount === undefined) {
-                    totalCount = document.querySelectorAll('input[type="checkbox"]').length
-                }
-
-                if (selectedCount === totalCount) {
-                    document.querySelector("button#togglebutton").innerHTML = "NONE";
-                } else if (selectedCount === totalCount - 1) {
-                    document.querySelector("button#togglebutton").innerHTML = "ALL";
-                }
-            }
-
-            function toggleAllPassed(isPassed) {
-                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                for (const checkbox of checkboxes) {
-                    if (checkbox.checked !== ((checkbox.dataset.ispassed === "true") === isPassed)) {
-                        checkbox.checked = (checkbox.dataset.ispassed === "true") === isPassed;
-                        updateCount(checkbox);
-                    }
-                }
-            }
-
-            function toggleAll() {
-                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                const deselect = selectedCount === totalCount;
-                for (const checkbox of checkboxes) {
-                    checkbox.checked = !deselect;
-                }
-                if (deselect) {
-                    document.querySelector("button#togglebutton").innerHTML = "ALL";
-                    selectedCount = 0;
-                } else {
-                    document.querySelector("button#togglebutton").innerHTML = "NONE";
-                    selectedCount = totalCount;
-                }
             }
 
             function backToMyCourses() {
