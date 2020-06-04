@@ -118,7 +118,7 @@
         >
             <div class="card border" style="background-color: inherit;">
                 <div class="card-body">
-                    This is a footer.
+                    Select action for <span id="selectedCount">0</span> selected items
                     <div class="row mt-2">
                         <div class="col-sm-3">
                             <button class="btn-info m-1 w-100" onclick="clearAll()">
@@ -143,6 +143,11 @@
 
             function updateCount(element) {
                 selectedCount += element.checked ? 1 : -1;
+                refreshFooter()
+            }
+
+            function refreshFooter() {
+                document.getElementById("selectedCount").innerText = selectedCount;
                 document.getElementById("contextMenu").style.visibility = (selectedCount === 0) ? "hidden" : "visible";
             }
 
@@ -152,7 +157,7 @@
                     checkbox.checked = false;
                 }
                 selectedCount = 0;
-                document.getElementById("contextMenu").style.visibility = "hidden";
+                refreshFooter()
             }
 
             function backToMyCourses() {
