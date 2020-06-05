@@ -50,6 +50,7 @@ export type CourseDetailsData = {
 
 export type CourseDetailsExerciseGroup = {
     name: string;
+    nextDeadlineString: string;
     exercises: CourseDetailsExercise[];
 };
 
@@ -59,7 +60,9 @@ export type CourseDetailsExercise = {
     isOpen: boolean;
     isClosed: boolean;
     passed: boolean;
-    deadlineString: string;
+    softDeadline: Date | null;
+    softDeadlineString: string;
+    hardDeadline: Date | null;
     hardDeadlineString: string;
     isHard: boolean;
 };

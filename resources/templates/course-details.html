@@ -54,16 +54,17 @@
             </div>
             <div class="row">
                 <div class="col-md">
-                    Next deadline: Sun Jun 14 2020 23:59:00 GMT+0300
+                    {{this.nextDeadlineString}}
                 </div>
-                <div class="col-md">
+                <div class="col-md-2">
                     <button
-                        class="btn btn-primary"
+                        class="btn-info"
                         onclick="toggleCollapse(document.getElementById('{{this.name}}-exercises'), 'block')"
                     >
                         Show all
                     </button>
                 </div>
+                <div class="col-md"></div>
             </div>
             <div class="row">
                 <div class="col-md" id="{{this.name}}-exercises" style="display: none;">
@@ -99,10 +100,10 @@
                                 </td>
                                 <td class="col-5">{{this.name}}</td>
                                 {{#if this.isHard}}
-                                <td class="col-4">{{this.deadlineString}}</td>
+                                <td class="col-4">{{this.hardDeadlineString}}</td>
                                 {{else}}
                                 <td class="col-4">
-                                    {{this.deadlineString}}
+                                    {{this.softDeadlineString}}
                                     <span
                                         class="font-weight-bold"
                                         title="This is a soft deadline and it can be exceeded. &#013;Exercises can be submitted after the soft deadline has passed, but you receive only 75% of the exercise points. &#013;Hard deadline for this exercise is: {{this.hardDeadlineString}}. &#013;Hard deadline can not be exceeded."

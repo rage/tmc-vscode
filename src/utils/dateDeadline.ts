@@ -33,6 +33,19 @@ export function findNextDateAfter(after: Date, dates: Array<Date | null>): Date 
 
     return dates.reduce(nextDate, null);
 }
+
+/**
+ * Resolves a future deadline if there is one and returns a verbal explanation of results.
+ */
+export function parseNextDeadlineAfter(after: Date, dates: Array<Date | null>): string {
+    const some = dates.filter((date) => date !== null);
+    if (some.length === 0) {
+        return "No deadline";
+    }
+    const next = findNextDateAfter(after, some);
+    return next ? `Next deadline: ${dateToString(next)}` : "All deadlines have expired";
+}
+
 /**
  * compares two dates and returns 1, if first date arg is later tha second date arg. Otherwise return -1
  * @param a first date arg
