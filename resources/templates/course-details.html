@@ -14,7 +14,7 @@
                         <nav aria-label="breadcrumb">
                             <ol class="breadcrumb">
                                 <li class="breadcrumb-item">
-                                    <a onclick="backToMyCourses() " href="#">My courses</a>
+                                    <a onclick="backToMyCourses()" href="#">My courses</a>
                                 </li>
                                 <li class="breadcrumb-item" aria-current="page">
                                     {{course.title}}
@@ -39,103 +39,106 @@
             </div>
         </div>
         {{#each exerciseData}}
-        <div class="container container-fluid border-dark">
+        <div class="container container-fluid border-current-color">
             <div class="row">
-                <div class="col-md-1"></div>
                 <div class="col-md">
-                    <h2>{{this.name}}</h2>
+                    <h2 style="text-transform: capitalize;">{{this.name}}</h2>
                 </div>
-                <div class="col-md-2">
-                    <button class="btn-info">Download all (7)</button>
+                <div class="col-md-2 my-1">
+                    <button class="btn-info w-100">Download all (7)</button>
                 </div>
-                <div class="col-md-2">
-                    <button class="btn-info">Open all</button>
+                <div class="col-md-2 my-1">
+                    <button class="btn-info w-100">Open all</button>
+                </div>
+                <div class="col-md-2 my-1">
+                    <button class="btn-info w-100">Close all</button>
                 </div>
             </div>
-            <div class="row">
-                <div class="col-md">
+            <div class="row pt-3">
+                <div class="col-md-5">
                     {{this.nextDeadlineString}}
                 </div>
                 <div class="col-md-2">
                     <button
-                        class="btn-info"
+                        class="show-all-button"
                         onclick="toggleCollapse(document.getElementById('{{this.name}}-exercises'), 'block')"
                     >
                         Show all
                     </button>
                 </div>
-                <div class="col-md"></div>
             </div>
             <div class="row">
                 <div class="col-md" id="{{this.name}}-exercises" style="display: none;">
                     <hr />
-                    <table class="table table-striped table-borderless">
-                        <thead>
-                            <tr class="d-flex">
-                                <th class="col-1 text-center" scope="col">
-                                    <input
-                                        class="checkbox-xl"
-                                        type="checkbox"
-                                        value="{{this.id}}"
-                                        onchange="toggleGroup(this)"
-                                    />
-                                </th>
-                                <th class="col-5" scope="col">Exercise</th>
-                                <th class="col-4" scope="col">Deadline</th>
-                                <th class="col-1" scope="col">Completed</th>
-                                <th class="col-1" scope="col">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {{#each this.exercises}}
-                            <tr class="d-flex">
-                                <td class="col-1 text-center">
-                                    <input
-                                        class="checkbox-xl"
-                                        type="checkbox"
-                                        data-isPassed="{{this.passed}}"
-                                        value="{{this.id}}"
-                                        onchange="updateCount(this)"
-                                    />
-                                </td>
-                                <td class="col-5">{{this.name}}</td>
-                                {{#if this.isHard}}
-                                <td class="col-4">{{this.hardDeadlineString}}</td>
-                                {{else}}
-                                <td class="col-4">
-                                    {{this.softDeadlineString}}
-                                    <span
-                                        class="font-weight-bold"
-                                        title="This is a soft deadline and it can be exceeded. &#013;Exercises can be submitted after the soft deadline has passed, but you receive only 75% of the exercise points. &#013;Hard deadline for this exercise is: {{this.hardDeadlineString}}. &#013;Hard deadline can not be exceeded."
-                                    >
-                                        &#9432;
-                                    </span>
-                                </td>
-                                {{/if}}
-                                <td class="col-1">
-                                    {{#if this.passed}} &#10004; {{else}} &#10060; {{/if}}
-                                </td>
-                                <td class="col-1">
-                                    {{#if this.isOpen}}
-                                    <span
-                                        class="badge badge-primary"
-                                        onclick="closeExercise({{this.id}})"
-                                        >open</span
-                                    >
-                                    {{else}} {{#if this.isClosed}}
-                                    <span
-                                        class="badge badge-secondary"
-                                        onclick="openExercise({{this.id}})"
-                                        >closed</span
-                                    >
+                    <div class="table-responsive-md">
+                        <table class="table table-striped table-borderless">
+                            <thead>
+                                <tr>
+                                    <th class="min-w-5 text-center">
+                                        <input
+                                            class="checkbox-xl"
+                                            type="checkbox"
+                                            value="{{this.id}}"
+                                            onchange="toggleGroup(this)"
+                                        />
+                                    </th>
+                                    <th class="min-w-40">Exercise</th>
+                                    <th class="min-w-30">Deadline</th>
+                                    <th class="min-w-10">Completed</th>
+                                    <th class="min-w-15">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{#each this.exercises}}
+                                <tr>
+                                    <td class="min-w-5 text-center">
+                                        <input
+                                            class="checkbox-xl"
+                                            type="checkbox"
+                                            data-isPassed="{{this.passed}}"
+                                            value="{{this.id}}"
+                                            onchange="updateCount(this)"
+                                        />
+                                    </td>
+                                    <td class="min-w-40">{{this.name}}</td>
+                                    {{#if this.isHard}}
+                                    <td class="min-w-30">{{this.hardDeadlineString}}</td>
                                     {{else}}
-                                    <span class="badge badge-secondary">missing</span>
-                                    {{/if}} {{/if}}
-                                </td>
-                            </tr>
-                            {{/each}}
-                        </tbody>
-                    </table>
+                                    <td class="min-w-30">
+                                        {{this.softDeadlineString}}
+                                        <span
+                                            class="font-weight-bold"
+                                            title="This is a soft deadline and it can be exceeded. &#013;Exercises can be submitted after the soft deadline has passed, but you receive only 75% of the exercise points. &#013;Hard deadline for this exercise is: {{this.hardDeadlineString}}. &#013;Hard deadline can not be exceeded."
+                                        >
+                                            &#9432;
+                                        </span>
+                                    </td>
+                                    {{/if}}
+                                    <td class="min-w-10">
+                                        {{#if this.passed}} &#10004; {{else}} &#10060; {{/if}}
+                                    </td>
+                                    <td class="min-w-15">
+                                        {{#if this.isOpen}}
+                                        <span
+                                            class="badge badge-primary"
+                                            onclick="closeExercise({{this.id}})"
+                                            >open</span
+                                        >
+                                        {{else}} {{#if this.isClosed}}
+                                        <span
+                                            class="badge badge-secondary"
+                                            onclick="openExercise({{this.id}})"
+                                            >closed</span
+                                        >
+                                        {{else}}
+                                        <span class="badge badge-secondary">missing</span>
+                                        {{/if}} {{/if}}
+                                    </td>
+                                </tr>
+                                {{/each}}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
