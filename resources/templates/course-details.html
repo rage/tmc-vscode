@@ -6,7 +6,7 @@
         </style>
     </head>
 
-    <body class="p-0">
+    <body id="body" class="p-0">
         <div class="w-100 sticky-top">
             <div class="container pt-0">
                 <div class="row">
@@ -39,7 +39,7 @@
             </div>
         </div>
         {{#each exerciseData}}
-        <div class="container container-fluid border-current-color">
+        <div class="container container-fluid border-current-color my-3">
             <div class="row">
                 <div class="col-md">
                     <h2 style="text-transform: capitalize;">{{this.name}}</h2>
@@ -142,8 +142,6 @@
                 </div>
             </div>
         </div>
-        <br />
-        <br />
         {{/each}}
         <div
             id="contextMenu"
@@ -156,7 +154,17 @@
                     <div class="row mt-2">
                         <div class="col-sm-3">
                             <button class="btn-info m-1 w-100" onclick="clearAll()">
-                                Clear all
+                                Open
+                            </button>
+                        </div>
+                        <div class="col-sm-3">
+                            <button class="btn-info m-1 w-100" onclick="clearAll()">
+                                Close
+                            </button>
+                        </div>
+                        <div class="col-sm-3">
+                            <button class="btn-info m-1 w-100" onclick="clearAll()">
+                                Clear selections
                             </button>
                         </div>
                     </div>
@@ -195,6 +203,7 @@
             function refreshFooter() {
                 document.getElementById("selectedCount").innerText = selectedCount;
                 document.getElementById("contextMenu").style.visibility = (selectedCount === 0) ? "hidden" : "visible";
+                document.getElementById("body").style.marginBottom = (selectedCount === 0) ? "0px" : (document.getElementById("contextMenu").offsetHeight + 20) + "px";
             }
 
             function clearAll() {
