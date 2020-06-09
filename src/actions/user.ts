@@ -251,20 +251,17 @@ export async function submitExercise(
 export async function getOldSubmissions(
     actionContext: ActionContext,
 ): Promise<Result<OldSubmission[], Error>> {
-    const { userData, tmc, workspaceManager } = actionContext;
+    const { tmc, workspaceManager } = actionContext;
     const currentExercise = getCurrentExerciseData(workspaceManager);
     if (currentExercise.err) {
         return new Err(new Error("Exercise not found in workspacemanager"));
     }
-    const course = userData.getCourseByName(currentExercise.val.course);
-    const result = await tmc.fetchOldSubmissionIds(course.id);
+    const result = await tmc.fetchOldSubmissionIds(currentExercise.val.id);
     if (result.err) {
         return new Err(new Error("Couldn't fetch old submissions"));
     }
-    const currentExerciseName = currentExercise.val.name;
-    const exerciseSubmissions = result.val.filter((e) => e.exercise_name === currentExerciseName);
 
-    return new Ok(exerciseSubmissions);
+    return new Ok(result.val);
 }
 
 /**

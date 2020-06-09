@@ -4,6 +4,7 @@
 
 ### Changed
 - Show first failed test when running tests locally.
+- API Endpoint for fetching old submissions.
 
 ### Security
 - Updated dependencies.

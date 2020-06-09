@@ -88,7 +88,6 @@ export default class TMC {
         this.cache = new Map();
         this.tmcDefaultHeaders = {
             client: "vscode_plugin",
-            // eslint-disable-next-line @typescript-eslint/camelcase
             client_version: resources.extensionVersion,
         };
     }
@@ -475,9 +474,11 @@ export default class TMC {
     /**
      * Function which returns old submissions as list from the server
      */
-    public async fetchOldSubmissionIds(courseId: number): Promise<Result<OldSubmission[], Error>> {
+    public async fetchOldSubmissionIds(
+        exerciseId: number,
+    ): Promise<Result<OldSubmission[], Error>> {
         return this.checkApiResponse(
-            this.tmcApiRequest(`courses/${courseId}/users/current/submissions`, false),
+            this.tmcApiRequest(`exercises/${exerciseId}/users/current/submissions`, false),
             createIs<OldSubmission[]>(),
         );
     }

@@ -6,7 +6,7 @@
 
 import { Err, Ok, Result } from "ts-results";
 import { ActionContext, CourseExerciseDownloads } from "./types";
-import pLimit from "p-limit";
+import * as pLimit from "p-limit";
 import { askForConfirmation, askForItem, showError, showNotification } from "../utils";
 import { getOldSubmissions } from "./user";
 import { OldSubmission } from "../api/types";
