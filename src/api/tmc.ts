@@ -287,6 +287,7 @@ export default class TMC {
         );
 
         if (extractResult.err) {
+            this.logger.error("Extracting failed", extractResult);
             this.workspaceManager.deleteExercise(id);
         }
 
