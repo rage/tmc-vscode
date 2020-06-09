@@ -88,7 +88,6 @@ export default class TMC {
         this.cache = new Map();
         this.tmcDefaultHeaders = {
             client: "vscode_plugin",
-            // eslint-disable-next-line @typescript-eslint/camelcase
             client_version: resources.extensionVersion,
         };
     }
