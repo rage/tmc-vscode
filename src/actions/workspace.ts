@@ -21,7 +21,7 @@ export async function downloadExercises(
     courseExerciseDownloads: CourseExerciseDownloads[],
     returnToCourse?: number,
 ): Promise<void> {
-    const { tmc, ui, logger } = actionContext;
+    const { tmc, ui, logger, workspaceManager } = actionContext;
 
     const exerciseStatus = new Map<
         number,
@@ -74,6 +74,7 @@ export async function downloadExercises(
     });
 
     const limit = pLimit(3);
+    const openExercises: Array<number> = [];
 
     await Promise.all(
         Array.from(exerciseStatus.entries()).map<Promise<Result<void, Error>>>(([id, data]) =>
@@ -81,6 +82,9 @@ export async function downloadExercises(
                 () =>
                     new Promise((resolve) => {
                         if (data) {
+                            if (workspaceManager.isExerciseOpen(id)) {
+                                openExercises.push(id);
+                            }
                             data.status = "Downloading";
                             exerciseStatus.set(id, data);
                             ui.webview.setContentFromTemplate({
@@ -129,6 +133,7 @@ export async function downloadExercises(
             ),
         ),
     );
+    workspaceManager.openExercise(...openExercises);
 }
 
 /**

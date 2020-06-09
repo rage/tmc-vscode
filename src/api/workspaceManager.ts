@@ -348,6 +348,14 @@ export default class WorkspaceManager {
         }
     }
 
+    public isExerciseOpen(id: number): boolean {
+        const data = this.idToData.get(id);
+        if (data) {
+            return data.status === ExerciseStatus.OPEN;
+        }
+        return false;
+    }
+
     public restartWatcher(): void {
         this.watcher.stop();
         this.watcher.start();
