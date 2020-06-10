@@ -3,6 +3,7 @@ import * as handlebars from "handlebars";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import * as templates from "./templates";
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, numbersToString } from "../utils/";
@@ -239,6 +240,14 @@ export default class TemplateEngine {
      * @returns The HTML document as a string
      */
     public async getTemplate(webview: vscode.Webview, templateData: TemplateData): Promise<string> {
+        const cspBlob = `<meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; img-src https:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';" />`;
+        const cssBlob = this.cssBlob;
+
+        if (templateData.templateName === "course-details") {
+            return templates.CourseDetails.render(cspBlob, cssBlob);
+        }
+
         const name = templateData.templateName;
         const p = path.join(this.htmlPath, `${name}.html`);
         let template: HandlebarsTemplateDelegate<unknown>;
@@ -248,10 +257,6 @@ export default class TemplateEngine {
         } else {
             template = handlebars.compile(fs.readFileSync(p, "utf8"));
         }
-
-        const cspBlob = `<meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; img-src https:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';" />`;
-        const cssBlob = this.cssBlob;
 
         return template({ ...templateData, cspBlob, cssBlob });
     }

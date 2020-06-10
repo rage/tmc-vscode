@@ -26,6 +26,25 @@ const config = {
             handlebars: "handlebars/dist/handlebars.min.js",
         },
     },
+    module: {
+        rules: [
+            {
+                test: /\.jsx$/,
+                exclude: /node_modules/,
+                use: [
+                    {
+                        loader: "babel-loader",
+                        options: {
+                            presets: ["@babel/preset-env"],
+                            plugins: [
+                                ["@babel/plugin-transform-react-jsx", { pragma: "createElement" }],
+                            ],
+                        },
+                    },
+                ],
+            },
+        ],
+    },
 };
 
 module.exports = config;
