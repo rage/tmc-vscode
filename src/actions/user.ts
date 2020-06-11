@@ -15,6 +15,7 @@ import {
     getCurrentExerciseData,
     isWorkspaceOpen,
     parseFeedbackQuestion,
+    removeFalseIsNotTrue,
     showError,
     showNotification,
     sleep,
@@ -118,10 +119,21 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         showError(message);
         return;
     }
+    let response = testResult.val.response;
+    if (response !== null) {
+        // TODO: Clean up this mess when coverting to new template
+        response = {
+            ...response,
+            testResults: response.testResults.map((res) => ({
+                ...res,
+                message: removeFalseIsNotTrue(res.message),
+            })),
+        };
+    }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
     logger.log(`Tests finished for ${exerciseName}`);
     const data = {
-        testResult: testResult.val.response,
+        testResult: response,
         id,
         exerciseName,
         tmcLogs: testResult.val.logs,
@@ -197,7 +209,7 @@ export async function submitExercise(
             showError(message);
             break;
         }
-        const statusData = statusResult.val;
+        let statusData = statusResult.val;
         if (statusResult.val.status !== "processing") {
             ui.setStatusBar("Tests finished, see result", 5000);
             let feedbackQuestions: FeedbackQuestion[] = [];
@@ -207,6 +219,14 @@ export async function submitExercise(
                     feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
                 }
                 courseId = userData.getCourseByName(statusData.course).id;
+            } else if (statusData.status === "fail" && statusData.test_cases) {
+                statusData = {
+                    ...statusData,
+                    test_cases: statusData.test_cases.map((c) => ({
+                        ...c,
+                        message: removeFalseIsNotTrue(c.message || ""),
+                    })),
+                };
             }
             temp.setContent({ templateName: "submission-result", statusData, feedbackQuestions });
             // Check for new exercises if exercise passed.
