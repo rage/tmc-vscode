@@ -1,69 +1,15 @@
-/* eslint-disable @typescript-eslint/quotes */
 /*eslint-env browser*/
 
-// Required for compilation
+// Required for compilation, even if not referenced
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const createElement = require("../../../transformers/createElement");
-
-const mockData = {
-    course: {
-        id: 0,
-        title: "Mock Python",
-        description: "Mock description lirum larum",
-    },
-    courseId: 0,
-    exerciseData: [
-        {
-            name: "osa1",
-            nextDeadlineString: "2020",
-            exercises: [
-                {
-                    id: 0,
-                    name: "mock-exercise",
-                    isOpen: true,
-                    isClosed: false,
-                    passed: false,
-                    softDeadlineString: "2020",
-                    hardDeadlineString: "2020",
-                    isHard: false,
-                },
-                {
-                    id: 2,
-                    name: "verokarhu",
-                    isOpen: false,
-                    isClosed: false,
-                    passed: false,
-                    softDeadlineString: "2020",
-                    hardDeadlineString: "2020",
-                    isHard: true,
-                },
-            ],
-        },
-        {
-            name: "osa2",
-            nextDeadlineString: "2021",
-            exercises: [
-                {
-                    id: 9001,
-                    name: "solve-n=np",
-                    isOpen: true,
-                    isClosed: false,
-                    passed: true,
-                    softDeadlineString: "2020",
-                    hardDeadlineString: "2021",
-                    isHard: true,
-                },
-            ],
-        },
-    ],
-};
+const createElement = require("./templateUtils").createElement;
 
 /**
  * @param {string} cspBlob
  * @param {string} cssBlob
  * @param {CourseDetailsData} data
  */
-function render(cspBlob, cssBlob, data = mockData) {
+function component(cspBlob, cssBlob, data) {
     const getHardDeadlineInformation = (deadline) =>
         "This is a soft deadline and it can be exceeded." +
         "&#013Exercises can be submitted after the soft deadline has passed, " +
@@ -75,10 +21,7 @@ function render(cspBlob, cssBlob, data = mockData) {
      * @param {number} id
      */
     const getOpenedBadge = (id) => (
-        <span
-            class="badge badge-primary"
-            onclick={`event.target.parentNode.innerHTML = getClosedBadge(${id})`}
-        >
+        <span class="badge badge-primary" onclick={`closeExercise(${id})`}>
             open
         </span>
     );
@@ -87,10 +30,7 @@ function render(cspBlob, cssBlob, data = mockData) {
      * @param {number} id
      */
     const getClosedBadge = (id) => (
-        <span
-            class="badge badge-secondary"
-            onclick={`event.target.parentNode.innerHTML = getOpenedBadge(${id})`}
-        >
+        <span class="badge badge-secondary" onclick={`openExercise(${id})`}>
             closed
         </span>
     );
@@ -120,16 +60,18 @@ function render(cspBlob, cssBlob, data = mockData) {
                         </nav>
                     </div>
                 </div>
-            </div>
-            <div class="row">
-                <div class="col-sm">
-                    <h2>{title}</h2>
-                    <span>{description}</span>
+                <div class="row">
+                    <div class="col-sm">
+                        <h2>{title}</h2>
+                        <span>{description}</span>
+                    </div>
                 </div>
-            </div>
-            <div class="row mt-2">
-                <div class="col-sm-3">
-                    <button class="btn-info m-1 w-100">Download exercises</button>
+                <div class="row mt-2">
+                    <div class="col-sm-3">
+                        <button class="btn-info m-1 w-100" onclick="downloadView()">
+                            Download exercises
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -212,7 +154,10 @@ function render(cspBlob, cssBlob, data = mockData) {
                                             <td class="min-w-10">
                                                 {exercise.passed ? "&#10004;" : "&#10060;"}
                                             </td>
-                                            <td class="min-w-15">
+                                            <td
+                                                class="min-w-15"
+                                                id={`exercise-${exercise.id}-status`}
+                                            >
                                                 {exercise.isOpen
                                                     ? getOpenedBadge(exercise.id)
                                                     : exercise.isClosed
@@ -241,12 +186,18 @@ function render(cspBlob, cssBlob, data = mockData) {
                     Select action for <span id="selectedCount">0</span> selected items
                     <div class="row mt-2">
                         <div class="col-sm-3">
-                            <button class="btn-info m-1 w-100" onclick="clearAll()">
+                            <button
+                                class="btn-info m-1 w-100"
+                                onclick="handleSelected('openSelected')"
+                            >
                                 Open
                             </button>
                         </div>
                         <div class="col-sm-3">
-                            <button class="btn-info m-1 w-100" onclick="clearAll()">
+                            <button
+                                class="btn-info m-1 w-100"
+                                onclick="handleSelected('closeSelected')"
+                            >
                                 Close
                             </button>
                         </div>
@@ -291,12 +242,25 @@ function render(cspBlob, cssBlob, data = mockData) {
     }
 
     function clearAll() {
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        const checkboxes = document.querySelectorAll("input[type='checkbox']");
         for (let i = 0; i < checkboxes.length; i++) {
             checkboxes[i].checked = false;
         }
         selectedCount = 0;
         refreshFooter();
+    }
+
+    function handleSelected(type) {
+        const checkboxes = document.querySelectorAll("input[type='checkbox']");
+        const ids = [];
+        for (let i = 0; i < checkboxes.length; i++) {
+            if (checkboxes[i].checked) {
+                ids.push(parseInt(checkboxes[i].value));
+            }
+        }
+        if (ids.length > 0) {
+            vscode.postMessage({ type: type, ids, id: courseId });
+        }
     }
 
     function refreshFooter() {
@@ -307,6 +271,28 @@ function render(cspBlob, cssBlob, data = mockData) {
             selectedCount === 0
                 ? "0px"
                 : document.getElementById("contextMenu").offsetHeight + 20 + "px";
+    }
+
+    function messageHandler(event) {
+        const message = event.data;
+        switch (message.command) {
+            case "exercisesOpened":
+                for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
+                    const id = message.exerciseIds[i];
+                    console.log(`exercise-${id}-status`);
+                    document.getElementById(`exercise-${id}-status`).innerHTML = getOpenedBadge(id);
+                }
+                break;
+            case "exercisesClosed":
+                for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
+                    const id = message.exerciseIds[i];
+                    console.log(`exercise-${id}-status`);
+                    document.getElementById(`exercise-${id}-status`).innerHTML = getClosedBadge(id);
+                }
+                break;
+            default:
+                console.log("Unsupported command", message.command);
+        }
     }
 
     return (
@@ -335,11 +321,17 @@ function render(cspBlob, cssBlob, data = mockData) {
                     {closeExercise}
                     {updateCount}
                     {clearAll}
+                    {handleSelected}
                     {refreshFooter}
+                    {`window.addEventListener("message", ${messageHandler})`}
                 </script>
             </body>
         </html>
     );
 }
 
-export { render };
+function render(cspBlob, cssBlob, data) {
+    return component(cspBlob, cssBlob, data).toString();
+}
+
+export { component, render };

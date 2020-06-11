@@ -245,7 +245,7 @@ export default class TemplateEngine {
         const cssBlob = this.cssBlob;
 
         if (templateData.templateName === "course-details") {
-            return templates.CourseDetails.render(cspBlob, cssBlob);
+            return templates.CourseDetails.render(cspBlob, cssBlob, templateData);
         }
 
         const name = templateData.templateName;

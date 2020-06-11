@@ -1,9 +1,8 @@
 /**
- * This function is used by the compiling process for transforming JSX elements into strings.
+ * This function is used to .
  * As presented in an article by Jared Jones (retrieved 2020-06-09):
  * https://dev.to/jaredkent/faking-react-for-vscode-webviews-2258
  */
-
 function createElement(type, attributes, ...children) {
     const attributeString = Object.entries(attributes || {})
         .map(([attr, value]) => {
@@ -19,4 +18,6 @@ function createElement(type, attributes, ...children) {
     return `<${type} ${attributeString}>${childrenString}</${type}>`;
 }
 
-module.exports = createElement;
+module.exports = {
+    createElement,
+};

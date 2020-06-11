@@ -163,7 +163,6 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (!(msg.type && msg.ids && msg.id)) {
                 return;
             }
-            actionContext.ui.webview.setContentFromTemplate({ templateName: "loading" });
             const result = await openExercises(msg.ids, actionContext);
             if (result.err) {
                 logger.error(`Error while opening exercises - ${result.val.message}`);
@@ -173,7 +172,10 @@ export function registerUiActions(actionContext: ActionContext): void {
                     : buttons.push(["Ok", (): void => {}]);
                 showError(`${result.val.name} - ${result.val.message}`, ...buttons);
             }
-            displayLocalCourseDetails(msg.id, actionContext);
+            actionContext.ui.webview.postMessage({
+                command: "exercisesOpened",
+                exerciseIds: msg.ids,
+            });
         },
     );
     ui.webview.registerHandler(
@@ -182,7 +184,6 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (!(msg.type && msg.ids && msg.id)) {
                 return;
             }
-            actionContext.ui.webview.setContentFromTemplate({ templateName: "loading" });
             const result = await closeExercises(actionContext, msg.ids);
             if (result.err) {
                 logger.error(`Error while closing exercises - ${result.val.message}`);
@@ -192,7 +193,10 @@ export function registerUiActions(actionContext: ActionContext): void {
                     : buttons.push(["Ok", (): void => {}]);
                 showError(`${result.val.name} - ${result.val.message}`, ...buttons);
             }
-            displayLocalCourseDetails(msg.id, actionContext);
+            actionContext.ui.webview.postMessage({
+                command: "exercisesClosed",
+                exerciseIds: msg.ids,
+            });
         },
     );
     ui.webview.registerHandler("changeTmcDataPath", async (msg: { type?: "changeTmcDataPath" }) => {
