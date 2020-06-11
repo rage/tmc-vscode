@@ -1,10 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [0.5.1] - 2020-06-12
+
+### Added
+- Filter out 'False is not true' from the start of failed test messages.
 
 ### Changed
-- Show first failed test when running tests locally.
+- By default, show only one locally failed test.
 - API Endpoint for fetching old submissions.
+- Reduced local test process timeout to 15 seconds.
+
+### Fixed
+- Missing whitespace when showing test results.
+- Regression: Closed exercises were not re-opened after updating.
 
 ### Security
 - Updated dependencies.
