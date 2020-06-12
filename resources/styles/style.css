@@ -8,6 +8,7 @@ body {
 pre {
     color: inherit;
     white-space: pre-wrap;
+    word-wrap: "break-word";
 }
 
 body.vscode-light {
