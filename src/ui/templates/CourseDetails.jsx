@@ -5,11 +5,9 @@
 const createElement = require("./templateUtils").createElement;
 
 /**
- * @param {string} cspBlob
- * @param {string} cssBlob
  * @param {CourseDetailsData} data
  */
-function component(cspBlob, cssBlob, data) {
+function component(data) {
     const getHardDeadlineInformation = (deadline) =>
         "This is a soft deadline and it can be exceeded." +
         "&#013Exercises can be submitted after the soft deadline has passed, " +
@@ -296,37 +294,30 @@ function component(cspBlob, cssBlob, data) {
     }
 
     return (
-        <html>
-            <head>
-                <meta charSet="UTF-8" />
-                {cspBlob}
-                <style>{cssBlob}</style>
-            </head>
-            <body id="body" class="p-0">
-                {stickyTop(data.course.title, data.course.description)}
-                {data.exerciseData.map(exerciseTable).join("")}
-                {contextMenu()}
-                <script>
-                    {"const vscode = acquireVsCodeApi();"}
-                    {`const courseId = ${data.course.id};`}
-                    {"selectedCount = 0;"}
-                    {createElement}
-                    {getOpenedBadge}
-                    {getClosedBadge}
-                    {getMissingBadge}
-                    {backToMyCourses}
-                    {downloadView}
-                    {toggleCollapse}
-                    {openExercise}
-                    {closeExercise}
-                    {updateCount}
-                    {clearAll}
-                    {handleSelected}
-                    {refreshFooter}
-                    {`window.addEventListener("message", ${messageHandler})`}
-                </script>
-            </body>
-        </html>
+        <div>
+            {stickyTop(data.course.title, data.course.description)}
+            {data.exerciseData.map(exerciseTable).join("")}
+            {contextMenu()}
+            <script>
+                {"const vscode = acquireVsCodeApi();"}
+                {`const courseId = ${data.course.id};`}
+                {"selectedCount = 0;"}
+                {createElement}
+                {getOpenedBadge}
+                {getClosedBadge}
+                {getMissingBadge}
+                {backToMyCourses}
+                {downloadView}
+                {toggleCollapse}
+                {openExercise}
+                {closeExercise}
+                {updateCount}
+                {clearAll}
+                {handleSelected}
+                {refreshFooter}
+                {`window.addEventListener("message", ${messageHandler})`}
+            </script>
+        </div>
     );
 }
 

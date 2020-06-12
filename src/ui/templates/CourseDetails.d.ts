@@ -1,13 +1,13 @@
-import { CourseDetailsData } from "../../../out/src/ui/types";
+import { CourseDetailsData } from "../types";
 
 /**
  * @param {string} cspBlob
  * @param {string} cssBlob
  */
-export function component(cspBlob: string, cssBlob: string, data: CourseDetailsData): unknown;
+export function component(data: CourseDetailsData): unknown;
 
 /**
  * @param {string} cspBlob
  * @param {string} cssBlob
  */
-export function render(cspBlob: string, cssBlob: string, data: CourseDetailsData): string;
+export function render(data: CourseDetailsData): string;

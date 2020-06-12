@@ -3,7 +3,7 @@ import * as handlebars from "handlebars";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import * as templates from "./templates";
+import { CourseDetails, Webview } from "./templates";
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, numbersToString } from "../utils/";
@@ -245,7 +245,11 @@ export default class TemplateEngine {
         const cssBlob = this.cssBlob;
 
         if (templateData.templateName === "course-details") {
-            return templates.CourseDetails.render(cspBlob, cssBlob, templateData);
+            return Webview.render({
+                children: CourseDetails.component(templateData),
+                cssBlob,
+                cspSource: webview.cspSource,
+            });
         }
 
         const name = templateData.templateName;
