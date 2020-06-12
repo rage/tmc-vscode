@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.2] - 2020-06-12
+
+### Changed
+- Parse test result headers.
+
+### Fixed
+- Issue with filtering out 'False is not true'.
+
 ## [0.5.1] - 2020-06-12
 
 ### Added
