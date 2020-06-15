@@ -46,6 +46,7 @@ export type CourseDetailsData = {
     course: LocalCourseData;
     courseId: number;
     exerciseData: CourseDetailsExerciseGroup[];
+    updateableExerciseIds: number[];
 };
 
 export type CourseDetailsExerciseGroup = {

@@ -39,11 +39,17 @@ function component(data) {
      * @param {string} title
      * @param {string} description
      */
-    const stickyTop = (title, description) => (
+    const stickyTop = (
+        title,
+        description,
+        awardedPoints,
+        availablePoints,
+        updateableExerciseIds,
+    ) => (
         <div class="w-100">
             <div class="container pt-0">
-                <div class="row">
-                    <div class="col">
+                <div class="row py-1">
+                    <div class="col-md">
                         <nav aria-label="breadcrumb">
                             <ol class="breadcrumb">
                                 <li class="breadcrumb-item">
@@ -58,10 +64,32 @@ function component(data) {
                         </nav>
                     </div>
                 </div>
-                <div class="row">
-                    <div class="col-sm">
+                <div class="row py-1">
+                    <div class="col-md">
                         <h2>{title}</h2>
                         <span>{description}</span>
+                    </div>
+                </div>
+                <div class="row py-1">
+                    <div class="col-md">
+                        <span>
+                            Points gained: {awardedPoints} / {availablePoints}
+                        </span>
+                    </div>
+                </div>
+                <div class="row py-1">
+                    <div class="col-md">
+                        {updateableExerciseIds.length > 0 ? (
+                            <div class="alert alert-warning" role="alert">
+                                <span class="mr-2">Updates found for exercises</span>
+                                <button
+                                    class="btn btn-danger"
+                                    onclick={`downloadSelectedExercises(${updateableExerciseIds})`}
+                                >
+                                    Update exercises
+                                </button>
+                            </div>
+                        ) : null}
                     </div>
                 </div>
             </div>
@@ -77,28 +105,48 @@ function component(data) {
                 <div class="col-md-2 my-1">
                     {exerciseGroup.downloadables.length !== 0 ? (
                         <button
-                            class="btn-info w-100"
+                            class="btn btn-success w-100"
                             onclick={`downloadSelectedExercises(${exerciseGroup.downloadables})`}
                         >
-                            Download part
+                            Download ({exerciseGroup.downloadables.length})
                         </button>
                     ) : null}
                 </div>
                 <div class="col-md-2 my-1">
-                    <button class="btn-info w-100">Open all</button>
+                    <button
+                        class="btn btn-primary w-100"
+                        onclick={`openExercises(${exerciseGroup.exercises.map((e) => e.id)})`}
+                    >
+                        Open all
+                    </button>
                 </div>
                 <div class="col-md-2 my-1">
-                    <button class="btn-info w-100">Close all</button>
+                    <button
+                        class="btn btn-primary w-100"
+                        onclick={`closeExercises(${exerciseGroup.exercises.map((e) => e.id)})`}
+                    >
+                        Close all
+                    </button>
                 </div>
             </div>
-            <div class="row pt-3">
+            <div class="row py-1">
+                <div class="col-md">
+                    {`<p>Downloaded ${exerciseGroup.exercises.length} / ${
+                        exerciseGroup.exercises.length + exerciseGroup.downloadables.length
+                    }<br />
+                    Completed ${exerciseGroup.exercises.filter((e) => e.passed).length} / ${
+                        exerciseGroup.exercises.length + exerciseGroup.downloadables.length
+                    }</p>`}
+                </div>
+            </div>
+            <div class="row pt-2">
                 <div class="col-md-5">{exerciseGroup.nextDeadlineString}</div>
                 <div class="col-md-2">
                     <button
                         class="show-all-button"
                         onclick={`toggleCollapse(document.getElementById('${exerciseGroup.name}-exercises'), 'block')`}
                     >
-                        Show all
+                        Show exercises
                     </button>
                 </div>
             </div>
@@ -185,7 +233,7 @@ function component(data) {
                     <div class="row mt-2">
                         <div class="col-sm-3">
                             <button
-                                class="btn-info m-1 w-100"
+                                class="btn btn-primary m-1 w-100"
                                 onclick="handleSelected('openSelected')"
                             >
                                 Open
@@ -193,14 +241,14 @@ function component(data) {
                         </div>
                         <div class="col-sm-3">
                             <button
-                                class="btn-info m-1 w-100"
+                                class="btn btn-primary m-1 w-100"
                                 onclick="handleSelected('closeSelected')"
                             >
                                 Close
                             </button>
                         </div>
                         <div class="col-sm-3">
-                            <button class="btn-info m-1 w-100" onclick="clearAll()">
+                            <button class="btn btn-primary m-1 w-100" onclick="clearAll()">
                                 Clear selections
                             </button>
                         </div>
@@ -236,12 +284,12 @@ function component(data) {
         }
     }
 
-    function openExercise(id) {
-        vscode.postMessage({ type: "openSelected", ids: [id], id: courseId });
+    function openExercises(...ids) {
+        vscode.postMessage({ type: "openSelected", ids, id: courseId });
     }
 
-    function closeExercise(id) {
-        vscode.postMessage({ type: "closeSelected", ids: [id], id: courseId });
+    function closeExercises(...ids) {
+        vscode.postMessage({ type: "closeSelected", ids, id: courseId });
     }
 
     function updateCount(element) {
@@ -287,14 +335,12 @@ function component(data) {
             case "exercisesOpened":
                 for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
                     const id = message.exerciseIds[i];
-                    console.log(`exercise-${id}-status`);
                     document.getElementById(`exercise-${id}-status`).innerHTML = getOpenedBadge(id);
                 }
                 break;
             case "exercisesClosed":
                 for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
                     const id = message.exerciseIds[i];
-                    console.log(`exercise-${id}-status`);
                     document.getElementById(`exercise-${id}-status`).innerHTML = getClosedBadge(id);
                 }
                 break;
@@ -305,7 +351,13 @@ function component(data) {
 
     return (
         <div>
-            {stickyTop(data.course.title, data.course.description)}
+            {stickyTop(
+                data.course.title,
+                data.course.description,
+                data.course.awardedPoints,
+                data.course.availablePoints,
+                data.updateableExerciseIds,
+            )}
             {data.exerciseData.map(exerciseTable).join("")}
             {contextMenu()}
             <script>
@@ -321,8 +373,8 @@ function component(data) {
                 {backToMyCourses}
                 {toggleCollapse}
                 {downloadSelectedExercises}
-                {openExercise}
-                {closeExercise}
+                {openExercises}
+                {closeExercises}
                 {updateCount}
                 {clearAll}
                 {handleSelected}

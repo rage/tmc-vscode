@@ -131,6 +131,11 @@ export async function downloadExercises(
     );
 }
 
+interface UpdateCheckOptions {
+    notify?: boolean;
+    useCache?: boolean;
+}
+
 /**
  * Checks all user's courses for exercise updates and download them.
  * @param courseId If given, check only updates for that course.
@@ -138,7 +143,8 @@ export async function downloadExercises(
 export async function checkForExerciseUpdates(
     actionContext: ActionContext,
     courseId?: number,
-): Promise<void> {
+    updateCheckOptions?: UpdateCheckOptions,
+): Promise<CourseExerciseDownloads[]> {
     const { tmc, userData, workspaceManager, logger } = actionContext;
 
     const coursesToUpdate: Map<number, CourseExerciseDownloads> = new Map();
@@ -149,9 +155,9 @@ export async function checkForExerciseUpdates(
     for (const course of filteredCourses) {
         const organizationSlug = course.organization;
 
-        const result = await tmc.getCourseDetails(course.id);
+        const result = await tmc.getCourseDetails(course.id, updateCheckOptions?.useCache || false);
         if (result.err) {
-            return;
+            continue;
         }
 
         const exerciseIds: number[] = [];
@@ -168,7 +174,7 @@ export async function checkForExerciseUpdates(
         }
     }
 
-    if (count > 0) {
+    if (count > 0 && updateCheckOptions?.notify !== false) {
         showNotification(
             `Found updates for ${count} exercises. Do you wish to download them?`,
             [
@@ -186,6 +192,7 @@ export async function checkForExerciseUpdates(
             ],
         );
     }
+    return Array.from(coursesToUpdate.values());
 }
 
 /**

@@ -17,6 +17,7 @@ import {
 import { ActionContext } from "./types";
 import { Exercise } from "../api/types";
 import { updateCourse } from "./user";
+import { checkForExerciseUpdates } from "./workspace";
 import { CourseDetailsExercise, CourseDetailsExerciseGroup } from "../ui/types";
 
 /**
@@ -89,7 +90,13 @@ export async function displayLocalCourseDetails(
     logger.log(`Display course view for ${course.name}`);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
     const exerciseData = new Map<string, CourseDetailsExerciseGroup>();
-
+    const updateables =
+        (
+            await checkForExerciseUpdates(actionContext, courseId, {
+                notify: false,
+                useCache: true,
+            })
+        ).find((u) => u.courseId === courseId)?.exerciseIds || [];
     const currentDate = new Date();
     course.exercises.forEach((ex) => {
         const nameMatch = ex.name.match(/(\w+)-(.+)/);
@@ -147,6 +154,7 @@ export async function displayLocalCourseDetails(
             exerciseData: exercisesDatam,
             course,
             courseId: course.id,
+            updateableExerciseIds: updateables,
         },
         true,
     );
