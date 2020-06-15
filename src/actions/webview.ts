@@ -125,7 +125,7 @@ export async function displayLocalCourseDetails(
             softDeadlineString: softDeadline ? dateToString(softDeadline) : "-",
             hardDeadline,
             hardDeadlineString: hardDeadline ? dateToString(hardDeadline) : "-",
-            isHard: softDeadline ? currentDate >= softDeadline : true,
+            isHard: softDeadline && hardDeadline ? hardDeadline <= softDeadline : true,
         };
 
         exerciseData.set(groupName, {
