@@ -415,7 +415,11 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
 
     const localData: LocalCourseData = {
         description: courseDetails.description || "",
-        exercises: courseDetails.exercises.map((e) => ({ id: e.id, passed: e.completed })),
+        exercises: courseDetails.exercises.map((e) => ({
+            id: e.id,
+            name: e.name,
+            passed: e.completed,
+        })),
         id: courseDetails.id,
         name: courseDetails.name,
         title: courseDetails.title,
@@ -495,7 +499,7 @@ export async function updateCourse(id: number, actionContext: ActionContext): Pr
 
             userData.updateExercises(
                 id,
-                details.exercises.map((x) => ({ id: x.id, passed: x.completed })),
+                details.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),
             );
             const [available, awarded] = exercises.reduce(
                 (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],

@@ -50,6 +50,7 @@ export type CourseDetailsData = {
 
 export type CourseDetailsExerciseGroup = {
     name: string;
+    downloadables: number[];
     nextDeadlineString: string;
     exercises: CourseDetailsExercise[];
 };

@@ -88,19 +88,31 @@ export async function displayLocalCourseDetails(
     const course = userData.getCourse(courseId);
     logger.log(`Display course view for ${course.name}`);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
-
     const exerciseData = new Map<string, CourseDetailsExerciseGroup>();
 
     const currentDate = new Date();
-    workspaceExercises.forEach((ex) => {
-        const name = ex.name.match(/(\w+)-(.+)/);
-        const softDeadline = ex.softDeadline ? parseDate(ex.softDeadline) : null;
-        const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
+    course.exercises.forEach((ex) => {
+        const nameMatch = ex.name.match(/(\w+)-(.+)/);
+        const groupName = nameMatch?.[1] || "";
+        const group = exerciseData.get(groupName);
+        const name = nameMatch?.[2] || "";
+        const exData = workspaceExercises.find((d) => d.id === ex.id);
+        if (!exData || exData.status === ExerciseStatus.MISSING) {
+            exerciseData.set(groupName, {
+                name: groupName,
+                nextDeadlineString: group?.nextDeadlineString || "",
+                exercises: group?.exercises || [],
+                downloadables: (group?.downloadables || []).concat(ex.id),
+            });
+            return;
+        }
+        const softDeadline = exData.softDeadline ? parseDate(exData.softDeadline) : null;
+        const hardDeadline = exData.deadline ? parseDate(exData.deadline) : null;
         const entry: CourseDetailsExercise = {
             id: ex.id,
-            name: name?.[2] || ex.name,
-            isOpen: ex.status === ExerciseStatus.OPEN,
-            isClosed: ex.status === ExerciseStatus.CLOSED,
+            name,
+            isOpen: exData.status === ExerciseStatus.OPEN,
+            isClosed: exData.status === ExerciseStatus.CLOSED,
             passed: course.exercises.find((ce) => ce.id === ex.id)?.passed || false,
             softDeadline,
             softDeadlineString: softDeadline ? dateToString(softDeadline) : "-",
@@ -109,12 +121,11 @@ export async function displayLocalCourseDetails(
             isHard: softDeadline ? currentDate >= softDeadline : true,
         };
 
-        const groupName = name?.[1] || "";
-        const group = exerciseData.get(groupName);
         exerciseData.set(groupName, {
             name: groupName,
             nextDeadlineString: "",
             exercises: group?.exercises.concat(entry) || [entry],
+            downloadables: group?.downloadables || [],
         });
     });
 
@@ -273,7 +284,7 @@ export async function displayCourseDownloads(
     const details = result.val.course;
     await userData.updateExercises(
         courseId,
-        details.exercises.map((x) => ({ id: x.id, passed: x.completed })),
+        details.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),
     );
     const newExercisesLength = userData.getCourse(courseId).newExercises.length;
     if (newExercisesLength > 0) {

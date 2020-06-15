@@ -40,7 +40,7 @@ function component(data) {
      * @param {string} description
      */
     const stickyTop = (title, description) => (
-        <div class="w-100 sticky-top">
+        <div class="w-100">
             <div class="container pt-0">
                 <div class="row">
                     <div class="col">
@@ -64,13 +64,6 @@ function component(data) {
                         <span>{description}</span>
                     </div>
                 </div>
-                <div class="row mt-2">
-                    <div class="col-sm-3">
-                        <button class="btn-info m-1 w-100" onclick="downloadView()">
-                            Download exercises
-                        </button>
-                    </div>
-                </div>
             </div>
         </div>
     );
@@ -82,7 +75,14 @@ function component(data) {
                     <h2 style="text-transform: capitalize;">{exerciseGroup.name}</h2>
                 </div>
                 <div class="col-md-2 my-1">
-                    <button class="btn-info w-100">Download all (7)</button>
+                    {exerciseGroup.downloadables.length !== 0 ? (
+                        <button
+                            class="btn-info w-100"
+                            onclick={`downloadSelectedExercises(${exerciseGroup.downloadables})`}
+                        >
+                            Download part
+                        </button>
+                    ) : null}
                 </div>
                 <div class="col-md-2 my-1">
                     <button class="btn-info w-100">Open all</button>
@@ -212,18 +212,28 @@ function component(data) {
 
     let vscode;
     let courseId;
+    let courseName;
+    let organizationSlug;
     let selectedCount;
 
     function backToMyCourses() {
         vscode.postMessage({ type: "myCourses" });
     }
 
-    function downloadView() {
-        vscode.postMessage({ type: "exerciseDownloads", id: courseId });
-    }
-
     function toggleCollapse(element, defaultDisplay) {
         element.style.display = element.style.display === "none" ? defaultDisplay : "none";
+    }
+
+    function downloadSelectedExercises(...ids) {
+        if (ids.length > 0) {
+            vscode.postMessage({
+                type: "downloadExercises",
+                ids,
+                courseName,
+                organizationSlug,
+                courseId,
+            });
+        }
     }
 
     function openExercise(id) {
@@ -301,14 +311,16 @@ function component(data) {
             <script>
                 {"const vscode = acquireVsCodeApi();"}
                 {`const courseId = ${data.course.id};`}
-                {"selectedCount = 0;"}
+                {`const courseName = "${data.course.name}";`}
+                {`const organizationSlug = "${data.course.organization}";`}
+                {"let selectedCount = 0;"}
                 {createElement}
                 {getOpenedBadge}
                 {getClosedBadge}
                 {getMissingBadge}
                 {backToMyCourses}
-                {downloadView}
                 {toggleCollapse}
+                {downloadSelectedExercises}
                 {openExercise}
                 {closeExercise}
                 {updateCount}
