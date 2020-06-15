@@ -141,10 +141,10 @@ function component(data) {
             </div>
             <div class="row pt-2">
                 <div class="col-md-5">{exerciseGroup.nextDeadlineString}</div>
-                <div class="col-md-2">
+                <div class="col-md-2 text-center">
                     <button
                         class="show-all-button"
-                        onclick={`toggleCollapse(document.getElementById('${exerciseGroup.name}-exercises'), 'block')`}
+                        onclick={`toggleCollapse(this, document.getElementById('${exerciseGroup.name}-exercises'), 'block')`}
                     >
                         Show exercises
                     </button>
@@ -179,7 +179,7 @@ function component(data) {
                                                     onchange="updateCount(this)"
                                                 />
                                             </td>
-                                            <td class="min-w-40">{exercise.name}</td>
+                                            <td class="min-w-40 text-break">{exercise.name}</td>
                                             <td class="min-w-30">
                                                 {exercise.isHard ? (
                                                     exercise.hardDeadlineString
@@ -268,8 +268,11 @@ function component(data) {
         vscode.postMessage({ type: "myCourses" });
     }
 
-    function toggleCollapse(element, defaultDisplay) {
+    function toggleCollapse(button, element, defaultDisplay) {
         element.style.display = element.style.display === "none" ? defaultDisplay : "none";
+        element.style.display === "none"
+            ? (button.innerHTML = "Show exercises")
+            : (button.innerHTML = "Hide exercises");
     }
 
     function downloadSelectedExercises(...ids) {
