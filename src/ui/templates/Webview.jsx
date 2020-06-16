@@ -5,7 +5,7 @@
 const createElement = require("./templateUtils").createElement;
 
 function component(webviewProps) {
-    const { cspSource, cssBlob, children } = webviewProps;
+    const { cspSource, cssBlob, children, script } = webviewProps;
 
     return (
         <html>
@@ -19,6 +19,12 @@ function component(webviewProps) {
             </head>
             <body id="body" class="p-0">
                 {children}
+                {script ? (
+                    <script>
+                        {createElement}
+                        {`(${script})();`}
+                    </script>
+                ) : null}
             </body>
         </html>
     );

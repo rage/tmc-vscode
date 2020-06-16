@@ -118,10 +118,6 @@ body.vscode-high-contrast tbody tr:nth-of-type(odd) {
     transform:scale(1.5);
 }
 
-.sticky-top {
-    background-color: var(--vscode-editor-background);
-}
-
 .badge:hover {
     cursor: pointer;
 }
@@ -141,6 +137,14 @@ body.vscode-high-contrast tbody tr:nth-of-type(odd) {
     text-decoration: none;
     display: inline-block;
     font-size: 16px;
+}
+
+#context-menu {
+    visibility: hidden;
+    background-color: var(--vscode-editor-background) !important;
+    width: 75%;
+    border-radius: 0;
+    padding: 0;
 }
 
 /*

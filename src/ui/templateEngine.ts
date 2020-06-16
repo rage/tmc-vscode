@@ -249,6 +249,7 @@ export default class TemplateEngine {
                 children: CourseDetails.component(templateData),
                 cssBlob,
                 cspSource: webview.cspSource,
+                script: CourseDetails.script,
             });
         }
 

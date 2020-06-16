@@ -4,6 +4,13 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const createElement = require("./templateUtils").createElement;
 
+// Provided by VSCode vebview at runtime
+/*global acquireVsCodeApi*/
+
+const miniSpinner = () => `<div class="spinner-border spinner-border-sm" role="status">
+    <span class="sr-only">Loading...</span>
+</div>`;
+
 /**
  * @param {CourseDetailsData} data
  */
@@ -16,36 +23,10 @@ function component(data) {
         "&#013;Hard deadline can not be exceeded.";
 
     /**
-     * @param {number} id
-     */
-    const getOpenedBadge = (id) => (
-        <span class="badge badge-primary" onclick={`closeExercise(${id})`}>
-            open
-        </span>
-    );
-
-    /**
-     * @param {number} id
-     */
-    const getClosedBadge = (id) => (
-        <span class="badge badge-secondary" onclick={`openExercise(${id})`}>
-            closed
-        </span>
-    );
-
-    const getMissingBadge = () => <span class="badge badge-secondary">missing</span>;
-
-    /**
      * @param {string} title
      * @param {string} description
      */
-    const stickyTop = (
-        title,
-        description,
-        awardedPoints,
-        availablePoints,
-        updateableExerciseIds,
-    ) => (
+    const stickyTop = (course, updateableExerciseIds) => (
         <div class="w-100">
             <div class="container pt-0">
                 <div class="row py-1">
@@ -53,27 +34,33 @@ function component(data) {
                         <nav aria-label="breadcrumb">
                             <ol class="breadcrumb">
                                 <li class="breadcrumb-item">
-                                    <a onclick="backToMyCourses()" href="#">
+                                    <a id="back-to-my-courses" href="#">
                                         My courses
                                     </a>
                                 </li>
                                 <li class="breadcrumb-item" aria-current="page">
-                                    {title}
+                                    {course.title}
                                 </li>
                             </ol>
                         </nav>
                     </div>
                 </div>
-                <div class="row py-1">
+                <div
+                    class="row py-1"
+                    id="course"
+                    data-course-id={course.id}
+                    data-course-name={course.name}
+                    data-course-org={course.organization}
+                >
                     <div class="col-md">
-                        <h2>{title}</h2>
-                        <span>{description}</span>
+                        <h2>{course.title}</h2>
+                        <span>{course.description}</span>
                     </div>
                 </div>
                 <div class="row py-1">
                     <div class="col-md">
                         <span>
-                            Points gained: {awardedPoints} / {availablePoints}
+                            Points gained: {course.awardedPoints} / {course.availablePoints}
                         </span>
                     </div>
                 </div>
@@ -84,7 +71,8 @@ function component(data) {
                                 <span class="mr-2">Updates found for exercises</span>
                                 <button
                                     class="btn btn-danger"
-                                    onclick={`downloadSelectedExercises(${updateableExerciseIds})`}
+                                    id="update-button"
+                                    data-exercises={updateableExerciseIds}
                                 >
                                     Update exercises
                                 </button>
@@ -105,8 +93,8 @@ function component(data) {
                 <div class="col-md-2 my-1">
                     {exerciseGroup.downloadables.length !== 0 ? (
                         <button
-                            class="btn btn-success w-100"
-                            onclick={`downloadSelectedExercises(${exerciseGroup.downloadables})`}
+                            class="btn btn-success w-100 download-all"
+                            data-exercises={exerciseGroup.downloadables}
                         >
                             Download ({exerciseGroup.downloadables.length})
                         </button>
@@ -114,16 +102,16 @@ function component(data) {
                 </div>
                 <div class="col-md-2 my-1">
                     <button
-                        class="btn btn-primary w-100"
-                        onclick={`openExercises(${exerciseGroup.exercises.map((e) => e.id)})`}
+                        class="btn btn-primary w-100 open-all"
+                        data-exercises={exerciseGroup.exercises.map((e) => e.id)}
                     >
                         Open all
                     </button>
                 </div>
                 <div class="col-md-2 my-1">
                     <button
-                        class="btn btn-primary w-100"
-                        onclick={`closeExercises(${exerciseGroup.exercises.map((e) => e.id)})`}
+                        class="btn btn-primary w-100 close-all"
+                        data-exercises={exerciseGroup.exercises.map((e) => e.id)}
                     >
                         Close all
                     </button>
@@ -142,10 +130,7 @@ function component(data) {
             <div class="row pt-2">
                 <div class="col-md-5">{exerciseGroup.nextDeadlineString}</div>
                 <div class="col-md-2 text-center">
-                    <button
-                        class="show-all-button"
-                        onclick={`toggleCollapse(this, document.getElementById('${exerciseGroup.name}-exercises'), 'block')`}
-                    >
+                    <button class="show-all-button" data-group-name={exerciseGroup.name}>
                         Show exercises
                     </button>
                 </div>
@@ -155,7 +140,7 @@ function component(data) {
                     <hr />
                     <div class="table-responsive-md">
                         <table class="table table-striped table-borderless">
-                            <thead>
+                            <thead id={`${exerciseGroup.name}-table-headers`}>
                                 <tr>
                                     <th class="min-w-5 text-center">
                                         <input class="checkbox-xl" type="checkbox" />
@@ -166,17 +151,15 @@ function component(data) {
                                     <th class="min-w-15">Status</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id={`${exerciseGroup.name}-checkboxes`}>
                                 {exerciseGroup.exercises
                                     .map((exercise) => (
-                                        <tr>
-                                            <td class="min-w-5 text-center">
+                                        <tr id={exercise.id}>
+                                            <td class="min-w-5 text-center exercise-selector">
                                                 <input
                                                     class="checkbox-xl"
                                                     type="checkbox"
-                                                    data-isPassed={exercise.passed}
                                                     value={exercise.id}
-                                                    onchange="updateCount(this)"
                                                 />
                                             </td>
                                             <td class="min-w-40 text-break">{exercise.name}</td>
@@ -201,14 +184,18 @@ function component(data) {
                                                 {exercise.passed ? "&#10004;" : "&#10060;"}
                                             </td>
                                             <td
-                                                class="min-w-15"
+                                                class="min-w-15 exerciseStatus"
                                                 id={`exercise-${exercise.id}-status`}
+                                                data-exercise-id={exercise.id}
+                                                data-workspace-status={
+                                                    exercise.isOpen
+                                                        ? "open"
+                                                        : exercise.isClosed
+                                                        ? "closed"
+                                                        : "missing"
+                                                }
                                             >
-                                                {exercise.isOpen
-                                                    ? getOpenedBadge(exercise.id)
-                                                    : exercise.isClosed
-                                                    ? getClosedBadge(exercise.id)
-                                                    : getMissingBadge()}
+                                                {miniSpinner()}
                                             </td>
                                         </tr>
                                     ))
@@ -222,33 +209,23 @@ function component(data) {
     );
 
     const contextMenu = () => (
-        <div
-            id="contextMenu"
-            class="container fixed-bottom"
-            style="visibility: hidden; background-color: inherit; padding: 0;"
-        >
-            <div class="card border" style="background-color: inherit;">
+        <div id="context-menu" class="container fixed-bottom">
+            <div class="card border-current-color" style="background-color: inherit;">
                 <div class="card-body">
-                    Select action for <span id="selectedCount">0</span> selected items
+                    Select action for <span id="selected-count">0</span> selected items
                     <div class="row mt-2">
-                        <div class="col-sm-3">
-                            <button
-                                class="btn btn-primary m-1 w-100"
-                                onclick="handleSelected('openSelected')"
-                            >
+                        <div class="col-md-3">
+                            <button class="btn btn-primary m-1 w-100" id="open-selected">
                                 Open
                             </button>
                         </div>
-                        <div class="col-sm-3">
-                            <button
-                                class="btn btn-primary m-1 w-100"
-                                onclick="handleSelected('closeSelected')"
-                            >
+                        <div class="col-md-3">
+                            <button class="btn btn-primary m-1 w-100" id="close-selected">
                                 Close
                             </button>
                         </div>
-                        <div class="col-sm-3">
-                            <button class="btn btn-primary m-1 w-100" onclick="clearAll()">
+                        <div class="col-md-3">
+                            <button class="btn btn-primary m-1 w-100" id="clear-all-selections">
                                 Clear selections
                             </button>
                         </div>
@@ -258,132 +235,11 @@ function component(data) {
         </div>
     );
 
-    let vscode;
-    let courseId;
-    let courseName;
-    let organizationSlug;
-    let selectedCount;
-
-    function backToMyCourses() {
-        vscode.postMessage({ type: "myCourses" });
-    }
-
-    function toggleCollapse(button, element, defaultDisplay) {
-        element.style.display = element.style.display === "none" ? defaultDisplay : "none";
-        element.style.display === "none"
-            ? (button.innerHTML = "Show exercises")
-            : (button.innerHTML = "Hide exercises");
-    }
-
-    function downloadSelectedExercises(...ids) {
-        if (ids.length > 0) {
-            vscode.postMessage({
-                type: "downloadExercises",
-                ids,
-                courseName,
-                organizationSlug,
-                courseId,
-            });
-        }
-    }
-
-    function openExercises(...ids) {
-        vscode.postMessage({ type: "openSelected", ids, id: courseId });
-    }
-
-    function closeExercises(...ids) {
-        vscode.postMessage({ type: "closeSelected", ids, id: courseId });
-    }
-
-    function updateCount(element) {
-        selectedCount += element.checked ? 1 : -1;
-        refreshFooter();
-    }
-
-    function clearAll() {
-        const checkboxes = document.querySelectorAll("input[type='checkbox']");
-        for (let i = 0; i < checkboxes.length; i++) {
-            checkboxes[i].checked = false;
-        }
-        selectedCount = 0;
-        refreshFooter();
-    }
-
-    function handleSelected(type) {
-        const checkboxes = document.querySelectorAll("input[type='checkbox']");
-        const ids = [];
-        for (let i = 0; i < checkboxes.length; i++) {
-            if (checkboxes[i].checked) {
-                ids.push(parseInt(checkboxes[i].value));
-            }
-        }
-        if (ids.length > 0) {
-            vscode.postMessage({ type: type, ids, id: courseId });
-        }
-    }
-
-    function refreshFooter() {
-        document.getElementById("selectedCount").innerText = selectedCount;
-        document.getElementById("contextMenu").style.visibility =
-            selectedCount === 0 ? "hidden" : "visible";
-        document.getElementById("body").style.marginBottom =
-            selectedCount === 0
-                ? "0px"
-                : document.getElementById("contextMenu").offsetHeight + 20 + "px";
-    }
-
-    function messageHandler(event) {
-        const message = event.data;
-        switch (message.command) {
-            case "exercisesOpened":
-                for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
-                    const id = message.exerciseIds[i];
-                    document.getElementById(`exercise-${id}-status`).innerHTML = getOpenedBadge(id);
-                }
-                break;
-            case "exercisesClosed":
-                for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
-                    const id = message.exerciseIds[i];
-                    document.getElementById(`exercise-${id}-status`).innerHTML = getClosedBadge(id);
-                }
-                break;
-            default:
-                console.log("Unsupported command", message.command);
-        }
-    }
-
     return (
         <div>
-            {stickyTop(
-                data.course.title,
-                data.course.description,
-                data.course.awardedPoints,
-                data.course.availablePoints,
-                data.updateableExerciseIds,
-            )}
+            {stickyTop(data.course, data.updateableExerciseIds)}
             {data.exerciseData.map(exerciseTable).join("")}
             {contextMenu()}
-            <script>
-                {"const vscode = acquireVsCodeApi();"}
-                {`const courseId = ${data.course.id};`}
-                {`const courseName = "${data.course.name}";`}
-                {`const organizationSlug = "${data.course.organization}";`}
-                {"let selectedCount = 0;"}
-                {createElement}
-                {getOpenedBadge}
-                {getClosedBadge}
-                {getMissingBadge}
-                {backToMyCourses}
-                {toggleCollapse}
-                {downloadSelectedExercises}
-                {openExercises}
-                {closeExercises}
-                {updateCount}
-                {clearAll}
-                {handleSelected}
-                {refreshFooter}
-                {`window.addEventListener("message", ${messageHandler})`}
-            </script>
         </div>
     );
 }
@@ -392,4 +248,230 @@ function render(cspBlob, cssBlob, data) {
     return component(cspBlob, cssBlob, data).toString();
 }
 
-export { component, render };
+function script() {
+    const vscode = acquireVsCodeApi();
+    const course = document.getElementById("course").dataset;
+    let contextMenu;
+    let selectedCount = 0;
+
+    /**@param {number[]} ids*/
+    function openExercises(ids) {
+        vscode.postMessage({ type: "openSelected", ids });
+    }
+
+    /**@param {number[]} ids*/
+    function closeExercises(ids) {
+        vscode.postMessage({ type: "closeSelected", ids });
+    }
+
+    function setStatusBadge(element) {
+        const id = parseInt(element.dataset.exerciseId);
+        switch (element.dataset.workspaceStatus) {
+            case "open":
+                element.innerHTML = (
+                    <span class="badge badge-primary" data-status="opened">
+                        opened
+                    </span>
+                );
+                element.firstElementChild.addEventListener(
+                    "click",
+                    function () {
+                        closeExercises([id]);
+                    },
+                    { once: true },
+                );
+                break;
+            case "closed":
+                element.innerHTML = (
+                    <span class="badge badge-secondary" data-status="closed">
+                        closed
+                    </span>
+                );
+                element.firstElementChild.addEventListener(
+                    "click",
+                    function () {
+                        openExercises([id]);
+                    },
+                    { once: true },
+                );
+                break;
+            default:
+                element.innerHTML = (
+                    <span class="badge badge-secondary" data-status="missing">
+                        missing
+                    </span>
+                );
+                break;
+        }
+    }
+
+    function downloadSelectedExercises(ids) {
+        if (ids.length > 0) {
+            vscode.postMessage({
+                type: "downloadExercises",
+                ids,
+                courseName: course.courseName,
+                organizationSlug: course.courseOrg,
+                courseId: parseInt(course.courseId),
+            });
+        }
+    }
+
+    function handleSelected(type) {
+        const checkboxCols = document.querySelectorAll("td.exercise-selector");
+        const ids = [];
+        for (let i = 0; i < checkboxCols.length; i++) {
+            if (checkboxCols[i].firstElementChild.checked) {
+                ids.push(parseInt(checkboxCols[i].firstElementChild.value));
+            }
+        }
+        if (ids.length > 0) {
+            vscode.postMessage({ type: type, ids });
+        }
+    }
+
+    function refreshFooter() {
+        contextMenu.querySelector("#selected-count").innerText = selectedCount;
+        contextMenu.style.visibility = selectedCount === 0 ? "hidden" : "visible";
+        document.querySelector("body").style.marginBottom =
+            selectedCount === 0
+                ? "0px"
+                : document.getElementById("context-menu").offsetHeight + 20 + "px";
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        contextMenu = document.getElementById("context-menu");
+
+        // Breadcrumbs
+        document.getElementById("back-to-my-courses").addEventListener(
+            "click",
+            function () {
+                vscode.postMessage({ type: "myCourses" });
+            },
+            { once: true },
+        );
+
+        // Course details
+        const updateButton = document.getElementById("update-button");
+        if (updateButton) {
+            updateButton.addEventListener("click", function () {
+                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
+                downloadSelectedExercises(updateableIds);
+            });
+        }
+
+        // Course part cards
+        const openAllButtons = document.querySelectorAll("button.open-all");
+        for (let i = 0; i < openAllButtons.length; i++) {
+            const ids = openAllButtons[i].dataset.exercises.split(",").map((id) => parseInt(id));
+            openAllButtons[i].addEventListener("click", function () {
+                openExercises(ids);
+            });
+        }
+
+        const closeAllButtons = document.querySelectorAll("button.close-all");
+        for (let i = 0; i < closeAllButtons.length; i++) {
+            const ids = closeAllButtons[i].dataset.exercises.split(",").map((id) => parseInt(id));
+            closeAllButtons[i].addEventListener("click", function () {
+                closeExercises(ids);
+            });
+        }
+
+        const downloadAllButtons = document.querySelectorAll("button.download-all");
+        for (let i = 0; i < downloadAllButtons.length; i++) {
+            const ids = downloadAllButtons[i].dataset.exercises
+                .split(",")
+                .map((id) => parseInt(id));
+            downloadAllButtons[i].addEventListener("click", function () {
+                downloadSelectedExercises(ids);
+            });
+        }
+
+        const toggleButtons = document.querySelectorAll("button.show-all-button");
+        for (let i = 0; i < toggleButtons.length; i++) {
+            const element = toggleButtons[i];
+            const target = document.getElementById(`${element.dataset.groupName}-exercises`);
+            element.addEventListener("click", function () {
+                if (target.style.display === "none") {
+                    target.style.display = "block";
+                    element.innerText = "Hide exercises";
+                } else {
+                    target.style.display = "none";
+                    element.innerText = "Show exercises";
+                }
+            });
+        }
+
+        const groupCheckboxCols = document.querySelectorAll("table.table");
+        for (let i = 0; i < groupCheckboxCols.length; i++) {
+            const theader = groupCheckboxCols[i].firstElementChild;
+            const headerCheckbox = theader.querySelector("input.checkbox-xl");
+            const tbody = groupCheckboxCols[i].querySelector("tbody");
+            headerCheckbox.addEventListener("click", function () {
+                const checkboxes = tbody.querySelectorAll("input[type='checkbox']");
+                for (let i = 0; i < checkboxes.length; i++) {
+                    if (checkboxes[i].checked !== this.checked) {
+                        checkboxes[i].click();
+                    }
+                }
+            });
+        }
+
+        const singleCheckboxCols = document.querySelectorAll("td.exercise-selector");
+        for (let i = 0; i < singleCheckboxCols.length; i++) {
+            singleCheckboxCols[i].firstElementChild.addEventListener("click", function (event) {
+                selectedCount += event.target.checked ? 1 : -1;
+                refreshFooter();
+            });
+        }
+
+        const exerciseStatuses = document.querySelectorAll("td.exerciseStatus");
+        for (let i = 0; i < exerciseStatuses.length; i++) {
+            setStatusBadge(exerciseStatuses[i]);
+        }
+
+        // Context menu
+        document.getElementById("clear-all-selections").addEventListener("click", function () {
+            const checkboxes = document.querySelectorAll("input[type='checkbox']");
+            for (let i = 0; i < checkboxes.length; i++) {
+                checkboxes[i].checked = false;
+            }
+            selectedCount = 0;
+            refreshFooter();
+        });
+
+        document.getElementById("open-selected").addEventListener("click", function () {
+            handleSelected("openSelected");
+        });
+
+        document.getElementById("close-selected").addEventListener("click", function () {
+            handleSelected("closeSelected");
+        });
+    });
+
+    window.addEventListener("message", function (event) {
+        const message = event.data;
+        switch (message.command) {
+            case "exercisesOpened":
+                for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
+                    const id = message.exerciseIds[i];
+                    const element = document.getElementById(`exercise-${id}-status`);
+                    element.dataset.workspaceStatus = "open";
+                    setStatusBadge(element);
+                }
+                break;
+            case "exercisesClosed":
+                for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
+                    const id = message.exerciseIds[i];
+                    const element = document.getElementById(`exercise-${id}-status`);
+                    element.dataset.workspaceStatus = "closed";
+                    setStatusBadge(element);
+                }
+                break;
+            default:
+                console.log("Unsupported command", message.command);
+        }
+    });
+}
+
+export { component, render, script };

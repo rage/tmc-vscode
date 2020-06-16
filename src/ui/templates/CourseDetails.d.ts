@@ -4,10 +4,14 @@ import { CourseDetailsData } from "../types";
  * @param {string} cspBlob
  * @param {string} cssBlob
  */
-export function component(data: CourseDetailsData): unknown;
+declare function component(data: CourseDetailsData): unknown;
 
 /**
  * @param {string} cspBlob
  * @param {string} cssBlob
  */
-export function render(data: CourseDetailsData): string;
+declare function render(data: CourseDetailsData): string;
+
+declare function script(): unknown;
+
+export { component, render, script };

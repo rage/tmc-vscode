@@ -159,8 +159,8 @@ export function registerUiActions(actionContext: ActionContext): void {
     });
     ui.webview.registerHandler(
         "openSelected",
-        async (msg: { type?: "openSelected"; ids?: number[]; id?: number }) => {
-            if (!(msg.type && msg.ids && msg.id)) {
+        async (msg: { type?: "openSelected"; ids?: number[] }) => {
+            if (!(msg.type && msg.ids)) {
                 return;
             }
             const result = await openExercises(msg.ids, actionContext);
@@ -180,8 +180,8 @@ export function registerUiActions(actionContext: ActionContext): void {
     );
     ui.webview.registerHandler(
         "closeSelected",
-        async (msg: { type?: "closeSelected"; ids?: number[]; id?: number }) => {
-            if (!(msg.type && msg.ids && msg.id)) {
+        async (msg: { type?: "closeSelected"; ids?: number[] }) => {
+            if (!(msg.type && msg.ids)) {
                 return;
             }
             const result = await closeExercises(actionContext, msg.ids);
