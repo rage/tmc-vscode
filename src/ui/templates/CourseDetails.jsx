@@ -399,73 +399,90 @@ function script() {
         }
 
         // Course part cards
-        const openAllButtons = document.querySelectorAll("button.open-all");
-        for (let i = 0; i < openAllButtons.length; i++) {
-            const ids = openAllButtons[i].dataset.exercises.split(",").map((id) => parseInt(id));
-            openAllButtons[i].addEventListener("click", function () {
-                openExercises(ids);
-            });
-        }
+        const exerciseCards = document.querySelectorAll("div.exercise-card");
+        for (let i = 0; i < exerciseCards.length; i++) {
+            const exerciseCard = exerciseCards[i];
 
-        const closeAllButtons = document.querySelectorAll("button.close-all");
-        for (let i = 0; i < closeAllButtons.length; i++) {
-            const ids = closeAllButtons[i].dataset.exercises.split(",").map((id) => parseInt(id));
-            closeAllButtons[i].addEventListener("click", function () {
-                closeExercises(ids);
-            });
-        }
+            const openAllButton = exerciseCard.querySelector("button.open-all");
+            if (openAllButton) {
+                const ids = openAllButton.dataset.exercises.split(",").map((id) => parseInt(id));
+                openAllButton.addEventListener("click", function () {
+                    openExercises(ids);
+                });
+            }
 
-        const downloadAllButtons = document.querySelectorAll("button.download-all");
-        for (let i = 0; i < downloadAllButtons.length; i++) {
-            const ids = downloadAllButtons[i].dataset.exercises
-                .split(",")
-                .map((id) => parseInt(id));
-            downloadAllButtons[i].addEventListener("click", function () {
-                downloadSelectedExercises(ids);
-            });
-        }
+            const closeAllButton = exerciseCard.querySelector("button.close-all");
+            if (closeAllButton) {
+                const ids = closeAllButton.dataset.exercises.split(",").map((id) => parseInt(id));
+                closeAllButton.addEventListener("click", function () {
+                    closeExercises(ids);
+                });
+            }
 
-        const toggleButtons = document.querySelectorAll("button.show-all-button");
-        for (let i = 0; i < toggleButtons.length; i++) {
-            const element = toggleButtons[i];
-            const target = document.getElementById(`${element.dataset.groupName}-exercises`);
-            element.addEventListener("click", function () {
-                if (target.style.display === "none") {
-                    target.style.display = "block";
-                    element.innerText = "Hide exercises";
-                } else {
-                    target.style.display = "none";
-                    element.innerText = "Show exercises";
-                }
-            });
-        }
+            const toggleButton = exerciseCard.querySelector("button.show-all-button");
+            const exerciseTable = exerciseCard.querySelector(
+                `#${toggleButton.dataset.groupName}-exercises`,
+            );
+            if (toggleButton && exerciseTable) {
+                toggleButton.addEventListener("click", function () {
+                    if (exerciseTable.style.display === "none") {
+                        exerciseTable.style.display = "block";
+                        toggleButton.innerText = "Hide exercises";
+                    } else {
+                        exerciseTable.style.display = "none";
+                        toggleButton.innerText = "Show exercises";
+                    }
+                });
+            }
 
-        const groupCheckboxCols = document.querySelectorAll("table.table");
-        for (let i = 0; i < groupCheckboxCols.length; i++) {
-            const theader = groupCheckboxCols[i].firstElementChild;
-            const headerCheckbox = theader.querySelector("input.checkbox-xl");
-            const tbody = groupCheckboxCols[i].querySelector("tbody");
-            headerCheckbox.addEventListener("click", function () {
-                const checkboxes = tbody.querySelectorAll("input[type='checkbox']");
-                for (let i = 0; i < checkboxes.length; i++) {
-                    if (checkboxes[i].checked !== this.checked) {
-                        checkboxes[i].click();
+            const downloadAllButton = exerciseCard.querySelector("button.download-all");
+            if (downloadAllButton) {
+                const ids = downloadAllButton.dataset.exercises
+                    .split(",")
+                    .map((id) => parseInt(id));
+                downloadAllButton.addEventListener("click", function () {
+                    if (toggleButton && exerciseTable && exerciseTable.style.display === "none") {
+                        toggleButton.click();
+                    }
+                    downloadSelectedExercises(ids);
+                });
+            }
+
+            if (exerciseTable) {
+                const theader = exerciseTable.querySelector("thead");
+                const tbody = exerciseTable.querySelector("tbody");
+                const headerCheckbox = theader.querySelector("input.checkbox-xl");
+                headerCheckbox.addEventListener("click", function () {
+                    const checkboxes = tbody.querySelectorAll("input[type='checkbox']");
+                    for (let j = 0; j < checkboxes.length; j++) {
+                        if (checkboxes[j].checked !== this.checked) {
+                            checkboxes[j].click();
+                        }
+                    }
+                });
+
+                const exerciseTableRows = exerciseTable.querySelectorAll("tr.exercise-table-row");
+                for (let j = 0; j < exerciseTableRows.length; j++) {
+                    const exerciseTableRow = exerciseTableRows[j];
+                    const singleCheckboxColumn = exerciseTableRow.querySelector(
+                        "td.exercise-selector",
+                    );
+                    if (singleCheckboxColumn) {
+                        singleCheckboxColumn.firstElementChild.addEventListener("click", function (
+                            event,
+                        ) {
+                            selectedCount += event.target.checked ? 1 : -1;
+                            refreshFooter();
+                        });
+                    }
+                    const exerciseStatusColumn = exerciseTableRow.querySelector(
+                        "td.exercise-status",
+                    );
+                    if (exerciseStatusColumn) {
+                        setStatusBadge(exerciseStatusColumn);
                     }
                 }
-            });
-        }
-
-        const singleCheckboxCols = document.querySelectorAll("td.exercise-selector");
-        for (let i = 0; i < singleCheckboxCols.length; i++) {
-            singleCheckboxCols[i].firstElementChild.addEventListener("click", function (event) {
-                selectedCount += event.target.checked ? 1 : -1;
-                refreshFooter();
-            });
-        }
-
-        const exerciseStatuses = document.querySelectorAll("td.exercise-status");
-        for (let i = 0; i < exerciseStatuses.length; i++) {
-            setStatusBadge(exerciseStatuses[i]);
+            }
         }
 
         // Context menu
