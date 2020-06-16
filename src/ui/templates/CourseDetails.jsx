@@ -85,7 +85,7 @@ function component(data) {
     );
 
     const exerciseTable = (exerciseGroup) => (
-        <div class="container container-fluid border-current-color my-3">
+        <div class="container container-fluid border-current-color my-3 exercise-card">
             <div class="row">
                 <div class="col-md">
                     <h2 style="text-transform: capitalize;">{exerciseGroup.name}</h2>
@@ -118,13 +118,10 @@ function component(data) {
                 </div>
             </div>
             <div class="row py-1">
-                <div class="col-md">
-                    {`<p>Downloaded ${exerciseGroup.exercises.length} / ${
-                        exerciseGroup.exercises.length + exerciseGroup.downloadables.length
-                    }<br />
-                    Completed ${exerciseGroup.exercises.filter((e) => e.passed).length} / ${
-                        exerciseGroup.exercises.length + exerciseGroup.downloadables.length
-                    }</p>`}
+                <div class="col-md group-info" data-group-name={exerciseGroup.name}>
+                    <div id={`completed-${exerciseGroup.name}`}>Completed 0/0</div>
+                    <div id={`downloaded-${exerciseGroup.name}`}>Downloaded 0/0</div>
+                    <div id={`opened-${exerciseGroup.name}`}>Opened 0/0</div>
                 </div>
             </div>
             <div class="row pt-2">
@@ -139,7 +136,7 @@ function component(data) {
                 <div class="col-md" id={`${exerciseGroup.name}-exercises`} style="display: none;">
                     <hr />
                     <div class="table-responsive-md">
-                        <table class="table table-striped table-borderless">
+                        <table class="table table-striped table-borderless exercise-table">
                             <thead id={`${exerciseGroup.name}-table-headers`}>
                                 <tr>
                                     <th class="min-w-5 text-center">
@@ -151,10 +148,10 @@ function component(data) {
                                     <th class="min-w-15">Status</th>
                                 </tr>
                             </thead>
-                            <tbody id={`${exerciseGroup.name}-checkboxes`}>
+                            <tbody class="exercise-tbody">
                                 {exerciseGroup.exercises
                                     .map((exercise) => (
-                                        <tr id={exercise.id}>
+                                        <tr class="exercise-table-row" id={exercise.id}>
                                             <td class="min-w-5 text-center exercise-selector">
                                                 <input
                                                     class="checkbox-xl"
@@ -180,11 +177,14 @@ function component(data) {
                                                     </div>
                                                 )}
                                             </td>
-                                            <td class="min-w-10">
+                                            <td
+                                                class="min-w-10 exercise-completed"
+                                                data-exercise-completed={exercise.passed}
+                                            >
                                                 {exercise.passed ? "&#10004;" : "&#10060;"}
                                             </td>
                                             <td
-                                                class="min-w-15 exerciseStatus"
+                                                class="min-w-15 exercise-status"
                                                 id={`exercise-${exercise.id}-status`}
                                                 data-exercise-id={exercise.id}
                                                 data-workspace-status={
@@ -339,8 +339,42 @@ function script() {
                 : document.getElementById("context-menu").offsetHeight + 20 + "px";
     }
 
+    function refreshCards() {
+        const exerciseCards = document.querySelectorAll("div.exercise-card");
+        for (let i = 0; i < exerciseCards.length; i++) {
+            const cardInfo = exerciseCards[i].querySelector("div.group-info");
+            const exerciseTableRow = exerciseCards[i].querySelectorAll("tr.exercise-table-row");
+            const allExercises = exerciseTableRow.length;
+
+            let completed = 0;
+            let open = 0;
+            let downloaded = allExercises;
+
+            for (let i = 0; i < exerciseTableRow.length; i++) {
+                const c = exerciseTableRow[i].querySelector("td.exercise-completed").dataset
+                    .exerciseCompleted;
+                const s = exerciseTableRow[i].querySelector("td.exercise-status").dataset
+                    .workspaceStatus;
+                s === "open" ? open++ : s === "missing" ? downloaded-- : null;
+                c === "true" ? completed++ : null;
+            }
+
+            const name = cardInfo.dataset.groupName;
+            cardInfo.querySelector(
+                `#completed-${name}`,
+            ).innerText = `Completed ${completed} / ${allExercises}`;
+            cardInfo.querySelector(
+                `#downloaded-${name}`,
+            ).innerText = `Downloaded ${downloaded} / ${allExercises}`;
+            cardInfo.querySelector(
+                `#opened-${name}`,
+            ).innerText = `Open in workspace ${open} / ${allExercises}`;
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         contextMenu = document.getElementById("context-menu");
+        refreshCards();
 
         // Breadcrumbs
         document.getElementById("back-to-my-courses").addEventListener(
@@ -425,7 +459,7 @@ function script() {
             });
         }
 
-        const exerciseStatuses = document.querySelectorAll("td.exerciseStatus");
+        const exerciseStatuses = document.querySelectorAll("td.exercise-status");
         for (let i = 0; i < exerciseStatuses.length; i++) {
             setStatusBadge(exerciseStatuses[i]);
         }
@@ -471,6 +505,7 @@ function script() {
             default:
                 console.log("Unsupported command", message.command);
         }
+        refreshCards();
     });
 }
 
