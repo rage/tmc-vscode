@@ -7,10 +7,6 @@ const createElement = require("./templateUtils").createElement;
 // Provided by VSCode vebview at runtime
 /*global acquireVsCodeApi*/
 
-const miniSpinner = () => `<div class="spinner-border spinner-border-sm" role="status">
-    <span class="sr-only">Loading...</span>
-</div>`;
-
 /**
  * @param {CourseDetailsData} data
  */
@@ -151,7 +147,13 @@ function component(data) {
                             <tbody class="exercise-tbody">
                                 {exerciseGroup.exercises
                                     .map((exercise) => (
-                                        <tr class="exercise-table-row" id={exercise.id}>
+                                        <tr
+                                            class="exercise-table-row"
+                                            id={exercise.id}
+                                            style={`display: ${
+                                                exercise.isOpen || exercise.isClosed ? "" : "none"
+                                            };`}
+                                        >
                                             <td class="min-w-5 text-center exercise-selector">
                                                 <input
                                                     class="checkbox-xl"
@@ -195,7 +197,7 @@ function component(data) {
                                                         : "missing"
                                                 }
                                             >
-                                                {miniSpinner()}
+                                                loading...
                                             </td>
                                         </tr>
                                     ))
@@ -295,13 +297,15 @@ function script() {
                     { once: true },
                 );
                 break;
-            default:
+            case "missing":
                 element.innerHTML = (
-                    <span class="badge badge-secondary" data-status="missing">
-                        missing
-                    </span>
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="sr-only">Loading...</span>
+                    </div>
                 );
                 break;
+            default:
+                element.innerText = "whoops!";
         }
     }
 

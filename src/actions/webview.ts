@@ -84,12 +84,14 @@ export async function displayLocalCourseDetails(
     courseId: number,
     actionContext: ActionContext,
 ): Promise<void> {
-    const { ui, userData, workspaceManager, logger } = actionContext;
+    const { ui, tmc, userData, workspaceManager, logger } = actionContext;
 
     const course = userData.getCourse(courseId);
     logger.log(`Display course view for ${course.name}`);
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
     const exerciseData = new Map<string, CourseDetailsExerciseGroup>();
+    const apiCourse = (await tmc.getCourseDetails(courseId, true)).mapErr(() => undefined).val
+        ?.course;
     const updateables =
         (
             await checkForExerciseUpdates(actionContext, courseId, {
@@ -103,14 +105,26 @@ export async function displayLocalCourseDetails(
         const groupName = nameMatch?.[1] || "";
         const group = exerciseData.get(groupName);
         const name = nameMatch?.[2] || "";
-        const exData = workspaceExercises.find((d) => d.id === ex.id);
-        if (!exData || exData.status === ExerciseStatus.MISSING) {
-            exerciseData.set(groupName, {
-                name: groupName,
-                nextDeadlineString: group?.nextDeadlineString || "",
-                exercises: group?.exercises || [],
-                downloadables: (group?.downloadables || []).concat(ex.id),
-            });
+        let exData = workspaceExercises.find((d) => d.id === ex.id);
+        let downloadables = group?.downloadables || [];
+        if ((!exData || exData.status === ExerciseStatus.MISSING) && apiCourse) {
+            const apiExercise = apiCourse.exercises.find((e) => e.id === ex.id);
+            exData = apiExercise
+                ? {
+                      id: ex.id,
+                      name: ex.name,
+                      checksum: "",
+                      course: apiCourse.name,
+                      deadline: apiExercise.deadline,
+                      organization: course.organization,
+                      softDeadline: apiExercise.soft_deadline,
+                      status: ExerciseStatus.MISSING,
+                      updateAvailable: false,
+                  }
+                : undefined;
+            downloadables = downloadables.concat(ex.id);
+        }
+        if (!exData) {
             return;
         }
         const softDeadline = exData.softDeadline ? parseDate(exData.softDeadline) : null;
@@ -132,7 +146,7 @@ export async function displayLocalCourseDetails(
             name: groupName,
             nextDeadlineString: "",
             exercises: group?.exercises.concat(entry) || [entry],
-            downloadables: group?.downloadables || [],
+            downloadables,
         });
     });
 
