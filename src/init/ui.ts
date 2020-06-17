@@ -15,7 +15,6 @@ import {
     displayLocalCourseDetails,
     displayUserCourses,
     downloadExercises,
-    legacy,
     login,
     logout,
     openExercises,
@@ -99,33 +98,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 organizationSlug: msg.organizationSlug,
             };
             await actionContext.userData.clearNewExercises(msg.courseId);
-            await downloadExercises(actionContext, [downloads]);
-            workspaceManager.openExercise(...msg.ids);
-            ui.webview.postMessage({
-                command: "exercisesOpened",
-                exerciseIds: msg.ids,
-            });
-        },
-    );
-    ui.webview.registerHandler(
-        "downloadExercisesLegacy",
-        async (msg: {
-            type?: "downloadExercisesLegacy";
-            ids?: number[];
-            courseName?: string;
-            organizationSlug?: string;
-            courseId?: number;
-        }) => {
-            if (!(msg.type && msg.ids && msg.courseName && msg.organizationSlug && msg.courseId)) {
-                return;
-            }
-            const downloads: CourseExerciseDownloads = {
-                courseId: msg.courseId,
-                exerciseIds: msg.ids,
-                organizationSlug: msg.organizationSlug,
-            };
-            await actionContext.userData.clearNewExercises(msg.courseId);
-            await legacy.downloadExercises(actionContext, [downloads], msg.courseId);
+            await downloadExercises(actionContext, [downloads], msg.courseId);
             workspaceManager.openExercise(...msg.ids);
         },
     );
@@ -186,10 +159,11 @@ export function registerUiActions(actionContext: ActionContext): void {
     });
     ui.webview.registerHandler(
         "openSelected",
-        async (msg: { type?: "openSelected"; ids?: number[] }) => {
-            if (!(msg.type && msg.ids)) {
+        async (msg: { type?: "openSelected"; ids?: number[]; id?: number }) => {
+            if (!(msg.type && msg.ids && msg.id)) {
                 return;
             }
+            actionContext.ui.webview.setContentFromTemplate({ templateName: "loading" });
             const result = await openExercises(msg.ids, actionContext);
             if (result.err) {
                 logger.error(`Error while opening exercises - ${result.val.message}`);
@@ -199,18 +173,16 @@ export function registerUiActions(actionContext: ActionContext): void {
                     : buttons.push(["Ok", (): void => {}]);
                 showError(`${result.val.name} - ${result.val.message}`, ...buttons);
             }
-            actionContext.ui.webview.postMessage({
-                command: "exercisesOpened",
-                exerciseIds: result.val,
-            });
+            displayLocalCourseDetails(msg.id, actionContext);
         },
     );
     ui.webview.registerHandler(
         "closeSelected",
-        async (msg: { type?: "closeSelected"; ids?: number[] }) => {
-            if (!(msg.type && msg.ids)) {
+        async (msg: { type?: "closeSelected"; ids?: number[]; id?: number }) => {
+            if (!(msg.type && msg.ids && msg.id)) {
                 return;
             }
+            actionContext.ui.webview.setContentFromTemplate({ templateName: "loading" });
             const result = await closeExercises(actionContext, msg.ids);
             if (result.err) {
                 logger.error(`Error while closing exercises - ${result.val.message}`);
@@ -220,10 +192,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                     : buttons.push(["Ok", (): void => {}]);
                 showError(`${result.val.name} - ${result.val.message}`, ...buttons);
             }
-            actionContext.ui.webview.postMessage({
-                command: "exercisesClosed",
-                exerciseIds: result.val,
-            });
+            displayLocalCourseDetails(msg.id, actionContext);
         },
     );
     ui.webview.registerHandler("changeTmcDataPath", async (msg: { type?: "changeTmcDataPath" }) => {
