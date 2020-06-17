@@ -68,7 +68,7 @@ export default class TemplateEngine {
                         <h5>Submit to TMC Paste</h5>
                         <p>You can submit your code to TMC Paste and share the link to the course discussion channel and ask for help.</p>
                         ${pasteLinkHTML}
-                        <input type='button' value='Submit to TMC Paste' class='btn-primary' onclick='sendToPaste()' />
+                        <input type='button' value='Submit to TMC Paste' class='btn btn-primary' onclick='sendToPaste()' />
                     </div>`;
                 } else if (status === "COMPILE_FAILED") {
                     return `<h1>COMPILE FAILED</h1><pre>${numbersToString(logs.stdout)}</pre>`;
