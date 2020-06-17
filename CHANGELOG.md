@@ -1,10 +1,6 @@
 # Changelog
 
-## [0.6.1] - 2020-06-17
-
-- Revert 0.6.0
-
-## [0.6.0] - 2020-06-17
+## [0.6.2] - 2020-06-17
 
 ### Changed
 - Redesigned course detail page.
@@ -13,17 +9,13 @@
 - Download exercises page.
 - Obsolete information from readme.
 
+### Fixed
+- Faulty API data when downloading old submissions
+
 ## [0.5.2] - 2020-06-12
 
-### Changed
-- Parse test result headers.
-
-### Fixed
-- Issue with filtering out 'False is not true'.
-
-## [0.5.1] - 2020-06-12
-
 ### Added
+- Parsing to test names within displayed test results
 - Filter out 'False is not true' from the start of failed test messages.
 
 ### Changed
