@@ -15,6 +15,7 @@ import {
     displayLocalCourseDetails,
     displayUserCourses,
     downloadExercises,
+    legacy,
     login,
     logout,
     openExercises,
@@ -104,6 +105,28 @@ export function registerUiActions(actionContext: ActionContext): void {
                 command: "exercisesOpened",
                 exerciseIds: msg.ids,
             });
+        },
+    );
+    ui.webview.registerHandler(
+        "downloadExercisesLegacy",
+        async (msg: {
+            type?: "downloadExercisesLegacy";
+            ids?: number[];
+            courseName?: string;
+            organizationSlug?: string;
+            courseId?: number;
+        }) => {
+            if (!(msg.type && msg.ids && msg.courseName && msg.organizationSlug && msg.courseId)) {
+                return;
+            }
+            const downloads: CourseExerciseDownloads = {
+                courseId: msg.courseId,
+                exerciseIds: msg.ids,
+                organizationSlug: msg.organizationSlug,
+            };
+            await actionContext.userData.clearNewExercises(msg.courseId);
+            await legacy.downloadExercises(actionContext, [downloads], msg.courseId);
+            workspaceManager.openExercise(...msg.ids);
         },
     );
     ui.webview.registerHandler("addCourse", async () => {

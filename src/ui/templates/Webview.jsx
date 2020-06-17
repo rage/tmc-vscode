@@ -1,5 +1,8 @@
 /*eslint-env browser*/
 
+// From merge, TODO: Fix
+/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
+
 // Required for compilation, even if not referenced
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const createElement = require("./templateUtils").createElement;

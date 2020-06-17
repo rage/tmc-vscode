@@ -100,7 +100,7 @@
                 event.stopPropagation(); // Don't send onclick event upwards
                 const splitToNumbers = ids.split(",").map(Number);
                 vscode.postMessage({
-                    type: "downloadExercises",
+                    type: "downloadExercisesLegacy",
                     ids: splitToNumbers,
                     courseName,
                     organizationSlug,

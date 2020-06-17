@@ -9,6 +9,7 @@ import { ActionContext, CourseExerciseDownloads } from "./types";
 import * as pLimit from "p-limit";
 import { askForConfirmation, askForItem, showError, showNotification } from "../utils";
 import { getOldSubmissions } from "./user";
+import * as legacy from "./legacy";
 import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 import { NOTIFICATION_DELAY } from "../config/constants";
@@ -56,10 +57,6 @@ export async function downloadExercises(
         }
     }
 
-    // const downloadCount = exerciseStatus.size;
-    // let successful = 0;
-    // let failed = 0;
-
     const limit = pLimit(3);
     const openExercises: Array<number> = [];
 
@@ -80,16 +77,18 @@ export async function downloadExercises(
                             (res: Result<void, Error>) => {
                                 if (data) {
                                     if (res.ok) {
-                                        // successful += 1;
+                                        data.downloaded = true;
                                         ui.webview.postMessage({
-                                            command: "exercisesClosed",
+                                            command: "exercisesFailedToDownload",
                                             exerciseIds: [id],
                                         });
-                                        data.downloaded = true;
                                     } else {
-                                        // failed += 1;
                                         data.failed = true;
                                         data.error = res.val.message;
+                                        ui.webview.postMessage({
+                                            command: "exercisesFailedToDownload",
+                                            exerciseIds: [id],
+                                        });
                                     }
                                     exerciseStatus.set(id, data);
                                 }
@@ -152,7 +151,7 @@ export async function checkForExerciseUpdates(
             [
                 "Download",
                 (): Promise<void> =>
-                    downloadExercises(actionContext, Array.from(coursesToUpdate.values())),
+                    legacy.downloadExercises(actionContext, Array.from(coursesToUpdate.values())),
             ],
             [
                 "Remind me later",

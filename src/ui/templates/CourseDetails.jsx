@@ -1,5 +1,8 @@
 /*eslint-env browser*/
 
+// From merge, TODO: Fix
+/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
+
 // Required for compilation, even if not referenced
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const createElement = require("./templateUtils").createElement;
@@ -7,9 +10,6 @@ const createElement = require("./templateUtils").createElement;
 // Provided by VSCode vebview at runtime
 /*global acquireVsCodeApi*/
 
-/**
- * @param {CourseDetailsData} data
- */
 function component(data) {
     const getHardDeadlineInformation = (deadline) =>
         "This is a soft deadline and it can be exceeded." +
@@ -304,6 +304,13 @@ function script() {
                     </div>
                 );
                 break;
+            case "downloadFailed":
+                element.innerHTML = (
+                    <span class="badge badge-alert" data-status="expired">
+                        failed
+                    </span>
+                );
+                break;
             case "expired":
                 element.innerHTML = (
                     <span class="badge badge-dark" data-status="expired">
@@ -543,16 +550,21 @@ function script() {
                 for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
                     const id = message.exerciseIds[i];
                     const element = document.getElementById(`exercise-${id}-status`);
-                    element.dataset.workspaceStatus = "open";
-                    setStatusBadge(element);
+                    setStatusBadge(element, "open");
                 }
                 break;
             case "exercisesClosed":
                 for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
                     const id = message.exerciseIds[i];
                     const element = document.getElementById(`exercise-${id}-status`);
-                    element.dataset.workspaceStatus = "closed";
-                    setStatusBadge(element);
+                    setStatusBadge(element, "closed");
+                }
+                break;
+            case "exercisesFailedToDownload":
+                for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
+                    const id = message.exerciseIds[i];
+                    const element = document.getElementById(`exercise-${id}-status`);
+                    setStatusBadge(element, "downloadFailed");
                 }
                 break;
             default:

@@ -22,7 +22,11 @@ import {
     sleep,
 } from "../utils/";
 import { ActionContext, FeedbackQuestion } from "./types";
-import { displayCourseDownloads, displayUserCourses, selectOrganizationAndCourse } from "./webview";
+import {
+    displayLocalCourseDetails,
+    displayUserCourses,
+    selectOrganizationAndCourse,
+} from "./webview";
 import { checkForExerciseUpdates, closeExercises } from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
@@ -329,9 +333,9 @@ export async function checkForNewExercises(
             showNotification(
                 `${course.newExercises.length} new exercises found for ${course.name}. Do you wish to move to the downloads page?`,
                 [
-                    "Go to downloads",
+                    "Go to course page",
                     (): void => {
-                        displayCourseDownloads(actionContext, course.id);
+                        displayLocalCourseDetails(course.id, actionContext);
                     },
                 ],
                 [
