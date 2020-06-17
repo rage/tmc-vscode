@@ -15,6 +15,8 @@ import {
     getCurrentExerciseData,
     isWorkspaceOpen,
     parseFeedbackQuestion,
+    prettifyTestHeaders,
+    removeFalseIsNotTrue,
     showError,
     showNotification,
     sleep,
@@ -118,10 +120,22 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         showError(message);
         return;
     }
+    let response = testResult.val.response;
+    if (response !== null) {
+        // TODO: Clean up this mess when coverting to new template
+        response = {
+            ...response,
+            testResults: response.testResults.map((res) => ({
+                ...res,
+                name: prettifyTestHeaders(res.name),
+                message: removeFalseIsNotTrue(res.message),
+            })),
+        };
+    }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
     logger.log(`Tests finished for ${exerciseName}`);
     const data = {
-        testResult: testResult.val.response,
+        testResult: response,
         id,
         exerciseName,
         tmcLogs: testResult.val.logs,
@@ -197,7 +211,7 @@ export async function submitExercise(
             showError(message);
             break;
         }
-        const statusData = statusResult.val;
+        let statusData = statusResult.val;
         if (statusResult.val.status !== "processing") {
             ui.setStatusBar("Tests finished, see result", 5000);
             let feedbackQuestions: FeedbackQuestion[] = [];
@@ -207,6 +221,15 @@ export async function submitExercise(
                     feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
                 }
                 courseId = userData.getCourseByName(statusData.course).id;
+            } else if (statusData.status === "fail" && statusData.test_cases) {
+                statusData = {
+                    ...statusData,
+                    test_cases: statusData.test_cases.map((c) => ({
+                        ...c,
+                        name: prettifyTestHeaders(c.name),
+                        message: removeFalseIsNotTrue(c.message || ""),
+                    })),
+                };
             }
             temp.setContent({ templateName: "submission-result", statusData, feedbackQuestions });
             // Check for new exercises if exercise passed.
@@ -251,20 +274,17 @@ export async function submitExercise(
 export async function getOldSubmissions(
     actionContext: ActionContext,
 ): Promise<Result<OldSubmission[], Error>> {
-    const { userData, tmc, workspaceManager } = actionContext;
+    const { tmc, workspaceManager } = actionContext;
     const currentExercise = getCurrentExerciseData(workspaceManager);
     if (currentExercise.err) {
         return new Err(new Error("Exercise not found in workspacemanager"));
     }
-    const course = userData.getCourseByName(currentExercise.val.course);
-    const result = await tmc.fetchOldSubmissionIds(course.id);
+    const result = await tmc.fetchOldSubmissionIds(currentExercise.val.id);
     if (result.err) {
         return new Err(new Error("Couldn't fetch old submissions"));
     }
-    const currentExerciseName = currentExercise.val.name;
-    const exerciseSubmissions = result.val.filter((e) => e.exercise_name === currentExerciseName);
 
-    return new Ok(exerciseSubmissions);
+    return new Ok(result.val);
 }
 
 /**

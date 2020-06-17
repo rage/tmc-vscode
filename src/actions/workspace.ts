@@ -6,7 +6,7 @@
 
 import { Err, Ok, Result } from "ts-results";
 import { ActionContext, CourseExerciseDownloads } from "./types";
-import pLimit from "p-limit";
+import * as pLimit from "p-limit";
 import { askForConfirmation, askForItem, showError, showNotification } from "../utils";
 import { getOldSubmissions } from "./user";
 import { OldSubmission } from "../api/types";
@@ -20,7 +20,7 @@ export async function downloadExercises(
     actionContext: ActionContext,
     courseExerciseDownloads: CourseExerciseDownloads[],
 ): Promise<void> {
-    const { tmc, ui, logger } = actionContext;
+    const { tmc, ui, logger, workspaceManager } = actionContext;
 
     const exerciseStatus = new Map<
         number,
@@ -61,6 +61,7 @@ export async function downloadExercises(
     // let failed = 0;
 
     const limit = pLimit(3);
+    const openExercises: Array<number> = [];
 
     await Promise.all(
         Array.from(exerciseStatus.entries()).map<Promise<Result<void, Error>>>(([id, data]) =>
@@ -68,6 +69,9 @@ export async function downloadExercises(
                 () =>
                     new Promise((resolve) => {
                         if (data) {
+                            if (workspaceManager.isExerciseOpen(id)) {
+                                openExercises.push(id);
+                            }
                             data.status = "Downloading";
                             exerciseStatus.set(id, data);
                         }
@@ -96,6 +100,7 @@ export async function downloadExercises(
             ),
         ),
     );
+    workspaceManager.openExercise(...openExercises);
 }
 
 interface UpdateCheckOptions {
