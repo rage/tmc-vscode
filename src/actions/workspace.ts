@@ -79,7 +79,7 @@ export async function downloadExercises(
                                     if (res.ok) {
                                         data.downloaded = true;
                                         ui.webview.postMessage({
-                                            command: "exercisesFailedToDownload",
+                                            command: "exercisesClosed",
                                             exerciseIds: [id],
                                         });
                                     } else {

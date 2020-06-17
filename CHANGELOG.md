@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0] - 2020-06-17
+
+### Changed
+- Redesigned course detail page.
+
+### Removed
+- Download exercises page.
+- Obsolete information from readme.
+
 ## [0.5.2] - 2020-06-12
 
 ### Changed

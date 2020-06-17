@@ -335,6 +335,7 @@ export async function checkForNewExercises(
                 [
                     "Go to course page",
                     (): void => {
+                        userData.clearNewExercises(course.id);
                         displayLocalCourseDetails(course.id, actionContext);
                     },
                 ],

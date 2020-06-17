@@ -560,13 +560,13 @@ function script() {
                     setStatusBadge(element, "closed");
                 }
                 break;
-            case "exercisesFailedToDownload":
-                for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
-                    const id = message.exerciseIds[i];
-                    const element = document.getElementById(`exercise-${id}-status`);
-                    setStatusBadge(element, "downloadFailed");
-                }
-                break;
+            // case "exercisesFailedToDownload":
+            //     for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
+            //         const id = message.exerciseIds[i];
+            //         const element = document.getElementById(`exercise-${id}-status`);
+            //         setStatusBadge(element, "downloadFailed");
+            //     }
+            //     break;
             default:
                 console.log("Unsupported command", message.command);
         }
