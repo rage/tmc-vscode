@@ -199,9 +199,9 @@ export type OldSubmission = {
     processed: boolean;
     all_tests_passed: boolean;
     points: string | null;
-    processing_tried_at: string | null;
-    processing_began_at: string | null;
-    processing_completed_at: string | null;
+    processing_tried_at: string;
+    processing_began_at: string;
+    processing_completed_at: string;
     times_sent_to_sandbox: number;
     processing_attempts_started_at: string;
     params_json: string | null;

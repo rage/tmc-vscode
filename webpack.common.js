@@ -5,7 +5,7 @@
 
 const path = require("path");
 
-/**@type {import('webpack').WebpackOptions}*/
+/**@type {import('webpack').Configuration}*/
 const config = {
     target: "node", // vscode extensions run in a Node.js-context 📖 -> https://webpack.js.org/configuration/node/
     entry: "./src/extension.ts", // the entry point of this extension, 📖 -> https://webpack.js.org/configuration/entry-context/
@@ -25,25 +25,6 @@ const config = {
         alias: {
             handlebars: "handlebars/dist/handlebars.min.js",
         },
-    },
-    module: {
-        rules: [
-            {
-                test: /\.jsx$/,
-                exclude: /node_modules/,
-                use: [
-                    {
-                        loader: "babel-loader",
-                        options: {
-                            presets: ["@babel/preset-env"],
-                            plugins: [
-                                ["@babel/plugin-transform-react-jsx", { pragma: "createElement" }],
-                            ],
-                        },
-                    },
-                ],
-            },
-        ],
     },
 };
 
