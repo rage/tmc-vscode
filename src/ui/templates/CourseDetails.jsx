@@ -147,13 +147,7 @@ function component(data) {
                             <tbody class="exercise-tbody">
                                 {exerciseGroup.exercises
                                     .map((exercise) => (
-                                        <tr
-                                            class="exercise-table-row"
-                                            id={exercise.id}
-                                            style={`display: ${
-                                                exercise.isOpen || exercise.isClosed ? "" : "none"
-                                            };`}
-                                        >
+                                        <tr class="exercise-table-row" id={exercise.id}>
                                             <td class="min-w-5 text-center exercise-selector">
                                                 <input
                                                     class="checkbox-xl"
@@ -266,8 +260,11 @@ function script() {
         vscode.postMessage({ type: "closeSelected", ids });
     }
 
-    function setStatusBadge(element) {
+    function setStatusBadge(element, status) {
         const id = parseInt(element.dataset.exerciseId);
+        if (status) {
+            element.dataset.workspaceStatus = status;
+        }
         switch (element.dataset.workspaceStatus) {
             case "open":
                 element.innerHTML = (
@@ -297,7 +294,7 @@ function script() {
                     { once: true },
                 );
                 break;
-            case "missing":
+            case "downloading":
                 element.innerHTML = (
                     <div class="spinner-border spinner-border-sm" role="status">
                         <span class="sr-only">Loading...</span>
@@ -305,7 +302,12 @@ function script() {
                 );
                 break;
             default:
-                element.innerText = "whoops!";
+                element.innerHTML = (
+                    <span class="badge badge-success" data-status="closed">
+                        new!
+                    </span>
+                );
+                break;
         }
     }
 
@@ -359,9 +361,16 @@ function script() {
                     .exerciseCompleted;
                 const s = exerciseTableRow[i].querySelector("td.exercise-status").dataset
                     .workspaceStatus;
-                s === "open" ? open++ : s === "missing" ? downloaded-- : null;
+                s === "open"
+                    ? open++
+                    : s === "missing" || s === "downloading"
+                    ? downloaded--
+                    : null;
                 c === "true" ? completed++ : null;
             }
+
+            exerciseCards[i].querySelector("button.open-all").disabled = open === allExercises;
+            exerciseCards[i].querySelector("button.close-all").disabled = open === 0;
 
             const name = cardInfo.dataset.groupName;
             cardInfo.querySelector(
@@ -407,6 +416,7 @@ function script() {
             if (openAllButton) {
                 const ids = openAllButton.dataset.exercises.split(",").map((id) => parseInt(id));
                 openAllButton.addEventListener("click", function () {
+                    openAllButton.disabled = true;
                     openExercises(ids);
                 });
             }
@@ -415,6 +425,7 @@ function script() {
             if (closeAllButton) {
                 const ids = closeAllButton.dataset.exercises.split(",").map((id) => parseInt(id));
                 closeAllButton.addEventListener("click", function () {
+                    closeAllButton.disabled = true;
                     closeExercises(ids);
                 });
             }
@@ -440,12 +451,26 @@ function script() {
                 const ids = downloadAllButton.dataset.exercises
                     .split(",")
                     .map((id) => parseInt(id));
-                downloadAllButton.addEventListener("click", function () {
-                    if (toggleButton && exerciseTable && exerciseTable.style.display === "none") {
-                        toggleButton.click();
-                    }
-                    downloadSelectedExercises(ids);
-                });
+                downloadAllButton.addEventListener(
+                    "click",
+                    function () {
+                        if (
+                            toggleButton &&
+                            exerciseTable &&
+                            exerciseTable.style.display === "none"
+                        ) {
+                            toggleButton.click();
+                        }
+                        for (let i = 0; i < ids.length; i++) {
+                            setStatusBadge(
+                                exerciseTable.querySelector(`#exercise-${ids[i]}-status`),
+                                "downloading",
+                            );
+                        }
+                        downloadSelectedExercises(ids);
+                    },
+                    { once: true },
+                );
             }
 
             if (exerciseTable) {

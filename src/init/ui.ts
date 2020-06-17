@@ -98,8 +98,12 @@ export function registerUiActions(actionContext: ActionContext): void {
                 organizationSlug: msg.organizationSlug,
             };
             await actionContext.userData.clearNewExercises(msg.courseId);
-            await downloadExercises(actionContext, [downloads], msg.courseId);
+            await downloadExercises(actionContext, [downloads]);
             workspaceManager.openExercise(...msg.ids);
+            ui.webview.postMessage({
+                command: "exercisesOpened",
+                exerciseIds: msg.ids,
+            });
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
