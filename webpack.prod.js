@@ -4,6 +4,7 @@
 "use strict";
 
 const merge = require("webpack-merge");
+const TerserPlugin = require("terser-webpack-plugin");
 const common = require("./webpack.common");
 
 /**@type {import('webpack').Configuration}*/
@@ -24,6 +25,18 @@ const devConfig = {
                     },
                 ],
             },
+        ],
+    },
+    optimization: {
+        minimizer: [
+            new TerserPlugin({
+                terserOptions: {
+                    keep_fnames: /createElement/,
+                    mangle: {
+                        reserved: ["createElement"],
+                    },
+                },
+            }),
         ],
     },
 };
