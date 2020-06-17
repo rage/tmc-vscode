@@ -22,7 +22,11 @@ import {
     sleep,
 } from "../utils/";
 import { ActionContext, FeedbackQuestion } from "./types";
-import { displayCourseDownloads, displayUserCourses, selectOrganizationAndCourse } from "./webview";
+import {
+    displayLocalCourseDetails,
+    displayUserCourses,
+    selectOrganizationAndCourse,
+} from "./webview";
 import { checkForExerciseUpdates, closeExercises } from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
@@ -329,9 +333,10 @@ export async function checkForNewExercises(
             showNotification(
                 `${course.newExercises.length} new exercises found for ${course.name}. Do you wish to move to the downloads page?`,
                 [
-                    "Go to downloads",
+                    "Go to course page",
                     (): void => {
-                        displayCourseDownloads(actionContext, course.id);
+                        userData.clearNewExercises(course.id);
+                        displayLocalCourseDetails(course.id, actionContext);
                     },
                 ],
                 [
@@ -435,7 +440,11 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
 
     const localData: LocalCourseData = {
         description: courseDetails.description || "",
-        exercises: courseDetails.exercises.map((e) => ({ id: e.id, passed: e.completed })),
+        exercises: courseDetails.exercises.map((e) => ({
+            id: e.id,
+            name: e.name,
+            passed: e.completed,
+        })),
         id: courseDetails.id,
         name: courseDetails.name,
         title: courseDetails.title,
@@ -515,7 +524,7 @@ export async function updateCourse(id: number, actionContext: ActionContext): Pr
 
             userData.updateExercises(
                 id,
-                details.exercises.map((x) => ({ id: x.id, passed: x.completed })),
+                details.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),
             );
             const [available, awarded] = exercises.reduce(
                 (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],

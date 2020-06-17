@@ -15,12 +15,12 @@
                 <input
                     type="button"
                     onclick="addCourse()"
-                    class="btn-primary mb-4 mt-2"
+                    class="btn btn-primary mb-4 mt-2"
                     value="Add new course"
                 />
             </div>
             {{#each courses}}
-            <div class="row org-row border-dark">
+            <div class="row org-row border-current-color">
                 <div class="col-md" onclick="fetchCourseDetails({{this.id}})">
                     <button
                         type="button"
@@ -34,7 +34,7 @@
                     <p>{{this.description}}</p>
 
                     <p>
-                        Next deadline: {{#if this.nextDeadline}} {{this.nextDeadline}} {{else}}
+                        {{#if this.nextDeadline}} {{this.nextDeadline}} {{else}}
                         <span
                             class="spinner-border spinner-border-sm"
                             role="status"
@@ -43,7 +43,7 @@
                         {{/if}}
                     </p>
                     <div>
-                        Course progress:
+                        Programming exercise progress:
                         <div class="progress">
                             <div
                                 class="progress-bar bg-success"
@@ -77,7 +77,7 @@
                 <input
                     type="button"
                     onclick="addCourse()"
-                    class="btn-primary"
+                    class="btn btn-primary"
                     value="Add new course"
                 />
             </div>
@@ -100,7 +100,7 @@
                 event.stopPropagation(); // Don't send onclick event upwards
                 const splitToNumbers = ids.split(",").map(Number);
                 vscode.postMessage({
-                    type: "downloadExercises",
+                    type: "downloadExercisesLegacy",
                     ids: splitToNumbers,
                     courseName,
                     organizationSlug,

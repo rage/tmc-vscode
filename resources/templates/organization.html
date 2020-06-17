@@ -32,7 +32,7 @@
                     <h1 class="org-header">Frequently used organizations</h1>
                     {{#each pinned}}
                     <div
-                        class="row org-row border-dark"
+                        class="row org-row border-current-color"
                         onclick="sendOrganization('{{this.slug}}')"
                     >
                         <div class="col-md-2 bg-white d-flex flex-wrap align-items-center">
@@ -70,7 +70,7 @@
                     {{#each organizations}}
                     <div
                         name="{{this.name}}, {{this.information}}, {{this.slug}}"
-                        class="row org-row border-dark organization"
+                        class="row org-row border-current-color organization"
                         onclick="sendOrganization('{{this.slug}}')"
                     >
                         <div class="col-md-2 bg-white d-flex flex-wrap align-items-center">

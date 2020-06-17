@@ -48,7 +48,7 @@
                     <input
                         type="button"
                         onclick="changeOrg()"
-                        class="btn-primary relative"
+                        class="btn btn-primary relative"
                         value="Change organization"
                     />
                 </div>
@@ -73,7 +73,7 @@
                     {{#each courses}}
                     <div
                         name="{{this.name}}, {{this.title}}"
-                        class="row org-row border-dark course"
+                        class="row org-row border-current-color course"
                         onclick="sendCourse('{{this.id}}')"
                     >
                         <div class="col-md">

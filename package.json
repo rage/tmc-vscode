@@ -162,8 +162,8 @@
         "eslint": "eslint --fix . --ext .js,.ts",
         "lint-check": "npm run eslint-check && npm run prettier-check",
         "postinstall": "babel node_modules/ts-results --out-dir node_modules/ts-results --plugins=@babel/plugin-transform-modules-commonjs",
-        "prettier-check": "prettier --check --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,ts,yml}\"",
-        "prettier": "prettier --write --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,ts,yml}\"",
+        "prettier-check": "prettier --check --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
+        "prettier": "prettier --write --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
         "release": "./bin/publishRelease.sh",
         "webpack": "webpack --config webpack.dev.js",
         "webpack:watch": "webpack --config webpack.dev.js --watch --info-verbosity verbose"
@@ -179,6 +179,8 @@
         "@babel/cli": "^7.10.1",
         "@babel/core": "^7.10.2",
         "@babel/plugin-transform-modules-commonjs": "^7.10.1",
+        "@babel/plugin-transform-react-jsx": "^7.10.1",
+        "@babel/preset-env": "^7.10.2",
         "@types/du": "^1.0.0",
         "@types/fs-extra": "^9.0.1",
         "@types/glob": "^7.1.2",
@@ -189,6 +191,7 @@
         "@types/vscode": "^1.40.0",
         "@typescript-eslint/eslint-plugin": "^3.2.0",
         "@typescript-eslint/parser": "^3.2.0",
+        "babel-loader": "^8.1.0",
         "eslint": "^7.2.0",
         "eslint-config-prettier": "^6.10.1",
         "eslint-plugin-prettier": "^3.1.3",
@@ -228,7 +231,7 @@
         }
     },
     "lint-staged": {
-        "*.{html,js,json,ts,yml}": [
+        "*.{html,js,json,jsx,ts,yml}": [
             "prettier --check"
         ],
         "*.{js,ts}": [

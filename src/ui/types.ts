@@ -45,16 +45,27 @@ export type TemplateData =
 export type CourseDetailsData = {
     course: LocalCourseData;
     courseId: number;
-    exerciseData: CourseDetailsExercise[];
+    exerciseData: CourseDetailsExerciseGroup[];
+    updateableExerciseIds: number[];
+};
+
+export type CourseDetailsExerciseGroup = {
+    name: string;
+    downloadables: number[];
+    nextDeadlineString: string;
+    exercises: CourseDetailsExercise[];
 };
 
 export type CourseDetailsExercise = {
     id: number;
     name: string;
+    expired: boolean;
     isOpen: boolean;
     isClosed: boolean;
     passed: boolean;
-    deadlineString: string;
+    softDeadline: Date | null;
+    softDeadlineString: string;
+    hardDeadline: Date | null;
     hardDeadlineString: string;
     isHard: boolean;
 };

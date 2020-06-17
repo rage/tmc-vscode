@@ -7,6 +7,7 @@ import { LocalExerciseData } from "../config/types";
 export * from "./user";
 export * from "./webview";
 export * from "./workspace";
+export * as legacy from "./legacy";
 
 export async function selectAction(
     actionContext: ActionContext,
