@@ -2,6 +2,9 @@
 
 ## [0.6.2] - 2020-06-17
 
+### Added
+- Server submission button even when some tests fail
+
 ### Changed
 - Redesigned course detail page.
 
