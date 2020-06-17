@@ -146,55 +146,58 @@ function component(data) {
                             </thead>
                             <tbody class="exercise-tbody">
                                 {exerciseGroup.exercises
-                                    .map((exercise) => (
-                                        <tr class="exercise-table-row" id={exercise.id}>
-                                            <td class="min-w-5 text-center exercise-selector">
-                                                <input
-                                                    class="checkbox-xl"
-                                                    type="checkbox"
-                                                    value={exercise.id}
-                                                />
-                                            </td>
-                                            <td class="min-w-40 text-break">{exercise.name}</td>
-                                            <td class="min-w-30">
-                                                {exercise.isHard ? (
-                                                    exercise.hardDeadlineString
-                                                ) : (
-                                                    <div>
-                                                        {exercise.softDeadlineString}
-                                                        <span
-                                                            class="font-weight-bold"
-                                                            title={getHardDeadlineInformation(
-                                                                exercise.hardDeadlineString,
-                                                            )}
-                                                        >
-                                                            &#9432;
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td
-                                                class="min-w-10 exercise-completed"
-                                                data-exercise-completed={exercise.passed}
-                                            >
-                                                {exercise.passed ? "&#10004;" : "&#10060;"}
-                                            </td>
-                                            <td
-                                                class="min-w-15 exercise-status"
-                                                id={`exercise-${exercise.id}-status`}
-                                                data-exercise-id={exercise.id}
-                                                data-workspace-status={
-                                                    exercise.isOpen
-                                                        ? "open"
-                                                        : exercise.isClosed
-                                                        ? "closed"
-                                                        : "missing"
-                                                }
-                                            >
-                                                loading...
-                                            </td>
-                                        </tr>
-                                    ))
+                                    .map((exercise) => {
+                                        const workspaceStatus = exercise.isOpen
+                                            ? "open"
+                                            : exercise.isClosed
+                                            ? "closed"
+                                            : exercise.expired
+                                            ? "expired"
+                                            : "missing";
+                                        return (
+                                            <tr class="exercise-table-row" id={exercise.id}>
+                                                <td class="min-w-5 text-center exercise-selector">
+                                                    <input
+                                                        class="checkbox-xl"
+                                                        type="checkbox"
+                                                        value={exercise.id}
+                                                    />
+                                                </td>
+                                                <td class="min-w-40 text-break">{exercise.name}</td>
+                                                <td class="min-w-30">
+                                                    {exercise.isHard ? (
+                                                        exercise.hardDeadlineString
+                                                    ) : (
+                                                        <div>
+                                                            {exercise.softDeadlineString}
+                                                            <span
+                                                                class="font-weight-bold"
+                                                                title={getHardDeadlineInformation(
+                                                                    exercise.hardDeadlineString,
+                                                                )}
+                                                            >
+                                                                &#9432;
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td
+                                                    class="min-w-10 exercise-completed"
+                                                    data-exercise-completed={exercise.passed}
+                                                >
+                                                    {exercise.passed ? "&#10004;" : "&#10060;"}
+                                                </td>
+                                                <td
+                                                    class="min-w-15 exercise-status"
+                                                    id={`exercise-${exercise.id}-status`}
+                                                    data-exercise-id={exercise.id}
+                                                    data-workspace-status={workspaceStatus}
+                                                >
+                                                    loading...
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
                                     .join("")}
                             </tbody>
                         </table>
@@ -301,6 +304,13 @@ function script() {
                     </div>
                 );
                 break;
+            case "expired":
+                element.innerHTML = (
+                    <span class="badge badge-dark" data-status="expired">
+                        expired
+                    </span>
+                );
+                break;
             default:
                 element.innerHTML = (
                     <span class="badge badge-success" data-status="closed">
@@ -361,11 +371,7 @@ function script() {
                     .exerciseCompleted;
                 const s = exerciseTableRow[i].querySelector("td.exercise-status").dataset
                     .workspaceStatus;
-                s === "open"
-                    ? open++
-                    : s === "missing" || s === "downloading"
-                    ? downloaded--
-                    : null;
+                s === "open" ? open++ : s !== "closed" ? downloaded-- : null;
                 c === "true" ? completed++ : null;
             }
 
@@ -454,6 +460,7 @@ function script() {
                 downloadAllButton.addEventListener(
                     "click",
                     function () {
+                        downloadAllButton.style.display = "none";
                         if (
                             toggleButton &&
                             exerciseTable &&

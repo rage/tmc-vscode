@@ -10,6 +10,7 @@ import TemporaryWebview from "../ui/temporaryWebview";
 import {
     chooseDeadline,
     dateToString,
+    findNextDateAfter,
     parseDate,
     parseNextDeadlineAfter,
     showNotification,
@@ -107,21 +108,19 @@ export async function displayLocalCourseDetails(
         const name = nameMatch?.[2] || "";
         let exData = workspaceExercises.find((d) => d.id === ex.id);
         let downloadables = group?.downloadables || [];
-        if ((!exData || exData.status === ExerciseStatus.MISSING) && apiCourse) {
-            const apiExercise = apiCourse.exercises.find((e) => e.id === ex.id);
-            exData = apiExercise
-                ? {
-                      id: ex.id,
-                      name: ex.name,
-                      checksum: "",
-                      course: apiCourse.name,
-                      deadline: apiExercise.deadline,
-                      organization: course.organization,
-                      softDeadline: apiExercise.soft_deadline,
-                      status: ExerciseStatus.MISSING,
-                      updateAvailable: false,
-                  }
-                : undefined;
+        const apiExercise = apiCourse?.exercises.find((e) => e.id === ex.id);
+        if ((!exData || exData.status === ExerciseStatus.MISSING) && apiCourse && apiExercise) {
+            exData = {
+                id: ex.id,
+                name: ex.name,
+                checksum: "",
+                course: apiCourse.name,
+                deadline: apiExercise.deadline,
+                organization: course.organization,
+                softDeadline: apiExercise.soft_deadline,
+                status: ExerciseStatus.MISSING,
+                updateAvailable: false,
+            };
             downloadables = downloadables.concat(ex.id);
         }
         if (!exData) {
@@ -134,6 +133,7 @@ export async function displayLocalCourseDetails(
             name,
             isOpen: exData.status === ExerciseStatus.OPEN,
             isClosed: exData.status === ExerciseStatus.CLOSED,
+            expired: !findNextDateAfter(currentDate, [hardDeadline]),
             passed: course.exercises.find((ce) => ce.id === ex.id)?.passed || false,
             softDeadline,
             softDeadlineString: softDeadline ? dateToString(softDeadline) : "-",

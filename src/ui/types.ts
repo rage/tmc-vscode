@@ -59,6 +59,7 @@ export type CourseDetailsExerciseGroup = {
 export type CourseDetailsExercise = {
     id: number;
     name: string;
+    expired: boolean;
     isOpen: boolean;
     isClosed: boolean;
     passed: boolean;
