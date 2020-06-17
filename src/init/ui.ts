@@ -178,7 +178,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             actionContext.ui.webview.postMessage({
                 command: "exercisesOpened",
-                exerciseIds: msg.ids,
+                exerciseIds: result.val,
             });
         },
     );
@@ -199,7 +199,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             actionContext.ui.webview.postMessage({
                 command: "exercisesClosed",
-                exerciseIds: msg.ids,
+                exerciseIds: result.val,
             });
         },
     );

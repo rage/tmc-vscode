@@ -10,7 +10,6 @@ import TemporaryWebview from "../ui/temporaryWebview";
 import {
     chooseDeadline,
     dateToString,
-    findNextDateAfter,
     parseDate,
     parseNextDeadlineAfter,
     showNotification,
@@ -133,7 +132,7 @@ export async function displayLocalCourseDetails(
             name,
             isOpen: exData.status === ExerciseStatus.OPEN,
             isClosed: exData.status === ExerciseStatus.CLOSED,
-            expired: !findNextDateAfter(currentDate, [hardDeadline]),
+            expired: hardDeadline ? currentDate >= hardDeadline : false,
             passed: course.exercises.find((ce) => ce.id === ex.id)?.passed || false,
             softDeadline,
             softDeadlineString: softDeadline ? dateToString(softDeadline) : "-",

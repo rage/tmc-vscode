@@ -222,10 +222,11 @@ export async function resetExercise(
 export async function openExercises(
     ids: number[],
     actionContext: ActionContext,
-): Promise<Result<void, Error>> {
+): Promise<Result<number[], Error>> {
     const { workspaceManager, logger } = actionContext;
 
-    const result = workspaceManager.openExercise(...ids);
+    const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
+    const result = workspaceManager.openExercise(...filterIds);
     const errors = result.filter((file) => file.err);
 
     if (errors.length !== 0) {
@@ -234,7 +235,7 @@ export async function openExercises(
         );
         return new Err(new Error("Something went wrong while opening exercises."));
     }
-    return Ok.EMPTY;
+    return new Ok(filterIds);
 }
 
 /**
@@ -244,10 +245,11 @@ export async function openExercises(
 export async function closeExercises(
     actionContext: ActionContext,
     ids: number[],
-): Promise<Result<void, Error>> {
+): Promise<Result<number[], Error>> {
     const { workspaceManager, logger } = actionContext;
 
-    const result = workspaceManager.closeExercise(...ids);
+    const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
+    const result = workspaceManager.closeExercise(...filterIds);
     const errors = result.filter((file) => file.err);
 
     if (errors.length !== 0) {
@@ -256,7 +258,7 @@ export async function closeExercises(
         );
         return new Err(new Error("Something went wrong while closing exercises."));
     }
-    return Ok.EMPTY;
+    return new Ok(filterIds);
 }
 
 /**
