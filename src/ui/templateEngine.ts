@@ -3,6 +3,7 @@ import * as handlebars from "handlebars";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { CourseDetails, Webview } from "./templates";
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, numbersToString } from "../utils/";
@@ -50,24 +51,24 @@ export default class TemplateEngine {
                 }
 
                 if (status === "PASSED") {
-                    return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn-primary' onclick='submitToServer()' />";
+                    return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn btn-primary' onclick='submitToServer()' />";
                 } else if (status === "TESTS_FAILED") {
                     let pasteLinkHTML = "";
                     let collapsed = `<button id='collapsible' class="collapsible">Need help?</button>
                                     <div id='content-collapsible' class="content-collapsible">`;
                     if (pasteLink) {
                         pasteLinkHTML = `<p><input style='width: 65%!important;' type="text" value="${pasteLink}" id="copyPasteLink">
-                                        <button class='btn-primary' onclick="copyText()">Copy text</button><span class='ml-1' id="copied"></span></p>`;
+                                        <button class='btn btn-primary' onclick="copyText()">Copy text</button><span class='ml-1' id="copied"></span></p>`;
                         collapsed = `<button id='collapsible' class="collapsible active">Need help?</button>
                                     <div id='content-collapsible' style="max-height: 250px;" class="content-collapsible">`;
                     }
 
-                    return `<h1>TESTS FAILED</h1>
+                    return `<h1>TESTS FAILED</h1><input type='button' value='Send solution to server' class='btn btn-primary mb-2' onclick='submitToServer()' />
                     ${collapsed}
                         <h5>Submit to TMC Paste</h5>
                         <p>You can submit your code to TMC Paste and share the link to the course discussion channel and ask for help.</p>
                         ${pasteLinkHTML}
-                        <input type='button' value='Submit to TMC Paste' class='btn-primary' onclick='sendToPaste()' />
+                        <input type='button' value='Submit to TMC Paste' class='btn btn-primary' onclick='sendToPaste()' />
                     </div>`;
                 } else if (status === "COMPILE_FAILED") {
                     return `<h1>COMPILE FAILED</h1><pre>${numbersToString(logs.stdout)}</pre>`;
@@ -239,6 +240,19 @@ export default class TemplateEngine {
      * @returns The HTML document as a string
      */
     public async getTemplate(webview: vscode.Webview, templateData: TemplateData): Promise<string> {
+        const cspBlob = `<meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; img-src https:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';" />`;
+        const cssBlob = this.cssBlob;
+
+        if (templateData.templateName === "course-details") {
+            return Webview.render({
+                children: CourseDetails.component(templateData),
+                cssBlob,
+                cspSource: webview.cspSource,
+                script: CourseDetails.script,
+            });
+        }
+
         const name = templateData.templateName;
         const p = path.join(this.htmlPath, `${name}.html`);
         let template: HandlebarsTemplateDelegate<unknown>;
@@ -248,10 +262,6 @@ export default class TemplateEngine {
         } else {
             template = handlebars.compile(fs.readFileSync(p, "utf8"));
         }
-
-        const cspBlob = `<meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; img-src https:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';" />`;
-        const cssBlob = this.cssBlob;
 
         return template({ ...templateData, cspBlob, cssBlob });
     }

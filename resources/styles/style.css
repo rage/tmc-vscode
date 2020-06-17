@@ -11,6 +11,14 @@ pre {
     word-wrap: "break-word";
 }
 
+hr {
+    border: 1px solid currentColor;
+    margin-block-start: 0;
+    margin-block-end: 0;
+    margin: 0;
+}
+
+
 body.vscode-light {
     color: black;
 }
@@ -23,6 +31,14 @@ body.vscode-high-contrast {
     color: red;
 }
 
+body.vscode-high-contrast tbody tr:nth-of-type(odd) {
+    background-color: rgba(222,222,222,.3);
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0,0,0,.3);
+}
+
 .breadcrumb {
     background-color: inherit;
     padding: .5rem 1rem 0 1rem;
@@ -31,6 +47,11 @@ body.vscode-high-contrast {
 
 .container {
     padding-top: 20px;
+}
+
+.border-current-color {
+    border: 1px solid currentColor !important;
+    border-radius: 5px;
 }
 
 .table {
@@ -83,7 +104,7 @@ body.vscode-high-contrast {
 
 
 /*
-    Course details checkbox styling
+    Course details
 */
 .checkbox-centered { 
     text-align:justify; 
@@ -94,11 +115,7 @@ body.vscode-high-contrast {
 }
 
 .checkbox-xl {
-    transform:scale(1.75);
-}
-
-.sticky-top {
-    background-color: var(--vscode-editor-background);
+    transform:scale(1.5);
 }
 
 .badge:hover {
@@ -107,6 +124,27 @@ body.vscode-high-contrast {
 
 .feedback-textarea {
     width: inherit;
+}
+
+.show-all-button {
+    background: transparent;
+    border: 1px solid currentColor;
+    border-bottom: 0px;
+    border-radius: 15px 15px 0px 0px;
+    color: inherit;
+    padding: 5px 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+}
+
+#context-menu {
+    visibility: hidden;
+    background-color: var(--vscode-editor-background) !important;
+    width: 75%;
+    border-radius: 0;
+    padding: 0;
 }
 
 /*
@@ -169,4 +207,41 @@ body.vscode-high-contrast {
 .border-color {
     border: 1px solid currentColor;
     border-radius: 5px;
+}
+
+.min-w-40 {
+    min-width: 40%;
+    max-width: 40%;
+    width: 40%;
+}
+
+
+.min-w-35 {
+    min-width: 35%;
+    max-width: 35%;
+    width: 35%;
+}
+
+.min-w-30 {
+    min-width: 30%;
+    max-width: 30%;
+    width: 30%;
+}
+
+.min-w-15 {
+    min-width: 15%;
+    max-width: 15%;
+    width: 15%;
+}
+
+.min-w-10 {
+    min-width: 10%;
+    max-width: 10%;
+    width: 10%;
+}
+
+.min-w-5 {
+    min-width: 5%;
+    max-width: 5%;
+    width: 5%;
 }

@@ -9,6 +9,7 @@ import { ActionContext, CourseExerciseDownloads } from "./types";
 import * as pLimit from "p-limit";
 import { askForConfirmation, askForItem, showError, showNotification } from "../utils";
 import { getOldSubmissions } from "./user";
+import * as legacy from "./legacy";
 import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 import { NOTIFICATION_DELAY } from "../config/constants";
@@ -19,7 +20,6 @@ import { NOTIFICATION_DELAY } from "../config/constants";
 export async function downloadExercises(
     actionContext: ActionContext,
     courseExerciseDownloads: CourseExerciseDownloads[],
-    returnToCourse?: number,
 ): Promise<void> {
     const { tmc, ui, logger, workspaceManager } = actionContext;
 
@@ -57,22 +57,6 @@ export async function downloadExercises(
         }
     }
 
-    const downloadCount = exerciseStatus.size;
-    let successful = 0;
-    let failed = 0;
-
-    ui.webview.setContentFromTemplate({
-        templateName: "downloading-exercises",
-        returnToCourse,
-        exercises: Array.from(exerciseStatus.values()),
-        failed,
-        failedPct: Math.round((100 * failed) / downloadCount),
-        remaining: downloadCount - successful - failed,
-        successful,
-        successfulPct: Math.round((100 * successful) / downloadCount),
-        total: downloadCount,
-    });
-
     const limit = pLimit(3);
     const openExercises: Array<number> = [];
 
@@ -87,44 +71,26 @@ export async function downloadExercises(
                             }
                             data.status = "Downloading";
                             exerciseStatus.set(id, data);
-                            ui.webview.setContentFromTemplate({
-                                templateName: "downloading-exercises",
-                                returnToCourse,
-                                exercises: Array.from(exerciseStatus.values()),
-                                failed,
-                                failedPct: Math.round((100 * failed) / downloadCount),
-                                remaining: downloadCount - successful - failed,
-                                successful,
-                                successfulPct: Math.round((100 * successful) / downloadCount),
-                                total: downloadCount,
-                            });
                         }
 
                         tmc.downloadExercise(id, data.organizationSlug).then(
                             (res: Result<void, Error>) => {
                                 if (data) {
                                     if (res.ok) {
-                                        successful += 1;
                                         data.downloaded = true;
+                                        ui.webview.postMessage({
+                                            command: "exercisesClosed",
+                                            exerciseIds: [id],
+                                        });
                                     } else {
-                                        failed += 1;
                                         data.failed = true;
                                         data.error = res.val.message;
+                                        ui.webview.postMessage({
+                                            command: "exercisesFailedToDownload",
+                                            exerciseIds: [id],
+                                        });
                                     }
                                     exerciseStatus.set(id, data);
-                                    ui.webview.setContentFromTemplate({
-                                        templateName: "downloading-exercises",
-                                        returnToCourse,
-                                        exercises: Array.from(exerciseStatus.values()),
-                                        failed,
-                                        failedPct: Math.round((100 * failed) / downloadCount),
-                                        remaining: downloadCount - successful - failed,
-                                        successful,
-                                        successfulPct: Math.round(
-                                            (100 * successful) / downloadCount,
-                                        ),
-                                        total: downloadCount,
-                                    });
                                 }
                                 resolve(res);
                             },
@@ -136,6 +102,11 @@ export async function downloadExercises(
     workspaceManager.openExercise(...openExercises);
 }
 
+interface UpdateCheckOptions {
+    notify?: boolean;
+    useCache?: boolean;
+}
+
 /**
  * Checks all user's courses for exercise updates and download them.
  * @param courseId If given, check only updates for that course.
@@ -143,7 +114,8 @@ export async function downloadExercises(
 export async function checkForExerciseUpdates(
     actionContext: ActionContext,
     courseId?: number,
-): Promise<void> {
+    updateCheckOptions?: UpdateCheckOptions,
+): Promise<CourseExerciseDownloads[]> {
     const { tmc, userData, workspaceManager, logger } = actionContext;
 
     const coursesToUpdate: Map<number, CourseExerciseDownloads> = new Map();
@@ -154,9 +126,9 @@ export async function checkForExerciseUpdates(
     for (const course of filteredCourses) {
         const organizationSlug = course.organization;
 
-        const result = await tmc.getCourseDetails(course.id);
+        const result = await tmc.getCourseDetails(course.id, updateCheckOptions?.useCache || false);
         if (result.err) {
-            return;
+            continue;
         }
 
         const exerciseIds: number[] = [];
@@ -173,13 +145,13 @@ export async function checkForExerciseUpdates(
         }
     }
 
-    if (count > 0) {
+    if (count > 0 && updateCheckOptions?.notify !== false) {
         showNotification(
             `Found updates for ${count} exercises. Do you wish to download them?`,
             [
                 "Download",
                 (): Promise<void> =>
-                    downloadExercises(actionContext, Array.from(coursesToUpdate.values())),
+                    legacy.downloadExercises(actionContext, Array.from(coursesToUpdate.values())),
             ],
             [
                 "Remind me later",
@@ -191,6 +163,7 @@ export async function checkForExerciseUpdates(
             ],
         );
     }
+    return Array.from(coursesToUpdate.values());
 }
 
 /**
@@ -248,10 +221,11 @@ export async function resetExercise(
 export async function openExercises(
     ids: number[],
     actionContext: ActionContext,
-): Promise<Result<void, Error>> {
+): Promise<Result<number[], Error>> {
     const { workspaceManager, logger } = actionContext;
 
-    const result = workspaceManager.openExercise(...ids);
+    const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
+    const result = workspaceManager.openExercise(...filterIds);
     const errors = result.filter((file) => file.err);
 
     if (errors.length !== 0) {
@@ -260,7 +234,7 @@ export async function openExercises(
         );
         return new Err(new Error("Something went wrong while opening exercises."));
     }
-    return Ok.EMPTY;
+    return new Ok(filterIds);
 }
 
 /**
@@ -270,10 +244,11 @@ export async function openExercises(
 export async function closeExercises(
     actionContext: ActionContext,
     ids: number[],
-): Promise<Result<void, Error>> {
+): Promise<Result<number[], Error>> {
     const { workspaceManager, logger } = actionContext;
 
-    const result = workspaceManager.closeExercise(...ids);
+    const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
+    const result = workspaceManager.closeExercise(...filterIds);
     const errors = result.filter((file) => file.err);
 
     if (errors.length !== 0) {
@@ -282,7 +257,7 @@ export async function closeExercises(
         );
         return new Err(new Error("Something went wrong while closing exercises."));
     }
-    return Ok.EMPTY;
+    return new Ok(filterIds);
 }
 
 /**

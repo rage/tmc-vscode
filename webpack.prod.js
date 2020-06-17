@@ -6,7 +6,7 @@
 const merge = require("webpack-merge");
 const common = require("./webpack.common");
 
-/**@type {import('webpack').Configuration}*/
+/**@type {import('webpack').WebpackOptions}*/
 const devConfig = {
     mode: "production",
     module: {

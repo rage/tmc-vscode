@@ -55,6 +55,10 @@ export default class TmcWebview {
         panel.reveal();
     }
 
+    public postMessage(message: unknown): void {
+        this.panel?.webview.postMessage(message);
+    }
+
     /**
      * Register a handler for a specific message type sent from the webview
      * @param messageId The message type to handle

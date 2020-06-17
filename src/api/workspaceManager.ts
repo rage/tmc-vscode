@@ -356,6 +356,14 @@ export default class WorkspaceManager {
         return false;
     }
 
+    public exerciseExists(id: number): boolean {
+        const data = this.idToData.get(id);
+        if (data) {
+            return data.status !== ExerciseStatus.MISSING;
+        }
+        return false;
+    }
+
     public restartWatcher(): void {
         this.watcher.stop();
         this.watcher.start();

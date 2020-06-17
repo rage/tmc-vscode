@@ -15,6 +15,7 @@ export type LocalCourseData = {
 
 export type LocalCourseExercise = {
     id: number;
+    name: string;
     passed: boolean;
 };
 
