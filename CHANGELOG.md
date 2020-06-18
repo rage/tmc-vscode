@@ -1,9 +1,14 @@
 # Changelog
 
+## [0.6.3] - 2020-06-18
+
+### Fixed
+- Course page 'Update exercises' button.
+
 ## [0.6.2] - 2020-06-17
 
 ### Added
-- Server submission button even when some tests fail
+- Server submission button even when some tests fail.
 
 ### Changed
 - Redesigned course detail page.
@@ -13,12 +18,12 @@
 - Obsolete information from readme.
 
 ### Fixed
-- Faulty API data when downloading old submissions
+- Faulty API data when downloading old submissions.
 
 ## [0.5.2] - 2020-06-12
 
 ### Added
-- Parsing to test names within displayed test results
+- Parsing to test names within displayed test results.
 - Filter out 'False is not true' from the start of failed test messages.
 
 ### Changed

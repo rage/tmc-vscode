@@ -340,6 +340,18 @@ function script() {
         }
     }
 
+    function downloadSelectedExercisesLegacy(ids) {
+        if (ids.length > 0) {
+            vscode.postMessage({
+                type: "downloadExercisesLegacy",
+                ids,
+                courseName: course.courseName,
+                organizationSlug: course.courseOrg,
+                courseId: parseInt(course.courseId),
+            });
+        }
+    }
+
     function handleSelected(type) {
         const checkboxCols = document.querySelectorAll("td.exercise-selector");
         const ids = [];
@@ -416,7 +428,7 @@ function script() {
         if (updateButton) {
             updateButton.addEventListener("click", function () {
                 const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
-                downloadSelectedExercises(updateableIds);
+                downloadSelectedExercisesLegacy(updateableIds);
             });
         }
 
