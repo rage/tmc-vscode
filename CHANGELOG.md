@@ -3,12 +3,15 @@
 ## [0.6.3] - 2020-06-18
 
 ### Added
-- Show logs button if logging enabled.
-- Timer (30min) to poll for new exercises and updates for My courses.
+- Show logs button to settings.
+- 30min timer to poll for new exercises and updates for My courses.
 
 ### Changed
-- TMC Langs version to 0.8.1.
-- TMC Langs timeout to one minute.
+- Bumped TMC-Langs version to 0.8.1.
+- TMC-Langs process timeout increased to one minute.
+
+### Removed
+- Exercise result parsing (now handled by TMC-Langs)
 
 ### Fixed
 - Course page 'Update exercises' button.
