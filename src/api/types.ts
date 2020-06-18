@@ -247,7 +247,7 @@ export type TmcLangsTestResult = {
     message: string;
     valgrindFailed: boolean;
     points: string[];
-    exception: string[];
+    exception?: string[];
 };
 
 export type TmcLangsTestResults = {
