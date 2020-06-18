@@ -4,4 +4,3 @@ export * from "./env";
 export * from "./utils";
 export * from "./disk";
 export * from "./logger";
-export * from "./testResultParsing";
