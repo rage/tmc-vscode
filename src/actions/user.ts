@@ -15,8 +15,6 @@ import {
     getCurrentExerciseData,
     isWorkspaceOpen,
     parseFeedbackQuestion,
-    prettifyTestHeaders,
-    removeFalseIsNotTrue,
     showError,
     showNotification,
     sleep,
@@ -131,8 +129,8 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             ...response,
             testResults: response.testResults.map((res) => ({
                 ...res,
-                name: prettifyTestHeaders(res.name),
-                message: removeFalseIsNotTrue(res.message),
+                name: res.name,
+                message: res.message,
             })),
         };
     }
@@ -230,8 +228,8 @@ export async function submitExercise(
                     ...statusData,
                     test_cases: statusData.test_cases.map((c) => ({
                         ...c,
-                        name: prettifyTestHeaders(c.name),
-                        message: removeFalseIsNotTrue(c.message || ""),
+                        name: c.name,
+                        message: c.message || "",
                     })),
                 };
             }

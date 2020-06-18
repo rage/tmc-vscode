@@ -127,6 +127,10 @@ export function registerUiActions(actionContext: ActionContext): void {
             await actionContext.userData.clearNewExercises(msg.courseId);
             await legacy.downloadExercises(actionContext, [downloads], msg.courseId);
             workspaceManager.openExercise(...msg.ids);
+            ui.webview.postMessage({
+                command: "exercisesOpened",
+                exerciseIds: msg.ids,
+            });
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
@@ -290,4 +294,11 @@ export function registerUiActions(actionContext: ActionContext): void {
             openSettings(actionContext);
         },
     );
+
+    ui.webview.registerHandler("showLogsToUser", (msg: { type?: "showLogsToUser" }) => {
+        if (!msg.type) {
+            return;
+        }
+        logger.show();
+    });
 }
