@@ -46,6 +46,9 @@
                                     <option value="verbose">verbose</option>
                                 </select>
                             </p>
+                            <button id="show-logs-btn" class="btn btn-primary" onclick="showLogs()">
+                                Show logs
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -58,7 +61,17 @@
                 vscode.postMessage({ type: "changeTmcDataPath" });
             }
 
+            function showLogs() {
+                vscode.postMessage({ type: "showLogsToUser" });
+            }
+
             const element = document.getElementById("log-level");
+            const button = document.getElementById("show-logs-btn");
+            if (element.options[0].value.includes("none")) {
+                button.style.display = "none";
+            } else {
+                button.style.display = "block";
+            }
             element.addEventListener("change", function () {
                 const element = document.getElementById("log-level");
                 if (element.selectedIndex !== 0) {

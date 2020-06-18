@@ -294,4 +294,11 @@ export function registerUiActions(actionContext: ActionContext): void {
             openSettings(actionContext);
         },
     );
+
+    ui.webview.registerHandler("showLogsToUser", (msg: { type?: "showLogsToUser" }) => {
+        if (!msg.type) {
+            return;
+        }
+        logger.show();
+    });
 }
