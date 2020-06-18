@@ -25,6 +25,21 @@ export const WORKSPACE_SETTINGS = {
     },
 };
 
+export const WORKSPACE_SETTINGS_EXCLUDE_META = {
+    folders: [{ path: "Exercises" }],
+    settings: {
+        "workbench.editor.closeOnFileDelete": true,
+        "files.autoSave": "onFocusChange",
+        "files.exclude": {
+            "**/__pycache__": true,
+            "**/.available_points.json": true,
+            "**/.tmc_test_results.json": true,
+            "**/.tmcproject.yml": true,
+            "**/tmc": true,
+        },
+    },
+};
+
 /** Delay for when TMC-Langs process should be killed. */
 export const TMC_LANGS_TIMEOUT = 15 * 1000;
 

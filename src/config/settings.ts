@@ -1,7 +1,10 @@
+import * as fs from "fs-extra";
 import Storage from "./storage";
 import { ExtensionSettings, ExtensionSettingsData } from "./types";
 import { Err, Ok, Result } from "ts-results";
 import Logger, { LogLevel } from "../utils/logger";
+import Resources from "./resources";
+import { WORKSPACE_SETTINGS, WORKSPACE_SETTINGS_EXCLUDE_META } from "./constants";
 
 /**
  * Settings class to manage user settings in storage.
@@ -9,13 +12,21 @@ import Logger, { LogLevel } from "../utils/logger";
 export default class Settings {
     private readonly storage: Storage;
     private readonly logger: Logger;
+    private readonly resources: Resources;
     private settings: ExtensionSettings;
 
-    constructor(storage: Storage, logger: Logger, settings: ExtensionSettings) {
+    constructor(
+        storage: Storage,
+        logger: Logger,
+        settings: ExtensionSettings,
+        resources: Resources,
+    ) {
         this.storage = storage;
         this.logger = logger;
+        this.resources = resources;
         this.settings = settings;
         this.updateExtensionSettings(settings);
+        this.updateSetting({ setting: "hideMetaFiles", value: settings.hideMetaFiles });
     }
 
     /**
@@ -54,6 +65,19 @@ export default class Settings {
                 break;
             case "hideMetaFiles":
                 this.settings.hideMetaFiles = data.value;
+                if (fs.existsSync(this.resources.getWorkspaceFilePath())) {
+                    if (data.value) {
+                        fs.writeFileSync(
+                            this.resources.getWorkspaceFilePath(),
+                            JSON.stringify(WORKSPACE_SETTINGS_EXCLUDE_META),
+                        );
+                    } else {
+                        fs.writeFileSync(
+                            this.resources.getWorkspaceFilePath(),
+                            JSON.stringify(WORKSPACE_SETTINGS),
+                        );
+                    }
+                }
                 break;
         }
         this.logger.log("Updated settings data", data);

@@ -48,6 +48,27 @@
                             </p>
                         </div>
                     </div>
+                    <div class="card-transparent border-color my-1">
+                        <div class="card-body">
+                            <h5 class="card-title">Hide Exercise Meta files</h5>
+                            <p class="card-text">
+                                Hides Exercise Meta files, i.e. .available_points, .tmc_test_result,
+                                tmc, __pycache__
+                            </p>
+                            <p>
+                                NB! Currently overwrites TMC Workspace.code-workspace settings.
+                            </p>
+                            <input
+                                type="checkbox"
+                                id="check-meta-files"
+                                class="checkbox-xl"
+                                name="checkbox-for-meta-files"
+                                onchange="hideMetaFiles(this)"
+                                checked="{{extensionSettings.hideMetaFiles}}"
+                            />
+                            <label for="check-meta-files">Toggle to hide</label>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -66,6 +87,11 @@
                     vscode.postMessage({ type: "changeLogLevel", data: level });
                 }
             });
+
+            function hideMetaFiles(element) {
+                const checkbox = document.getElementById("check-meta-files");
+                vscode.postMessage({ type: "hideMetaFiles", data: checkbox.checked });
+            }
         </script>
     </body>
 </html>

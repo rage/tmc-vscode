@@ -14,7 +14,7 @@ import {
     TMC_JAR_URL,
     WORKSPACE_ROOT_FILE,
     WORKSPACE_ROOT_FILE_TEXT,
-    WORKSPACE_SETTINGS,
+    WORKSPACE_SETTINGS_EXCLUDE_META,
 } from "../config/constants";
 import Storage from "../config/storage";
 import del = require("del");
@@ -140,7 +140,7 @@ export async function resourceInitialization(
 
     const tmcWorkspaceFilePath = path.join(tmcDataPath, tmcWorkspaceFilePathRelative);
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
-        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
+        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS_EXCLUDE_META));
         logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
     }
 

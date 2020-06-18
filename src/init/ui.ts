@@ -290,4 +290,14 @@ export function registerUiActions(actionContext: ActionContext): void {
             openSettings(actionContext);
         },
     );
+
+    ui.webview.registerHandler(
+        "hideMetaFiles",
+        (msg: { type?: "hideMetaFiles"; data?: boolean }) => {
+            if (!(msg.type && msg.data !== undefined)) {
+                return;
+            }
+            settings.updateSetting({ setting: "hideMetaFiles", value: msg.data });
+        },
+    );
 }
