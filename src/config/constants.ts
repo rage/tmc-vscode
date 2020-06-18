@@ -33,6 +33,8 @@ export const TMC_LANGS_TIMEOUT = 15 * 1000;
  */
 export const NOTIFICATION_DELAY = 30 * 60 * 1000;
 
+export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000;
+
 export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Security-Policy"}" content="default-src 'none';" /></head></html>`;
 
 /**
