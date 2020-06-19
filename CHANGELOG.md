@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.6.3] - 2020-06-18
+## [0.6.4] - 2020-06-19
 
 ### Added
 - Show logs button to settings.
@@ -8,7 +8,7 @@
 
 ### Changed
 - Bumped TMC-Langs version to 0.8.1.
-- TMC-Langs process timeout increased to one minute.
+- TMC-Langs process timeout increased to two minutes.
 
 ### Removed
 - Exercise result parsing (now handled by TMC-Langs)
