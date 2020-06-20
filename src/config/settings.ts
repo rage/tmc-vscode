@@ -1,10 +1,11 @@
+import * as vscode from "vscode";
 import * as fs from "fs-extra";
 import Storage from "./storage";
 import { ExtensionSettings, ExtensionSettingsData } from "./types";
 import { Err, Ok, Result } from "ts-results";
 import Logger, { LogLevel } from "../utils/logger";
 import Resources from "./resources";
-import { WORKSPACE_SETTINGS, WORKSPACE_SETTINGS_EXCLUDE_META } from "./constants";
+import { HIDE_META_FILES, SHOW_META_FILES } from "./constants";
 
 /**
  * Settings class to manage user settings in storage.
@@ -26,7 +27,7 @@ export default class Settings {
         this.resources = resources;
         this.settings = settings;
         this.updateExtensionSettings(settings);
-        this.updateSetting({ setting: "hideMetaFiles", value: settings.hideMetaFiles });
+        this.updateMetaFilesSetting(settings.hideMetaFiles);
     }
 
     /**
@@ -65,19 +66,7 @@ export default class Settings {
                 break;
             case "hideMetaFiles":
                 this.settings.hideMetaFiles = data.value;
-                if (fs.existsSync(this.resources.getWorkspaceFilePath())) {
-                    if (data.value) {
-                        fs.writeFileSync(
-                            this.resources.getWorkspaceFilePath(),
-                            JSON.stringify(WORKSPACE_SETTINGS_EXCLUDE_META),
-                        );
-                    } else {
-                        fs.writeFileSync(
-                            this.resources.getWorkspaceFilePath(),
-                            JSON.stringify(WORKSPACE_SETTINGS),
-                        );
-                    }
-                }
+                this.updateMetaFilesSetting(data.value);
                 break;
         }
         this.logger.log("Updated settings data", data);
@@ -86,5 +75,17 @@ export default class Settings {
 
     public getLogLevel(): LogLevel {
         return this.settings.logLevel;
+    }
+
+    private updateMetaFilesSetting(hide: boolean): void {
+        if (fs.existsSync(this.resources.getWorkspaceFilePath())) {
+            vscode.workspace
+                .getConfiguration(undefined, vscode.Uri.file(this.resources.getWorkspaceFilePath()))
+                .update(
+                    "files.exclude",
+                    hide ? { ...HIDE_META_FILES } : { ...SHOW_META_FILES },
+                    vscode.ConfigurationTarget.Workspace,
+                );
+        }
     }
 }

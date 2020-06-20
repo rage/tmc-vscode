@@ -52,21 +52,20 @@
                         <div class="card-body">
                             <h5 class="card-title">Hide Exercise Meta files</h5>
                             <p class="card-text">
-                                Hides Exercise Meta files, i.e. .available_points, .tmc_test_result,
-                                tmc, __pycache__
+                                Hides exercise meta files, i.e. .available_points.json,
+                                .tmc_test_result.json, tmc, __pycache__, etc.
                             </p>
-                            <p>
-                                NB! Currently overwrites TMC Workspace.code-workspace settings.
-                            </p>
-                            <input
-                                type="checkbox"
-                                id="check-meta-files"
-                                class="checkbox-xl"
-                                name="checkbox-for-meta-files"
-                                onchange="hideMetaFiles(this)"
-                                checked="{{extensionSettings.hideMetaFiles}}"
-                            />
-                            <label for="check-meta-files">Toggle to hide</label>
+                            <div class="custom-control custom-switch">
+                                <input
+                                    type="checkbox"
+                                    onclick="hideMetaFiles()"
+                                    class="custom-control-input"
+                                    id="check-meta-files"
+                                />
+                                <label class="custom-control-label" for="check-meta-files"
+                                    >Toggle to hide</label
+                                >
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -74,7 +73,7 @@
         </div>
         <script>
             const vscode = acquireVsCodeApi();
-
+            const metaFile = {{extensionSettings.hideMetaFiles}};
             function changeTmcDataPath() {
                 vscode.postMessage({ type: "changeTmcDataPath" });
             }
@@ -88,7 +87,10 @@
                 }
             });
 
-            function hideMetaFiles(element) {
+            if (metaFile) {
+                document.getElementById("check-meta-files").checked = true;
+            }
+            function hideMetaFiles() {
                 const checkbox = document.getElementById("check-meta-files");
                 vscode.postMessage({ type: "hideMetaFiles", data: checkbox.checked });
             }

@@ -25,18 +25,28 @@ export const WORKSPACE_SETTINGS = {
     },
 };
 
+export const HIDE_META_FILES = {
+    "**/__pycache__": true,
+    "**/.available_points.json": true,
+    "**/.tmc_test_results.json": true,
+    "**/.tmcproject.yml": true,
+    "**/tmc": true,
+};
+
+export const SHOW_META_FILES = {
+    "**/__pycache__": false,
+    "**/.available_points.json": false,
+    "**/.tmc_test_results.json": false,
+    "**/.tmcproject.yml": false,
+    "**/tmc": false,
+};
+
 export const WORKSPACE_SETTINGS_EXCLUDE_META = {
     folders: [{ path: "Exercises" }],
     settings: {
         "workbench.editor.closeOnFileDelete": true,
         "files.autoSave": "onFocusChange",
-        "files.exclude": {
-            "**/__pycache__": true,
-            "**/.available_points.json": true,
-            "**/.tmc_test_results.json": true,
-            "**/.tmcproject.yml": true,
-            "**/tmc": true,
-        },
+        "files.exclude": { ...HIDE_META_FILES },
     },
 };
 
