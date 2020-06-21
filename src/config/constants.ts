@@ -17,13 +17,6 @@ export const TMC_API_URL = "https://tmc.mooc.fi/api/v8/";
 export const ACCESS_TOKEN_URI = "https://tmc.mooc.fi/oauth/token";
 export const CLIENT_ID = "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0";
 export const CLIENT_SECRET = "3e6c4df1992e4031d316ea1933e350e9658326a67efb2e65a5b15207bdc09ee8";
-export const WORKSPACE_SETTINGS = {
-    folders: [{ path: "Exercises" }],
-    settings: {
-        "workbench.editor.closeOnFileDelete": true,
-        "files.autoSave": "onFocusChange",
-    },
-};
 
 export const HIDE_META_FILES = {
     "**/__pycache__": true,
@@ -41,12 +34,15 @@ export const SHOW_META_FILES = {
     "**/tmc": false,
 };
 
-export const WORKSPACE_SETTINGS_EXCLUDE_META = {
+export const WORKSPACE_SETTINGS = {
     folders: [{ path: "Exercises" }],
     settings: {
         "workbench.editor.closeOnFileDelete": true,
         "files.autoSave": "onFocusChange",
         "files.exclude": { ...HIDE_META_FILES },
+        "files.watcherExclude": {
+            "**/.vscode/**": true,
+        },
     },
 };
 

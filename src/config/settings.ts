@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as fs from "fs-extra";
 import Storage from "./storage";
 import { ExtensionSettings, ExtensionSettingsData } from "./types";
 import { Err, Ok, Result } from "ts-results";
@@ -9,7 +8,13 @@ import { HIDE_META_FILES, SHOW_META_FILES } from "./constants";
 import { isWorkspaceOpen } from "../utils";
 
 /**
- * Settings class to manage user settings in storage.
+ * Settings class to communicate changes to storage and keeping TMC Workspace.code-workspace settings in place.
+ * Updates settings to workspace only if it is open.
+ *
+ * Perhaps TODO: Read and Write the .code-workspace file without using vscode premade functions for workspace,
+ * because they require the workspace to be open.
+ * Currently this approach works, because the settings are saved to the storage and
+ * VSCode restarts when the multi-root workspace is opened by the extension.
  */
 export default class Settings {
     private readonly storage: Storage;
@@ -32,8 +37,12 @@ export default class Settings {
     }
 
     private verifyWorkspaceSettingsIntegrity(): void {
-        this.setFilesExcludeInWorkspace(this.settings.hideMetaFiles);
-        this.verifyFoldersInWorkspace();
+        if (isWorkspaceOpen(this.resources)) {
+            this.logger.log("TMC Workspace open, verifying workspace settings integrity.");
+            this.setFilesExcludeInWorkspace(this.settings.hideMetaFiles);
+            this.verifyFoldersInWorkspace();
+            this.verifyWatcherPatternExclusion();
+        }
     }
 
     /**
@@ -48,6 +57,15 @@ export default class Settings {
                 { uri: vscode.Uri.file(this.resources.getExercisesFolderPath()) },
             );
         }
+    }
+
+    /**
+     * Makes sure that folders and its contents aren't deleted by our watcher.
+     * .vscode folder needs to be unwatched, otherwise adding settings to WorkspaceFolder level doesn't work.
+     * For example defining Python interpreter for the Exercise folder.
+     */
+    private verifyWatcherPatternExclusion(): void {
+        this.updateWorkspaceSetting("files.watcherExclude", { "**/.vscode/**": true });
     }
 
     /**
@@ -114,7 +132,7 @@ export default class Settings {
      * @param value The new value
      */
     private updateWorkspaceSetting(section: string, value: unknown): void {
-        if (fs.existsSync(this.resources.getWorkspaceFilePath())) {
+        if (isWorkspaceOpen(this.resources)) {
             vscode.workspace
                 .getConfiguration(undefined, vscode.Uri.file(this.resources.getWorkspaceFilePath()))
                 .update(section, value, vscode.ConfigurationTarget.Workspace);
@@ -126,7 +144,7 @@ export default class Settings {
      * @param section A dot-separated identifier.
      */
     private getWorkspaceSetting(section?: string): vscode.WorkspaceConfiguration | undefined {
-        if (fs.existsSync(this.resources.getWorkspaceFilePath())) {
+        if (isWorkspaceOpen(this.resources)) {
             return vscode.workspace.getConfiguration(
                 section,
                 vscode.Uri.file(this.resources.getWorkspaceFilePath()),
