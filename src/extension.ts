@@ -7,7 +7,7 @@ import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
-import { isWorkspaceOpen, showError, superfluousPropertiesEnabled } from "./utils/";
+import { showError, superfluousPropertiesEnabled } from "./utils/";
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import Logger from "./utils/logger";
 import Settings from "./config/settings";
@@ -30,17 +30,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const settings = new Settings(storage, logger, settingsResult, resources);
     logger.setLogLevel(settings.getLogLevel());
     await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
-
-    /**
-     * Checks whether the necessary folders are open in the workspace and opens them if they aren't.
-     */
-    if (isWorkspaceOpen(resources)) {
-        vscode.workspace.updateWorkspaceFolders(
-            vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders.length : 0,
-            null,
-            { uri: vscode.Uri.file(resources.getExercisesFolderPath()) },
-        );
-    }
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
 
