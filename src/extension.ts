@@ -11,6 +11,9 @@ import { showError, superfluousPropertiesEnabled } from "./utils/";
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import Logger from "./utils/logger";
 import Settings from "./config/settings";
+import { EXERCISE_CHECK_INTERVAL } from "./config/constants";
+
+let maintenanceInterval: NodeJS.Timeout | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const productionMode = superfluousPropertiesEnabled();
@@ -53,6 +56,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     checkForExerciseUpdates(actionContext);
     checkForNewExercises(actionContext);
 
+    if (maintenanceInterval) {
+        clearInterval(maintenanceInterval);
+    }
+
+    maintenanceInterval = setInterval(() => {
+        checkForExerciseUpdates(actionContext);
+        checkForNewExercises(actionContext);
+    }, EXERCISE_CHECK_INTERVAL);
+
     /* const freeSpace = await checkFreeDiskSpace(actionContext.resources.getDataPath());
 
     if (freeSpace.err) {
@@ -69,4 +81,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     } */
 }
 
-export function deactivate(): void {}
+export function deactivate(): void {
+    maintenanceInterval && clearInterval(maintenanceInterval);
+}

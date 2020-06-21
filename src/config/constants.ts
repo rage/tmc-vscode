@@ -1,7 +1,7 @@
 export const EXTENSION_ID = "moocfi.test-my-code";
 export const OUTPUT_CHANNEL_NAME = "TestMyCode";
-export const TMC_JAR_URL = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.7.17-SNAPSHOT.jar";
-export const TMC_JAR_NAME = "tmc-langs-cli-0.7.17-SNAPSHOT.jar";
+export const TMC_JAR_URL = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.8.2-SNAPSHOT.jar";
+export const TMC_JAR_NAME = "tmc-langs-cli-0.8.2-SNAPSHOT.jar";
 export const JAVA_ZIP_URLS: {
     linux32?: string;
     linux64?: string;
@@ -47,12 +47,14 @@ export const WORKSPACE_SETTINGS = {
 };
 
 /** Delay for when TMC-Langs process should be killed. */
-export const TMC_LANGS_TIMEOUT = 15 * 1000;
+export const TMC_LANGS_TIMEOUT = 2 * 60 * 1000;
 
 /**
  * Delay for notifications that offer a "remind me later" option.
  */
 export const NOTIFICATION_DELAY = 30 * 60 * 1000;
+
+export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000;
 
 export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Security-Policy"}" content="default-src 'none';" /></head></html>`;
 
