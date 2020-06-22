@@ -302,6 +302,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 return;
             }
             settings.updateSetting({ setting: "hideMetaFiles", value: msg.data });
+            openSettings(actionContext);
         },
     );
 

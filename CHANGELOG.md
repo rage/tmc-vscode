@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased] - 2020-06-xx
+
+### Added
+- Possibility to hide exercise meta files. (Hidden by default)
+
+### Fixed
+- Workspace watcher not deleting .vscode folder that can contain user defined settings.
+
 ## [0.6.4] - 2020-06-19
 
 ### Added

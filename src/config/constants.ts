@@ -24,6 +24,8 @@ export const HIDE_META_FILES = {
     "**/.tmc_test_results.json": true,
     "**/.tmcproject.yml": true,
     "**/tmc": true,
+    "**/.settings": true,
+    "**/.tmcproject.json": true,
 };
 
 export const SHOW_META_FILES = {
@@ -32,6 +34,12 @@ export const SHOW_META_FILES = {
     "**/.tmc_test_results.json": false,
     "**/.tmcproject.yml": false,
     "**/tmc": false,
+    "**/.settings": false,
+    "**/.tmcproject.json": false,
+};
+
+export const WATCHER_EXCLUDE = {
+    "**/.vscode/**": true,
 };
 
 export const WORKSPACE_SETTINGS = {
@@ -40,9 +48,7 @@ export const WORKSPACE_SETTINGS = {
         "workbench.editor.closeOnFileDelete": true,
         "files.autoSave": "onFocusChange",
         "files.exclude": { ...HIDE_META_FILES },
-        "files.watcherExclude": {
-            "**/.vscode/**": true,
-        },
+        "files.watcherExclude": { ...WATCHER_EXCLUDE },
     },
 };
 

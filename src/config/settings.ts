@@ -4,7 +4,7 @@ import { ExtensionSettings, ExtensionSettingsData } from "./types";
 import { Err, Ok, Result } from "ts-results";
 import Logger, { LogLevel } from "../utils/logger";
 import Resources from "./resources";
-import { HIDE_META_FILES, SHOW_META_FILES } from "./constants";
+import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
 import { isWorkspaceOpen } from "../utils";
 
 /**
@@ -13,8 +13,8 @@ import { isWorkspaceOpen } from "../utils";
  *
  * Perhaps TODO: Read and Write the .code-workspace file without using vscode premade functions for workspace,
  * because they require the workspace to be open.
- * Currently this approach works, because the settings are saved to the storage and
- * VSCode restarts when the multi-root workspace is opened by the extension.
+ * Currently this approach works, because extension settings are saved to storage and
+ * VSCode restarts when our workspace is opened by the extension.
  */
 export default class Settings {
     private readonly storage: Storage;
@@ -65,7 +65,7 @@ export default class Settings {
      * For example defining Python interpreter for the Exercise folder.
      */
     private verifyWatcherPatternExclusion(): void {
-        this.updateWorkspaceSetting("files.watcherExclude", { "**/.vscode/**": true });
+        this.updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
     }
 
     /**
@@ -121,21 +121,23 @@ export default class Settings {
      * @param hide true to hide meta files in TMC workspace.
      */
     private setFilesExcludeInWorkspace(hide: boolean): void {
-        const old = this.getWorkspaceSetting("files.exclude");
-        const value = hide ? { ...old, ...HIDE_META_FILES } : { ...old, ...SHOW_META_FILES };
+        const value = hide ? HIDE_META_FILES : SHOW_META_FILES;
         this.updateWorkspaceSetting("files.exclude", value);
     }
 
     /**
-     * Updates a section for the TMC Workspace.code-workspace file, if the file exists.
+     * Updates a section for the TMC Workspace.code-workspace file, if the workspace is open.
      * @param section Configuration name, supports dotted names.
      * @param value The new value
      */
-    private updateWorkspaceSetting(section: string, value: unknown): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private updateWorkspaceSetting(section: string, value: any): void {
         if (isWorkspaceOpen(this.resources)) {
+            const oldValue = this.getWorkspaceSetting(section);
+            const newValue = { ...oldValue, ...value };
             vscode.workspace
                 .getConfiguration(undefined, vscode.Uri.file(this.resources.getWorkspaceFilePath()))
-                .update(section, value, vscode.ConfigurationTarget.Workspace);
+                .update(section, newValue, vscode.ConfigurationTarget.Workspace);
         }
     }
 
