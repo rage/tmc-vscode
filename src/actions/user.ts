@@ -7,7 +7,6 @@
 import * as vscode from "vscode";
 
 import { ExerciseStatus, LocalCourseData } from "../config/types";
-import TemporaryWebview from "../ui/temporaryWebview";
 import { VisibilityGroups } from "../ui/types";
 import {
     askForConfirmation,
@@ -77,7 +76,7 @@ export async function logout(
  * Tests an exercise while keeping the user informed
  */
 export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, resources, tmc, workspaceManager, logger } = actionContext;
+    const { ui, tmc, workspaceManager, logger, temporaryWebviewProvider } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         const message = `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`;
@@ -88,11 +87,12 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
 
     const [testRunner, interrupt] = tmc.runTests(id);
     let aborted = false;
-    const temp = new TemporaryWebview(
-        resources,
-        ui,
-        "TMC Test Results",
-        async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
+    const exerciseName = exerciseDetails.val.name;
+    const temp = temporaryWebviewProvider.getTemporaryWebview();
+    temp.setContent({
+        title: "TMC Running tests",
+        template: { templateName: "running-tests", exerciseName },
+        messageHandler: async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
             if (msg.type === "closeWindow") {
                 temp.dispose();
             } else if (msg.type === "abortTests") {
@@ -100,9 +100,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
                 aborted = true;
             }
         },
-    );
-    const exerciseName = exerciseDetails.val.name;
-    temp.setContent({ templateName: "running-tests", exerciseName });
+    });
     ui.setStatusBar(`Running tests for ${exerciseName}`);
     logger.log(`Running local tests for ${exerciseName}`);
 
@@ -116,91 +114,94 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             temp.dispose();
             return;
         }
-        temp.setContent({ templateName: "error", error: testResult.val });
+        temp.setContent({
+            title: "TMC",
+            template: { templateName: "error", error: testResult.val },
+            messageHandler: (msg: { type?: string }) => {
+                if (msg.type === "closeWindow") {
+                    temp.dispose();
+                }
+            },
+        });
+        temporaryWebviewProvider.addToRecycables(temp);
         const message = `Exercise test run failed: ${testResult.val.name} - ${testResult.val.message}`;
         logger.error(message);
         showError(message);
         return;
     }
-    let response = testResult.val.response;
-    if (response !== null) {
-        // TODO: Clean up this mess when coverting to new template
-        response = {
-            ...response,
-            testResults: response.testResults.map((res) => ({
-                ...res,
-                name: res.name,
-                message: res.message,
-            })),
-        };
-    }
     ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
     logger.log(`Tests finished for ${exerciseName}`);
     const data = {
-        testResult: response,
+        testResult: testResult.val.response,
         id,
         exerciseName,
         tmcLogs: testResult.val.logs,
     };
 
     // Set test-result handlers.
-    temp.addMessageHandler(async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
-        if (msg.type === "submitToServer" && msg.data) {
-            submitExercise(actionContext, msg.data.exerciseId as number, temp);
-        } else if (msg.type === "sendToPaste" && msg.data) {
-            const pasteLink = await pasteExercise(actionContext, msg.data.exerciseId as number);
-            temp.setContent({ templateName: "test-result", ...data, pasteLink });
-        }
+    temp.setContent({
+        title: "TMC Test Results",
+        template: { templateName: "test-result", ...data, pasteLink: "" },
+        messageHandler: async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
+            if (msg.type === "submitToServer" && msg.data) {
+                submitExercise(actionContext, msg.data.exerciseId as number);
+            } else if (msg.type === "sendToPaste" && msg.data) {
+                const pasteLink = await pasteExercise(actionContext, msg.data.exerciseId as number);
+                logger.log(pasteLink);
+            } else if (msg.type === "closeWindow") {
+                temp.dispose();
+            }
+        },
     });
-    temp.setContent({ templateName: "test-result", ...data });
+    temporaryWebviewProvider.addToRecycables(temp);
 }
 
 /**
  * Submits an exercise while keeping the user informed
  * @param tempView Existing TemporaryWebview to use if any
  */
-export async function submitExercise(
-    actionContext: ActionContext,
-    id: number,
-    tempView?: TemporaryWebview,
-): Promise<void> {
-    const { ui, resources, tmc, userData, workspaceManager, logger } = actionContext;
+export async function submitExercise(actionContext: ActionContext, id: number): Promise<void> {
+    const { ui, temporaryWebviewProvider, tmc, userData, workspaceManager, logger } = actionContext;
     logger.log(
         `Submitting exercise ${workspaceManager.getExerciseDataById(id).val.name} to server`,
     );
     const submitResult = await tmc.submitExercise(id);
 
-    const temp =
-        tempView ||
-        new TemporaryWebview(resources, ui, "", async (msg: { type?: string }) => {
-            if (msg.type === "closeWindow") {
-                temp.dispose();
-            }
-        });
-    temp.setTitle("TMC Server Submission");
+    const temp = temporaryWebviewProvider.getTemporaryWebview();
 
     if (submitResult.err) {
-        temp.setContent({ templateName: "error", error: submitResult.val });
+        temp.setContent({
+            title: "TMC Server Submission",
+            template: { templateName: "error", error: submitResult.val },
+            messageHandler: async (msg: { type?: string }): Promise<void> => {
+                if (msg.type === "closeWindow") {
+                    temp.dispose();
+                }
+            },
+        });
         const message = `Exercise submission failed: ${submitResult.val.name} - ${submitResult.val.message}`;
         logger.error(message);
         showError(message);
         return;
     }
 
-    temp.addMessageHandler(
-        async (msg: { data?: { [key: string]: unknown }; type?: string }): Promise<void> => {
-            if (msg.type === "feedback" && msg.data) {
-                await tmc.submitSubmissionFeedback(
-                    msg.data.url as string,
-                    msg.data.feedback as SubmissionFeedback,
-                );
-            } else if (msg.type === "showInBrowser") {
-                vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
-            } else if (msg.type === "showSolutionInBrowser" && msg.data) {
-                vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
-            }
-        },
-    );
+    const messageHandler = async (msg: {
+        data?: { [key: string]: unknown };
+        type?: string;
+    }): Promise<void> => {
+        if (msg.type === "feedback" && msg.data) {
+            await tmc.submitSubmissionFeedback(
+                msg.data.url as string,
+                msg.data.feedback as SubmissionFeedback,
+            );
+        } else if (msg.type === "showInBrowser") {
+            vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
+        } else if (msg.type === "showSolutionInBrowser" && msg.data) {
+            vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
+        } else if (msg.type === "closeWindow") {
+            temp.dispose();
+        }
+    };
 
     let notified = false;
     let timeWaited = 0;
@@ -213,7 +214,7 @@ export async function submitExercise(
             showError(message);
             break;
         }
-        let statusData = statusResult.val;
+        const statusData = statusResult.val;
         if (statusResult.val.status !== "processing") {
             ui.setStatusBar("Tests finished, see result", 5000);
             let feedbackQuestions: FeedbackQuestion[] = [];
@@ -223,17 +224,13 @@ export async function submitExercise(
                     feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
                 }
                 courseId = userData.getCourseByName(statusData.course).id;
-            } else if (statusData.status === "fail" && statusData.test_cases) {
-                statusData = {
-                    ...statusData,
-                    test_cases: statusData.test_cases.map((c) => ({
-                        ...c,
-                        name: c.name,
-                        message: c.message || "",
-                    })),
-                };
             }
-            temp.setContent({ templateName: "submission-result", statusData, feedbackQuestions });
+            temp.setContent({
+                title: "TMC Server Submission",
+                template: { templateName: "submission-result", statusData, feedbackQuestions },
+                messageHandler,
+            });
+            temporaryWebviewProvider.addToRecycables(temp);
             // Check for new exercises if exercise passed.
             if (courseId) {
                 checkForNewExercises(actionContext, courseId);
@@ -243,7 +240,11 @@ export async function submitExercise(
         }
 
         if (!temp.disposed) {
-            temp.setContent({ templateName: "submission-status", statusData });
+            temp.setContent({
+                title: "TMC Server Submission",
+                template: { templateName: "submission-status", statusData },
+                messageHandler,
+            });
         }
 
         await sleep(2500);

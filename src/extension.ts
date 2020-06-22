@@ -12,6 +12,7 @@ import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import Logger from "./utils/logger";
 import Settings from "./config/settings";
 import { EXERCISE_CHECK_INTERVAL } from "./config/constants";
+import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 
@@ -59,7 +60,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const workspaceManager = new WorkspaceManager(storage, resources, logger);
     tmc.setWorkspaceManager(workspaceManager);
     const userData = new UserData(storage, logger);
-    const actionContext = { ui, resources, workspaceManager, tmc, userData, logger, settings };
+    const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
+    const actionContext = {
+        logger,
+        resources,
+        settings,
+        temporaryWebviewProvider,
+        tmc,
+        ui,
+        userData,
+        workspaceManager,
+    };
 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
