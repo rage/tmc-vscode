@@ -312,4 +312,13 @@ export function registerUiActions(actionContext: ActionContext): void {
         }
         logger.show();
     });
+
+    ui.webview.registerHandler("openEditorDirection", (msg: { type?: "openEditorDirection" }) => {
+        if (!msg.type) {
+            return;
+        }
+        const search = "workbench.editor.openSideBySideDirection";
+        // https://github.com/microsoft/vscode/issues/90086 openWorkspaceSettings doesn't take search params.
+        vscode.commands.executeCommand("workbench.action.openSettings", search);
+    });
 }

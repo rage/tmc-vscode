@@ -71,6 +71,20 @@
                             </div>
                         </div>
                     </div>
+                    <div class="card-transparent border-color my-1">
+                        <div class="card-body">
+                            <h5 class="card-title">Editor: Open Side By Side Direction</h5>
+                            <p class="card-text">
+                                Controls the default direction of editors that are opened side by
+                                side (e.g. from the explorer). By default, editors will open on the
+                                right hand side of the currently active one. If changed to down, the
+                                editors will open below the currently active one.
+                            </p>
+                            <button class="btn btn-primary" onclick="gotoSettings()">
+                                Change in VSCode settings
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -106,6 +120,9 @@
             function hideMetaFiles() {
                 const checkbox = document.getElementById("check-meta-files");
                 vscode.postMessage({ type: "hideMetaFiles", data: checkbox.checked });
+            }
+            function gotoSettings() {
+                vscode.postMessage({ type: "openEditorDirection" });
             }
         </script>
     </body>
