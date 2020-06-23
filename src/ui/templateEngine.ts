@@ -155,12 +155,12 @@ export default class TemplateEngine {
                                     FAIL:
                                 </div>
                                 <div class="col-md">
-                                    <span>${first[0].name}</span>
+                                    <span>${first[0].name.replace(/\\/g, "\\\\")}</span>
                                 </div>
                             </div>
                             <div class="row m-0">
                                 <div class="col">
-                                    <pre>${first[0].message}</pre>
+                                    <pre>${first[0].message.replace(/\\/g, "\\\\")}</pre>
                                 </div>
                             </div>
                         </div>`);
@@ -174,12 +174,12 @@ export default class TemplateEngine {
                                         ${test.successful ? "PASS:" : "FAIL:"}
                                     </div>
                                     <div class="col-md">
-                                        <span>${test.name}</span>
+                                        <span>${test.name.replace(/\\/g, "\\\\")}</span>
                                     </div>
                                 </div>
                                 <div class="row m-0">
                                     <div class="col">
-                                        <pre>${test.message}</pre>
+                                        <pre>${test.message.replace(/\\/g, "\\\\")}</pre>
                                     </div>
                                 </div>
                             </div>`);
