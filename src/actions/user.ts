@@ -419,11 +419,15 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
 
     const courseDetailsResult = await tmc.getCourseDetails(orgAndCourse.val.course);
     const courseExercises = await tmc.getCourseExercises(orgAndCourse.val.course);
+    const courseSettings = await tmc.getCourseSettings(orgAndCourse.val.course);
     if (courseDetailsResult.err) {
         return new Err(courseDetailsResult.val);
     }
     if (courseExercises.err) {
         return new Err(courseExercises.val);
+    }
+    if (courseSettings.err) {
+        return new Err(courseSettings.val);
     }
 
     const courseDetails = courseDetailsResult.val.course;
@@ -449,6 +453,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         organization: orgAndCourse.val.organization,
         availablePoints: availablePoints,
         awardedPoints: awardedPoints,
+        perhapsExamMode: courseSettings.val.hide_submission_results,
         newExercises: [],
         notifyAfter: 0,
     };

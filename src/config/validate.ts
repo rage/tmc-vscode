@@ -3,7 +3,7 @@ import Storage from "./storage";
 
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
-import { CourseDetails, CourseExercise } from "../api/types";
+import { CourseDetails, CourseExercise, CourseSettings } from "../api/types";
 import { ApiError, ConnectionError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
@@ -120,6 +120,19 @@ export async function validateAndFix(
                     }
                     return new Err(courseExercises.val);
                 }
+
+                const courseSettings = await (course.id !== undefined
+                    ? tmc.getCourseSettings(course.id, true)
+                    : getCourseSettings(tmc, course.organization, course.name as string));
+
+                if (courseSettings.err) {
+                    if (courseSettings.val instanceof ApiError) {
+                        logger.warn("Skipping bad userdata", course);
+                        continue;
+                    }
+                    return new Err(courseSettings.val);
+                }
+
                 const courseData = courseDetails.val.course;
                 const exerciseData = courseExercises.val;
                 const [availablePoints, awardedPoints] = exerciseData.reduce(
@@ -139,6 +152,7 @@ export async function validateAndFix(
                     organization: course.organization,
                     awardedPoints: awardedPoints,
                     availablePoints: availablePoints,
+                    perhapsExamMode: courseSettings.val.hide_submission_results,
                     notifyAfter: 0,
                     newExercises: [],
                 });
@@ -183,6 +197,23 @@ async function getCourseExercises(
         return new Err(new ApiError("No such course in response"));
     }
     return tmc.getCourseExercises(courseId, true);
+}
+
+async function getCourseSettings(
+    tmc: TMC,
+    org: string,
+    course: string,
+): Promise<Result<CourseSettings, Error>> {
+    const coursesResult = await tmc.getCourses(org, true);
+    if (coursesResult.err) {
+        return new Err(coursesResult.val);
+    }
+
+    const courseId = coursesResult.val.find((x) => x.name === course)?.id;
+    if (!courseId) {
+        return new Err(new ApiError("No such course in response"));
+    }
+    return tmc.getCourseSettings(courseId, true);
 }
 
 async function ensureLogin(

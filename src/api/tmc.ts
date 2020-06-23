@@ -25,6 +25,7 @@ import {
     Course,
     CourseDetails,
     CourseExercise,
+    CourseSettings,
     ExerciseDetails,
     OldSubmission,
     Organization,
@@ -180,6 +181,17 @@ export default class TMC {
         return this.checkApiResponse(
             this.tmcApiRequest(`core/courses/${id}`, cache),
             createIs<CourseDetails>(),
+        );
+    }
+
+    /**
+     * @param id course id
+     * @returns course settings for the specified course
+     */
+    public getCourseSettings(id: number, cache = false): Promise<Result<CourseSettings, Error>> {
+        return this.checkApiResponse(
+            this.tmcApiRequest(`courses/${id}`, cache),
+            createIs<CourseSettings>(),
         );
     }
 

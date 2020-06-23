@@ -5,6 +5,7 @@ export type TMCApiResponse =
     | Course[]
     | CourseDetails
     | CourseExercise[]
+    | CourseSettings
     | Organization[]
     | Organization
     | ExerciseDetails
@@ -98,6 +99,13 @@ export type Organization = {
     slug: string;
     logo_path: string;
     pinned: boolean;
+};
+
+/**
+ * GET /api/v8/courses/{course_id}
+ */
+export type CourseSettings = {
+    hide_submission_results: boolean;
 };
 
 /**
