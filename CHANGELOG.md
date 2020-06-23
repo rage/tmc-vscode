@@ -1,27 +1,28 @@
 # Changelog
 
-## [Unreleased] - 2020-06-xx
+## [0.7.0] - 2020-06-23
 
 ### Added
-- Hide/show exercise meta files. Hidden by default.
-- Easier way for users to change where webviews are opened via TMC Settings.
+- Hide/show exercise meta files. Hidden by default, can be changed in TMC Settings.
+- Provide an easy access from TMC Settings to change where webviews are opened.
+- Notify user if couldn't fetch API data on course page.
 
 ### Changed
-- TMC test result pages are recycled after usage.
+- TMC Test Results and Submission pages are recycled after usage.
 
 ### Fixed
-- WorkspaceFolder defined settings were automatically deleted, excluded .vscode folder for workspace watcher.
-- Tests not appearing to finish if ran with broken code in some cases.
+- User-defined Workspace Folder settings were automatically being deleted.
+- TMC Langs logs not appearing if test results (.tmc_test_results.json) can't be found.
 - Problem showing error messages with backslashes in TMC Test Results.
 
-## [0.6.4] - 2020-06-19
+## [0.6.3] - 2020-06-18
 
 ### Added
 - Show logs button to settings.
 - 30min timer to poll for new exercises and updates for My courses.
 
 ### Changed
-- Bumped TMC-Langs version to 0.8.1.
+- 0.6.4 Hotfix: Bumped TMC-Langs version to 0.8.2.
 - TMC-Langs process timeout increased to two minutes.
 
 ### Removed
@@ -30,7 +31,7 @@
 ### Fixed
 - Course page 'Update exercises' button.
 
-## [0.6.2] - 2020-06-17
+## [0.6.0] - 2020-06-17
 
 ### Added
 - Server submission button even when some tests fail.
@@ -44,6 +45,7 @@
 
 ### Fixed
 - Faulty API data when downloading old submissions.
+- 0.6.2 Hotfix: Broken course detail page scripts in production build.
 
 ## [0.5.2] - 2020-06-12
 
