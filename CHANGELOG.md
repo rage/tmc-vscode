@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- TMC test result pages are recycled after usage.
+
+### Fixed
+- Tests not appearing to finish if ran with broken code in some cases.
+
 ## [0.6.4] - 2020-06-19
 
 ### Added
