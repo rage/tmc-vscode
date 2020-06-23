@@ -148,6 +148,9 @@ export default class TemplateEngine {
         handlebars.registerHelper(
             "show_test_results",
             (testResults: TmcLangsTestResult[], showAll: boolean) => {
+                if (!testResults) {
+                    return;
+                }
                 if (!showAll) {
                     const first = testResults.filter((test) => !test.successful);
                     if (first.length === 0) {
