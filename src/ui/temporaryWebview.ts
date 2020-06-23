@@ -58,6 +58,10 @@ export default class TemporaryWebview {
         return this.panel.visible;
     }
 
+    public postMessage(message: unknown): void {
+        this.panel?.webview.postMessage(message);
+    }
+
     /**
      * Closes the webview
      */

@@ -147,7 +147,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
                 submitExercise(actionContext, msg.data.exerciseId as number);
             } else if (msg.type === "sendToPaste" && msg.data) {
                 const pasteLink = await pasteExercise(actionContext, msg.data.exerciseId as number);
-                logger.log(pasteLink);
+                temp.postMessage({ command: "showPasteLink", pasteLink });
             } else if (msg.type === "closeWindow") {
                 temp.dispose();
             }
