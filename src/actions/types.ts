@@ -5,15 +5,17 @@ import { UserData } from "../config/userdata";
 import UI from "../ui/ui";
 import Logger from "../utils/logger";
 import Settings from "../config/settings";
+import TemporaryWebviewProvider from "../ui/temporaryWebviewProvider";
 
 export type ActionContext = {
+    logger: Logger;
+    resources: Resources;
+    settings: Settings;
+    temporaryWebviewProvider: TemporaryWebviewProvider;
     tmc: TMC;
     ui: UI;
-    resources: Resources;
-    workspaceManager: WorkspaceManager;
     userData: UserData;
-    logger: Logger;
-    settings: Settings;
+    workspaceManager: WorkspaceManager;
 };
 
 export type CourseExerciseDownloads = {
