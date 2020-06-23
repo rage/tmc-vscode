@@ -88,6 +88,7 @@ export async function displayLocalCourseDetails(
 
     const course = userData.getCourse(courseId);
     logger.log(`Display course view for ${course.name}`);
+
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
     const exerciseData = new Map<string, CourseDetailsExerciseGroup>();
     const apiCourse = (await tmc.getCourseDetails(courseId, true)).mapErr(() => undefined).val
@@ -100,6 +101,7 @@ export async function displayLocalCourseDetails(
             })
         ).find((u) => u.courseId === courseId)?.exerciseIds || [];
     const currentDate = new Date();
+
     course.exercises.forEach((ex) => {
         const nameMatch = ex.name.match(/(\w+)-(.+)/);
         const groupName = nameMatch?.[1] || "";
@@ -161,6 +163,7 @@ export async function displayLocalCourseDetails(
                 ),
             };
         });
+
     await ui.webview.setContentFromTemplate(
         {
             templateName: "course-details",
@@ -168,6 +171,7 @@ export async function displayLocalCourseDetails(
             course,
             courseId: course.id,
             updateableExerciseIds: updateables,
+            offlineMode: apiCourse === undefined,
         },
         true,
     );
