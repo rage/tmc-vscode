@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased] - 2020-06-xx
+
+### Added
+- Hide/show exercise meta files. Hidden by default.
+- Easier way for users to change where webviews are opened via TMC Settings.
+
+### Fixed
+- WorkspaceFolder defined settings were automatically deleted, excluded .vscode folder for workspace watcher.
+- Problem showing error messages with backslashes in TMC Test Results.
+
 ## [0.6.4] - 2020-06-19
 
 ### Added

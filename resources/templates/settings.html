@@ -51,12 +51,46 @@
                             </button>
                         </div>
                     </div>
+                    <div class="card-transparent border-color my-1">
+                        <div class="card-body">
+                            <h5 class="card-title">Hide Exercise Meta files</h5>
+                            <p class="card-text">
+                                Hides exercise meta files, i.e. .available_points.json,
+                                .tmc_test_result.json, tmc, etc.
+                            </p>
+                            <div class="custom-control custom-switch">
+                                <input
+                                    type="checkbox"
+                                    onclick="hideMetaFiles()"
+                                    class="custom-control-input"
+                                    id="check-meta-files"
+                                />
+                                <label class="custom-control-label" for="check-meta-files"
+                                    >Toggle to hide</label
+                                >
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-transparent border-color my-1">
+                        <div class="card-body">
+                            <h5 class="card-title">Editor: Open Side By Side Direction</h5>
+                            <p class="card-text">
+                                Controls the default direction of editors that are opened side by
+                                side (e.g. from the explorer). By default, editors will open on the
+                                right hand side of the currently active one. If changed to down, the
+                                editors will open below the currently active one.
+                            </p>
+                            <button class="btn btn-primary" onclick="gotoSettings()">
+                                Change in VSCode settings
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
         <script>
             const vscode = acquireVsCodeApi();
-
+            const metaFile = {{extensionSettings.hideMetaFiles}};
             function changeTmcDataPath() {
                 vscode.postMessage({ type: "changeTmcDataPath" });
             }
@@ -79,6 +113,17 @@
                     vscode.postMessage({ type: "changeLogLevel", data: level });
                 }
             });
+
+            if (metaFile) {
+                document.getElementById("check-meta-files").checked = true;
+            }
+            function hideMetaFiles() {
+                const checkbox = document.getElementById("check-meta-files");
+                vscode.postMessage({ type: "hideMetaFiles", data: checkbox.checked });
+            }
+            function gotoSettings() {
+                vscode.postMessage({ type: "openEditorDirection" });
+            }
         </script>
     </body>
 </html>
