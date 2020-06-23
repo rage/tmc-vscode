@@ -14,7 +14,7 @@
             {{#if testResult.testResults}}
             <div class="row m-0">
                 <div class="col-md-10 pr-0">
-                    {{{ check_test_status testResult.status testResult.logs undefined pasteLink }}}
+                    {{{ check_test_status testResult.status testResult.logs undefined }}}
                 </div>
             </div>
             <div class="row m-0" style="line-height: 0;">
@@ -83,13 +83,34 @@
                 document.getElementById("testResultPlaceholder").innerHTML = firstFailed;
             });
 
+            function refreshCollapsibleHeight() {
+                // Deprecate this ASAP
+                const coll = document.getElementsByClassName("collapsible");
+                if (coll[0]) {
+                    const content = coll[0].nextElementSibling;
+                    content.style.maxHeight = content.scrollHeight + "px";
+                }
+            }
+
             function copyText() {
                 const copyText = document.getElementById("copyPasteLink");
                 copyText.select();
                 document.execCommand("copy");
                 const copied = document.getElementById("copied");
                 copied.innerHTML = "Copied!";
+                refreshCollapsibleHeight();
             }
+
+            window.addEventListener("message", function(event) {
+                const message = event.data;
+                switch (message.command) {
+                    case "showPasteLink":
+                        document.getElementById("showPasteLink").style.display = "block";
+                        document.getElementById("copyPasteLink").value = message.pasteLink;
+                        refreshCollapsibleHeight();
+                        break;
+                }
+            });
         </script>
     </body>
 </html>
