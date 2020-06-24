@@ -6,7 +6,7 @@ import * as unzipper from "unzipper";
 
 import { Err, Ok, Result } from "ts-results";
 import Resources from "../config/resources";
-import { downloadFile, getPlatform, isJavaPresent } from "../utils/";
+import { downloadFile, getPlatform, isJavaPresent, showProgressNotification } from "../utils/";
 import {
     EXTENSION_ID,
     JAVA_ZIP_URLS,
@@ -66,11 +66,8 @@ export async function resourceInitialization(
                     return new Err(new Error("Java not found or improperly configured."));
                 }
                 logger.log(`Downloading java from ${javaUrl} to ${archivePath}`);
-                await vscode.window.withProgress(
-                    {
-                        location: vscode.ProgressLocation.Notification,
-                        title: "TestMyCode",
-                    },
+                await showProgressNotification(
+                    "Java not found. Downloading standalone bundle...",
                     async (p) =>
                         downloadFile(
                             javaUrl,
@@ -79,35 +76,21 @@ export async function resourceInitialization(
                             undefined,
                             (progress: number, increment: number) =>
                                 p.report({
-                                    message: `Java not found. Downloading... (${progress}%)`,
                                     increment,
                                 }),
                         ),
                 );
             }
-            await vscode.window.withProgress(
-                {
-                    location: vscode.ProgressLocation.Notification,
-                    title: "TestMyCode",
-                },
-                async (p) => {
-                    const totalSize = fs.statSync(archivePath).size;
-                    let totalExtracted = 0;
-                    return fs
-                        .createReadStream(archivePath)
-                        .addListener("data", (c) => {
-                            totalExtracted += c.length;
-                            p.report({
-                                message: `Extracting Java... (${Math.round(
-                                    (100 * totalExtracted) / totalSize,
-                                )}%)`,
-                                increment: (100 * c.length) / totalSize,
-                            });
-                        })
-                        .pipe(unzipper.Extract({ path: javaDownloadPathTemp }))
-                        .promise();
-                },
-            );
+            await showProgressNotification("Extracting Java...", async (p) => {
+                const totalSize = fs.statSync(archivePath).size;
+                return fs
+                    .createReadStream(archivePath)
+                    .addListener("data", (c) =>
+                        p.report({ increment: (100 * c.length) / totalSize }),
+                    )
+                    .pipe(unzipper.Extract({ path: javaDownloadPathTemp }))
+                    .promise();
+            });
             del.sync(javaDownloadPath, { force: true });
             fs.renameSync(javaDownloadPathTemp, javaDownloadPath);
             del.sync(archivePath, { force: true });
@@ -170,22 +153,15 @@ export async function resourceInitialization(
     const tmcLangsPath = path.join(tmcDataPath, tmcLangsPathRelative);
     if (!fs.existsSync(tmcLangsPath)) {
         del.sync(path.join(tmcDataPath, "*.jar"), { force: true });
-        const tmcLangsResult = await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: "TestMyCode",
-            },
+        const [tmcLangsResult] = await showProgressNotification(
+            "Downloading required files...",
             async (p) =>
                 downloadFile(
                     TMC_JAR_URL,
                     tmcLangsPath,
                     undefined,
                     undefined,
-                    (progress: number, increment: number) =>
-                        p.report({
-                            message: `Downloading required files... (${progress}%)`,
-                            increment,
-                        }),
+                    (progress: number, increment: number) => p.report({ increment }),
                 ),
         );
 

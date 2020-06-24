@@ -65,9 +65,10 @@ export async function showNotification(
 }
 
 /**
- * Wrapper for vscode.window.withProgress that can display the progress as a sum of several simultaneous tasks.
- * Like when using withProgress, tasks are expected to report of their progress with positive increments that will sum up to 100.
- * In addition, completed promises are handled automatically.
+ * Wrapper for vscode.window.withProgress that can display the progress as a sum of several
+ * simultaneous tasks. Like when using withProgress, tasks are expected to report of their progress
+ * with positive increments that will sum up to 100. In addition, completed promises are handled
+ * automatically.
  *
  * @param message Message bing displayed along the progress notification.
  * @param tasks Tasks that will be displayed as one single comprehensive progress.
