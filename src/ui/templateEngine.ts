@@ -40,7 +40,6 @@ export default class TemplateEngine {
                 status: string,
                 logs: { stdout: number[]; stderr: number[] },
                 tmcLogs?: { stdout: string; stderr: string },
-                pasteLink?: string,
             ) => {
                 // Java langs 'run tests' returns: PASSED, TESTS_FAILED; COMPILE_FAILED and own logs
                 // Python langs 'run tests' returns: PASSED, TESTS_FAILED, but not COMPILE_FAILED
@@ -53,16 +52,10 @@ export default class TemplateEngine {
                 if (status === "PASSED") {
                     return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn btn-primary' onclick='submitToServer()' />";
                 } else if (status === "TESTS_FAILED") {
-                    let pasteLinkHTML = "";
-                    let collapsed = `<button id='collapsible' class="collapsible">Need help?</button>
-                                    <div id='content-collapsible' class="content-collapsible">`;
-                    if (pasteLink) {
-                        pasteLinkHTML = `<p><input style='width: 65%!important;' type="text" value="${pasteLink}" id="copyPasteLink">
+                    const collapsed = `<button id='collapsible' class="collapsible">Need help?</button>
+                                    <div id='content-collapsible' style="height: auto;" class="content-collapsible">`;
+                    const pasteLinkHTML = `<p id="showPasteLink" style="display: none;"><input style='width: 65%!important;' type="text" value="" id="copyPasteLink">
                                         <button class='btn btn-primary' onclick="copyText()">Copy text</button><span class='ml-1' id="copied"></span></p>`;
-                        collapsed = `<button id='collapsible' class="collapsible active">Need help?</button>
-                                    <div id='content-collapsible' style="max-height: 250px;" class="content-collapsible">`;
-                    }
-
                     return `<h1>TESTS FAILED</h1><input type='button' value='Send solution to server' class='btn btn-primary mb-2' onclick='submitToServer()' />
                     ${collapsed}
                         <h5>Submit to TMC Paste</h5>
@@ -148,6 +141,9 @@ export default class TemplateEngine {
         handlebars.registerHelper(
             "show_test_results",
             (testResults: TmcLangsTestResult[], showAll: boolean) => {
+                if (!testResults) {
+                    return;
+                }
                 if (!showAll) {
                     const first = testResults.filter((test) => !test.successful);
                     if (first.length === 0) {
@@ -159,12 +155,12 @@ export default class TemplateEngine {
                                     FAIL:
                                 </div>
                                 <div class="col-md">
-                                    <span>${first[0].name}</span>
+                                    <span>${first[0].name.replace(/\\/g, "\\\\")}</span>
                                 </div>
                             </div>
                             <div class="row m-0">
                                 <div class="col">
-                                    <pre>${first[0].message}</pre>
+                                    <pre>${first[0].message.replace(/\\/g, "\\\\")}</pre>
                                 </div>
                             </div>
                         </div>`);
@@ -178,12 +174,12 @@ export default class TemplateEngine {
                                         ${test.successful ? "PASS:" : "FAIL:"}
                                     </div>
                                     <div class="col-md">
-                                        <span>${test.name}</span>
+                                        <span>${test.name.replace(/\\/g, "\\\\")}</span>
                                     </div>
                                 </div>
                                 <div class="row m-0">
                                     <div class="col">
-                                        <pre>${test.message}</pre>
+                                        <pre>${test.message.replace(/\\/g, "\\\\")}</pre>
                                     </div>
                                 </div>
                             </div>`);

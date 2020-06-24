@@ -47,6 +47,7 @@ export type CourseDetailsData = {
     courseId: number;
     exerciseData: CourseDetailsExerciseGroup[];
     updateableExerciseIds: number[];
+    offlineMode: boolean;
 };
 
 export type CourseDetailsExerciseGroup = {

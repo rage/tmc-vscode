@@ -227,16 +227,15 @@ async function ensureLogin(
             username?: string;
             password?: string;
         } = await new Promise((resolve) => {
-            const temp = new TemporaryWebview(
-                resources,
-                ui,
-                "Login",
-                (msg: { type?: "login"; username?: string; password?: string }) => {
+            const temp = new TemporaryWebview(resources, ui);
+            temp.setContent({
+                title: "Login",
+                template: { templateName: "login" },
+                messageHandler: (msg: { type?: "login"; username?: string; password?: string }) => {
                     temp.dispose();
                     resolve(msg);
                 },
-            );
-            temp.setContent({ templateName: "login" });
+            });
         });
         if (!loginMsg.username || !loginMsg.password) {
             continue;

@@ -295,10 +295,30 @@ export function registerUiActions(actionContext: ActionContext): void {
         },
     );
 
+    ui.webview.registerHandler(
+        "hideMetaFiles",
+        (msg: { type?: "hideMetaFiles"; data?: boolean }) => {
+            if (!(msg.type && msg.data !== undefined)) {
+                return;
+            }
+            settings.updateSetting({ setting: "hideMetaFiles", value: msg.data });
+            openSettings(actionContext);
+        },
+    );
+
     ui.webview.registerHandler("showLogsToUser", (msg: { type?: "showLogsToUser" }) => {
         if (!msg.type) {
             return;
         }
         logger.show();
+    });
+
+    ui.webview.registerHandler("openEditorDirection", (msg: { type?: "openEditorDirection" }) => {
+        if (!msg.type) {
+            return;
+        }
+        const search = "workbench.editor.openSideBySideDirection";
+        // https://github.com/microsoft/vscode/issues/90086 openWorkspaceSettings doesn't take search params.
+        vscode.commands.executeCommand("workbench.action.openSettings", search);
     });
 }

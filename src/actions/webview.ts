@@ -88,6 +88,7 @@ export async function displayLocalCourseDetails(
 
     const course = userData.getCourse(courseId);
     logger.log(`Display course view for ${course.name}`);
+
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
     const exerciseData = new Map<string, CourseDetailsExerciseGroup>();
     const apiCourse = (await tmc.getCourseDetails(courseId, true)).mapErr(() => undefined).val
@@ -100,6 +101,7 @@ export async function displayLocalCourseDetails(
             })
         ).find((u) => u.courseId === courseId)?.exerciseIds || [];
     const currentDate = new Date();
+
     course.exercises.forEach((ex) => {
         const nameMatch = ex.name.match(/(\w+)-(.+)/);
         const groupName = nameMatch?.[1] || "";
@@ -161,6 +163,7 @@ export async function displayLocalCourseDetails(
                 ),
             };
         });
+
     await ui.webview.setContentFromTemplate(
         {
             templateName: "course-details",
@@ -168,6 +171,7 @@ export async function displayLocalCourseDetails(
             course,
             courseId: course.id,
             updateableExerciseIds: updateables,
+            offlineMode: apiCourse === undefined,
         },
         true,
     );
@@ -194,22 +198,24 @@ export async function selectCourse(
     let course: number | undefined;
 
     await new Promise((resolve) => {
-        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
-        temp.setTitle("Select course");
-        temp.addMessageHandler((msg: { type?: string; id?: number }) => {
-            if (msg.type === "setCourse") {
-                course = msg.id;
-            } else if (msg.type === "changeOrg") {
-                changeOrg = true;
-            } else {
-                return;
-            }
-            if (!webview) {
-                temp.dispose();
-            }
-            resolve();
+        const temp = webview || new TemporaryWebview(resources, ui);
+        temp.setContent({
+            title: "Select course",
+            template: { templateName: "course", ...data },
+            messageHandler: (msg: { type?: string; id?: number }) => {
+                if (msg.type === "setCourse") {
+                    course = msg.id;
+                } else if (msg.type === "changeOrg") {
+                    changeOrg = true;
+                } else {
+                    return;
+                }
+                if (!webview) {
+                    temp.dispose();
+                }
+                resolve();
+            },
         });
-        temp.setContent({ templateName: "course", ...data });
     });
     return new Ok({ changeOrg, course });
 }
@@ -233,19 +239,21 @@ export async function selectOrganization(
     let slug: string | undefined;
 
     await new Promise((resolve) => {
-        const temp = webview ? webview : new TemporaryWebview(resources, ui, "", () => {});
-        temp.setTitle("Select organization");
-        temp.addMessageHandler((msg: { type?: string; slug?: string }) => {
-            if (msg.type !== "setOrganization") {
-                return;
-            }
-            slug = msg.slug;
-            if (!webview) {
-                temp.dispose();
-            }
-            resolve();
+        const temp = webview || new TemporaryWebview(resources, ui);
+        temp.setContent({
+            title: "Select organization",
+            template: { templateName: "organization", ...data },
+            messageHandler: (msg: { type?: string; slug?: string }) => {
+                if (msg.type !== "setOrganization") {
+                    return;
+                }
+                slug = msg.slug;
+                if (!webview) {
+                    temp.dispose();
+                }
+                resolve();
+            },
         });
-        temp.setContent({ templateName: "organization", ...data });
     });
     if (!slug) {
         return new Err(new Error("Couldn't get organization"));
@@ -261,7 +269,7 @@ export async function selectOrganizationAndCourse(
 ): Promise<Result<{ organization: string; course: number }, Error>> {
     const { resources, ui, logger } = actionContext;
 
-    const tempView = new TemporaryWebview(resources, ui, "", () => {});
+    const tempView = new TemporaryWebview(resources, ui);
 
     let organizationSlug: string | undefined;
     let courseId: number | undefined;

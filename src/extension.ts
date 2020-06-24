@@ -7,11 +7,12 @@ import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import UI from "./ui/ui";
-import { isWorkspaceOpen, showError, superfluousPropertiesEnabled } from "./utils/";
+import { showError, superfluousPropertiesEnabled } from "./utils/";
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import Logger from "./utils/logger";
 import Settings from "./config/settings";
 import { EXERCISE_CHECK_INTERVAL } from "./config/constants";
+import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 
@@ -30,20 +31,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const resources = resourcesResult.val;
 
     const settingsResult = await init.settingsInitialization(storage, resources, logger);
-    const settings = new Settings(storage, logger, settingsResult);
+    const settings = new Settings(storage, logger, settingsResult, resources);
     logger.setLogLevel(settings.getLogLevel());
     await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
-
-    /**
-     * Checks whether the necessary folders are open in the workspace and opens them if they aren't.
-     */
-    if (isWorkspaceOpen(resources)) {
-        vscode.workspace.updateWorkspaceFolders(
-            vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders.length : 0,
-            null,
-            { uri: vscode.Uri.file(resources.getExercisesFolderPath()) },
-        );
-    }
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
 
@@ -59,7 +49,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const workspaceManager = new WorkspaceManager(storage, resources, logger);
     tmc.setWorkspaceManager(workspaceManager);
     const userData = new UserData(storage, logger);
-    const actionContext = { ui, resources, workspaceManager, tmc, userData, logger, settings };
+    const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
+    const actionContext = {
+        logger,
+        resources,
+        settings,
+        temporaryWebviewProvider,
+        tmc,
+        ui,
+        userData,
+        workspaceManager,
+    };
 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);

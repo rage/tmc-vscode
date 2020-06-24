@@ -22,7 +22,7 @@ function component(data) {
      * @param {string} title
      * @param {string} description
      */
-    const stickyTop = (course, updateableExerciseIds) => (
+    const stickyTop = (course, updateableExerciseIds, offlineMode) => (
         <div class="w-100">
             <div class="container pt-0">
                 <div class="row py-1">
@@ -72,6 +72,14 @@ function component(data) {
                                 >
                                     Update exercises
                                 </button>
+                            </div>
+                        ) : null}
+                        {offlineMode ? (
+                            <div class="alert alert-warning" role="alert">
+                                <span>
+                                    Unable to fetch exercise data from server. Displaying local
+                                    exercises.
+                                </span>
                             </div>
                         ) : null}
                     </div>
@@ -236,7 +244,7 @@ function component(data) {
 
     return (
         <div>
-            {stickyTop(data.course, data.updateableExerciseIds)}
+            {stickyTop(data.course, data.updateableExerciseIds, data.offlineMode)}
             {data.exerciseData.map(exerciseTable).join("")}
             {contextMenu()}
         </div>
