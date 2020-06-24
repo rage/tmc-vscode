@@ -40,7 +40,7 @@ export function findNextDateAfter(after: Date, dates: Array<Date | null>): Date 
 export function parseNextDeadlineAfter(after: Date, dates: Array<Date | null>): string {
     const some = dates.filter((date) => date !== null);
     if (some.length === 0) {
-        return "No deadline";
+        return "Next deadline: None available.";
     }
     const next = findNextDateAfter(after, some);
     return next ? `Next deadline: ${dateToString(next)}` : "All deadlines have expired";
