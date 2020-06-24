@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 import { CourseDetails, Webview } from "./templates";
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
-import { getProgressBar, numbersToString } from "../utils/";
+import { getProgressBar, numbersToString, parseTestResultsText } from "../utils/";
 import { TemplateData } from "./types";
 
 export default class TemplateEngine {
@@ -155,12 +155,12 @@ export default class TemplateEngine {
                                     FAIL:
                                 </div>
                                 <div class="col-md">
-                                    <span>${first[0].name.replace(/\\/g, "\\\\")}</span>
+                                    <span>${parseTestResultsText(first[0].name)}</span>
                                 </div>
                             </div>
                             <div class="row m-0">
                                 <div class="col">
-                                    <pre>${first[0].message.replace(/\\/g, "\\\\")}</pre>
+                                    <pre>${parseTestResultsText(first[0].message)}</pre>
                                 </div>
                             </div>
                         </div>`);
@@ -174,12 +174,12 @@ export default class TemplateEngine {
                                         ${test.successful ? "PASS:" : "FAIL:"}
                                     </div>
                                     <div class="col-md">
-                                        <span>${test.name.replace(/\\/g, "\\\\")}</span>
+                                        <span>${parseTestResultsText(test.name)}</span>
                                     </div>
                                 </div>
                                 <div class="row m-0">
                                     <div class="col">
-                                        <pre>${test.message.replace(/\\/g, "\\\\")}</pre>
+                                        <pre>${parseTestResultsText(test.message)}</pre>
                                     </div>
                                 </div>
                             </div>`);

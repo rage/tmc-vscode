@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.1] - 2020-06-24
+
+### Changed
+- Darker disabled buttons.
+- Enable python.terminal.executeInFileDir for TMC Workspace.
+
+### Fixed
+- Problem showing HTML characters in TMC Test Results.
+- Disabled 'Open all' button if no exercises downloaded.
+
 ## [0.7.0] - 2020-06-23
 
 ### Added
