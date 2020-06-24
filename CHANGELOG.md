@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Disabled buttons styling.
+
+### Fixed
+- Problem showing HTML entities in TMC Test Results.
+- Disabled 'Open all' button if no exercises downloaded.
+
 ## [0.7.0] - 2020-06-23
 
 ### Added
