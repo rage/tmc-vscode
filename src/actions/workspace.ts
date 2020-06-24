@@ -7,7 +7,13 @@
 import { Err, Ok, Result } from "ts-results";
 import { ActionContext, CourseExerciseDownloads } from "./types";
 import * as pLimit from "p-limit";
-import { askForConfirmation, askForItem, showError, showNotification } from "../utils";
+import {
+    askForConfirmation,
+    askForItem,
+    showError,
+    showNotification,
+    showProgressNotification,
+} from "../utils";
 import { getOldSubmissions } from "./user";
 import * as legacy from "./legacy";
 import { OldSubmission } from "../api/types";
@@ -62,88 +68,56 @@ export async function downloadExercises(
     const limit = pLimit(3);
     const openExercises: Array<number> = [];
 
-    const task = (state: DownloadState) => (
-        p: vscode.Progress<{ downloadedPct: number; increment: number }>,
+    const task = (
+        process: vscode.Progress<{ downloadedPct: number; increment: number }>,
+        state: DownloadState,
     ): Promise<void> =>
-        new Promise<void>((resolve) => {
-            console.log("Single task started");
-            if (state) {
-                if (workspaceManager.isExerciseOpen(state.id)) {
-                    openExercises.push(state.id);
-                }
-                state.status = "Downloading";
-                exerciseStatus.set(state.id, state);
-            }
-            tmc.downloadExercise(state.id, state.organizationSlug, (downloadedPct, increment) => {
-                console.log("Callback works", downloadedPct, increment);
-                p.report({ downloadedPct, increment });
-            }).then((res: Result<void, Error>) => {
-                if (state) {
-                    if (res.ok) {
-                        state.downloaded = true;
-                        ui.webview.postMessage({
-                            command: "exercisesClosed",
-                            exerciseIds: [state.id],
-                        });
-                    } else {
-                        state.failed = true;
-                        state.error = res.val.message;
-                        ui.webview.postMessage({
-                            command: "exercisesFailedToDownload",
-                            exerciseIds: [state.id],
-                        });
+        limit(
+            () =>
+                new Promise<void>((resolve) => {
+                    if (state) {
+                        if (workspaceManager.isExerciseOpen(state.id)) {
+                            openExercises.push(state.id);
+                        }
+                        state.status = "Downloading";
+                        exerciseStatus.set(state.id, state);
                     }
-                    exerciseStatus.set(state.id, state);
-                }
-                resolve();
-            });
-        });
-
-    const tasks = (
-        p: vscode.Progress<{ message?: string; increment: number }>,
-    ): Promise<void[]> => {
-        p.report({ message: "Downloading exercises... (0%)", increment: 0 });
-        let percent = 0;
-        let progress = 0;
-        const total = exerciseStatus.size * 100;
-        console.log("The magical number is", total);
-        return Promise.all(
-            Array.from(exerciseStatus.values()).map((state) =>
-                limit(() => {
-                    let increments = 0;
-                    const report = (p2: { message?: string; increment: number }): void => {
-                        increments += p2.increment;
-                        progress += p2.increment;
-                        const oldPercent = percent;
-                        percent = (progress * 100) / total;
-                        console.log(
-                            "Received increment",
-                            p2.increment,
-                            percent,
-                            percent - oldPercent,
-                        );
-                        logger.log("Received increment", p2.increment, percent);
-                        p.report({
-                            message: `Downloading exercises... (${percent}%)`,
-                            increment: Math.floor(percent - oldPercent),
-                        });
-                    };
-                    return task(state)({ report }).then(() => {
-                        console.log("Then called");
-                        report({ increment: 100 - increments });
-                        return Promise.resolve();
+                    tmc.downloadExercise(
+                        state.id,
+                        state.organizationSlug,
+                        (downloadedPct, increment) => process.report({ downloadedPct, increment }),
+                    ).then((res: Result<void, Error>) => {
+                        if (state) {
+                            if (res.ok) {
+                                state.downloaded = true;
+                                ui.webview.postMessage({
+                                    command: "exercisesClosed",
+                                    exerciseIds: [state.id],
+                                });
+                            } else {
+                                state.failed = true;
+                                state.error = res.val.message;
+                                ui.webview.postMessage({
+                                    command: "exercisesFailedToDownload",
+                                    exerciseIds: [state.id],
+                                });
+                            }
+                            exerciseStatus.set(state.id, state);
+                        }
+                        resolve();
                     });
                 }),
-            ),
         );
-    };
 
-    await vscode.window.withProgress(
-        {
-            location: vscode.ProgressLocation.Notification,
-            title: "TestMyCode",
-        },
-        (p) => tasks(p),
+    await showProgressNotification(
+        `Downloading ${exerciseStatus.size} exercises...`,
+        ...Array.from(
+            exerciseStatus.values(),
+        ).map(
+            (state) => (
+                p: vscode.Progress<{ downloadedPct: number; increment: number }>,
+            ): Promise<void> => task(p, state),
+        ),
     );
 
     workspaceManager.openExercise(...openExercises);
