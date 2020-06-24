@@ -42,6 +42,7 @@ export default class Settings {
             this.setFilesExcludeInWorkspace(this.settings.hideMetaFiles);
             this.verifyFoldersInWorkspace();
             this.verifyWatcherPatternExclusion();
+            this.updateWorkspaceSetting("python.terminal.executeInFileDir", true);
         }
     }
 
@@ -134,7 +135,10 @@ export default class Settings {
     private updateWorkspaceSetting(section: string, value: any): void {
         if (isWorkspaceOpen(this.resources)) {
             const oldValue = this.getWorkspaceSetting(section);
-            const newValue = { ...oldValue, ...value };
+            let newValue = value;
+            if (value instanceof Object) {
+                newValue = { ...oldValue, ...value };
+            }
             vscode.workspace
                 .getConfiguration(undefined, vscode.Uri.file(this.resources.getWorkspaceFilePath()))
                 .update(section, newValue, vscode.ConfigurationTarget.Workspace);

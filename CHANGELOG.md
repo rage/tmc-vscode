@@ -4,6 +4,7 @@
 
 ### Changed
 - Disabled buttons styling.
+- Enable python.terminal.executeInFileDir for TMC Workspace.
 
 ### Fixed
 - Problem showing HTML entities in TMC Test Results.
