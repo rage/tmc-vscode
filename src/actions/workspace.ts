@@ -20,6 +20,8 @@ import { dateToString, parseDate } from "../utils/dateDeadline";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import * as vscode from "vscode";
 
+const limit = pLimit(3);
+
 /**
  * Downloads given exercises and opens them in TMC workspace.
  */
@@ -27,99 +29,65 @@ export async function downloadExercises(
     actionContext: ActionContext,
     courseExerciseDownloads: CourseExerciseDownloads[],
 ): Promise<void> {
-    const { tmc, ui, logger, workspaceManager } = actionContext;
+    const { tmc, ui, logger } = actionContext;
 
     type DownloadState = {
         id: number;
         name: string;
         organizationSlug: string;
-        downloaded: boolean;
-        failed: boolean;
-        error: string;
-        status: string;
     };
-
-    const exerciseStatus = new Map<number, DownloadState>();
-
-    for (const ced of courseExerciseDownloads) {
-        const courseDetails = await tmc.getCourseDetails(ced.courseId);
-        if (courseDetails.ok) {
-            courseDetails.val.course.exercises
-                .filter((x) => ced.exerciseIds.includes(x.id))
-                .forEach((x) =>
-                    exerciseStatus.set(x.id, {
-                        id: x.id,
-                        name: x.name,
-                        organizationSlug: ced.organizationSlug,
-                        downloaded: false,
-                        failed: false,
-                        error: "",
-                        status: "In queue",
-                    }),
-                );
-        } else {
-            const message = `Could not download exercises, course details not found: ${courseDetails.val.name} - ${courseDetails.val.message}`;
-            logger.log(message);
-            showError(message);
-        }
-    }
-
-    const limit = pLimit(3);
-    const openExercises: Array<number> = [];
 
     const task = (
         process: vscode.Progress<{ downloadedPct: number; increment: number }>,
         state: DownloadState,
     ): Promise<void> =>
-        limit(
-            () =>
-                new Promise<void>((resolve) => {
-                    if (state) {
-                        if (workspaceManager.isExerciseOpen(state.id)) {
-                            openExercises.push(state.id);
-                        }
-                        state.status = "Downloading";
-                        exerciseStatus.set(state.id, state);
-                    }
-                    tmc.downloadExercise(
-                        state.id,
-                        state.organizationSlug,
-                        (downloadedPct, increment) => process.report({ downloadedPct, increment }),
-                    ).then((res: Result<void, Error>) => {
-                        if (state) {
-                            if (res.ok) {
-                                state.downloaded = true;
-                                ui.webview.postMessage({
-                                    command: "exercisesClosed",
-                                    exerciseIds: [state.id],
-                                });
-                            } else {
-                                state.failed = true;
-                                state.error = res.val.message;
-                                ui.webview.postMessage({
-                                    command: "exercisesFailedToDownload",
-                                    exerciseIds: [state.id],
-                                });
-                            }
-                            exerciseStatus.set(state.id, state);
-                        }
-                        resolve();
-                    });
-                }),
-        );
+        new Promise<void>((resolve) => {
+            ui.webview.postMessage({
+                command: "exerciseStatusChange",
+                exerciseIds: [state.id],
+                value: "downloading",
+            });
+            tmc.downloadExercise(state.id, state.organizationSlug, (downloadedPct, increment) =>
+                process.report({ downloadedPct, increment }),
+            ).then((res: Result<void, Error>) => {
+                const value = res.ok ? "closed" : "failed";
+                ui.webview.postMessage({
+                    command: "exerciseStatusChange",
+                    exerciseIds: [state.id],
+                    value,
+                });
+                resolve();
+            });
+        });
+
+    const exerciseStatuses = await Promise.all(
+        courseExerciseDownloads.map(async (ced) => {
+            const courseDetails = await tmc.getCourseDetails(ced.courseId);
+            if (courseDetails.err) {
+                logger.warn(
+                    "Could not download exercises, course details not found: " +
+                        `${courseDetails.val.name} - ${courseDetails.val.message}`,
+                );
+                return [];
+            }
+            return courseDetails.val.course.exercises
+                .filter((x) => ced.exerciseIds.includes(x.id))
+                .map<DownloadState>((x) => ({
+                    id: x.id,
+                    name: x.name,
+                    organizationSlug: ced.organizationSlug,
+                }));
+        }),
+    ).then((res) => res.reduce((collected, next) => collected.concat(next), []));
 
     await showProgressNotification(
-        `Downloading ${exerciseStatus.size} exercises...`,
-        ...Array.from(
-            exerciseStatus.values(),
-        ).map(
+        `Downloading ${exerciseStatuses.length} exercises...`,
+        ...exerciseStatuses.map(
             (state) => (
                 p: vscode.Progress<{ downloadedPct: number; increment: number }>,
-            ): Promise<void> => task(p, state),
+            ): Promise<void> => limit(() => task(p, state)),
         ),
     );
-
-    workspaceManager.openExercise(...openExercises);
 }
 
 interface UpdateCheckOptions {
@@ -242,7 +210,7 @@ export async function openExercises(
     ids: number[],
     actionContext: ActionContext,
 ): Promise<Result<number[], Error>> {
-    const { workspaceManager, logger } = actionContext;
+    const { workspaceManager, logger, ui } = actionContext;
 
     const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
     const result = workspaceManager.openExercise(...filterIds);
@@ -254,6 +222,11 @@ export async function openExercises(
         );
         return new Err(new Error("Something went wrong while opening exercises."));
     }
+    ui.webview.postMessage({
+        command: "exerciseStatusChange",
+        exerciseIds: filterIds,
+        value: "opened",
+    });
     return new Ok(filterIds);
 }
 
@@ -265,7 +238,7 @@ export async function closeExercises(
     actionContext: ActionContext,
     ids: number[],
 ): Promise<Result<number[], Error>> {
-    const { workspaceManager, logger } = actionContext;
+    const { workspaceManager, logger, ui } = actionContext;
 
     const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
     const result = workspaceManager.closeExercise(...filterIds);
@@ -277,6 +250,11 @@ export async function closeExercises(
         );
         return new Err(new Error("Something went wrong while closing exercises."));
     }
+    ui.webview.postMessage({
+        command: "exerciseStatusChange",
+        exerciseIds: filterIds,
+        value: "closed",
+    });
     return new Ok(filterIds);
 }
 

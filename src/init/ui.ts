@@ -24,6 +24,7 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
+import { ExerciseStatus } from "../config/types";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -92,6 +93,11 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (!(msg.type && msg.ids && msg.courseName && msg.organizationSlug && msg.courseId)) {
                 return;
             }
+            const openAfter = msg.ids.filter(
+                (id) =>
+                    workspaceManager.getExerciseDataById(id).mapErr(() => undefined).val?.status !==
+                    ExerciseStatus.CLOSED,
+            );
             const downloads: CourseExerciseDownloads = {
                 courseId: msg.courseId,
                 exerciseIds: msg.ids,
@@ -99,12 +105,8 @@ export function registerUiActions(actionContext: ActionContext): void {
             };
             await actionContext.userData.clearNewExercises(msg.courseId);
             await downloadExercises(actionContext, [downloads]);
-            // Poitless? Is opening exercises while updating
-            // workspaceManager.openExercise(...msg.ids);
-            ui.webview.postMessage({
-                command: "exercisesOpened",
-                exerciseIds: msg.ids,
-            });
+            // Handle errors?
+            openExercises(openAfter, actionContext);
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
@@ -177,10 +179,6 @@ export function registerUiActions(actionContext: ActionContext): void {
                     : buttons.push(["Ok", (): void => {}]);
                 showError(`${result.val.name} - ${result.val.message}`, ...buttons);
             }
-            actionContext.ui.webview.postMessage({
-                command: "exercisesOpened",
-                exerciseIds: result.val,
-            });
         },
     );
     ui.webview.registerHandler(
@@ -198,10 +196,6 @@ export function registerUiActions(actionContext: ActionContext): void {
                     : buttons.push(["Ok", (): void => {}]);
                 showError(`${result.val.name} - ${result.val.message}`, ...buttons);
             }
-            actionContext.ui.webview.postMessage({
-                command: "exercisesClosed",
-                exerciseIds: result.val,
-            });
         },
     );
     ui.webview.registerHandler("changeTmcDataPath", async (msg: { type?: "changeTmcDataPath" }) => {
