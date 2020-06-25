@@ -11,7 +11,6 @@ import {
 import {
     addNewCourse,
     closeExercises,
-    displayCourseDownloads,
     displayLocalCourseDetails,
     displayUserCourses,
     downloadExercises,
@@ -117,20 +116,6 @@ export function registerUiActions(actionContext: ActionContext): void {
             showError(message);
         }
     });
-    ui.webview.registerHandler(
-        "exerciseDownloads",
-        async (msg: { type?: "exerciseDownloads"; id?: number }) => {
-            if (!(msg.type && msg.id)) {
-                return;
-            }
-            const res = await displayCourseDownloads(actionContext, msg.id);
-            if (res.err) {
-                const message = `Can't display downloads: ${res.val.message}`;
-                logger.error(message);
-                showError(message);
-            }
-        },
-    );
     ui.webview.registerHandler(
         "removeCourse",
         async (msg: { type?: "removeCourse"; id?: number }) => {
