@@ -50,7 +50,7 @@ export async function downloadExercises(
             tmc.downloadExercise(state.id, state.organizationSlug, (downloadedPct, increment) =>
                 process.report({ downloadedPct, increment }),
             ).then((res: Result<void, Error>) => {
-                const value = res.ok ? "closed" : "failed";
+                const value = res.ok ? "closed" : "downloadFailed";
                 ui.webview.postMessage({
                     command: "exerciseStatusChange",
                     exerciseIds: [state.id],

@@ -308,7 +308,7 @@ function script() {
                 break;
             case "downloadFailed":
                 html = (
-                    <span class="badge badge-alert" data-status="expired">
+                    <span class="badge badge-danger" data-status="downloadFailed">
                         failed
                     </span>
                 );
