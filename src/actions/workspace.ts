@@ -15,7 +15,6 @@ import {
     showProgressNotification,
 } from "../utils";
 import { getOldSubmissions } from "./user";
-import * as legacy from "./legacy";
 import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 import { NOTIFICATION_DELAY } from "../config/constants";
@@ -172,7 +171,7 @@ export async function checkForExerciseUpdates(
             [
                 "Download",
                 (): Promise<void> =>
-                    legacy.downloadExercises(actionContext, Array.from(coursesToUpdate.values())),
+                    downloadExercises(actionContext, Array.from(coursesToUpdate.values())),
             ],
             [
                 "Remind me later",

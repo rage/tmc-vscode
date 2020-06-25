@@ -63,7 +63,7 @@ function component(data) {
                 <div class="row py-1">
                     <div class="col-md">
                         {updateableExerciseIds.length > 0 ? (
-                            <div class="alert alert-warning" role="alert">
+                            <div class="alert alert-warning" id="update-notification" role="alert">
                                 <span class="mr-2">Updates found for exercises</span>
                                 <button
                                     class="btn btn-danger"
@@ -348,18 +348,6 @@ function script() {
         }
     }
 
-    function downloadSelectedExercisesLegacy(ids) {
-        if (ids.length > 0) {
-            vscode.postMessage({
-                type: "downloadExercisesLegacy",
-                ids,
-                courseName: course.courseName,
-                organizationSlug: course.courseOrg,
-                courseId: parseInt(course.courseId),
-            });
-        }
-    }
-
     function handleSelected(type) {
         const checkboxCols = document.querySelectorAll("td.exercise-selector");
         const ids = [];
@@ -432,12 +420,20 @@ function script() {
         );
 
         // Course details
+        const updateNotification = document.getElementById("update-notification");
         const updateButton = document.getElementById("update-button");
-        if (updateButton) {
-            updateButton.addEventListener("click", function () {
-                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
-                downloadSelectedExercisesLegacy(updateableIds);
-            });
+        if (updateNotification && updateButton) {
+            updateButton.addEventListener(
+                "click",
+                function () {
+                    updateNotification.style.display = "none";
+                    const updateableIds = this.dataset.exercises
+                        .split(",")
+                        .map((id) => parseInt(id));
+                    downloadSelectedExercises(updateableIds);
+                },
+                { once: true },
+            );
         }
 
         // Course part cards
