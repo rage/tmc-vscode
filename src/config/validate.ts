@@ -11,6 +11,10 @@ import Resources from "./resources";
 import { ExerciseStatus, LocalCourseData, LocalExerciseData } from "./types";
 import Logger from "../utils/logger";
 
+/**
+ * Check that workspace and userdata is up-to-date.
+ * Uses cache, so that API requests in for loops can be re-used.
+ */
 export async function validateAndFix(
     storage: Storage,
     tmc: TMC,
@@ -24,9 +28,12 @@ export async function validateAndFix(
         if (login.err) {
             return new Err(login.val);
         }
+
         logger.log("Fixing workspacemanager data");
         const exerciseDataFixed: LocalExerciseData[] = [];
         for (const ex of exerciseData) {
+            // If data objects doesn't have following fields or isOpen and status is undefined, remove from storage.
+            // These are critical fields needed for the extension to work.
             if (
                 !is<{
                     organization: string;
@@ -42,21 +49,24 @@ export async function validateAndFix(
                 continue;
             }
 
+            // Get the current status of the exercise
             const exerciseStatus =
                 ex.isOpen !== undefined
                     ? ex.isOpen
                         ? ExerciseStatus.OPEN
                         : ExerciseStatus.CLOSED
                     : (ex.status as ExerciseStatus);
-            const details = await getCourseDetails(tmc, ex.organization, ex.course);
 
+            const details = await getCourseDetails(tmc, ex.organization, ex.course);
             if (details.err) {
                 if (details.val instanceof ApiError) {
                     logger.warn(`Skipping bad workspacemanager data - ${details.val.message}`, ex);
+                    exerciseDataFixed.push(ex as LocalExerciseData);
                     continue;
                 }
                 return new Err(details.val);
             }
+            // Find the exercise from API Data and update fields.
             const exerciseDetails = details.val.course.exercises.find((x) => x.id === ex.id);
             if (exerciseDetails) {
                 exerciseDataFixed.push({
@@ -86,6 +96,8 @@ export async function validateAndFix(
         const userDataFixed: { courses: LocalCourseData[] } = { courses: [] };
         if (userData.courses !== undefined) {
             for (const course of userData.courses) {
+                // If data objects doesn't have following fields or id and name is undefined, remove from storage.
+                // These are critical fields needed for the extension to work.
                 if (
                     !is<{
                         organization: string;
@@ -98,47 +110,53 @@ export async function validateAndFix(
                     continue;
                 }
 
+                // Try to fetch from API with ID, if fails, try to find the course from all API data
                 const courseDetails = await (course.id !== undefined
                     ? tmc.getCourseDetails(course.id, true)
                     : getCourseDetails(tmc, course.organization, course.name as string));
                 if (courseDetails.err) {
                     if (courseDetails.val instanceof ApiError) {
-                        logger.warn("Skipping bad userdata", course);
+                        logger.warn("Skipping bad userdata due to courseDetails", course);
+                        userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     }
                     return new Err(courseDetails.val);
                 }
-
+                // Try to fetch from API with ID, if fails, try to find the course from all API data
                 const courseExercises = await (course.id !== undefined
                     ? tmc.getCourseExercises(course.id, true)
                     : getCourseExercises(tmc, course.organization, course.name as string));
 
                 if (courseExercises.err) {
                     if (courseDetails.val instanceof ApiError) {
-                        logger.warn("Skipping bad userdata", course);
+                        logger.warn("Skipping bad userdata due to courseExercises", course);
+                        userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     }
                     return new Err(courseExercises.val);
                 }
-
+                // Try to fetch from API with ID, if fails, try to find the course from all API data
                 const courseSettings = await (course.id !== undefined
                     ? tmc.getCourseSettings(course.id, true)
                     : getCourseSettings(tmc, course.organization, course.name as string));
 
                 if (courseSettings.err) {
                     if (courseSettings.val instanceof ApiError) {
-                        logger.warn("Skipping bad userdata", course);
+                        logger.warn("Skipping bad userdata due to courseSettings", course);
+                        userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     }
                     return new Err(courseSettings.val);
                 }
 
                 const courseData = courseDetails.val.course;
+                const courseInfo = courseSettings.val;
                 const exerciseData = courseExercises.val;
                 const [availablePoints, awardedPoints] = exerciseData.reduce(
                     (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
                     [0, 0],
                 );
+
                 userDataFixed.courses.push({
                     description: courseData.description || "",
                     exercises: courseData.exercises.map((x) => ({
@@ -152,7 +170,7 @@ export async function validateAndFix(
                     organization: course.organization,
                     awardedPoints: awardedPoints,
                     availablePoints: availablePoints,
-                    perhapsExamMode: courseSettings.val.hide_submission_results,
+                    perhapsExamMode: courseInfo.hide_submission_results,
                     notifyAfter: 0,
                     newExercises: [],
                 });
@@ -165,12 +183,15 @@ export async function validateAndFix(
     return Ok.EMPTY;
 }
 
-async function getCourseDetails(
+/**
+ * Try to find the course ID from all TMC courses in given organization.
+ */
+async function findCourseInfo(
     tmc: TMC,
-    organization: string,
+    org: string,
     course: string,
-): Promise<Result<CourseDetails, Error>> {
-    const coursesResult = await tmc.getCourses(organization, true);
+): Promise<Result<number, Error>> {
+    const coursesResult = await tmc.getCourses(org, true);
     if (coursesResult.err) {
         return new Err(coursesResult.val);
     }
@@ -179,7 +200,19 @@ async function getCourseDetails(
     if (!courseId) {
         return new Err(new ApiError("No such course in response"));
     }
-    return tmc.getCourseDetails(courseId, true);
+    return new Ok(courseId);
+}
+
+async function getCourseDetails(
+    tmc: TMC,
+    org: string,
+    course: string,
+): Promise<Result<CourseDetails, Error>> {
+    const courseId = await findCourseInfo(tmc, org, course);
+    if (courseId.err) {
+        return new Err(courseId.val);
+    }
+    return tmc.getCourseDetails(courseId.val, true);
 }
 
 async function getCourseExercises(
@@ -187,16 +220,11 @@ async function getCourseExercises(
     org: string,
     course: string,
 ): Promise<Result<CourseExercise[], Error>> {
-    const coursesResult = await tmc.getCourses(org, true);
-    if (coursesResult.err) {
-        return new Err(coursesResult.val);
+    const courseId = await findCourseInfo(tmc, org, course);
+    if (courseId.err) {
+        return new Err(courseId.val);
     }
-
-    const courseId = coursesResult.val.find((x) => x.name === course)?.id;
-    if (!courseId) {
-        return new Err(new ApiError("No such course in response"));
-    }
-    return tmc.getCourseExercises(courseId, true);
+    return tmc.getCourseExercises(courseId.val, true);
 }
 
 async function getCourseSettings(
@@ -204,16 +232,11 @@ async function getCourseSettings(
     org: string,
     course: string,
 ): Promise<Result<CourseSettings, Error>> {
-    const coursesResult = await tmc.getCourses(org, true);
-    if (coursesResult.err) {
-        return new Err(coursesResult.val);
+    const courseId = await findCourseInfo(tmc, org, course);
+    if (courseId.err) {
+        return new Err(courseId.val);
     }
-
-    const courseId = coursesResult.val.find((x) => x.name === course)?.id;
-    if (!courseId) {
-        return new Err(new ApiError("No such course in response"));
-    }
-    return tmc.getCourseSettings(courseId, true);
+    return tmc.getCourseSettings(courseId.val, true);
 }
 
 async function ensureLogin(

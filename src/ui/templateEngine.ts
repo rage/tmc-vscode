@@ -76,7 +76,10 @@ export default class TemplateEngine {
          */
         handlebars.registerHelper("submission_status", (results: SubmissionResultReport) => {
             if (results.status === "ok" && results.all_tests_passed) {
-                return "<h1 class='passed-header'>All tests passed on the server</h1><input type='button' class='btn-primary' value='View model solution' onclick='viewModelSolution()' />";
+                if (results.solution_url) {
+                    return "<h1 class='passed-header'>All tests passed on the server</h1><input type='button' class='btn-primary' value='View model solution' onclick='viewModelSolution()' />";
+                }
+                return "<h1 class='passed-header'>All tests passed on the server</h1>";
             } else if (results.status === "fail") {
                 return "<h1>Some tests failed on the server</h1>";
             } else if (results.status === "error") {

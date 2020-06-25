@@ -607,7 +607,7 @@ export default class TMC {
                     const stderr = result.val[1] ? result.val[1] : stderrExec;
                     const logs = { stdout, stderr };
 
-                    this.logger.logVerbose("Logs", false, stdout, stderr);
+                    this.logger.log("Logs", stdout, stderr);
 
                     if (action === "extract-project" || action === "compress-project") {
                         return resolve(new Ok({ response: outputPath, logs }));
@@ -618,6 +618,7 @@ export default class TMC {
                         logs,
                     };
                     // del.sync(outputPath, { force: true });
+                    this.logger.log("Temp JSON data", readResult.response);
                     if (is<TmcLangsResponse>(readResult)) {
                         return resolve(new Ok(readResult));
                     }
@@ -700,7 +701,10 @@ export default class TMC {
                         }
                         return new Ok(responseObject);
                     }
-                    this.logger.error("Unexpected TMC response type", responseObject);
+                    this.logger.error(
+                        `Unexpected TMC response type from ${request.url}`,
+                        responseObject,
+                    );
                     this.logger.show();
                     return new Err(new ApiError("Unexpected response type"));
                 } catch (error) {

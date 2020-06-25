@@ -78,7 +78,7 @@ export default class WorkspaceWatcher {
     }
 
     public watch({ organization, course, name }: LocalExerciseData): void {
-        this.logger.logVerbose("Watcher watching data for", true, organization, course, name);
+        this.logger.log("Watcher watching data for", organization, course, name);
         if (!this.folderTree.has(organization)) {
             this.folderTree.set(organization, new Map());
         }
@@ -89,7 +89,7 @@ export default class WorkspaceWatcher {
     }
 
     public unwatch({ organization, course, name }: LocalExerciseData): void {
-        this.logger.logVerbose("Watcher unwatching data for", true, organization, course, name);
+        this.logger.log("Watcher unwatching data for", organization, course, name);
         if (this.folderTree.get(organization)?.has(course)) {
             this.folderTree.get(organization)?.get(course)?.delete(name);
             if (this.folderTree.get(organization)?.get(course)?.size === 0) {

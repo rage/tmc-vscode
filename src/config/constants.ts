@@ -1,3 +1,5 @@
+import { SubmissionResultReport } from "../api/types";
+
 export const EXTENSION_ID = "moocfi.test-my-code";
 export const OUTPUT_CHANNEL_NAME = "TestMyCode";
 export const TMC_JAR_URL = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.8.2-SNAPSHOT.jar";
@@ -84,3 +86,56 @@ Workspace:
     Please manage, i.e. close, open and download, exercises only via the TMC extension or by using our premade commands. 
     Moving/deleting/renaming folders manually currently breaks the TMC extensions state and could potentially remove files and folders automatically.
     Files and folders can only be created under the exercise folders, all other will be automatically deleted.`;
+
+export const EXAM_TEST_RESULT = {
+    testResult: {
+        status: "PASSED",
+        testResults: [
+            {
+                name: "Hidden Exam Test: hidden_test",
+                successful: true,
+                message: "Remember to submit your solution to the server for evaluation.",
+                valgrindFailed: false,
+                points: [],
+                exception: [],
+            },
+        ],
+        logs: {},
+    },
+    exerciseName: "part01-exam01",
+    tmcLogs: {
+        stdout: "",
+        stderr: "",
+    },
+};
+
+export const EXAM_SUBMISSION_RESULT: SubmissionResultReport = {
+    api_version: 8,
+    all_tests_passed: true,
+    user_id: 0,
+    login: "0",
+    course: "0",
+    exercise_name: "string",
+    status: "ok",
+    points: [],
+    validations: "unknown",
+    valgrind: null,
+    submission_url: "",
+    solution_url: null,
+    submitted_at: "string",
+    processing_time: 3,
+    reviewed: false,
+    requests_review: false,
+    paste_url: null,
+    message_for_paste: null,
+    missing_review_points: [],
+    test_cases: [
+        {
+            name: "Hidden Exam Test: hidden_test",
+            successful: true,
+            message: "Exam exercise sent to server successfully, you can now continue.",
+            exception: null,
+            detailed_message: null,
+        },
+    ],
+};
