@@ -231,7 +231,7 @@ export async function openExercises(
 }
 
 /**
- * Closes given exercises, hiding them in TMC workspace.
+ * Closes given exercises, hiding them from TMC workspace.
  * @param ids Array of exercise IDs
  */
 export async function closeExercises(
