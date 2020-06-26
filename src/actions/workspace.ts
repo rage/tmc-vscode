@@ -24,11 +24,14 @@ const limit = pLimit(3);
 
 /**
  * Downloads given exercises and opens them in TMC workspace.
+ *
+ * @param courseExerciseDownloads An array of course-related data that is required for downloading.
+ * @returns An array of successful downloads.
  */
 export async function downloadExercises(
     actionContext: ActionContext,
     courseExerciseDownloads: CourseExerciseDownloads[],
-): Promise<void> {
+): Promise<number[]> {
     const { tmc, ui, logger } = actionContext;
 
     type DownloadState = {
@@ -36,6 +39,9 @@ export async function downloadExercises(
         name: string;
         organizationSlug: string;
     };
+
+    const successful: DownloadState[] = [];
+    const failed: DownloadState[] = [];
 
     const task = (
         process: vscode.Progress<{ downloadedPct: number; increment: number }>,
@@ -56,6 +62,15 @@ export async function downloadExercises(
                     exerciseIds: [state.id],
                     value,
                 });
+                if (res.ok) {
+                    successful.push(state);
+                } else {
+                    failed.push(state);
+                    logger.error(
+                        `Failed to download ${state.organizationSlug}/${state.name}`,
+                        res.val.message,
+                    );
+                }
                 resolve();
             });
         });
@@ -80,6 +95,7 @@ export async function downloadExercises(
         }),
     ).then((res) => res.reduce((collected, next) => collected.concat(next), []));
 
+    logger.log(`Starting to download ${exerciseStatuses.length} exercises`);
     await showProgressNotification(
         `Downloading ${exerciseStatuses.length} exercises...`,
         ...exerciseStatuses.map(
@@ -88,6 +104,16 @@ export async function downloadExercises(
             ): Promise<void> => limit(() => task(p, state)),
         ),
     );
+
+    if (failed.length > 0) {
+        logger.error("Some exercises failed to download");
+        showError("Some exercises failed to download, please try again later.", [
+            "Details",
+            (): void => logger.show(),
+        ]);
+    }
+
+    return successful.map((x) => x.id);
 }
 
 interface UpdateCheckOptions {
@@ -138,7 +164,7 @@ export async function checkForExerciseUpdates(
             `Found updates for ${count} exercises. Do you wish to download them?`,
             [
                 "Download",
-                (): Promise<void> =>
+                (): Promise<number[]> =>
                     downloadExercises(actionContext, Array.from(coursesToUpdate.values())),
             ],
             [

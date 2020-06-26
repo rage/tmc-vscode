@@ -103,9 +103,11 @@ export function registerUiActions(actionContext: ActionContext): void {
                 organizationSlug: msg.organizationSlug,
             };
             await actionContext.userData.clearNewExercises(msg.courseId);
-            await downloadExercises(actionContext, [downloads]);
-            // Handle errors?
-            openExercises(openAfter, actionContext);
+            const succesful = await downloadExercises(actionContext, [downloads]);
+            openExercises(
+                openAfter.filter((oa) => succesful.find((s) => s === oa)),
+                actionContext,
+            );
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
