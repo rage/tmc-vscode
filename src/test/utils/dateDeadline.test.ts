@@ -95,8 +95,8 @@ suite("Date utils", () => {
                 CURRENT_TIME,
                 FUTURE_DATES.map((x) => ({ date: x, active: false })),
             ),
-            parsedTarget,
-            `Parsed deadline from inactive future dates was expected to be "${parsedTarget}"`,
+            NO_DEADLINE_AVAILABLE,
+            `Parsed deadline from inactive future dates was expected to be "${NO_DEADLINE_AVAILABLE}"`,
         );
     });
 });

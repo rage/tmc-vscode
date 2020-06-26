@@ -45,25 +45,25 @@ export interface Deadline {
  * Resolves a future deadline if there is one and returns a verbal explanation of results.
  */
 export function parseNextDeadlineAfter(after: Date, deadlines: Deadline[]): string {
-    const validDeadlines = deadlines.filter((x) => x.date !== null);
-
+    const validDeadlines = deadlines.filter((x) => x.date);
     if (validDeadlines.length === 0) {
         return "No deadline";
     }
 
+    const activeDeadlines = validDeadlines.filter((x) => x.active);
     const next = findNextDateAfter(
         after,
-        validDeadlines.map((x) => x.date),
+        activeDeadlines.map((x) => x.date),
     );
     if (next) {
         return `Next deadline: ${dateToString(next)}`;
     }
 
-    if (validDeadlines.some((x) => x.active)) {
-        return "All deadlines have expired";
+    if (activeDeadlines.length === 0) {
+        return "Next deadline: Not available";
     }
 
-    return "Next deadline: Not available";
+    return "All deadlines have expired";
 }
 
 /**

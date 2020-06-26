@@ -60,7 +60,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
                 new Date(),
                 exercises.map((exercise) => ({
                     date: exercise.deadline || null,
-                    active: exercise.passed,
+                    active: !exercise.passed,
                 })),
             );
             return { ...course, exercises, nextDeadline, completedPrc, newExercises };
@@ -155,7 +155,7 @@ export async function displayLocalCourseDetails(
                     currentDate,
                     e.exercises.map((ex) => ({
                         date: ex.isHard ? ex.hardDeadline : ex.softDeadline,
-                        active: ex.passed,
+                        active: !ex.passed,
                     })),
                 ),
             };
