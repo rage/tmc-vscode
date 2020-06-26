@@ -388,7 +388,8 @@ function script() {
                 c === "true" ? completed++ : null;
             }
 
-            exerciseCards[i].querySelector("button.open-all").disabled = open === allExercises;
+            exerciseCards[i].querySelector("button.open-all").disabled =
+                open === allExercises || downloaded === 0;
             exerciseCards[i].querySelector("button.close-all").disabled = open === 0;
 
             const name = cardInfo.dataset.groupName;

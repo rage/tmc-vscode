@@ -49,6 +49,7 @@ export const WORKSPACE_SETTINGS = {
         "files.autoSave": "onFocusChange",
         "files.exclude": { ...HIDE_META_FILES },
         "files.watcherExclude": { ...WATCHER_EXCLUDE },
+        "python.terminal.executeInFileDir": true,
     },
 };
 

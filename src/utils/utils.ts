@@ -176,3 +176,13 @@ export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): 
     });
     return feedbackQuestions;
 }
+
+export function parseTestResultsText(value: string): string {
+    return value
+        .replace(/\\/g, "\\\\")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
