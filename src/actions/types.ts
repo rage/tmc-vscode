@@ -18,11 +18,14 @@ export type ActionContext = {
     workspaceManager: WorkspaceManager;
 };
 
-export type CourseExerciseDownloads = {
+/**
+ * Required details for downloading exercises of a specific course.
+ */
+export interface CourseExerciseDownloads {
     courseId: number;
     exerciseIds: number[];
     organizationSlug: string;
-};
+}
 
 export type FeedbackQuestion = {
     id: number;

@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- All exercise downloads are now displayed with a progress notification.
+
+### Removed
+- Exercise Download Progress page.
+
 ## [0.7.1] - 2020-06-24
 
 ### Changed

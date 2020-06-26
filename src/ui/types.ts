@@ -149,3 +149,11 @@ export type TestResultData = {
     };
     pasteLink?: string;
 };
+
+export type ExerciseStatus = "closed" | "downloading" | "downloadFailed" | "opened";
+
+export interface WebviewMessage {
+    command: "exerciseStatusChange";
+    exerciseIds: number[];
+    value: ExerciseStatus;
+}

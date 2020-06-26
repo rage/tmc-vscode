@@ -19,12 +19,13 @@ import {
     sleep,
 } from "../utils/";
 import { ActionContext, FeedbackQuestion } from "./types";
+import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import {
-    displayLocalCourseDetails,
-    displayUserCourses,
-    selectOrganizationAndCourse,
-} from "./webview";
-import { checkForExerciseUpdates, closeExercises } from "./workspace";
+    checkForExerciseUpdates,
+    closeExercises,
+    downloadExercises,
+    openExercises,
+} from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
 import { CourseExercise, Exercise, OldSubmission, SubmissionFeedback } from "../api/types";
@@ -330,12 +331,21 @@ export async function checkForNewExercises(
     for (const course of updatedCourses) {
         if (course.newExercises.length > 0) {
             showNotification(
-                `${course.newExercises.length} new exercises found for ${course.name}. Do you wish to move to the downloads page?`,
+                `Found ${course.newExercises.length} new exercises for ${course.name}. Do you wish to download them now?`,
                 [
-                    "Go to course page",
-                    (): void => {
+                    "Download",
+                    async (): Promise<void> => {
                         userData.clearNewExercises(course.id);
-                        displayLocalCourseDetails(course.id, actionContext);
+                        openExercises(
+                            await downloadExercises(actionContext, [
+                                {
+                                    courseId: course.id,
+                                    exerciseIds: course.newExercises,
+                                    organizationSlug: course.organization,
+                                },
+                            ]),
+                            actionContext,
+                        );
                     },
                 ],
                 [

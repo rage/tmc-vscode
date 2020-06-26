@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import Resources from "../config/resources";
 import TemplateEngine from "./templateEngine";
 import { EMPTY_HTML_DOCUMENT } from "../config/constants";
-import { TemplateData } from "./types";
+import { TemplateData, WebviewMessage } from "./types";
 
 /**
  * A class for managing the Webview component of the plugin UI, to be used through the UI class
@@ -55,7 +55,7 @@ export default class TmcWebview {
         panel.reveal();
     }
 
-    public postMessage(message: unknown): void {
+    public postMessage(message: WebviewMessage): void {
         this.panel?.webview.postMessage(message);
     }
 

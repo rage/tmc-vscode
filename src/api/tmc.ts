@@ -233,6 +233,7 @@ export default class TMC {
     public async downloadExercise(
         id: number,
         organizationSlug: string,
+        progressCallback?: (downloadedPct: number, increment: number) => void,
     ): Promise<Result<void, Error>> {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assigned");
@@ -244,6 +245,7 @@ export default class TMC {
             archivePath,
             this.tmcDefaultHeaders,
             this.token,
+            progressCallback,
         );
         if (result.err) {
             return new Err(result.val);
