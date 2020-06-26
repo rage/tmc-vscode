@@ -60,10 +60,11 @@ export function registerCommands(
             const exerciseId = getCurrentExerciseId(workspaceManager);
             if (exerciseId) {
                 const link = await pasteExercise(actionContext, exerciseId);
-                showNotification(`Paste to TMC Server successful: ${link}`, [
-                    "Open URL",
-                    (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link)),
-                ]);
+                link &&
+                    showNotification(`Paste link: ${link}`, [
+                        "Open URL",
+                        (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link)),
+                    ]);
             } else {
                 logger.error(errorMessage);
                 showError(errorMessage);

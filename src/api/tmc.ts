@@ -700,7 +700,7 @@ export default class TMC {
             if (response.status === 403) {
                 return new Err(new AuthorizationError("403 - Forbidden"));
             }
-            const errorText = await response.text();
+            const errorText = (await response.json())?.error || (await response.text());
             this.logger.error(`${response.status} - ${response.statusText} - ${errorText}`);
             return new Err(
                 new ApiError(`${response.status} - ${response.statusText} - ${errorText}`),

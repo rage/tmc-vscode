@@ -107,30 +107,6 @@
                     "command": "selectAction",
                     "group": "navigation@1",
                     "when": "resourceScheme == file && tmcWorkspaceActive"
-                },
-                {
-                    "command": "uploadArchive",
-                    "when": "resourceScheme == file && tmcWorkspaceActive"
-                },
-                {
-                    "command": "closeExercise",
-                    "when": "resourceScheme == file && tmcWorkspaceActive"
-                },
-                {
-                    "command": "resetExercise",
-                    "when": "resourceScheme == file && tmcWorkspaceActive"
-                },
-                {
-                    "command": "pasteExercise",
-                    "when": "resourceScheme == file && tmcWorkspaceActive"
-                },
-                {
-                    "command": "downloadOldSubmission",
-                    "when": "resourceScheme == file && tmcWorkspaceActive"
-                },
-                {
-                    "command": "selectAction",
-                    "when": "resourceScheme == file && tmcWorkspaceActive"
                 }
             ]
         },

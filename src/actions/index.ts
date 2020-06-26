@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { ActionContext } from "./types";
-import { askForItem, showNotification } from "../utils";
-import { pasteExercise, submitExercise, testExercise } from "./user";
+import { askForItem } from "../utils";
+import { submitExercise, testExercise } from "./user";
 import { LocalExerciseData } from "../config/types";
 
 export * from "./user";
@@ -13,7 +13,7 @@ export async function selectAction(
     actionContext: ActionContext,
     exercise: LocalExerciseData,
 ): Promise<void> {
-    const options: [string, () => Promise<unknown>][] = [
+    const options: [string, () => Thenable<void>][] = [
         [
             "Run tests (CTRL + SHIFT + T)",
             (): Promise<void> => testExercise(actionContext, exercise.id),
@@ -21,13 +21,7 @@ export async function selectAction(
         ["Submit to server", (): Promise<void> => submitExercise(actionContext, exercise.id)],
         [
             "Upload to TMC Pastebin",
-            async (): Promise<void> => {
-                const link = await pasteExercise(actionContext, exercise.id);
-                showNotification(`Paste to TMC Server successful: ${link}`, [
-                    "Open URL",
-                    (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link)),
-                ]);
-            },
+            (): Thenable<void> => vscode.commands.executeCommand("pasteExercise"),
         ],
         [
             "Close exercise (CTRL + SHIFT + C)",
@@ -45,7 +39,7 @@ export async function selectAction(
     ];
 
     (
-        await askForItem<() => Promise<unknown>>(
+        await askForItem<() => Thenable<unknown>>(
             `Select TMC Action for ${exercise.name}`,
             false,
             ...options,
