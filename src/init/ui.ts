@@ -11,11 +11,9 @@ import {
 import {
     addNewCourse,
     closeExercises,
-    displayCourseDownloads,
     displayLocalCourseDetails,
     displayUserCourses,
     downloadExercises,
-    legacy,
     login,
     logout,
     openExercises,
@@ -25,6 +23,7 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
+import { ExerciseStatus } from "../config/types";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -93,44 +92,22 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (!(msg.type && msg.ids && msg.courseName && msg.organizationSlug && msg.courseId)) {
                 return;
             }
+            const openAfter = msg.ids.filter(
+                (id) =>
+                    workspaceManager.getExerciseDataById(id).mapErr(() => undefined).val?.status !==
+                    ExerciseStatus.CLOSED,
+            );
             const downloads: CourseExerciseDownloads = {
                 courseId: msg.courseId,
                 exerciseIds: msg.ids,
                 organizationSlug: msg.organizationSlug,
             };
             await actionContext.userData.clearNewExercises(msg.courseId);
-            await downloadExercises(actionContext, [downloads]);
-            workspaceManager.openExercise(...msg.ids);
-            ui.webview.postMessage({
-                command: "exercisesOpened",
-                exerciseIds: msg.ids,
-            });
-        },
-    );
-    ui.webview.registerHandler(
-        "downloadExercisesLegacy",
-        async (msg: {
-            type?: "downloadExercisesLegacy";
-            ids?: number[];
-            courseName?: string;
-            organizationSlug?: string;
-            courseId?: number;
-        }) => {
-            if (!(msg.type && msg.ids && msg.courseName && msg.organizationSlug && msg.courseId)) {
-                return;
-            }
-            const downloads: CourseExerciseDownloads = {
-                courseId: msg.courseId,
-                exerciseIds: msg.ids,
-                organizationSlug: msg.organizationSlug,
-            };
-            await actionContext.userData.clearNewExercises(msg.courseId);
-            await legacy.downloadExercises(actionContext, [downloads], msg.courseId);
-            workspaceManager.openExercise(...msg.ids);
-            ui.webview.postMessage({
-                command: "exercisesOpened",
-                exerciseIds: msg.ids,
-            });
+            const succesful = await downloadExercises(actionContext, [downloads]);
+            openExercises(
+                openAfter.filter((oa) => succesful.find((s) => s === oa)),
+                actionContext,
+            );
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
@@ -141,20 +118,6 @@ export function registerUiActions(actionContext: ActionContext): void {
             showError(message);
         }
     });
-    ui.webview.registerHandler(
-        "exerciseDownloads",
-        async (msg: { type?: "exerciseDownloads"; id?: number }) => {
-            if (!(msg.type && msg.id)) {
-                return;
-            }
-            const res = await displayCourseDownloads(actionContext, msg.id);
-            if (res.err) {
-                const message = `Can't display downloads: ${res.val.message}`;
-                logger.error(message);
-                showError(message);
-            }
-        },
-    );
     ui.webview.registerHandler(
         "removeCourse",
         async (msg: { type?: "removeCourse"; id?: number }) => {
@@ -203,10 +166,6 @@ export function registerUiActions(actionContext: ActionContext): void {
                     : buttons.push(["Ok", (): void => {}]);
                 showError(`${result.val.name} - ${result.val.message}`, ...buttons);
             }
-            actionContext.ui.webview.postMessage({
-                command: "exercisesOpened",
-                exerciseIds: result.val,
-            });
         },
     );
     ui.webview.registerHandler(
@@ -224,10 +183,6 @@ export function registerUiActions(actionContext: ActionContext): void {
                     : buttons.push(["Ok", (): void => {}]);
                 showError(`${result.val.name} - ${result.val.message}`, ...buttons);
             }
-            actionContext.ui.webview.postMessage({
-                command: "exercisesClosed",
-                exerciseIds: result.val,
-            });
         },
     );
     ui.webview.registerHandler("changeTmcDataPath", async (msg: { type?: "changeTmcDataPath" }) => {

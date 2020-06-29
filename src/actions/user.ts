@@ -19,12 +19,13 @@ import {
     sleep,
 } from "../utils/";
 import { ActionContext, FeedbackQuestion } from "./types";
+import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import {
-    displayLocalCourseDetails,
-    displayUserCourses,
-    selectOrganizationAndCourse,
-} from "./webview";
-import { checkForExerciseUpdates, closeExercises } from "./workspace";
+    checkForExerciseUpdates,
+    closeExercises,
+    downloadExercises,
+    openExercises,
+} from "./workspace";
 
 import { Err, Ok, Result } from "ts-results";
 import { CourseExercise, Exercise, OldSubmission, SubmissionFeedback } from "../api/types";
@@ -153,7 +154,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
                 submitExercise(actionContext, msg.data.exerciseId as number);
             } else if (msg.type === "sendToPaste" && msg.data) {
                 const pasteLink = await pasteExercise(actionContext, msg.data.exerciseId as number);
-                temp.postMessage({ command: "showPasteLink", pasteLink });
+                pasteLink && temp.postMessage({ command: "showPasteLink", pasteLink });
             } else if (msg.type === "closeWindow") {
                 temp.dispose();
             }
@@ -325,19 +326,29 @@ export async function getOldSubmissions(
 /**
  * Sends the exercise to the TMC Paste server.
  * @param id Exercise ID
+ * @returns TMC Pastebin link if the action was successful.
  */
-export async function pasteExercise(actionContext: ActionContext, id: number): Promise<string> {
+export async function pasteExercise(
+    actionContext: ActionContext,
+    id: number,
+): Promise<string | undefined> {
     const { tmc, logger } = actionContext;
     const params = new Map<string, string>();
     params.set("paste", "1");
     const submitResult = await tmc.submitExercise(id, params);
 
+    const errorMessage = "Failed to send exercise to TMC pastebin";
     if (submitResult.err) {
-        const message = `Failed to paste exercise to server: ${submitResult.val.name} - ${submitResult.val.message}`;
-        logger.error(message);
-        showError(message);
-        return "";
+        logger.error(errorMessage, submitResult.val);
+        showError(`${errorMessage}: ${submitResult.val.message}`);
+        return undefined;
+    } else if (!submitResult.val.paste_url) {
+        const notProvided = "Paste link was not provided by the server.";
+        logger.error(errorMessage, notProvided);
+        showError(`${errorMessage}: ${notProvided}`);
+        return undefined;
     }
+
     return submitResult.val.paste_url;
 }
 
@@ -362,12 +373,21 @@ export async function checkForNewExercises(
     for (const course of updatedCourses) {
         if (course.newExercises.length > 0) {
             showNotification(
-                `${course.newExercises.length} new exercises found for ${course.name}. Do you wish to move to the downloads page?`,
+                `Found ${course.newExercises.length} new exercises for ${course.name}. Do you wish to download them now?`,
                 [
-                    "Go to course page",
-                    (): void => {
+                    "Download",
+                    async (): Promise<void> => {
                         userData.clearNewExercises(course.id);
-                        displayLocalCourseDetails(course.id, actionContext);
+                        openExercises(
+                            await downloadExercises(actionContext, [
+                                {
+                                    courseId: course.id,
+                                    exerciseIds: course.newExercises,
+                                    organizationSlug: course.organization,
+                                },
+                            ]),
+                            actionContext,
+                        );
                     },
                 ],
                 [

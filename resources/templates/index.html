@@ -58,7 +58,7 @@
                         </div>
                     </div>
                     {{#if this.newExercises}}
-                    <div class="alert alert-info mt-2" role="alert">
+                    <div class="alert alert-info mt-2" role="alert" id="new-exercise-{{this.id}}">
                         <span>{{newExercises.length}} new exercises found for this course.</span>
                         <button
                             type="button"
@@ -98,9 +98,10 @@
 
             function downloadNewExercises(event, ids, courseName, organizationSlug, courseId) {
                 event.stopPropagation(); // Don't send onclick event upwards
+                document.getElementById(`new-exercise-${courseId}`).style.display = "none";
                 const splitToNumbers = ids.split(",").map(Number);
                 vscode.postMessage({
-                    type: "downloadExercisesLegacy",
+                    type: "downloadExercises",
                     ids: splitToNumbers,
                     courseName,
                     organizationSlug,

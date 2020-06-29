@@ -245,6 +245,7 @@ export default class TMC {
     public async downloadExercise(
         id: number,
         organizationSlug: string,
+        progressCallback?: (downloadedPct: number, increment: number) => void,
     ): Promise<Result<void, Error>> {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assigned");
@@ -256,6 +257,7 @@ export default class TMC {
             archivePath,
             this.tmcDefaultHeaders,
             this.token,
+            progressCallback,
         );
         if (result.err) {
             return new Err(result.val);
@@ -714,7 +716,7 @@ export default class TMC {
             if (response.status === 403) {
                 return new Err(new AuthorizationError("403 - Forbidden"));
             }
-            const errorText = await response.text();
+            const errorText = (await response.json())?.error || (await response.text());
             this.logger.error(`${response.status} - ${response.statusText} - ${errorText}`);
             return new Err(
                 new ApiError(`${response.status} - ${response.statusText} - ${errorText}`),

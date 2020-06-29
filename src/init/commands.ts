@@ -8,6 +8,7 @@ import {
     showNotification,
 } from "../utils/";
 import {
+    closeExercises,
     downloadOldSubmissions,
     pasteExercise,
     resetExercise,
@@ -59,10 +60,11 @@ export function registerCommands(
             const exerciseId = getCurrentExerciseId(workspaceManager);
             if (exerciseId) {
                 const link = await pasteExercise(actionContext, exerciseId);
-                showNotification(`Paste to TMC Server successful: ${link}`, [
-                    "Open URL",
-                    (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link)),
-                ]);
+                link &&
+                    showNotification(`Paste link: ${link}`, [
+                        "Open URL",
+                        (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link)),
+                    ]);
             } else {
                 logger.error(errorMessage);
                 showError(errorMessage);
@@ -131,21 +133,20 @@ export function registerCommands(
                 showError(errorMessage);
                 return;
             }
+
             const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
-            if (exerciseData.err) {
-                logger.error("The data for this exercise seems to be missing");
-                showError("The data for this exercise seems to be missing");
-                return;
+            if (
+                userData.getPassed(exerciseId) ||
+                (await askForConfirmation(
+                    `Are you sure you want to close uncompleted exercise ${exerciseData.val.name}?`,
+                ))
+            ) {
+                const result = await closeExercises(actionContext, [exerciseId]);
+                if (result.err) {
+                    logger.error(result.val.message);
+                    showError(result.val.message);
+                }
             }
-            if (userData.getPassed(exerciseId)) {
-                workspaceManager.closeExercise(exerciseId);
-                return;
-            }
-            (await askForConfirmation(
-                `Are you sure you want to close uncompleted exercise ${exerciseData.val.name}?`,
-            ))
-                ? workspaceManager.closeExercise(exerciseId)
-                : showNotification(`Close canceled for exercise ${exerciseData.val.name}.`);
         }),
     );
 }

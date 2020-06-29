@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- All exercise downloads are now displayed with a progress notification.
+- "No deadline" text is shown only if there are no deadlines in a group of exercises.
+
+### Removed
+- Exercise Download Progress page.
+
+### Fixed
+- Hide update exercises notification in Course View after pressing the button.
+- Error handling when attempting to send an expired exercise to TMC Paste.
+
 ## [0.7.1] - 2020-06-24
 
 ### Changed

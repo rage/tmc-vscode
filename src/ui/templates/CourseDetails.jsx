@@ -63,7 +63,7 @@ function component(data) {
                 <div class="row py-1">
                     <div class="col-md">
                         {updateableExerciseIds.length > 0 ? (
-                            <div class="alert alert-warning" role="alert">
+                            <div class="alert alert-warning" id="update-notification" role="alert">
                                 <span class="mr-2">Updates found for exercises</span>
                                 <button
                                     class="btn btn-danger"
@@ -163,7 +163,7 @@ function component(data) {
                                 {exerciseGroup.exercises
                                     .map((exercise) => {
                                         const workspaceStatus = exercise.isOpen
-                                            ? "open"
+                                            ? "opened"
                                             : exercise.isClosed
                                             ? "closed"
                                             : exercise.expired
@@ -283,68 +283,66 @@ function script() {
         vscode.postMessage({ type: "closeSelected", ids });
     }
 
+    /**
+     * @param {HTMLElement} element
+     * @param {import("../types").ExerciseStatus} status
+     */
     function setStatusBadge(element, status) {
         const id = parseInt(element.dataset.exerciseId);
         if (status) {
             element.dataset.workspaceStatus = status;
         }
+        let html;
+        let handler;
         switch (element.dataset.workspaceStatus) {
-            case "open":
-                element.innerHTML = (
+            case "opened":
+                html = (
                     <span class="badge badge-primary" data-status="opened">
                         opened
                     </span>
                 );
-                element.firstElementChild.addEventListener(
-                    "click",
-                    function () {
-                        closeExercises([id]);
-                    },
-                    { once: true },
-                );
+                handler = () => closeExercises([id]);
                 break;
             case "closed":
-                element.innerHTML = (
+                html = (
                     <span class="badge badge-secondary" data-status="closed">
                         closed
                     </span>
                 );
-                element.firstElementChild.addEventListener(
-                    "click",
-                    function () {
-                        openExercises([id]);
-                    },
-                    { once: true },
-                );
+                handler = () => openExercises([id]);
                 break;
             case "downloading":
-                element.innerHTML = (
+                html = (
                     <div class="spinner-border spinner-border-sm" role="status">
                         <span class="sr-only">Loading...</span>
                     </div>
                 );
                 break;
             case "downloadFailed":
-                element.innerHTML = (
-                    <span class="badge badge-alert" data-status="expired">
+                html = (
+                    <span class="badge badge-danger" data-status="downloadFailed">
                         failed
                     </span>
                 );
                 break;
             case "expired":
-                element.innerHTML = (
+                html = (
                     <span class="badge badge-dark" data-status="expired">
                         expired
                     </span>
                 );
                 break;
             default:
-                element.innerHTML = (
+                html = (
                     <span class="badge badge-success" data-status="closed">
                         new!
                     </span>
                 );
                 break;
+        }
+        element.innerHTML = html;
+        if (handler) {
+            element.firstElementChild.addEventListener("click", handler, { once: true });
         }
     }
 
@@ -352,18 +350,6 @@ function script() {
         if (ids.length > 0) {
             vscode.postMessage({
                 type: "downloadExercises",
-                ids,
-                courseName: course.courseName,
-                organizationSlug: course.courseOrg,
-                courseId: parseInt(course.courseId),
-            });
-        }
-    }
-
-    function downloadSelectedExercisesLegacy(ids) {
-        if (ids.length > 0) {
-            vscode.postMessage({
-                type: "downloadExercisesLegacy",
                 ids,
                 courseName: course.courseName,
                 organizationSlug: course.courseOrg,
@@ -410,7 +396,7 @@ function script() {
                     .exerciseCompleted;
                 const s = exerciseTableRow[i].querySelector("td.exercise-status").dataset
                     .workspaceStatus;
-                s === "open" ? open++ : s !== "closed" ? downloaded-- : null;
+                s === "opened" ? open++ : s !== "closed" ? downloaded-- : null;
                 c === "true" ? completed++ : null;
             }
 
@@ -445,12 +431,20 @@ function script() {
         );
 
         // Course details
+        const updateNotification = document.getElementById("update-notification");
         const updateButton = document.getElementById("update-button");
-        if (updateButton) {
-            updateButton.addEventListener("click", function () {
-                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
-                downloadSelectedExercisesLegacy(updateableIds);
-            });
+        if (updateNotification && updateButton) {
+            updateButton.addEventListener(
+                "click",
+                function () {
+                    updateNotification.style.display = "none";
+                    const updateableIds = this.dataset.exercises
+                        .split(",")
+                        .map((id) => parseInt(id));
+                    downloadSelectedExercises(updateableIds);
+                },
+                { once: true },
+            );
         }
 
         // Course part cards
@@ -577,29 +571,16 @@ function script() {
     });
 
     window.addEventListener("message", function (event) {
+        /**@type {import("../types").WebviewMessage} */
         const message = event.data;
         switch (message.command) {
-            case "exercisesOpened":
+            case "exerciseStatusChange":
                 for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
                     const id = message.exerciseIds[i];
                     const element = document.getElementById(`exercise-${id}-status`);
-                    setStatusBadge(element, "open");
+                    setStatusBadge(element, message.value);
                 }
                 break;
-            case "exercisesClosed":
-                for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
-                    const id = message.exerciseIds[i];
-                    const element = document.getElementById(`exercise-${id}-status`);
-                    setStatusBadge(element, "closed");
-                }
-                break;
-            // case "exercisesFailedToDownload":
-            //     for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
-            //         const id = message.exerciseIds[i];
-            //         const element = document.getElementById(`exercise-${id}-status`);
-            //         setStatusBadge(element, "downloadFailed");
-            //     }
-            //     break;
             default:
                 console.log("Unsupported command", message.command);
         }

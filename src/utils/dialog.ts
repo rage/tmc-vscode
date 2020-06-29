@@ -63,3 +63,52 @@ export async function showNotification(
             items.find((item) => item[0] === selection)?.[1]();
         });
 }
+
+/**
+ * Wrapper for vscode.window.withProgress that can display the progress as a sum of several
+ * simultaneous tasks. Like when using withProgress, tasks are expected to report of their progress
+ * with positive increments that will sum up to 100. In addition, completed promises are handled
+ * automatically.
+ *
+ * @param message Message bing displayed along the progress notification.
+ * @param tasks Tasks that will be displayed as one single comprehensive progress.
+ */
+export async function showProgressNotification<T>(
+    message: string,
+    ...tasks: Array<(progress: vscode.Progress<{ increment: number }>) => Promise<T>>
+): Promise<T[]> {
+    return vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: "TestMyCode",
+        },
+        (progress) => {
+            progress.report({ message: `${message} (0%)`, increment: 0 });
+
+            let percentDone = 0;
+            let increments = 0;
+            const maxIncrements = 100 * tasks.length;
+
+            return Promise.all(
+                tasks.map(async (task) => {
+                    let subIncrements = 0;
+
+                    const report = (p: { increment: number }): void => {
+                        increments += p.increment;
+                        subIncrements += p.increment;
+                        const oldPercentDone = percentDone;
+                        percentDone = (increments * 100) / maxIncrements;
+                        progress.report({
+                            message: `${message} (${Math.floor(percentDone)}%)`,
+                            increment: percentDone - oldPercentDone,
+                        });
+                    };
+
+                    const result = await task({ report });
+                    report({ increment: 100 - subIncrements });
+                    return result;
+                }),
+            );
+        },
+    );
+}
