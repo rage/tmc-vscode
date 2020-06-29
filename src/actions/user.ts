@@ -148,7 +148,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
                 submitExercise(actionContext, msg.data.exerciseId as number);
             } else if (msg.type === "sendToPaste" && msg.data) {
                 const pasteLink = await pasteExercise(actionContext, msg.data.exerciseId as number);
-                temp.postMessage({ command: "showPasteLink", pasteLink });
+                pasteLink && temp.postMessage({ command: "showPasteLink", pasteLink });
             } else if (msg.type === "closeWindow") {
                 temp.dispose();
             }
@@ -294,19 +294,29 @@ export async function getOldSubmissions(
 /**
  * Sends the exercise to the TMC Paste server.
  * @param id Exercise ID
+ * @returns TMC Pastebin link if the action was successful.
  */
-export async function pasteExercise(actionContext: ActionContext, id: number): Promise<string> {
+export async function pasteExercise(
+    actionContext: ActionContext,
+    id: number,
+): Promise<string | undefined> {
     const { tmc, logger } = actionContext;
     const params = new Map<string, string>();
     params.set("paste", "1");
     const submitResult = await tmc.submitExercise(id, params);
 
+    const errorMessage = "Failed to send exercise to TMC pastebin";
     if (submitResult.err) {
-        const message = `Failed to paste exercise to server: ${submitResult.val.name} - ${submitResult.val.message}`;
-        logger.error(message);
-        showError(message);
-        return "";
+        logger.error(errorMessage, submitResult.val);
+        showError(`${errorMessage}: ${submitResult.val.message}`);
+        return undefined;
+    } else if (!submitResult.val.paste_url) {
+        const notProvided = "Paste link was not provided by the server.";
+        logger.error(errorMessage, notProvided);
+        showError(`${errorMessage}: ${notProvided}`);
+        return undefined;
     }
+
     return submitResult.val.paste_url;
 }
 

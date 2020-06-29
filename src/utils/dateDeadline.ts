@@ -34,16 +34,36 @@ export function findNextDateAfter(after: Date, dates: Array<Date | null>): Date 
     return dates.reduce(nextDate, null);
 }
 
+export interface Deadline {
+    /**Date of deadline */
+    date: Date | null;
+    /**Whether this deadline is yet to be met. */
+    active: boolean;
+}
+
 /**
  * Resolves a future deadline if there is one and returns a verbal explanation of results.
  */
-export function parseNextDeadlineAfter(after: Date, dates: Array<Date | null>): string {
-    const some = dates.filter((date) => date !== null);
-    if (some.length === 0) {
-        return "Next deadline: None available.";
+export function parseNextDeadlineAfter(after: Date, deadlines: Deadline[]): string {
+    const validDeadlines = deadlines.filter((x) => x.date);
+    if (validDeadlines.length === 0) {
+        return "No deadline";
     }
-    const next = findNextDateAfter(after, some);
-    return next ? `Next deadline: ${dateToString(next)}` : "All deadlines have expired";
+
+    const activeDeadlines = validDeadlines.filter((x) => x.active);
+    const next = findNextDateAfter(
+        after,
+        activeDeadlines.map((x) => x.date),
+    );
+    if (next) {
+        return `Next deadline: ${dateToString(next)}`;
+    }
+
+    if (activeDeadlines.length === 0) {
+        return "Next deadline: Not available";
+    }
+
+    return "All deadlines have expired";
 }
 
 /**

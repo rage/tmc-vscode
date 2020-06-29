@@ -58,9 +58,10 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
             }));
             const nextDeadline = parseNextDeadlineAfter(
                 new Date(),
-                exercises
-                    .filter((exercise) => !exercise.passed)
-                    .map((exercise) => (exercise.deadline ? exercise.deadline : null)),
+                exercises.map((exercise) => ({
+                    date: exercise.deadline || null,
+                    active: !exercise.passed,
+                })),
             );
             return { ...course, exercises, nextDeadline, completedPrc, newExercises };
         }),
@@ -152,7 +153,10 @@ export async function displayLocalCourseDetails(
                 exercises: e.exercises.sort((a, b) => (a.name > b.name ? 1 : -1)),
                 nextDeadlineString: parseNextDeadlineAfter(
                     currentDate,
-                    e.exercises.map((ex) => (ex.isHard ? ex.hardDeadline : ex.softDeadline)),
+                    e.exercises.map((ex) => ({
+                        date: ex.isHard ? ex.hardDeadline : ex.softDeadline,
+                        active: !ex.passed,
+                    })),
                 ),
             };
         });
