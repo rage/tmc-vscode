@@ -11,7 +11,12 @@ import { chooseDeadline, dateToString, parseDate, parseNextDeadlineAfter } from 
 import { ActionContext } from "./types";
 import { updateCourse } from "./user";
 import { checkForExerciseUpdates } from "./workspace";
-import { CourseDetailsExercise, CourseDetailsExerciseGroup } from "../ui/types";
+import {
+    CourseDetailsExercise,
+    CourseDetailsExerciseGroup,
+    ExerciseStatus as TextStatus,
+    WebviewMessage,
+} from "../ui/types";
 
 /**
  * Displays a summary page of user's courses.
@@ -80,11 +85,23 @@ export async function displayLocalCourseDetails(
 ): Promise<void> {
     const { ui, tmc, userData, workspaceManager, logger } = actionContext;
 
+    const mapStatus = (status: ExerciseStatus, expired: boolean): TextStatus => {
+        switch (status) {
+            case ExerciseStatus.CLOSED:
+                return "closed";
+            case ExerciseStatus.OPEN:
+                return "opened";
+            default:
+                return expired ? "expired" : "new";
+        }
+    };
+
     const course = userData.getCourse(courseId);
     logger.log(`Display course view for ${course.name}`);
 
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
     const exerciseData = new Map<string, CourseDetailsExerciseGroup>();
+    const initialState: Array<{ key: string; message: WebviewMessage }> = [];
     const apiCourse = (await tmc.getCourseDetails(courseId, true)).mapErr(() => undefined).val
         ?.course;
     const updateables =
@@ -123,12 +140,20 @@ export async function displayLocalCourseDetails(
         }
         const softDeadline = exData.softDeadline ? parseDate(exData.softDeadline) : null;
         const hardDeadline = exData.deadline ? parseDate(exData.deadline) : null;
+        initialState.push({
+            key: `exercise-${exData.id}-status`,
+            message: {
+                command: "exerciseStatusChange",
+                exerciseId: exData.id,
+                status: mapStatus(
+                    exData.status,
+                    hardDeadline !== null && currentDate >= hardDeadline,
+                ),
+            },
+        });
         const entry: CourseDetailsExercise = {
             id: ex.id,
             name,
-            isOpen: exData.status === ExerciseStatus.OPEN,
-            isClosed: exData.status === ExerciseStatus.CLOSED,
-            expired: hardDeadline ? currentDate >= hardDeadline : false,
             passed: course.exercises.find((ce) => ce.id === ex.id)?.passed || false,
             softDeadline,
             softDeadlineString: softDeadline ? dateToString(softDeadline) : "-",
@@ -171,6 +196,7 @@ export async function displayLocalCourseDetails(
             offlineMode: apiCourse === undefined,
         },
         true,
+        initialState,
     );
 }
 

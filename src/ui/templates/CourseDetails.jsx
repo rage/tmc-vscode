@@ -155,13 +155,6 @@ function component(data) {
                             <tbody class="exercise-tbody">
                                 {exerciseGroup.exercises
                                     .map((exercise) => {
-                                        const workspaceStatus = exercise.isOpen
-                                            ? "opened"
-                                            : exercise.isClosed
-                                            ? "closed"
-                                            : exercise.expired
-                                            ? "expired"
-                                            : "missing";
                                         return (
                                             <tr class="exercise-table-row" id={exercise.id}>
                                                 <td class="min-w-5 text-center exercise-selector">
@@ -199,7 +192,6 @@ function component(data) {
                                                     class="min-w-15 exercise-status"
                                                     id={`exercise-${exercise.id}-status`}
                                                     data-exercise-id={exercise.id}
-                                                    data-workspace-status={workspaceStatus}
                                                 >
                                                     loading...
                                                 </td>
@@ -320,12 +312,15 @@ function script() {
                     </span>
                 );
                 break;
-            default:
+            case "new":
                 html = (
-                    <span class="badge badge-success" data-status="closed">
-                        new!
+                    <span class="badge badge-dark" data-status="new">
+                        expired
                     </span>
                 );
+                break;
+            default:
+                html = <span data-status="unknown">{element.dataset.workspaceStatus}</span>;
                 break;
         }
         element.innerHTML = html;
@@ -528,12 +523,6 @@ function script() {
                             selectedCount += event.target.checked ? 1 : -1;
                             refreshFooter();
                         });
-                    }
-                    const exerciseStatusColumn = exerciseTableRow.querySelector(
-                        "td.exercise-status",
-                    );
-                    if (exerciseStatusColumn) {
-                        setStatusBadge(exerciseStatusColumn);
                     }
                 }
             }

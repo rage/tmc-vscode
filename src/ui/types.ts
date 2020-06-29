@@ -60,9 +60,6 @@ export type CourseDetailsExerciseGroup = {
 export type CourseDetailsExercise = {
     id: number;
     name: string;
-    expired: boolean;
-    isOpen: boolean;
-    isClosed: boolean;
     passed: boolean;
     softDeadline: Date | null;
     softDeadlineString: string;
@@ -150,7 +147,13 @@ export type TestResultData = {
     pasteLink?: string;
 };
 
-export type ExerciseStatus = "closed" | "downloading" | "downloadFailed" | "opened";
+export type ExerciseStatus =
+    | "closed"
+    | "downloading"
+    | "downloadFailed"
+    | "expired"
+    | "new"
+    | "opened";
 
 export interface ExerciseStatusChange {
     command: "exerciseStatusChange";

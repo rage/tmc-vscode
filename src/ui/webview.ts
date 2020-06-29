@@ -45,6 +45,7 @@ export default class TmcWebview {
     public async setContentFromTemplate(
         templateData: TemplateData,
         forceUpdate = false,
+        initialState?: Array<{ key: string; message: WebviewMessage }>,
     ): Promise<void> {
         this.stateId++;
         const panel = this.getPanel();
@@ -62,13 +63,14 @@ export default class TmcWebview {
             }
         });
         panel.reveal();
+        initialState && this.postMessage(...initialState);
     }
 
     public postMessage(...messages: Array<{ key: string; message: WebviewMessage }>): void {
         for (const { key, message } of messages) {
             this.webviewState.set(key, message);
-            this.panel?.webview.postMessage([message]);
         }
+        this.panel?.webview.postMessage(messages.map((m) => m.message));
     }
 
     /**
