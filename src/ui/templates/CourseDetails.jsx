@@ -559,18 +559,20 @@ function script() {
     });
 
     window.addEventListener("message", function (event) {
-        /**@type {import("../types").WebviewMessage} */
-        const message = event.data;
-        switch (message.command) {
-            case "exerciseStatusChange":
-                for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
-                    const id = message.exerciseIds[i];
-                    const element = document.getElementById(`exercise-${id}-status`);
-                    setStatusBadge(element, message.value);
+        for (let i = 0; i < event.data.length; i++) {
+            /**@type {import("../types").WebviewMessage} */
+            const message = event.data[i];
+            switch (message.command) {
+                case "exerciseStatusChange": {
+                    const element = document.getElementById(
+                        `exercise-${message.exerciseId}-status`,
+                    );
+                    setStatusBadge(element, message.status);
+                    break;
                 }
-                break;
-            default:
-                console.log("Unsupported command", message.command);
+                default:
+                    console.log("Unsupported command", message.command);
+            }
         }
         refreshCards();
     });

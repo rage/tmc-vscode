@@ -19,6 +19,7 @@ import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import * as vscode from "vscode";
+import { ExerciseStatus, WebviewMessage } from "../ui/types";
 
 const limit = pLimit(3);
 
@@ -43,25 +44,27 @@ export async function downloadExercises(
     const successful: DownloadState[] = [];
     const failed: DownloadState[] = [];
 
+    const postChange = (exerciseId: number, status: ExerciseStatus): void =>
+        ui.webview.postMessage({
+            key: `exercise-${exerciseId}-status`,
+            message: {
+                command: "exerciseStatusChange",
+                exerciseId,
+                status,
+            },
+        });
+
     const task = (
         process: vscode.Progress<{ downloadedPct: number; increment: number }>,
         state: DownloadState,
     ): Promise<void> =>
         new Promise<void>((resolve) => {
-            ui.webview.postMessage({
-                command: "exerciseStatusChange",
-                exerciseIds: [state.id],
-                value: "downloading",
-            });
+            postChange(state.id, "downloading");
             tmc.downloadExercise(state.id, state.organizationSlug, (downloadedPct, increment) =>
                 process.report({ downloadedPct, increment }),
             ).then((res: Result<void, Error>) => {
-                const value = res.ok ? "closed" : "downloadFailed";
-                ui.webview.postMessage({
-                    command: "exerciseStatusChange",
-                    exerciseIds: [state.id],
-                    value,
-                });
+                const status = res.ok ? "closed" : "downloadFailed";
+                postChange(state.id, status);
                 if (res.ok) {
                     successful.push(state);
                 } else {
@@ -248,11 +251,16 @@ export async function openExercises(
         );
         return new Err(new Error("Something went wrong while opening exercises."));
     }
-    ui.webview.postMessage({
-        command: "exerciseStatusChange",
-        exerciseIds: filterIds,
-        value: "opened",
-    });
+    ui.webview.postMessage(
+        ...filterIds.map<{ key: string; message: WebviewMessage }>((exerciseId) => ({
+            key: `exercise-${exerciseId}-status`,
+            message: {
+                command: "exerciseStatusChange",
+                exerciseId,
+                status: "opened",
+            },
+        })),
+    );
     return new Ok(filterIds);
 }
 
@@ -276,11 +284,16 @@ export async function closeExercises(
         );
         return new Err(new Error("Something went wrong while closing exercises."));
     }
-    ui.webview.postMessage({
-        command: "exerciseStatusChange",
-        exerciseIds: filterIds,
-        value: "closed",
-    });
+    ui.webview.postMessage(
+        ...filterIds.map<{ key: string; message: WebviewMessage }>((exerciseId) => ({
+            key: `exercise-${exerciseId}-status`,
+            message: {
+                command: "exerciseStatusChange",
+                exerciseId,
+                status: "closed",
+            },
+        })),
+    );
     return new Ok(filterIds);
 }
 

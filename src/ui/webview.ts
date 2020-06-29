@@ -12,10 +12,9 @@ export default class TmcWebview {
     public readonly templateEngine: TemplateEngine;
 
     private readonly extensionContext: vscode.ExtensionContext;
-    private readonly messageHandlers: Map<
-        string,
-        (msg: { [key: string]: unknown }) => void
-    > = new Map();
+    private readonly messageHandlers: Map<string, (msg: { [key: string]: unknown }) => void>;
+    private readonly webviewState: Map<string, unknown>;
+    private listenerDisposer?: vscode.Disposable;
 
     /**
      * NOTE: use [[getPanel]] to correctly handle disposed instances
@@ -32,6 +31,8 @@ export default class TmcWebview {
      */
     constructor(extensionContext: vscode.ExtensionContext, resources: Resources) {
         this.extensionContext = extensionContext;
+        this.messageHandlers = new Map();
+        this.webviewState = new Map();
         this.templateEngine = new TemplateEngine(resources);
         this.resources = resources;
     }
@@ -52,11 +53,22 @@ export default class TmcWebview {
             panel.webview.html = html + " ";
         }
         panel.webview.html = html;
+        this.listenerDisposer?.dispose();
+        this.webviewState.clear();
+        this.listenerDisposer = panel.onDidChangeViewState((event) => {
+            if (event.webviewPanel.visible) {
+                console.log("Restoring webview content", this.webviewState.size, "items");
+                panel.webview.postMessage(Array.from(this.webviewState.values()));
+            }
+        });
         panel.reveal();
     }
 
-    public postMessage(message: WebviewMessage): void {
-        this.panel?.webview.postMessage(message);
+    public postMessage(...messages: Array<{ key: string; message: WebviewMessage }>): void {
+        for (const { key, message } of messages) {
+            this.webviewState.set(key, message);
+            this.panel?.webview.postMessage([message]);
+        }
     }
 
     /**

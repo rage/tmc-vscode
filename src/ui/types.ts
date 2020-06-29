@@ -152,8 +152,10 @@ export type TestResultData = {
 
 export type ExerciseStatus = "closed" | "downloading" | "downloadFailed" | "opened";
 
-export interface WebviewMessage {
+export interface ExerciseStatusChange {
     command: "exerciseStatusChange";
-    exerciseIds: number[];
-    value: ExerciseStatus;
+    exerciseId: number;
+    status: ExerciseStatus;
 }
+
+export type WebviewMessage = ExerciseStatusChange;
