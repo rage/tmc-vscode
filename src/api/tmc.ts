@@ -25,6 +25,7 @@ import {
     Course,
     CourseDetails,
     CourseExercise,
+    CourseSettings,
     ExerciseDetails,
     OldSubmission,
     Organization,
@@ -180,6 +181,17 @@ export default class TMC {
         return this.checkApiResponse(
             this.tmcApiRequest(`core/courses/${id}`, cache),
             createIs<CourseDetails>(),
+        );
+    }
+
+    /**
+     * @param id course id
+     * @returns course settings for the specified course
+     */
+    public getCourseSettings(id: number, cache = false): Promise<Result<CourseSettings, Error>> {
+        return this.checkApiResponse(
+            this.tmcApiRequest(`courses/${id}`, cache),
+            createIs<CourseSettings>(),
         );
     }
 
@@ -597,7 +609,7 @@ export default class TMC {
                     const stderr = result.val[1] ? result.val[1] : stderrExec;
                     const logs = { stdout, stderr };
 
-                    this.logger.logVerbose("Logs", false, stdout, stderr);
+                    this.logger.log("Logs", stdout, stderr);
 
                     if (action === "extract-project" || action === "compress-project") {
                         return resolve(new Ok({ response: outputPath, logs }));
@@ -608,6 +620,7 @@ export default class TMC {
                         logs,
                     };
                     // del.sync(outputPath, { force: true });
+                    this.logger.log("Temp JSON data", readResult.response);
                     if (is<TmcLangsResponse>(readResult)) {
                         return resolve(new Ok(readResult));
                     }
@@ -690,7 +703,10 @@ export default class TMC {
                         }
                         return new Ok(responseObject);
                     }
-                    this.logger.error("Unexpected TMC response type", responseObject);
+                    this.logger.error(
+                        `Unexpected TMC response type from ${request.url}`,
+                        responseObject,
+                    );
                     this.logger.show();
                     return new Err(new ApiError("Unexpected response type"));
                 } catch (error) {

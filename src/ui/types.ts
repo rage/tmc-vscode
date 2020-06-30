@@ -29,11 +29,8 @@ export type VisibilityGroupNegated = {
 export type TemplateData =
     | ({ templateName: "course-details" } & CourseDetailsData)
     | ({ templateName: "course" } & CourseData)
-    | ({ templateName: "download-exercises" } & DownloadExercisesData)
-    | ({ templateName: "downloading-exercises" } & DownloadingExercisesData)
     | ({ templateName: "error" } & ErrorData)
     | ({ templateName: "index" } & IndexData)
-    | { templateName: "loading" }
     | ({ templateName: "login" } & loginData)
     | ({ templateName: "organization" } & OrganizationData)
     | ({ templateName: "running-tests" } & RunningTestsData)
@@ -74,34 +71,6 @@ export type CourseDetailsExercise = {
 export type CourseData = {
     courses: Course[];
     organization: Organization;
-};
-
-export type DownloadExercisesData = {
-    courseId: number;
-    courseName: string;
-    details: unknown;
-    organizationSlug: string;
-    exerciseLists: unknown;
-};
-
-export type DownloadingExercisesData = {
-    returnToCourse?: number;
-    exercises: DownloadingExercisesExercise[];
-    failed: number;
-    failedPct: number;
-    remaining: number;
-    successful: number;
-    successfulPct: number;
-    total: number;
-};
-
-export type DownloadingExercisesExercise = {
-    name: string;
-    organizationSlug: string;
-    downloaded: boolean;
-    failed: boolean;
-    error: string;
-    status: string;
 };
 
 export type ErrorData = {
