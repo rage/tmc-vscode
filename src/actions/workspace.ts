@@ -19,7 +19,8 @@ import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import * as vscode from "vscode";
-import { ExerciseStatus, WebviewMessage } from "../ui/types";
+import { ExerciseStatus as TextStatus, WebviewMessage } from "../ui/types";
+import { ExerciseStatus } from "../config/types";
 
 const limit = pLimit(3);
 
@@ -37,7 +38,7 @@ export async function downloadExercises(
 
     interface StatusChange {
         exerciseId: number;
-        status: ExerciseStatus;
+        status: TextStatus;
     }
 
     const postChange = (...changes: StatusChange[]): void =>
@@ -179,8 +180,24 @@ export async function checkForExerciseUpdates(
             `Found updates for ${count} exercises. Do you wish to download them?`,
             [
                 "Download",
-                (): Promise<number[]> =>
-                    downloadExercises(actionContext, Array.from(coursesToUpdate.values())),
+                async (): Promise<void> => {
+                    const exerciseIds = Array.from(coursesToUpdate.values())
+                        .map((x) => x.exerciseIds)
+                        .reduce((acc, next) => acc.concat(next), []);
+                    const openAfter = exerciseIds.filter(
+                        (id) =>
+                            workspaceManager.getExerciseDataById(id).mapErr(() => undefined).val
+                                ?.status !== ExerciseStatus.CLOSED,
+                    );
+                    const successful = await downloadExercises(
+                        actionContext,
+                        Array.from(coursesToUpdate.values()),
+                    );
+                    openExercises(
+                        openAfter.filter((oa) => successful.find((s) => s === oa)),
+                        actionContext,
+                    );
+                },
             ],
             [
                 "Remind me later",
