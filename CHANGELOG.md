@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.8.1] - 2020-06-30
+
+#### Fixed
+- Validation issue on old user courses when receiving Authorization error.
+
 ## [0.8.0] - 2020-06-30
 
 #### Added
