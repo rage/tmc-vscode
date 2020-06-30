@@ -32,8 +32,8 @@ export async function validateAndFix(
         logger.log("Fixing workspacemanager data");
         const exerciseDataFixed: LocalExerciseData[] = [];
         for (const ex of exerciseData) {
-            // If data objects doesn't have following fields or isOpen and status is undefined, remove from storage.
-            // These are critical fields needed for the extension to work.
+            // If data objects doesn't have following fields or isOpen and status is undefined,
+            // remove from storage. These are critical fields needed for the extension to work.
             if (
                 !is<{
                     organization: string;
@@ -100,8 +100,8 @@ export async function validateAndFix(
         const userDataFixed: { courses: LocalCourseData[] } = { courses: [] };
         if (userData.courses !== undefined) {
             for (const course of userData.courses) {
-                // If data objects doesn't have following fields or id and name is undefined, remove from storage.
-                // These are critical fields needed for the extension to work.
+                // If data objects doesn't have following fields or id and name is undefined,
+                // remove from storage. These are critical fields needed for the extension to work.
                 if (
                     !is<{
                         organization: string;

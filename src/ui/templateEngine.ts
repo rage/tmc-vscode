@@ -1,3 +1,7 @@
+// It would get too complicated to enforce length rules for templates in this file. Instead, they
+// should be handled when converting over from handlebars.
+/* eslint-disable max-len */
+
 import * as fs from "fs";
 import * as handlebars from "handlebars";
 import * as path from "path";

@@ -67,8 +67,9 @@ export default class WorkspaceManager {
     }
 
     /**
-     * Creates a unique human-readable directory path for an exercise and persistently manages its relation
-     * to exercise's actual id.
+     * Creates a unique human-readable directory path for an exercise and persistently manages its
+     * relation to exercise's actual id.
+     *
      * @param organizationSlug Organization slug used in the creation of exercise path
      * @param exerciseDetails Exercise details used in the creation of exercise path
      */
@@ -205,7 +206,9 @@ export default class WorkspaceManager {
             } catch (err2) {
                 return new Err(
                     new Error(
-                        "Folder move operation failed, please try closing the workspace and make sure that any files are not in use. Some files could not be cleaned up from the target directory.",
+                        "Folder move operation failed, " +
+                            "please try closing the workspace and make sure that any files are not in use. " +
+                            "Some files could not be cleaned up from the target directory.",
                     ),
                 );
             }

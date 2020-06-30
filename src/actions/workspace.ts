@@ -1,7 +1,7 @@
 /**
- * ---------------------------------------------------------------------------------------------------------------------
+ * -------------------------------------------------------------------------------------------------
  * Group for actions that modify the TMC workspace.
- * ---------------------------------------------------------------------------------------------------------------------
+ * -------------------------------------------------------------------------------------------------
  */
 
 import { Err, Ok, Result } from "ts-results";
@@ -327,11 +327,12 @@ export async function closeExercises(
 }
 
 /**
- * Downloads an oldsubmission of a currently open exercise and submits current code to server if user wants it
+ * Downloads an old submission of a currently open exercise and prompts the user beforehand to
+ * optionally submit their current exercise beforehand.
+ *
  * @param exerciseId exercise which older submission will be downloaded
  * @param actionContext
  */
-
 export async function downloadOldSubmissions(
     exerciseId: number,
     actionContext: ActionContext,

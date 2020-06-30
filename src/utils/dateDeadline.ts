@@ -67,7 +67,7 @@ export function parseNextDeadlineAfter(after: Date, deadlines: Deadline[]): stri
 }
 
 /**
- * compares two dates and returns 1, if first date arg is later tha second date arg. Otherwise return -1
+ * Compares two dates and returns 1, if first date later tha second date. Otherwise returns -1.
  * @param a first date arg
  * @param b second date arg
  */

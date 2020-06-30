@@ -1,3 +1,6 @@
+// Some templates on this page are very specific, so this rule is disabled here.
+/* eslint-disable max-len */
+
 import { SubmissionResultReport } from "../api/types";
 
 export const EXTENSION_ID = "moocfi.test-my-code";

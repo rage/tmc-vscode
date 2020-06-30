@@ -228,7 +228,8 @@ export function registerUiActions(actionContext: ActionContext): void {
                 logger.log(`Moved workspace folder from ${old} to ${newPath}`);
                 if (!res.val) {
                     showNotification(
-                        `Some files could not be removed from the previous workspace directory. They will have to be removed manually. ${old}`,
+                        "Some files could not be removed from the previous workspace directory." +
+                            `They will have to be removed manually. ${old}`,
                         ["OK", (): void => {}],
                     );
                 }
@@ -291,7 +292,8 @@ export function registerUiActions(actionContext: ActionContext): void {
             return;
         }
         const search = "workbench.editor.openSideBySideDirection";
-        // https://github.com/microsoft/vscode/issues/90086 openWorkspaceSettings doesn't take search params.
+        // openWorkspaceSettings doesn't take search params:
+        // https://github.com/microsoft/vscode/issues/90086
         vscode.commands.executeCommand("workbench.action.openSettings", search);
     });
 }

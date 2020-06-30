@@ -15,7 +15,9 @@ import { superfluousPropertiesEnabled } from "./env";
 import { showNotification } from "./dialog";
 
 /**
- * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
+ * Downloads data from given url to the specified file. If file exists, its content will be
+ * overwritten.
+ *
  * @param url Url to data
  * @param filePath Absolute path to the desired output file
  * @param headers Request headers if any
@@ -142,7 +144,14 @@ export function getCurrentExerciseData(
  */
 export function getProgressBar(percentDone: number): string {
     return `<div class="progress">
-        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
+        <div
+            class="progress-bar progress-bar-striped progress-bar-animated"
+            role="progressbar"
+            aria-valuenow="${percentDone}"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            style="width: ${percentDone}%"
+        ></div>
     </div>`;
 }
 

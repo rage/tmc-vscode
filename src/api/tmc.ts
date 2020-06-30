@@ -101,7 +101,9 @@ export default class TMC {
     }
 
     /**
-     * Attempts to log in with the given credentials, throws an error if an authentication token is already present
+     * Attempts to authenticate with given credentials. Throws an error if an authentication token
+     * is already present.
+     *
      * @param username Username or email
      * @param password Password
      * @returns A boolean determining success, and a human readable error description.
@@ -198,7 +200,8 @@ export default class TMC {
     /**
      *
      * @param id course id
-     * @returns return list of courses exercises. Each exercise carry info about available points that can be gained from an exercise
+     * @returns return list of courses exercises. Each exercise carry info about available points
+     * that can be gained from an exercise
      */
     public getCourseExercises(id: number, cache = false): Promise<Result<CourseExercise[], Error>> {
         return this.checkApiResponse(
@@ -637,8 +640,8 @@ export default class TMC {
     /**
      * Unwraps the response, checks the type, and rewraps it with the type error possibly included
      *
-     * Note that the current type checking method requires the type checker to be passed as a parameter
-     * to allow the correct type predicates to be generated during compilation
+     * Note that the current type checking method requires the type checker to be passed as a
+     * parameter to allow the correct type predicates to be generated during compilation
      *
      * @param response The response to be typechecked
      * @param typechecker The type checker to be used
@@ -659,11 +662,13 @@ export default class TMC {
     }
 
     /**
-     * Performs an HTTP request to the hardcoded TMC server
-     * By default returns from cache if method === get & cache === undefined and data exists in cache.
+     * Performs a HTTP request to hardcoded TMC server.
      *
-     * @param endpoint target API endpoint, can also be complete URL
-     * @param method HTTP method, defaults to GET
+     * @param endpoint Target API endpoint, can also be a complete URL.
+     * @param cache Whether this operation should attempt to return cached data first.
+     * @param method HTTP method, defaults to GET.
+     * @param body Optional data body for the request.
+     * @param headers Headers for the request.
      */
     private async tmcApiRequest(
         endpoint: string,

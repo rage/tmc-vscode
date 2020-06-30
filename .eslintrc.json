@@ -35,7 +35,15 @@
         "@typescript-eslint/no-empty-function": "off",
         "@typescript-eslint/no-var-requires": "off",
         "@typescript-eslint/semi": ["error"],
-        "eqeqeq": ["error"]
+        "eqeqeq": ["error"],
+        "max-len": [
+            "warn",
+            {
+                "code": 130,
+                "comments": 100,
+                "ignoreComments": false
+            }
+        ]
     },
     "overrides": [
         {
