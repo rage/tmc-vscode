@@ -287,6 +287,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         }
     } else {
         const examData = EXAM_SUBMISSION_RESULT;
+        const submitUrl = submitResult.val.show_submission_url;
         const feedbackQuestions: FeedbackQuestion[] = [];
         temp.setContent({
             title: "TMC Server Submission",
@@ -298,6 +299,8 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
             messageHandler: async (msg: { type?: string }) => {
                 if (msg.type === "closeWindow") {
                     temp.dispose();
+                } else if (msg.type === "showInBrowser") {
+                    vscode.env.openExternal(vscode.Uri.parse(submitUrl));
                 }
             },
         });

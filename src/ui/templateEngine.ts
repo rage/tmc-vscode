@@ -79,7 +79,7 @@ export default class TemplateEngine {
                 if (results.solution_url) {
                     return "<h1 class='passed-header'>All tests passed on the server</h1><input type='button' class='btn-primary' value='View model solution' onclick='viewModelSolution()' />";
                 }
-                return "<h1 class='passed-header'>All tests passed on the server</h1>";
+                return "<h1 class='passed-header'>All tests passed on the server</h1><input type='button' class='btn-primary' value='View submission in browser' onclick='showInBrowser()' />";
             } else if (results.status === "fail") {
                 return "<h1>Some tests failed on the server</h1>";
             } else if (results.status === "error") {
