@@ -119,7 +119,6 @@ export async function displayLocalCourseDetails(
         const group = exerciseData.get(groupName);
         const name = nameMatch?.[2] || "";
         let exData = workspaceExercises.find((d) => d.id === ex.id);
-        let downloadables = group?.downloadables || [];
         const apiExercise = apiCourse?.exercises.find((e) => e.id === ex.id);
         if ((!exData || exData.status === ExerciseStatus.MISSING) && apiCourse && apiExercise) {
             exData = {
@@ -133,7 +132,6 @@ export async function displayLocalCourseDetails(
                 status: ExerciseStatus.MISSING,
                 updateAvailable: false,
             };
-            downloadables = downloadables.concat(ex.id);
         }
         if (!exData) {
             return;
@@ -166,7 +164,6 @@ export async function displayLocalCourseDetails(
             name: groupName,
             nextDeadlineString: "",
             exercises: group?.exercises.concat(entry) || [entry],
-            downloadables,
         });
     });
 

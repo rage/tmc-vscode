@@ -95,14 +95,9 @@ function component(data) {
                     <h2 style="text-transform: capitalize;">{exerciseGroup.name}</h2>
                 </div>
                 <div class="col-md-2 my-1">
-                    {exerciseGroup.downloadables.length !== 0 ? (
-                        <button
-                            class="btn btn-success w-100 download-all"
-                            data-exercises={exerciseGroup.downloadables}
-                        >
-                            Download ({exerciseGroup.downloadables.length})
-                        </button>
-                    ) : null}
+                    <button class="btn btn-success w-100 download-all" style="display: none;">
+                        Download (<span>0</span>)
+                    </button>
                 </div>
                 <div class="col-md-2 my-1">
                     <button
@@ -370,33 +365,60 @@ function script() {
             const exerciseTableRow = exerciseCards[i].querySelectorAll("tr.exercise-table-row");
             const allExercises = exerciseTableRow.length;
 
+            let opened = 0;
+            let closed = 0;
             let completed = 0;
-            let open = 0;
-            let downloaded = allExercises;
+            let downloadable = [];
 
-            for (let i = 0; i < exerciseTableRow.length; i++) {
-                const c = exerciseTableRow[i].querySelector("td.exercise-completed").dataset
-                    .exerciseCompleted;
-                const s = exerciseTableRow[i].querySelector("td.exercise-status").dataset
+            for (let j = 0; j < exerciseTableRow.length; j++) {
+                if (
+                    exerciseTableRow[j].querySelector("td.exercise-completed").dataset
+                        .exerciseCompleted === "true"
+                ) {
+                    completed++;
+                }
+
+                const s = exerciseTableRow[j].querySelector("td.exercise-status").dataset
                     .workspaceStatus;
-                s === "opened" ? open++ : s !== "closed" ? downloaded-- : null;
-                c === "true" ? completed++ : null;
+                switch (s) {
+                    case "opened":
+                        opened++;
+                        break;
+                    case "closed":
+                        closed++;
+                        break;
+                    case "new":
+                    case "expired":
+                        downloadable.push(exerciseTableRow[j].id);
+                        break;
+                }
             }
 
-            exerciseCards[i].querySelector("button.open-all").disabled =
-                open === allExercises || downloaded === 0;
-            exerciseCards[i].querySelector("button.close-all").disabled = open === 0;
+            const downloadAllButton = exerciseCards[i].querySelector("button.download-all");
+            downloadAllButton.dataset.exercises = downloadable;
+            if (downloadable.length === 0) {
+                downloadAllButton.style.display = "none";
+                downloadAllButton.disabled = true;
+            } else {
+                downloadAllButton.style.display = "block";
+                downloadAllButton.disabled = false;
+            }
+            downloadAllButton.style.display = downloadable.length === 0 ? "none" : "block";
+            downloadAllButton.querySelector("span").innerText = downloadable.length;
+
+            exerciseCards[i].querySelector("button.open-all").disabled = closed === 0;
+            exerciseCards[i].querySelector("button.close-all").disabled = opened === 0;
 
             const name = cardInfo.dataset.groupName;
             cardInfo.querySelector(
                 `#completed-${name}`,
             ).innerText = `Completed ${completed} / ${allExercises}`;
-            cardInfo.querySelector(
-                `#downloaded-${name}`,
-            ).innerText = `Downloaded ${downloaded} / ${allExercises}`;
+            cardInfo.querySelector(`#downloaded-${name}`).innerText = `Downloaded ${
+                opened + closed
+            } / ${allExercises}`;
             cardInfo.querySelector(
                 `#opened-${name}`,
-            ).innerText = `Open in workspace ${open} / ${allExercises}`;
+            ).innerText = `Open in workspace ${opened} / ${allExercises}`;
         }
     }
 
@@ -471,30 +493,22 @@ function script() {
 
             const downloadAllButton = exerciseCard.querySelector("button.download-all");
             if (downloadAllButton) {
-                const ids = downloadAllButton.dataset.exercises
-                    .split(",")
-                    .map((id) => parseInt(id));
-                downloadAllButton.addEventListener(
-                    "click",
-                    function () {
-                        downloadAllButton.style.display = "none";
-                        if (
-                            toggleButton &&
-                            exerciseTable &&
-                            exerciseTable.style.display === "none"
-                        ) {
-                            toggleButton.click();
-                        }
-                        for (let i = 0; i < ids.length; i++) {
-                            setStatusBadge(
-                                exerciseTable.querySelector(`#exercise-${ids[i]}-status`),
-                                "downloading",
-                            );
-                        }
-                        downloadSelectedExercises(ids);
-                    },
-                    { once: true },
-                );
+                downloadAllButton.addEventListener("click", function () {
+                    downloadAllButton.disabled = true;
+                    if (toggleButton && exerciseTable && exerciseTable.style.display === "none") {
+                        toggleButton.click();
+                    }
+                    const ids = downloadAllButton.dataset.exercises
+                        .split(",")
+                        .map((id) => parseInt(id));
+                    for (let i = 0; i < ids.length; i++) {
+                        setStatusBadge(
+                            exerciseTable.querySelector(`#exercise-${ids[i]}-status`),
+                            "downloading",
+                        );
+                    }
+                    downloadSelectedExercises(ids);
+                });
             }
 
             if (exerciseTable) {

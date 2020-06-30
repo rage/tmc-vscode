@@ -35,6 +35,23 @@ export async function downloadExercises(
 ): Promise<number[]> {
     const { tmc, ui, logger } = actionContext;
 
+    interface StatusChange {
+        exerciseId: number;
+        status: ExerciseStatus;
+    }
+
+    const postChange = (...changes: StatusChange[]): void =>
+        ui.webview.postMessage(
+            ...changes.map<{ key: string; message: WebviewMessage }>(({ exerciseId, status }) => ({
+                key: `exercise-${exerciseId}-status`,
+                message: {
+                    command: "exerciseStatusChange",
+                    exerciseId,
+                    status,
+                },
+            })),
+        );
+
     type DownloadState = {
         id: number;
         name: string;
@@ -44,27 +61,15 @@ export async function downloadExercises(
     const successful: DownloadState[] = [];
     const failed: DownloadState[] = [];
 
-    const postChange = (exerciseId: number, status: ExerciseStatus): void =>
-        ui.webview.postMessage({
-            key: `exercise-${exerciseId}-status`,
-            message: {
-                command: "exerciseStatusChange",
-                exerciseId,
-                status,
-            },
-        });
-
     const task = (
         process: vscode.Progress<{ downloadedPct: number; increment: number }>,
         state: DownloadState,
     ): Promise<void> =>
         new Promise<void>((resolve) => {
-            postChange(state.id, "downloading");
             tmc.downloadExercise(state.id, state.organizationSlug, (downloadedPct, increment) =>
                 process.report({ downloadedPct, increment }),
             ).then((res: Result<void, Error>) => {
-                const status = res.ok ? "closed" : "downloadFailed";
-                postChange(state.id, status);
+                postChange({ exerciseId: state.id, status: res.ok ? "closed" : "downloadFailed" });
                 if (res.ok) {
                     successful.push(state);
                 } else {
@@ -78,6 +83,13 @@ export async function downloadExercises(
             });
         });
 
+    postChange(
+        ...courseExerciseDownloads
+            .reduce<number[]>((collected, next) => collected.concat(next.exerciseIds), [])
+            .map<StatusChange>((exerciseId) => ({ exerciseId, status: "downloading" })),
+    );
+
+    // TODO: Base this process on above reduction
     const exerciseStatuses = await Promise.all(
         courseExerciseDownloads.map(async (ced) => {
             const courseDetails = await tmc.getCourseDetails(ced.courseId);
