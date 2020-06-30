@@ -46,7 +46,6 @@ export type CourseDetailsData = {
     course: LocalCourseData;
     courseId: number;
     exerciseData: CourseDetailsExerciseGroup[];
-    updateableExerciseIds: number[];
     offlineMode: boolean;
 };
 
@@ -160,4 +159,9 @@ export interface ExerciseStatusChange {
     status: ExerciseStatus;
 }
 
-export type WebviewMessage = ExerciseStatusChange;
+export interface SetUpdateables {
+    command: "setUpdateables";
+    exerciseIds: number[];
+}
+
+export type WebviewMessage = ExerciseStatusChange | SetUpdateables;

@@ -104,13 +104,6 @@ export async function displayLocalCourseDetails(
     const initialState: Array<{ key: string; message: WebviewMessage }> = [];
     const apiCourse = (await tmc.getCourseDetails(courseId, true)).mapErr(() => undefined).val
         ?.course;
-    const updateables =
-        (
-            await checkForExerciseUpdates(actionContext, courseId, {
-                notify: false,
-                useCache: true,
-            })
-        ).find((u) => u.courseId === courseId)?.exerciseIds || [];
     const currentDate = new Date();
 
     course.exercises.forEach((ex) => {
@@ -189,12 +182,26 @@ export async function displayLocalCourseDetails(
             exerciseData: exercisesDatam,
             course,
             courseId: course.id,
-            updateableExerciseIds: updateables,
             offlineMode: apiCourse === undefined,
         },
         true,
         initialState,
     );
+
+    const updateables =
+        (
+            await checkForExerciseUpdates(actionContext, courseId, {
+                notify: false,
+                useCache: true,
+            })
+        ).find((u) => u.courseId === courseId)?.exerciseIds || [];
+    ui.webview.postMessage({
+        key: "course-updates",
+        message: {
+            command: "setUpdateables",
+            exerciseIds: updateables,
+        },
+    });
 }
 
 /**

@@ -62,18 +62,17 @@ function component(data) {
                 </div>
                 <div class="row py-1">
                     <div class="col-md">
-                        {updateableExerciseIds.length > 0 ? (
-                            <div class="alert alert-warning" id="update-notification" role="alert">
-                                <span class="mr-2">Updates found for exercises</span>
-                                <button
-                                    class="btn btn-danger"
-                                    id="update-button"
-                                    data-exercises={updateableExerciseIds}
-                                >
-                                    Update exercises
-                                </button>
-                            </div>
-                        ) : null}
+                        <div
+                            class="alert alert-warning"
+                            id="update-notification"
+                            role="alert"
+                            style="display: none"
+                        >
+                            <span class="mr-2">Updates found for exercises</span>
+                            <button class="btn btn-danger" id="update-button">
+                                Update exercises
+                            </button>
+                        </div>
                         {offlineMode ? (
                             <div class="alert alert-warning" role="alert">
                                 <span>
@@ -324,7 +323,7 @@ function script() {
         }
     }
 
-    function downloadSelectedExercises(ids) {
+    function downloadSelectedExercises(ids, mode) {
         if (ids.length > 0) {
             vscode.postMessage({
                 type: "downloadExercises",
@@ -332,6 +331,7 @@ function script() {
                 courseName: course.courseName,
                 organizationSlug: course.courseOrg,
                 courseId: parseInt(course.courseId),
+                mode,
             });
         }
     }
@@ -439,17 +439,11 @@ function script() {
         const updateNotification = document.getElementById("update-notification");
         const updateButton = document.getElementById("update-button");
         if (updateNotification && updateButton) {
-            updateButton.addEventListener(
-                "click",
-                function () {
-                    updateNotification.style.display = "none";
-                    const updateableIds = this.dataset.exercises
-                        .split(",")
-                        .map((id) => parseInt(id));
-                    downloadSelectedExercises(updateableIds);
-                },
-                { once: true },
-            );
+            updateButton.addEventListener("click", function () {
+                updateButton.disabled = true;
+                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
+                downloadSelectedExercises(updateableIds, "update");
+            });
         }
 
         // Course part cards
@@ -507,7 +501,7 @@ function script() {
                             "downloading",
                         );
                     }
-                    downloadSelectedExercises(ids);
+                    downloadSelectedExercises(ids, "download");
                 });
             }
 
@@ -571,6 +565,19 @@ function script() {
                         `exercise-${message.exerciseId}-status`,
                     );
                     setStatusBadge(element, message.status);
+                    break;
+                }
+                case "setUpdateables": {
+                    const notification = document.getElementById("update-notification");
+                    const button = notification.querySelector("button#update-button");
+                    if (message.exerciseIds.length === 0) {
+                        button.disabled = true;
+                        notification.style.display = "none";
+                    } else {
+                        button.disabled = false;
+                        button.dataset.exercises = message.exerciseIds;
+                        notification.style.display = "block";
+                    }
                     break;
                 }
                 default:

@@ -58,7 +58,6 @@ export default class TmcWebview {
         this.webviewState.clear();
         this.listenerDisposer = panel.onDidChangeViewState((event) => {
             if (event.webviewPanel.visible) {
-                console.log("Restoring webview content", this.webviewState.size, "items");
                 panel.webview.postMessage(Array.from(this.webviewState.values()));
             }
         });
@@ -66,6 +65,12 @@ export default class TmcWebview {
         initialState && this.postMessage(...initialState);
     }
 
+    /**
+     * Posts a message to the current webview. Keys provided with messages are used to restore
+     * latest state when the webview has been hidden.
+     *
+     * @param messages Pairs of keys and messages to send to webview.
+     */
     public postMessage(...messages: Array<{ key: string; message: WebviewMessage }>): void {
         for (const { key, message } of messages) {
             this.webviewState.set(key, message);
