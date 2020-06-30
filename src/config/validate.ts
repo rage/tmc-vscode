@@ -4,7 +4,7 @@ import Storage from "./storage";
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
 import { CourseDetails, CourseExercise, CourseSettings } from "../api/types";
-import { ApiError, ConnectionError } from "../errors";
+import { ApiError, AuthorizationError, ConnectionError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
 import Resources from "./resources";
@@ -63,6 +63,10 @@ export async function validateAndFix(
                     logger.warn(`Skipping bad workspacemanager data - ${details.val.message}`, ex);
                     exerciseDataFixed.push(ex as LocalExerciseData);
                     continue;
+                } else if (details.val instanceof AuthorizationError) {
+                    logger.warn(`No access to exercise - ${details.val.message}`, ex);
+                    exerciseDataFixed.push(ex as LocalExerciseData);
+                    continue;
                 }
                 return new Err(details.val);
             }
@@ -119,6 +123,14 @@ export async function validateAndFix(
                         logger.warn("Skipping bad userdata due to courseDetails", course);
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
+                    } else if (courseDetails.val instanceof AuthorizationError) {
+                        // TODO: Mark the course as old course.
+                        logger.warn(
+                            `No access to courseDetails - ${courseDetails.val.message}`,
+                            course,
+                        );
+                        userDataFixed.courses.push(course as LocalCourseData);
+                        continue;
                     }
                     return new Err(courseDetails.val);
                 }
@@ -132,6 +144,14 @@ export async function validateAndFix(
                         logger.warn("Skipping bad userdata due to courseExercises", course);
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
+                    } else if (courseExercises.val instanceof AuthorizationError) {
+                        // TODO: Mark the course as old course.
+                        logger.warn(
+                            `No access to courseExercises - ${courseExercises.val.message}`,
+                            course,
+                        );
+                        userDataFixed.courses.push(course as LocalCourseData);
+                        continue;
                     }
                     return new Err(courseExercises.val);
                 }
@@ -143,6 +163,14 @@ export async function validateAndFix(
                 if (courseSettings.err) {
                     if (courseSettings.val instanceof ApiError) {
                         logger.warn("Skipping bad userdata due to courseSettings", course);
+                        userDataFixed.courses.push(course as LocalCourseData);
+                        continue;
+                    } else if (courseSettings.val instanceof AuthorizationError) {
+                        // TODO: Mark the course as old course.
+                        logger.warn(
+                            `No access to courseSettings - ${courseSettings.val.message}`,
+                            course,
+                        );
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     }
