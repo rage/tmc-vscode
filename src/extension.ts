@@ -35,6 +35,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger.setLogLevel(settings.getLogLevel());
     await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
+    logger.log(`VSCode version: ${vscode.version}`);
+    logger.log(`TMC extension version: ${resources.extensionVersion}`);
+    logger.log(
+        `Python extension version: ${
+            vscode.extensions.getExtension("ms-python.python")?.packageJSON.version
+        }`,
+    );
+
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
 
     const tmc = new TMC(storage, resources, logger);

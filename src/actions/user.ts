@@ -545,72 +545,91 @@ export async function removeCourse(id: number, actionContext: ActionContext): Pr
  */
 export async function updateCourse(id: number, actionContext: ActionContext): Promise<void> {
     const { tmc, userData, workspaceManager, logger } = actionContext;
-    return Promise.all([tmc.getCourseDetails(id), tmc.getCourseExercises(id)]).then(
-        ([courseDetailsResult, courseExercisesResult]) => {
-            if (courseDetailsResult.err) {
-                if (!(courseDetailsResult.val instanceof ConnectionError)) {
-                    const message = `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`;
-                    logger.error(`Error refreshing course data ${message}`, courseDetailsResult);
-                    showError(
-                        `Something went wrong while trying to refresh course data: ${message}`,
-                    );
-                    return;
-                }
-                logger.warn(
-                    `Didn't fetch course updates, working offline: ${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`,
-                );
+    return Promise.all([
+        tmc.getCourseDetails(id),
+        tmc.getCourseExercises(id),
+        tmc.getCourseSettings(id),
+    ]).then(([courseDetailsResult, courseExercisesResult, courseSettingsResult]) => {
+        const showErrorForResult = (message: string, result: unknown): void => {
+            logger.error(`Error refreshing course data ${message}`, result);
+            showError(`Something went wrong while trying to refresh course data: ${message}`);
+        };
+        if (courseDetailsResult.err) {
+            if (!(courseDetailsResult.val instanceof ConnectionError)) {
+                const message = `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`;
+                showErrorForResult(message, courseDetailsResult);
                 return;
             }
-            if (courseExercisesResult.err) {
-                if (!(courseExercisesResult.val instanceof ConnectionError)) {
-                    const message = `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`;
-                    logger.error(`Error refreshing course data ${message}`, courseExercisesResult);
-                    showError(
-                        `Something went wrong while trying to refresh course data: ${message}`,
-                    );
-                    return;
-                }
-                logger.warn(
-                    `Didn't fetch course updates, working offline: ${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`,
-                );
+            logger.warn(
+                "Didn't fetch course updates, working offline: " +
+                    `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`,
+            );
+            return;
+        }
+        if (courseExercisesResult.err) {
+            if (!(courseExercisesResult.val instanceof ConnectionError)) {
+                const message = `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`;
+                showErrorForResult(message, courseExercisesResult);
                 return;
             }
-
-            const details = courseDetailsResult.val.course;
-            const exercises = courseExercisesResult.val;
-
-            logger.log(`Refreshing exercise data for course ${details.name} from API`);
-
-            userData.updateExercises(
-                id,
-                details.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),
+            logger.warn(
+                "Didn't fetch course updates, working offline: " +
+                    `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`,
             );
-            const [available, awarded] = exercises.reduce(
-                (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
-                [0, 0],
-            );
-            userData.updatePoints(id, awarded, available);
-
-            const combinedDetails: Map<number, { c?: CourseExercise; e?: Exercise }> = new Map();
-            details.exercises.forEach((x) => {
-                combinedDetails.set(x.id, { e: x });
-            });
-            exercises.forEach((x) => {
-                let d = combinedDetails.get(x.id);
-                if (d) d.c = x;
-                else d = { c: x };
-                combinedDetails.set(x.id, d);
-            });
-            for (const x of combinedDetails.values()) {
-                if (x.c && x.e) {
-                    workspaceManager.updateExerciseData(
-                        x.c.id,
-                        x.c.soft_deadline,
-                        x.c.deadline,
-                        x.e.checksum,
-                    );
-                }
+            return;
+        }
+        if (courseSettingsResult.err) {
+            if (!(courseExercisesResult.val instanceof ConnectionError)) {
+                const message = `${courseSettingsResult.val.name} - ${courseSettingsResult.val.message}`;
+                showErrorForResult(message, courseSettingsResult);
+                return;
             }
-        },
-    );
+            logger.warn(
+                "Didn't fetch course updates, working offline: " +
+                    `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`,
+            );
+            return;
+        }
+
+        const details = courseDetailsResult.val.course;
+        const exercises = courseExercisesResult.val;
+        const settings = courseSettingsResult.val;
+
+        const courseData = userData.getCourseByName(settings.name);
+        courseData.perhapsExamMode = settings.hide_submission_results;
+        userData.updateCourse(courseData);
+
+        logger.log(`Refreshing exercise data for course ${details.name} from API`);
+
+        userData.updateExercises(
+            id,
+            details.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),
+        );
+        const [available, awarded] = exercises.reduce(
+            (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
+            [0, 0],
+        );
+        userData.updatePoints(id, awarded, available);
+
+        const combinedDetails: Map<number, { c?: CourseExercise; e?: Exercise }> = new Map();
+        details.exercises.forEach((x) => {
+            combinedDetails.set(x.id, { e: x });
+        });
+        exercises.forEach((x) => {
+            let d = combinedDetails.get(x.id);
+            if (d) d.c = x;
+            else d = { c: x };
+            combinedDetails.set(x.id, d);
+        });
+        for (const x of combinedDetails.values()) {
+            if (x.c && x.e) {
+                workspaceManager.updateExerciseData(
+                    x.c.id,
+                    x.c.soft_deadline,
+                    x.c.deadline,
+                    x.e.checksum,
+                );
+            }
+        }
+    });
 }

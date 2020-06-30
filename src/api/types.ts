@@ -105,7 +105,7 @@ export type Organization = {
  * GET /api/v8/courses/{course_id}
  */
 export type CourseSettings = {
-    name: string | null;
+    name: string;
     hide_after: string | null;
     hidden: boolean;
     cache_version: number | null;
