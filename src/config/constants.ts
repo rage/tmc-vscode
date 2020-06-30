@@ -2,8 +2,8 @@ import { SubmissionResultReport } from "../api/types";
 
 export const EXTENSION_ID = "moocfi.test-my-code";
 export const OUTPUT_CHANNEL_NAME = "TestMyCode";
-export const TMC_JAR_URL = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.8.2-SNAPSHOT.jar";
-export const TMC_JAR_NAME = "tmc-langs-cli-0.8.2-SNAPSHOT.jar";
+export const TMC_JAR_URL = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.8.5-SNAPSHOT.jar";
+export const TMC_JAR_NAME = "tmc-langs-cli-0.8.5-SNAPSHOT.jar";
 export const JAVA_ZIP_URLS: {
     linux32?: string;
     linux64?: string;

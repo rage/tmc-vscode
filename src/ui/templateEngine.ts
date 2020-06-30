@@ -77,9 +77,11 @@ export default class TemplateEngine {
         handlebars.registerHelper("submission_status", (results: SubmissionResultReport) => {
             if (results.status === "ok" && results.all_tests_passed) {
                 if (results.solution_url) {
-                    return "<h1 class='passed-header'>All tests passed on the server</h1><input type='button' class='btn-primary' value='View model solution' onclick='viewModelSolution()' />";
+                    return "<h1 class='passed-header'>All tests passed on the server</h1><input type='button' class='btn btn-primary' value='View model solution' onclick='viewModelSolution()' />";
                 }
-                return "<h1 class='passed-header'>All tests passed on the server</h1><input type='button' class='btn-primary' value='View submission in browser' onclick='showInBrowser()' />";
+                return `<h1 class='passed-header'>All tests passed on the server</h1>
+                <div class="alert alert-info">Your submission has been saved, but you can't see test results because this course is an exam.</div>
+                <input type='button' class='btn btn-primary' value='View submission in browser' onclick='showInBrowser()' />`;
             } else if (results.status === "fail") {
                 return "<h1>Some tests failed on the server</h1>";
             } else if (results.status === "error") {
