@@ -62,18 +62,17 @@ function component(data) {
                 </div>
                 <div class="row py-1">
                     <div class="col-md">
-                        {updateableExerciseIds.length > 0 ? (
-                            <div class="alert alert-warning" id="update-notification" role="alert">
-                                <span class="mr-2">Updates found for exercises</span>
-                                <button
-                                    class="btn btn-danger"
-                                    id="update-button"
-                                    data-exercises={updateableExerciseIds}
-                                >
-                                    Update exercises
-                                </button>
-                            </div>
-                        ) : null}
+                        <div
+                            class="alert alert-warning"
+                            id="update-notification"
+                            role="alert"
+                            style="display: none"
+                        >
+                            <span class="mr-2">Updates found for exercises</span>
+                            <button class="btn btn-danger" id="update-button">
+                                Update exercises
+                            </button>
+                        </div>
                         {offlineMode ? (
                             <div class="alert alert-warning" role="alert">
                                 <span>
@@ -102,14 +101,9 @@ function component(data) {
                     <h2 style="text-transform: capitalize;">{exerciseGroup.name}</h2>
                 </div>
                 <div class="col-md-2 my-1">
-                    {exerciseGroup.downloadables.length !== 0 ? (
-                        <button
-                            class="btn btn-success w-100 download-all"
-                            data-exercises={exerciseGroup.downloadables}
-                        >
-                            Download ({exerciseGroup.downloadables.length})
-                        </button>
-                    ) : null}
+                    <button class="btn btn-success w-100 download-all" style="display: none;">
+                        Download (<span>0</span>)
+                    </button>
                 </div>
                 <div class="col-md-2 my-1">
                     <button
@@ -162,13 +156,6 @@ function component(data) {
                             <tbody class="exercise-tbody">
                                 {exerciseGroup.exercises
                                     .map((exercise) => {
-                                        const workspaceStatus = exercise.isOpen
-                                            ? "opened"
-                                            : exercise.isClosed
-                                            ? "closed"
-                                            : exercise.expired
-                                            ? "expired"
-                                            : "missing";
                                         return (
                                             <tr class="exercise-table-row" id={exercise.id}>
                                                 <td class="min-w-5 text-center exercise-selector">
@@ -206,7 +193,6 @@ function component(data) {
                                                     class="min-w-15 exercise-status"
                                                     id={`exercise-${exercise.id}-status`}
                                                     data-exercise-id={exercise.id}
-                                                    data-workspace-status={workspaceStatus}
                                                 >
                                                     loading...
                                                 </td>
@@ -332,12 +318,15 @@ function script() {
                     </span>
                 );
                 break;
-            default:
+            case "new":
                 html = (
-                    <span class="badge badge-success" data-status="closed">
-                        new!
+                    <span class="badge badge-dark" data-status="new">
+                        expired
                     </span>
                 );
+                break;
+            default:
+                html = <span data-status="unknown">{element.dataset.workspaceStatus}</span>;
                 break;
         }
         element.innerHTML = html;
@@ -346,7 +335,7 @@ function script() {
         }
     }
 
-    function downloadSelectedExercises(ids) {
+    function downloadSelectedExercises(ids, mode) {
         if (ids.length > 0) {
             vscode.postMessage({
                 type: "downloadExercises",
@@ -354,6 +343,7 @@ function script() {
                 courseName: course.courseName,
                 organizationSlug: course.courseOrg,
                 courseId: parseInt(course.courseId),
+                mode,
             });
         }
     }
@@ -387,33 +377,60 @@ function script() {
             const exerciseTableRow = exerciseCards[i].querySelectorAll("tr.exercise-table-row");
             const allExercises = exerciseTableRow.length;
 
+            let opened = 0;
+            let closed = 0;
             let completed = 0;
-            let open = 0;
-            let downloaded = allExercises;
+            let downloadable = [];
 
-            for (let i = 0; i < exerciseTableRow.length; i++) {
-                const c = exerciseTableRow[i].querySelector("td.exercise-completed").dataset
-                    .exerciseCompleted;
-                const s = exerciseTableRow[i].querySelector("td.exercise-status").dataset
+            for (let j = 0; j < exerciseTableRow.length; j++) {
+                if (
+                    exerciseTableRow[j].querySelector("td.exercise-completed").dataset
+                        .exerciseCompleted === "true"
+                ) {
+                    completed++;
+                }
+
+                const s = exerciseTableRow[j].querySelector("td.exercise-status").dataset
                     .workspaceStatus;
-                s === "opened" ? open++ : s !== "closed" ? downloaded-- : null;
-                c === "true" ? completed++ : null;
+                switch (s) {
+                    case "opened":
+                        opened++;
+                        break;
+                    case "closed":
+                        closed++;
+                        break;
+                    case "new":
+                    case "expired":
+                        downloadable.push(exerciseTableRow[j].id);
+                        break;
+                }
             }
 
-            exerciseCards[i].querySelector("button.open-all").disabled =
-                open === allExercises || downloaded === 0;
-            exerciseCards[i].querySelector("button.close-all").disabled = open === 0;
+            const downloadAllButton = exerciseCards[i].querySelector("button.download-all");
+            downloadAllButton.dataset.exercises = downloadable;
+            if (downloadable.length === 0) {
+                downloadAllButton.style.display = "none";
+                downloadAllButton.disabled = true;
+            } else {
+                downloadAllButton.style.display = "block";
+                downloadAllButton.disabled = false;
+            }
+            downloadAllButton.style.display = downloadable.length === 0 ? "none" : "block";
+            downloadAllButton.querySelector("span").innerText = downloadable.length;
+
+            exerciseCards[i].querySelector("button.open-all").disabled = closed === 0;
+            exerciseCards[i].querySelector("button.close-all").disabled = opened === 0;
 
             const name = cardInfo.dataset.groupName;
             cardInfo.querySelector(
                 `#completed-${name}`,
             ).innerText = `Completed ${completed} / ${allExercises}`;
-            cardInfo.querySelector(
-                `#downloaded-${name}`,
-            ).innerText = `Downloaded ${downloaded} / ${allExercises}`;
+            cardInfo.querySelector(`#downloaded-${name}`).innerText = `Downloaded ${
+                opened + closed
+            } / ${allExercises}`;
             cardInfo.querySelector(
                 `#opened-${name}`,
-            ).innerText = `Open in workspace ${open} / ${allExercises}`;
+            ).innerText = `Open in workspace ${opened} / ${allExercises}`;
         }
     }
 
@@ -434,17 +451,11 @@ function script() {
         const updateNotification = document.getElementById("update-notification");
         const updateButton = document.getElementById("update-button");
         if (updateNotification && updateButton) {
-            updateButton.addEventListener(
-                "click",
-                function () {
-                    updateNotification.style.display = "none";
-                    const updateableIds = this.dataset.exercises
-                        .split(",")
-                        .map((id) => parseInt(id));
-                    downloadSelectedExercises(updateableIds);
-                },
-                { once: true },
-            );
+            updateButton.addEventListener("click", function () {
+                updateButton.disabled = true;
+                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
+                downloadSelectedExercises(updateableIds, "update");
+            });
         }
 
         // Course part cards
@@ -488,30 +499,22 @@ function script() {
 
             const downloadAllButton = exerciseCard.querySelector("button.download-all");
             if (downloadAllButton) {
-                const ids = downloadAllButton.dataset.exercises
-                    .split(",")
-                    .map((id) => parseInt(id));
-                downloadAllButton.addEventListener(
-                    "click",
-                    function () {
-                        downloadAllButton.style.display = "none";
-                        if (
-                            toggleButton &&
-                            exerciseTable &&
-                            exerciseTable.style.display === "none"
-                        ) {
-                            toggleButton.click();
-                        }
-                        for (let i = 0; i < ids.length; i++) {
-                            setStatusBadge(
-                                exerciseTable.querySelector(`#exercise-${ids[i]}-status`),
-                                "downloading",
-                            );
-                        }
-                        downloadSelectedExercises(ids);
-                    },
-                    { once: true },
-                );
+                downloadAllButton.addEventListener("click", function () {
+                    downloadAllButton.disabled = true;
+                    if (toggleButton && exerciseTable && exerciseTable.style.display === "none") {
+                        toggleButton.click();
+                    }
+                    const ids = downloadAllButton.dataset.exercises
+                        .split(",")
+                        .map((id) => parseInt(id));
+                    for (let i = 0; i < ids.length; i++) {
+                        setStatusBadge(
+                            exerciseTable.querySelector(`#exercise-${ids[i]}-status`),
+                            "downloading",
+                        );
+                    }
+                    downloadSelectedExercises(ids, "download");
+                });
             }
 
             if (exerciseTable) {
@@ -541,12 +544,6 @@ function script() {
                             refreshFooter();
                         });
                     }
-                    const exerciseStatusColumn = exerciseTableRow.querySelector(
-                        "td.exercise-status",
-                    );
-                    if (exerciseStatusColumn) {
-                        setStatusBadge(exerciseStatusColumn);
-                    }
                 }
             }
         }
@@ -571,18 +568,33 @@ function script() {
     });
 
     window.addEventListener("message", function (event) {
-        /**@type {import("../types").WebviewMessage} */
-        const message = event.data;
-        switch (message.command) {
-            case "exerciseStatusChange":
-                for (let i = 0; i < message.exerciseIds?.length || 0; i++) {
-                    const id = message.exerciseIds[i];
-                    const element = document.getElementById(`exercise-${id}-status`);
-                    setStatusBadge(element, message.value);
+        for (let i = 0; i < event.data.length; i++) {
+            /**@type {import("../types").WebviewMessage} */
+            const message = event.data[i];
+            switch (message.command) {
+                case "exerciseStatusChange": {
+                    const element = document.getElementById(
+                        `exercise-${message.exerciseId}-status`,
+                    );
+                    setStatusBadge(element, message.status);
+                    break;
                 }
-                break;
-            default:
-                console.log("Unsupported command", message.command);
+                case "setUpdateables": {
+                    const notification = document.getElementById("update-notification");
+                    const button = notification.querySelector("button#update-button");
+                    if (message.exerciseIds.length === 0) {
+                        button.disabled = true;
+                        notification.style.display = "none";
+                    } else {
+                        button.disabled = false;
+                        button.dataset.exercises = message.exerciseIds;
+                        notification.style.display = "block";
+                    }
+                    break;
+                }
+                default:
+                    console.log("Unsupported command", message.command);
+            }
         }
         refreshCards();
     });

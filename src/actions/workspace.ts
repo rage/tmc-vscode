@@ -19,6 +19,7 @@ import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import * as vscode from "vscode";
+import { ExerciseStatus, WebviewMessage } from "../ui/types";
 
 const limit = pLimit(3);
 
@@ -34,6 +35,23 @@ export async function downloadExercises(
 ): Promise<number[]> {
     const { tmc, ui, logger } = actionContext;
 
+    interface StatusChange {
+        exerciseId: number;
+        status: ExerciseStatus;
+    }
+
+    const postChange = (...changes: StatusChange[]): void =>
+        ui.webview.postMessage(
+            ...changes.map<{ key: string; message: WebviewMessage }>(({ exerciseId, status }) => ({
+                key: `exercise-${exerciseId}-status`,
+                message: {
+                    command: "exerciseStatusChange",
+                    exerciseId,
+                    status,
+                },
+            })),
+        );
+
     type DownloadState = {
         id: number;
         name: string;
@@ -48,20 +66,10 @@ export async function downloadExercises(
         state: DownloadState,
     ): Promise<void> =>
         new Promise<void>((resolve) => {
-            ui.webview.postMessage({
-                command: "exerciseStatusChange",
-                exerciseIds: [state.id],
-                value: "downloading",
-            });
             tmc.downloadExercise(state.id, state.organizationSlug, (downloadedPct, increment) =>
                 process.report({ downloadedPct, increment }),
             ).then((res: Result<void, Error>) => {
-                const value = res.ok ? "closed" : "downloadFailed";
-                ui.webview.postMessage({
-                    command: "exerciseStatusChange",
-                    exerciseIds: [state.id],
-                    value,
-                });
+                postChange({ exerciseId: state.id, status: res.ok ? "closed" : "downloadFailed" });
                 if (res.ok) {
                     successful.push(state);
                 } else {
@@ -75,6 +83,13 @@ export async function downloadExercises(
             });
         });
 
+    postChange(
+        ...courseExerciseDownloads
+            .reduce<number[]>((collected, next) => collected.concat(next.exerciseIds), [])
+            .map<StatusChange>((exerciseId) => ({ exerciseId, status: "downloading" })),
+    );
+
+    // TODO: Base this process on above reduction
     const exerciseStatuses = await Promise.all(
         courseExerciseDownloads.map(async (ced) => {
             const courseDetails = await tmc.getCourseDetails(ced.courseId);
@@ -248,11 +263,16 @@ export async function openExercises(
         );
         return new Err(new Error("Something went wrong while opening exercises."));
     }
-    ui.webview.postMessage({
-        command: "exerciseStatusChange",
-        exerciseIds: filterIds,
-        value: "opened",
-    });
+    ui.webview.postMessage(
+        ...filterIds.map<{ key: string; message: WebviewMessage }>((exerciseId) => ({
+            key: `exercise-${exerciseId}-status`,
+            message: {
+                command: "exerciseStatusChange",
+                exerciseId,
+                status: "opened",
+            },
+        })),
+    );
     return new Ok(filterIds);
 }
 
@@ -276,11 +296,16 @@ export async function closeExercises(
         );
         return new Err(new Error("Something went wrong while closing exercises."));
     }
-    ui.webview.postMessage({
-        command: "exerciseStatusChange",
-        exerciseIds: filterIds,
-        value: "closed",
-    });
+    ui.webview.postMessage(
+        ...filterIds.map<{ key: string; message: WebviewMessage }>((exerciseId) => ({
+            key: `exercise-${exerciseId}-status`,
+            message: {
+                command: "exerciseStatusChange",
+                exerciseId,
+                status: "closed",
+            },
+        })),
+    );
     return new Ok(filterIds);
 }
 

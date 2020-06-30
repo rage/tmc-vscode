@@ -80,6 +80,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.webview.registerHandler("myCourses", () => {
         displayUserCourses(actionContext);
     });
+    // TODO: Split download and update in more sensible way
     ui.webview.registerHandler(
         "downloadExercises",
         async (msg: {
@@ -88,8 +89,18 @@ export function registerUiActions(actionContext: ActionContext): void {
             courseName?: string;
             organizationSlug?: string;
             courseId?: number;
+            mode?: string;
         }) => {
-            if (!(msg.type && msg.ids && msg.courseName && msg.organizationSlug && msg.courseId)) {
+            if (
+                !(
+                    msg.type &&
+                    msg.ids &&
+                    msg.courseName &&
+                    msg.organizationSlug &&
+                    msg.courseId &&
+                    msg.mode
+                )
+            ) {
                 return;
             }
             const openAfter = msg.ids.filter(
@@ -102,7 +113,14 @@ export function registerUiActions(actionContext: ActionContext): void {
                 exerciseIds: msg.ids,
                 organizationSlug: msg.organizationSlug,
             };
-            await actionContext.userData.clearNewExercises(msg.courseId);
+            if (msg.mode === "download") {
+                await actionContext.userData.clearNewExercises(msg.courseId);
+            } else if (msg.mode === "update") {
+                ui.webview.postMessage({
+                    key: "course-updates",
+                    message: { command: "setUpdateables", exerciseIds: [] },
+                });
+            }
             const succesful = await downloadExercises(actionContext, [downloads]);
             openExercises(
                 openAfter.filter((oa) => succesful.find((s) => s === oa)),

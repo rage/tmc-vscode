@@ -43,13 +43,11 @@ export type CourseDetailsData = {
     course: LocalCourseData;
     courseId: number;
     exerciseData: CourseDetailsExerciseGroup[];
-    updateableExerciseIds: number[];
     offlineMode: boolean;
 };
 
 export type CourseDetailsExerciseGroup = {
     name: string;
-    downloadables: number[];
     nextDeadlineString: string;
     exercises: CourseDetailsExercise[];
 };
@@ -57,9 +55,6 @@ export type CourseDetailsExerciseGroup = {
 export type CourseDetailsExercise = {
     id: number;
     name: string;
-    expired: boolean;
-    isOpen: boolean;
-    isClosed: boolean;
     passed: boolean;
     softDeadline: Date | null;
     softDeadlineString: string;
@@ -119,10 +114,23 @@ export type TestResultData = {
     pasteLink?: string;
 };
 
-export type ExerciseStatus = "closed" | "downloading" | "downloadFailed" | "opened";
+export type ExerciseStatus =
+    | "closed"
+    | "downloading"
+    | "downloadFailed"
+    | "expired"
+    | "new"
+    | "opened";
 
-export interface WebviewMessage {
+export interface ExerciseStatusChange {
     command: "exerciseStatusChange";
-    exerciseIds: number[];
-    value: ExerciseStatus;
+    exerciseId: number;
+    status: ExerciseStatus;
 }
+
+export interface SetUpdateables {
+    command: "setUpdateables";
+    exerciseIds: number[];
+}
+
+export type WebviewMessage = ExerciseStatusChange | SetUpdateables;
