@@ -1,6 +1,8 @@
 import { OutputChannel } from "vscode";
 import * as vscode from "vscode";
+
 import { OUTPUT_CHANNEL_NAME } from "../config/constants";
+
 import { superfluousPropertiesEnabled } from ".";
 
 export enum LogLevel {

@@ -1,17 +1,26 @@
 import * as cp from "child_process";
 import * as ClientOauth2 from "client-oauth2";
-import * as del from "del";
+import { sync as delSync } from "del";
 import * as FormData from "form-data";
 import * as fs from "fs";
 import * as fetch from "node-fetch";
-import * as kill from "tree-kill";
 import * as path from "path";
-import * as url from "url";
-import Resources from "../config/resources";
-import Storage from "../config/storage";
-
+import * as kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
+import * as url from "url";
+
+import { resetExercise } from "../actions";
+import { ActionContext } from "../actions/types";
+import {
+    ACCESS_TOKEN_URI,
+    CLIENT_ID,
+    CLIENT_SECRET,
+    TMC_API_URL,
+    TMC_LANGS_TIMEOUT,
+} from "../config/constants";
+import Resources from "../config/resources";
+import Storage from "../config/storage";
 import {
     ApiError,
     AuthenticationError,
@@ -21,6 +30,8 @@ import {
     TimeoutError,
 } from "../errors";
 import { displayProgrammerError, downloadFile } from "../utils/";
+import Logger from "../utils/logger";
+
 import {
     Course,
     CourseDetails,
@@ -41,16 +52,6 @@ import {
     TmcLangsTestResults,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
-import {
-    ACCESS_TOKEN_URI,
-    CLIENT_ID,
-    CLIENT_SECRET,
-    TMC_API_URL,
-    TMC_LANGS_TIMEOUT,
-} from "../config/constants";
-import { resetExercise } from "../actions";
-import { ActionContext } from "../actions/types";
-import Logger from "../utils/logger";
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -308,7 +309,7 @@ export default class TMC {
             this.workspaceManager.deleteExercise(id);
         }
 
-        del.sync(archivePath, { force: true });
+        delSync(archivePath, { force: true });
 
         return Ok.EMPTY;
     }
@@ -383,7 +384,7 @@ export default class TMC {
         }
 
         userFilePaths.val.response.studentFilePaths.forEach((dataPath) => {
-            del.sync(path.join(closedExPath.val, dataPath), { force: true });
+            delSync(path.join(closedExPath.val, dataPath), { force: true });
             fs.renameSync(
                 path.join(oldSubmissionTempPath, dataPath),
                 path.join(closedExPath.val, dataPath),
@@ -392,8 +393,8 @@ export default class TMC {
 
         this.workspaceManager.openExercise(exerciseId);
 
-        del.sync(archivePath, { force: true });
-        del.sync(oldSubmissionTempPath, { force: true });
+        delSync(archivePath, { force: true });
+        delSync(oldSubmissionTempPath, { force: true });
 
         return new Ok("Old submission downloaded succesfully");
     }

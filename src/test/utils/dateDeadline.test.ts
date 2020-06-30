@@ -1,4 +1,5 @@
 import { strictEqual } from "assert";
+
 import { dateToString, findNextDateAfter, parseNextDeadlineAfter } from "../../utils/dateDeadline";
 
 suite("Date utils", () => {

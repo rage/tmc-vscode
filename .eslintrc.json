@@ -6,15 +6,21 @@
     },
     "extends": [
         "eslint:recommended",
-        "plugin:@typescript-eslint/eslint-recommended",
-        "plugin:@typescript-eslint/recommended"
+        "plugin:@typescript-eslint/recommended",
+        "plugin:import/errors",
+        "plugin:import/warnings",
+        "plugin:import/typescript",
+        "prettier/@typescript-eslint"
     ],
     "globals": {
         "Atomics": "readonly",
         "SharedArrayBuffer": "readonly"
     },
     "parser": "@typescript-eslint/parser",
-    "plugins": ["@typescript-eslint", "prettier"],
+    "plugins": ["@typescript-eslint", "import", "prettier"],
+    "settings": {
+        "import/core-modules": ["vscode"]
+    },
     "rules": {
         "@typescript-eslint/no-use-before-define": [
             "error",
@@ -25,12 +31,6 @@
         ],
         "quotes": "off",
         "@typescript-eslint/quotes": ["error"],
-        "sort-imports": [
-            "error",
-            {
-                "ignoreDeclarationSort": true
-            }
-        ],
         "@typescript-eslint/explicit-function-return-type": "off",
         "@typescript-eslint/no-empty-function": "off",
         "@typescript-eslint/no-var-requires": "off",
@@ -42,6 +42,16 @@
                 "code": 130,
                 "comments": 100,
                 "ignoreComments": false
+            }
+        ],
+        "import/order": [
+            "error",
+            {
+                "alphabetize": {
+                    "order": "asc"
+                },
+                "groups": [["builtin", "external"], "parent", "sibling", "index"],
+                "newlines-between": "always"
             }
         ]
     },

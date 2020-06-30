@@ -7,10 +7,11 @@ import * as handlebars from "handlebars";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { CourseDetails, Webview } from "./templates";
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, numbersToString, parseTestResultsText } from "../utils/";
+
+import { CourseDetails, Webview } from "./templates";
 import { TemplateData } from "./types";
 
 export default class TemplateEngine {

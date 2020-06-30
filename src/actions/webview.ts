@@ -5,18 +5,20 @@
  */
 
 import { Err, Ok, Result } from "ts-results";
+
 import { ExerciseStatus } from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
-import { chooseDeadline, dateToString, parseDate, parseNextDeadlineAfter } from "../utils/";
-import { ActionContext } from "./types";
-import { updateCourse } from "./user";
-import { checkForExerciseUpdates } from "./workspace";
 import {
     CourseDetailsExercise,
     CourseDetailsExerciseGroup,
     ExerciseStatus as TextStatus,
     WebviewMessage,
 } from "../ui/types";
+import { chooseDeadline, dateToString, parseDate, parseNextDeadlineAfter } from "../utils/";
+
+import { ActionContext } from "./types";
+import { updateCourse } from "./user";
+import { checkForExerciseUpdates } from "./workspace";
 
 /**
  * Displays a summary page of user's courses.

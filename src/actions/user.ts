@@ -4,9 +4,14 @@
  * -------------------------------------------------------------------------------------------------
  */
 
+import du = require("du");
+import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import { CourseExercise, Exercise, OldSubmission, SubmissionFeedback } from "../api/types";
+import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
+import { ConnectionError } from "../errors";
 import { TestResultData, VisibilityGroups } from "../ui/types";
 import {
     askForConfirmation,
@@ -18,6 +23,7 @@ import {
     showNotification,
     sleep,
 } from "../utils/";
+
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import {
@@ -26,12 +32,6 @@ import {
     downloadExercises,
     openExercises,
 } from "./workspace";
-
-import { Err, Ok, Result } from "ts-results";
-import { CourseExercise, Exercise, OldSubmission, SubmissionFeedback } from "../api/types";
-import du = require("du");
-import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
-import { ConnectionError } from "../errors";
 
 /**
  * Authenticates and logs the user in if credentials are correct.

@@ -1,7 +1,9 @@
-import Storage from "./storage";
 import { Err, Ok, Result } from "ts-results";
-import { LocalCourseData, LocalCourseExercise } from "./types";
+
 import Logger from "../utils/logger";
+
+import Storage from "./storage";
+import { LocalCourseData, LocalCourseExercise } from "./types";
 
 export class UserData {
     private courses: Map<number, LocalCourseData>;

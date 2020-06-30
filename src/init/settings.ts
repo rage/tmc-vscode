@@ -1,8 +1,9 @@
-import Storage from "../config/storage";
-import Resources from "../config/resources";
-import Logger, { LogLevel } from "../utils/logger";
-import { ExtensionSettings } from "../config/types";
 import { is } from "typescript-is";
+
+import Resources from "../config/resources";
+import Storage from "../config/storage";
+import { ExtensionSettings } from "../config/types";
+import Logger, { LogLevel } from "../utils/logger";
 
 // TODO: Perhaps not initialize if everything is ok.
 /**

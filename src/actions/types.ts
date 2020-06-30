@@ -1,11 +1,11 @@
 import TMC from "../api/tmc";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
+import Settings from "../config/settings";
 import { UserData } from "../config/userdata";
+import TemporaryWebviewProvider from "../ui/temporaryWebviewProvider";
 import UI from "../ui/ui";
 import Logger from "../utils/logger";
-import Settings from "../config/settings";
-import TemporaryWebviewProvider from "../ui/temporaryWebviewProvider";
 
 export type ActionContext = {
     logger: Logger;

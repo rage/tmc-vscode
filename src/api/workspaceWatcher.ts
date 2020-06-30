@@ -1,14 +1,15 @@
-import * as del from "del";
+import { sync as delSync } from "del";
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { ExerciseStatus, LocalExerciseData } from "../config/types";
-import Resources from "../config/resources";
 import { WORKSPACE_ROOT_FILE, WORKSPACE_ROOT_FILE_TEXT } from "../config/constants";
-import WorkspaceManager from "./workspaceManager";
-import Logger from "../utils/logger";
+import Resources from "../config/resources";
+import { ExerciseStatus, LocalExerciseData } from "../config/types";
 import { showError } from "../utils";
+import Logger from "../utils/logger";
+
+import WorkspaceManager from "./workspaceManager";
 
 export default class WorkspaceWatcher {
     private readonly folderTree: Map<string, Map<string, Set<string>>> = new Map();
@@ -127,7 +128,7 @@ export default class WorkspaceWatcher {
                     this.logger.warn(
                         `Unknown item ${organization.name} - Removing from ${basedir}`,
                     );
-                    del.sync(path.join(basedir, organization.name), { force: true });
+                    delSync(path.join(basedir, organization.name), { force: true });
                 } else {
                     fs.readdirSync(path.join(basedir, organization.name), {
                         withFileTypes: true,
@@ -141,7 +142,7 @@ export default class WorkspaceWatcher {
                             this.logger.warn(
                                 `Course ${course.name} not found in ${organization.name} - Removing form ${basedir}`,
                             );
-                            del.sync(path.join(basedir, organization.name, course.name), {
+                            delSync(path.join(basedir, organization.name, course.name), {
                                 force: true,
                             });
                         } else {
@@ -159,7 +160,7 @@ export default class WorkspaceWatcher {
                                     this.logger.warn(
                                         `Exercise ${exercise.name} not found in ${course.name} - Removing from ${basedir}`,
                                     );
-                                    del.sync(
+                                    delSync(
                                         path.join(
                                             basedir,
                                             organization.name,
@@ -196,7 +197,7 @@ export default class WorkspaceWatcher {
         ) {
             const pathToRemove = path.join(basedir, relation[0]);
             this.logger.warn(`Removing ${pathToRemove}`);
-            del.sync(pathToRemove, {
+            delSync(pathToRemove, {
                 force: true,
             });
             return;
@@ -204,7 +205,7 @@ export default class WorkspaceWatcher {
         if (relation.length > 1 && !this.folderTree.get(relation[0])?.has(relation[1])) {
             const pathToRemove = path.join(basedir, relation[0], relation[1]);
             this.logger.warn(`Removing ${pathToRemove}`);
-            del.sync(pathToRemove, {
+            delSync(pathToRemove, {
                 force: true,
             });
             return;
@@ -215,7 +216,7 @@ export default class WorkspaceWatcher {
         ) {
             const pathToRemove = path.join(basedir, ...relation);
             this.logger.warn(`Removing ${pathToRemove}`);
-            del.sync(pathToRemove, {
+            delSync(pathToRemove, {
                 force: true,
             });
             return;

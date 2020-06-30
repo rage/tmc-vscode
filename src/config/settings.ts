@@ -1,11 +1,13 @@
+import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
+
+import { isWorkspaceOpen } from "../utils";
+import Logger, { LogLevel } from "../utils/logger";
+
+import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
+import Resources from "./resources";
 import Storage from "./storage";
 import { ExtensionSettings, ExtensionSettingsData } from "./types";
-import { Err, Ok, Result } from "ts-results";
-import Logger, { LogLevel } from "../utils/logger";
-import Resources from "./resources";
-import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
-import { isWorkspaceOpen } from "../utils";
 
 /**
  * Settings class communicates changes to persistent storage and manages TMC

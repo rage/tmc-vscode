@@ -1,15 +1,16 @@
-import TMC from "../api/tmc";
-import Storage from "./storage";
-
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
+
+import TMC from "../api/tmc";
 import { CourseDetails, CourseExercise, CourseSettings } from "../api/types";
 import { ApiError, AuthorizationError, ConnectionError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
-import Resources from "./resources";
-import { ExerciseStatus, LocalCourseData, LocalExerciseData } from "./types";
 import Logger from "../utils/logger";
+
+import Resources from "./resources";
+import Storage from "./storage";
+import { ExerciseStatus, LocalCourseData, LocalExerciseData } from "./types";
 
 /**
  * Check that workspace and userdata is up-to-date.

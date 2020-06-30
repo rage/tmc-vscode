@@ -1,8 +1,10 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import Resources from "../config/resources";
-import TemplateEngine from "./templateEngine";
+
 import { EMPTY_HTML_DOCUMENT } from "../config/constants";
+import Resources from "../config/resources";
+
+import TemplateEngine from "./templateEngine";
 import { TemplateData, WebviewMessage } from "./types";
 
 /**

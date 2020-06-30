@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
 
-import Resources from "../config/resources";
-import UI from "./ui";
 import { EMPTY_HTML_DOCUMENT } from "../config/constants";
+import Resources from "../config/resources";
+
 import { TemplateData } from "./types";
+import UI from "./ui";
 
 interface MessageHandler {
     (msg: { [key: string]: unknown }): void;

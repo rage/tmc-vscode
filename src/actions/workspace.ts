@@ -4,9 +4,14 @@
  * -------------------------------------------------------------------------------------------------
  */
 
-import { Err, Ok, Result } from "ts-results";
-import { ActionContext, CourseExerciseDownloads } from "./types";
 import * as pLimit from "p-limit";
+import { Err, Ok, Result } from "ts-results";
+import * as vscode from "vscode";
+
+import { OldSubmission } from "../api/types";
+import { NOTIFICATION_DELAY } from "../config/constants";
+import { ExerciseStatus } from "../config/types";
+import { ExerciseStatus as TextStatus, WebviewMessage } from "../ui/types";
 import {
     askForConfirmation,
     askForItem,
@@ -14,13 +19,10 @@ import {
     showNotification,
     showProgressNotification,
 } from "../utils";
-import { getOldSubmissions } from "./user";
-import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
-import { NOTIFICATION_DELAY } from "../config/constants";
-import * as vscode from "vscode";
-import { ExerciseStatus as TextStatus, WebviewMessage } from "../ui/types";
-import { ExerciseStatus } from "../config/types";
+
+import { ActionContext, CourseExerciseDownloads } from "./types";
+import { getOldSubmissions } from "./user";
 
 const limit = pLimit(3);
 
