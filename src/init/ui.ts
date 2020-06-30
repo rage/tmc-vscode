@@ -121,9 +121,9 @@ export function registerUiActions(actionContext: ActionContext): void {
                     message: { command: "setUpdateables", exerciseIds: [] },
                 });
             }
-            const succesful = await downloadExercises(actionContext, [downloads]);
+            const successful = await downloadExercises(actionContext, [downloads]);
             openExercises(
-                openAfter.filter((oa) => succesful.find((s) => s === oa)),
+                openAfter.filter((oa) => successful.find((s) => s === oa)),
                 actionContext,
             );
         },
