@@ -5,6 +5,7 @@ export type TMCApiResponse =
     | Course[]
     | CourseDetails
     | CourseExercise[]
+    | CourseSettings
     | Organization[]
     | Organization
     | ExerciseDetails
@@ -98,6 +99,33 @@ export type Organization = {
     slug: string;
     logo_path: string;
     pinned: boolean;
+};
+
+/**
+ * GET /api/v8/courses/{course_id}
+ */
+export type CourseSettings = {
+    name: string;
+    hide_after: string | null;
+    hidden: boolean;
+    cache_version: number | null;
+    spreadsheet_key: string | null;
+    hidden_if_registered_after: string | null;
+    refreshed_at: string | null;
+    locked_exercise_points_visible: boolean;
+    description: string | null;
+    paste_visibility: string | null;
+    formal_name: string | null;
+    certificate_downloadable: boolean;
+    certificate_unlock_spec: string | null;
+    organization_id: number | null;
+    disabled_status?: string | null;
+    title?: string | null;
+    material_url: string | null;
+    course_template_id: number | null;
+    hide_submission_results: boolean;
+    external_scoreboard_url: string | null;
+    organization_slug: string | null;
 };
 
 /**

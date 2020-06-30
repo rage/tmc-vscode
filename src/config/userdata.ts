@@ -55,6 +55,14 @@ export class UserData {
         this.updatePersistentData();
     }
 
+    public updateCourse(data: LocalCourseData): void {
+        if (!this.courses.has(data.id)) {
+            throw new Error("Trying to fetch course that doesn't exist.");
+        }
+        this.courses.set(data.id, data);
+        this.updatePersistentData();
+    }
+
     public async updateExercises(
         courseId: number,
         exercises: LocalCourseExercise[],

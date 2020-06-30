@@ -9,6 +9,7 @@ export type LocalCourseData = {
     exercises: LocalCourseExercise[];
     availablePoints: number;
     awardedPoints: number;
+    perhapsExamMode: boolean;
     newExercises: number[];
     notifyAfter: number;
 };

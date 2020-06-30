@@ -132,6 +132,9 @@
                 data: { solutionUrl: solution_url },
             });
         }
+        function showInBrowser() {
+            vscode.postMessage({ type: "showInBrowser" });
+        }
 
         function closeWindow() {
             vscode.postMessage({ type: "closeWindow" });

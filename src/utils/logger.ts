@@ -33,7 +33,7 @@ export default class Logger {
         }
     }
 
-    public logVerbose(message: string, logInDebug: boolean, ...params: unknown[]): void {
+    /*public logVerbose(message: string, logInDebug: boolean, ...params: unknown[]): void {
         if (this.level === LogLevel.None && this.productionMode) return;
 
         if ((this.level === LogLevel.Debug && logInDebug) || !this.productionMode) {
@@ -48,7 +48,7 @@ export default class Logger {
                 `${this.timestamp} INFO: ${message} ${this.toLoggableParams(params)}`,
             );
         }
-    }
+    }*/
 
     public error(message: string, ...params: unknown[]): void {
         if (this.level === LogLevel.None && this.productionMode) return;
