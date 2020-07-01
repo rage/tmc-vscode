@@ -185,7 +185,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         showError(message);
         return;
     }
-    const courseExamMode = userData.getCourseByName(exerciseDetails.val.course);
+    const courseData = userData.getCourseByName(exerciseDetails.val.course);
 
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
@@ -205,92 +205,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         return;
     }
 
-    if (!courseExamMode.perhapsExamMode) {
-        const messageHandler = async (msg: {
-            data?: { [key: string]: unknown };
-            type?: string;
-        }): Promise<void> => {
-            if (msg.type === "feedback" && msg.data) {
-                await tmc.submitSubmissionFeedback(
-                    msg.data.url as string,
-                    msg.data.feedback as SubmissionFeedback,
-                );
-            } else if (msg.type === "showInBrowser") {
-                vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
-            } else if (msg.type === "showSolutionInBrowser" && msg.data) {
-                vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
-            } else if (msg.type === "closeWindow") {
-                temp.dispose();
-            }
-        };
-
-        let notified = false;
-        let timeWaited = 0;
-        let getStatus = true;
-        while (getStatus) {
-            const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
-            if (statusResult.err) {
-                const message = `Failed getting submission status: ${statusResult.val.name} - ${statusResult.val.message}`;
-                logger.error(message);
-                showError(message);
-                break;
-            }
-            const statusData = statusResult.val;
-            if (statusResult.val.status !== "processing") {
-                ui.setStatusBar("Tests finished, see result", 5000);
-                let feedbackQuestions: FeedbackQuestion[] = [];
-                let courseId = undefined;
-                if (statusData.status === "ok" && statusData.all_tests_passed) {
-                    if (statusData.feedback_questions) {
-                        feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
-                    }
-                    courseId = userData.getCourseByName(statusData.course).id;
-                }
-                temp.setContent({
-                    title: "TMC Server Submission",
-                    template: { templateName: "submission-result", statusData, feedbackQuestions },
-                    messageHandler,
-                });
-                temporaryWebviewProvider.addToRecycables(temp);
-                // Check for new exercises if exercise passed.
-                if (courseId) {
-                    checkForNewExercises(actionContext, courseId);
-                }
-                checkForExerciseUpdates(actionContext);
-                break;
-            }
-
-            if (!temp.disposed) {
-                temp.setContent({
-                    title: "TMC Server Submission",
-                    template: { templateName: "submission-status", statusData },
-                    messageHandler,
-                });
-            }
-
-            await sleep(2500);
-            timeWaited = timeWaited + 2500;
-
-            if (timeWaited >= 120000 && !notified) {
-                notified = true;
-                showNotification(
-                    `This seems to be taking a long time — consider continuing to the next exercise while this is running. \
-                    Your submission will still be graded. Check the results later at ${submitResult.val.show_submission_url}`,
-                    [
-                        "Open URL and move on...",
-                        (): void => {
-                            vscode.env.openExternal(
-                                vscode.Uri.parse(submitResult.val.show_submission_url),
-                            );
-                            getStatus = false;
-                            temp.dispose();
-                        },
-                    ],
-                    ["No, I'll wait", (): void => {}],
-                );
-            }
-        }
-    } else {
+    if (courseData.perhapsExamMode) {
         const examData = EXAM_SUBMISSION_RESULT;
         const submitUrl = submitResult.val.show_submission_url;
         const feedbackQuestions: FeedbackQuestion[] = [];
@@ -309,8 +224,96 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
                 }
             },
         });
+        temporaryWebviewProvider.addToRecycables(temp);
+        return;
+    }
+
+    const messageHandler = async (msg: {
+        data?: { [key: string]: unknown };
+        type?: string;
+    }): Promise<void> => {
+        if (msg.type === "feedback" && msg.data) {
+            await tmc.submitSubmissionFeedback(
+                msg.data.url as string,
+                msg.data.feedback as SubmissionFeedback,
+            );
+        } else if (msg.type === "showInBrowser") {
+            vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
+        } else if (msg.type === "showSolutionInBrowser" && msg.data) {
+            vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
+        } else if (msg.type === "closeWindow") {
+            temp.dispose();
+        }
+    };
+
+    let notified = false;
+    let timeWaited = 0;
+    let getStatus = true;
+    while (getStatus) {
+        const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
+        if (statusResult.err) {
+            const message = `Failed getting submission status: ${statusResult.val.name} - ${statusResult.val.message}`;
+            logger.error(message);
+            showError(message);
+            break;
+        }
+        const statusData = statusResult.val;
+        if (statusResult.val.status !== "processing") {
+            ui.setStatusBar("Tests finished, see result", 5000);
+            let feedbackQuestions: FeedbackQuestion[] = [];
+            let courseId = undefined;
+            if (statusData.status === "ok" && statusData.all_tests_passed) {
+                if (statusData.feedback_questions) {
+                    feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
+                }
+                courseId = userData.getCourseByName(statusData.course).id;
+            }
+            temp.setContent({
+                title: "TMC Server Submission",
+                template: { templateName: "submission-result", statusData, feedbackQuestions },
+                messageHandler,
+            });
+            temporaryWebviewProvider.addToRecycables(temp);
+            // Check for new exercises if exercise passed.
+            if (courseId) {
+                checkForNewExercises(actionContext, courseId);
+            }
+            checkForExerciseUpdates(actionContext);
+            break;
+        }
+
+        if (!temp.disposed) {
+            temp.setContent({
+                title: "TMC Server Submission",
+                template: { templateName: "submission-status", statusData },
+                messageHandler,
+            });
+        }
+
+        await sleep(2500);
+        timeWaited = timeWaited + 2500;
+
+        if (timeWaited >= 120000 && !notified) {
+            notified = true;
+            showNotification(
+                `This seems to be taking a long time — consider continuing to the next exercise while this is running. \
+                Your submission will still be graded. Check the results later at ${submitResult.val.show_submission_url}`,
+                [
+                    "Open URL and move on...",
+                    (): void => {
+                        vscode.env.openExternal(
+                            vscode.Uri.parse(submitResult.val.show_submission_url),
+                        );
+                        getStatus = false;
+                        temp.dispose();
+                    },
+                ],
+                ["No, I'll wait", (): void => {}],
+            );
+        }
     }
 }
+
 /**
  * Gets all submission ids from currently selected courses and maps them to corresponding exercises
  *

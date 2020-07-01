@@ -127,7 +127,7 @@ export async function validateAndFix(
                     } else if (courseDetails.val instanceof AuthorizationError) {
                         course.disabled = true;
                         logger.warn(
-                            `No access to courseDetails - ${courseDetails.val.message}`,
+                            `No access to courseDetails, disabling course - ${courseDetails.val.message}`,
                             course,
                         );
                         userDataFixed.courses.push(course as LocalCourseData);
@@ -148,7 +148,7 @@ export async function validateAndFix(
                     } else if (courseExercises.val instanceof AuthorizationError) {
                         course.disabled = true;
                         logger.warn(
-                            `No access to courseExercises - ${courseExercises.val.message}`,
+                            `No access to courseExercises, disabling course  - ${courseExercises.val.message}`,
                             course,
                         );
                         userDataFixed.courses.push(course as LocalCourseData);
@@ -169,7 +169,7 @@ export async function validateAndFix(
                     } else if (courseSettings.val instanceof AuthorizationError) {
                         course.disabled = true;
                         logger.warn(
-                            `No access to courseSettings - ${courseSettings.val.message}`,
+                            `No access to courseSettings, disabling course - ${courseSettings.val.message}`,
                             course,
                         );
                         userDataFixed.courses.push(course as LocalCourseData);
