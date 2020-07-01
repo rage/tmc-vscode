@@ -61,8 +61,8 @@ export async function login(
  * Logs the user out, updating UI state
  */
 export async function logout(
-    visibility: VisibilityGroups,
     actionContext: ActionContext,
+    visibility: VisibilityGroups,
 ): Promise<void> {
     if (await askForConfirmation("Are you sure you want to log out?")) {
         const { tmc, ui } = actionContext;
@@ -369,7 +369,7 @@ export async function checkForNewExercises(
     logger.log(`Checking for new exercises for courses ${filteredCourses.map((c) => c.name)}`);
     const updatedCourses: LocalCourseData[] = [];
     for (const course of filteredCourses) {
-        await updateCourse(course.id, actionContext);
+        await updateCourse(actionContext, course.id);
         updatedCourses.push(userData.getCourse(course.id));
     }
 
@@ -382,6 +382,7 @@ export async function checkForNewExercises(
                     async (): Promise<void> => {
                         userData.clearNewExercises(course.id);
                         openExercises(
+                            actionContext,
                             await downloadExercises(actionContext, [
                                 {
                                     courseId: course.id,
@@ -389,7 +390,6 @@ export async function checkForNewExercises(
                                     organizationSlug: course.organization,
                                 },
                             ]),
-                            actionContext,
                         );
                     },
                 ],
@@ -522,7 +522,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
  * Removes given course from UserData and closes all its exercises.
  * @param id ID of the course to remove
  */
-export async function removeCourse(id: number, actionContext: ActionContext): Promise<void> {
+export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
     const { userData, workspaceManager, logger } = actionContext;
     const course = userData.getCourse(id);
     logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
@@ -543,7 +543,7 @@ export async function removeCourse(id: number, actionContext: ActionContext): Pr
  * Keeps the user course exercises, points and course data up to date.
  * @param id Course id
  */
-export async function updateCourse(id: number, actionContext: ActionContext): Promise<void> {
+export async function updateCourse(actionContext: ActionContext, id: number): Promise<void> {
     const { tmc, userData, workspaceManager, logger } = actionContext;
     return Promise.all([
         tmc.getCourseDetails(id),

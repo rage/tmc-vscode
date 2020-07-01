@@ -43,9 +43,9 @@ export function registerUiActions(actionContext: ActionContext): void {
         WORKSPACE_OPEN,
     };
 
-    // Register UI actionS
+    // Register UI actions
     ui.treeDP.registerAction("Log out", [LOGGED_IN], () => {
-        logout(visibilityGroups, actionContext);
+        logout(actionContext, visibilityGroups);
     });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not], () => {
         ui.webview.setContentFromTemplate({ templateName: "login" });
@@ -123,7 +123,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 });
             }
             const successful = await downloadExercises(actionContext, [downloads]);
-            openExercises(_.intersection(openAfter, successful), actionContext);
+            openExercises(actionContext, _.intersection(openAfter, successful));
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
@@ -147,7 +147,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                     true,
                 )
             ) {
-                await removeCourse(msg.id, actionContext);
+                await removeCourse(actionContext, msg.id);
                 await displayUserCourses(actionContext);
                 showNotification(`${course.name} was removed from courses.`);
             }
@@ -158,12 +158,12 @@ export function registerUiActions(actionContext: ActionContext): void {
             return;
         }
         const courseId: number = msg.id;
-        displayLocalCourseDetails(msg.id, actionContext);
+        displayLocalCourseDetails(actionContext, msg.id);
         const uiState = ui.webview.getStateId();
         // Try to fetch updates from API
-        updateCourse(courseId, actionContext).then(() =>
+        updateCourse(actionContext, courseId).then(() =>
             uiState === ui.webview.getStateId()
-                ? displayLocalCourseDetails(courseId, actionContext)
+                ? displayLocalCourseDetails(actionContext, courseId)
                 : {},
         );
     });
@@ -173,7 +173,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (!(msg.type && msg.ids)) {
                 return;
             }
-            const result = await openExercises(msg.ids, actionContext);
+            const result = await openExercises(actionContext, msg.ids);
             if (result.err) {
                 logger.error(`Error while opening exercises - ${result.val.message}`);
                 const buttons: Array<[string, () => void]> = [];

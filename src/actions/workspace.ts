@@ -4,6 +4,7 @@
  * -------------------------------------------------------------------------------------------------
  */
 
+import * as _ from "lodash";
 import * as pLimit from "p-limit";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
@@ -195,10 +196,7 @@ export async function checkForExerciseUpdates(
                         actionContext,
                         Array.from(coursesToUpdate.values()),
                     );
-                    openExercises(
-                        openAfter.filter((oa) => successful.find((s) => s === oa)),
-                        actionContext,
-                    );
+                    openExercises(actionContext, _.intersection(openAfter, successful));
                 },
             ],
             [
@@ -267,8 +265,8 @@ export async function resetExercise(
  * @param ids Array of exercise IDs
  */
 export async function openExercises(
-    ids: number[],
     actionContext: ActionContext,
+    ids: number[],
 ): Promise<Result<number[], Error>> {
     const { workspaceManager, logger, ui } = actionContext;
 
@@ -336,8 +334,8 @@ export async function closeExercises(
  * @param actionContext
  */
 export async function downloadOldSubmissions(
-    exerciseId: number,
     actionContext: ActionContext,
+    exerciseId: number,
 ): Promise<void> {
     const { tmc, workspaceManager, logger } = actionContext;
     const exercise = workspaceManager.getExerciseDataById(exerciseId);

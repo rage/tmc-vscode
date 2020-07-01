@@ -122,7 +122,7 @@ export function registerCommands(
                 showError(errorMessage);
                 return;
             }
-            downloadOldSubmissions(exerciseId, actionContext);
+            downloadOldSubmissions(actionContext, exerciseId);
         }),
     );
 
