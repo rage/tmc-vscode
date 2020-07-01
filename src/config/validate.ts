@@ -125,7 +125,7 @@ export async function validateAndFix(
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     } else if (courseDetails.val instanceof AuthorizationError) {
-                        // TODO: Mark the course as old course.
+                        course.disabled = true;
                         logger.warn(
                             `No access to courseDetails - ${courseDetails.val.message}`,
                             course,
@@ -146,7 +146,7 @@ export async function validateAndFix(
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     } else if (courseExercises.val instanceof AuthorizationError) {
-                        // TODO: Mark the course as old course.
+                        course.disabled = true;
                         logger.warn(
                             `No access to courseExercises - ${courseExercises.val.message}`,
                             course,
@@ -167,7 +167,7 @@ export async function validateAndFix(
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     } else if (courseSettings.val instanceof AuthorizationError) {
-                        // TODO: Mark the course as old course.
+                        course.disabled = true;
                         logger.warn(
                             `No access to courseSettings - ${courseSettings.val.message}`,
                             course,
@@ -202,6 +202,8 @@ export async function validateAndFix(
                     perhapsExamMode: courseInfo.hide_submission_results,
                     notifyAfter: 0,
                     newExercises: [],
+                    disabled: courseInfo.disabled_status === "enabled" ? false : true,
+                    material_url: courseInfo.material_url,
                 });
             }
         }

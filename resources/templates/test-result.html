@@ -11,7 +11,16 @@
             <button type="button" class="close" aria-label="Close" onclick="closeWindow()">
                 <span aria-hidden="true">&times;</span>
             </button>
-            {{#if testResult.testResults}}
+            {{#if disabled}}
+            <div class="row m-1">
+                <div class="col-md">
+                    <div role="alert" class="alert alert-danger">
+                        Sending solution or paste to the TMC server is not available for this
+                        exercise, because the course has been disabled.
+                    </div>
+                </div>
+            </div>
+            {{/if}} {{#if testResult.testResults}}
             <div class="row m-0">
                 <div class="col-md-10 pr-0">
                     {{{ check_test_status testResult.status testResult.logs undefined }}}
@@ -40,6 +49,7 @@
         <script>
             const vscode = acquireVsCodeApi();
             const exerciseId = {{id}};
+            const disabled = {{disabled}};
 
             function submitToServer() {
                 vscode.postMessage({ type: 'submitToServer', data: { exerciseId: exerciseId } });
@@ -49,6 +59,13 @@
             }
             function sendToPaste() {
                 vscode.postMessage({ type: 'sendToPaste', data: { exerciseId } });
+            }
+
+            document.getElementById("submitToServer").disabled = disabled;
+            try {
+                document.getElementById("sendToPaste").disabled = disabled;
+            } catch(e) {
+
             }
 
             const coll = document.getElementsByClassName("collapsible");

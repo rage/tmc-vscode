@@ -22,7 +22,7 @@ function component(data) {
      * @param {string} title
      * @param {string} description
      */
-    const stickyTop = (course, updateableExerciseIds, offlineMode, perhapsExamMode) => (
+    const stickyTop = (course, offlineMode, perhapsExamMode, courseDisabled, materialUrl) => (
         <div class="w-100">
             <div class="container pt-0">
                 <div class="row py-1">
@@ -60,6 +60,13 @@ function component(data) {
                         </span>
                     </div>
                 </div>
+                {materialUrl ? (
+                    <div class="row py-1">
+                        <div class="col-md">
+                            Material: <a href={materialUrl}>{materialUrl}</a>
+                        </div>
+                    </div>
+                ) : null}
                 <div class="row py-1">
                     <div class="col-md">
                         <div
@@ -86,6 +93,12 @@ function component(data) {
                                 <span>
                                     This is an exam. Exercise submission results will not be shown.
                                 </span>
+                            </div>
+                        ) : null}
+                        {courseDisabled ? (
+                            <div role="alert" class="alert alert-info">
+                                This course is disabled and exercises can't be submitted to the
+                                server.
                             </div>
                         ) : null}
                     </div>
@@ -239,9 +252,10 @@ function component(data) {
         <div>
             {stickyTop(
                 data.course,
-                data.updateableExerciseIds,
                 data.offlineMode,
                 data.course.perhapsExamMode,
+                data.course.disabled,
+                data.course.material_url,
             )}
             {data.exerciseData.map(exerciseTable).join("")}
             {contextMenu()}

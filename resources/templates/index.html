@@ -32,7 +32,6 @@
                     </button>
                     <h3>{{this.title}} <small class="text-muted">({{this.name}})</small></h3>
                     <p>{{this.description}}</p>
-
                     <p>
                         {{#if this.nextDeadline}} {{this.nextDeadline}} {{else}}
                         <span
@@ -42,6 +41,11 @@
                         ></span>
                         {{/if}}
                     </p>
+                    {{#if this.disabled}}
+                    <div role="alert" class="alert alert-info">
+                        This course is disabled and exercises can't be submitted to TMC server.
+                    </div>
+                    {{/if}}
                     <div>
                         Programming exercise progress:
                         <div class="progress">
@@ -106,6 +110,7 @@
                     courseName,
                     organizationSlug,
                     courseId,
+                    mode: "download",
                 });
             }
 

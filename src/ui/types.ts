@@ -113,6 +113,7 @@ export type TestResultData = {
         stderr?: string;
     };
     pasteLink?: string;
+    disabled?: boolean;
 };
 
 export type ExerciseStatus =

@@ -12,6 +12,8 @@ export type LocalCourseData = {
     perhapsExamMode: boolean;
     newExercises: number[];
     notifyAfter: number;
+    disabled: boolean;
+    material_url: string | null;
 };
 
 export type LocalCourseExercise = {

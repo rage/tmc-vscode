@@ -87,7 +87,11 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
     }
     const courseExamMode = userData.getCourseByName(exerciseDetails.val.course);
 
-    let data: TestResultData = { ...EXAM_TEST_RESULT, id };
+    let data: TestResultData = {
+        ...EXAM_TEST_RESULT,
+        id,
+        disabled: userData.getCourseByName(exerciseDetails.val.course).disabled,
+    };
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
     if (!courseExamMode.perhapsExamMode) {
@@ -142,6 +146,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             id,
             exerciseName,
             tmcLogs: testResult.val.logs,
+            disabled: userData.getCourseByName(exerciseDetails.val.course).disabled,
         };
     }
 
@@ -365,7 +370,7 @@ export async function checkForNewExercises(
 ): Promise<void> {
     const { userData, logger } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
-    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
+    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now() && !c.disabled);
     logger.log(`Checking for new exercises for courses ${filteredCourses.map((c) => c.name)}`);
     const updatedCourses: LocalCourseData[] = [];
     for (const course of filteredCourses) {
@@ -488,6 +493,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
 
     const courseDetails = courseDetailsResult.val.course;
     const exercises = courseExercises.val;
+    const settings = courseSettings.val;
 
     let availablePoints = 0;
     let awardedPoints = 0;
@@ -509,9 +515,11 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         organization: orgAndCourse.val.organization,
         availablePoints: availablePoints,
         awardedPoints: awardedPoints,
-        perhapsExamMode: courseSettings.val.hide_submission_results,
+        perhapsExamMode: settings.hide_submission_results,
         newExercises: [],
         notifyAfter: 0,
+        disabled: settings.disabled_status === "enabled" ? false : true,
+        material_url: settings.material_url,
     };
     userData.addCourse(localData);
     await displayUserCourses(actionContext);
@@ -550,14 +558,20 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
         tmc.getCourseExercises(id),
         tmc.getCourseSettings(id),
     ]).then(([courseDetailsResult, courseExercisesResult, courseSettingsResult]) => {
-        const showErrorForResult = (message: string, result: unknown): void => {
-            logger.error(`Error refreshing course data ${message}`, result);
+        const showErrorForResult = (endpoint: string, message: string, result: unknown): void => {
+            logger.error(
+                `Error refreshing course data for courseId ${id}, ${endpoint} - ${message}`,
+                result,
+            );
             showError(`Something went wrong while trying to refresh course data: ${message}`);
         };
+        if (userData.getCourse(id).disabled) {
+            return;
+        }
         if (courseDetailsResult.err) {
             if (!(courseDetailsResult.val instanceof ConnectionError)) {
                 const message = `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`;
-                showErrorForResult(message, courseDetailsResult);
+                showErrorForResult("courseDetailsResult", message, courseDetailsResult);
                 return;
             }
             logger.warn(
@@ -569,7 +583,7 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
         if (courseExercisesResult.err) {
             if (!(courseExercisesResult.val instanceof ConnectionError)) {
                 const message = `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`;
-                showErrorForResult(message, courseExercisesResult);
+                showErrorForResult("courseExercisesResult", message, courseExercisesResult);
                 return;
             }
             logger.warn(
@@ -579,14 +593,14 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
             return;
         }
         if (courseSettingsResult.err) {
-            if (!(courseExercisesResult.val instanceof ConnectionError)) {
+            if (!(courseSettingsResult.val instanceof ConnectionError)) {
                 const message = `${courseSettingsResult.val.name} - ${courseSettingsResult.val.message}`;
-                showErrorForResult(message, courseSettingsResult);
+                showErrorForResult("courseSettingsResult", message, courseSettingsResult);
                 return;
             }
             logger.warn(
                 "Didn't fetch course updates, working offline: " +
-                    `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`,
+                    `${courseSettingsResult.val.name} - ${courseSettingsResult.val.message}`,
             );
             return;
         }
@@ -597,6 +611,9 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
 
         const courseData = userData.getCourseByName(settings.name);
         courseData.perhapsExamMode = settings.hide_submission_results;
+        courseData.description = details.description || "";
+        courseData.disabled = settings.disabled_status === "enabled" ? false : true;
+        courseData.material_url = settings.material_url;
         userData.updateCourse(courseData);
 
         logger.log(`Refreshing exercise data for course ${details.name} from API`);

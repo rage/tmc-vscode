@@ -108,8 +108,12 @@ export default class WorkspaceWatcher {
         try {
             this.logger.log("Watcher starting to sweep");
             fs.readdirSync(basedir, { withFileTypes: true }).forEach((organization) => {
-                if (organization.isFile() && organization.name === WORKSPACE_ROOT_FILE) {
+                if (
+                    (organization.isFile() && organization.name === WORKSPACE_ROOT_FILE) ||
+                    (organization.name === ".vscode" && organization.isDirectory())
+                ) {
                     if (
+                        organization.name === WORKSPACE_ROOT_FILE &&
                         fs.readFileSync(path.join(basedir, organization.name), {
                             encoding: "utf-8",
                         }) !== WORKSPACE_ROOT_FILE_TEXT
@@ -151,10 +155,12 @@ export default class WorkspaceWatcher {
                             }).forEach((exercise) => {
                                 if (
                                     !(
-                                        this.folderTree
+                                        (this.folderTree
                                             .get(organization.name)
                                             ?.get(course.name)
-                                            ?.has(exercise.name) && exercise.isDirectory()
+                                            ?.has(exercise.name) &&
+                                            exercise.isDirectory()) ||
+                                        (exercise.name === ".tmc.json" && exercise.isFile())
                                     )
                                 ) {
                                     this.logger.warn(

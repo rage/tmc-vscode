@@ -154,7 +154,7 @@ export async function checkForExerciseUpdates(
     const coursesToUpdate: Map<number, CourseExerciseDownloads> = new Map();
     let count = 0;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
-    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
+    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now() && !c.disabled);
     logger.log(`Checking for exercise updates for courses ${filteredCourses.map((c) => c.name)}`);
     for (const course of filteredCourses) {
         const organizationSlug = course.organization;
