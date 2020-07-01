@@ -11,7 +11,7 @@ import * as vscode from "vscode";
 import { CourseExercise, Exercise, OldSubmission, SubmissionFeedback } from "../api/types";
 import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
-import { ConnectionError } from "../errors";
+import { AuthorizationError, ConnectionError } from "../errors";
 import { TestResultData, VisibilityGroups } from "../ui/types";
 import {
     askForConfirmation,
@@ -565,50 +565,71 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
             );
             showError(`Something went wrong while trying to refresh course data: ${message}`);
         };
+        const courseToDisable = (id: number): void => {
+            logger.warn(
+                `Received 403 Forbidden Authorization Error, disabling course with id ${id}`,
+            );
+            const course = userData.getCourse(id);
+            course.disabled = true;
+            userData.updateCourse(course);
+        };
+        const warnOffline = (message: string): void => {
+            logger.warn(`Didn't fetch course updates, working offline: ${message}`);
+        };
+
+        // Check if disabled course still returns error from API
         if (userData.getCourse(id).disabled) {
-            return;
-        }
-        if (courseDetailsResult.err) {
-            if (!(courseDetailsResult.val instanceof ConnectionError)) {
-                const message = `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`;
-                showErrorForResult("courseDetailsResult", message, courseDetailsResult);
+            logger.log(`Checking if course with id ${id} still disabled.`);
+            if (courseDetailsResult.err || courseExercisesResult.err || courseSettingsResult.err) {
+                logger.log("Course still disabled, can't receive data from API.");
                 return;
             }
-            logger.warn(
-                "Didn't fetch course updates, working offline: " +
-                    `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`,
-            );
+            logger.log("Received all necessary data from API, continuing to update course.");
+        }
+
+        if (courseDetailsResult.err) {
+            const message = `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`;
+            if (courseDetailsResult.val instanceof AuthorizationError) {
+                courseToDisable(id);
+                return;
+            } else if (courseDetailsResult.val instanceof ConnectionError) {
+                warnOffline(message);
+                return;
+            }
+            showErrorForResult("courseDetailsResult", message, courseDetailsResult);
             return;
         }
         if (courseExercisesResult.err) {
-            if (!(courseExercisesResult.val instanceof ConnectionError)) {
-                const message = `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`;
-                showErrorForResult("courseExercisesResult", message, courseExercisesResult);
+            const message = `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`;
+            if (courseExercisesResult.val instanceof AuthorizationError) {
+                courseToDisable(id);
+                return;
+            } else if (courseExercisesResult.val instanceof ConnectionError) {
+                warnOffline(message);
                 return;
             }
-            logger.warn(
-                "Didn't fetch course updates, working offline: " +
-                    `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`,
-            );
+            showErrorForResult("courseExercisesResult", message, courseExercisesResult);
             return;
         }
         if (courseSettingsResult.err) {
-            if (!(courseSettingsResult.val instanceof ConnectionError)) {
-                const message = `${courseSettingsResult.val.name} - ${courseSettingsResult.val.message}`;
-                showErrorForResult("courseSettingsResult", message, courseSettingsResult);
+            const message = `${courseSettingsResult.val.name} - ${courseSettingsResult.val.message}`;
+            if (courseSettingsResult.val instanceof AuthorizationError) {
+                courseToDisable(id);
+                return;
+            } else if (courseSettingsResult.val instanceof ConnectionError) {
+                warnOffline(message);
                 return;
             }
-            logger.warn(
-                "Didn't fetch course updates, working offline: " +
-                    `${courseSettingsResult.val.name} - ${courseSettingsResult.val.message}`,
-            );
+            showErrorForResult("courseSettingsResult", message, courseSettingsResult);
             return;
         }
 
         const details = courseDetailsResult.val.course;
         const exercises = courseExercisesResult.val;
         const settings = courseSettingsResult.val;
+        logger.log(`Refreshing data for course ${details.name} from API`);
 
+        // Update course data
         const courseData = userData.getCourseByName(settings.name);
         courseData.perhapsExamMode = settings.hide_submission_results;
         courseData.description = details.description || "";
@@ -616,8 +637,7 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
         courseData.material_url = settings.material_url;
         userData.updateCourse(courseData);
 
-        logger.log(`Refreshing exercise data for course ${details.name} from API`);
-
+        // Update course exercise data
         userData.updateExercises(
             id,
             details.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),

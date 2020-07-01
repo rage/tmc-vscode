@@ -47,6 +47,7 @@ function component(data) {
                     data-course-id={course.id}
                     data-course-name={course.name}
                     data-course-org={course.organization}
+                    data-course-disabled={course.disabled}
                 >
                     <div class="col-md">
                         <h2>{course.title}</h2>
@@ -97,8 +98,8 @@ function component(data) {
                         ) : null}
                         {courseDisabled ? (
                             <div role="alert" class="alert alert-info">
-                                This course is disabled and exercises can't be submitted to the
-                                server.
+                                This course has been disabled and exercises can't be downloaded or
+                                submitted to the server.
                             </div>
                         ) : null}
                     </div>
@@ -419,10 +420,9 @@ function script() {
                         break;
                 }
             }
-
             const downloadAllButton = exerciseCards[i].querySelector("button.download-all");
             downloadAllButton.dataset.exercises = downloadable;
-            if (downloadable.length === 0) {
+            if (downloadable.length === 0 || course.courseDisabled === "true") {
                 downloadAllButton.style.display = "none";
                 downloadAllButton.disabled = true;
             } else {

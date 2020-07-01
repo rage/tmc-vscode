@@ -36,6 +36,10 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
 
     const uiState = ui.webview.getStateId();
 
+    /**  Tries to update courses from API;
+     * Also checks for disabled courses, if they are enabled again.
+     * When going to My Courses view.
+     */
     const apiCourses = await Promise.all(
         courses.map(async (course) => {
             const exerciseResult = await tmc.getCourseDetails(course.id);
@@ -54,6 +58,8 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
 
             await updateCourse(actionContext, course.id);
             const updatedCourse = userData.getCourse(course.id);
+            course.disabled = updatedCourse.disabled;
+
             const completedPrc = (
                 (updatedCourse.awardedPoints / updatedCourse.availablePoints) *
                 100
