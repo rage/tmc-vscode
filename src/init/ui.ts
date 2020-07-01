@@ -1,3 +1,4 @@
+import * as _ from "lodash";
 import * as path from "path";
 import * as vscode from "vscode";
 
@@ -18,9 +19,9 @@ import {
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
 import { ExerciseStatus } from "../config/types";
 import {
-    LogLevel,
     askForConfirmation,
     isWorkspaceOpen,
+    LogLevel,
     showError,
     showNotification,
 } from "../utils/";
@@ -122,10 +123,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 });
             }
             const successful = await downloadExercises(actionContext, [downloads]);
-            openExercises(
-                openAfter.filter((oa) => successful.find((s) => s === oa)),
-                actionContext,
-            );
+            openExercises(_.intersection(openAfter, successful), actionContext);
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
