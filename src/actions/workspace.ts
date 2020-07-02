@@ -1,12 +1,18 @@
 /**
- * ---------------------------------------------------------------------------------------------------------------------
+ * -------------------------------------------------------------------------------------------------
  * Group for actions that modify the TMC workspace.
- * ---------------------------------------------------------------------------------------------------------------------
+ * -------------------------------------------------------------------------------------------------
  */
 
-import { Err, Ok, Result } from "ts-results";
-import { ActionContext, CourseExerciseDownloads } from "./types";
+import * as _ from "lodash";
 import * as pLimit from "p-limit";
+import { Err, Ok, Result } from "ts-results";
+import * as vscode from "vscode";
+
+import { OldSubmission } from "../api/types";
+import { NOTIFICATION_DELAY } from "../config/constants";
+import { ExerciseStatus } from "../config/types";
+import { ExerciseStatus as TextStatus, WebviewMessage } from "../ui/types";
 import {
     askForConfirmation,
     askForItem,
@@ -14,13 +20,10 @@ import {
     showNotification,
     showProgressNotification,
 } from "../utils";
-import { getOldSubmissions } from "./user";
-import { OldSubmission } from "../api/types";
 import { dateToString, parseDate } from "../utils/dateDeadline";
-import { NOTIFICATION_DELAY } from "../config/constants";
-import * as vscode from "vscode";
-import { ExerciseStatus as TextStatus, WebviewMessage } from "../ui/types";
-import { ExerciseStatus } from "../config/types";
+
+import { ActionContext, CourseExerciseDownloads } from "./types";
+import { getOldSubmissions } from "./user";
 
 const limit = pLimit(3);
 
@@ -151,7 +154,7 @@ export async function checkForExerciseUpdates(
     const coursesToUpdate: Map<number, CourseExerciseDownloads> = new Map();
     let count = 0;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
-    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
+    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now() && !c.disabled);
     logger.log(`Checking for exercise updates for courses ${filteredCourses.map((c) => c.name)}`);
     for (const course of filteredCourses) {
         const organizationSlug = course.organization;
@@ -193,10 +196,7 @@ export async function checkForExerciseUpdates(
                         actionContext,
                         Array.from(coursesToUpdate.values()),
                     );
-                    openExercises(
-                        openAfter.filter((oa) => successful.find((s) => s === oa)),
-                        actionContext,
-                    );
+                    openExercises(actionContext, _.intersection(openAfter, successful));
                 },
             ],
             [
@@ -265,8 +265,8 @@ export async function resetExercise(
  * @param ids Array of exercise IDs
  */
 export async function openExercises(
-    ids: number[],
     actionContext: ActionContext,
+    ids: number[],
 ): Promise<Result<number[], Error>> {
     const { workspaceManager, logger, ui } = actionContext;
 
@@ -327,14 +327,15 @@ export async function closeExercises(
 }
 
 /**
- * Downloads an oldsubmission of a currently open exercise and submits current code to server if user wants it
+ * Downloads an old submission of a currently open exercise and prompts the user beforehand to
+ * optionally submit their current exercise beforehand.
+ *
  * @param exerciseId exercise which older submission will be downloaded
  * @param actionContext
  */
-
 export async function downloadOldSubmissions(
-    exerciseId: number,
     actionContext: ActionContext,
+    exerciseId: number,
 ): Promise<void> {
     const { tmc, workspaceManager, logger } = actionContext;
     const exercise = workspaceManager.getExerciseDataById(exerciseId);

@@ -1,4 +1,5 @@
 import { strictEqual } from "assert";
+
 import { dateToString, findNextDateAfter, parseNextDeadlineAfter } from "../../utils/dateDeadline";
 
 suite("Date utils", () => {
@@ -9,12 +10,6 @@ suite("Date utils", () => {
     const TESTSET = PASSED_DATES.concat(FUTURE_DATES);
 
     test("findNextDateAfter", () => {
-        // const after = new Date(2020, 3, 1);
-        // const target = new Date(2020, 3, 2);
-        // const tooEarlyDates = [new Date(2020, 1, 1), new Date(2020, 2, 23), new Date(2020, 2, 17)];
-        // const laterDates = [target, new Date(2020, 6, 1)];
-        // const dates = tooEarlyDates.concat(laterDates);
-
         strictEqual(
             findNextDateAfter(CURRENT_TIME, []),
             null,

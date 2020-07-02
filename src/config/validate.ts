@@ -1,15 +1,16 @@
-import TMC from "../api/tmc";
-import Storage from "./storage";
-
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
+
+import TMC from "../api/tmc";
 import { CourseDetails, CourseExercise, CourseSettings } from "../api/types";
 import { ApiError, AuthorizationError, ConnectionError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
-import Resources from "./resources";
-import { ExerciseStatus, LocalCourseData, LocalExerciseData } from "./types";
 import Logger from "../utils/logger";
+
+import Resources from "./resources";
+import Storage from "./storage";
+import { ExerciseStatus, LocalCourseData, LocalExerciseData } from "./types";
 
 /**
  * Check that workspace and userdata is up-to-date.
@@ -32,8 +33,8 @@ export async function validateAndFix(
         logger.log("Fixing workspacemanager data");
         const exerciseDataFixed: LocalExerciseData[] = [];
         for (const ex of exerciseData) {
-            // If data objects doesn't have following fields or isOpen and status is undefined, remove from storage.
-            // These are critical fields needed for the extension to work.
+            // If data objects doesn't have following fields or isOpen and status is undefined,
+            // remove from storage. These are critical fields needed for the extension to work.
             if (
                 !is<{
                     organization: string;
@@ -100,8 +101,8 @@ export async function validateAndFix(
         const userDataFixed: { courses: LocalCourseData[] } = { courses: [] };
         if (userData.courses !== undefined) {
             for (const course of userData.courses) {
-                // If data objects doesn't have following fields or id and name is undefined, remove from storage.
-                // These are critical fields needed for the extension to work.
+                // If data objects doesn't have following fields or id and name is undefined,
+                // remove from storage. These are critical fields needed for the extension to work.
                 if (
                     !is<{
                         organization: string;
@@ -124,9 +125,9 @@ export async function validateAndFix(
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     } else if (courseDetails.val instanceof AuthorizationError) {
-                        // TODO: Mark the course as old course.
+                        course.disabled = true;
                         logger.warn(
-                            `No access to courseDetails - ${courseDetails.val.message}`,
+                            `No access to courseDetails, disabling course - ${courseDetails.val.message}`,
                             course,
                         );
                         userDataFixed.courses.push(course as LocalCourseData);
@@ -145,9 +146,9 @@ export async function validateAndFix(
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     } else if (courseExercises.val instanceof AuthorizationError) {
-                        // TODO: Mark the course as old course.
+                        course.disabled = true;
                         logger.warn(
-                            `No access to courseExercises - ${courseExercises.val.message}`,
+                            `No access to courseExercises, disabling course  - ${courseExercises.val.message}`,
                             course,
                         );
                         userDataFixed.courses.push(course as LocalCourseData);
@@ -166,9 +167,9 @@ export async function validateAndFix(
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     } else if (courseSettings.val instanceof AuthorizationError) {
-                        // TODO: Mark the course as old course.
+                        course.disabled = true;
                         logger.warn(
-                            `No access to courseSettings - ${courseSettings.val.message}`,
+                            `No access to courseSettings, disabling course - ${courseSettings.val.message}`,
                             course,
                         );
                         userDataFixed.courses.push(course as LocalCourseData);
@@ -201,6 +202,8 @@ export async function validateAndFix(
                     perhapsExamMode: courseInfo.hide_submission_results,
                     notifyAfter: 0,
                     newExercises: [],
+                    disabled: courseInfo.disabled_status === "enabled" ? false : true,
+                    material_url: courseInfo.material_url,
                 });
             }
         }

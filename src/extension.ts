@@ -1,18 +1,18 @@
 import * as vscode from "vscode";
-import * as init from "./init";
 
+import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
+import { EXERCISE_CHECK_INTERVAL } from "./config/constants";
+import Settings from "./config/settings";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
+import * as init from "./init";
+import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
 import { showError, superfluousPropertiesEnabled } from "./utils/";
-import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import Logger from "./utils/logger";
-import Settings from "./config/settings";
-import { EXERCISE_CHECK_INTERVAL } from "./config/constants";
-import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 

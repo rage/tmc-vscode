@@ -1,17 +1,16 @@
-import * as del from "del";
+import { sync as delSync } from "del";
+import du = require("du");
 import * as fs from "fs-extra";
 import * as path from "path";
-
-import du = require("du");
-
 import { Err, Ok, Result } from "ts-results";
 
 import Resources from "../config/resources";
 import Storage from "../config/storage";
-import { ExerciseDetails } from "./types";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
-import WorkspaceWatcher from "./workspaceWatcher";
 import Logger from "../utils/logger";
+
+import { ExerciseDetails } from "./types";
+import WorkspaceWatcher from "./workspaceWatcher";
 
 /**
  * Class for managing, opening and closing of exercises on disk.
@@ -67,8 +66,9 @@ export default class WorkspaceManager {
     }
 
     /**
-     * Creates a unique human-readable directory path for an exercise and persistently manages its relation
-     * to exercise's actual id.
+     * Creates a unique human-readable directory path for an exercise and persistently manages its
+     * relation to exercise's actual id.
+     *
      * @param organizationSlug Organization slug used in the creation of exercise path
      * @param exerciseDetails Exercise details used in the creation of exercise path
      */
@@ -205,7 +205,9 @@ export default class WorkspaceManager {
             } catch (err2) {
                 return new Err(
                     new Error(
-                        "Folder move operation failed, please try closing the workspace and make sure that any files are not in use. Some files could not be cleaned up from the target directory.",
+                        "Folder move operation failed, " +
+                            "please try closing the workspace and make sure that any files are not in use. " +
+                            "Some files could not be cleaned up from the target directory.",
                     ),
                 );
             }
@@ -285,7 +287,7 @@ export default class WorkspaceManager {
                     results.push(new Err(new Error(`Exercise data missing: ${openPath}`)));
                     continue;
                 }
-                del.sync(this.getClosedPath(id), { force: true });
+                delSync(this.getClosedPath(id), { force: true });
                 try {
                     fs.renameSync(openPath, this.getClosedPath(id));
                 } catch (err) {
@@ -325,8 +327,8 @@ export default class WorkspaceManager {
             if (data) {
                 this.watcher.unwatch(data);
                 const openPath = this.getOpenPath(data);
-                del.sync(openPath, { force: true });
-                del.sync(this.getClosedPath(id), { force: true });
+                delSync(openPath, { force: true });
+                delSync(this.getClosedPath(id), { force: true });
                 this.pathToId.delete(openPath);
                 this.idToData.delete(id);
             }
@@ -415,7 +417,7 @@ export default class WorkspaceManager {
             if (isOpen) {
                 data.status = ExerciseStatus.OPEN;
                 if (isClosed) {
-                    del.sync(this.getClosedPath(data.id), { force: true });
+                    delSync(this.getClosedPath(data.id), { force: true });
                 }
             } else if (isClosed) {
                 data.status = ExerciseStatus.CLOSED;

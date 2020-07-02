@@ -1,5 +1,6 @@
 import * as oauth2 from "client-oauth2";
 import * as vscode from "vscode";
+
 import { ExtensionSettings, LocalCourseData, LocalExerciseData } from "./types";
 
 /**

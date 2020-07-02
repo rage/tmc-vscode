@@ -1,12 +1,17 @@
+// It would get too complicated to enforce length rules for templates in this file. Instead, they
+// should be handled when converting over from handlebars.
+/* eslint-disable max-len */
+
 import * as fs from "fs";
 import * as handlebars from "handlebars";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { CourseDetails, Webview } from "./templates";
 import { SubmissionResultReport, TmcLangsTestResult } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, numbersToString, parseTestResultsText } from "../utils/";
+
+import { CourseDetails, Webview } from "./templates";
 import { TemplateData } from "./types";
 
 export default class TemplateEngine {
@@ -50,18 +55,18 @@ export default class TemplateEngine {
                 }
 
                 if (status === "PASSED") {
-                    return "<h1 class='passed-header'>PASSED</h1><input type='button' value='Submit to server' class='btn btn-primary' onclick='submitToServer()' />";
+                    return "<h1 class='passed-header'>PASSED</h1><input id='submitToServer' type='button' value='Submit to server' class='btn btn-primary' onclick='submitToServer()' />";
                 } else if (status === "TESTS_FAILED") {
                     const collapsed = `<button id='collapsible' class="collapsible">Need help?</button>
                                     <div id='content-collapsible' style="height: auto;" class="content-collapsible">`;
                     const pasteLinkHTML = `<p id="showPasteLink" style="display: none;"><input style='width: 65%!important;' type="text" value="" id="copyPasteLink">
                                         <button class='btn btn-primary' onclick="copyText()">Copy text</button><span class='ml-1' id="copied"></span></p>`;
-                    return `<h1>TESTS FAILED</h1><input type='button' value='Send solution to server' class='btn btn-primary mb-2' onclick='submitToServer()' />
+                    return `<h1>TESTS FAILED</h1><input id='submitToServer' type='button' value='Send solution to server' class='btn btn-primary mb-2' onclick='submitToServer()' />
                     ${collapsed}
                         <h5>Submit to TMC Paste</h5>
                         <p>You can submit your code to TMC Paste and share the link to the course discussion channel and ask for help.</p>
                         ${pasteLinkHTML}
-                        <input type='button' value='Submit to TMC Paste' class='btn btn-primary' onclick='sendToPaste()' />
+                        <input type='button' id='sendToPaste' value='Submit to TMC Paste' class='btn btn-primary' onclick='sendToPaste()' />
                     </div>`;
                 } else if (status === "COMPILE_FAILED") {
                     return `<h1>COMPILE FAILED</h1><pre>${numbersToString(logs.stdout)}</pre>`;

@@ -1,3 +1,6 @@
+// Some templates on this page are very specific, so this rule is disabled here.
+/* eslint-disable max-len */
+
 import { SubmissionResultReport } from "../api/types";
 
 export const EXTENSION_ID = "moocfi.test-my-code";
@@ -28,6 +31,7 @@ export const HIDE_META_FILES = {
     "**/tmc": true,
     "**/.settings": true,
     "**/.tmcproject.json": true,
+    "**/.tmc.json": true,
 };
 
 export const SHOW_META_FILES = {
@@ -38,10 +42,12 @@ export const SHOW_META_FILES = {
     "**/tmc": false,
     "**/.settings": false,
     "**/.tmcproject.json": false,
+    "**/.tmc.json": false,
 };
 
 export const WATCHER_EXCLUDE = {
     "**/.vscode/**": true,
+    "**/.tmc.json": true,
 };
 
 export const WORKSPACE_SETTINGS = {

@@ -1,12 +1,5 @@
 import * as vscode from "vscode";
-import { ActionContext } from "../actions/types";
-import {
-    askForConfirmation,
-    getCurrentExerciseData,
-    getCurrentExerciseId,
-    showError,
-    showNotification,
-} from "../utils/";
+
 import {
     closeExercises,
     downloadOldSubmissions,
@@ -16,6 +9,14 @@ import {
     submitExercise,
     testExercise,
 } from "../actions";
+import { ActionContext } from "../actions/types";
+import {
+    askForConfirmation,
+    getCurrentExerciseData,
+    getCurrentExerciseId,
+    showError,
+    showNotification,
+} from "../utils/";
 
 // TODO: Fix error handling so user receives better error messages.
 const errorMessage = "Currently open editor is not part of a TMC exercise";
@@ -121,7 +122,7 @@ export function registerCommands(
                 showError(errorMessage);
                 return;
             }
-            downloadOldSubmissions(exerciseId, actionContext);
+            downloadOldSubmissions(actionContext, exerciseId);
         }),
     );
 

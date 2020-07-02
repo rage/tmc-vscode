@@ -1,13 +1,7 @@
-import * as vscode from "vscode";
+import * as _ from "lodash";
 import * as path from "path";
+import * as vscode from "vscode";
 
-import {
-    LogLevel,
-    askForConfirmation,
-    isWorkspaceOpen,
-    showError,
-    showNotification,
-} from "../utils/";
 import {
     addNewCourse,
     closeExercises,
@@ -24,6 +18,13 @@ import {
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
 import { ExerciseStatus } from "../config/types";
+import {
+    askForConfirmation,
+    isWorkspaceOpen,
+    LogLevel,
+    showError,
+    showNotification,
+} from "../utils/";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -42,9 +43,9 @@ export function registerUiActions(actionContext: ActionContext): void {
         WORKSPACE_OPEN,
     };
 
-    // Register UI actionS
+    // Register UI actions
     ui.treeDP.registerAction("Log out", [LOGGED_IN], () => {
-        logout(visibilityGroups, actionContext);
+        logout(actionContext, visibilityGroups);
     });
     ui.treeDP.registerAction("Log in", [LOGGED_IN.not], () => {
         ui.webview.setContentFromTemplate({ templateName: "login" });
@@ -122,10 +123,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 });
             }
             const successful = await downloadExercises(actionContext, [downloads]);
-            openExercises(
-                openAfter.filter((oa) => successful.find((s) => s === oa)),
-                actionContext,
-            );
+            openExercises(actionContext, _.intersection(openAfter, successful));
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
@@ -149,7 +147,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                     true,
                 )
             ) {
-                await removeCourse(msg.id, actionContext);
+                await removeCourse(actionContext, msg.id);
                 await displayUserCourses(actionContext);
                 showNotification(`${course.name} was removed from courses.`);
             }
@@ -160,12 +158,12 @@ export function registerUiActions(actionContext: ActionContext): void {
             return;
         }
         const courseId: number = msg.id;
-        displayLocalCourseDetails(msg.id, actionContext);
+        displayLocalCourseDetails(actionContext, msg.id);
         const uiState = ui.webview.getStateId();
         // Try to fetch updates from API
-        updateCourse(courseId, actionContext).then(() =>
+        updateCourse(actionContext, courseId).then(() =>
             uiState === ui.webview.getStateId()
-                ? displayLocalCourseDetails(courseId, actionContext)
+                ? displayLocalCourseDetails(actionContext, courseId)
                 : {},
         );
     });
@@ -175,7 +173,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (!(msg.type && msg.ids)) {
                 return;
             }
-            const result = await openExercises(msg.ids, actionContext);
+            const result = await openExercises(actionContext, msg.ids);
             if (result.err) {
                 logger.error(`Error while opening exercises - ${result.val.message}`);
                 const buttons: Array<[string, () => void]> = [];
@@ -228,7 +226,8 @@ export function registerUiActions(actionContext: ActionContext): void {
                 logger.log(`Moved workspace folder from ${old} to ${newPath}`);
                 if (!res.val) {
                     showNotification(
-                        `Some files could not be removed from the previous workspace directory. They will have to be removed manually. ${old}`,
+                        "Some files could not be removed from the previous workspace directory." +
+                            `They will have to be removed manually. ${old}`,
                         ["OK", (): void => {}],
                     );
                 }
@@ -291,7 +290,8 @@ export function registerUiActions(actionContext: ActionContext): void {
             return;
         }
         const search = "workbench.editor.openSideBySideDirection";
-        // https://github.com/microsoft/vscode/issues/90086 openWorkspaceSettings doesn't take search params.
+        // openWorkspaceSettings doesn't take search params:
+        // https://github.com/microsoft/vscode/issues/90086
         vscode.commands.executeCommand("workbench.action.openSettings", search);
     });
 }

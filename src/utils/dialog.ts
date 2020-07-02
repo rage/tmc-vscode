@@ -17,7 +17,8 @@ export async function askForConfirmation(prompt: string, explicit?: boolean): Pr
 }
 
 /**
- * Prompts a selection to the user for multiple different options and returns its associated generic type.
+ * Prompts a selection to the user for multiple different options and returns its associated
+ * generic type.
  */
 export async function askForItem<T>(
     prompt: string,
@@ -51,7 +52,8 @@ export async function showError(
 }
 
 /**
- * Wrapper for vscode.window.showInformationMessage that resolves optional items to associated callbacks.
+ * Wrapper for vscode.window.showInformationMessage that resolves optional items to associated
+ * callbacks.
  */
 export async function showNotification(
     message: string,

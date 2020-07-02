@@ -36,7 +36,9 @@ export class Visibility {
     }
 
     /**
-     * Implementation for the registration of groups for an action, checks for group name correctness
+     * Implementation for the registration of groups for an action, checks for group name
+     * correctness.
+     *
      * @param id Id of the action
      * @param groups Names of the associated groups, possibly negated
      */

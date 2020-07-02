@@ -1,20 +1,22 @@
+import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
+
+import { isWorkspaceOpen } from "../utils";
+import Logger, { LogLevel } from "../utils/logger";
+
+import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
+import Resources from "./resources";
 import Storage from "./storage";
 import { ExtensionSettings, ExtensionSettingsData } from "./types";
-import { Err, Ok, Result } from "ts-results";
-import Logger, { LogLevel } from "../utils/logger";
-import Resources from "./resources";
-import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
-import { isWorkspaceOpen } from "../utils";
 
 /**
- * Settings class to communicate changes to storage and keeping TMC Workspace.code-workspace settings in place.
- * Updates settings to workspace only if it is open.
+ * Settings class communicates changes to persistent storage and manages TMC
+ * Workspace.code-workspace settings. Workspace settings will only be updated when it is open.
  *
- * Perhaps TODO: Read and Write the .code-workspace file without using vscode premade functions for workspace,
- * because they require the workspace to be open.
- * Currently this approach works, because extension settings are saved to storage and
- * VSCode restarts when our workspace is opened by the extension.
+ * Perhaps TODO: Read and Write the .code-workspace file without using vscode premade functions for
+ * workspace, because they require the workspace to be open. Currently this approach works, because
+ * extension settings are saved to storage and VSCode restarts when our workspace is opened by the
+ * extension.
  */
 export default class Settings {
     private readonly storage: Storage;
@@ -47,8 +49,8 @@ export default class Settings {
     }
 
     /**
-     * Checks that the necessary root folders are open in the workspace and opens them if they aren't.
-     * Doesn't remove user added folders from workspace.
+     * Checks that the necessary root folders are open in the workspace and opens them if they
+     * aren't. Doesn't remove user added folders from workspace.
      */
     private verifyFoldersInWorkspace(): void {
         if (isWorkspaceOpen(this.resources)) {
@@ -62,8 +64,8 @@ export default class Settings {
 
     /**
      * Makes sure that folders and its contents aren't deleted by our watcher.
-     * .vscode folder needs to be unwatched, otherwise adding settings to WorkspaceFolder level doesn't work.
-     * For example defining Python interpreter for the Exercise folder.
+     * .vscode folder needs to be unwatched, otherwise adding settings to WorkspaceFolder level
+     * doesn't work. For example defining Python interpreter for the Exercise folder.
      */
     private verifyWatcherPatternExclusion(): void {
         this.updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
@@ -79,7 +81,9 @@ export default class Settings {
 
     /**
      * Updates individual setting for user and adds them to user storage.
-     * @param data ExtensionSettingsData object, for example { setting: 'dataPath', value: '~/newpath' }
+     *
+     * @param {ExtensionSettingsData} data ExtensionSettingsData object, for example { setting:
+     * 'dataPath', value: '~/newpath' }
      */
     public updateSetting(data: ExtensionSettingsData): void {
         switch (data.setting) {

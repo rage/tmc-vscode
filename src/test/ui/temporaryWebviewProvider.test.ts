@@ -2,9 +2,9 @@ import * as assert from "assert";
 import * as TypeMoq from "typemoq";
 
 import Resources from "../../config/resources";
+import Webview from "../../ui/temporaryWebview";
 import TemporaryWebviewProvider from "../../ui/temporaryWebviewProvider";
 import UI from "../../ui/ui";
-import Webview from "../../ui/temporaryWebview";
 
 suite("TemporaryWebviewProvider tests", () => {
     let resourcesMock: TypeMoq.IMock<Resources>;

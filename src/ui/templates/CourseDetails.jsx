@@ -22,7 +22,7 @@ function component(data) {
      * @param {string} title
      * @param {string} description
      */
-    const stickyTop = (course, updateableExerciseIds, offlineMode, perhapsExamMode) => (
+    const stickyTop = (course, offlineMode, perhapsExamMode, courseDisabled, materialUrl) => (
         <div class="w-100">
             <div class="container pt-0">
                 <div class="row py-1">
@@ -47,6 +47,7 @@ function component(data) {
                     data-course-id={course.id}
                     data-course-name={course.name}
                     data-course-org={course.organization}
+                    data-course-disabled={course.disabled}
                 >
                     <div class="col-md">
                         <h2>{course.title}</h2>
@@ -60,6 +61,13 @@ function component(data) {
                         </span>
                     </div>
                 </div>
+                {materialUrl ? (
+                    <div class="row py-1">
+                        <div class="col-md">
+                            Material: <a href={materialUrl}>{materialUrl}</a>
+                        </div>
+                    </div>
+                ) : null}
                 <div class="row py-1">
                     <div class="col-md">
                         <div
@@ -86,6 +94,12 @@ function component(data) {
                                 <span>
                                     This is an exam. Exercise submission results will not be shown.
                                 </span>
+                            </div>
+                        ) : null}
+                        {courseDisabled ? (
+                            <div role="alert" class="alert alert-info">
+                                This course has been disabled and exercises can't be downloaded or
+                                submitted to the server.
                             </div>
                         ) : null}
                     </div>
@@ -239,9 +253,10 @@ function component(data) {
         <div>
             {stickyTop(
                 data.course,
-                data.updateableExerciseIds,
                 data.offlineMode,
                 data.course.perhapsExamMode,
+                data.course.disabled,
+                data.course.material_url,
             )}
             {data.exerciseData.map(exerciseTable).join("")}
             {contextMenu()}
@@ -405,10 +420,9 @@ function script() {
                         break;
                 }
             }
-
             const downloadAllButton = exerciseCards[i].querySelector("button.download-all");
             downloadAllButton.dataset.exercises = downloadable;
-            if (downloadable.length === 0) {
+            if (downloadable.length === 0 || course.courseDisabled === "true") {
                 downloadAllButton.style.display = "none";
                 downloadAllButton.disabled = true;
             } else {

@@ -1,22 +1,24 @@
 /**
- * ---------------------------------------------------------------------------------------------------------------------
+ * -------------------------------------------------------------------------------------------------
  * Group of actions that provide webviews.
- * ---------------------------------------------------------------------------------------------------------------------
+ * -------------------------------------------------------------------------------------------------
  */
 
 import { Err, Ok, Result } from "ts-results";
+
 import { ExerciseStatus } from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
-import { chooseDeadline, dateToString, parseDate, parseNextDeadlineAfter } from "../utils/";
-import { ActionContext } from "./types";
-import { updateCourse } from "./user";
-import { checkForExerciseUpdates } from "./workspace";
 import {
     CourseDetailsExercise,
     CourseDetailsExerciseGroup,
     ExerciseStatus as TextStatus,
     WebviewMessage,
 } from "../ui/types";
+import { chooseDeadline, dateToString, parseDate, parseNextDeadlineAfter } from "../utils/";
+
+import { ActionContext } from "./types";
+import { updateCourse } from "./user";
+import { checkForExerciseUpdates } from "./workspace";
 
 /**
  * Displays a summary page of user's courses.
@@ -34,6 +36,10 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
 
     const uiState = ui.webview.getStateId();
 
+    /**  Tries to update courses from API;
+     * Also checks for disabled courses, if they are enabled again.
+     * When going to My Courses view.
+     */
     const apiCourses = await Promise.all(
         courses.map(async (course) => {
             const exerciseResult = await tmc.getCourseDetails(course.id);
@@ -50,8 +56,10 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
                 });
             }
 
-            await updateCourse(course.id, actionContext);
+            await updateCourse(actionContext, course.id);
             const updatedCourse = userData.getCourse(course.id);
+            course.disabled = updatedCourse.disabled;
+
             const completedPrc = (
                 (updatedCourse.awardedPoints / updatedCourse.availablePoints) *
                 100
@@ -80,8 +88,8 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
  * Displays details view for a local course.
  */
 export async function displayLocalCourseDetails(
-    courseId: number,
     actionContext: ActionContext,
+    courseId: number,
 ): Promise<void> {
     const { ui, tmc, userData, workspaceManager, logger } = actionContext;
 
@@ -208,8 +216,8 @@ export async function displayLocalCourseDetails(
  * Lets the user select a course
  */
 export async function selectCourse(
-    orgSlug: string,
     actionContext: ActionContext,
+    orgSlug: string,
     webview?: TemporaryWebview,
 ): Promise<Result<{ changeOrg: boolean; course?: number }, Error>> {
     const { tmc, resources, ui } = actionContext;
@@ -309,7 +317,7 @@ export async function selectOrganizationAndCourse(
         }
         logger.log(`Organization slug ${orgResult.val} selected`);
         organizationSlug = orgResult.val;
-        const courseResult = await selectCourse(organizationSlug, actionContext, tempView);
+        const courseResult = await selectCourse(actionContext, organizationSlug, tempView);
         if (courseResult.err) {
             tempView.dispose();
             return new Err(courseResult.val);

@@ -1,12 +1,17 @@
 /**
- * ---------------------------------------------------------------------------------------------------------------------
+ * -------------------------------------------------------------------------------------------------
  * Group of actions that respond to the user.
- * ---------------------------------------------------------------------------------------------------------------------
+ * -------------------------------------------------------------------------------------------------
  */
 
+import du = require("du");
+import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import { CourseExercise, Exercise, OldSubmission, SubmissionFeedback } from "../api/types";
+import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
+import { AuthorizationError, ConnectionError } from "../errors";
 import { TestResultData, VisibilityGroups } from "../ui/types";
 import {
     askForConfirmation,
@@ -18,6 +23,7 @@ import {
     showNotification,
     sleep,
 } from "../utils/";
+
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 import {
@@ -26,12 +32,6 @@ import {
     downloadExercises,
     openExercises,
 } from "./workspace";
-
-import { Err, Ok, Result } from "ts-results";
-import { CourseExercise, Exercise, OldSubmission, SubmissionFeedback } from "../api/types";
-import du = require("du");
-import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
-import { ConnectionError } from "../errors";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -61,8 +61,8 @@ export async function login(
  * Logs the user out, updating UI state
  */
 export async function logout(
-    visibility: VisibilityGroups,
     actionContext: ActionContext,
+    visibility: VisibilityGroups,
 ): Promise<void> {
     if (await askForConfirmation("Are you sure you want to log out?")) {
         const { tmc, ui } = actionContext;
@@ -87,7 +87,11 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
     }
     const courseExamMode = userData.getCourseByName(exerciseDetails.val.course);
 
-    let data: TestResultData = { ...EXAM_TEST_RESULT, id };
+    let data: TestResultData = {
+        ...EXAM_TEST_RESULT,
+        id,
+        disabled: userData.getCourseByName(exerciseDetails.val.course).disabled,
+    };
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
     if (!courseExamMode.perhapsExamMode) {
@@ -142,6 +146,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             id,
             exerciseName,
             tmcLogs: testResult.val.logs,
+            disabled: userData.getCourseByName(exerciseDetails.val.course).disabled,
         };
     }
 
@@ -180,7 +185,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         showError(message);
         return;
     }
-    const courseExamMode = userData.getCourseByName(exerciseDetails.val.course);
+    const courseData = userData.getCourseByName(exerciseDetails.val.course);
 
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
@@ -200,92 +205,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         return;
     }
 
-    if (!courseExamMode.perhapsExamMode) {
-        const messageHandler = async (msg: {
-            data?: { [key: string]: unknown };
-            type?: string;
-        }): Promise<void> => {
-            if (msg.type === "feedback" && msg.data) {
-                await tmc.submitSubmissionFeedback(
-                    msg.data.url as string,
-                    msg.data.feedback as SubmissionFeedback,
-                );
-            } else if (msg.type === "showInBrowser") {
-                vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
-            } else if (msg.type === "showSolutionInBrowser" && msg.data) {
-                vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
-            } else if (msg.type === "closeWindow") {
-                temp.dispose();
-            }
-        };
-
-        let notified = false;
-        let timeWaited = 0;
-        let getStatus = true;
-        while (getStatus) {
-            const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
-            if (statusResult.err) {
-                const message = `Failed getting submission status: ${statusResult.val.name} - ${statusResult.val.message}`;
-                logger.error(message);
-                showError(message);
-                break;
-            }
-            const statusData = statusResult.val;
-            if (statusResult.val.status !== "processing") {
-                ui.setStatusBar("Tests finished, see result", 5000);
-                let feedbackQuestions: FeedbackQuestion[] = [];
-                let courseId = undefined;
-                if (statusData.status === "ok" && statusData.all_tests_passed) {
-                    if (statusData.feedback_questions) {
-                        feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
-                    }
-                    courseId = userData.getCourseByName(statusData.course).id;
-                }
-                temp.setContent({
-                    title: "TMC Server Submission",
-                    template: { templateName: "submission-result", statusData, feedbackQuestions },
-                    messageHandler,
-                });
-                temporaryWebviewProvider.addToRecycables(temp);
-                // Check for new exercises if exercise passed.
-                if (courseId) {
-                    checkForNewExercises(actionContext, courseId);
-                }
-                checkForExerciseUpdates(actionContext);
-                break;
-            }
-
-            if (!temp.disposed) {
-                temp.setContent({
-                    title: "TMC Server Submission",
-                    template: { templateName: "submission-status", statusData },
-                    messageHandler,
-                });
-            }
-
-            await sleep(2500);
-            timeWaited = timeWaited + 2500;
-
-            if (timeWaited >= 120000 && !notified) {
-                notified = true;
-                showNotification(
-                    `This seems to be taking a long time — consider continuing to the next exercise while this is running. \
-                    Your submission will still be graded. Check the results later at ${submitResult.val.show_submission_url}`,
-                    [
-                        "Open URL and move on...",
-                        (): void => {
-                            vscode.env.openExternal(
-                                vscode.Uri.parse(submitResult.val.show_submission_url),
-                            );
-                            getStatus = false;
-                            temp.dispose();
-                        },
-                    ],
-                    ["No, I'll wait", (): void => {}],
-                );
-            }
-        }
-    } else {
+    if (courseData.perhapsExamMode) {
         const examData = EXAM_SUBMISSION_RESULT;
         const submitUrl = submitResult.val.show_submission_url;
         const feedbackQuestions: FeedbackQuestion[] = [];
@@ -304,8 +224,96 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
                 }
             },
         });
+        temporaryWebviewProvider.addToRecycables(temp);
+        return;
+    }
+
+    const messageHandler = async (msg: {
+        data?: { [key: string]: unknown };
+        type?: string;
+    }): Promise<void> => {
+        if (msg.type === "feedback" && msg.data) {
+            await tmc.submitSubmissionFeedback(
+                msg.data.url as string,
+                msg.data.feedback as SubmissionFeedback,
+            );
+        } else if (msg.type === "showInBrowser") {
+            vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
+        } else if (msg.type === "showSolutionInBrowser" && msg.data) {
+            vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
+        } else if (msg.type === "closeWindow") {
+            temp.dispose();
+        }
+    };
+
+    let notified = false;
+    let timeWaited = 0;
+    let getStatus = true;
+    while (getStatus) {
+        const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
+        if (statusResult.err) {
+            const message = `Failed getting submission status: ${statusResult.val.name} - ${statusResult.val.message}`;
+            logger.error(message);
+            showError(message);
+            break;
+        }
+        const statusData = statusResult.val;
+        if (statusResult.val.status !== "processing") {
+            ui.setStatusBar("Tests finished, see result", 5000);
+            let feedbackQuestions: FeedbackQuestion[] = [];
+            let courseId = undefined;
+            if (statusData.status === "ok" && statusData.all_tests_passed) {
+                if (statusData.feedback_questions) {
+                    feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
+                }
+                courseId = userData.getCourseByName(statusData.course).id;
+            }
+            temp.setContent({
+                title: "TMC Server Submission",
+                template: { templateName: "submission-result", statusData, feedbackQuestions },
+                messageHandler,
+            });
+            temporaryWebviewProvider.addToRecycables(temp);
+            // Check for new exercises if exercise passed.
+            if (courseId) {
+                checkForNewExercises(actionContext, courseId);
+            }
+            checkForExerciseUpdates(actionContext);
+            break;
+        }
+
+        if (!temp.disposed) {
+            temp.setContent({
+                title: "TMC Server Submission",
+                template: { templateName: "submission-status", statusData },
+                messageHandler,
+            });
+        }
+
+        await sleep(2500);
+        timeWaited = timeWaited + 2500;
+
+        if (timeWaited >= 120000 && !notified) {
+            notified = true;
+            showNotification(
+                `This seems to be taking a long time — consider continuing to the next exercise while this is running. \
+                Your submission will still be graded. Check the results later at ${submitResult.val.show_submission_url}`,
+                [
+                    "Open URL and move on...",
+                    (): void => {
+                        vscode.env.openExternal(
+                            vscode.Uri.parse(submitResult.val.show_submission_url),
+                        );
+                        getStatus = false;
+                        temp.dispose();
+                    },
+                ],
+                ["No, I'll wait", (): void => {}],
+            );
+        }
     }
 }
+
 /**
  * Gets all submission ids from currently selected courses and maps them to corresponding exercises
  *
@@ -365,11 +373,11 @@ export async function checkForNewExercises(
 ): Promise<void> {
     const { userData, logger } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
-    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
+    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now() && !c.disabled);
     logger.log(`Checking for new exercises for courses ${filteredCourses.map((c) => c.name)}`);
     const updatedCourses: LocalCourseData[] = [];
     for (const course of filteredCourses) {
-        await updateCourse(course.id, actionContext);
+        await updateCourse(actionContext, course.id);
         updatedCourses.push(userData.getCourse(course.id));
     }
 
@@ -382,6 +390,7 @@ export async function checkForNewExercises(
                     async (): Promise<void> => {
                         userData.clearNewExercises(course.id);
                         openExercises(
+                            actionContext,
                             await downloadExercises(actionContext, [
                                 {
                                     courseId: course.id,
@@ -389,7 +398,6 @@ export async function checkForNewExercises(
                                     organizationSlug: course.organization,
                                 },
                             ]),
-                            actionContext,
                         );
                     },
                 ],
@@ -488,6 +496,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
 
     const courseDetails = courseDetailsResult.val.course;
     const exercises = courseExercises.val;
+    const settings = courseSettings.val;
 
     let availablePoints = 0;
     let awardedPoints = 0;
@@ -509,9 +518,11 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         organization: orgAndCourse.val.organization,
         availablePoints: availablePoints,
         awardedPoints: awardedPoints,
-        perhapsExamMode: courseSettings.val.hide_submission_results,
+        perhapsExamMode: settings.hide_submission_results,
         newExercises: [],
         notifyAfter: 0,
+        disabled: settings.disabled_status === "enabled" ? false : true,
+        material_url: settings.material_url,
     };
     userData.addCourse(localData);
     await displayUserCourses(actionContext);
@@ -522,7 +533,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
  * Removes given course from UserData and closes all its exercises.
  * @param id ID of the course to remove
  */
-export async function removeCourse(id: number, actionContext: ActionContext): Promise<void> {
+export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
     const { userData, workspaceManager, logger } = actionContext;
     const course = userData.getCourse(id);
     logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
@@ -543,64 +554,93 @@ export async function removeCourse(id: number, actionContext: ActionContext): Pr
  * Keeps the user course exercises, points and course data up to date.
  * @param id Course id
  */
-export async function updateCourse(id: number, actionContext: ActionContext): Promise<void> {
+export async function updateCourse(actionContext: ActionContext, id: number): Promise<void> {
     const { tmc, userData, workspaceManager, logger } = actionContext;
     return Promise.all([
         tmc.getCourseDetails(id),
         tmc.getCourseExercises(id),
         tmc.getCourseSettings(id),
     ]).then(([courseDetailsResult, courseExercisesResult, courseSettingsResult]) => {
-        const showErrorForResult = (message: string, result: unknown): void => {
-            logger.error(`Error refreshing course data ${message}`, result);
+        const showErrorForResult = (endpoint: string, message: string, result: unknown): void => {
+            logger.error(
+                `Error refreshing course data for courseId ${id}, ${endpoint} - ${message}`,
+                result,
+            );
             showError(`Something went wrong while trying to refresh course data: ${message}`);
         };
-        if (courseDetailsResult.err) {
-            if (!(courseDetailsResult.val instanceof ConnectionError)) {
-                const message = `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`;
-                showErrorForResult(message, courseDetailsResult);
+        const courseToDisable = (id: number): void => {
+            logger.warn(
+                `Received 403 Forbidden Authorization Error, disabling course with id ${id}`,
+            );
+            const course = userData.getCourse(id);
+            course.disabled = true;
+            userData.updateCourse(course);
+        };
+        const warnOffline = (message: string): void => {
+            logger.warn(`Didn't fetch course updates, working offline: ${message}`);
+        };
+
+        // Check if disabled course still returns error from API
+        if (userData.getCourse(id).disabled) {
+            logger.log(`Checking if course with id ${id} still disabled.`);
+            if (courseDetailsResult.err || courseExercisesResult.err || courseSettingsResult.err) {
+                logger.log("Course still disabled, can't receive data from API.");
                 return;
             }
-            logger.warn(
-                "Didn't fetch course updates, working offline: " +
-                    `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`,
-            );
+            logger.log("Received all necessary data from API, continuing to update course.");
+        }
+
+        if (courseDetailsResult.err) {
+            const message = `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`;
+            if (courseDetailsResult.val instanceof AuthorizationError) {
+                courseToDisable(id);
+                return;
+            } else if (courseDetailsResult.val instanceof ConnectionError) {
+                warnOffline(message);
+                return;
+            }
+            showErrorForResult("courseDetailsResult", message, courseDetailsResult);
             return;
         }
         if (courseExercisesResult.err) {
-            if (!(courseExercisesResult.val instanceof ConnectionError)) {
-                const message = `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`;
-                showErrorForResult(message, courseExercisesResult);
+            const message = `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`;
+            if (courseExercisesResult.val instanceof AuthorizationError) {
+                courseToDisable(id);
+                return;
+            } else if (courseExercisesResult.val instanceof ConnectionError) {
+                warnOffline(message);
                 return;
             }
-            logger.warn(
-                "Didn't fetch course updates, working offline: " +
-                    `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`,
-            );
+            showErrorForResult("courseExercisesResult", message, courseExercisesResult);
             return;
         }
         if (courseSettingsResult.err) {
-            if (!(courseExercisesResult.val instanceof ConnectionError)) {
-                const message = `${courseSettingsResult.val.name} - ${courseSettingsResult.val.message}`;
-                showErrorForResult(message, courseSettingsResult);
+            const message = `${courseSettingsResult.val.name} - ${courseSettingsResult.val.message}`;
+            if (courseSettingsResult.val instanceof AuthorizationError) {
+                courseToDisable(id);
+                return;
+            } else if (courseSettingsResult.val instanceof ConnectionError) {
+                warnOffline(message);
                 return;
             }
-            logger.warn(
-                "Didn't fetch course updates, working offline: " +
-                    `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`,
-            );
+            showErrorForResult("courseSettingsResult", message, courseSettingsResult);
             return;
         }
 
         const details = courseDetailsResult.val.course;
         const exercises = courseExercisesResult.val;
         const settings = courseSettingsResult.val;
+        logger.log(`Refreshing data for course ${details.name} from API`);
 
+        // Update course data
         const courseData = userData.getCourseByName(settings.name);
         courseData.perhapsExamMode = settings.hide_submission_results;
+        courseData.description = details.description || "";
+        courseData.disabled = settings.disabled_status === "enabled" ? false : true;
+        courseData.material_url = settings.material_url;
         userData.updateCourse(courseData);
 
-        logger.log(`Refreshing exercise data for course ${details.name} from API`);
-
+        // Update course exercise data
         userData.updateExercises(
             id,
             details.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),

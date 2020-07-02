@@ -1,7 +1,9 @@
-import Storage from "./storage";
 import { Err, Ok, Result } from "ts-results";
-import { LocalCourseData, LocalCourseExercise } from "./types";
+
 import Logger from "../utils/logger";
+
+import Storage from "./storage";
+import { LocalCourseData, LocalCourseExercise } from "./types";
 
 export class UserData {
     private courses: Map<number, LocalCourseData>;
@@ -129,7 +131,10 @@ export class UserData {
     }
 
     /**
-     * Sets the notification timestamp for when the user should be notified of the given course next time.
+     * Sets a timeout for when the user can be notified about the given course the next time.
+     *
+     * @param courseId ID of the course where the notification timeout is being set.
+     * @param dateInMillis Next possible notification date, in milliseconds.
      */
     public async setNotifyDate(
         courseId: number,

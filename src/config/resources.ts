@@ -1,4 +1,5 @@
 import * as path from "path";
+
 import Storage from "./storage";
 
 export default class Resources {

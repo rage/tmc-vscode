@@ -3,8 +3,9 @@
 
 "use strict";
 
-const merge = require("webpack-merge");
 const TerserPlugin = require("terser-webpack-plugin");
+const merge = require("webpack-merge");
+
 const common = require("./webpack.common");
 
 /**@type {import('webpack').Configuration}*/
@@ -20,7 +21,8 @@ const devConfig = {
                         loader: "ts-loader",
                         options: {
                             compiler: "ttypescript",
-                            configFile: "tsconfig.production.json", // Use extended tsconfig settings for production
+                            // Use extended tsconfig settings for production
+                            configFile: "tsconfig.production.json",
                         },
                     },
                 ],

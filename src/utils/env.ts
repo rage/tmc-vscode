@@ -28,11 +28,12 @@ export function getPlatform(): "linux32" | "linux64" | "windows32" | "windows64"
 }
 
 /**
- * Runs a test to see whether or not superfluous properties are enabled within typescript-is properties.
+ * Runs a test to see whether or not superfluous properties are enabled within typescript-is
+ * properties.
  */
 export function superfluousPropertiesEnabled(): boolean {
-    // Use configuration properties to see whether superflous object properties are enabled in tsconfig.
-    // In the code this feature is used when fetched API data is being parsed.
+    // Use configuration properties to see whether superflous object properties are enabled in
+    // tsconfig. In the code this feature is primarily used when fetched API data is being parsed.
     // For configuration, see tsconfig.json used by webpack.dev.json
     // and tsconfig.production.json used by webpack.prod.json
     type TestType = {

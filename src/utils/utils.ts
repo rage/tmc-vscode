@@ -1,21 +1,24 @@
+import ClientOAuth2 = require("client-oauth2");
 import * as fs from "fs";
 import * as fetch from "node-fetch";
 import * as path from "path";
+import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { Err, Ok, Result } from "ts-results";
+import { FeedbackQuestion } from "../actions/types";
+import { SubmissionFeedbackQuestion } from "../api/types";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
-import { ConnectionError } from "../errors";
-import { SubmissionFeedbackQuestion } from "../api/types";
-import { FeedbackQuestion } from "../actions/types";
-import ClientOAuth2 = require("client-oauth2");
 import { LocalExerciseData } from "../config/types";
-import { superfluousPropertiesEnabled } from "./env";
+import { ConnectionError } from "../errors";
+
 import { showNotification } from "./dialog";
+import { superfluousPropertiesEnabled } from "./env";
 
 /**
- * Downloads data from given url to the specified file. If file exists, its content will be overwritten.
+ * Downloads data from given url to the specified file. If file exists, its content will be
+ * overwritten.
+ *
  * @param url Url to data
  * @param filePath Absolute path to the desired output file
  * @param headers Request headers if any
@@ -142,7 +145,14 @@ export function getCurrentExerciseData(
  */
 export function getProgressBar(percentDone: number): string {
     return `<div class="progress">
-        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="${percentDone}" aria-valuemin="0" aria-valuemax="100" style="width: ${percentDone}%"></div>
+        <div
+            class="progress-bar progress-bar-striped progress-bar-animated"
+            role="progressbar"
+            aria-valuenow="${percentDone}"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            style="width: ${percentDone}%"
+        ></div>
     </div>`;
 }
 

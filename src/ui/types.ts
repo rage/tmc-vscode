@@ -1,9 +1,10 @@
-import TMC from "../api/tmc";
-import Storage from "../config/storage";
-import UI from "./ui";
-import { ExtensionSettings, LocalCourseData } from "../config/types";
-import { Course, Organization, SubmissionStatusReport } from "../api/types";
 import { FeedbackQuestion } from "../actions/types";
+import TMC from "../api/tmc";
+import { Course, Organization, SubmissionStatusReport } from "../api/types";
+import Storage from "../config/storage";
+import { ExtensionSettings, LocalCourseData } from "../config/types";
+
+import UI from "./ui";
 
 export type HandlerContext = {
     tmc: TMC;
@@ -112,6 +113,7 @@ export type TestResultData = {
         stderr?: string;
     };
     pasteLink?: string;
+    disabled?: boolean;
 };
 
 export type ExerciseStatus =

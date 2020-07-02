@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
-import { ActionContext } from "./types";
-import { askForItem } from "../utils";
-import { submitExercise, testExercise } from "./user";
+
 import { LocalExerciseData } from "../config/types";
+import { askForItem } from "../utils";
+
+import { ActionContext } from "./types";
+import { submitExercise, testExercise } from "./user";
 
 export * from "./user";
 export * from "./webview";

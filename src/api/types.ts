@@ -119,8 +119,8 @@ export type CourseSettings = {
     certificate_downloadable: boolean;
     certificate_unlock_spec: string | null;
     organization_id: number | null;
-    disabled_status?: string | null;
-    title?: string | null;
+    disabled_status: string | null;
+    title: string | null;
     material_url: string | null;
     course_template_id: number | null;
     hide_submission_results: boolean;

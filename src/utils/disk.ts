@@ -1,5 +1,5 @@
-import { Err, Ok, Result } from "ts-results";
 import diskusage = require("diskusage-ng");
+import { Err, Ok, Result } from "ts-results";
 
 export async function checkFreeDiskSpace(path: string): Promise<Result<number, Error>> {
     return new Promise((resolve) => {

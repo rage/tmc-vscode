@@ -1,12 +1,11 @@
+import del = require("del");
 import * as fs from "fs-extra";
 import * as glob from "glob";
 import * as path from "path";
-import * as vscode from "vscode";
-import * as unzipper from "unzipper";
-
 import { Err, Ok, Result } from "ts-results";
-import Resources from "../config/resources";
-import { downloadFile, getPlatform, isJavaPresent, showProgressNotification } from "../utils/";
+import * as unzipper from "unzipper";
+import * as vscode from "vscode";
+
 import {
     EXTENSION_ID,
     JAVA_ZIP_URLS,
@@ -16,8 +15,9 @@ import {
     WORKSPACE_ROOT_FILE_TEXT,
     WORKSPACE_SETTINGS,
 } from "../config/constants";
+import Resources from "../config/resources";
 import Storage from "../config/storage";
-import del = require("del");
+import { downloadFile, getPlatform, isJavaPresent, showProgressNotification } from "../utils/";
 import Logger from "../utils/logger";
 
 /**

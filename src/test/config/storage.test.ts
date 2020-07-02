@@ -17,8 +17,8 @@ suite("Storage tests", () => {
         storage = new Storage(mockContext.object);
     });
 
-    // Same as hardcoded keys in Storage class.
-    // We "magically" know them also here to remind you that changing these may break compatibility between releases.
+    // Same as hardcoded keys in Storage class. We "magically" know them also here to remind you
+    // that changing these may break compatibility between releases.
     const AUTHENTICATION_TOKEN_KEY = "token";
     const EXERCISE_DATA_KEY = "exerciseData";
     const EXTENSION_SETTINGS_KEY = "extensionSettings";
