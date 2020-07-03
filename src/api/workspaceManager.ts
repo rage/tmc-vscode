@@ -51,15 +51,11 @@ export default class WorkspaceManager {
         id: number,
         softDeadline: string | null,
         hardDeadline: string | null,
-        latestChecksum: string,
     ): void {
         const data = this.idToData.get(id);
         if (data) {
             data.deadline = hardDeadline;
             data.softDeadline = softDeadline;
-            if (data.checksum !== latestChecksum) {
-                data.updateAvailable = true;
-            }
             this.idToData.set(id, data);
             this.updatePersistentData();
         }
@@ -110,7 +106,6 @@ export default class WorkspaceManager {
             name: exerciseDetails.exercise_name,
             organization: organizationSlug,
             softDeadline: softDeadline,
-            updateAvailable: false,
         });
         this.updatePersistentData();
         return new Ok(this.getClosedPath(exerciseDetails.exercise_id));

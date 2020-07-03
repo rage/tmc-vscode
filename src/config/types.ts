@@ -28,7 +28,6 @@ export type LocalExerciseData = {
     course: string;
     organization: string;
     checksum: string;
-    updateAvailable: boolean;
     status: ExerciseStatus;
     deadline: string | null;
     softDeadline: string | null;
