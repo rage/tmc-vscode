@@ -10,8 +10,6 @@ import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import * as url from "url";
 
-import { resetExercise } from "../actions";
-import { ActionContext } from "../actions/types";
 import {
     ACCESS_TOKEN_URI,
     CLIENT_ID,
@@ -315,7 +313,6 @@ export default class TMC {
     }
 
     public async downloadOldExercise(
-        context: ActionContext,
         exerciseId: number,
         submissionId: number,
     ): Promise<Result<string, Error>> {
@@ -323,16 +320,12 @@ export default class TMC {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
 
-        const archivePath = path.join(`${this.resources.getDataPath()}`, `${submissionId}.zip`);
-
         const exercisePath = this.workspaceManager.getExercisePathById(exerciseId);
-
         if (exercisePath.err) {
             return new Err(new Error("Couldn't find exercise path for exercise"));
         }
 
         const exPath = exercisePath.val + "/";
-
         const userFilePaths = await this.checkApiResponse(
             this.executeLangsAction({
                 action: "get-exercise-packaging-configuration",
@@ -345,6 +338,7 @@ export default class TMC {
             return new Err(new Error("Couldn't resolve userfiles from exercise files"));
         }
 
+        const archivePath = path.join(`${this.resources.getDataPath()}`, `${submissionId}.zip`);
         const downloadResult = await downloadFile(
             `${this.tmcApiUrl}core/submissions/${submissionId}/download`,
             archivePath,
@@ -357,7 +351,6 @@ export default class TMC {
         }
 
         const oldSubmissionTempPath = path.join(this.resources.getDataPath(), "temp");
-
         const extractResult = await this.checkApiResponse(
             this.executeLangsAction({
                 action: "extract-project",
@@ -371,14 +364,7 @@ export default class TMC {
             return new Err(new Error("Something went wrong while extracting the submission."));
         }
 
-        const resetResult = await resetExercise(context, exerciseId);
-
-        if (resetResult.err) {
-            return new Err(new Error("Couldn't reset exercise"));
-        }
-
         const closedExPath = this.workspaceManager.getExercisePathById(exerciseId);
-
         if (closedExPath.err) {
             return new Err(new Error("?????"));
         }
