@@ -8,7 +8,7 @@
 - Show material url in course details if defined.
 
 #### Changed
-- After downloading an old submission, reopen the active file.
+- After reseting an exercise or downloading an old submission, reopen the active file.
 - Data validation to set course as disabled when receiving 403.
 - Not to check for updates and new exercises for disabled courses.
 
