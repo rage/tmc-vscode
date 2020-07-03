@@ -45,8 +45,10 @@ export async function validateAndFix(
                     status?: ExerciseStatus;
                     [key: string]: unknown;
                 }>(ex) ||
-                (ex.isOpen === undefined && ex.status === undefined)
+                (ex.isOpen === undefined && ex.status === undefined) ||
+                ex.status === ExerciseStatus.MISSING
             ) {
+                logger.warn("Exercise missing or data is bad, removing:", ex);
                 continue;
             }
 
@@ -83,7 +85,6 @@ export async function validateAndFix(
                     status: exerciseStatus,
                     name: exerciseDetails.name,
                     organization: ex.organization,
-                    updateAvailable: false,
                 });
             }
         }
@@ -112,6 +113,7 @@ export async function validateAndFix(
                     }>(course) ||
                     (course.id === undefined && course.name === undefined)
                 ) {
+                    logger.warn("Course data is bad, removing:", course);
                     continue;
                 }
 
@@ -200,8 +202,8 @@ export async function validateAndFix(
                     awardedPoints: awardedPoints,
                     availablePoints: availablePoints,
                     perhapsExamMode: courseInfo.hide_submission_results,
-                    notifyAfter: 0,
-                    newExercises: [],
+                    notifyAfter: is<number>(course.notifyAfter) ? course.notifyAfter : 0,
+                    newExercises: is<number[]>(course.newExercises) ? course.newExercises : [],
                     disabled: courseInfo.disabled_status === "enabled" ? false : true,
                     material_url: courseInfo.material_url,
                 });

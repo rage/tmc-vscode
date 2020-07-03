@@ -8,7 +8,7 @@ import du = require("du");
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { CourseExercise, Exercise, OldSubmission, SubmissionFeedback } from "../api/types";
+import { OldSubmission, SubmissionFeedback } from "../api/types";
 import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
 import { AuthorizationError, ConnectionError } from "../errors";
@@ -651,25 +651,8 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
         );
         userData.updatePoints(id, awarded, available);
 
-        const combinedDetails: Map<number, { c?: CourseExercise; e?: Exercise }> = new Map();
-        details.exercises.forEach((x) => {
-            combinedDetails.set(x.id, { e: x });
+        exercises.forEach((ex) => {
+            workspaceManager.updateExerciseData(ex.id, ex.soft_deadline, ex.deadline);
         });
-        exercises.forEach((x) => {
-            let d = combinedDetails.get(x.id);
-            if (d) d.c = x;
-            else d = { c: x };
-            combinedDetails.set(x.id, d);
-        });
-        for (const x of combinedDetails.values()) {
-            if (x.c && x.e) {
-                workspaceManager.updateExerciseData(
-                    x.c.id,
-                    x.c.soft_deadline,
-                    x.c.deadline,
-                    x.e.checksum,
-                );
-            }
-        }
     });
 }

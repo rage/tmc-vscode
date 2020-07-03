@@ -12,6 +12,7 @@
 - Not to check for updates and new exercises for disabled courses.
 
 #### Fixed
+- Data validation to not clear new exercises array or notification delay for courses.
 - Workspace not deleting .vscode/settings.json file.
 
 ## [0.8.1] - 2020-06-30
