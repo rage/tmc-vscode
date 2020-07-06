@@ -83,21 +83,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         checkForExerciseUpdates(actionContext);
         checkForNewExercises(actionContext);
     }, EXERCISE_CHECK_INTERVAL);
-
-    /* const freeSpace = await checkFreeDiskSpace(actionContext.resources.getDataPath());
-
-    if (freeSpace.err) {
-        showNotification(freeSpace.val.message);
-    } else {
-        const formatted = formatSizeInBytes(freeSpace.val);
-        if (freeSpace.val < 1000000000) {
-            showNotification(
-                "WARNING! Currently available space less than 1Gb. Available space: " + formatted,
-            );
-        } else {
-            showNotification("Currently available space: " + formatted);
-        }
-    } */
 }
 
 export function deactivate(): void {
