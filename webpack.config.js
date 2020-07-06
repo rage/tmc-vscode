@@ -5,7 +5,6 @@
 
 const path = require("path");
 const TerserPlugin = require("terser-webpack-plugin");
-const webpack = require("webpack");
 const merge = require("webpack-merge");
 
 /**@type {import('webpack').ConfigurationFactory}*/
@@ -35,11 +34,6 @@ const config = () => {
                 handlebars: "handlebars/dist/handlebars.min.js",
             },
         },
-        plugins: [
-            new webpack.DefinePlugin({
-                "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV),
-            }),
-        ],
         module: {
             rules: [
                 {
