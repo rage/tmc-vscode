@@ -3,7 +3,7 @@ import { is } from "typescript-is";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { ExtensionSettings } from "../config/types";
-import { removeOldData } from "../utils";
+import { removeOldData, showNotification } from "../utils";
 import Logger, { LogLevel } from "../utils/logger";
 
 // TODO: Perhaps not initialize if everything is ok.
@@ -24,6 +24,13 @@ export async function settingsInitialization(
     // Try removing once old data, if the data move happened within 10 minutes.
     if (settings && settings.oldDataPath !== undefined) {
         const result = await removeOldData(settings.oldDataPath);
+        if (result.err) {
+            showNotification(
+                "Some files could not be removed from the previous workspace directory." +
+                    `They will have to be removed manually. ${settings.oldDataPath}`,
+                ["OK", (): void => {}],
+            );
+        }
         logger.log("Tried to remove old data", result);
     }
     const tmcDataPath = settings?.dataPath || resources.getDataPath();
