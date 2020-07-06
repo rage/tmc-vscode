@@ -40,7 +40,6 @@ suite("Date utils", () => {
     test("parseNextDeadline", () => {
         const NO_DEADLINE = "No deadline";
         const ALL_DEADLINES_HAVE_EXPIRED = "All deadlines have expired";
-        const NO_DEADLINE_AVAILABLE = "Next deadline: Not available";
 
         strictEqual(
             parseNextDeadlineAfter(CURRENT_TIME, []),
@@ -74,8 +73,8 @@ suite("Date utils", () => {
                 CURRENT_TIME,
                 PASSED_DATES.map((x) => ({ date: x, active: false })),
             ),
-            NO_DEADLINE_AVAILABLE,
-            `Parsed deadline after inactive past dates should be "${NO_DEADLINE_AVAILABLE}"`,
+            ALL_DEADLINES_HAVE_EXPIRED,
+            `Parsed deadline after inactive past dates should be "${ALL_DEADLINES_HAVE_EXPIRED}"`,
         );
         strictEqual(
             parseNextDeadlineAfter(
@@ -90,8 +89,8 @@ suite("Date utils", () => {
                 CURRENT_TIME,
                 FUTURE_DATES.map((x) => ({ date: x, active: false })),
             ),
-            NO_DEADLINE_AVAILABLE,
-            `Parsed deadline from inactive future dates was expected to be "${NO_DEADLINE_AVAILABLE}"`,
+            parsedTarget,
+            `Parsed deadline from inactive future dates was expected to be "${parsedTarget}"`,
         );
     });
 });
