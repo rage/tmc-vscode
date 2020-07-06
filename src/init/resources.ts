@@ -172,7 +172,6 @@ export async function resourceInitialization(
     }
 
     const resources: Resources = new Resources(
-        storage,
         cssPath,
         extensionVersion,
         htmlPath,

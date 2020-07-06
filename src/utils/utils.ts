@@ -1,5 +1,5 @@
 import ClientOAuth2 = require("client-oauth2");
-import * as fs from "fs";
+import * as fs from "fs-extra";
 import * as fetch from "node-fetch";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
@@ -196,4 +196,24 @@ export function parseTestResultsText(value: string): string {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;")
         .replace(/`/g, "&#96;");
+}
+
+/**
+ * Tries to remove old data if extension restarted within 10 minutes of moving TMC Data and
+ * receiving error that some data could not be removed and has to be removed manually.
+ * @param oldDataObject
+ */
+export async function removeOldData(oldDataObject: {
+    path: string;
+    timestamp: number;
+}): Promise<Result<string, Error>> {
+    if (oldDataObject.timestamp + 10 * 60 * 1000 > Date.now()) {
+        try {
+            fs.removeSync(oldDataObject.path);
+        } catch (err) {
+            return new Err(new Error(`Still failed to remove data from ${oldDataObject.path}`));
+        }
+        return new Ok(`Removed successfully from ${oldDataObject.path}`);
+    }
+    return new Ok(`Time exceeded, will not remove data from ${oldDataObject.path}`);
 }
