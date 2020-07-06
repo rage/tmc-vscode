@@ -129,7 +129,7 @@
         }
     },
     "scripts": {
-        "vscode:prepublish": "webpack --config webpack.prod.js",
+        "vscode:prepublish": "npm run webpack",
         "compile": "ttsc -p ./",
         "watch": "ttsc -watch -p ./",
         "pretest": "npm run compile",
@@ -141,8 +141,8 @@
         "prettier-check": "prettier --check --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
         "prettier": "prettier --write --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
         "release": "./bin/publishRelease.sh",
-        "webpack": "webpack --config webpack.dev.js",
-        "webpack:watch": "webpack --config webpack.dev.js --watch --info-verbosity verbose"
+        "webpack": "webpack",
+        "webpack:watch": "webpack --watch --info-verbosity verbose"
     },
     "prettier": {
         "printWidth": 100,

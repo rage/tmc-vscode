@@ -10,14 +10,15 @@
             "problemMatcher": "$tsc-watch",
             "isBackground": true,
             "presentation": {
-                "reveal": "never"
+                "reveal": "silent"
             },
-            "group": "build"
+            "group": "test"
         },
         {
             "label": "webpackBuild",
             "type": "npm",
             "script": "webpack:watch",
+            "promptOnClose": false,
             "problemMatcher": {
                 "base": "$tsc-watch",
                 "background": {
@@ -27,10 +28,13 @@
                 }
             },
             "isBackground": true,
-            "presentation": {
-                "reveal": "never"
+            "group": {
+                "kind": "build",
+                "isDefault": true
             },
-            "group": "build"
+            "runOptions": {
+                "instanceLimit": 1
+            }
         }
     ]
 }
