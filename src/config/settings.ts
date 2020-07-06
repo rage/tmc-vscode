@@ -90,6 +90,9 @@ export default class Settings {
             case "dataPath":
                 this.settings.dataPath = data.value;
                 break;
+            case "oldDataPath":
+                this.settings.oldDataPath = { path: data.value, timestamp: Date.now() };
+                break;
             case "logLevel":
                 this.settings.logLevel = data.value;
                 break;

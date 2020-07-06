@@ -1,7 +1,5 @@
 import * as path from "path";
 
-import Storage from "./storage";
-
 export default class Resources {
     public readonly cssFolder: string;
     public readonly htmlFolder: string;
@@ -15,10 +13,8 @@ export default class Resources {
     private readonly tmcWorkspaceFilePathRelative: string;
     private readonly tmcExercisesFolderPathRelative: string;
     private readonly tmcClosedExercisesFolderPathRelative: string;
-    private readonly storage: Storage;
 
     constructor(
-        storage: Storage,
         cssFolder: string,
         extensionVersion: string,
         htmlFolder: string,
@@ -31,7 +27,6 @@ export default class Resources {
         tmcClosedExercisesFolderPathRelative: string,
         javaPath: string,
     ) {
-        this.storage = storage;
         this.cssFolder = cssFolder;
         this.extensionVersion = extensionVersion;
         this.htmlFolder = htmlFolder;

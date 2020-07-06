@@ -43,9 +43,11 @@ export type ExtensionSettings = {
     dataPath: string;
     logLevel: LogLevel;
     hideMetaFiles: boolean;
+    oldDataPath: { path: string; timestamp: number } | undefined;
 };
 
 export type ExtensionSettingsData =
     | { setting: "dataPath"; value: string }
+    | { setting: "oldDataPath"; value: string }
     | { setting: "logLevel"; value: LogLevel }
     | { setting: "hideMetaFiles"; value: boolean };
