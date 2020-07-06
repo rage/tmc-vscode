@@ -86,8 +86,18 @@ body.vscode-high-contrast tbody tr:nth-of-type(odd) {
     min-height: 125px;
 }
 
-.org-row:hover {
-    background-color: #CAC7C7;
+body.vscode-high-contrast .org-row:hover {
+    background-color: #3f3f3f;
+    cursor: pointer;
+}
+
+body.vscode-dark .org-row:hover {
+    background-color: #575757;
+    cursor: pointer;
+}
+
+body.vscode-light .org-row:hover {
+    background-color: #dddddd;
     cursor: pointer;
 }
 
@@ -142,6 +152,21 @@ body.vscode-high-contrast tbody tr:nth-of-type(odd) {
     text-decoration: none;
     display: inline-block;
     font-size: 16px;
+}
+
+body.vscode-high-contrast .show-all-button:hover {
+    background-color: #444444;
+    cursor: pointer;
+}
+
+body.vscode-dark .show-all-button:hover {
+    background-color: #646464;
+    cursor: pointer;
+}
+
+body.vscode-light .show-all-button:hover {
+    background-color: #cfcfcf;
+    cursor: pointer;
 }
 
 #context-menu {
