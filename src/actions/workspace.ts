@@ -13,13 +13,7 @@ import { OldSubmission } from "../api/types";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus } from "../config/types";
 import { ExerciseStatus as TextStatus, WebviewMessage } from "../ui/types";
-import {
-    askForConfirmation,
-    askForItem,
-    showError,
-    showNotification,
-    showProgressNotification,
-} from "../utils";
+import { askForItem, showError, showNotification, showProgressNotification } from "../utils";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 
 import { ActionContext, CourseExerciseDownloads } from "./types";
@@ -212,13 +206,21 @@ export async function checkForExerciseUpdates(
     return Array.from(coursesToUpdate.values());
 }
 
+interface ResetOptions {
+    /** Whether to submit current state, asks user if not defined. */
+    submitCurrent?: boolean;
+}
+
 /**
- * Sends given exercise to the server and resets it to initial state.
- * @param id ID of the exercise to reset
+ * Resets an exercise to its initial state. Optionally submits the exercise beforehand.
+ *
+ * @param id ID of the exercise to reset.
+ * @param options Optional parameters for predetermine action behavior.
  */
 export async function resetExercise(
     actionContext: ActionContext,
     id: number,
+    options?: ResetOptions,
 ): Promise<Result<void, Error>> {
     const { ui, tmc, workspaceManager, logger } = actionContext;
 
@@ -226,17 +228,24 @@ export async function resetExercise(
 
     if (exerciseData.err) {
         const message = "The data for this exercise seems to be missing";
-
         showError(message);
         return new Err(exerciseData.val);
     }
 
-    const saveOrNo = await askForConfirmation(
-        "Do you want to save the current state of the exercise by submitting it to TMC Server?",
-        true,
-    );
+    const submitFirst =
+        options?.submitCurrent !== undefined
+            ? options.submitCurrent
+            : await askForItem(
+                  "Do you want to save the current state of the exercise by submitting it to TMC Server?",
+                  false,
+                  ["Yes", true],
+                  ["No", false],
+                  ["Cancel", undefined],
+              );
 
-    if (saveOrNo) {
+    if (submitFirst === undefined) {
+        return Ok.EMPTY;
+    } else if (submitFirst) {
         const submitResult = await tmc.submitExercise(id);
         if (submitResult.err) {
             const message = `Reset canceled, failed to submit exercise: ${submitResult.val.name} - ${submitResult.val.message}`;
@@ -250,7 +259,6 @@ export async function resetExercise(
         }
     }
 
-    showNotification(`Resetting exercise ${exerciseData.val.name}`);
     ui.setStatusBar(`Resetting exercise ${exerciseData.val.name}`);
 
     const slug = exerciseData.val.organization;
@@ -327,23 +335,24 @@ export async function closeExercises(
 }
 
 /**
- * Downloads an old submission of a currently open exercise and prompts the user beforehand to
- * optionally submit their current exercise beforehand.
+ * Looks for older submissions of the given exercise and lets user choose which one to download.
+ * Uses resetExercise action before applying the contents of the actual submission.
  *
  * @param exerciseId exercise which older submission will be downloaded
- * @param actionContext
  */
 export async function downloadOldSubmissions(
     actionContext: ActionContext,
     exerciseId: number,
 ): Promise<void> {
     const { tmc, workspaceManager, logger } = actionContext;
+
     const exercise = workspaceManager.getExerciseDataById(exerciseId);
     if (exercise.err) {
         logger.error("Exercise data missing");
         showError("Exercise data missing");
         return;
     }
+
     const response = await getOldSubmissions(actionContext);
     if (response.err) {
         const message = `Something went wrong while fetching old submissions: ${response.val.message}`;
@@ -352,6 +361,7 @@ export async function downloadOldSubmissions(
         return;
     }
     if (response.val.length === 0) {
+        logger.log("No previoussubmissions found for exercise", exerciseId);
         showNotification("No previous submissions found for this exercise.");
         return;
     }
@@ -367,16 +377,23 @@ export async function downloadOldSubmissions(
         ]),
     );
 
-    if (submission === undefined) {
+    if (!submission) {
         return;
     }
 
-    const oldSub = await tmc.downloadOldExercise(actionContext, exercise.val.id, submission.id);
+    const resetResult = await resetExercise(actionContext, exerciseId);
+    if (resetResult.err) {
+        const message = `Something went wrong while downloading old submission for exercise: ${resetResult.val}`;
+        logger.error(message);
+        showError(message);
+        return;
+    }
+
+    const oldSub = await tmc.downloadOldExercise(exercise.val.id, submission.id);
     if (oldSub.err) {
         const message = `Something went wrong while downloading old submission for exercise: ${oldSub.val}`;
         logger.error(message);
         showError(message);
         return;
     }
-    showNotification(oldSub.val);
 }

@@ -101,15 +101,27 @@ export function registerCommands(
             }
 
             if (
-                await askForConfirmation(
+                !(await askForConfirmation(
                     `Are you sure you want to reset exercise ${exerciseData.val.name}?`,
                     false,
-                )
+                ))
             ) {
-                await resetExercise(actionContext, exerciseId);
-                workspaceManager.openExercise(exerciseId);
+                return;
+            }
+
+            const editor = vscode.window.activeTextEditor;
+            const resource = editor?.document.uri;
+            await resetExercise(actionContext, exerciseId);
+            workspaceManager.openExercise(exerciseId);
+
+            if (editor && resource) {
+                vscode.commands.executeCommand<undefined>(
+                    "vscode.open",
+                    resource,
+                    editor.viewColumn,
+                );
             } else {
-                showNotification(`Reset canceled for exercise ${exerciseData.val.name}.`);
+                logger.warn(`Active file for exercise ${exerciseId} returned undefined?`);
             }
         }),
     );
@@ -122,7 +134,18 @@ export function registerCommands(
                 showError(errorMessage);
                 return;
             }
-            downloadOldSubmissions(actionContext, exerciseId);
+            const editor = vscode.window.activeTextEditor;
+            const resource = editor?.document.uri;
+            await downloadOldSubmissions(actionContext, exerciseId);
+            if (editor && resource) {
+                vscode.commands.executeCommand<undefined>(
+                    "vscode.open",
+                    resource,
+                    editor.viewColumn,
+                );
+            } else {
+                logger.warn(`Active file for exercise ${exerciseId} returned undefined?`);
+            }
         }),
     );
 
