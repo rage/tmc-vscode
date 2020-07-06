@@ -50,17 +50,13 @@ export function parseNextDeadlineAfter(after: Date, deadlines: Deadline[]): stri
         return "No deadline";
     }
 
-    const activeDeadlines = validDeadlines.filter((x) => x.active);
     const next = findNextDateAfter(
         after,
-        activeDeadlines.map((x) => x.date),
+        validDeadlines.map((x) => x.date),
     );
+
     if (next) {
         return `Next deadline: ${dateToString(next)}`;
-    }
-
-    if (activeDeadlines.length === 0) {
-        return "Next deadline: Not available";
     }
 
     return "All deadlines have expired";

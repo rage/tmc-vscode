@@ -167,29 +167,32 @@ export async function displayLocalCourseDetails(
         });
     });
 
-    const exercisesDatam = Array.from(exerciseData.values())
+    const offlineMode = apiCourse === undefined;
+    const courseGroups = Array.from(exerciseData.values())
         .sort((a, b) => (a.name > b.name ? 1 : -1))
         .map((e) => {
             return {
                 ...e,
                 exercises: e.exercises.sort((a, b) => (a.name > b.name ? 1 : -1)),
-                nextDeadlineString: parseNextDeadlineAfter(
-                    currentDate,
-                    e.exercises.map((ex) => ({
-                        date: ex.isHard ? ex.hardDeadline : ex.softDeadline,
-                        active: !ex.passed,
-                    })),
-                ),
+                nextDeadlineString: offlineMode
+                    ? "Next deadline: Not available"
+                    : parseNextDeadlineAfter(
+                          currentDate,
+                          e.exercises.map((ex) => ({
+                              date: ex.isHard ? ex.hardDeadline : ex.softDeadline,
+                              active: !ex.passed,
+                          })),
+                      ),
             };
         });
 
     await ui.webview.setContentFromTemplate(
         {
             templateName: "course-details",
-            exerciseData: exercisesDatam,
+            exerciseData: courseGroups,
             course,
             courseId: course.id,
-            offlineMode: apiCourse === undefined,
+            offlineMode,
         },
         true,
         initialState,
