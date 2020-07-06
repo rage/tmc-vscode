@@ -3,8 +3,6 @@ import * as vscode from "vscode";
 
 import { OUTPUT_CHANNEL_NAME } from "../config/constants";
 
-import { superfluousPropertiesEnabled } from ".";
-
 export enum LogLevel {
     None = "none",
     Errors = "errors",
@@ -16,8 +14,8 @@ export default class Logger {
     private productionMode: boolean;
     private level: LogLevel;
     constructor() {
-        this.level = LogLevel.Errors;
-        this.productionMode = superfluousPropertiesEnabled();
+        this.level = LogLevel.Verbose;
+        this.productionMode = process.env.DEBUG_MODE === "production";
         this.productionMode ? this.setLogLevel(this.level) : this.setLogLevel(LogLevel.Debug);
     }
 

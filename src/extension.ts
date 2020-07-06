@@ -11,15 +11,14 @@ import { validateAndFix } from "./config/validate";
 import * as init from "./init";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
-import { showError, superfluousPropertiesEnabled } from "./utils/";
+import { showError } from "./utils/";
 import Logger from "./utils/logger";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    const productionMode = superfluousPropertiesEnabled();
     const logger = new Logger();
-    logger.log(`Starting extension in ${productionMode ? "production" : "development"} mode.`);
+    logger.log(`Starting extension in "${process.env.DEBUG_MODE || "production"}" mode.`);
     const storage = new Storage(context);
     const resourcesResult = await init.resourceInitialization(context, storage, logger);
     if (resourcesResult.err) {
