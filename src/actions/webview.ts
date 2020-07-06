@@ -131,7 +131,6 @@ export async function displayLocalCourseDetails(
                 organization: course.organization,
                 softDeadline: apiExercise.soft_deadline,
                 status: ExerciseStatus.MISSING,
-                updateAvailable: false,
             };
         }
         if (!exData) {
