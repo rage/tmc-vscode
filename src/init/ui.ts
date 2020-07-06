@@ -227,9 +227,10 @@ export function registerUiActions(actionContext: ActionContext): void {
                 if (!res.val) {
                     showNotification(
                         "Some files could not be removed from the previous workspace directory." +
-                            `They will have to be removed manually. ${old}`,
+                            `${old}`,
                         ["OK", (): void => {}],
                     );
+                    settings.updateSetting({ setting: "oldDataPath", value: old });
                 }
                 showNotification(`TMC Data was successfully moved to ${newPath}`, [
                     "OK",
