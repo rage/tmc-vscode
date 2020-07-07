@@ -24,6 +24,7 @@ import {
     LogLevel,
     showError,
     showNotification,
+    sleep,
 } from "../utils/";
 
 /**
@@ -221,7 +222,18 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (newPath === old) {
                 return;
             }
-            const res = await workspaceManager.moveFolder(old, newPath);
+            const res = await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: "TestMyCode",
+                },
+                async (p) => {
+                    p.report({ message: "Moving TMC Data folder..." });
+                    // Have to wait here to allow for the notification to show up.
+                    await sleep(50);
+                    return workspaceManager.moveFolder(old, newPath);
+                },
+            );
             if (res.ok) {
                 logger.log(`Moved workspace folder from ${old} to ${newPath}`);
                 if (!res.val) {
