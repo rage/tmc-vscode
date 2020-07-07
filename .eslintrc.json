@@ -32,6 +32,7 @@
         "quotes": "off",
         "@typescript-eslint/quotes": ["error"],
         "@typescript-eslint/explicit-function-return-type": "off",
+        "@typescript-eslint/explicit-module-boundary-types": "off",
         "@typescript-eslint/no-empty-function": "off",
         "@typescript-eslint/no-var-requires": "off",
         "@typescript-eslint/semi": ["error"],
@@ -67,6 +68,7 @@
             "files": ["*.ts", "*.tsx"],
             "rules": {
                 "@typescript-eslint/explicit-function-return-type": ["error"],
+                "@typescript-eslint/explicit-module-boundary-types": ["error"],
                 "@typescript-eslint/no-var-requires": ["error"]
             }
         }

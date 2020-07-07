@@ -1,8 +1,5 @@
 /*eslint-env browser*/
 
-// From merge, TODO: Fix
-/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-
 // Required for compilation, even if not referenced
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const createElement = require("./templateUtils").createElement;
@@ -49,9 +46,14 @@ function component(data) {
                     data-course-org={course.organization}
                     data-course-disabled={course.disabled}
                 >
-                    <div class="col-md">
+                    <div class="col-md-10">
                         <h2>{course.title}</h2>
                         <span>{course.description}</span>
+                    </div>
+                    <div class="col-md-2" style="text-align: right;">
+                        <button class="btn btn-primary" id="refresh-button" aria-label="Refresh">
+                            Refresh
+                        </button>
                     </div>
                 </div>
                 <div class="row py-1">
@@ -387,6 +389,7 @@ function script() {
 
     function refreshCards() {
         const exerciseCards = document.querySelectorAll("div.exercise-card");
+        let totalDownloading = 0;
         for (let i = 0; i < exerciseCards.length; i++) {
             const cardInfo = exerciseCards[i].querySelector("div.group-info");
             const exerciseTableRow = exerciseCards[i].querySelectorAll("tr.exercise-table-row");
@@ -413,6 +416,9 @@ function script() {
                         break;
                     case "closed":
                         closed++;
+                        break;
+                    case "downloading":
+                        totalDownloading++;
                         break;
                     case "new":
                     case "expired":
@@ -446,6 +452,7 @@ function script() {
                 `#opened-${name}`,
             ).innerText = `Open in workspace ${opened} / ${allExercises}`;
         }
+        document.getElementById("refresh-button").disabled = totalDownloading > 0;
     }
 
     document.addEventListener("DOMContentLoaded", function () {
@@ -460,6 +467,18 @@ function script() {
             },
             { once: true },
         );
+
+        const refreshButton = document.getElementById("refresh-button");
+        if (refreshButton) {
+            refreshButton.addEventListener(
+                "click",
+                function () {
+                    refreshButton.disabled = true;
+                    vscode.postMessage({ type: "courseDetails", id: parseInt(course.courseId) });
+                },
+                { once: true },
+            );
+        }
 
         // Course details
         const updateNotification = document.getElementById("update-notification");
@@ -515,9 +534,6 @@ function script() {
             if (downloadAllButton) {
                 downloadAllButton.addEventListener("click", function () {
                     downloadAllButton.disabled = true;
-                    if (toggleButton && exerciseTable && exerciseTable.style.display === "none") {
-                        toggleButton.click();
-                    }
                     const ids = downloadAllButton.dataset.exercises
                         .split(",")
                         .map((id) => parseInt(id));
