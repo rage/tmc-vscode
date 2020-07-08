@@ -474,7 +474,12 @@ function script() {
                 "click",
                 function () {
                     refreshButton.disabled = true;
-                    vscode.postMessage({ type: "courseDetails", id: parseInt(course.courseId) });
+                    refreshButton.innerHTML = `<span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>Refreshing`;
+                    vscode.postMessage({
+                        type: "courseDetails",
+                        id: parseInt(course.courseId),
+                        useCache: false,
+                    });
                 },
                 { once: true },
             );
