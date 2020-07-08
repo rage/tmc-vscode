@@ -13,10 +13,7 @@
             "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
             "outFiles": ["${workspaceFolder}/dist/**/*.js"],
             "preLaunchTask": "webpackBuild",
-            "sourceMaps": true,
-            "env": {
-                "DEBUG_MODE": "${input:debugMode}"
-            }
+            "sourceMaps": true
         },
         {
             "name": "Extension Tests",
@@ -29,15 +26,6 @@
             ],
             "outFiles": ["${workspaceFolder}/out/test/**/*.js"],
             "preLaunchTask": "testBuild"
-        }
-    ],
-    "inputs": [
-        {
-            "type": "pickString",
-            "id": "debugMode",
-            "description": "Select launch mode",
-            "options": ["debug", "debugLocal", "production"],
-            "default": "debug"
         }
     ]
 }
