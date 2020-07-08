@@ -1,10 +1,13 @@
 import express from "express";
 
-import { orgsRouter } from "./controllers";
+import { langsRounter, orgsRouter } from "./controllers";
 
 const PORT = 4001;
 
 const app = express();
+
+app.use("/langs", langsRounter);
+
 app.use("/org", orgsRouter);
 app.use("/org.json", orgsRouter);
 app.use("/core/org", orgsRouter);

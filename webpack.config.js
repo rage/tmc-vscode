@@ -82,7 +82,9 @@ const config = () => {
                 ),
                 __TMC_JAR_NAME__: JSON.stringify("tmc-langs-cli-0.8.5-SNAPSHOT.jar"),
                 __TMC_JAR_URL__: JSON.stringify(
-                    "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.8.5-SNAPSHOT.jar",
+                    localBackend
+                        ? "http://localhost:4001/langs"
+                        : "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.8.5-SNAPSHOT.jar",
                 ),
             }),
         ],

@@ -9,6 +9,7 @@ src/**
 test-resources/**
 types/**
 
+**/.eslintcache
 **/.gitattributes
 **/.gitignore
 **/.eslintignore
@@ -25,6 +26,9 @@ types/**
 # **/*.svg
 **/*.png
 !media/TMC.png
+
+# Development backend
+backend/**
 
 # Webpack configuration
 webpack.common.js
