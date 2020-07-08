@@ -154,20 +154,26 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
         },
     );
-    ui.webview.registerHandler("courseDetails", (msg: { type?: "courseDetails"; id?: number }) => {
-        if (!(msg.type && msg.id)) {
-            return;
-        }
-        const courseId: number = msg.id;
-        displayLocalCourseDetails(actionContext, msg.id);
-        const uiState = ui.webview.getStateId();
-        // Try to fetch updates from API
-        updateCourse(actionContext, courseId).then(() =>
-            uiState === ui.webview.getStateId()
-                ? displayLocalCourseDetails(actionContext, courseId)
-                : {},
-        );
-    });
+    ui.webview.registerHandler(
+        "courseDetails",
+        async (msg: { type?: "courseDetails"; id?: number; useCache?: boolean }) => {
+            if (!(msg.type && msg.id)) {
+                return;
+            }
+            const courseId: number = msg.id;
+            const uiState = ui.webview.getStateId();
+
+            if (msg.useCache) {
+                displayLocalCourseDetails(actionContext, courseId);
+            } else {
+                updateCourse(actionContext, courseId).then(() =>
+                    uiState === ui.webview.getStateId()
+                        ? displayLocalCourseDetails(actionContext, courseId)
+                        : {},
+                );
+            }
+        },
+    );
     ui.webview.registerHandler(
         "openSelected",
         async (msg: { type?: "openSelected"; ids?: number[] }) => {

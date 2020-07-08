@@ -552,6 +552,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
 
 /**
  * Keeps the user course exercises, points and course data up to date.
+ * Refreshes the userData.
  * @param id Course id
  */
 export async function updateCourse(actionContext: ActionContext, id: number): Promise<void> {
