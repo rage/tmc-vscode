@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import TMC from "./api/tmc";
+import VSCApi from "./api/vscode";
 import WorkspaceManager from "./api/workspaceManager";
 import { EXERCISE_CHECK_INTERVAL } from "./config/constants";
 import Settings from "./config/settings";
@@ -19,7 +20,9 @@ let maintenanceInterval: NodeJS.Timeout | undefined;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const logger = new Logger();
     logger.log(`Starting extension in "${process.env.DEBUG_MODE || "production"}" mode.`);
+
     const storage = new Storage(context);
+
     const resourcesResult = await init.resourceInitialization(context, storage, logger);
     if (resourcesResult.err) {
         const message = `TestMyCode Initialization failed: ${resourcesResult.val}`;
@@ -32,19 +35,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const settingsResult = await init.settingsInitialization(storage, resources, logger);
     const settings = new Settings(storage, logger, settingsResult, resources);
     logger.setLogLevel(settings.getLogLevel());
-    await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
-    logger.log(`VSCode version: ${vscode.version}`);
+    const vsc = new VSCApi(settings, logger);
+    await vsc.activate();
+
+    logger.log(`VSCode version: ${vsc.getVSCodeVersion()}`);
     logger.log(`TMC extension version: ${resources.extensionVersion}`);
-    logger.log(
-        `Python extension version: ${
-            vscode.extensions.getExtension("ms-python.python")?.packageJSON.version
-        }`,
-    );
+    logger.log(`Python extension version: ${vsc.getExtensionVersion("ms-python.python")}`);
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
+    const tmc = new TMC(storage, resources, vsc, logger);
 
-    const tmc = new TMC(storage, resources, logger);
     const validationResult = await validateAndFix(storage, tmc, ui, resources, logger);
     if (validationResult.err) {
         const message = `Data reconstruction failed: ${validationResult.val.message}`;
@@ -63,6 +64,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         settings,
         temporaryWebviewProvider,
         tmc,
+        vsc,
         ui,
         userData,
         workspaceManager,

@@ -1,4 +1,5 @@
 import TMC from "../api/tmc";
+import VSCApi from "../api/vscode";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import Settings from "../config/settings";
@@ -13,6 +14,7 @@ export type ActionContext = {
     settings: Settings;
     temporaryWebviewProvider: TemporaryWebviewProvider;
     tmc: TMC;
+    vsc: VSCApi;
     ui: UI;
     userData: UserData;
     workspaceManager: WorkspaceManager;

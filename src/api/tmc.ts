@@ -49,6 +49,7 @@ import {
     TmcLangsResponse,
     TmcLangsTestResults,
 } from "./types";
+import VSCApi from "./vscode";
 import WorkspaceManager from "./workspaceManager";
 
 /**
@@ -59,6 +60,7 @@ export default class TMC {
     private token: ClientOauth2.Token | undefined;
     private readonly storage: Storage;
     private readonly resources: Resources;
+    private readonly vsc: VSCApi;
     private readonly tmcApiUrl: string;
     private readonly tmcDefaultHeaders: { client: string; client_version: string };
     private logger: Logger;
@@ -71,7 +73,7 @@ export default class TMC {
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage, resources: Resources, logger: Logger) {
+    constructor(storage: Storage, resources: Resources, vsc: VSCApi, logger: Logger) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: ACCESS_TOKEN_URI,
             clientId: CLIENT_ID,
@@ -79,6 +81,7 @@ export default class TMC {
         });
         this.storage = storage;
         this.logger = logger;
+        this.vsc = vsc;
         const authToken = storage.getAuthenticationToken();
         if (authToken) {
             this.token = new ClientOauth2.Token(this.oauth2, authToken);
@@ -397,10 +400,11 @@ export default class TMC {
         if (exerciseFolderPath.err) {
             return [Promise.resolve(new Err(new Error("???"))), (): void => {}];
         }
-
+        const executablePath = this.vsc.getActiveEditorExecutablePath();
         const [testRunner, interrupt] = this.executeLangsAction({
             action: "run-tests",
             exerciseFolderPath: exerciseFolderPath.val,
+            executablePath,
         });
 
         return [this.checkApiResponse(testRunner, createIs<TmcLangsTestResults>()), interrupt];
@@ -497,6 +501,7 @@ export default class TMC {
         const action = tmcLangsAction.action;
         let exercisePath = "";
         let outputPath = "";
+        let executablePath: string | undefined = undefined;
 
         switch (tmcLangsAction.action) {
             case "extract-project":
@@ -512,6 +517,7 @@ export default class TMC {
                 ];
                 break;
             case "run-tests":
+                executablePath = tmcLangsAction.executablePath;
                 exercisePath = tmcLangsAction.exerciseFolderPath;
                 outputPath = path.join(
                     this.resources.getDataPath(),
@@ -526,6 +532,8 @@ export default class TMC {
                 );
                 break;
         }
+
+        this.logger.log("ExecutablePath", executablePath);
 
         const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
