@@ -3,4 +3,5 @@
 dist
 **/node_modules
 out
+test-resources/
 .vscode-test/

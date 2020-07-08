@@ -6,6 +6,7 @@ bin/**
 node_modules/**
 out/**
 src/**
+test-resources/**
 types/**
 
 **/.gitattributes

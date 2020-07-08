@@ -141,6 +141,9 @@
         "prettier-check": "prettier --check --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
         "prettier": "prettier --write --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
         "release": "./bin/publishRelease.sh",
+        "ui-test": "npm run ui-test:setup && npm run ui-test:run",
+        "ui-test:run": "npm run compile && extest run-tests out/ui-test/*.js",
+        "ui-test:setup": "extest setup-tests",
         "webpack": "webpack",
         "webpack:watch": "webpack --watch --info-verbosity verbose"
     },
@@ -184,6 +187,7 @@
         "ttypescript": "^1.5.10",
         "typemoq": "^2.1.0",
         "typescript": "^3.9.5",
+        "vscode-extension-tester": "^3.0.2",
         "vscode-test": "^1.4.0",
         "webpack": "^4.42.1",
         "webpack-cli": "^3.3.11",
