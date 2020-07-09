@@ -75,7 +75,15 @@ export async function logout(
  * Tests an exercise while keeping the user informed
  */
 export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, tmc, userData, workspaceManager, logger, temporaryWebviewProvider } = actionContext;
+    const {
+        ui,
+        tmc,
+        userData,
+        workspaceManager,
+        logger,
+        temporaryWebviewProvider,
+        vsc,
+    } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         const message = `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`;
@@ -93,7 +101,8 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
     if (!courseExamMode.perhapsExamMode) {
-        const [testRunner, interrupt] = tmc.runTests(id);
+        const executablePath = vsc.getActiveEditorExecutablePath();
+        const [testRunner, interrupt] = tmc.runTests(id, executablePath);
         let aborted = false;
         const exerciseName = exerciseDetails.val.name;
 

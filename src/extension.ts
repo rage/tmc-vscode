@@ -43,7 +43,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger.log(`Python extension version: ${vsc.getExtensionVersion("ms-python.python")}`);
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
-    const tmc = new TMC(storage, resources, vsc, logger);
+    const tmc = new TMC(storage, resources, logger);
 
     const validationResult = await validateAndFix(storage, tmc, ui, resources, logger);
     if (validationResult.err) {

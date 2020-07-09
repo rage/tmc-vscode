@@ -49,7 +49,6 @@ import {
     TmcLangsResponse,
     TmcLangsTestResults,
 } from "./types";
-import VSC from "./vscode";
 import WorkspaceManager from "./workspaceManager";
 
 /**
@@ -60,7 +59,6 @@ export default class TMC {
     private token: ClientOauth2.Token | undefined;
     private readonly storage: Storage;
     private readonly resources: Resources;
-    private readonly vsc: VSC;
     private readonly tmcApiUrl: string;
     private readonly tmcDefaultHeaders: { client: string; client_version: string };
     private logger: Logger;
@@ -73,7 +71,7 @@ export default class TMC {
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage, resources: Resources, vsc: VSC, logger: Logger) {
+    constructor(storage: Storage, resources: Resources, logger: Logger) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: ACCESS_TOKEN_URI,
             clientId: CLIENT_ID,
@@ -81,7 +79,6 @@ export default class TMC {
         });
         this.storage = storage;
         this.logger = logger;
-        this.vsc = vsc;
         const authToken = storage.getAuthenticationToken();
         if (authToken) {
             this.token = new ClientOauth2.Token(this.oauth2, authToken);
@@ -392,7 +389,10 @@ export default class TMC {
      * Runs tests locally for an exercise
      * @param id Id of the exercise
      */
-    public runTests(id: number): [Promise<Result<TmcLangsTestResults, Error>>, () => void] {
+    public runTests(
+        id: number,
+        executablePath?: string,
+    ): [Promise<Result<TmcLangsTestResults, Error>>, () => void] {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
@@ -400,7 +400,7 @@ export default class TMC {
         if (exerciseFolderPath.err) {
             return [Promise.resolve(new Err(new Error("???"))), (): void => {}];
         }
-        const executablePath = this.vsc.getActiveEditorExecutablePath();
+
         const [testRunner, interrupt] = this.executeLangsAction({
             action: "run-tests",
             exerciseFolderPath: exerciseFolderPath.val,
