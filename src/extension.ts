@@ -34,12 +34,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const settingsResult = await init.settingsInitialization(storage, resources, logger);
     const settings = new Settings(storage, logger, settingsResult, resources);
     logger.setLogLevel(settings.getLogLevel());
-    if (settings.isBeta()) {
-        logger.warn("Using beta channel.");
-    }
 
     const vsc = new VSC(settings, logger);
     await vsc.activate();
+
+    const currentVersion = resources.extensionVersion;
+    const previousVersion = storage.getExtensionVersion();
+    if (currentVersion !== previousVersion) {
+        storage.updateExtensionVersion(currentVersion);
+        // settings.isBeta() ? showBetaHTMLPAGE : showChangeLog?
+    }
+    if (settings.isBeta()) {
+        logger.warn("Using beta channel.");
+    }
 
     logger.log(`VSCode version: ${vsc.getVSCodeVersion()}`);
     logger.log(`TMC extension version: ${resources.extensionVersion}`);
