@@ -1,6 +1,6 @@
 import { Err, Ok, Result } from "ts-results";
 
-import Logger from "../utils/logger";
+import { Logger } from "../utils/logger";
 
 import Storage from "./storage";
 import { LocalCourseData, LocalCourseExercise } from "./types";
@@ -9,10 +9,8 @@ export class UserData {
     private courses: Map<number, LocalCourseData>;
     private passedExercises: Set<number> = new Set();
     private storage: Storage;
-    private logger: Logger;
-    constructor(storage: Storage, logger: Logger) {
+    constructor(storage: Storage) {
         const persistentData = storage.getUserData();
-        this.logger = logger;
         if (persistentData) {
             this.courses = new Map(persistentData.courses.map((x) => [x.id, x]));
 
@@ -47,7 +45,7 @@ export class UserData {
         if (this.courses.has(data.id)) {
             throw new Error("Trying to add an already existing course");
         }
-        this.logger.log(`Adding course ${data.name} to My courses`);
+        Logger.log(`Adding course ${data.name} to My courses`);
         this.courses.set(data.id, data);
         this.updatePersistentData();
     }
@@ -83,7 +81,7 @@ export class UserData {
                 ),
             );
         courseData.newExercises.length > 0
-            ? this.logger.log(
+            ? Logger.log(
                   `Found ${courseData.newExercises.length} new exercises for ${courseData.name}`,
               )
             : {};
@@ -124,7 +122,7 @@ export class UserData {
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
-        this.logger.log(`Clearing new exercises for ${courseData.name}`);
+        Logger.log(`Clearing new exercises for ${courseData.name}`);
         courseData.newExercises = [];
         await this.updatePersistentData();
         return Ok.EMPTY;
@@ -144,7 +142,7 @@ export class UserData {
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
-        this.logger.log(
+        Logger.log(
             `Notifying user for course ${courseData.name} again at ${new Date(
                 dateInMillis,
             ).toString()}`,
