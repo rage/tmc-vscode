@@ -6,9 +6,9 @@ import * as vscode from "vscode";
 import { WORKSPACE_ROOT_FILE, WORKSPACE_ROOT_FILE_TEXT } from "../config/constants";
 import Resources from "../config/resources";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
-import { showError } from "../utils";
 import Logger from "../utils/logger";
 
+import { showError } from "./vscode";
 import WorkspaceManager from "./workspaceManager";
 
 export default class WorkspaceWatcher {

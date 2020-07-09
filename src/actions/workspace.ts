@@ -10,10 +10,10 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { OldSubmission } from "../api/types";
+import { askForItem, showError, showNotification, showProgressNotification } from "../api/vscode";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus } from "../config/types";
 import { ExerciseStatus as TextStatus, WebviewMessage } from "../ui/types";
-import { askForItem, showError, showNotification, showProgressNotification } from "../utils";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 
 import { ActionContext, CourseExerciseDownloads } from "./types";

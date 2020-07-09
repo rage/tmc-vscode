@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import TMC from "./api/tmc";
-import VSC from "./api/vscode";
+import VSC, { showError } from "./api/vscode";
 import WorkspaceManager from "./api/workspaceManager";
 import { EXERCISE_CHECK_INTERVAL } from "./config/constants";
 import Settings from "./config/settings";
@@ -12,7 +12,6 @@ import { validateAndFix } from "./config/validate";
 import * as init from "./init";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
-import { showError } from "./utils/";
 import Logger from "./utils/logger";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;

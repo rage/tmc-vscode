@@ -17,15 +17,9 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
+import { askForConfirmation, showError, showNotification } from "../api/vscode";
 import { ExerciseStatus } from "../config/types";
-import {
-    askForConfirmation,
-    isWorkspaceOpen,
-    LogLevel,
-    showError,
-    showNotification,
-    sleep,
-} from "../utils/";
+import { isWorkspaceOpen, LogLevel, sleep } from "../utils/";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
