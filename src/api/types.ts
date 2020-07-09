@@ -256,6 +256,7 @@ export type TmcLangsAction =
     | {
           action: "run-tests";
           exerciseFolderPath: string;
+          executablePath: string | undefined;
       }
     | {
           action: "get-exercise-packaging-configuration";

@@ -389,7 +389,10 @@ export default class TMC {
      * Runs tests locally for an exercise
      * @param id Id of the exercise
      */
-    public runTests(id: number): [Promise<Result<TmcLangsTestResults, Error>>, () => void] {
+    public runTests(
+        id: number,
+        executablePath?: string,
+    ): [Promise<Result<TmcLangsTestResults, Error>>, () => void] {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
@@ -401,6 +404,7 @@ export default class TMC {
         const [testRunner, interrupt] = this.executeLangsAction({
             action: "run-tests",
             exerciseFolderPath: exerciseFolderPath.val,
+            executablePath,
         });
 
         return [this.checkApiResponse(testRunner, createIs<TmcLangsTestResults>()), interrupt];
@@ -497,6 +501,7 @@ export default class TMC {
         const action = tmcLangsAction.action;
         let exercisePath = "";
         let outputPath = "";
+        let executablePath: string | undefined = undefined;
 
         switch (tmcLangsAction.action) {
             case "extract-project":
@@ -512,6 +517,7 @@ export default class TMC {
                 ];
                 break;
             case "run-tests":
+                executablePath = tmcLangsAction.executablePath;
                 exercisePath = tmcLangsAction.exerciseFolderPath;
                 outputPath = path.join(
                     this.resources.getDataPath(),
@@ -526,6 +532,8 @@ export default class TMC {
                 );
                 break;
         }
+
+        this.logger.log("ExecutablePath", executablePath);
 
         const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
