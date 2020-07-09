@@ -34,6 +34,8 @@ export async function settingsInitialization(
         }
         logger.log("Tried to remove old data", result);
     }
+    const betaChannel =
+        settings?.betaChannel !== undefined ? settings.betaChannel : Math.random() < 0.1;
     const tmcDataPath = settings?.dataPath || resources.getDataPath();
     const logLevel =
         is<LogLevel>(settings?.logLevel) && settings?.logLevel
@@ -42,6 +44,7 @@ export async function settingsInitialization(
     const hideMetaFiles = settings?.hideMetaFiles !== undefined ? settings.hideMetaFiles : true;
 
     const fixedSettings: ExtensionSettings = {
+        betaChannel: betaChannel,
         dataPath: tmcDataPath,
         oldDataPath: undefined,
         logLevel,

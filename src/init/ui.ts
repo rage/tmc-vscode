@@ -286,6 +286,14 @@ export function registerUiActions(actionContext: ActionContext): void {
         },
     );
 
+    ui.webview.registerHandler("betaChannel", (msg: { type?: "betaChannel"; data?: boolean }) => {
+        if (!(msg.type && msg.data !== undefined)) {
+            return;
+        }
+        settings.updateSetting({ setting: "betaChannel", value: msg.data });
+        openSettings(actionContext);
+    });
+
     ui.webview.registerHandler("showLogsToUser", (msg: { type?: "showLogsToUser" }) => {
         if (!msg.type) {
             return;
