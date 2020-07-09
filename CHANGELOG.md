@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.3] - 2020-07-08
+
+#### Fixed
+- Refresh button was using cache data.
+
+
 ## [0.8.2] - 2020-07-07
 
 #### Added

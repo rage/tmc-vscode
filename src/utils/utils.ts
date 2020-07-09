@@ -7,12 +7,12 @@ import * as vscode from "vscode";
 
 import { FeedbackQuestion } from "../actions/types";
 import { SubmissionFeedbackQuestion } from "../api/types";
+import { showNotification } from "../api/vscode";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import { LocalExerciseData } from "../config/types";
 import { ConnectionError } from "../errors";
 
-import { showNotification } from "./dialog";
 import { superfluousPropertiesEnabled } from "./env";
 
 /**

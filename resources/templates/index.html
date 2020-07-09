@@ -116,7 +116,7 @@
             }
 
             function fetchCourseDetails(id) {
-                vscode.postMessage({ type: "courseDetails", id: id });
+                vscode.postMessage({ type: "courseDetails", id: id, useCache: true });
             }
         </script>
     </body>

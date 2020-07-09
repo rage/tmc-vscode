@@ -9,18 +9,16 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { OldSubmission, SubmissionFeedback } from "../api/types";
+import { askForConfirmation, showError, showNotification } from "../api/vscode";
 import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
 import { AuthorizationError, ConnectionError } from "../errors";
 import { TestResultData, VisibilityGroups } from "../ui/types";
 import {
-    askForConfirmation,
     formatSizeInBytes,
     getCurrentExerciseData,
     isWorkspaceOpen,
     parseFeedbackQuestion,
-    showError,
-    showNotification,
     sleep,
 } from "../utils/";
 
@@ -77,7 +75,15 @@ export async function logout(
  * Tests an exercise while keeping the user informed
  */
 export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, tmc, userData, workspaceManager, logger, temporaryWebviewProvider } = actionContext;
+    const {
+        ui,
+        tmc,
+        userData,
+        workspaceManager,
+        logger,
+        temporaryWebviewProvider,
+        vsc,
+    } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         const message = `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`;
@@ -95,7 +101,8 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
     if (!courseExamMode.perhapsExamMode) {
-        const [testRunner, interrupt] = tmc.runTests(id);
+        const executablePath = vsc.getActiveEditorExecutablePath();
+        const [testRunner, interrupt] = tmc.runTests(id, executablePath);
         let aborted = false;
         const exerciseName = exerciseDetails.val.name;
 
@@ -173,7 +180,15 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
  * @param tempView Existing TemporaryWebview to use if any
  */
 export async function submitExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, temporaryWebviewProvider, tmc, userData, workspaceManager, logger } = actionContext;
+    const {
+        ui,
+        temporaryWebviewProvider,
+        tmc,
+        vsc,
+        userData,
+        workspaceManager,
+        logger,
+    } = actionContext;
     logger.log(
         `Submitting exercise ${workspaceManager.getExerciseDataById(id).val.name} to server`,
     );
@@ -220,7 +235,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
                 if (msg.type === "closeWindow") {
                     temp.dispose();
                 } else if (msg.type === "showInBrowser") {
-                    vscode.env.openExternal(vscode.Uri.parse(submitUrl));
+                    vsc.openUri(submitUrl);
                 }
             },
         });
@@ -238,9 +253,9 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
                 msg.data.feedback as SubmissionFeedback,
             );
         } else if (msg.type === "showInBrowser") {
-            vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
+            vsc.openUri(submitResult.val.show_submission_url);
         } else if (msg.type === "showSolutionInBrowser" && msg.data) {
-            vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
+            vsc.openUri(msg.data.solutionUrl as string);
         } else if (msg.type === "closeWindow") {
             temp.dispose();
         }
@@ -301,9 +316,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
                 [
                     "Open URL and move on...",
                     (): void => {
-                        vscode.env.openExternal(
-                            vscode.Uri.parse(submitResult.val.show_submission_url),
-                        );
+                        vsc.openUri(submitResult.val.show_submission_url);
                         getStatus = false;
                         temp.dispose();
                     },
@@ -416,9 +429,9 @@ export async function checkForNewExercises(
  * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
  */
 export async function openWorkspace(actionContext: ActionContext): Promise<void> {
-    const { resources, logger } = actionContext;
-    const currentWorkspaceFile = vscode.workspace.workspaceFile;
-    const tmcWorkspaceFile = vscode.Uri.file(resources.getWorkspaceFilePath());
+    const { resources, logger, vsc } = actionContext;
+    const currentWorkspaceFile = vsc.getWorkspaceFile();
+    const tmcWorkspaceFile = vsc.toUri(resources.getWorkspaceFilePath());
 
     if (!isWorkspaceOpen(resources)) {
         logger.log(`Current workspace: ${currentWorkspaceFile}`);
@@ -433,16 +446,11 @@ export async function openWorkspace(actionContext: ActionContext): Promise<void>
             // Restarts VSCode
         } else {
             const choice = "Close current and open TMC Workspace";
-            await vscode.window
-                .showErrorMessage(
-                    "Please close your current workspace before using TestMyCode.",
-                    choice,
-                )
-                .then((selection) => {
-                    if (selection === choice) {
-                        vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
-                    }
-                });
+            await showError("Please close your current workspace before using TestMyCode.", [
+                choice,
+                (): Thenable<unknown> =>
+                    vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile),
+            ]);
         }
     }
 }
@@ -552,6 +560,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
 
 /**
  * Keeps the user course exercises, points and course data up to date.
+ * Refreshes the userData.
  * @param id Course id
  */
 export async function updateCourse(actionContext: ActionContext, id: number): Promise<void> {

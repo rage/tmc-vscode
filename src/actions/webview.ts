@@ -114,6 +114,11 @@ export async function displayLocalCourseDetails(
         ?.course;
     const currentDate = new Date();
 
+    /* Emergency solution.
+    Match cached api data (obtained by entering My courses, which updates cache) to existing
+    userdata for the webview, because we no longer show only downloaded exercises.
+    (except offline mode) 
+    */
     course.exercises.forEach((ex) => {
         const nameMatch = ex.name.match(/(\w+)-(.+)/);
         const groupName = nameMatch?.[1] || "";

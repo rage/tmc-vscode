@@ -6,6 +6,7 @@ import { Err, Ok, Result } from "ts-results";
 import * as unzipper from "unzipper";
 import * as vscode from "vscode";
 
+import { showProgressNotification } from "../api/vscode";
 import {
     EXTENSION_ID,
     JAVA_ZIP_URLS,
@@ -17,7 +18,7 @@ import {
 } from "../config/constants";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
-import { downloadFile, getPlatform, isJavaPresent, showProgressNotification } from "../utils/";
+import { downloadFile, getPlatform, isJavaPresent } from "../utils/";
 import Logger from "../utils/logger";
 
 /**

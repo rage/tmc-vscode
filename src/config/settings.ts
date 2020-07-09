@@ -141,7 +141,7 @@ export default class Settings {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private updateWorkspaceSetting(section: string, value: any): void {
         if (isWorkspaceOpen(this.resources)) {
-            const oldValue = this.getWorkspaceSetting(section);
+            const oldValue = this.getWorkspaceSettings(section);
             let newValue = value;
             if (value instanceof Object) {
                 newValue = { ...oldValue, ...value };
@@ -156,7 +156,7 @@ export default class Settings {
      * Returns the section for the Workspace setting. If undefined, returns all settings.
      * @param section A dot-separated identifier.
      */
-    private getWorkspaceSetting(section?: string): vscode.WorkspaceConfiguration | undefined {
+    public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration | undefined {
         if (isWorkspaceOpen(this.resources)) {
             return vscode.workspace.getConfiguration(
                 section,
