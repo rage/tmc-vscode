@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import TMC from "./api/tmc";
-import VSCApi from "./api/vscode";
+import VSC from "./api/vscode";
 import WorkspaceManager from "./api/workspaceManager";
 import { EXERCISE_CHECK_INTERVAL } from "./config/constants";
 import Settings from "./config/settings";
@@ -36,7 +36,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const settings = new Settings(storage, logger, settingsResult, resources);
     logger.setLogLevel(settings.getLogLevel());
 
-    const vsc = new VSCApi(settings, logger);
+    const vsc = new VSC(settings, logger);
     await vsc.activate();
 
     logger.log(`VSCode version: ${vsc.getVSCodeVersion()}`);

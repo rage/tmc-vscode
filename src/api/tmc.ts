@@ -49,7 +49,7 @@ import {
     TmcLangsResponse,
     TmcLangsTestResults,
 } from "./types";
-import VSCApi from "./vscode";
+import VSC from "./vscode";
 import WorkspaceManager from "./workspaceManager";
 
 /**
@@ -60,7 +60,7 @@ export default class TMC {
     private token: ClientOauth2.Token | undefined;
     private readonly storage: Storage;
     private readonly resources: Resources;
-    private readonly vsc: VSCApi;
+    private readonly vsc: VSC;
     private readonly tmcApiUrl: string;
     private readonly tmcDefaultHeaders: { client: string; client_version: string };
     private logger: Logger;
@@ -73,7 +73,7 @@ export default class TMC {
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage, resources: Resources, vsc: VSCApi, logger: Logger) {
+    constructor(storage: Storage, resources: Resources, vsc: VSC, logger: Logger) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: ACCESS_TOKEN_URI,
             clientId: CLIENT_ID,

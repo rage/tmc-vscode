@@ -3,7 +3,10 @@ import * as vscode from "vscode";
 import Settings from "../config/settings";
 import Logger from "../utils/logger";
 
-export default class VSCApi {
+/**
+ * A Class for interacting with the Visual Studio Code.
+ */
+export default class VSC {
     private readonly settings: Settings;
     private logger: Logger;
 
@@ -25,9 +28,7 @@ export default class VSCApi {
     }
 
     /**
-     * Returns python executable for active text editor if open and python extension is active.
-     * @param actionContext
-     * @param document
+     * Returns python executable path for ms-python.python extension.
      */
     private getPythonPath(document: vscode.TextDocument): string | undefined {
         try {
@@ -57,6 +58,11 @@ export default class VSCApi {
         }
     }
 
+    /**
+     * Get the active text editor and figure out the language ID
+     * and the executable path from recommended extensions
+     * If languageID not supported, returns undefined.
+     */
     public getActiveEditorExecutablePath(): string | undefined {
         const resource = vscode.window.activeTextEditor;
         if (!resource) {
