@@ -75,7 +75,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     };
 
     if (settings.isInsider()) {
-        logger.warn("Using insider version.");
+        Logger.warn("Using insider version.");
         if (currentVersion !== previousVersion) {
             showNotification(
                 "A new version of the extension has been released. " +
