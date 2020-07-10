@@ -603,35 +603,37 @@ function script() {
     });
 
     window.addEventListener("message", function (event) {
-        for (let i = 0; i < event.data.length; i++) {
-            /**@type {import("../types").WebviewMessage} */
-            const message = event.data[i];
-            switch (message.command) {
-                case "exerciseStatusChange": {
-                    const element = document.getElementById(
-                        `exercise-${message.exerciseId}-status`,
-                    );
-                    setStatusBadge(element, message.status);
-                    break;
-                }
-                case "setUpdateables": {
-                    const notification = document.getElementById("update-notification");
-                    const button = notification.querySelector("button#update-button");
-                    if (message.exerciseIds.length === 0) {
-                        button.disabled = true;
-                        notification.style.display = "none";
-                    } else {
-                        button.disabled = false;
-                        button.dataset.exercises = message.exerciseIds;
-                        notification.style.display = "block";
+        if (event.origin.split(":")[0] === "vscode-webview") {
+            for (let i = 0; i < event.data.length; i++) {
+                /**@type {import("../types").WebviewMessage} */
+                const message = event.data[i];
+                switch (message.command) {
+                    case "exerciseStatusChange": {
+                        const element = document.getElementById(
+                            `exercise-${message.exerciseId}-status`,
+                        );
+                        setStatusBadge(element, message.status);
+                        break;
                     }
-                    break;
+                    case "setUpdateables": {
+                        const notification = document.getElementById("update-notification");
+                        const button = notification.querySelector("button#update-button");
+                        if (message.exerciseIds.length === 0) {
+                            button.disabled = true;
+                            notification.style.display = "none";
+                        } else {
+                            button.disabled = false;
+                            button.dataset.exercises = message.exerciseIds;
+                            notification.style.display = "block";
+                        }
+                        break;
+                    }
+                    default:
+                        console.log("Unsupported command", message.command);
                 }
-                default:
-                    console.log("Unsupported command", message.command);
             }
+            refreshCards();
         }
-        refreshCards();
     });
 }
 
