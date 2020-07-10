@@ -87,6 +87,9 @@ export default class Settings {
      */
     public updateSetting(data: ExtensionSettingsData): void {
         switch (data.setting) {
+            case "insiderVersion":
+                this.settings.insiderVersion = data.value;
+                break;
             case "dataPath":
                 this.settings.dataPath = data.value;
                 break;
@@ -163,5 +166,9 @@ export default class Settings {
                 vscode.Uri.file(this.resources.getWorkspaceFilePath()),
             );
         }
+    }
+
+    public isInsider(): boolean {
+        return this.settings.insiderVersion;
     }
 }

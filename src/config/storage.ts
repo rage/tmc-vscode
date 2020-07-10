@@ -37,6 +37,10 @@ export default class Storage {
         return this.context.globalState.get("extensionSettings");
     }
 
+    public getExtensionVersion(): string | undefined {
+        return this.context.globalState.get("extensionVersion");
+    }
+
     /**
      * Updates the given authentication token in storage.
      * @param authenticationToken authentication token to update
@@ -57,5 +61,9 @@ export default class Storage {
 
     public async updateExtensionSettings(settings: ExtensionSettings): Promise<void> {
         await this.context.globalState.update("extensionSettings", settings);
+    }
+
+    public async updateExtensionVersion(version: string): Promise<void> {
+        await this.context.globalState.update("extensionVersion", version);
     }
 }

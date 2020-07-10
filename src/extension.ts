@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 
-import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
+import { checkForExerciseUpdates, checkForNewExercises, openSettings } from "./actions";
 import TMC from "./api/tmc";
-import VSC, { showError } from "./api/vscode";
+import VSC, { showError, showNotification } from "./api/vscode";
 import WorkspaceManager from "./api/workspaceManager";
 import { EXERCISE_CHECK_INTERVAL } from "./config/constants";
 import Settings from "./config/settings";
@@ -38,6 +38,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const vsc = new VSC(settings);
     await vsc.activate();
 
+    const currentVersion = resources.extensionVersion;
+    const previousVersion = storage.getExtensionVersion();
+    if (currentVersion !== previousVersion) {
+        storage.updateExtensionVersion(currentVersion);
+    }
+
     Logger.log(`VSCode version: ${vsc.getVSCodeVersion()}`);
     Logger.log(`TMC extension version: ${resources.extensionVersion}`);
     Logger.log(`Python extension version: ${vsc.getExtensionVersion("ms-python.python")}`);
@@ -67,6 +73,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         userData,
         workspaceManager,
     };
+
+    if (settings.isInsider()) {
+        Logger.warn("Using insider version.");
+        if (currentVersion !== previousVersion) {
+            showNotification(
+                "A new version of the extension has been released. " +
+                    "You are using the insider version of the TMC extension. " +
+                    "This means you will receive new feature updates prior to their release. " +
+                    "You can opt-out from insider version via our settings. ",
+                ["OK", (): void => {}],
+                ["Go to settings", (): Promise<void> => openSettings(actionContext)],
+                [
+                    "Read more...",
+                    (): void =>
+                        vsc.openUri(
+                            "https://github.com/rage/tmc-vscode-documents/blob/master/insider.md",
+                        ),
+                ],
+            );
+        }
+    }
 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);

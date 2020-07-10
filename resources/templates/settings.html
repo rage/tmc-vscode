@@ -22,6 +22,34 @@
                 <div class="col">
                     <div class="card-transparent border-color my-1">
                         <div class="card-body">
+                            <h5 class="card-title">Insider version</h5>
+                            <p class="card-text">
+                                Toggle this on if you wish to use and test TestMyCode extension
+                                upcoming features and enhancements.<br />
+                                New features might not be visible by eye and might crash the
+                                extension. <br />
+                                You can always opt-out if something isn't working and use the stable
+                                version. <br />
+                                If you encounter any issues, please report them to our Github
+                                <a href="https://github.com/rage/tmc-vscode/issues/new/choose"
+                                    >issues</a
+                                >.
+                            </p>
+                            <div class="custom-control custom-switch">
+                                <input
+                                    type="checkbox"
+                                    onclick="toggleInsider()"
+                                    class="custom-control-input"
+                                    id="insider-version"
+                                />
+                                <label class="custom-control-label" for="insider-version"
+                                    >Opt-in</label
+                                >
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-transparent border-color my-1">
+                        <div class="card-body">
                             <h5 class="card-title">TMC Data</h5>
                             <p class="card-text">
                                 Currently your TMC data ({{tmcDataSize}}) is located at: <br />
@@ -91,6 +119,7 @@
         <script>
             const vscode = acquireVsCodeApi();
             const metaFile = {{extensionSettings.hideMetaFiles}};
+            const insider = {{extensionSettings.insiderVersion}}
             function changeTmcDataPath() {
                 vscode.postMessage({ type: "changeTmcDataPath" });
             }
@@ -117,9 +146,16 @@
             if (metaFile) {
                 document.getElementById("check-meta-files").checked = true;
             }
+            if (insider) {
+                document.getElementById("insider-version").checked = true;
+            }
             function hideMetaFiles() {
                 const checkbox = document.getElementById("check-meta-files");
                 vscode.postMessage({ type: "hideMetaFiles", data: checkbox.checked });
+            }
+            function toggleInsider() {
+                const checkbox = document.getElementById("insider-version");
+                vscode.postMessage({ type: "insiderVersion", data: checkbox.checked });
             }
             function gotoSettings() {
                 vscode.postMessage({ type: "openEditorDirection" });
