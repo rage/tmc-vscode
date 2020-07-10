@@ -5,7 +5,7 @@ import { fillLoginForm } from "./macros";
 import { openTMCSideBar, operateTMCWebview } from "./navigation";
 import { waitForElements } from "./utils";
 
-describe("Introductory tests", () => {
+describe("Login tests", () => {
     let activityBar: ActivityBar;
     let editorView: EditorView;
 

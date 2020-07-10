@@ -8,14 +8,14 @@ const TerserPlugin = require("terser-webpack-plugin");
 const webpack = require("webpack");
 const merge = require("webpack-merge");
 
+const { localApi, productionApi } = require("./config");
+
 /**@type {import('webpack').ConfigurationFactory}*/
 const config = () => {
     const isDevelopmentMode = process.env.NODE_ENV && process.env.NODE_ENV === "development";
-    const localBackend = process.env.BACKEND && process.env.BACKEND === "local";
-    console.log(
-        `Webpack building in ${isDevelopmentMode ? "development" : "production"} configuration.`,
-    );
-    console.log(`Using ${localBackend ? "localhost" : "production"} server.`);
+
+    const apiConfig =
+        process.env.BACKEND && process.env.BACKEND === "local" ? localApi : productionApi;
 
     /**@type {import('webpack').Configuration}*/
     const commonConfig = {
@@ -77,20 +77,7 @@ const config = () => {
         plugins: [
             new webpack.DefinePlugin({
                 __DEBUG_MODE__: JSON.stringify(isDevelopmentMode),
-                __ACCESS_TOKEN_URI__: JSON.stringify(
-                    localBackend
-                        ? "http://localhost:4001/oauth/token"
-                        : "https://tmc.mooc.fi/oauth/token",
-                ),
-                __TMC_API_URL__: JSON.stringify(
-                    localBackend ? "http://localhost:4001/" : "https://tmc.mooc.fi/api/v8/",
-                ),
-                __TMC_JAR_NAME__: JSON.stringify("tmc-langs-cli-0.8.5-SNAPSHOT.jar"),
-                __TMC_JAR_URL__: JSON.stringify(
-                    localBackend
-                        ? "http://localhost:4001/langs"
-                        : "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.8.5-SNAPSHOT.jar",
-                ),
+                ...apiConfig,
             }),
         ],
     };
@@ -117,6 +104,11 @@ const config = () => {
             ],
         },
     };
+
+    console.log(
+        `Webpack building in ${isDevelopmentMode ? "development" : "production"} configuration.`,
+    );
+    console.log(`Configured backend: ${apiConfig.__TMC_API_URL__}`);
 
     return merge(commonConfig, isDevelopmentMode ? devConfig : prodConfig);
 };
