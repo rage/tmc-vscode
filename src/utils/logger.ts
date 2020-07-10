@@ -1,7 +1,8 @@
-import { OutputChannel } from "vscode";
-import * as vscode from "vscode";
+import { OutputChannel, Uri, window } from "vscode";
 
 import { OUTPUT_CHANNEL_NAME } from "../config/constants";
+
+const emptyStr = "";
 
 export enum LogLevel {
     None = "none",
@@ -9,120 +10,177 @@ export enum LogLevel {
     Verbose = "verbose",
     Debug = "debug",
 }
-export default class Logger {
-    private output: OutputChannel | undefined;
-    private productionMode: boolean;
-    private level: LogLevel;
-    constructor() {
-        this.level = LogLevel.Verbose;
-        this.productionMode = process.env.DEBUG_MODE === "production";
-        this.productionMode ? this.setLogLevel(this.level) : this.setLogLevel(LogLevel.Debug);
+
+const channel = `[${OUTPUT_CHANNEL_NAME}]`;
+
+export class Logger {
+    static output: OutputChannel | undefined;
+
+    static configure(level: LogLevel): void {
+        this.level = level;
     }
 
-    public log(message: string, ...params: unknown[]): void {
-        if (this.level === LogLevel.None && this.productionMode) return;
-
-        if (this.level === LogLevel.Debug || !this.productionMode) {
-            console.log(`${this.timestamp} INFO: ${message} ${this.toLoggableParams(params)}`);
+    private static _level: LogLevel = LogLevel.None;
+    static get level(): LogLevel {
+        return this._level;
+    }
+    static set level(value: LogLevel) {
+        this._level = value;
+        if (value === LogLevel.None) {
+            if (this.output !== undefined) {
+                this.output.dispose();
+                this.output = undefined;
+            }
+        } else {
+            this.output = this.output || window.createOutputChannel(OUTPUT_CHANNEL_NAME);
         }
+    }
 
-        if (this.output && (this.level === LogLevel.Verbose || this.level === LogLevel.Debug)) {
+    static debug(message: string | undefined, ...params: unknown[]): void {
+        if (this.level !== LogLevel.Debug && !Logger.isDebugging) return;
+        if (Logger.isDebugging) {
+            console.log(this.timestamp, channel, message || emptyStr, ...params);
+        }
+        if (this.output !== undefined && this.level === LogLevel.Debug) {
             this.output.appendLine(
-                `${this.timestamp} INFO: ${message} ${this.toLoggableParams(params)}`,
+                `${this.timestamp} [DEBUG] ${message || emptyStr}${this.toLoggableParams(
+                    true,
+                    params,
+                )}`,
             );
         }
     }
 
-    /*public logVerbose(message: string, logInDebug: boolean, ...params: unknown[]): void {
-        if (this.level === LogLevel.None && this.productionMode) return;
+    static error(message?: string, ...params: unknown[]): void {
+        if (this.level === LogLevel.None && !Logger.isDebugging) return;
 
-        if ((this.level === LogLevel.Debug && logInDebug) || !this.productionMode) {
-            console.log(`${this.timestamp} INFO: ${message} ${this.toLoggableParams(params)}`);
+        if (Logger.isDebugging) {
+            console.error(this.timestamp, channel, message || emptyStr, ...params);
+        }
+
+        if (this.output !== undefined && this.level !== LogLevel.None) {
+            this.output.appendLine(
+                `${this.timestamp} [ERROR] ${message || emptyStr}${this.toLoggableParams(
+                    false,
+                    params,
+                )}`,
+            );
+        }
+    }
+
+    static log(message: string, ...params: unknown[]): void {
+        if (
+            this.level !== LogLevel.Verbose &&
+            this.level !== LogLevel.Debug &&
+            !Logger.isDebugging
+        ) {
+            return;
+        }
+
+        if (Logger.isDebugging) {
+            console.log(this.timestamp, channel, message || emptyStr, ...params);
         }
 
         if (
-            this.output &&
-            (this.level === LogLevel.Verbose || (this.level === LogLevel.Debug && logInDebug))
+            this.output !== undefined &&
+            (this.level === LogLevel.Verbose || this.level === LogLevel.Debug)
         ) {
             this.output.appendLine(
-                `${this.timestamp} INFO: ${message} ${this.toLoggableParams(params)}`,
+                `${this.timestamp} [INFO] ${message || emptyStr}${this.toLoggableParams(
+                    false,
+                    params,
+                )}`,
             );
         }
-    }*/
+    }
 
-    public error(message: string, ...params: unknown[]): void {
-        if (this.level === LogLevel.None && this.productionMode) return;
-
-        if (this.level === LogLevel.Debug || !this.productionMode) {
-            console.error(`${this.timestamp} ERROR: ${message} ${this.toLoggableParams(params)}`);
+    static logWithDebugParams(message: string, ...params: unknown[]): void {
+        if (
+            this.level !== LogLevel.Verbose &&
+            this.level !== LogLevel.Debug &&
+            !Logger.isDebugging
+        ) {
+            return;
         }
 
-        if (this.output && this.level !== LogLevel.None) {
+        if (Logger.isDebugging) {
+            console.log(this.timestamp, channel, message || emptyStr, ...params);
+        }
+
+        if (
+            this.output !== undefined &&
+            (this.level === LogLevel.Verbose || this.level === LogLevel.Debug)
+        ) {
             this.output.appendLine(
-                `${this.timestamp} ERROR: ${message} ${this.toLoggableParams(params)}`,
+                `${this.timestamp} [INFO] ${message || emptyStr}${this.toLoggableParams(
+                    true,
+                    params,
+                )}`,
             );
         }
     }
 
-    public warn(message: string, ...params: unknown[]): void {
-        if (this.level === LogLevel.None && this.productionMode) return;
+    static warn(message: string, ...params: unknown[]): void {
+        if (this.level === LogLevel.None && !Logger.isDebugging) return;
 
-        if (this.level === LogLevel.Debug || !this.productionMode) {
-            console.warn(`${this.timestamp} WARNING: ${message} ${this.toLoggableParams(params)}`);
+        if (Logger.isDebugging) {
+            console.warn(this.timestamp, channel, message || emptyStr, ...params);
         }
 
-        if (this.output && (this.level === LogLevel.Verbose || this.level === LogLevel.Debug)) {
+        if (this.output !== undefined && this.level !== LogLevel.None) {
             this.output.appendLine(
-                `${this.timestamp} WARNING: ${message} ${this.toLoggableParams(params)}`,
+                `${this.timestamp} [WARNING] ${message || emptyStr}${this.toLoggableParams(
+                    false,
+                    params,
+                )}`,
             );
         }
     }
 
-    public show(): void {
-        this.output ? this.output.show(true) : "";
+    static show(): void {
+        if (this.output === undefined) {
+            return;
+        }
+        this.output.show();
     }
 
-    public dispose(): void {
-        if (this.output) {
-            this.output.clear();
-            this.output.dispose();
-            this.output = undefined;
-        }
-    }
+    static toLoggable(p: unknown): string {
+        if (typeof p !== "object") return String(p);
+        if (p instanceof Uri) return `Uri(${p.toString(true)})`;
 
-    private toLoggableParams(params: unknown[]): string {
-        if (params.length === 0) {
-            return "";
-        }
-        const loggableParams = params.map((p) => this.toLoggable(p)).join(", ");
-        return loggableParams.length !== 0 ? `\u2014 ${loggableParams}` : "";
-    }
-
-    private toLoggable(p: unknown): string {
-        if (typeof p !== "object") {
-            return String(p);
-        }
         try {
             return JSON.stringify(p);
         } catch {
-            return "<failed to log param to JSON>";
+            return "<error>";
         }
     }
 
-    private get timestamp(): string {
+    private static get timestamp(): string {
         const now = new Date();
         return `[${now
             .toISOString()
             .replace(/T/, " ")
-            .replace(/\..+/, "")}:${`00${now.getUTCMilliseconds()}`.slice(-3)}]`;
+            .replace(/\..+/, emptyStr)}:${`00${now.getUTCMilliseconds()}`.slice(-3)}]`;
     }
 
-    public setLogLevel(value: LogLevel): void {
-        this.level = value;
-        if (value === LogLevel.None) {
-            this.dispose();
-        } else {
-            this.output = this.output || vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
+    private static toLoggableParams(debugOnly: boolean, params: unknown[]): string {
+        if (
+            params.length === 0 ||
+            (debugOnly && this.level !== LogLevel.Debug && !Logger.isDebugging)
+        ) {
+            return emptyStr;
         }
+
+        const loggableParams = params.map((p) => this.toLoggable(p)).join(", ");
+        return loggableParams.length !== 0 ? ` \u2014 ${loggableParams}` : emptyStr;
+    }
+
+    private static _isDebugging: boolean | undefined;
+    static get isDebugging(): boolean {
+        if (this._isDebugging === undefined) {
+            this._isDebugging = process.env.DEBUG_MODE === "debug";
+        }
+
+        return this._isDebugging;
     }
 }

@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 import { WORKSPACE_ROOT_FILE, WORKSPACE_ROOT_FILE_TEXT } from "../config/constants";
 import Resources from "../config/resources";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
-import Logger from "../utils/logger";
+import { Logger } from "../utils/logger";
 
 import { showError } from "./vscode";
 import WorkspaceManager from "./workspaceManager";
@@ -15,16 +15,14 @@ export default class WorkspaceWatcher {
     private readonly folderTree: Map<string, Map<string, Set<string>>> = new Map();
     private readonly resources: Resources;
     private readonly workspaceManager: WorkspaceManager;
-    private readonly logger: Logger;
     public running: boolean;
     private watcher?: vscode.FileSystemWatcher;
 
-    constructor(workspaceManager: WorkspaceManager, resources: Resources, logger: Logger) {
+    constructor(workspaceManager: WorkspaceManager, resources: Resources) {
         this.resources = resources;
-        this.logger = logger;
         this.workspaceManager = workspaceManager;
         this.running = false;
-        this.logger.log("WorkspaceWatcher initializing");
+        Logger.log("WorkspaceWatcher initializing");
         for (const exercise of workspaceManager.getAllExercises()) {
             if (exercise.status === ExerciseStatus.OPEN) {
                 this.watch(exercise);
@@ -34,7 +32,7 @@ export default class WorkspaceWatcher {
 
     public start(): void {
         if (this.running) {
-            this.logger.warn("WorkspaceWatcher already running.");
+            Logger.warn("WorkspaceWatcher already running.");
         }
         this.running = true;
         this.sweep();
@@ -45,7 +43,7 @@ export default class WorkspaceWatcher {
                 false,
                 false,
             );
-            this.logger.log(
+            Logger.log(
                 `Watcher started watching for file changes at ${
                     this.resources.getExercisesFolderPath() + "/**"
                 }`,
@@ -70,16 +68,15 @@ export default class WorkspaceWatcher {
 
     public stop(): void {
         if (!this.running) {
-            this.logger.warn("WorkspaceWatcher already stopped.");
+            Logger.warn("WorkspaceWatcher already stopped.");
         }
         this.watcher?.dispose();
         this.watcher = undefined;
         this.running = false;
-        this.logger.log("Watcher stopped");
+        Logger.log("Watcher stopped");
     }
 
     public watch({ organization, course, name }: LocalExerciseData): void {
-        this.logger.log("Watcher watching data for", organization, course, name);
         if (!this.folderTree.has(organization)) {
             this.folderTree.set(organization, new Map());
         }
@@ -90,7 +87,7 @@ export default class WorkspaceWatcher {
     }
 
     public unwatch({ organization, course, name }: LocalExerciseData): void {
-        this.logger.log("Watcher unwatching data for", organization, course, name);
+        Logger.log("Watcher unwatching data for", organization, course, name);
         if (this.folderTree.get(organization)?.has(course)) {
             this.folderTree.get(organization)?.get(course)?.delete(name);
             if (this.folderTree.get(organization)?.get(course)?.size === 0) {
@@ -106,7 +103,7 @@ export default class WorkspaceWatcher {
         const basedir = this.resources.getExercisesFolderPath();
 
         try {
-            this.logger.log("Watcher starting to sweep");
+            Logger.log("Watcher starting to sweep");
             fs.readdirSync(basedir, { withFileTypes: true }).forEach((organization) => {
                 if (
                     (organization.isFile() && organization.name === WORKSPACE_ROOT_FILE) ||
@@ -118,7 +115,7 @@ export default class WorkspaceWatcher {
                             encoding: "utf-8",
                         }) !== WORKSPACE_ROOT_FILE_TEXT
                     ) {
-                        this.logger.log(`Writing ${WORKSPACE_ROOT_FILE} at ${basedir}`);
+                        Logger.log(`Writing ${WORKSPACE_ROOT_FILE} at ${basedir}`);
                         fs.writeFileSync(
                             path.join(basedir, organization.name),
                             WORKSPACE_ROOT_FILE_TEXT,
@@ -129,9 +126,7 @@ export default class WorkspaceWatcher {
                 } else if (
                     !(organization.isDirectory() && this.folderTree.has(organization.name))
                 ) {
-                    this.logger.warn(
-                        `Unknown item ${organization.name} - Removing from ${basedir}`,
-                    );
+                    Logger.warn(`Unknown item ${organization.name} - Removing from ${basedir}`);
                     delSync(path.join(basedir, organization.name), { force: true });
                 } else {
                     fs.readdirSync(path.join(basedir, organization.name), {
@@ -143,7 +138,7 @@ export default class WorkspaceWatcher {
                                 course.isDirectory()
                             )
                         ) {
-                            this.logger.warn(
+                            Logger.warn(
                                 `Course ${course.name} not found in ${organization.name} - Removing form ${basedir}`,
                             );
                             delSync(path.join(basedir, organization.name, course.name), {
@@ -163,7 +158,7 @@ export default class WorkspaceWatcher {
                                         (exercise.name === ".tmc.json" && exercise.isFile())
                                     )
                                 ) {
-                                    this.logger.warn(
+                                    Logger.warn(
                                         `Exercise ${exercise.name} not found in ${course.name} - Removing from ${basedir}`,
                                     );
                                     delSync(
@@ -181,16 +176,16 @@ export default class WorkspaceWatcher {
                     });
                 }
             });
-            this.logger.log("Watcher completed sweeping without errors");
+            Logger.log("Watcher completed sweeping without errors");
         } catch (error) {
-            this.logger.error("Fatal error while sweeping", error);
-            this.logger.show();
+            Logger.error(error, "Fatal error while sweeping");
+            Logger.show();
             showError("External file error, please restart Visual Studio Code to repair.");
         }
     }
 
     private fileCreateAction(targetPath: string): void {
-        this.logger.log(`File created ${targetPath}`);
+        Logger.log(`File created ${targetPath}`);
         const basedir = this.resources.getExercisesFolderPath();
         const relation = path.relative(basedir, targetPath).toString().split(path.sep, 3);
         if (relation[0] === "..") {
@@ -202,7 +197,7 @@ export default class WorkspaceWatcher {
             relation[0] !== WORKSPACE_ROOT_FILE
         ) {
             const pathToRemove = path.join(basedir, relation[0]);
-            this.logger.warn(`Removing ${pathToRemove}`);
+            Logger.warn(`Removing ${pathToRemove}`);
             delSync(pathToRemove, {
                 force: true,
             });
@@ -210,7 +205,7 @@ export default class WorkspaceWatcher {
         }
         if (relation.length > 1 && !this.folderTree.get(relation[0])?.has(relation[1])) {
             const pathToRemove = path.join(basedir, relation[0], relation[1]);
-            this.logger.warn(`Removing ${pathToRemove}`);
+            Logger.warn(`Removing ${pathToRemove}`);
             delSync(pathToRemove, {
                 force: true,
             });
@@ -221,7 +216,7 @@ export default class WorkspaceWatcher {
             !this.folderTree.get(relation[0])?.get(relation[1])?.has(relation[2])
         ) {
             const pathToRemove = path.join(basedir, ...relation);
-            this.logger.warn(`Removing ${pathToRemove}`);
+            Logger.warn(`Removing ${pathToRemove}`);
             delSync(pathToRemove, {
                 force: true,
             });
@@ -234,7 +229,7 @@ export default class WorkspaceWatcher {
      * as closed exercises by the watcher
      */
     private fileDeleteAction(targetPath: string): void {
-        this.logger.log(`File deleted ${targetPath}`);
+        Logger.log(`File deleted ${targetPath}`);
         const basedir = this.resources.getExercisesFolderPath();
         const rootFilePath = path.join(basedir, WORKSPACE_ROOT_FILE);
 
@@ -253,7 +248,7 @@ export default class WorkspaceWatcher {
                 .getAllExercises()
                 .filter((x) => x.organization === relation[0] && x.status === ExerciseStatus.OPEN)
                 .forEach((x) => {
-                    this.logger.warn(
+                    Logger.warn(
                         `Exercise data marked as missing for organization ${x.organization}`,
                     );
                     this.workspaceManager.setMissing(x.id);
@@ -271,7 +266,7 @@ export default class WorkspaceWatcher {
                         x.status === ExerciseStatus.OPEN,
                 )
                 .forEach((x) => {
-                    this.logger.warn(`Exercise data marked as missing for course ${x.course}`);
+                    Logger.warn(`Exercise data marked as missing for course ${x.course}`);
                     this.workspaceManager.setMissing(x.id);
                     this.unwatch(x);
                 });
@@ -291,7 +286,7 @@ export default class WorkspaceWatcher {
                         x.status === ExerciseStatus.OPEN,
                 )
                 .forEach((x) => {
-                    this.logger.warn(`Exercise data marked as missing for exercise ${x.name}`);
+                    Logger.warn(`Exercise data marked as missing for exercise ${x.name}`);
                     this.workspaceManager.setMissing(x.id);
                     this.unwatch(x);
                 });
@@ -310,7 +305,7 @@ export default class WorkspaceWatcher {
 
         if (path.relative(rootFilePath, targetPath) === "") {
             if (fs.readFileSync(rootFilePath, { encoding: "utf-8" }) !== WORKSPACE_ROOT_FILE_TEXT) {
-                this.logger.log(`Rewriting ${WORKSPACE_ROOT_FILE_TEXT} at ${targetPath}`);
+                Logger.log(`Rewriting ${WORKSPACE_ROOT_FILE_TEXT} at ${targetPath}`);
                 fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
             }
         }

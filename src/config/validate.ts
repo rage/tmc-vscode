@@ -6,7 +6,7 @@ import { CourseDetails, CourseExercise, CourseSettings } from "../api/types";
 import { ApiError, AuthorizationError, ConnectionError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
-import Logger from "../utils/logger";
+import { Logger } from "../utils/logger";
 
 import Resources from "./resources";
 import Storage from "./storage";
@@ -21,7 +21,6 @@ export async function validateAndFix(
     tmc: TMC,
     ui: UI,
     resources: Resources,
-    logger: Logger,
 ): Promise<Result<void, Error>> {
     const exerciseData = storage.getExerciseData() as unknown[];
     if (!is<LocalExerciseData[]>(exerciseData) && is<unknown[]>(exerciseData)) {
@@ -30,7 +29,7 @@ export async function validateAndFix(
             return new Err(login.val);
         }
 
-        logger.log("Fixing workspacemanager data");
+        Logger.log("Fixing workspacemanager data");
         const exerciseDataFixed: LocalExerciseData[] = [];
         for (const ex of exerciseData) {
             // If data objects doesn't have following fields or isOpen and status is undefined,
@@ -48,7 +47,7 @@ export async function validateAndFix(
                 (ex.isOpen === undefined && ex.status === undefined) ||
                 ex.status === ExerciseStatus.MISSING
             ) {
-                logger.warn("Exercise missing or data is bad, removing:", ex);
+                Logger.warn("Exercise missing or data is bad, removing:", ex);
                 continue;
             }
 
@@ -63,11 +62,11 @@ export async function validateAndFix(
             const details = await getCourseDetails(tmc, ex.organization, ex.course);
             if (details.err) {
                 if (details.val instanceof ApiError) {
-                    logger.warn(`Skipping bad workspacemanager data - ${details.val.message}`, ex);
+                    Logger.warn(`Skipping bad workspacemanager data - ${details.val.message}`, ex);
                     exerciseDataFixed.push(ex as LocalExerciseData);
                     continue;
                 } else if (details.val instanceof AuthorizationError) {
-                    logger.warn(`No access to exercise - ${details.val.message}`, ex);
+                    Logger.warn(`No access to exercise - ${details.val.message}`, ex);
                     exerciseDataFixed.push(ex as LocalExerciseData);
                     continue;
                 }
@@ -89,7 +88,7 @@ export async function validateAndFix(
             }
         }
         storage.updateExerciseData(exerciseDataFixed);
-        logger.log("Workspacemanager data fixed");
+        Logger.log("Workspacemanager data fixed");
     }
     const userData = storage.getUserData() as { courses: unknown[] };
     if (!is<{ courses: LocalCourseData[] }>(userData) && is<{ courses: unknown[] }>(userData)) {
@@ -97,7 +96,7 @@ export async function validateAndFix(
         if (login.err) {
             return new Err(login.val);
         }
-        logger.log("Fixing userdata");
+        Logger.log("Fixing userdata");
 
         const userDataFixed: { courses: LocalCourseData[] } = { courses: [] };
         if (userData.courses !== undefined) {
@@ -113,7 +112,7 @@ export async function validateAndFix(
                     }>(course) ||
                     (course.id === undefined && course.name === undefined)
                 ) {
-                    logger.warn("Course data is bad, removing:", course);
+                    Logger.warn("Course data is bad, removing:", course);
                     continue;
                 }
 
@@ -123,12 +122,12 @@ export async function validateAndFix(
                     : getCourseDetails(tmc, course.organization, course.name as string));
                 if (courseDetails.err) {
                     if (courseDetails.val instanceof ApiError) {
-                        logger.warn("Skipping bad userdata due to courseDetails", course);
+                        Logger.warn("Skipping bad userdata due to courseDetails", course);
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     } else if (courseDetails.val instanceof AuthorizationError) {
                         course.disabled = true;
-                        logger.warn(
+                        Logger.warn(
                             `No access to courseDetails, disabling course - ${courseDetails.val.message}`,
                             course,
                         );
@@ -144,12 +143,12 @@ export async function validateAndFix(
 
                 if (courseExercises.err) {
                     if (courseDetails.val instanceof ApiError) {
-                        logger.warn("Skipping bad userdata due to courseExercises", course);
+                        Logger.warn("Skipping bad userdata due to courseExercises", course);
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     } else if (courseExercises.val instanceof AuthorizationError) {
                         course.disabled = true;
-                        logger.warn(
+                        Logger.warn(
                             `No access to courseExercises, disabling course  - ${courseExercises.val.message}`,
                             course,
                         );
@@ -165,12 +164,12 @@ export async function validateAndFix(
 
                 if (courseSettings.err) {
                     if (courseSettings.val instanceof ApiError) {
-                        logger.warn("Skipping bad userdata due to courseSettings", course);
+                        Logger.warn("Skipping bad userdata due to courseSettings", course);
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     } else if (courseSettings.val instanceof AuthorizationError) {
                         course.disabled = true;
-                        logger.warn(
+                        Logger.warn(
                             `No access to courseSettings, disabling course - ${courseSettings.val.message}`,
                             course,
                         );
@@ -210,7 +209,7 @@ export async function validateAndFix(
             }
         }
         storage.updateUserData(userDataFixed);
-        logger.log("Userdata fixed");
+        Logger.log("Userdata fixed");
     }
 
     return Ok.EMPTY;

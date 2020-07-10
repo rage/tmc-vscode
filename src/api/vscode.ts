@@ -1,17 +1,15 @@
 import * as vscode from "vscode";
 
 import Settings from "../config/settings";
-import Logger from "../utils/logger";
+import { Logger } from "../utils/logger";
 
 /**
  * A Class for interacting with Visual Studio Code.
  */
 export default class VSC {
     private readonly settings: Settings;
-    private logger: Logger;
 
-    constructor(settings: Settings, logger: Logger) {
-        this.logger = logger;
+    constructor(settings: Settings) {
         this.settings = settings;
     }
 
@@ -38,14 +36,14 @@ export default class VSC {
         try {
             const extension = vscode.extensions.getExtension("ms-python.python");
             if (!extension) {
-                this.logger.warn("Extension ms-python.python not found.");
+                Logger.warn("Extension ms-python.python not found.");
                 return undefined;
             }
             const usingNewInterpreterStorage =
                 extension.packageJSON?.featureFlags?.usingNewInterpreterStorage;
             if (usingNewInterpreterStorage) {
                 if (!extension.isActive) {
-                    this.logger.log("Python extension not active.");
+                    Logger.log("Python extension not active.");
                     return undefined;
                 }
                 // Support old and new python extension versions. vscode-python issue #11294
@@ -57,7 +55,7 @@ export default class VSC {
                 return this.settings.getWorkspaceSettings()?.get<string>("python.pythonPath");
             }
         } catch (error) {
-            this.logger.error("Some error while fetching python execution string", error);
+            Logger.error(error, "Some error while fetching python execution string");
             return undefined;
         }
     }
@@ -72,10 +70,10 @@ export default class VSC {
         if (!resource) {
             return undefined;
         }
-        this.logger.log("Active text document", resource.document);
+        Logger.log("Active text document", resource.document);
         switch (resource.document.languageId) {
             case "python":
-                this.logger.warn("Python");
+                Logger.warn("Python");
                 return this.getPythonPath(resource.document);
         }
         return undefined;

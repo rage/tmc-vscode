@@ -6,10 +6,8 @@ import Settings from "../config/settings";
 import { UserData } from "../config/userdata";
 import TemporaryWebviewProvider from "../ui/temporaryWebviewProvider";
 import UI from "../ui/ui";
-import Logger from "../utils/logger";
 
 export type ActionContext = {
-    logger: Logger;
     resources: Resources;
     settings: Settings;
     temporaryWebviewProvider: TemporaryWebviewProvider;

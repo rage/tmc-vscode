@@ -18,6 +18,7 @@ import {
     formatSizeInBytes,
     getCurrentExerciseData,
     isWorkspaceOpen,
+    Logger,
     parseFeedbackQuestion,
     sleep,
 } from "../utils/";
@@ -75,19 +76,11 @@ export async function logout(
  * Tests an exercise while keeping the user informed
  */
 export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const {
-        ui,
-        tmc,
-        userData,
-        workspaceManager,
-        logger,
-        temporaryWebviewProvider,
-        vsc,
-    } = actionContext;
+    const { ui, tmc, userData, workspaceManager, temporaryWebviewProvider, vsc } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         const message = `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`;
-        logger.error(message);
+        Logger.error(message);
         showError(message);
         return;
     }
@@ -119,7 +112,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             },
         });
         ui.setStatusBar(`Running tests for ${exerciseName}`);
-        logger.log(`Running local tests for ${exerciseName}`);
+        Logger.log(`Running local tests for ${exerciseName}`);
 
         const testResult = await testRunner;
         if (testResult.err) {
@@ -142,12 +135,12 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             });
             temporaryWebviewProvider.addToRecycables(temp);
             const message = `Exercise test run failed: ${testResult.val.name} - ${testResult.val.message}`;
-            logger.error(message);
+            Logger.error(message);
             showError(message);
             return;
         }
         ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
-        logger.log(`Tests finished for ${exerciseName}`);
+        Logger.log(`Tests finished for ${exerciseName}`);
         data = {
             testResult: testResult.val.response,
             id,
@@ -180,23 +173,15 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
  * @param tempView Existing TemporaryWebview to use if any
  */
 export async function submitExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const {
-        ui,
-        temporaryWebviewProvider,
-        tmc,
-        vsc,
-        userData,
-        workspaceManager,
-        logger,
-    } = actionContext;
-    logger.log(
+    const { ui, temporaryWebviewProvider, tmc, vsc, userData, workspaceManager } = actionContext;
+    Logger.log(
         `Submitting exercise ${workspaceManager.getExerciseDataById(id).val.name} to server`,
     );
     const submitResult = await tmc.submitExercise(id);
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         const message = `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`;
-        logger.error(message);
+        Logger.error(message);
         showError(message);
         return;
     }
@@ -215,7 +200,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
             },
         });
         const message = `Exercise submission failed: ${submitResult.val.name} - ${submitResult.val.message}`;
-        logger.error(message);
+        Logger.error(message);
         showError(message);
         return;
     }
@@ -268,7 +253,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
         if (statusResult.err) {
             const message = `Failed getting submission status: ${statusResult.val.name} - ${statusResult.val.message}`;
-            logger.error(message);
+            Logger.error(message);
             showError(message);
             break;
         }
@@ -356,19 +341,19 @@ export async function pasteExercise(
     actionContext: ActionContext,
     id: number,
 ): Promise<string | undefined> {
-    const { tmc, logger } = actionContext;
+    const { tmc } = actionContext;
     const params = new Map<string, string>();
     params.set("paste", "1");
     const submitResult = await tmc.submitExercise(id, params);
 
     const errorMessage = "Failed to send exercise to TMC pastebin";
     if (submitResult.err) {
-        logger.error(errorMessage, submitResult.val);
+        Logger.error(errorMessage, submitResult.val);
         showError(`${errorMessage}: ${submitResult.val.message}`);
         return undefined;
     } else if (!submitResult.val.paste_url) {
         const notProvided = "Paste link was not provided by the server.";
-        logger.error(errorMessage, notProvided);
+        Logger.warn(errorMessage, notProvided);
         showError(`${errorMessage}: ${notProvided}`);
         return undefined;
     }
@@ -384,10 +369,10 @@ export async function checkForNewExercises(
     actionContext: ActionContext,
     courseId?: number,
 ): Promise<void> {
-    const { userData, logger } = actionContext;
+    const { userData } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now() && !c.disabled);
-    logger.log(`Checking for new exercises for courses ${filteredCourses.map((c) => c.name)}`);
+    Logger.log(`Checking for new exercises for courses ${filteredCourses.map((c) => c.name)}`);
     const updatedCourses: LocalCourseData[] = [];
     for (const course of filteredCourses) {
         await updateCourse(actionContext, course.id);
@@ -429,13 +414,13 @@ export async function checkForNewExercises(
  * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
  */
 export async function openWorkspace(actionContext: ActionContext): Promise<void> {
-    const { resources, logger, vsc } = actionContext;
+    const { resources, vsc } = actionContext;
     const currentWorkspaceFile = vsc.getWorkspaceFile();
     const tmcWorkspaceFile = vsc.toUri(resources.getWorkspaceFilePath());
 
     if (!isWorkspaceOpen(resources)) {
-        logger.log(`Current workspace: ${currentWorkspaceFile}`);
-        logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
+        Logger.log(`Current workspace: ${currentWorkspaceFile}`);
+        Logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
         if (
             !currentWorkspaceFile ||
             (await askForConfirmation(
@@ -459,11 +444,11 @@ export async function openWorkspace(actionContext: ActionContext): Promise<void>
  * Settings webview
  */
 export async function openSettings(actionContext: ActionContext): Promise<void> {
-    const { ui, resources, logger, settings } = actionContext;
-    logger.log("Display extension settings");
+    const { ui, resources, settings } = actionContext;
+    Logger.log("Display extension settings");
     const extensionSettings = await settings.getExtensionSettings();
     if (extensionSettings.err) {
-        logger.error("Failed to fetch Settings: ", extensionSettings);
+        Logger.error("Failed to fetch Settings: ", extensionSettings);
         showError(`Failed to fetch Settings: ${extensionSettings.val}`);
         return;
     }
@@ -481,8 +466,8 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
  * Adds a new course to user's courses.
  */
 export async function addNewCourse(actionContext: ActionContext): Promise<Result<void, Error>> {
-    const { tmc, userData, logger } = actionContext;
-    logger.log("Adding new course");
+    const { tmc, userData } = actionContext;
+    Logger.log("Adding new course");
     const orgAndCourse = await selectOrganizationAndCourse(actionContext);
 
     if (orgAndCourse.err) {
@@ -542,9 +527,9 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
  * @param id ID of the course to remove
  */
 export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
-    const { userData, workspaceManager, logger } = actionContext;
+    const { userData, workspaceManager } = actionContext;
     const course = userData.getCourse(id);
-    logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
+    Logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
     await closeExercises(
         actionContext,
         course.exercises.map((e) => e.id),
@@ -553,7 +538,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
     const missingIds = exercises
         .filter((e) => e.status === ExerciseStatus.MISSING)
         .map((e) => e.id);
-    logger.log(`Removing ${missingIds.length} exercise data with Missing status`);
+    Logger.log(`Removing ${missingIds.length} exercise data with Missing status`);
     workspaceManager.deleteExercise(...missingIds);
     userData.deleteCourse(id);
 }
@@ -564,21 +549,21 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
  * @param id Course id
  */
 export async function updateCourse(actionContext: ActionContext, id: number): Promise<void> {
-    const { tmc, userData, workspaceManager, logger } = actionContext;
+    const { tmc, userData, workspaceManager } = actionContext;
     return Promise.all([
         tmc.getCourseDetails(id),
         tmc.getCourseExercises(id),
         tmc.getCourseSettings(id),
     ]).then(([courseDetailsResult, courseExercisesResult, courseSettingsResult]) => {
         const showErrorForResult = (endpoint: string, message: string, result: unknown): void => {
-            logger.error(
+            Logger.error(
                 `Error refreshing course data for courseId ${id}, ${endpoint} - ${message}`,
                 result,
             );
             showError(`Something went wrong while trying to refresh course data: ${message}`);
         };
         const courseToDisable = (id: number): void => {
-            logger.warn(
+            Logger.warn(
                 `Received 403 Forbidden Authorization Error, disabling course with id ${id}`,
             );
             const course = userData.getCourse(id);
@@ -586,17 +571,17 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
             userData.updateCourse(course);
         };
         const warnOffline = (message: string): void => {
-            logger.warn(`Didn't fetch course updates, working offline: ${message}`);
+            Logger.warn(`Didn't fetch course updates, working offline: ${message}`);
         };
 
         // Check if disabled course still returns error from API
         if (userData.getCourse(id).disabled) {
-            logger.log(`Checking if course with id ${id} still disabled.`);
+            Logger.log(`Checking if course with id ${id} still disabled.`);
             if (courseDetailsResult.err || courseExercisesResult.err || courseSettingsResult.err) {
-                logger.log("Course still disabled, can't receive data from API.");
+                Logger.log("Course still disabled, can't receive data from API.");
                 return;
             }
-            logger.log("Received all necessary data from API, continuing to update course.");
+            Logger.log("Received all necessary data from API, continuing to update course.");
         }
 
         if (courseDetailsResult.err) {
@@ -608,7 +593,7 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
                 warnOffline(message);
                 return;
             }
-            showErrorForResult("courseDetailsResult", message, courseDetailsResult);
+            showErrorForResult("courseDetailsResult", message, courseDetailsResult.val);
             return;
         }
         if (courseExercisesResult.err) {
@@ -620,7 +605,7 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
                 warnOffline(message);
                 return;
             }
-            showErrorForResult("courseExercisesResult", message, courseExercisesResult);
+            showErrorForResult("courseExercisesResult", message, courseExercisesResult.val);
             return;
         }
         if (courseSettingsResult.err) {
@@ -632,14 +617,14 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
                 warnOffline(message);
                 return;
             }
-            showErrorForResult("courseSettingsResult", message, courseSettingsResult);
+            showErrorForResult("courseSettingsResult", message, courseSettingsResult.val);
             return;
         }
 
         const details = courseDetailsResult.val.course;
         const exercises = courseExercisesResult.val;
         const settings = courseSettingsResult.val;
-        logger.log(`Refreshing data for course ${details.name} from API`);
+        Logger.log(`Refreshing data for course ${details.name} from API`);
 
         // Update course data
         const courseData = userData.getCourseByName(settings.name);
