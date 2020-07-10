@@ -40,7 +40,7 @@ export enum ExerciseStatus {
 }
 
 export type ExtensionSettings = {
-    betaChannel: boolean;
+    insiderVersion: boolean;
     dataPath: string;
     logLevel: LogLevel;
     hideMetaFiles: boolean;
@@ -48,7 +48,7 @@ export type ExtensionSettings = {
 };
 
 export type ExtensionSettingsData =
-    | { setting: "betaChannel"; value: boolean }
+    | { setting: "insiderVersion"; value: boolean }
     | { setting: "dataPath"; value: string }
     | { setting: "oldDataPath"; value: string }
     | { setting: "logLevel"; value: LogLevel }

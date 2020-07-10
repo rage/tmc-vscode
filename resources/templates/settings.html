@@ -22,7 +22,7 @@
                 <div class="col">
                     <div class="card-transparent border-color my-1">
                         <div class="card-body">
-                            <h5 class="card-title">Beta channel</h5>
+                            <h5 class="card-title">Insider version</h5>
                             <p class="card-text">
                                 Toggle this on if you wish to use and test TestMyCode extension
                                 upcoming features and enhancements.<br />
@@ -38,11 +38,11 @@
                             <div class="custom-control custom-switch">
                                 <input
                                     type="checkbox"
-                                    onclick="toggleBeta()"
+                                    onclick="toggleInsider()"
                                     class="custom-control-input"
-                                    id="beta-channel"
+                                    id="insider-version"
                                 />
-                                <label class="custom-control-label" for="beta-channel"
+                                <label class="custom-control-label" for="insider-version"
                                     >Opt-in</label
                                 >
                             </div>
@@ -119,7 +119,7 @@
         <script>
             const vscode = acquireVsCodeApi();
             const metaFile = {{extensionSettings.hideMetaFiles}};
-            const beta = {{extensionSettings.betaChannel}}
+            const insider = {{extensionSettings.insiderVersion}}
             function changeTmcDataPath() {
                 vscode.postMessage({ type: "changeTmcDataPath" });
             }
@@ -146,16 +146,16 @@
             if (metaFile) {
                 document.getElementById("check-meta-files").checked = true;
             }
-            if (beta) {
-                document.getElementById("beta-channel").checked = true;
+            if (insider) {
+                document.getElementById("insider-version").checked = true;
             }
             function hideMetaFiles() {
                 const checkbox = document.getElementById("check-meta-files");
                 vscode.postMessage({ type: "hideMetaFiles", data: checkbox.checked });
             }
-            function toggleBeta() {
-                const checkbox = document.getElementById("beta-channel");
-                vscode.postMessage({ type: "betaChannel", data: checkbox.checked });
+            function toggleInsider() {
+                const checkbox = document.getElementById("insider-version");
+                vscode.postMessage({ type: "insiderVersion", data: checkbox.checked });
             }
             function gotoSettings() {
                 vscode.postMessage({ type: "openEditorDirection" });

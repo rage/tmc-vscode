@@ -96,7 +96,7 @@ suite("Storage tests", () => {
 
     test("Extension settings updater uses ExtensionContext correctly", () => {
         const extensionSettings = {
-            betaChannel: false,
+            insiderVersion: false,
             dataPath: "/tmp/tmcdata",
             oldDataPath: undefined,
             logLevel: LogLevel.None,

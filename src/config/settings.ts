@@ -87,8 +87,8 @@ export default class Settings {
      */
     public updateSetting(data: ExtensionSettingsData): void {
         switch (data.setting) {
-            case "betaChannel":
-                this.settings.betaChannel = data.value;
+            case "insiderVersion":
+                this.settings.insiderVersion = data.value;
                 break;
             case "dataPath":
                 this.settings.dataPath = data.value;
@@ -168,7 +168,7 @@ export default class Settings {
         }
     }
 
-    public isBeta(): boolean {
-        return this.settings.betaChannel;
+    public isInsider(): boolean {
+        return this.settings.insiderVersion;
     }
 }
