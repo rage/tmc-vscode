@@ -6,12 +6,23 @@ import { promise } from "vscode-extension-tester";
  */
 const waitForElements = async <T>(
     elementsProvider: () => promise.Promise<T[]>,
+    comparator: (t: T) => Promise<boolean> = async (): Promise<boolean> => true,
     timeout?: number,
 ): Promise<T[]> => {
     let elements: T[];
     const end = timeout ? Date.now() + timeout : undefined;
     do {
-        elements = await elementsProvider();
+        elements = [];
+        const elems = await elementsProvider();
+        if (!comparator) {
+            elements = elems;
+            continue;
+        }
+        for (const elem of elems) {
+            if (await comparator(elem)) {
+                elements.push(elem);
+            }
+        }
     } while (elements.length === 0 || (end && Date.now() > end));
     return elements;
 };

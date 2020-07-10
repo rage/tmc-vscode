@@ -7,12 +7,13 @@ import { waitForElements } from "./utils";
  */
 const openTMCSideBar = async (
     activityBar: ActivityBar,
-    timeout: number,
+    timeout?: number,
 ): Promise<Map<string, WebElement>> => {
     const content = (await activityBar.getViewControl("TestMyCode").openView()).getContent();
     const sections = await waitForElements(() => content.getSections());
     const elements = await waitForElements(
         () => sections[0].findElements(By.css("div[role='treeitem']")),
+        undefined,
         timeout,
     );
 

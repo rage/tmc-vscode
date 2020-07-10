@@ -1,23 +1,16 @@
 import { expect } from "chai";
-import {
-    ActivityBar,
-    By,
-    EditorView,
-    VSBrowser,
-    WebDriver,
-    WebElement,
-} from "vscode-extension-tester";
+import { ActivityBar, By, EditorView, WebElement } from "vscode-extension-tester";
 
+import { fillLoginForm } from "./macros";
 import { openTMCSideBar, operateTMCWebview } from "./navigation";
+import { waitForElements } from "./utils";
 
 describe("Introductory tests", () => {
     let activityBar: ActivityBar;
-    let driver: WebDriver;
     let editorView: EditorView;
 
     before(() => {
         activityBar = new ActivityBar();
-        driver = VSBrowser.instance.driver;
         editorView = new EditorView();
     });
 
@@ -43,29 +36,20 @@ describe("Introductory tests", () => {
 
             loginButton.click();
             await operateTMCWebview(editorView, async (webview) => {
-                await webview
-                    .findWebElements(By.css("[data-se='error-notification']"))
-                    .then((ns) => {
-                        expect(ns.length).to.be.equal(
-                            0,
-                            "There shouldn't be any error notifications when entering login page.",
-                        );
-                    });
-                await webview
-                    .findWebElement(By.css("[data-se='username']"))
-                    .then((u) => u.sendKeys("TestMyCode"));
-                await webview
-                    .findWebElement(By.css("[data-se='password']"))
-                    .then((p) => p.sendKeys("hunter2"));
-                await webview.findWebElement(By.css("[data-se='submit']")).then((s) => s.click());
+                const errors = await webview.findWebElements(
+                    By.css("[data-se='error-notification']"),
+                );
+                expect(errors.length).to.be.equal(
+                    0,
+                    "There shouldn't be any error notifications when entering login page.",
+                );
+                await fillLoginForm(webview, "TestMyCode", "hunter2").then((s) => s.click());
             });
+
             await operateTMCWebview(editorView, async (webview) => {
-                const error = (await driver.wait(async () => {
-                    const errors = await webview.findWebElements(
-                        By.css("[data-se='error-notification']"),
-                    );
-                    return errors.length > 0 ? errors[0] : undefined;
-                }, 1000)) as WebElement;
+                const [error] = await waitForElements(() =>
+                    webview.findWebElements(By.css("[data-se='error-notification']")),
+                );
                 expect(await error.getCssValue("display")).to.be.equal(
                     "block",
                     "Error notification expected when using wrong credentials.",
@@ -73,5 +57,24 @@ describe("Introductory tests", () => {
             });
         };
         return new Promise((resolve, reject) => test().then(resolve).catch(reject));
+    }).timeout(10000);
+
+    it("Logging in with correct credentials works and allows to see My Courses", () => {
+        const test = async (): Promise<void> => {
+            const buttons = await openTMCSideBar(activityBar, 1000);
+            const loginButton = buttons.get("Log in") as WebElement;
+            loginButton.click();
+            await operateTMCWebview(editorView, async (webview) => {
+                await fillLoginForm(webview, "TestMyExtension", "hunter2").then((s) => s.click());
+            });
+
+            await operateTMCWebview(editorView, async (webview) => {
+                await waitForElements(
+                    () => webview.findWebElements(By.css("h1")),
+                    async (e) => (await e.getText()) === "My courses",
+                );
+            });
+        };
+        return new Promise((resolve, reject) => test().then(resolve).catch(reject)).finally();
     }).timeout(10000);
 });
