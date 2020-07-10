@@ -2,7 +2,7 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { isWorkspaceOpen } from "../utils";
-import Logger, { LogLevel } from "../utils/logger";
+import { Logger, LogLevel } from "../utils/logger";
 
 import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
 import Resources from "./resources";
@@ -40,7 +40,7 @@ export default class Settings {
 
     private verifyWorkspaceSettingsIntegrity(): void {
         if (isWorkspaceOpen(this.resources)) {
-            this.logger.log("TMC Workspace open, verifying workspace settings integrity.");
+            Logger.log("TMC Workspace open, verifying workspace settings integrity.");
             this.setFilesExcludeInWorkspace(this.settings.hideMetaFiles);
             this.verifyFoldersInWorkspace();
             this.verifyWatcherPatternExclusion();
@@ -101,7 +101,7 @@ export default class Settings {
                 this.setFilesExcludeInWorkspace(data.value);
                 break;
         }
-        this.logger.log("Updated settings data", data);
+        Logger.log("Updated settings data", data);
         this.updateExtensionSettingsToStorage(this.settings);
     }
 
