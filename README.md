@@ -1,3 +1,9 @@
+[![](https://vsmarketplacebadge.apphb.com/version-short/moocfi.test-my-code.svg)](https://marketplace.visualstudio.com/items?itemName=moocfi.test-my-code)
+[![](https://vsmarketplacebadge.apphb.com/downloads-short/moocfi.test-my-code.svg)](https://marketplace.visualstudio.com/items?itemName=moocfi.test-my-code)
+[![](https://vsmarketplacebadge.apphb.com/rating-star/moocfi.test-my-code.svg)](https://marketplace.visualstudio.com/items?itemName=moocfi.test-my-code&ssr=false#review-details)  
+![Node CI](https://github.com/rage/tmc-vscode/workflows/Node%20CI/badge.svg)
+![Code scanning](https://github.com/rage/tmc-vscode/workflows/Code%20scanning/badge.svg)
+
 # TestMyCode for Visual Studio Code
 
 This extension provides [TestMyCode](https://tmc.mooc.fi/) integration for Visual Studio Code.
