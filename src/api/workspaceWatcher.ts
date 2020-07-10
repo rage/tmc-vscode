@@ -77,7 +77,6 @@ export default class WorkspaceWatcher {
     }
 
     public watch({ organization, course, name }: LocalExerciseData): void {
-        Logger.log("Watcher watching data for", organization, course, name);
         if (!this.folderTree.has(organization)) {
             this.folderTree.set(organization, new Map());
         }

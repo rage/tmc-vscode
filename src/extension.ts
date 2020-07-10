@@ -9,7 +9,6 @@ import Settings from "./config/settings";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
-import { ApiError } from "./errors";
 import * as init from "./init";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
@@ -20,7 +19,7 @@ let maintenanceInterval: NodeJS.Timeout | undefined;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     Logger.configure(LogLevel.Verbose);
     Logger.log(`Starting extension in "${process.env.DEBUG_MODE || "production"}" mode.`);
-    Logger.error("Test", new ApiError("Unexpected error"));
+
     const storage = new Storage(context);
 
     const resourcesResult = await init.resourceInitialization(context, storage);
