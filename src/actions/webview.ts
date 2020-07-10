@@ -14,7 +14,7 @@ import {
     ExerciseStatus as TextStatus,
     WebviewMessage,
 } from "../ui/types";
-import { chooseDeadline, dateToString, parseDate, parseNextDeadlineAfter } from "../utils/";
+import { chooseDeadline, dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utils/";
 
 import { ActionContext } from "./types";
 import { updateCourse } from "./user";
@@ -24,8 +24,8 @@ import { checkForExerciseUpdates } from "./workspace";
  * Displays a summary page of user's courses.
  */
 export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
-    const { userData, tmc, ui, logger } = actionContext;
-    logger.log("Displaying My courses view");
+    const { userData, tmc, ui } = actionContext;
+    Logger.log("Displaying My courses view");
     const courses = userData.getCourses().map((course) => {
         const completedPrc = ((course.awardedPoints / course.availablePoints) * 100).toFixed(2);
         return { ...course, completedPrc };
@@ -91,7 +91,7 @@ export async function displayLocalCourseDetails(
     actionContext: ActionContext,
     courseId: number,
 ): Promise<void> {
-    const { ui, tmc, userData, workspaceManager, logger } = actionContext;
+    const { ui, tmc, userData, workspaceManager } = actionContext;
 
     const mapStatus = (status: ExerciseStatus, expired: boolean): TextStatus => {
         switch (status) {
@@ -105,7 +105,7 @@ export async function displayLocalCourseDetails(
     };
 
     const course = userData.getCourse(courseId);
-    logger.log(`Display course view for ${course.name}`);
+    Logger.log(`Display course view for ${course.name}`);
 
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
     const exerciseData = new Map<string, CourseDetailsExerciseGroup>();
@@ -309,7 +309,7 @@ export async function selectOrganization(
 export async function selectOrganizationAndCourse(
     actionContext: ActionContext,
 ): Promise<Result<{ organization: string; course: number }, Error>> {
-    const { resources, ui, logger } = actionContext;
+    const { resources, ui } = actionContext;
 
     const tempView = new TemporaryWebview(resources, ui);
 
@@ -322,7 +322,7 @@ export async function selectOrganizationAndCourse(
             tempView.dispose();
             return new Err(orgResult.val);
         }
-        logger.log(`Organization slug ${orgResult.val} selected`);
+        Logger.log(`Organization slug ${orgResult.val} selected`);
         organizationSlug = orgResult.val;
         const courseResult = await selectCourse(actionContext, organizationSlug, tempView);
         if (courseResult.err) {
@@ -334,7 +334,7 @@ export async function selectOrganizationAndCourse(
         }
         courseId = courseResult.val.course;
     }
-    logger.log(`Course with id ${courseId} selected`);
+    Logger.log(`Course with id ${courseId} selected`);
     tempView.dispose();
     return new Ok({ organization: organizationSlug, course: courseId });
 }

@@ -28,7 +28,7 @@ import {
     TimeoutError,
 } from "../errors";
 import { displayProgrammerError, downloadFile } from "../utils/";
-import Logger from "../utils/logger";
+import { Logger } from "../utils/logger";
 
 import {
     Course,
@@ -61,7 +61,6 @@ export default class TMC {
     private readonly resources: Resources;
     private readonly tmcApiUrl: string;
     private readonly tmcDefaultHeaders: { client: string; client_version: string };
-    private logger: Logger;
     private workspaceManager?: WorkspaceManager;
 
     private readonly cache: Map<string, TMCApiResponse>;
@@ -71,14 +70,13 @@ export default class TMC {
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage, resources: Resources, logger: Logger) {
+    constructor(storage: Storage, resources: Resources) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: ACCESS_TOKEN_URI,
             clientId: CLIENT_ID,
             clientSecret: CLIENT_SECRET,
         });
         this.storage = storage;
-        this.logger = logger;
         const authToken = storage.getAuthenticationToken();
         if (authToken) {
             this.token = new ClientOauth2.Token(this.oauth2, authToken);
@@ -119,7 +117,7 @@ export default class TMC {
             } else if (err.code === "EUNAVAILABLE") {
                 return new Err(new ConnectionError("Connection error"));
             }
-            this.logger.error("Unknown authentication error:", err);
+            Logger.error(err, "Unknown authentication error:");
             return new Err(new Error("Unknown error: " + err.code));
         }
         this.storage.updateAuthenticationToken(this.token.data);
@@ -303,7 +301,7 @@ export default class TMC {
         );
 
         if (extractResult.err) {
-            this.logger.error("Extracting failed", extractResult);
+            Logger.error("Extracting failed", extractResult);
             this.workspaceManager.deleteExercise(id);
         }
 
@@ -533,14 +531,14 @@ export default class TMC {
                 break;
         }
 
-        this.logger.log("ExecutablePath", executablePath);
+        Logger.log("ExecutablePath", executablePath);
 
         const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
 
         const command = `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
 
-        this.logger.log(command);
+        Logger.log(command);
 
         let active = true;
         let error: cp.ExecException | undefined;
@@ -552,14 +550,14 @@ export default class TMC {
             stdoutExec = stdout;
             stderrExec = stderr;
             if (err) {
-                this.logger.error(`Process raised error: ${command}`, err, stdout, stderr);
+                Logger.error(`Process raised error: ${command}`, err, stdout, stderr);
                 error = err;
             }
         });
 
         const interrupt = (): void => {
             if (active) {
-                this.logger.log(`Killing TMC-Langs process ${process.pid}`);
+                Logger.log(`Killing TMC-Langs process ${process.pid}`);
                 kill(process.pid);
                 interrupted = true;
             }
@@ -607,7 +605,7 @@ export default class TMC {
                     const stderr = result.val[1] ? result.val[1] : stderrExec;
                     const logs = { stdout, stderr };
 
-                    this.logger.log("Logs", stdout, stderr);
+                    Logger.log("Logs", stdout, stderr);
 
                     if (action === "extract-project" || action === "compress-project") {
                         return resolve(new Ok({ response: outputPath, logs }));
@@ -618,13 +616,13 @@ export default class TMC {
                         logs,
                     };
                     // del.sync(outputPath, { force: true });
-                    this.logger.log("Temp JSON data", readResult.response);
+                    Logger.log("Temp JSON data", readResult.response);
                     if (is<TmcLangsResponse>(readResult)) {
                         return resolve(new Ok(readResult));
                     }
 
-                    this.logger.error("Unexpected response JSON type", result.val);
-                    this.logger.show();
+                    Logger.error("Unexpected response JSON type", result.val);
+                    Logger.show();
                     return resolve(new Err(new Error("Unexpected response JSON type")));
                 });
             }),
@@ -703,11 +701,11 @@ export default class TMC {
                         }
                         return new Ok(responseObject);
                     }
-                    this.logger.error(
+                    Logger.error(
                         `Unexpected TMC response type from ${request.url}`,
                         responseObject,
                     );
-                    this.logger.show();
+                    Logger.show();
                     return new Err(new ApiError("Unexpected response type"));
                 } catch (error) {
                     return new Err(new ApiError("Response not in JSON format: " + error.name));
@@ -717,7 +715,7 @@ export default class TMC {
                 return new Err(new AuthorizationError("403 - Forbidden"));
             }
             const errorText = (await response.json())?.error || (await response.text());
-            this.logger.error(`${response.status} - ${response.statusText} - ${errorText}`);
+            Logger.error(`${response.status} - ${response.statusText} - ${errorText}`);
             return new Err(
                 new ApiError(`${response.status} - ${response.statusText} - ${errorText}`),
             );

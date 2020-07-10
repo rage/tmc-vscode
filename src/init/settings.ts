@@ -5,7 +5,7 @@ import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { ExtensionSettings } from "../config/types";
 import { removeOldData } from "../utils";
-import Logger, { LogLevel } from "../utils/logger";
+import { Logger, LogLevel } from "../utils/logger";
 
 // TODO: Perhaps not initialize if everything is ok.
 /**
@@ -17,10 +17,9 @@ import Logger, { LogLevel } from "../utils/logger";
 export async function settingsInitialization(
     storage: Storage,
     resources: Resources,
-    logger: Logger,
 ): Promise<ExtensionSettings> {
     const settings = storage.getExtensionSettings();
-    logger.log("Initializing settings", settings);
+    Logger.log("Initializing settings", settings);
 
     // Try removing once old data, if the data move happened within 10 minutes.
     if (settings && settings.oldDataPath !== undefined) {
@@ -32,7 +31,7 @@ export async function settingsInitialization(
                 ["OK", (): void => {}],
             );
         }
-        logger.log("Tried to remove old data", result);
+        Logger.log("Tried to remove old data", result);
     }
     const tmcDataPath = settings?.dataPath || resources.getDataPath();
     const logLevel =
@@ -47,7 +46,7 @@ export async function settingsInitialization(
         logLevel,
         hideMetaFiles,
     };
-    logger.log("Settings initialized", fixedSettings);
+    Logger.log("Settings initialized", fixedSettings);
 
     return fixedSettings;
 }
