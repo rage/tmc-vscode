@@ -33,6 +33,8 @@ export async function settingsInitialization(
         }
         Logger.log("Tried to remove old data", result);
     }
+    const insiderVersion =
+        settings?.insiderVersion !== undefined ? settings.insiderVersion : Math.random() < 0.1;
     const tmcDataPath = settings?.dataPath || resources.getDataPath();
     const logLevel =
         is<LogLevel>(settings?.logLevel) && settings?.logLevel
@@ -41,6 +43,7 @@ export async function settingsInitialization(
     const hideMetaFiles = settings?.hideMetaFiles !== undefined ? settings.hideMetaFiles : true;
 
     const fixedSettings: ExtensionSettings = {
+        insiderVersion: insiderVersion,
         dataPath: tmcDataPath,
         oldDataPath: undefined,
         logLevel,
