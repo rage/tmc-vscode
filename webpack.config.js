@@ -77,6 +77,11 @@ const config = () => {
         plugins: [
             new webpack.DefinePlugin({
                 __DEBUG_MODE__: JSON.stringify(isDevelopmentMode),
+                __ACCESS_TOKEN_URI__: JSON.stringify(
+                    localBackend
+                        ? "http://localhost:4001/oauth/token"
+                        : "https://tmc.mooc.fi/oauth/token",
+                ),
                 __TMC_API_URL__: JSON.stringify(
                     localBackend ? "http://localhost:4001/" : "https://tmc.mooc.fi/api/v8/",
                 ),
