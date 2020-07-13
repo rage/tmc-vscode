@@ -84,7 +84,7 @@ export default class VSC {
     }
 
     public toUri(uri: string): vscode.Uri {
-        return vscode.Uri.parse(uri);
+        return vscode.Uri.file(uri);
     }
 }
 
