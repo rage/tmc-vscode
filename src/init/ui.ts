@@ -65,7 +65,14 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.webview.registerHandler(
         "login",
         async (msg: { type?: "login"; username?: string; password?: string }) => {
-            if (!(msg.type && msg.username && msg.password)) {
+            if (!(msg.type && msg.username !== undefined && msg.password !== undefined)) {
+                return;
+            }
+            if (msg.username === "" || msg.password === "") {
+                ui.webview.setContentFromTemplate(
+                    { templateName: "login", error: "Username or password empty." },
+                    true,
+                );
                 return;
             }
             const result = await login(actionContext, msg.username, msg.password, visibilityGroups);

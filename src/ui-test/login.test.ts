@@ -63,8 +63,20 @@ describe("Login tests", () => {
         const test = async (): Promise<void> => {
             const buttons = await openTMCSideBar(activityBar, 1000);
             const loginButton = buttons.get("Log in") as WebElement;
+            expect(loginButton).to.be.instanceOf(
+                WebElement,
+                "Expected to find WebElement `Log in`",
+            );
+
             loginButton.click();
             await operateTMCWebview(editorView, async (webview) => {
+                const errors = await webview.findWebElements(
+                    By.css("[data-se='error-notification']"),
+                );
+                expect(errors.length).to.be.equal(
+                    0,
+                    "There shouldn't be any error notifications when entering login page.",
+                );
                 await fillLoginForm(webview, "TestMyExtension", "hunter2").then((s) => s.click());
             });
 

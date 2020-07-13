@@ -24,12 +24,10 @@ const download = async (): Promise<void> => {
     }
 };
 
-const langs = download();
-
 const langsRouter = Router();
-
+const langs = download;
 langsRouter.get("/", (request, response) => {
-    langs.then(() => {
+    langs().then(() => {
         return response.sendFile(path.resolve(__dirname, "..", "resources", LANGS_NAME));
     });
 });

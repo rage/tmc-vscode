@@ -145,7 +145,8 @@
         "ui-test:compile-and-run": "npm run ui-test:compile && npm run ui-test:run",
         "ui-test:run": "extest run-tests out/ui-test/**.test.js",
         "ui-test:setup": "cross-env NODE_ENV=development BACKEND=local extest setup-tests",
-        "webpack": "webpack"
+        "webpack": "webpack",
+        "webpack:watch": "webpack --watch --info-verbosity verbose"
     },
     "prettier": {
         "printWidth": 100,
