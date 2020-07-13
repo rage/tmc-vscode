@@ -129,10 +129,8 @@
         }
     },
     "scripts": {
-        "vscode:prepublish": "npm run webpack",
+        "vscode:prepublish": "cross-env NODE_ENV=production npm run webpack",
         "ci:all": "npm ci && cd backend && npm ci",
-        "compile": "ttsc -p ./",
-        "watch": "ttsc -watch -p ./",
         "pretest": "cross-env NODE_ENV=development BACKEND=local npm run webpack",
         "test": "node ./bin/runTests.js",
         "eslint-check": "eslint . --ext .js,.ts",
@@ -142,11 +140,12 @@
         "prettier-check": "prettier --check --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
         "prettier": "prettier --write --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
         "release": "./bin/publishRelease.sh",
-        "ui-test": "npm run ui-test:setup && npm run ui-test:run",
-        "ui-test:run": "npm run compile && extest run-tests out/ui-test/*.js",
-        "ui-test:setup": "cross-env BACKEND=local extest setup-tests",
-        "webpack": "webpack",
-        "webpack:watch": "webpack --watch --info-verbosity verbose"
+        "ui-test": "npm run ui-test:setup && npm run ui-test:compile && npm run ui-test:run",
+        "ui-test:compile": "tsc ./src/ui-test/*.ts --rootDir src --outDir out",
+        "ui-test:compile-and-run": "npm run ui-test:compile && npm run ui-test:run",
+        "ui-test:run": "extest run-tests out/ui-test/**.test.js",
+        "ui-test:setup": "cross-env NODE_ENV=development BACKEND=local extest setup-tests",
+        "webpack": "webpack"
     },
     "prettier": {
         "printWidth": 100,

@@ -32,9 +32,8 @@ const config = () => {
             devtoolModuleFilenameTemplate: "../[resource-path]",
         },
         externals: {
+            chai: "commonjs chai",
             mocha: "commonjs mocha",
-            path: "path",
-            // vscode-module is created on-the-fly and must be excluded.
             vscode: "commonjs vscode",
             "vscode-test": "commonjs vscode-test",
         },

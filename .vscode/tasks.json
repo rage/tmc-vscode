@@ -4,17 +4,6 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "testBuild",
-            "type": "npm",
-            "script": "watch",
-            "problemMatcher": "$tsc-watch",
-            "isBackground": true,
-            "presentation": {
-                "reveal": "silent"
-            },
-            "group": "test"
-        },
-        {
             "label": "webpackBuild",
             "type": "npm",
             "script": "webpack:watch",
