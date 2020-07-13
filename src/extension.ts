@@ -32,7 +32,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const resources = resourcesResult.val;
 
     const settingsResult = await init.settingsInitialization(storage, resources);
-    const settings = new Settings(storage, Logger, settingsResult, resources);
+    const settings = new Settings(storage, settingsResult, resources);
     Logger.configure(settings.getLogLevel());
 
     const vsc = new VSC(settings);

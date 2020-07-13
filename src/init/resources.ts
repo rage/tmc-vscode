@@ -1,6 +1,7 @@
 import del = require("del");
 import * as fs from "fs-extra";
 import * as glob from "glob";
+import * as os from "os";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as unzipper from "unzipper";
@@ -12,6 +13,8 @@ import {
     JAVA_ZIP_URLS,
     TMC_JAR_NAME,
     TMC_JAR_URL,
+    TMC_LANGS_RUST_DL_URL,
+    TMC_LANGS_RUST_VERSION,
     WORKSPACE_ROOT_FILE,
     WORKSPACE_ROOT_FILE_TEXT,
     WORKSPACE_SETTINGS,
@@ -171,6 +174,55 @@ export async function resourceInitialization(
         Logger.log(`${TMC_JAR_URL} downloaded`);
     }
 
+    /**
+     * Insider version toggle.
+     */
+    let executable: string;
+    const osType = os.type();
+    if (osType === "Linux") {
+        Logger.log("Detected Linux");
+        executable = "tmc-langs-cli-linux-" + TMC_LANGS_RUST_VERSION;
+    } else if (osType === "Darwin") {
+        Logger.log("Detected MacOS");
+        executable = "tmc-langs-cli-macos-" + TMC_LANGS_RUST_VERSION;
+    } else if (osType === "Windows_NT") {
+        Logger.log("Detected Windows");
+        executable = "tmc-langs-cli-windows-" + TMC_LANGS_RUST_VERSION + ".exe";
+    } else {
+        Logger.warn("Detected unknown os", osType);
+        // Currently set linux CLI as default, this is experimental, in future return error.
+        executable = "tmc-langs-cli-linux-" + TMC_LANGS_RUST_VERSION;
+        // return new Err(new Error("Unexpected OS type from Node."));
+    }
+
+    const cliPath = path.join(tmcDataPath, "cli", executable);
+    const cliUrl = TMC_LANGS_RUST_DL_URL + executable;
+    if (!fs.existsSync(cliPath)) {
+        Logger.log("Downloading CLI from", cliUrl, "to", cliPath);
+        const [tmcLangsRustCLI] = await showProgressNotification(
+            "Downloading required files...",
+            async (p) =>
+                downloadFile(
+                    cliUrl,
+                    cliPath,
+                    undefined,
+                    undefined,
+                    (progress: number, increment: number) => p.report({ increment }),
+                ),
+        );
+        if (tmcLangsRustCLI.err) {
+            Logger.warn("Occured some error while downloading TMC Langs rust", tmcLangsRustCLI);
+        }
+        try {
+            const fd = await fs.open(cliPath, "r+");
+            await fs.fchmod(fd, 0o111);
+            await fs.close(fd);
+        } catch (e) {
+            Logger.error("Error", e);
+        }
+        Logger.log("CLI at", cliPath);
+    }
+
     const resources: Resources = new Resources(
         cssPath,
         extensionVersion,
@@ -183,6 +235,7 @@ export async function resourceInitialization(
         tmcExercisesFolderPathRelative,
         tmcClosedExercisesFolderPathRelative,
         javaPath,
+        cliPath,
     );
 
     return new Ok(resources);
