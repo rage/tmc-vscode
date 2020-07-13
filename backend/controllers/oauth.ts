@@ -2,14 +2,12 @@ import { Router } from "express";
 
 import db from "../db";
 
-const { users } = db;
-
 const oauthRouter = Router();
 
 oauthRouter.post("/token", (req, res) => {
     const { username, password } = req.body;
     console.log("Username:" + username, "Password:", password);
-    const user = users.find((u) => u.username === username && u.password === password);
+    const user = db.users.find((u) => u.username === username && u.password === password);
     return user
         ? res.json({
               access_token: "1234",
