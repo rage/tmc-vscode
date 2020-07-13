@@ -3,6 +3,7 @@
 
 "use strict";
 
+const glob = require("glob");
 const path = require("path");
 const TerserPlugin = require("terser-webpack-plugin");
 const webpack = require("webpack");
@@ -20,16 +21,22 @@ const config = () => {
     /**@type {import('webpack').Configuration}*/
     const commonConfig = {
         target: "node",
-        entry: "./src/extension.ts",
+        entry: {
+            extension: "./src/extension.ts",
+            "testBundle.test": glob.sync("./src/test/**/*.test.ts"),
+        },
         output: {
             path: path.resolve(__dirname, "dist"),
-            filename: "extension.js",
+            filename: "[name].js",
             libraryTarget: "commonjs2",
             devtoolModuleFilenameTemplate: "../[resource-path]",
         },
         externals: {
+            mocha: "commonjs mocha",
+            path: "path",
             // vscode-module is created on-the-fly and must be excluded.
             vscode: "commonjs vscode",
+            "vscode-test": "commonjs vscode-test",
         },
         resolve: {
             extensions: [".ts", ".js"],

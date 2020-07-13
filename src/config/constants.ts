@@ -3,19 +3,19 @@
 
 // Build time only globals defined in webpack configuration. These values are inlined when
 // compiling.
-declare const __ACCESS_TOKEN_URI__: string | undefined;
-declare const __DEBUG_MODE__: boolean | undefined;
-declare const __TMC_API_URL__: string | undefined;
-declare const __TMC_JAR_NAME__: string | undefined;
-declare const __TMC_JAR_URL__: string | undefined;
+declare const __ACCESS_TOKEN_URI__: string;
+declare const __DEBUG_MODE__: boolean;
+declare const __TMC_API_URL__: string;
+declare const __TMC_JAR_NAME__: string;
+declare const __TMC_JAR_URL__: string;
 
 import { SubmissionResultReport } from "../api/types";
 
-export const ACCESS_TOKEN_URI = __ACCESS_TOKEN_URI__ || "tscbuild";
-export const DEBUG_MODE = __DEBUG_MODE__ || true;
-export const TMC_API_URL = __TMC_API_URL__ || "tscbuild";
-export const TMC_JAR_NAME = __TMC_JAR_NAME__ || "tscbuild";
-export const TMC_JAR_URL = __TMC_JAR_URL__ || "tscbuild";
+export const ACCESS_TOKEN_URI = __ACCESS_TOKEN_URI__;
+export const DEBUG_MODE = __DEBUG_MODE__;
+export const TMC_API_URL = __TMC_API_URL__;
+export const TMC_JAR_NAME = __TMC_JAR_NAME__;
+export const TMC_JAR_URL = __TMC_JAR_URL__;
 
 export const EXTENSION_ID = "moocfi.test-my-code";
 export const OUTPUT_CHANNEL_NAME = "TestMyCode";
