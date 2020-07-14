@@ -8,6 +8,8 @@ import * as config from "../../config";
 const LANGS_NAME = config.productionApi.__TMC_JAR_NAME__.replace(/"/g, "");
 const LANGS_URL = config.productionApi.__TMC_JAR_URL__.replace(/"/g, "");
 
+const langsRouter = Router();
+
 const download = async (): Promise<void> => {
     const langsPath = path.resolve(__dirname, "..", "resources");
     if (!fs.existsSync(langsPath)) {
@@ -21,16 +23,15 @@ const download = async (): Promise<void> => {
             throw "Failed";
         }
         fs.writeFileSync(langs, await res.buffer());
+        console.log("Langs downloaded!");
     }
 };
 
-const langsRouter = Router();
-const langs = download().then(() => {
-    langsRouter.get("/", (request, response) => {
-        langs.then(() => {
-            return response.sendFile(path.resolve(__dirname, "..", "resources", LANGS_NAME));
-        });
-    });
+const langs = download();
+
+langsRouter.get("/", async (req, res) => {
+    await langs;
+    return res.sendFile(path.resolve(__dirname, "..", "resources", LANGS_NAME));
 });
 
 export default langsRouter;
