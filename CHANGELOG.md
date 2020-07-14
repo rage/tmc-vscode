@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.0] - 2020-07-14
+
+#### Added
+- [Insider](https://github.com/rage/tmc-vscode-documents/blob/master/insider.md) version support.
+
+#### Changed
+- Insider: Use TMC Langs Rust when running local tests.
+
+#### Fixed
+- Not to check for new exercises or updates if logged out.
+
+
 ## [0.8.3] - 2020-07-08
 
 #### Fixed

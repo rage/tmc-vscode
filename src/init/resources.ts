@@ -1,7 +1,6 @@
 import del = require("del");
 import * as fs from "fs-extra";
 import * as glob from "glob";
-import * as os from "os";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as unzipper from "unzipper";
@@ -14,14 +13,13 @@ import {
     TMC_JAR_NAME,
     TMC_JAR_URL,
     TMC_LANGS_RUST_DL_URL,
-    TMC_LANGS_RUST_VERSION,
     WORKSPACE_ROOT_FILE,
     WORKSPACE_ROOT_FILE_TEXT,
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
-import { downloadFile, getPlatform, isJavaPresent } from "../utils/";
+import { downloadFile, getPlatform, getRustExecutable, isJavaPresent } from "../utils/";
 import { Logger } from "../utils/logger";
 
 /**
@@ -177,24 +175,11 @@ export async function resourceInitialization(
     /**
      * Insider version toggle.
      */
-    let executable: string;
-    const osType = os.type();
-    if (osType === "Linux") {
-        Logger.log("Detected Linux");
-        executable = "tmc-langs-cli-linux-" + TMC_LANGS_RUST_VERSION;
-    } else if (osType === "Darwin") {
-        Logger.log("Detected MacOS");
-        executable = "tmc-langs-cli-macos-" + TMC_LANGS_RUST_VERSION;
-    } else if (osType === "Windows_NT") {
-        Logger.log("Detected Windows");
-        executable = "tmc-langs-cli-windows-" + TMC_LANGS_RUST_VERSION + ".exe";
-    } else {
-        Logger.warn("Detected unknown os", osType);
-        // Currently set linux CLI as default, this is experimental, in future return error.
-        executable = "tmc-langs-cli-linux-" + TMC_LANGS_RUST_VERSION;
-        // return new Err(new Error("Unexpected OS type from Node."));
-    }
-
+    const platform = getPlatform();
+    Logger.log("Detected platform", platform);
+    Logger.log("Platform", process.platform, "Arch", process.arch);
+    const executable: string = getRustExecutable(platform);
+    Logger.log("Executable", executable);
     const cliPath = path.join(tmcDataPath, "cli", executable);
     const cliUrl = TMC_LANGS_RUST_DL_URL + executable;
     if (!fs.existsSync(cliPath)) {

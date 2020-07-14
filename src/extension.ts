@@ -98,16 +98,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
 
-    checkForExerciseUpdates(actionContext);
-    checkForNewExercises(actionContext);
+    if (tmc.isAuthenticated()) {
+        checkForExerciseUpdates(actionContext);
+        checkForNewExercises(actionContext);
+    }
 
     if (maintenanceInterval) {
         clearInterval(maintenanceInterval);
     }
 
     maintenanceInterval = setInterval(() => {
-        checkForExerciseUpdates(actionContext);
-        checkForNewExercises(actionContext);
+        if (tmc.isAuthenticated()) {
+            checkForExerciseUpdates(actionContext);
+            checkForNewExercises(actionContext);
+        }
     }, EXERCISE_CHECK_INTERVAL);
 }
 
