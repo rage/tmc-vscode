@@ -8,6 +8,8 @@ declare const __DEBUG_MODE__: boolean;
 declare const __TMC_API_URL__: string;
 declare const __TMC_JAR_NAME__: string;
 declare const __TMC_JAR_URL__: string;
+declare const __TMC_LANGS_RUST_DL_URL__: string;
+declare const __TMC_LANGS_RUST_VERSION__: string;
 
 import { SubmissionResultReport } from "../api/types";
 
@@ -16,11 +18,11 @@ export const DEBUG_MODE = __DEBUG_MODE__;
 export const TMC_API_URL = __TMC_API_URL__;
 export const TMC_JAR_NAME = __TMC_JAR_NAME__;
 export const TMC_JAR_URL = __TMC_JAR_URL__;
+export const TMC_LANGS_RUST_DL_URL = __TMC_LANGS_RUST_DL_URL__;
+export const TMC_LANGS_RUST_VERSION = __TMC_LANGS_RUST_VERSION__;
 
 export const EXTENSION_ID = "moocfi.test-my-code";
 export const OUTPUT_CHANNEL_NAME = "TestMyCode";
-export const TMC_LANGS_RUST_VERSION = "0.1.3-alpha";
-export const TMC_LANGS_RUST_DL_URL = "https://download.mooc.fi/tmc-langs-rust/";
 export const JAVA_ZIP_URLS: {
     linux32?: string;
     linux64?: string;
