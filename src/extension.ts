@@ -4,7 +4,7 @@ import { checkForExerciseUpdates, checkForNewExercises, openSettings } from "./a
 import TMC from "./api/tmc";
 import VSC, { showError, showNotification } from "./api/vscode";
 import WorkspaceManager from "./api/workspaceManager";
-import { EXERCISE_CHECK_INTERVAL } from "./config/constants";
+import { DEBUG_MODE, EXERCISE_CHECK_INTERVAL } from "./config/constants";
 import Settings from "./config/settings";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
@@ -18,7 +18,7 @@ let maintenanceInterval: NodeJS.Timeout | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     Logger.configure(LogLevel.Verbose);
-    Logger.log(`Starting extension in "${process.env.DEBUG_MODE || "production"}" mode.`);
+    Logger.log(`Starting extension in "${DEBUG_MODE ? "development" : "production"}" mode.`);
 
     const storage = new Storage(context);
 

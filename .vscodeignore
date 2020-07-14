@@ -6,24 +6,29 @@ bin/**
 node_modules/**
 out/**
 src/**
+test-resources/**
 types/**
 
+**/.eslintcache
 **/.gitattributes
 **/.gitignore
 **/.eslintignore
 **/.eslintrc.json
+**/dist/testBundle*
 **/tsconfig.json
 **/tsconfig.production.json
 **/tslint.json
 **/*.map
 **/*.ts
 **/vsc-extension-quickstart.md
+config.js
 
-# No SVG images to releases and only required images
-# Test whether can include svg images after all
-# **/*.svg
+# Media
 **/*.png
 !media/TMC.png
+
+# Development backend
+backend/**
 
 # Webpack configuration
 webpack.common.js

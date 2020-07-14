@@ -1,5 +1,7 @@
 out
+backend/resources/
 node_modules
+test-resources/
 .vscode-test/
 dist/
 *.vsix

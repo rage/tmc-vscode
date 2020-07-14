@@ -4,20 +4,15 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "testBuild",
-            "type": "npm",
-            "script": "watch",
-            "problemMatcher": "$tsc-watch",
-            "isBackground": true,
-            "presentation": {
-                "reveal": "silent"
-            },
-            "group": "test"
-        },
-        {
             "label": "webpackBuild",
             "type": "npm",
             "script": "webpack:watch",
+            "options": {
+                "env": {
+                    "NODE_ENV": "${input:nodeEnv}",
+                    "BACKEND": "${input:zBackend}"
+                }
+            },
             "promptOnClose": false,
             "problemMatcher": {
                 "base": "$tsc-watch",
@@ -35,6 +30,22 @@
             "runOptions": {
                 "instanceLimit": 1
             }
+        }
+    ],
+    "inputs": [
+        {
+            "type": "pickString",
+            "id": "nodeEnv",
+            "description": "Define node environment",
+            "options": ["development", "production"],
+            "default": "development"
+        },
+        {
+            "type": "pickString",
+            "id": "zBackend",
+            "description": "Select backend mode",
+            "options": ["local", "production"],
+            "default": "production"
         }
     ]
 }

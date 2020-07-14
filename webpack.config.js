@@ -3,30 +3,39 @@
 
 "use strict";
 
+const glob = require("glob");
 const path = require("path");
 const TerserPlugin = require("terser-webpack-plugin");
+const webpack = require("webpack");
 const merge = require("webpack-merge");
+
+const { localApi, productionApi } = require("./config");
 
 /**@type {import('webpack').ConfigurationFactory}*/
 const config = () => {
-    const isDevelopmentMode = process.env.DEBUG_MODE && process.env.DEBUG_MODE !== "production";
-    console.log(
-        `Webpack building in ${isDevelopmentMode ? "development" : "production"} configuration.`,
-    );
+    const isDevelopmentMode = process.env.NODE_ENV && process.env.NODE_ENV === "development";
+
+    const apiConfig =
+        process.env.BACKEND && process.env.BACKEND === "local" ? localApi : productionApi;
 
     /**@type {import('webpack').Configuration}*/
     const commonConfig = {
         target: "node",
-        entry: "./src/extension.ts",
+        entry: {
+            extension: "./src/extension.ts",
+            "testBundle.test": glob.sync("./src/test/**/*.test.ts"),
+        },
         output: {
             path: path.resolve(__dirname, "dist"),
-            filename: "extension.js",
+            filename: "[name].js",
             libraryTarget: "commonjs2",
             devtoolModuleFilenameTemplate: "../[resource-path]",
         },
         externals: {
-            // vscode-module is created on-the-fly and must be excluded.
+            chai: "commonjs chai",
+            mocha: "commonjs mocha",
             vscode: "commonjs vscode",
+            "vscode-test": "commonjs vscode-test",
         },
         resolve: {
             extensions: [".ts", ".js"],
@@ -71,6 +80,12 @@ const config = () => {
                 },
             ],
         },
+        plugins: [
+            new webpack.DefinePlugin({
+                __DEBUG_MODE__: JSON.stringify(isDevelopmentMode),
+                ...apiConfig,
+            }),
+        ],
     };
 
     /**@type {import('webpack').Configuration}*/
@@ -95,6 +110,11 @@ const config = () => {
             ],
         },
     };
+
+    console.log(
+        `Webpack building in ${isDevelopmentMode ? "development" : "production"} configuration.`,
+    );
+    console.log(`Configured backend: ${apiConfig.__TMC_API_URL__}`);
 
     return merge(commonConfig, isDevelopmentMode ? devConfig : prodConfig);
 };
