@@ -47,7 +47,8 @@ import {
     TmcLangsFilePath,
     TmcLangsPath,
     TmcLangsResponse,
-    TmcLangsTestResults,
+    TmcLangsTestResultsJava,
+    TmcLangsTestResultsRust,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
 
@@ -386,11 +387,14 @@ export default class TMC {
     /**
      * Runs tests locally for an exercise
      * @param id Id of the exercise
+     * @param isInsider To be removed once TMC Lang JAR removed.
+     * Insider version toggle.
      */
     public runTests(
         id: number,
+        isInsider: boolean,
         executablePath?: string,
-    ): [Promise<Result<TmcLangsTestResults, Error>>, () => void] {
+    ): [Promise<Result<TmcLangsTestResultsJava | TmcLangsTestResultsRust, Error>>, () => void] {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
@@ -403,9 +407,16 @@ export default class TMC {
             action: "run-tests",
             exerciseFolderPath: exerciseFolderPath.val,
             executablePath,
+            isInsider,
         });
 
-        return [this.checkApiResponse(testRunner, createIs<TmcLangsTestResults>()), interrupt];
+        return [
+            this.checkApiResponse(
+                testRunner,
+                createIs<TmcLangsTestResultsJava | TmcLangsTestResultsRust>(),
+            ),
+            interrupt,
+        ];
     }
 
     /**
@@ -500,6 +511,10 @@ export default class TMC {
         let exercisePath = "";
         let outputPath = "";
         let executablePath: string | undefined = undefined;
+        /**
+         * Insider version toggle.
+         */
+        let insider = false;
 
         switch (tmcLangsAction.action) {
             case "extract-project":
@@ -521,6 +536,7 @@ export default class TMC {
                     this.resources.getDataPath(),
                     `temp_${this.nextLangsJsonId++}.json`,
                 );
+                insider = tmcLangsAction.isInsider;
                 break;
             case "get-exercise-packaging-configuration":
                 exercisePath = tmcLangsAction.exerciseFolderPath;
@@ -536,29 +552,42 @@ export default class TMC {
         const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
 
-        const command = `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
-
-        Logger.log(command);
+        /**
+         * Insider version toggle.
+         */
+        let command = "";
+        if (insider) {
+            command = `${this.resources.getCliPath()} ${action} ${arg0} ${arg1}`;
+            Logger.warn("Using experimental feature", command);
+        } else {
+            command = `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
+            Logger.log(command);
+        }
 
         let active = true;
         let error: cp.ExecException | undefined;
         let interrupted = false;
         let [stdoutExec, stderrExec] = ["", ""];
+        const currentEnvVar = process.env;
 
-        const process = cp.exec(command, (err, stdout, stderr) => {
-            active = false;
-            stdoutExec = stdout;
-            stderrExec = stderr;
-            if (err) {
-                Logger.error(`Process raised error: ${command}`, err, stdout, stderr);
-                error = err;
-            }
-        });
+        const cprocess = cp.exec(
+            command,
+            insider ? { env: { ...currentEnvVar, RUST_LOG: "debug" } } : {},
+            (err, stdout, stderr) => {
+                active = false;
+                stdoutExec = stdout;
+                stderrExec = stderr;
+                if (err) {
+                    Logger.error(`Process raised error: ${command}`, err, stdout, stderr);
+                    error = err;
+                }
+            },
+        );
 
         const interrupt = (): void => {
             if (active) {
-                Logger.log(`Killing TMC-Langs process ${process.pid}`);
-                kill(process.pid);
+                Logger.log(`Killing TMC-Langs process ${cprocess.pid}`);
+                kill(cprocess.pid);
                 interrupted = true;
             }
         };
@@ -575,7 +604,7 @@ export default class TMC {
                 );
             }, TMC_LANGS_TIMEOUT);
 
-            process.on("exit", (code) => {
+            cprocess.on("exit", (code) => {
                 clearTimeout(timeout);
                 if (error) {
                     return resolve(new Err(error));
@@ -584,8 +613,8 @@ export default class TMC {
                 } else if (code !== null && code > 0) {
                     return resolve(new Err(new Error("Unknown error")));
                 }
-                const stdout = (process.stdout?.read() || "") as string;
-                const stderr = (process.stderr?.read() || "") as string;
+                const stdout = (cprocess.stdout?.read() || "") as string;
+                const stderr = (cprocess.stderr?.read() || "") as string;
                 return resolve(new Ok([stdout, stderr]));
             });
         });

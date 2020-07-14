@@ -19,6 +19,7 @@ import {
     getCurrentExerciseData,
     isWorkspaceOpen,
     Logger,
+    LogLevel,
     parseFeedbackQuestion,
     sleep,
 } from "../utils/";
@@ -76,7 +77,15 @@ export async function logout(
  * Tests an exercise while keeping the user informed
  */
 export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, tmc, userData, workspaceManager, temporaryWebviewProvider, vsc } = actionContext;
+    const {
+        ui,
+        tmc,
+        userData,
+        workspaceManager,
+        temporaryWebviewProvider,
+        vsc,
+        settings,
+    } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         const message = `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`;
@@ -95,7 +104,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
 
     if (!courseExamMode.perhapsExamMode) {
         const executablePath = vsc.getActiveEditorExecutablePath();
-        const [testRunner, interrupt] = tmc.runTests(id, executablePath);
+        const [testRunner, interrupt] = tmc.runTests(id, settings.isInsider(), executablePath);
         let aborted = false;
         const exerciseName = exerciseDetails.val.name;
 
@@ -136,7 +145,17 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             temporaryWebviewProvider.addToRecycables(temp);
             const message = `Exercise test run failed: ${testResult.val.name} - ${testResult.val.message}`;
             Logger.error(message);
-            showError(message);
+            showError(
+                message,
+                settings.getLogLevel() !== LogLevel.None
+                    ? [
+                          "Show logs",
+                          (): void => {
+                              Logger.show();
+                          },
+                      ]
+                    : ["Ok", (): void => {}],
+            );
             return;
         }
         ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);

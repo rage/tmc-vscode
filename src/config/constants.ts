@@ -7,6 +7,8 @@ export const EXTENSION_ID = "moocfi.test-my-code";
 export const OUTPUT_CHANNEL_NAME = "TestMyCode";
 export const TMC_JAR_URL = "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.8.5-SNAPSHOT.jar";
 export const TMC_JAR_NAME = "tmc-langs-cli-0.8.5-SNAPSHOT.jar";
+export const TMC_LANGS_RUST_VERSION = "0.1.3-alpha";
+export const TMC_LANGS_RUST_DL_URL = "https://download.mooc.fi/tmc-langs-rust/";
 export const JAVA_ZIP_URLS: {
     linux32?: string;
     linux64?: string;

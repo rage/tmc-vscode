@@ -20,18 +20,11 @@ import { ExtensionSettings, ExtensionSettingsData } from "./types";
  */
 export default class Settings {
     private readonly storage: Storage;
-    private readonly logger: Logger;
     private readonly resources: Resources;
     private settings: ExtensionSettings;
 
-    constructor(
-        storage: Storage,
-        logger: Logger,
-        settings: ExtensionSettings,
-        resources: Resources,
-    ) {
+    constructor(storage: Storage, settings: ExtensionSettings, resources: Resources) {
         this.storage = storage;
-        this.logger = logger;
         this.resources = resources;
         this.settings = settings;
         this.updateExtensionSettingsToStorage(settings);
