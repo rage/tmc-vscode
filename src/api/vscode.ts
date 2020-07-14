@@ -70,10 +70,9 @@ export default class VSC {
         if (!resource) {
             return undefined;
         }
-        Logger.log("Active text document", resource.document);
+        Logger.log("Active text document language:", resource.document.languageId);
         switch (resource.document.languageId) {
             case "python":
-                Logger.warn("Python");
                 return this.getPythonPath(resource.document);
         }
         return undefined;
