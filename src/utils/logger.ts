@@ -1,6 +1,6 @@
 import { OutputChannel, Uri, window } from "vscode";
 
-import { OUTPUT_CHANNEL_NAME } from "../config/constants";
+import { DEBUG_MODE, OUTPUT_CHANNEL_NAME } from "../config/constants";
 
 const emptyStr = "";
 
@@ -178,7 +178,7 @@ export class Logger {
     private static _isDebugging: boolean | undefined;
     static get isDebugging(): boolean {
         if (this._isDebugging === undefined) {
-            this._isDebugging = process.env.DEBUG_MODE === "debug";
+            this._isDebugging = DEBUG_MODE;
         }
 
         return this._isDebugging;
