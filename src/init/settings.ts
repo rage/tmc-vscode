@@ -49,6 +49,7 @@ export async function settingsInitialization(
         logLevel,
         hideMetaFiles,
     };
+    await storage.updateExtensionSettings(fixedSettings);
     Logger.log("Settings initialized", fixedSettings);
 
     return fixedSettings;

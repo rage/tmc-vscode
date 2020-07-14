@@ -244,14 +244,14 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (res.ok) {
                 Logger.log(`Moved workspace folder from ${old} to ${newPath}`);
                 if (!res.val) {
-                    settings.updateSetting({ setting: "oldDataPath", value: old });
+                    await settings.updateSetting({ setting: "oldDataPath", value: old });
                 }
                 showNotification(`TMC Data was successfully moved to ${newPath}`, [
                     "OK",
                     (): void => {},
                 ]);
                 resources.setDataPath(newPath);
-                settings.updateSetting({ setting: "dataPath", value: newPath });
+                await settings.updateSetting({ setting: "dataPath", value: newPath });
                 if (open) {
                     // Opening a workspace restarts VSCode (v1.44)
                     vscode.commands.executeCommand(
@@ -272,11 +272,11 @@ export function registerUiActions(actionContext: ActionContext): void {
 
     ui.webview.registerHandler(
         "changeLogLevel",
-        (msg: { type?: "changeLogLevel"; data?: LogLevel }) => {
+        async (msg: { type?: "changeLogLevel"; data?: LogLevel }) => {
             if (!(msg.type && msg.data)) {
                 return;
             }
-            settings.updateSetting({ setting: "logLevel", value: msg.data });
+            await settings.updateSetting({ setting: "logLevel", value: msg.data });
             Logger.configure(msg.data);
             openSettings(actionContext);
         },
@@ -284,22 +284,22 @@ export function registerUiActions(actionContext: ActionContext): void {
 
     ui.webview.registerHandler(
         "hideMetaFiles",
-        (msg: { type?: "hideMetaFiles"; data?: boolean }) => {
+        async (msg: { type?: "hideMetaFiles"; data?: boolean }) => {
             if (!(msg.type && msg.data !== undefined)) {
                 return;
             }
-            settings.updateSetting({ setting: "hideMetaFiles", value: msg.data });
+            await settings.updateSetting({ setting: "hideMetaFiles", value: msg.data });
             openSettings(actionContext);
         },
     );
 
     ui.webview.registerHandler(
         "insiderVersion",
-        (msg: { type?: "insiderVersion"; data?: boolean }) => {
+        async (msg: { type?: "insiderVersion"; data?: boolean }) => {
             if (!(msg.type && msg.data !== undefined)) {
                 return;
             }
-            settings.updateSetting({ setting: "insiderVersion", value: msg.data });
+            await settings.updateSetting({ setting: "insiderVersion", value: msg.data });
             openSettings(actionContext);
         },
     );

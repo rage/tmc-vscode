@@ -485,7 +485,7 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
  * Adds a new course to user's courses.
  */
 export async function addNewCourse(actionContext: ActionContext): Promise<Result<void, Error>> {
-    const { tmc, userData } = actionContext;
+    const { tmc, userData, resources } = actionContext;
     Logger.log("Adding new course");
     const orgAndCourse = await selectOrganizationAndCourse(actionContext);
 
@@ -494,25 +494,25 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
     }
 
     const courseDetailsResult = await tmc.getCourseDetails(orgAndCourse.val.course);
-    const courseExercises = await tmc.getCourseExercises(orgAndCourse.val.course);
-    const courseSettings = await tmc.getCourseSettings(orgAndCourse.val.course);
+    const courseExercisesResult = await tmc.getCourseExercises(orgAndCourse.val.course);
+    const courseSettingsResult = await tmc.getCourseSettings(orgAndCourse.val.course);
     if (courseDetailsResult.err) {
         return new Err(courseDetailsResult.val);
     }
-    if (courseExercises.err) {
-        return new Err(courseExercises.val);
+    if (courseExercisesResult.err) {
+        return new Err(courseExercisesResult.val);
     }
-    if (courseSettings.err) {
-        return new Err(courseSettings.val);
+    if (courseSettingsResult.err) {
+        return new Err(courseSettingsResult.val);
     }
 
     const courseDetails = courseDetailsResult.val.course;
-    const exercises = courseExercises.val;
-    const settings = courseSettings.val;
+    const courseExercises = courseExercisesResult.val;
+    const courseSettings = courseSettingsResult.val;
 
     let availablePoints = 0;
     let awardedPoints = 0;
-    exercises.forEach((x) => {
+    courseExercises.forEach((x) => {
         availablePoints += x.available_points.length;
         awardedPoints += x.awarded_points.length;
     });
@@ -530,13 +530,14 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         organization: orgAndCourse.val.organization,
         availablePoints: availablePoints,
         awardedPoints: awardedPoints,
-        perhapsExamMode: settings.hide_submission_results,
+        perhapsExamMode: courseSettings.hide_submission_results,
         newExercises: [],
         notifyAfter: 0,
-        disabled: settings.disabled_status === "enabled" ? false : true,
-        material_url: settings.material_url,
+        disabled: courseSettings.disabled_status === "enabled" ? false : true,
+        material_url: courseSettings.material_url,
     };
     userData.addCourse(localData);
+    resources.createWorkspaceFile(courseDetails.name);
     await displayUserCourses(actionContext);
     return Ok.EMPTY;
 }

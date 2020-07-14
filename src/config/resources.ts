@@ -1,4 +1,9 @@
+import * as fs from "fs-extra";
 import * as path from "path";
+
+import { Logger } from "../utils";
+
+import { WORKSPACE_SETTINGS_INSIDER } from "./constants";
 
 export default class Resources {
     public readonly cssFolder: string;
@@ -59,7 +64,29 @@ export default class Resources {
         return path.join(this.tmcDataFolder, this.tmcWorkspaceFolderPathRelative);
     }
 
-    public getWorkspaceFilePath(): string {
+    public createWorkspaceFile(courseName: string): void {
+        const tmcWorkspaceFilePath = path.join(
+            this.tmcDataFolder,
+            this.tmcWorkspaceFolderPathRelative,
+            courseName + ".code-workspace",
+        );
+        if (!fs.existsSync(tmcWorkspaceFilePath)) {
+            fs.writeFileSync(
+                tmcWorkspaceFilePath,
+                JSON.stringify({ folders: [{}], ...WORKSPACE_SETTINGS_INSIDER }),
+            );
+            Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
+        }
+    }
+
+    public getWorkspaceFilePath(courseName?: string): string {
+        if (courseName) {
+            return path.join(
+                this.tmcDataFolder,
+                this.tmcWorkspaceFolderPathRelative,
+                courseName + ".code-workspace",
+            );
+        }
         return path.join(this.tmcDataFolder, this.tmcWorkspaceFilePathRelative);
     }
 
