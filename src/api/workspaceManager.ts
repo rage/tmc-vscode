@@ -7,7 +7,7 @@ import { Err, Ok, Result } from "ts-results";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
-import Logger from "../utils/logger";
+import { Logger } from "../utils/logger";
 
 import { ExerciseDetails } from "./types";
 import WorkspaceWatcher from "./workspaceWatcher";
@@ -20,7 +20,6 @@ export default class WorkspaceManager {
     private readonly idToData: Map<number, LocalExerciseData>;
     private readonly storage: Storage;
     private readonly resources: Resources;
-    private readonly logger: Logger;
 
     // Data for the workspace filesystem event watcher
     private readonly watcher: WorkspaceWatcher;
@@ -30,10 +29,9 @@ export default class WorkspaceManager {
      * @param storage Storage object for persistent data storing
      * @param resources Resources instance for constructing the exercise path
      */
-    constructor(storage: Storage, resources: Resources, logger: Logger) {
+    constructor(storage: Storage, resources: Resources) {
         this.storage = storage;
         this.resources = resources;
-        this.logger = logger;
         const storedData = this.storage.getExerciseData();
         if (storedData) {
             this.idToData = new Map(storedData.map((x) => [x.id, x]));
@@ -43,7 +41,7 @@ export default class WorkspaceManager {
             this.pathToId = new Map();
         }
         this.workspaceIntegrityCheck();
-        this.watcher = new WorkspaceWatcher(this, resources, logger);
+        this.watcher = new WorkspaceWatcher(this, resources);
         this.watcher.start();
     }
 
@@ -403,7 +401,7 @@ export default class WorkspaceManager {
      * should be run at startup before the watcher is initialized
      */
     private workspaceIntegrityCheck(): void {
-        this.logger.log(
+        Logger.log(
             "WorkspaceManager - Checking that all exercise folders and their status are in place.",
         );
         for (const data of Array.from(this.idToData.values())) {

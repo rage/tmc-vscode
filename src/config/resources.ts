@@ -7,6 +7,7 @@ export default class Resources {
     public readonly extensionVersion: string;
     private tmcDataFolder: string;
     private javaPath: string;
+    private cliPath: string;
 
     private readonly tmcLangsPathRelative: string;
     private readonly tmcWorkspaceFolderPathRelative: string;
@@ -26,6 +27,7 @@ export default class Resources {
         tmcExercisesFolderPathRelative: string,
         tmcClosedExercisesFolderPathRelative: string,
         javaPath: string,
+        cliPath: string,
     ) {
         this.cssFolder = cssFolder;
         this.extensionVersion = extensionVersion;
@@ -38,10 +40,15 @@ export default class Resources {
         this.tmcExercisesFolderPathRelative = tmcExercisesFolderPathRelative;
         this.tmcClosedExercisesFolderPathRelative = tmcClosedExercisesFolderPathRelative;
         this.javaPath = javaPath;
+        this.cliPath = cliPath;
     }
 
     public setDataPath(dataPath: string): void {
         this.tmcDataFolder = dataPath;
+    }
+
+    public getCliPath(): string {
+        return this.cliPath;
     }
 
     public getTmcLangsPath(): string {

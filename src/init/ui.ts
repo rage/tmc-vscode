@@ -17,15 +17,9 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
+import { askForConfirmation, showError, showNotification } from "../api/vscode";
 import { ExerciseStatus } from "../config/types";
-import {
-    askForConfirmation,
-    isWorkspaceOpen,
-    LogLevel,
-    showError,
-    showNotification,
-    sleep,
-} from "../utils/";
+import { isWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -34,8 +28,8 @@ import {
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { tmc, workspaceManager, ui, resources, logger, settings } = actionContext;
-    logger.log("Initializing UI Actions");
+    const { tmc, workspaceManager, ui, resources, settings } = actionContext;
+    Logger.log("Initializing UI Actions");
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
     const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
 
@@ -138,7 +132,7 @@ export function registerUiActions(actionContext: ActionContext): void {
         const result = await addNewCourse(actionContext);
         if (result.err) {
             const message = `Failed to add new course: ${result.val.message}`;
-            logger.error(message);
+            Logger.error(message, result.val);
             showError(message);
         }
     });
@@ -189,10 +183,10 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             const result = await openExercises(actionContext, msg.ids);
             if (result.err) {
-                logger.error(`Error while opening exercises - ${result.val.message}`);
+                Logger.error(`Error while opening exercises - ${result.val.message}`, result.val);
                 const buttons: Array<[string, () => void]> = [];
                 settings.getLogLevel() !== LogLevel.None
-                    ? buttons.push(["Open logs", (): void => actionContext.logger.show()])
+                    ? buttons.push(["Open logs", (): void => Logger.show()])
                     : buttons.push(["Ok", (): void => {}]);
                 showError(`${result.val.name} - ${result.val.message}`, ...buttons);
             }
@@ -206,10 +200,10 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             const result = await closeExercises(actionContext, msg.ids);
             if (result.err) {
-                logger.error(`Error while closing exercises - ${result.val.message}`);
+                Logger.error(`Error while closing exercises - ${result.val.message}`);
                 const buttons: Array<[string, () => void]> = [];
                 settings.getLogLevel() !== LogLevel.None
-                    ? buttons.push(["Open logs", (): void => actionContext.logger.show()])
+                    ? buttons.push(["Open logs", (): void => Logger.show()])
                     : buttons.push(["Ok", (): void => {}]);
                 showError(`${result.val.name} - ${result.val.message}`, ...buttons);
             }
@@ -248,7 +242,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 },
             );
             if (res.ok) {
-                logger.log(`Moved workspace folder from ${old} to ${newPath}`);
+                Logger.log(`Moved workspace folder from ${old} to ${newPath}`);
                 if (!res.val) {
                     settings.updateSetting({ setting: "oldDataPath", value: old });
                 }
@@ -268,7 +262,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                     );
                 }
             } else {
-                logger.error(res.val.message);
+                Logger.error(res.val.message);
                 showError(res.val.message);
             }
             workspaceManager.restartWatcher();
@@ -283,7 +277,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 return;
             }
             settings.updateSetting({ setting: "logLevel", value: msg.data });
-            logger.setLogLevel(msg.data);
+            Logger.configure(msg.data);
             openSettings(actionContext);
         },
     );
@@ -299,11 +293,22 @@ export function registerUiActions(actionContext: ActionContext): void {
         },
     );
 
+    ui.webview.registerHandler(
+        "insiderVersion",
+        (msg: { type?: "insiderVersion"; data?: boolean }) => {
+            if (!(msg.type && msg.data !== undefined)) {
+                return;
+            }
+            settings.updateSetting({ setting: "insiderVersion", value: msg.data });
+            openSettings(actionContext);
+        },
+    );
+
     ui.webview.registerHandler("showLogsToUser", (msg: { type?: "showLogsToUser" }) => {
         if (!msg.type) {
             return;
         }
-        logger.show();
+        Logger.show();
     });
 
     ui.webview.registerHandler("openEditorDirection", (msg: { type?: "openEditorDirection" }) => {

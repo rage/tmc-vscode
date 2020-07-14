@@ -246,6 +246,7 @@ export type OldSubmission = {
 
 /**
  * TMC-langs.jar Actions
+ * Insider version toggle.
  */
 export type TmcLangsAction =
     | {
@@ -256,6 +257,8 @@ export type TmcLangsAction =
     | {
           action: "run-tests";
           exerciseFolderPath: string;
+          executablePath: string | undefined;
+          isInsider: boolean;
       }
     | {
           action: "get-exercise-packaging-configuration";
@@ -269,7 +272,7 @@ export type TmcLangsLogs = {
     };
 };
 
-export type TmcLangsTestResult = {
+export type TmcLangsTestResultJava = {
     name: string;
     successful: boolean;
     message: string;
@@ -278,10 +281,34 @@ export type TmcLangsTestResult = {
     exception?: string[];
 };
 
-export type TmcLangsTestResults = {
+export type TmcLangsTestResultsJava = {
     response: {
         status: string;
-        testResults: TmcLangsTestResult[];
+        testResults: TmcLangsTestResultJava[];
+        logs: {
+            stdout?: number[];
+            stderr?: number[];
+        };
+    } | null;
+} & TmcLangsLogs;
+
+export type TmcLangsTestResultRust = {
+    name: string;
+    successful: boolean;
+    message: string;
+    points: string[];
+    exception?: string[];
+};
+
+export type TmcLangsTestResultsRust = {
+    response: {
+        status:
+            | "PASSED"
+            | "TESTS_FAILED"
+            | "COMPILE_FAILED"
+            | "TESTRUN_INTERRUPTED"
+            | "GENERIC_ERROR";
+        testResults: TmcLangsTestResultRust[];
         logs: {
             stdout?: number[];
             stderr?: number[];
@@ -300,4 +327,8 @@ export type TmcLangsFilePath = {
     };
 } & TmcLangsLogs;
 
-export type TmcLangsResponse = TmcLangsPath | TmcLangsTestResults | TmcLangsFilePath;
+export type TmcLangsResponse =
+    | TmcLangsPath
+    | TmcLangsTestResultsJava
+    | TmcLangsTestResultsRust
+    | TmcLangsFilePath;

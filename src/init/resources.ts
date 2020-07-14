@@ -1,24 +1,28 @@
 import del = require("del");
 import * as fs from "fs-extra";
 import * as glob from "glob";
+import * as os from "os";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as unzipper from "unzipper";
 import * as vscode from "vscode";
 
+import { showProgressNotification } from "../api/vscode";
 import {
     EXTENSION_ID,
     JAVA_ZIP_URLS,
     TMC_JAR_NAME,
     TMC_JAR_URL,
+    TMC_LANGS_RUST_DL_URL,
+    TMC_LANGS_RUST_VERSION,
     WORKSPACE_ROOT_FILE,
     WORKSPACE_ROOT_FILE_TEXT,
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
-import { downloadFile, getPlatform, isJavaPresent, showProgressNotification } from "../utils/";
-import Logger from "../utils/logger";
+import { downloadFile, getPlatform, isJavaPresent } from "../utils/";
+import { Logger } from "../utils/logger";
 
 /**
  * Checks if Java is present and performs resource initialization on extension activation
@@ -27,7 +31,6 @@ import Logger from "../utils/logger";
 export async function resourceInitialization(
     extensionContext: vscode.ExtensionContext,
     storage: Storage,
-    logger: Logger,
 ): Promise<Result<Resources, Error>> {
     const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
 
@@ -65,7 +68,7 @@ export async function resourceInitialization(
                 if (javaUrl === undefined) {
                     return new Err(new Error("Java not found or improperly configured."));
                 }
-                logger.log(`Downloading java from ${javaUrl} to ${archivePath}`);
+                Logger.log(`Downloading java from ${javaUrl} to ${archivePath}`);
                 await showProgressNotification(
                     "Java not found. Downloading standalone bundle...",
                     async (p) =>
@@ -112,25 +115,25 @@ export async function resourceInitialization(
 
     if (!fs.existsSync(tmcDataPath)) {
         fs.mkdirSync(tmcDataPath, { recursive: true });
-        logger.log(`Created tmc data directory at ${tmcDataPath}`);
+        Logger.log(`Created tmc data directory at ${tmcDataPath}`);
     }
 
     const tmcWorkspacePath = path.join(tmcDataPath, tmcWorkspacePathRelative);
     if (!fs.existsSync(tmcWorkspacePath)) {
         fs.mkdirSync(tmcWorkspacePath);
-        logger.log(`Created tmc workspace directory at ${tmcWorkspacePath}`);
+        Logger.log(`Created tmc workspace directory at ${tmcWorkspacePath}`);
     }
 
     const tmcWorkspaceFilePath = path.join(tmcDataPath, tmcWorkspaceFilePathRelative);
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
         fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
-        logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
+        Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
     }
 
     const tmcExercisesFolderPath = path.join(tmcDataPath, tmcExercisesFolderPathRelative);
     if (!fs.existsSync(tmcExercisesFolderPath)) {
         fs.mkdirSync(tmcExercisesFolderPath);
-        logger.log(`Created tmc exercise directory at ${tmcExercisesFolderPath}`);
+        Logger.log(`Created tmc exercise directory at ${tmcExercisesFolderPath}`);
     }
 
     if (!fs.existsSync(path.join(tmcExercisesFolderPath, WORKSPACE_ROOT_FILE))) {
@@ -138,7 +141,7 @@ export async function resourceInitialization(
             path.join(tmcExercisesFolderPath, WORKSPACE_ROOT_FILE),
             WORKSPACE_ROOT_FILE_TEXT,
         );
-        logger.log(`Wrote tmc root file at ${tmcExercisesFolderPath}`);
+        Logger.log(`Wrote tmc root file at ${tmcExercisesFolderPath}`);
     }
 
     const tmcClosedExercisesFolderPath = path.join(
@@ -147,7 +150,7 @@ export async function resourceInitialization(
     );
     if (!fs.existsSync(tmcClosedExercisesFolderPath)) {
         fs.mkdirSync(tmcClosedExercisesFolderPath);
-        logger.log(`Created tmc closed exercise directory at ${tmcClosedExercisesFolderPath}`);
+        Logger.log(`Created tmc closed exercise directory at ${tmcClosedExercisesFolderPath}`);
     }
 
     const tmcLangsPath = path.join(tmcDataPath, tmcLangsPathRelative);
@@ -168,7 +171,56 @@ export async function resourceInitialization(
         if (tmcLangsResult.err) {
             return new Err(tmcLangsResult.val);
         }
-        logger.log(`${TMC_JAR_URL} downloaded`);
+        Logger.log(`${TMC_JAR_URL} downloaded`);
+    }
+
+    /**
+     * Insider version toggle.
+     */
+    let executable: string;
+    const osType = os.type();
+    if (osType === "Linux") {
+        Logger.log("Detected Linux");
+        executable = "tmc-langs-cli-linux-" + TMC_LANGS_RUST_VERSION;
+    } else if (osType === "Darwin") {
+        Logger.log("Detected MacOS");
+        executable = "tmc-langs-cli-macos-" + TMC_LANGS_RUST_VERSION;
+    } else if (osType === "Windows_NT") {
+        Logger.log("Detected Windows");
+        executable = "tmc-langs-cli-windows-" + TMC_LANGS_RUST_VERSION + ".exe";
+    } else {
+        Logger.warn("Detected unknown os", osType);
+        // Currently set linux CLI as default, this is experimental, in future return error.
+        executable = "tmc-langs-cli-linux-" + TMC_LANGS_RUST_VERSION;
+        // return new Err(new Error("Unexpected OS type from Node."));
+    }
+
+    const cliPath = path.join(tmcDataPath, "cli", executable);
+    const cliUrl = TMC_LANGS_RUST_DL_URL + executable;
+    if (!fs.existsSync(cliPath)) {
+        Logger.log("Downloading CLI from", cliUrl, "to", cliPath);
+        const [tmcLangsRustCLI] = await showProgressNotification(
+            "Downloading required files...",
+            async (p) =>
+                downloadFile(
+                    cliUrl,
+                    cliPath,
+                    undefined,
+                    undefined,
+                    (progress: number, increment: number) => p.report({ increment }),
+                ),
+        );
+        if (tmcLangsRustCLI.err) {
+            Logger.warn("Occured some error while downloading TMC Langs rust", tmcLangsRustCLI);
+        }
+        try {
+            const fd = await fs.open(cliPath, "r+");
+            await fs.fchmod(fd, 0o111);
+            await fs.close(fd);
+        } catch (e) {
+            Logger.error("Error", e);
+        }
+        Logger.log("CLI at", cliPath);
     }
 
     const resources: Resources = new Resources(
@@ -183,6 +235,7 @@ export async function resourceInitialization(
         tmcExercisesFolderPathRelative,
         tmcClosedExercisesFolderPathRelative,
         javaPath,
+        cliPath,
     );
 
     return new Ok(resources);

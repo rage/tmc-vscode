@@ -1,18 +1,18 @@
 import TMC from "../api/tmc";
+import VSC from "../api/vscode";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import Settings from "../config/settings";
 import { UserData } from "../config/userdata";
 import TemporaryWebviewProvider from "../ui/temporaryWebviewProvider";
 import UI from "../ui/ui";
-import Logger from "../utils/logger";
 
 export type ActionContext = {
-    logger: Logger;
     resources: Resources;
     settings: Settings;
     temporaryWebviewProvider: TemporaryWebviewProvider;
     tmc: TMC;
+    vsc: VSC;
     ui: UI;
     userData: UserData;
     workspaceManager: WorkspaceManager;

@@ -28,7 +28,7 @@ import {
     TimeoutError,
 } from "../errors";
 import { displayProgrammerError, downloadFile } from "../utils/";
-import Logger from "../utils/logger";
+import { Logger } from "../utils/logger";
 
 import {
     Course,
@@ -47,7 +47,8 @@ import {
     TmcLangsFilePath,
     TmcLangsPath,
     TmcLangsResponse,
-    TmcLangsTestResults,
+    TmcLangsTestResultsJava,
+    TmcLangsTestResultsRust,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
 
@@ -61,7 +62,6 @@ export default class TMC {
     private readonly resources: Resources;
     private readonly tmcApiUrl: string;
     private readonly tmcDefaultHeaders: { client: string; client_version: string };
-    private logger: Logger;
     private workspaceManager?: WorkspaceManager;
 
     private readonly cache: Map<string, TMCApiResponse>;
@@ -71,14 +71,13 @@ export default class TMC {
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage, resources: Resources, logger: Logger) {
+    constructor(storage: Storage, resources: Resources) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: ACCESS_TOKEN_URI,
             clientId: CLIENT_ID,
             clientSecret: CLIENT_SECRET,
         });
         this.storage = storage;
-        this.logger = logger;
         const authToken = storage.getAuthenticationToken();
         if (authToken) {
             this.token = new ClientOauth2.Token(this.oauth2, authToken);
@@ -119,7 +118,7 @@ export default class TMC {
             } else if (err.code === "EUNAVAILABLE") {
                 return new Err(new ConnectionError("Connection error"));
             }
-            this.logger.error("Unknown authentication error:", err);
+            Logger.error(err, "Unknown authentication error:");
             return new Err(new Error("Unknown error: " + err.code));
         }
         this.storage.updateAuthenticationToken(this.token.data);
@@ -303,7 +302,7 @@ export default class TMC {
         );
 
         if (extractResult.err) {
-            this.logger.error("Extracting failed", extractResult);
+            Logger.error("Extracting failed", extractResult);
             this.workspaceManager.deleteExercise(id);
         }
 
@@ -388,8 +387,14 @@ export default class TMC {
     /**
      * Runs tests locally for an exercise
      * @param id Id of the exercise
+     * @param isInsider To be removed once TMC Lang JAR removed.
+     * Insider version toggle.
      */
-    public runTests(id: number): [Promise<Result<TmcLangsTestResults, Error>>, () => void] {
+    public runTests(
+        id: number,
+        isInsider: boolean,
+        executablePath?: string,
+    ): [Promise<Result<TmcLangsTestResultsJava | TmcLangsTestResultsRust, Error>>, () => void] {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
@@ -401,9 +406,17 @@ export default class TMC {
         const [testRunner, interrupt] = this.executeLangsAction({
             action: "run-tests",
             exerciseFolderPath: exerciseFolderPath.val,
+            executablePath,
+            isInsider,
         });
 
-        return [this.checkApiResponse(testRunner, createIs<TmcLangsTestResults>()), interrupt];
+        return [
+            this.checkApiResponse(
+                testRunner,
+                createIs<TmcLangsTestResultsJava | TmcLangsTestResultsRust>(),
+            ),
+            interrupt,
+        ];
     }
 
     /**
@@ -497,6 +510,11 @@ export default class TMC {
         const action = tmcLangsAction.action;
         let exercisePath = "";
         let outputPath = "";
+        let executablePath: string | undefined = undefined;
+        /**
+         * Insider version toggle.
+         */
+        let insider = false;
 
         switch (tmcLangsAction.action) {
             case "extract-project":
@@ -512,11 +530,13 @@ export default class TMC {
                 ];
                 break;
             case "run-tests":
+                executablePath = tmcLangsAction.executablePath;
                 exercisePath = tmcLangsAction.exerciseFolderPath;
                 outputPath = path.join(
                     this.resources.getDataPath(),
                     `temp_${this.nextLangsJsonId++}.json`,
                 );
+                insider = tmcLangsAction.isInsider;
                 break;
             case "get-exercise-packaging-configuration":
                 exercisePath = tmcLangsAction.exerciseFolderPath;
@@ -527,32 +547,47 @@ export default class TMC {
                 break;
         }
 
+        Logger.log("ExecutablePath", executablePath);
+
         const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
 
-        const command = `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
-
-        this.logger.log(command);
+        /**
+         * Insider version toggle.
+         */
+        let command = "";
+        if (insider) {
+            command = `${this.resources.getCliPath()} ${action} ${arg0} ${arg1}`;
+            Logger.warn("Using experimental feature", command);
+        } else {
+            command = `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
+            Logger.log(command);
+        }
 
         let active = true;
         let error: cp.ExecException | undefined;
         let interrupted = false;
         let [stdoutExec, stderrExec] = ["", ""];
+        const currentEnvVar = process.env;
 
-        const process = cp.exec(command, (err, stdout, stderr) => {
-            active = false;
-            stdoutExec = stdout;
-            stderrExec = stderr;
-            if (err) {
-                this.logger.error(`Process raised error: ${command}`, err, stdout, stderr);
-                error = err;
-            }
-        });
+        const cprocess = cp.exec(
+            command,
+            insider ? { env: { ...currentEnvVar, RUST_LOG: "debug" } } : {},
+            (err, stdout, stderr) => {
+                active = false;
+                stdoutExec = stdout;
+                stderrExec = stderr;
+                if (err) {
+                    Logger.error(`Process raised error: ${command}`, err, stdout, stderr);
+                    error = err;
+                }
+            },
+        );
 
         const interrupt = (): void => {
             if (active) {
-                this.logger.log(`Killing TMC-Langs process ${process.pid}`);
-                kill(process.pid);
+                Logger.log(`Killing TMC-Langs process ${cprocess.pid}`);
+                kill(cprocess.pid);
                 interrupted = true;
             }
         };
@@ -569,7 +604,7 @@ export default class TMC {
                 );
             }, TMC_LANGS_TIMEOUT);
 
-            process.on("exit", (code) => {
+            cprocess.on("exit", (code) => {
                 clearTimeout(timeout);
                 if (error) {
                     return resolve(new Err(error));
@@ -578,8 +613,8 @@ export default class TMC {
                 } else if (code !== null && code > 0) {
                     return resolve(new Err(new Error("Unknown error")));
                 }
-                const stdout = (process.stdout?.read() || "") as string;
-                const stderr = (process.stderr?.read() || "") as string;
+                const stdout = (cprocess.stdout?.read() || "") as string;
+                const stderr = (cprocess.stderr?.read() || "") as string;
                 return resolve(new Ok([stdout, stderr]));
             });
         });
@@ -599,7 +634,7 @@ export default class TMC {
                     const stderr = result.val[1] ? result.val[1] : stderrExec;
                     const logs = { stdout, stderr };
 
-                    this.logger.log("Logs", stdout, stderr);
+                    Logger.log("Logs", stdout, stderr);
 
                     if (action === "extract-project" || action === "compress-project") {
                         return resolve(new Ok({ response: outputPath, logs }));
@@ -610,13 +645,13 @@ export default class TMC {
                         logs,
                     };
                     // del.sync(outputPath, { force: true });
-                    this.logger.log("Temp JSON data", readResult.response);
+                    Logger.log("Temp JSON data", readResult.response);
                     if (is<TmcLangsResponse>(readResult)) {
                         return resolve(new Ok(readResult));
                     }
 
-                    this.logger.error("Unexpected response JSON type", result.val);
-                    this.logger.show();
+                    Logger.error("Unexpected response JSON type", result.val);
+                    Logger.show();
                     return resolve(new Err(new Error("Unexpected response JSON type")));
                 });
             }),
@@ -695,11 +730,11 @@ export default class TMC {
                         }
                         return new Ok(responseObject);
                     }
-                    this.logger.error(
+                    Logger.error(
                         `Unexpected TMC response type from ${request.url}`,
                         responseObject,
                     );
-                    this.logger.show();
+                    Logger.show();
                     return new Err(new ApiError("Unexpected response type"));
                 } catch (error) {
                     return new Err(new ApiError("Response not in JSON format: " + error.name));
@@ -709,7 +744,7 @@ export default class TMC {
                 return new Err(new AuthorizationError("403 - Forbidden"));
             }
             const errorText = (await response.json())?.error || (await response.text());
-            this.logger.error(`${response.status} - ${response.statusText} - ${errorText}`);
+            Logger.error(`${response.status} - ${response.statusText} - ${errorText}`);
             return new Err(
                 new ApiError(`${response.status} - ${response.statusText} - ${errorText}`),
             );

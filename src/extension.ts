@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 
-import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
+import { checkForExerciseUpdates, checkForNewExercises, openSettings } from "./actions";
 import TMC from "./api/tmc";
+import VSC, { showError, showNotification } from "./api/vscode";
 import WorkspaceManager from "./api/workspaceManager";
 import { DEBUG_MODE, EXERCISE_CHECK_INTERVAL } from "./config/constants";
 import Settings from "./config/settings";
@@ -11,63 +12,88 @@ import { validateAndFix } from "./config/validate";
 import * as init from "./init";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
-import { showError } from "./utils/";
-import Logger from "./utils/logger";
+import { Logger, LogLevel } from "./utils/logger";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    const logger = new Logger();
-    logger.log(`Starting extension in "${DEBUG_MODE ? "development" : "production"}" mode.`);
+    Logger.configure(LogLevel.Verbose);
+    Logger.log(`Starting extension in "${DEBUG_MODE ? "development" : "production"}" mode.`);
 
     const storage = new Storage(context);
-    const resourcesResult = await init.resourceInitialization(context, storage, logger);
+
+    const resourcesResult = await init.resourceInitialization(context, storage);
     if (resourcesResult.err) {
         const message = `TestMyCode Initialization failed: ${resourcesResult.val}`;
-        logger.error(message);
+        Logger.error(message);
         showError(message);
         return;
     }
     const resources = resourcesResult.val;
 
-    const settingsResult = await init.settingsInitialization(storage, resources, logger);
-    const settings = new Settings(storage, logger, settingsResult, resources);
-    logger.setLogLevel(settings.getLogLevel());
-    await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
+    const settingsResult = await init.settingsInitialization(storage, resources);
+    const settings = new Settings(storage, settingsResult, resources);
+    Logger.configure(settings.getLogLevel());
 
-    logger.log(`VSCode version: ${vscode.version}`);
-    logger.log(`TMC extension version: ${resources.extensionVersion}`);
-    logger.log(
-        `Python extension version: ${
-            vscode.extensions.getExtension("ms-python.python")?.packageJSON.version
-        }`,
-    );
+    const vsc = new VSC(settings);
+    await vsc.activate();
+
+    const currentVersion = resources.extensionVersion;
+    const previousVersion = storage.getExtensionVersion();
+    if (currentVersion !== previousVersion) {
+        storage.updateExtensionVersion(currentVersion);
+    }
+
+    Logger.log(`VSCode version: ${vsc.getVSCodeVersion()}`);
+    Logger.log(`TMC extension version: ${resources.extensionVersion}`);
+    Logger.log(`Python extension version: ${vsc.getExtensionVersion("ms-python.python")}`);
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
+    const tmc = new TMC(storage, resources);
 
-    const tmc = new TMC(storage, resources, logger);
-    const validationResult = await validateAndFix(storage, tmc, ui, resources, logger);
+    const validationResult = await validateAndFix(storage, tmc, ui, resources);
     if (validationResult.err) {
         const message = `Data reconstruction failed: ${validationResult.val.message}`;
-        logger.error(message);
+        Logger.error(message);
         showError(message);
         return;
     }
 
-    const workspaceManager = new WorkspaceManager(storage, resources, logger);
+    const workspaceManager = new WorkspaceManager(storage, resources);
     tmc.setWorkspaceManager(workspaceManager);
-    const userData = new UserData(storage, logger);
+    const userData = new UserData(storage);
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
     const actionContext = {
-        logger,
         resources,
         settings,
         temporaryWebviewProvider,
         tmc,
+        vsc,
         ui,
         userData,
         workspaceManager,
     };
+
+    if (settings.isInsider()) {
+        Logger.warn("Using insider version.");
+        if (currentVersion !== previousVersion) {
+            showNotification(
+                "A new version of the extension has been released. " +
+                    "You are using the insider version of the TMC extension. " +
+                    "This means you will receive new feature updates prior to their release. " +
+                    "You can opt-out from insider version via our settings. ",
+                ["OK", (): void => {}],
+                ["Go to settings", (): Promise<void> => openSettings(actionContext)],
+                [
+                    "Read more...",
+                    (): void =>
+                        vsc.openUri(
+                            "https://github.com/rage/tmc-vscode-documents/blob/master/insider.md",
+                        ),
+                ],
+            );
+        }
+    }
 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);

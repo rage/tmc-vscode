@@ -2,7 +2,7 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { isWorkspaceOpen } from "../utils";
-import Logger, { LogLevel } from "../utils/logger";
+import { Logger, LogLevel } from "../utils/logger";
 
 import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
 import Resources from "./resources";
@@ -20,18 +20,11 @@ import { ExtensionSettings, ExtensionSettingsData } from "./types";
  */
 export default class Settings {
     private readonly storage: Storage;
-    private readonly logger: Logger;
     private readonly resources: Resources;
     private settings: ExtensionSettings;
 
-    constructor(
-        storage: Storage,
-        logger: Logger,
-        settings: ExtensionSettings,
-        resources: Resources,
-    ) {
+    constructor(storage: Storage, settings: ExtensionSettings, resources: Resources) {
         this.storage = storage;
-        this.logger = logger;
         this.resources = resources;
         this.settings = settings;
         this.updateExtensionSettingsToStorage(settings);
@@ -40,7 +33,7 @@ export default class Settings {
 
     private verifyWorkspaceSettingsIntegrity(): void {
         if (isWorkspaceOpen(this.resources)) {
-            this.logger.log("TMC Workspace open, verifying workspace settings integrity.");
+            Logger.log("TMC Workspace open, verifying workspace settings integrity.");
             this.setFilesExcludeInWorkspace(this.settings.hideMetaFiles);
             this.verifyFoldersInWorkspace();
             this.verifyWatcherPatternExclusion();
@@ -87,6 +80,9 @@ export default class Settings {
      */
     public updateSetting(data: ExtensionSettingsData): void {
         switch (data.setting) {
+            case "insiderVersion":
+                this.settings.insiderVersion = data.value;
+                break;
             case "dataPath":
                 this.settings.dataPath = data.value;
                 break;
@@ -101,7 +97,7 @@ export default class Settings {
                 this.setFilesExcludeInWorkspace(data.value);
                 break;
         }
-        this.logger.log("Updated settings data", data);
+        Logger.log("Updated settings data", data);
         this.updateExtensionSettingsToStorage(this.settings);
     }
 
@@ -141,7 +137,7 @@ export default class Settings {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private updateWorkspaceSetting(section: string, value: any): void {
         if (isWorkspaceOpen(this.resources)) {
-            const oldValue = this.getWorkspaceSetting(section);
+            const oldValue = this.getWorkspaceSettings(section);
             let newValue = value;
             if (value instanceof Object) {
                 newValue = { ...oldValue, ...value };
@@ -156,12 +152,16 @@ export default class Settings {
      * Returns the section for the Workspace setting. If undefined, returns all settings.
      * @param section A dot-separated identifier.
      */
-    private getWorkspaceSetting(section?: string): vscode.WorkspaceConfiguration | undefined {
+    public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration | undefined {
         if (isWorkspaceOpen(this.resources)) {
             return vscode.workspace.getConfiguration(
                 section,
                 vscode.Uri.file(this.resources.getWorkspaceFilePath()),
             );
         }
+    }
+
+    public isInsider(): boolean {
+        return this.settings.insiderVersion;
     }
 }
