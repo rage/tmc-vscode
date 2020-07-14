@@ -14,6 +14,10 @@ describe("Login tests", () => {
         editorView = new EditorView();
     });
 
+    afterEach(async () => {
+        await editorView.closeAllEditors();
+    });
+
     it("Activity Bar contains TMC icon", () => {
         activityBar.getViewControl("TestMyCode");
     });
@@ -81,10 +85,11 @@ describe("Login tests", () => {
             });
 
             await operateTMCWebview(editorView, async (webview) => {
-                await waitForElements(
+                const headers = await waitForElements(
                     () => webview.findWebElements(By.css("h1")),
                     async (e) => (await e.getText()) === "My courses",
                 );
+                expect(headers.length).to.be.equal(1);
             });
         };
         return new Promise((resolve, reject) => test().then(resolve).catch(reject)).finally();
