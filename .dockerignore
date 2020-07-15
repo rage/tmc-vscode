@@ -1,0 +1,7 @@
+.git/
+.github/
+backend/resources/
+dist/
+out/
+test-resources/
+*.vsix
