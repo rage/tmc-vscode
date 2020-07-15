@@ -24,11 +24,21 @@ export function getPlatform():
     | "windows64"
     | "macos64"
     | "macos32"
+    | "arm64"
+    | "arm"
     | "other" {
     const platform = process.platform;
     const arch = process.arch;
     if (platform === "linux") {
-        return arch === "x64" ? "linux64" : "linux32";
+        if (arch === "x64") {
+            return "linux64";
+        } else if (arch === "arm64") {
+            return "arm64";
+        } else if (arch === "arm") {
+            return "arm";
+        } else {
+            return "linux32";
+        }
     } else if (platform === "win32") {
         return arch === "x64" ? "windows64" : "windows32";
     } else if (platform === "darwin") {
