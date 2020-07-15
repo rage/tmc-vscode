@@ -45,9 +45,14 @@ jobs:
               uses: actions/setup-node@v1
               with:
                   node-version: ${{ matrix.node-version }}
+            - name: Setup ci
+              run: npm run ci:all
+            - name: Docker build test
+              run: docker build -f ./containers/ubuntu-test/Dockerfile . -t tmc-vscode-ubuntu-test
+            - name: Docker run ui test
+              run: docker run -t --rm tmc-vscode-ubuntu-test
             - name: Package extension
               run: |
-                  npm ci
                   npm install -g vsce
                   vsce package
                   # move packaged extension from project root to own release folder
