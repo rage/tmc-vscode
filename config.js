@@ -20,7 +20,7 @@ const productionApi = {
         "https://download.mooc.fi/tmc-langs/tmc-langs-cli-0.8.5-SNAPSHOT.jar",
     ),
     __TMC_LANGS_RUST_DL_URL__: JSON.stringify("https://download.mooc.fi/tmc-langs-rust/"),
-    __TMC_LANGS_RUST_VERSION__: JSON.stringify("0.1.3-alpha"),
+    __TMC_LANGS_RUST_VERSION__: JSON.stringify("0.1.5-alpha"),
 };
 
 module.exports = { localApi, productionApi };
