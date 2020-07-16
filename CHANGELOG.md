@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.1] - 2020-07-16
+
+#### Changed
+- Log level to verbose if insider.
+
+#### Fixed
+- Quote TMC Rust cli path in command.
+
 ## [0.9.0] - 2020-07-15
 
 #### Added

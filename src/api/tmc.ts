@@ -561,7 +561,7 @@ export default class TMC {
          */
         let command = "";
         if (insider) {
-            command = `${this.resources.getCliPath()} ${action} ${arg0} ${arg1}`;
+            command = `"${this.resources.getCliPath()}" ${action} ${arg0} ${arg1}`;
             Logger.warn("Using experimental feature", command);
         } else {
             command = `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
