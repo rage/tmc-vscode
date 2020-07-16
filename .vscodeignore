@@ -3,12 +3,14 @@
 .vscode/**
 .vscode-test/**
 bin/**
+containers/**
 node_modules/**
 out/**
 src/**
 test-resources/**
 types/**
 
+**/.dockerignore
 **/.eslintcache
 **/.gitattributes
 **/.gitignore

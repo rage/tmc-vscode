@@ -1,0 +1,9 @@
+.git/
+.github/
+backend/node_modules/
+backend/resources/
+dist/
+node_modules/
+out/
+test-resources/
+*.vsix
