@@ -19,7 +19,7 @@ describe("Login tests", () => {
     });
 
     it("Activity Bar contains TMC icon", () => {
-        activityBar.getViewControl("TestMyKoodi");
+        activityBar.getViewControl("TestMyCode");
     });
 
     it("Clicking activity bar provides TMC treeview", () => {

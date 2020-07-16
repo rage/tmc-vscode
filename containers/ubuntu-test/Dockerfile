@@ -15,7 +15,8 @@ RUN apt-get update && \
 
 COPY . .
 
-RUN cd backend && npm run setup && cd .. && \
+RUN npm run ci:all && \
+    cd backend && npm run setup && cd .. && \
     npm run ui-test:setup && \
     npm run ui-test:compile
 
