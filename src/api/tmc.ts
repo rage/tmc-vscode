@@ -550,8 +550,12 @@ export default class TMC {
 
         Logger.log("ExecutablePath", executablePath);
 
-        const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
-        const arg1 = `--outputPath="${outputPath}"`;
+        const arg0 = exercisePath
+            ? insider
+                ? `--exercise-path "${exercisePath}"`
+                : `--exercisePath="${exercisePath}"`
+            : "";
+        const arg1 = insider ? `--output-path "${outputPath}"` : `--outputPath="${outputPath}"`;
 
         /**
          * Insider version toggle.

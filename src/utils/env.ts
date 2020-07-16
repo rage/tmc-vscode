@@ -24,11 +24,21 @@ export function getPlatform():
     | "windows64"
     | "macos64"
     | "macos32"
+    | "arm64"
+    | "arm"
     | "other" {
     const platform = process.platform;
     const arch = process.arch;
     if (platform === "linux") {
-        return arch === "x64" ? "linux64" : "linux32";
+        if (arch === "x64") {
+            return "linux64";
+        } else if (arch === "arm64") {
+            return "arm64";
+        } else if (arch === "arm") {
+            return "arm";
+        } else {
+            return "linux32";
+        }
     } else if (platform === "win32") {
         return arch === "x64" ? "windows64" : "windows32";
     } else if (platform === "darwin") {
@@ -40,19 +50,21 @@ export function getPlatform():
 export function getRustExecutable(platform: string): string {
     switch (platform) {
         case "linux32":
-            return "tmc-langs-cli-linux-" + TMC_LANGS_RUST_VERSION;
+            return "tmc-langs-cli-i686-unknown-linux-gnu-" + TMC_LANGS_RUST_VERSION;
         case "linux64":
-            return "tmc-langs-cli-linux-" + TMC_LANGS_RUST_VERSION;
-        case "macos32":
-            return "tmc-langs-cli-macos-" + TMC_LANGS_RUST_VERSION;
+            return "tmc-langs-cli-x86_64-unknown-linux-gnu-" + TMC_LANGS_RUST_VERSION;
         case "macos64":
-            return "tmc-langs-cli-macos-" + TMC_LANGS_RUST_VERSION;
+            return "tmc-langs-cli-x86_64-apple-darwin-" + TMC_LANGS_RUST_VERSION;
         case "windows32":
-            return "tmc-langs-cli-windows-" + TMC_LANGS_RUST_VERSION + ".exe";
+            return "tmc-langs-cli-i686-pc-windows-msvc-" + TMC_LANGS_RUST_VERSION + ".exe";
         case "windows64":
-            return "tmc-langs-cli-windows-" + TMC_LANGS_RUST_VERSION + ".exe";
+            return "tmc-langs-cli-x86_64-pc-windows-msvc-" + TMC_LANGS_RUST_VERSION + ".exe";
+        case "arm":
+            return "tmc-langs-cli-armv7-unknown-linux-gnueabihf-" + TMC_LANGS_RUST_VERSION;
+        case "arm64":
+            return "tmc-langs-cli-aarch64-unknown-linux-gnu-" + TMC_LANGS_RUST_VERSION;
         default:
-            return "tmc-langs-cli-linux-" + TMC_LANGS_RUST_VERSION;
+            return "tmc-langs-cli-x86_64-unknown-linux-gnu-" + TMC_LANGS_RUST_VERSION;
         // Currently set linux CLI as default, this is experimental, in future return error.
         // return new Err(new Error("Unexpected OS type from Node."));
     }
