@@ -73,7 +73,7 @@ export default class Resources {
         if (!fs.existsSync(tmcWorkspaceFilePath)) {
             fs.writeFileSync(
                 tmcWorkspaceFilePath,
-                JSON.stringify({ folders: [{}], ...WORKSPACE_SETTINGS_INSIDER }),
+                JSON.stringify({ ...WORKSPACE_SETTINGS_INSIDER }),
             );
             Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
         }

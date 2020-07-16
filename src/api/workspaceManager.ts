@@ -1,6 +1,7 @@
 import { sync as delSync } from "del";
 import du = require("du");
 import * as fs from "fs-extra";
+import * as _ from "lodash";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
@@ -226,81 +227,73 @@ export default class WorkspaceManager {
         const results: Result<string, Error>[] = [];
 
         if (insider) {
-            const currentFolders = vscode.workspace.workspaceFolders;
-            if (!currentFolders) {
-                // ???
-                results.push(new Err(new Error("No exercises open in workspace")));
+            const data = this.idToData.get(ids[0]);
+            if (!data) {
+                results.push(new Err(new Error(`Invalid ID: ${ids[0]}`)));
                 return results;
             }
-            const currentlyOpenUris: vscode.Uri[] = currentFolders.map((f) => f.uri);
-            ids.forEach((id) => {
-                const data = this.idToData.get(id);
-                if (data && data.status === ExerciseStatus.CLOSED) {
-                    const openPath = this.getOpenPath(data);
-                    if (!fs.existsSync(openPath)) {
-                        this.setMissing(id);
-                        results.push(new Err(new Error(`Exercise data missing: ${openPath}`)));
-                        return;
-                    }
-                    currentlyOpenUris.push(vscode.Uri.file(openPath));
+            // All ID's from same currently course, so getting the first ID course name is enough?
+            if (isCorrectWorkspaceOpen(this.resources, data.course)) {
+                const currentlyOpenFolders = vscode.workspace.workspaceFolders;
+                if (!currentlyOpenFolders) {
+                    // User closed all folders manually?
+                    results.push(
+                        new Err(
+                            new Error("No exercises or the root folder .tmc open in workspace"),
+                        ),
+                    );
+                    return results;
                 }
-            });
-
-            const sortedCurrentlyOpenUris = currentlyOpenUris.sort();
-            Logger.warn("Objects", sortedCurrentlyOpenUris);
-            const mappedOpens = sortedCurrentlyOpenUris.map((e) => ({ uri: e }));
-            Logger.warn("Mapped objects", ...mappedOpens);
-            const mappedReverse = mappedOpens.reverse();
-            mappedReverse.pop();
-            const mappedTrue = mappedReverse.reverse();
-            const success = vscode.workspace.updateWorkspaceFolders(
-                1,
-                currentFolders.length === 1 ? null : currentFolders.length - 1,
-                ...mappedTrue,
-            );
-            Logger.log("Success", success);
-
-            // data.status = ExerciseStatus.OPEN;
-            // this.idToData.set(id, data);
-            /*
-            for (const id of ids) {
-                const data = this.idToData.get(id);
-                if (data && data.status === ExerciseStatus.CLOSED) {
-                    const openPath = this.getOpenPath(data);
-                    if (!fs.existsSync(openPath)) {
-                        this.setMissing(id);
-                        results.push(new Err(new Error(`Exercise data missing: ${openPath}`)));
-                        continue;
-                    }
-                    if (isCorrectWorkspaceOpen(this.resources, data.course)) {
-                        const successfull = vscode.workspace.updateWorkspaceFolders(
-                            vscode.workspace.workspaceFolders
-                                ? vscode.workspace.workspaceFolders.length
-                                : 0,
-                            null,
-                            { uri: vscode.Uri.file(openPath) },
-                        );
-                        // if (!successfull) {
-                        //     results.push(
-                        //         new Err(
-                        //             new Error(`Failed to open folder ${data.name}`),
-                        //         ),
-                        //     );
-                        //     continue;
-                        // }
-                        vscode.workspace.onDidChangeWorkspaceFolders((e) => {
-                            console.log(e);
-                            data.status = ExerciseStatus.OPEN;
-                            this.idToData.set(id, data);
-                            results.push(new Ok(openPath));
-                        });
-                    }
-                } else if (!data) {
-                    results.push(new Err(new Error(`Invalid ID: ${id}`)));
-                    continue;
+                let currentlyOpenFoldersUris: vscode.Uri[] = currentlyOpenFolders.map((f) => f.uri);
+                if (currentlyOpenFolders[0].name === ".tmc") {
+                    currentlyOpenFoldersUris = _.slice(currentlyOpenFoldersUris, 1);
+                } else {
+                    // Add it back as first folder?
                 }
+
+                const dataIds: LocalExerciseData[] = [];
+                const toOpenFoldersUris: vscode.Uri[] = [];
+                ids.forEach((id) => {
+                    const data = this.idToData.get(id);
+                    if (data && data.status === ExerciseStatus.CLOSED) {
+                        const openPath = this.getOpenPath(data);
+                        if (!fs.existsSync(openPath)) {
+                            this.setMissing(id);
+                            results.push(new Err(new Error(`Exercise data missing: ${openPath}`)));
+                            return;
+                        }
+                        dataIds.push(data);
+                        toOpenFoldersUris.push(vscode.Uri.file(openPath));
+                    } else {
+                        // Data not found or status different than closed?
+                        // Or how could we end up here...
+                    }
+                });
+
+                const toOpenUnionFoldersUris = _.unionBy(
+                    currentlyOpenFoldersUris,
+                    toOpenFoldersUris,
+                    "path",
+                );
+                const toOpenAsWorkspaceArg = toOpenUnionFoldersUris.sort().map((e) => ({ uri: e }));
+                const success = vscode.workspace.updateWorkspaceFolders(
+                    1,
+                    currentlyOpenFolders.length - 1,
+                    ...toOpenAsWorkspaceArg,
+                );
+
+                if (success) {
+                    dataIds.forEach((data) => {
+                        data.status = ExerciseStatus.OPEN;
+                        this.idToData.set(data.id, data);
+                        results.push(new Ok(this.getOpenPath(data)));
+                    });
+                } else {
+                    results.push(new Err(new Error("Failed to open exercises in workspace.")));
+                }
+            } else {
+                // just set status as closed and handle when opening workspace?
             }
-            */
             this.updatePersistentData();
         } else {
             this.watcher.stop();
@@ -353,59 +346,70 @@ export default class WorkspaceManager {
     public closeExercise(insider: boolean, ...ids: number[]): Result<void, Error>[] {
         const results: Result<void, Error>[] = [];
         if (insider) {
-            for (const id of ids) {
-                const data = this.idToData.get(id);
-                if (data && data.status === ExerciseStatus.OPEN) {
-                    const openPath = this.getOpenPath(data);
-                    if (!fs.existsSync(openPath)) {
-                        this.setMissing(id);
-                        results.push(new Err(new Error(`Exercise data missing: ${openPath}`)));
-                        continue;
-                    }
-                    if (isCorrectWorkspaceOpen(this.resources, data.course)) {
-                        Logger.log("Correct workspace open");
-                        const currentlyOpenFolders = vscode.workspace.workspaceFolders;
-                        if (!currentlyOpenFolders) {
-                            results.push(
-                                new Err(new Error("There are no workspace folders open.")),
-                            );
-                            continue;
-                        }
-                        const folderToRemove = currentlyOpenFolders.find(
-                            (f) => f.name === data.name,
-                        );
-                        if (!folderToRemove) {
-                            results.push(
-                                new Err(
-                                    new Error(`Folder named ${data.name} not found in workspace.`),
-                                ),
-                            );
-                            continue;
-                        }
-                        const successfull = vscode.workspace.updateWorkspaceFolders(
-                            folderToRemove.index,
-                            1,
-                        );
-                        Logger.log("Success", successfull);
-                        // if (!successfull) {
-                        //     results.push(
-                        //         new Err(
-                        //             new Error(`Failed to close folder ${data.name}`),
-                        //         ),
-                        //     );
-                        //     continue;
-                        // }
-                        // vscode.workspace.onDidChangeWorkspaceFolders((e) => {
-
-                        //     data.status = ExerciseStatus.CLOSED;
-                        //     this.idToData.set(id, data);
-                        //     results.push(Ok.EMPTY);
-                        // });
-                    }
-                } else if (!data) {
-                    results.push(new Err(new Error(`Invalid ID: ${id}`)));
-                    continue;
+            const data = this.idToData.get(ids[0]);
+            if (!data) {
+                results.push(new Err(new Error(`Invalid ID: ${ids[0]}`)));
+                return results;
+            }
+            if (isCorrectWorkspaceOpen(this.resources, data.course)) {
+                const currentlyOpenFolders = vscode.workspace.workspaceFolders;
+                if (!currentlyOpenFolders) {
+                    // User closed all folders manually?
+                    results.push(
+                        new Err(
+                            new Error("No exercises or the root folder .tmc open in workspace"),
+                        ),
+                    );
+                    return results;
                 }
+                let currentlyOpenFoldersUris: vscode.Uri[] = currentlyOpenFolders.map((f) => f.uri);
+                if (currentlyOpenFolders[0].name === ".tmc") {
+                    currentlyOpenFoldersUris = _.slice(currentlyOpenFoldersUris, 1);
+                } else {
+                    // Add it back as first folder?
+                }
+
+                const dataIds: LocalExerciseData[] = [];
+                const toCloseFoldersUris: vscode.Uri[] = [];
+                ids.forEach((id) => {
+                    const data = this.idToData.get(id);
+                    if (data && data.status === ExerciseStatus.OPEN) {
+                        const openPath = this.getOpenPath(data);
+                        if (!fs.existsSync(openPath)) {
+                            this.setMissing(id);
+                            results.push(new Err(new Error(`Exercise data missing: ${openPath}`)));
+                            return;
+                        }
+                        dataIds.push(data);
+                        toCloseFoldersUris.push(vscode.Uri.file(openPath));
+                    } else {
+                        // Data not found or status different than closed?
+                        // Or how could we end up here...
+                    }
+                });
+                const toCloseDifferenceFoldersUris = _.differenceBy(
+                    currentlyOpenFoldersUris,
+                    toCloseFoldersUris,
+                    "path",
+                );
+                const toReOpenAsWorkspaceArg = toCloseDifferenceFoldersUris
+                    .sort()
+                    .map((e) => ({ uri: e }));
+                const success = vscode.workspace.updateWorkspaceFolders(
+                    1,
+                    currentlyOpenFolders.length - 1,
+                    ...toReOpenAsWorkspaceArg,
+                );
+
+                if (success) {
+                    dataIds.forEach((data) => {
+                        data.status = ExerciseStatus.CLOSED;
+                        this.idToData.set(data.id, data);
+                        results.push(Ok.EMPTY);
+                    });
+                }
+            } else {
+                // just set status as open and handle when opening workspace?
             }
             this.updatePersistentData();
         } else {
