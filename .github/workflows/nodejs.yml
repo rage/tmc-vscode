@@ -1,6 +1,6 @@
-name: Node CI
+name: Extension tests
 
-on: [push]
+on: push
 
 jobs:
     extension_tests:
@@ -30,39 +30,3 @@ jobs:
               uses: GabrielBB/xvfb-action@v1.0
               with:
                   run: npm test
-
-    build_and_upload:
-        name: Build and upload
-        needs: [extension_tests]
-        runs-on: [ubuntu-latest]
-        strategy:
-            matrix:
-                node-version: [12.x]
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v1
-            - name: Use Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v1
-              with:
-                  node-version: ${{ matrix.node-version }}
-            - name: Package extension
-              run: |
-                  npm ci
-                  npm install -g vsce
-                  vsce package
-                  # move packaged extension from project root to own release folder
-                  mkdir extension && mv *.vsix extension
-              env:
-                  CI: true
-            - name: Upload artifact
-              uses: actions/upload-artifact@v1
-              if: success()
-              with:
-                  name: packaged-extension
-                  path: extension/
-            - name: Publish if ${{ github.ref }} is a tag
-              if: success() && startsWith( github.ref, 'refs/tags/v' )
-              run: |
-                  chmod +x bin/validateRelease.sh
-                  bin/validateRelease.sh ${{ github.ref }}
-                  vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} --packagePath extension/*.vsix

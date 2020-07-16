@@ -36,10 +36,11 @@ export async function settingsInitialization(
     const insiderVersion =
         settings?.insiderVersion !== undefined ? settings.insiderVersion : Math.random() < 0.1;
     const tmcDataPath = settings?.dataPath || resources.getDataPath();
-    const logLevel =
-        is<LogLevel>(settings?.logLevel) && settings?.logLevel
-            ? settings.logLevel
-            : LogLevel.Errors;
+    const logLevel = insiderVersion
+        ? LogLevel.Verbose
+        : is<LogLevel>(settings?.logLevel) && settings?.logLevel
+        ? settings.logLevel
+        : LogLevel.Errors;
     const hideMetaFiles = settings?.hideMetaFiles !== undefined ? settings.hideMetaFiles : true;
 
     const fixedSettings: ExtensionSettings = {

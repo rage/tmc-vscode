@@ -1,0 +1,49 @@
+name: Build and Upload
+
+on:
+    push:
+        branches: [master]
+        tags:
+            - v[0-9]+.[0-9]+.[0-9]+
+    pull_request:
+        branches: [master]
+
+jobs:
+    build_and_upload:
+        name: Build and Upload
+        runs-on: [ubuntu-latest]
+        strategy:
+            matrix:
+                node-version: [12.x]
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v1
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v1
+              with:
+                  node-version: ${{ matrix.node-version }}
+            - name: Build E2E images
+              run: docker build -f ./containers/ubuntu-test/Dockerfile . -t tmc-vscode-ubuntu-test
+            - name: Run ui tests
+              run: docker run -t --rm tmc-vscode-ubuntu-test
+            - name: Package extension
+              run: |
+                  npm run ci:all
+                  npm install -g vsce
+                  vsce package
+                  # move packaged extension from project root to own release folder
+                  mkdir extension && mv *.vsix extension
+              env:
+                  CI: true
+            - name: Upload artifact
+              uses: actions/upload-artifact@v1
+              if: success()
+              with:
+                  name: packaged-extension
+                  path: extension/
+            - name: Publish if ${{ github.ref }} is a tag
+              if: success() && startsWith( github.ref, 'refs/tags/v' )
+              run: |
+                  chmod +x bin/validateRelease.sh
+                  bin/validateRelease.sh ${{ github.ref }}
+                  vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} --packagePath extension/*.vsix
