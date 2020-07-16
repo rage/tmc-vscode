@@ -20,7 +20,7 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
 ): void {
-    const { ui, workspaceManager, userData } = actionContext;
+    const { ui, workspaceManager, userData, settings } = actionContext;
     Logger.log("Registering TMC VSCode commands");
 
     context.subscriptions.push(
@@ -107,7 +107,7 @@ export function registerCommands(
             const editor = vscode.window.activeTextEditor;
             const resource = editor?.document.uri;
             await resetExercise(actionContext, exerciseId);
-            workspaceManager.openExercise(exerciseId);
+            workspaceManager.openExercise(settings.isInsider(), exerciseId);
 
             if (editor && resource) {
                 vscode.commands.executeCommand<undefined>(

@@ -59,7 +59,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
     }
 
-    const workspaceManager = new WorkspaceManager(storage, resources);
+    const workspaceManager = new WorkspaceManager(storage, resources, settings);
     tmc.setWorkspaceManager(workspaceManager);
     const userData = new UserData(storage);
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);

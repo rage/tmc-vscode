@@ -78,6 +78,12 @@ export function isWorkspaceOpen(resources: Resources): boolean {
     return currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString();
 }
 
+export function isCorrectWorkspaceOpen(resources: Resources, courseName: string): boolean {
+    const currentWorkspaceFile = vscode.workspace.workspaceFile;
+    const tmcWorkspaceFile = vscode.Uri.file(resources.getWorkspaceFilePath(courseName));
+    return currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString();
+}
+
 /**
  * Await this to pause execution for an amount of time
  * @param millis

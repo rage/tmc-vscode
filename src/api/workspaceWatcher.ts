@@ -24,7 +24,10 @@ export default class WorkspaceWatcher {
         this.running = false;
         Logger.log("WorkspaceWatcher initializing");
         for (const exercise of workspaceManager.getAllExercises()) {
-            if (exercise.status === ExerciseStatus.OPEN) {
+            if (
+                exercise.status === ExerciseStatus.OPEN ||
+                exercise.status === ExerciseStatus.CLOSED
+            ) {
                 this.watch(exercise);
             }
         }
