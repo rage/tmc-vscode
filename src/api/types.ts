@@ -244,25 +244,45 @@ export type OldSubmission = {
     paste_key: string | null;
 };
 
+interface LangsArchiveProject {
+    action: "extract-project" | "compress-project";
+    archivePath: string;
+    exerciseFolderPath: string;
+}
+
+interface LangsRunTests {
+    action: "run-tests";
+    exerciseFolderPath: string;
+}
+
+interface LangsRunTestsInsider {
+    action: "run-tests-insider";
+    exerciseFolderPath: string;
+    executablePath: string | undefined;
+}
+
+interface LangsGetExercisePackagingConfiguration {
+    action: "get-exercise-packaging-configuration";
+    exerciseFolderPath: string;
+}
+
+interface LangsLogin {
+    action: "login-insider";
+    token: string;
+}
+
 /**
  * TMC-langs.jar Actions
  * Insider version toggle.
  */
 export type TmcLangsAction =
+    | LangsArchiveProject
+    | LangsRunTests
+    | LangsRunTestsInsider
+    | LangsGetExercisePackagingConfiguration
+    | LangsLogin
     | {
-          action: "extract-project" | "compress-project";
-          archivePath: string;
-          exerciseFolderPath: string;
-      }
-    | {
-          action: "run-tests";
-          exerciseFolderPath: string;
-          executablePath: string | undefined;
-          isInsider: boolean;
-      }
-    | {
-          action: "get-exercise-packaging-configuration";
-          exerciseFolderPath: string;
+          action: "logged-in-insider" | "logout-insider";
       };
 
 export type TmcLangsLogs = {

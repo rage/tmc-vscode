@@ -13,6 +13,7 @@ import * as url from "url";
 import {
     ACCESS_TOKEN_URI,
     CLIENT_ID,
+    CLIENT_NAME,
     CLIENT_SECRET,
     TMC_API_URL,
     TMC_LANGS_TIMEOUT,
@@ -86,7 +87,7 @@ export default class TMC {
         this.tmcApiUrl = TMC_API_URL;
         this.cache = new Map();
         this.tmcDefaultHeaders = {
-            client: "vscode_plugin",
+            client: CLIENT_NAME,
             client_version: resources.extensionVersion,
         };
     }
@@ -403,12 +404,18 @@ export default class TMC {
             return [Promise.resolve(new Err(new Error("???"))), (): void => {}];
         }
 
-        const [testRunner, interrupt] = this.executeLangsAction({
-            action: "run-tests",
-            exerciseFolderPath: exerciseFolderPath.val,
-            executablePath,
-            isInsider,
-        });
+        const [testRunner, interrupt] = this.executeLangsAction(
+            isInsider
+                ? {
+                      action: "run-tests-insider",
+                      exerciseFolderPath: exerciseFolderPath.val,
+                      executablePath,
+                  }
+                : {
+                      action: "run-tests",
+                      exerciseFolderPath: exerciseFolderPath.val,
+                  },
+        );
 
         return [
             this.checkApiResponse(
@@ -507,76 +514,95 @@ export default class TMC {
     private executeLangsAction(
         tmcLangsAction: TmcLangsAction,
     ): [Promise<Result<TmcLangsResponse, Error>>, () => void] {
-        const action = tmcLangsAction.action;
-        let exercisePath = "";
-        let outputPath = "";
-        let executablePath: string | undefined = undefined;
-        /**
-         * Insider version toggle.
-         */
-        let insider = false;
+        const javaCommand = (command: string, ...args: string[]): string =>
+            `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ` +
+            `${command} ${args.join(" ")}`;
 
+        const rustCoreCommand = (command: string, ...args: string[]): string =>
+            `"${this.resources.getCliPath()}" core --client-name ${CLIENT_NAME} ` +
+            `${command} ${args.join(" ")}`;
+
+        const rustCommand = (command: string, ...args: string[]): string =>
+            `"${this.resources.getCliPath()}" ${command} ${args.join(" ")}`;
+
+        const nextTempOutputPath = (): string =>
+            path.join(this.resources.getDataPath(), `temp_${this.nextLangsJsonId++ % 10}.json`);
+
+        let command: string | undefined;
+        const env: { [key: string]: string } = {};
+        let outputPath = "";
         switch (tmcLangsAction.action) {
-            case "extract-project":
-                [exercisePath, outputPath] = [
-                    tmcLangsAction.archivePath,
-                    tmcLangsAction.exerciseFolderPath,
-                ];
-                break;
             case "compress-project":
-                [outputPath, exercisePath] = [
-                    tmcLangsAction.archivePath,
-                    tmcLangsAction.exerciseFolderPath,
-                ];
-                break;
-            case "run-tests":
-                executablePath = tmcLangsAction.executablePath;
-                exercisePath = tmcLangsAction.exerciseFolderPath;
-                outputPath = path.join(
-                    this.resources.getDataPath(),
-                    `temp_${this.nextLangsJsonId++}.json`,
+                command = javaCommand(
+                    "compress-project",
+                    `--exercisePath="${tmcLangsAction.exerciseFolderPath}"`,
+                    `--outputPath="${(outputPath = tmcLangsAction.archivePath)}"`,
                 );
-                insider = tmcLangsAction.isInsider;
+                break;
+            case "extract-project":
+                command = javaCommand(
+                    tmcLangsAction.action,
+                    `--exercisePath="${tmcLangsAction.archivePath}"`,
+                    `--outputPath="${(outputPath = tmcLangsAction.exerciseFolderPath)}"`,
+                );
                 break;
             case "get-exercise-packaging-configuration":
-                exercisePath = tmcLangsAction.exerciseFolderPath;
-                outputPath = path.join(
-                    this.resources.getDataPath(),
-                    `temp_${this.nextLangsJsonId++}.json`,
+                command = javaCommand(
+                    "get-exercise-packaging-configuration",
+                    `--exercisePath="${tmcLangsAction.exerciseFolderPath}"`,
                 );
+                break;
+            case "logged-in-insider":
+                command = rustCoreCommand("logged-in");
+                break;
+            case "login-insider":
+                command = rustCoreCommand("login", `--set-access-token ${tmcLangsAction.token}`);
+                break;
+            case "logout-insider":
+                command = rustCoreCommand("logout");
+                break;
+            case "run-tests":
+                command = javaCommand(
+                    "run-tests",
+                    `--exercisePath="${tmcLangsAction.exerciseFolderPath}"`,
+                    `--outputPath="${(outputPath = nextTempOutputPath())}"`,
+                );
+                break;
+            case "run-tests-insider":
+                command = rustCommand(
+                    "run-tests",
+                    `--exercise-path "${tmcLangsAction.exerciseFolderPath}"`,
+                    `--output-path "${(outputPath = nextTempOutputPath())}"`,
+                );
+                if (tmcLangsAction.executablePath) {
+                    env.TMC_LANGS_PYTHON_EXEC = tmcLangsAction.executablePath;
+                }
                 break;
         }
 
-        Logger.log("ExecutablePath", executablePath);
+        let showInsiderWarning = false;
+        switch (tmcLangsAction.action) {
+            case "logged-in-insider":
+            case "login-insider":
+            case "logout-insider":
+            case "run-tests-insider":
+                showInsiderWarning = true;
+                env.RUST_LOG = "debug";
+        }
 
-        const arg0 = exercisePath
-            ? insider
-                ? `--exercise-path "${exercisePath}"`
-                : `--exercisePath="${exercisePath}"`
-            : "";
-        const arg1 = insider ? `--output-path "${outputPath}"` : `--outputPath="${outputPath}"`;
-
-        /**
-         * Insider version toggle.
-         */
-        let command = "";
-        if (insider) {
-            command = `"${this.resources.getCliPath()}" ${action} ${arg0} ${arg1}`;
+        if (showInsiderWarning) {
             Logger.warn("Using experimental feature", command);
-        } else {
-            command = `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
-            Logger.log(command);
         }
 
         let active = true;
         let error: cp.ExecException | undefined;
         let interrupted = false;
         let [stdoutExec, stderrExec] = ["", ""];
-        const currentEnvVar = process.env;
 
+        Logger.log(command);
         const cprocess = cp.exec(
             command,
-            insider ? { env: { ...currentEnvVar, RUST_LOG: "debug" } } : {},
+            { env: { ...process.env, ...env } },
             (err, stdout, stderr) => {
                 active = false;
                 stdoutExec = stdout;
@@ -623,44 +649,43 @@ export default class TMC {
             });
         });
 
-        return [
-            new Promise((resolve) => {
-                processResult.then((result) => {
-                    if (error) {
-                        return resolve(new Err(error));
-                    }
+        const processResultHandler = async (): Promise<Result<TmcLangsResponse, Error>> => {
+            const result = await processResult;
+            if (error) {
+                return new Err(error);
+            }
 
-                    if (result.err) {
-                        return resolve(new Err(result.val));
-                    }
+            if (result.err) {
+                return new Err(result.val);
+            }
 
-                    const stdout = result.val[0] ? result.val[0] : stdoutExec;
-                    const stderr = result.val[1] ? result.val[1] : stderrExec;
-                    const logs = { stdout, stderr };
+            const stdout = result.val[0] ? result.val[0] : stdoutExec;
+            const stderr = result.val[1] ? result.val[1] : stderrExec;
+            const logs = { stdout, stderr };
 
-                    Logger.log("Logs", stdout, stderr);
+            Logger.log("Logs", stdout, stderr);
 
-                    if (action === "extract-project" || action === "compress-project") {
-                        return resolve(new Ok({ response: outputPath, logs }));
-                    }
+            const action = tmcLangsAction.action;
+            if (action === "extract-project" || action === "compress-project") {
+                return new Ok({ response: outputPath, logs });
+            }
 
-                    const readResult = {
-                        response: JSON.parse(fs.readFileSync(outputPath, "utf8")),
-                        logs,
-                    };
-                    // del.sync(outputPath, { force: true });
-                    Logger.log("Temp JSON data", readResult.response);
-                    if (is<TmcLangsResponse>(readResult)) {
-                        return resolve(new Ok(readResult));
-                    }
+            const readResult = {
+                response: JSON.parse(fs.readFileSync(outputPath, "utf8")),
+                logs,
+            };
+            // del.sync(outputPath, { force: true });
+            Logger.log("Temp JSON data", readResult.response);
+            if (is<TmcLangsResponse>(readResult)) {
+                return new Ok(readResult);
+            }
 
-                    Logger.error("Unexpected response JSON type", result.val);
-                    Logger.show();
-                    return resolve(new Err(new Error("Unexpected response JSON type")));
-                });
-            }),
-            interrupt,
-        ];
+            Logger.error("Unexpected response JSON type", result.val);
+            Logger.show();
+            return new Err(new Error("Unexpected response JSON type"));
+        };
+
+        return [processResultHandler(), interrupt];
     }
 
     /**
