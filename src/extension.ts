@@ -103,7 +103,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ) {
         Logger.log("TMC Workspace identified, listening for folder changes.");
         vscode.workspace.onDidChangeWorkspaceFolders((listener) => {
-            Logger.warn("Removed folders manually from workspace", listener);
+            Logger.warn(
+                "Removed folders manually from workspace, fixing state for exercises.",
+                listener,
+            );
             listener.removed.forEach((item) => {
                 const exercise = workspaceManager.getExerciseDataByPath(item.uri.fsPath);
                 if (

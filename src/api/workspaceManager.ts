@@ -45,7 +45,7 @@ export default class WorkspaceManager {
             this.idToData = new Map();
             this.pathToId = new Map();
         }
-        // this.workspaceIntegrityCheck();
+        this.workspaceIntegrityCheck();
         // this.watcher = new WorkspaceWatcher(this, resources);
         // this.watcher.start();
     }
@@ -300,6 +300,7 @@ export default class WorkspaceManager {
                     }
                     data.status = ExerciseStatus.OPEN;
                     this.idToData.set(data.id, data);
+                    results.push(new Ok({ id: data.id, status: "opened" }));
                 }
             });
         }
@@ -385,6 +386,7 @@ export default class WorkspaceManager {
                     }
                     data.status = ExerciseStatus.CLOSED;
                     this.idToData.set(data.id, data);
+                    results.push(new Ok({ id: data.id, status: "closed" }));
                 }
             });
         }
@@ -474,22 +476,17 @@ export default class WorkspaceManager {
      * Checks to make sure all the folders are in place,
      * should be run at startup before the watcher is initialized
      */
-    // private workspaceIntegrityCheck(): void {
-    //     for (const data of Array.from(this.idToData.values())) {
-    //         const isOpen = fs.existsSync(this.getOpenPath(data));
-    //         const isClosed = fs.existsSync(this.getClosedPath(data.id));
-    //         if (isOpen) {
-    //             data.status = ExerciseStatus.OPEN;
-    //             if (isClosed) {
-    //                 delSync(this.getClosedPath(data.id), { force: true });
-    //             }
-    //         } else if (isClosed) {
-    //             data.status = ExerciseStatus.CLOSED;
-    //         } else {
-    //             data.status = ExerciseStatus.MISSING;
-    //         }
-    //         this.idToData.set(data.id, data);
-    //     }
-    //     this.updatePersistentData();
-    // }
+    private workspaceIntegrityCheck(): void {
+        const workspaceAndCourseName = vscode.workspace.name?.split(" ")[0];
+        if (
+            workspaceAndCourseName &&
+            isCorrectWorkspaceOpen(this.resources, workspaceAndCourseName)
+        ) {
+            const exercises = this.getExercisesByCourseName(workspaceAndCourseName);
+            const openIds: number[] = exercises
+                .filter((ex) => ex.status === ExerciseStatus.OPEN)
+                .map((ex) => ex.id);
+            this.openExercise(...openIds);
+        }
+    }
 }

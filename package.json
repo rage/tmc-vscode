@@ -34,7 +34,6 @@
         "workspaceContains:**/.available_points.json",
         "workspaceContains:**/.tmc_test_results.json",
         "workspaceContains:**/.tmcproject.yml",
-        "workspaceContains:**/tmc",
         "workspaceContains:**/.tmcproject.json",
         "workspaceContains:**/.tmc.json",
         "onView:tmcView",
