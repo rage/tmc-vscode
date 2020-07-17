@@ -1,7 +1,13 @@
 import bodyParser from "body-parser";
 import express from "express";
 
-import { langsRounter, oauthRouter, orgsRouter } from "./controllers";
+import {
+    coreCoursesRouter,
+    coursesRouter,
+    langsRounter,
+    oauthRouter,
+    orgsRouter,
+} from "./controllers";
 
 const PORT = 4001;
 
@@ -18,6 +24,9 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use("/oauth", oauthRouter);
 
 app.use("/langs", langsRounter);
+
+app.use("/core/courses", coreCoursesRouter);
+app.use("/courses", coursesRouter);
 
 app.use("/org", orgsRouter);
 app.use("/org.json", orgsRouter);
