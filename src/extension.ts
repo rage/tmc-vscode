@@ -1,4 +1,5 @@
 import * as fs from "fs-extra";
+import path = require("path");
 import * as vscode from "vscode";
 
 import { checkForExerciseUpdates, checkForNewExercises, openSettings } from "./actions";
@@ -76,13 +77,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     };
 
     const allExerciseData = workspaceManager.getAllExercises();
-    Logger.warn("Data", allExerciseData);
     allExerciseData?.forEach(async (ex) => {
-        if (fs.existsSync(workspaceManager.getClosedPath(ex.id))) {
-            const ok = await workspaceManager.moveFolder(
-                workspaceManager.getClosedPath(ex.id),
-                workspaceManager.getOpenPath(ex),
-            );
+        const closedPath = path.join(resources.getClosedExercisesFolderPath(), ex.id.toString());
+        const openPath = path.join(
+            resources.getExercisesFolderPath(),
+            ex.organization,
+            ex.course,
+            ex.name,
+        );
+        if (fs.existsSync(closedPath)) {
+            const ok = await workspaceManager.moveFolder(closedPath, openPath);
             if (ok.err) {
                 Logger.error("Error while moving", ok.val);
             }

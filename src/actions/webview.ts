@@ -11,7 +11,7 @@ import TemporaryWebview from "../ui/temporaryWebview";
 import {
     CourseDetailsExercise,
     CourseDetailsExerciseGroup,
-    ExerciseStatus as TextStatus,
+    UIExerciseStatus as TextStatus,
     WebviewMessage,
 } from "../ui/types";
 import { chooseDeadline, dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utils/";

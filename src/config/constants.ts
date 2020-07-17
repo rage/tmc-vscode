@@ -103,10 +103,7 @@ export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Sec
  */
 export const WORKSPACE_ROOT_FILE = "TMC-Readme.txt";
 
-export const WORKSPACE_ROOT_FILE_TEXT = `This folder should be the first folder of every TMC Workspaces.
-Folder is in every workspace so that Visual Studio Code doesn't restart when opening and closing exercises via our extension.
-Please do not remove/move/delete this folder, otherwise the TMC extension will not work properly.
-This folder will be removed once Visual Studio Code deprecates the rootPath folder in workspaces and doesn't restart extensions.
+export const WORKSPACE_ROOT_FILE_TEXT = `Please do not remove/move/delete/close this folder, otherwise the TMC extension will not work properly.
 Read more: https://github.com/microsoft/vscode/issues/69335`;
 
 export const EXAM_TEST_RESULT = {

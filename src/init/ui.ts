@@ -189,7 +189,10 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             const result = await openExercises(actionContext, msg.ids);
             if (result.err) {
-                Logger.error(`Error while opening exercises - ${result.val.message}`, result.val);
+                Logger.error(
+                    `Error while opening exercises - ${result.val.message}`,
+                    result.val.stack,
+                );
                 const buttons: Array<[string, () => void]> = [];
                 settings.getLogLevel() !== LogLevel.None
                     ? buttons.push(["Open logs", (): void => Logger.show()])

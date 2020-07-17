@@ -129,7 +129,7 @@ export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number
     if (!editorPath) {
         return undefined;
     }
-    return workspaceManager.getExercisePath(editorPath);
+    return workspaceManager.checkExerciseIdByPath(editorPath);
 }
 
 /**

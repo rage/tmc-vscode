@@ -10,6 +10,7 @@ import Resources from "../config/resources";
 import Settings from "../config/settings";
 import Storage from "../config/storage";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
+import { UIExerciseStatus } from "../ui/types";
 import { isCorrectWorkspaceOpen } from "../utils";
 
 import { ExerciseDetails } from "./types";
@@ -39,7 +40,7 @@ export default class WorkspaceManager {
         const storedData = this.storage.getExerciseData();
         if (storedData) {
             this.idToData = new Map(storedData.map((x) => [x.id, x]));
-            this.pathToId = new Map(storedData.map((x) => [this.getOpenPath(x), x.id]));
+            this.pathToId = new Map(storedData.map((x) => [this.getExercisePath(x), x.id]));
         } else {
             this.idToData = new Map();
             this.pathToId = new Map();
@@ -162,7 +163,7 @@ export default class WorkspaceManager {
      * Checks if a given file is a part of a TMC exercise and returns its id if it is
      * @param filePath
      */
-    public getExercisePath(filePath: string): number | undefined {
+    public checkExerciseIdByPath(filePath: string): number | undefined {
         const exerciseFolderPath = this.resources.getExercisesFolderPath();
         const relation = path.relative(exerciseFolderPath, filePath);
 
@@ -220,14 +221,16 @@ export default class WorkspaceManager {
      * Opens exercise by moving it to workspace folder.
      * @param id Exercise ID to open
      */
-    public openExercise(...ids: number[]): Result<string, Error>[] {
-        const results: Result<string, Error>[] = [];
+    public openExercise(
+        ...ids: number[]
+    ): Result<{ id: number; status: UIExerciseStatus }, Error>[] {
+        const results: Result<{ id: number; status: UIExerciseStatus }, Error>[] = [];
         const data = this.idToData.get(ids[0]);
         if (!data) {
             results.push(new Err(new Error(`Invalid ID: ${ids[0]}`)));
             return results;
         }
-        // All ID's from same currently course, so getting the first ID course name is enough?
+
         if (isCorrectWorkspaceOpen(this.resources, data.course)) {
             const currentlyOpenFolders = vscode.workspace.workspaceFolders;
             if (!currentlyOpenFolders) {
@@ -237,38 +240,30 @@ export default class WorkspaceManager {
                 );
                 return results;
             }
-            let currentlyOpenFoldersUris: vscode.Uri[] = currentlyOpenFolders.map((f) => f.uri);
             if (currentlyOpenFolders[0].name === ".tmc") {
-                currentlyOpenFoldersUris = _.slice(currentlyOpenFoldersUris, 1);
-            } else {
-                // Add it back as first folder?
+                // Return error?
             }
 
+            const courseExercises = this.getExercisesByCourseName(data.course);
             const dataIds: LocalExerciseData[] = [];
-            const toOpenFoldersUris: vscode.Uri[] = [];
+            const allToOpen: vscode.Uri[] = courseExercises
+                .filter((ex) => ex.status === ExerciseStatus.OPEN)
+                .map((ex) => vscode.Uri.file(this.getExercisePath(ex)));
             ids.forEach((id) => {
                 const data = this.idToData.get(id);
                 if (data && data.status === ExerciseStatus.CLOSED) {
-                    const openPath = this.getOpenPath(data);
+                    const openPath = this.getExercisePath(data);
                     if (!fs.existsSync(openPath)) {
                         this.setMissing(id);
-                        results.push(new Err(new Error(`Exercise data missing: ${openPath}`)));
+                        results.push(new Ok({ id: data.id, status: "new" }));
                         return;
                     }
                     dataIds.push(data);
-                    toOpenFoldersUris.push(vscode.Uri.file(openPath));
-                } else {
-                    // Data not found or status different than closed?
-                    // Or how could we end up here...
+                    allToOpen.push(vscode.Uri.file(openPath));
                 }
             });
 
-            const toOpenUnionFoldersUris = _.unionBy(
-                currentlyOpenFoldersUris,
-                toOpenFoldersUris,
-                "path",
-            );
-            const toOpenAsWorkspaceArg = toOpenUnionFoldersUris.sort().map((e) => ({ uri: e }));
+            const toOpenAsWorkspaceArg = allToOpen.sort().map((e) => ({ uri: e }));
             const success = vscode.workspace.updateWorkspaceFolders(
                 1,
                 currentlyOpenFolders.length - 1,
@@ -279,13 +274,25 @@ export default class WorkspaceManager {
                 dataIds.forEach((data) => {
                     data.status = ExerciseStatus.OPEN;
                     this.idToData.set(data.id, data);
-                    results.push(new Ok(this.getOpenPath(data)));
+                    results.push(new Ok({ id: data.id, status: "opened" }));
                 });
             } else {
                 results.push(new Err(new Error("Failed to open exercises in workspace.")));
             }
         } else {
-            // just set status as closed and handle when opening workspace?
+            ids.forEach((id) => {
+                const data = this.idToData.get(id);
+                if (data && data.status === ExerciseStatus.CLOSED) {
+                    const openPath = this.getExercisePath(data);
+                    if (!fs.existsSync(openPath)) {
+                        this.setMissing(id);
+                        results.push(new Ok({ id: data.id, status: "new" }));
+                        return;
+                    }
+                    data.status = ExerciseStatus.OPEN;
+                    this.idToData.set(data.id, data);
+                }
+            });
         }
         this.updatePersistentData();
         return results;
@@ -295,13 +302,16 @@ export default class WorkspaceManager {
      * Closes exercise by moving it away from workspace.
      * @param id Exercise ID to close
      */
-    public closeExercise(...ids: number[]): Result<void, Error>[] {
-        const results: Result<void, Error>[] = [];
+    public closeExercise(
+        ...ids: number[]
+    ): Result<{ id: number; status: UIExerciseStatus }, Error>[] {
+        const results: Result<{ id: number; status: UIExerciseStatus }, Error>[] = [];
         const data = this.idToData.get(ids[0]);
         if (!data) {
             results.push(new Err(new Error(`Invalid ID: ${ids[0]}`)));
             return results;
         }
+
         if (isCorrectWorkspaceOpen(this.resources, data.course)) {
             const currentlyOpenFolders = vscode.workspace.workspaceFolders;
             if (!currentlyOpenFolders) {
@@ -311,55 +321,129 @@ export default class WorkspaceManager {
                 );
                 return results;
             }
-            let currentlyOpenFoldersUris: vscode.Uri[] = currentlyOpenFolders.map((f) => f.uri);
             if (currentlyOpenFolders[0].name === ".tmc") {
-                currentlyOpenFoldersUris = _.slice(currentlyOpenFoldersUris, 1);
-            } else {
-                // Add it back as first folder?
+                // Return error?
             }
 
+            const courseExercises = this.getExercisesByCourseName(data.course);
             const dataIds: LocalExerciseData[] = [];
-            const toCloseFoldersUris: vscode.Uri[] = [];
+            const allOpen: vscode.Uri[] = courseExercises
+                .filter((ex) => ex.status === ExerciseStatus.OPEN)
+                .map((ex) => vscode.Uri.file(this.getExercisePath(ex)));
+
+            const toClose: vscode.Uri[] = [];
             ids.forEach((id) => {
                 const data = this.idToData.get(id);
                 if (data && data.status === ExerciseStatus.OPEN) {
-                    const openPath = this.getOpenPath(data);
+                    const openPath = this.getExercisePath(data);
                     if (!fs.existsSync(openPath)) {
                         this.setMissing(id);
-                        results.push(new Err(new Error(`Exercise data missing: ${openPath}`)));
+                        results.push(new Ok({ id: data.id, status: "new" }));
                         return;
                     }
                     dataIds.push(data);
-                    toCloseFoldersUris.push(vscode.Uri.file(openPath));
-                } else {
-                    // Data not found or status different than closed?
-                    // Or how could we end up here...
+                    toClose.push(vscode.Uri.file(openPath));
                 }
             });
-            const toCloseDifferenceFoldersUris = _.differenceBy(
-                currentlyOpenFoldersUris,
-                toCloseFoldersUris,
-                "path",
-            );
-            const toReOpenAsWorkspaceArg = toCloseDifferenceFoldersUris
-                .sort()
-                .map((e) => ({ uri: e }));
+
+            const toOpen = _.differenceBy(allOpen, toClose, "path");
+
+            const toOpenAsWorkspaceArg = toOpen.sort().map((e) => ({ uri: e }));
             const success = vscode.workspace.updateWorkspaceFolders(
                 1,
                 currentlyOpenFolders.length - 1,
-                ...toReOpenAsWorkspaceArg,
+                ...toOpenAsWorkspaceArg,
             );
 
             if (success) {
                 dataIds.forEach((data) => {
                     data.status = ExerciseStatus.CLOSED;
                     this.idToData.set(data.id, data);
-                    results.push(Ok.EMPTY);
+                    results.push(new Ok({ id: data.id, status: "closed" }));
                 });
+            } else {
+                results.push(new Err(new Error("Failed to open exercises in workspace.")));
             }
         } else {
-            // just set status as open and handle when opening workspace?
+            ids.forEach((id) => {
+                const data = this.idToData.get(id);
+                if (data && data.status === ExerciseStatus.OPEN) {
+                    const openPath = this.getExercisePath(data);
+                    if (!fs.existsSync(openPath)) {
+                        this.setMissing(id);
+                        results.push(new Ok({ id: data.id, status: "new" }));
+                        return;
+                    }
+                    data.status = ExerciseStatus.CLOSED;
+                    this.idToData.set(data.id, data);
+                }
+            });
         }
+        // if (isCorrectWorkspaceOpen(this.resources, data.course)) {
+        //     const currentlyOpenFolders = vscode.workspace.workspaceFolders;
+        //     if (!currentlyOpenFolders) {
+        //         // User closed all folders manually?
+        //         results.push(
+        //             new Err(new Error("No exercises or the root folder .tmc open in workspace")),
+        //         );
+        //         return results;
+        //     }
+        //     let currentlyOpenFoldersUris: vscode.Uri[] = currentlyOpenFolders.map((f) => f.uri);
+        //     if (currentlyOpenFolders[0].name === ".tmc") {
+        //         currentlyOpenFoldersUris = _.slice(currentlyOpenFoldersUris, 1);
+        //     } else {
+        //         // Add it back as first folder?
+        //     }
+
+        //     const dataIds: LocalExerciseData[] = [];
+        //     const toCloseFoldersUris: vscode.Uri[] = [];
+        //     ids.forEach((id) => {
+        //         const data = this.idToData.get(id);
+        //         if (data && data.status === ExerciseStatus.OPEN) {
+        //             const openPath = this.getExercisePath(data);
+        //             if (!fs.existsSync(openPath)) {
+        //                 this.setMissing(id);
+        //                 results.push(new Ok({ id: data.id, status: "new" }));
+        //                 return;
+        //             }
+        //             dataIds.push(data);
+        //             toCloseFoldersUris.push(vscode.Uri.file(openPath));
+        //         } else {
+        //             // Data not found or status different than closed?
+        //             // Or how could we end up here...
+        //         }
+        //     });
+        //     const errors = results.filter((res) => res.err);
+        //     if (errors.length !== 0) {
+        //         return results;
+        //     }
+        //     currentlyOpenFoldersUris = currentlyOpenFoldersUris.filter(
+        //         (f) => !fs.existsSync(f.path),
+        //     );
+        //     const toCloseDifferenceFoldersUris = _.differenceBy(
+        //         currentlyOpenFoldersUris,
+        //         toCloseFoldersUris,
+        //         "path",
+        //     );
+        //     const toReOpenAsWorkspaceArg = toCloseDifferenceFoldersUris
+        //         .sort()
+        //         .map((e) => ({ uri: e }));
+        //     const success = vscode.workspace.updateWorkspaceFolders(
+        //         1,
+        //         currentlyOpenFolders.length - 1,
+        //         ...toReOpenAsWorkspaceArg,
+        //     );
+
+        //     if (success) {
+        //         dataIds.forEach((data) => {
+        //             data.status = ExerciseStatus.CLOSED;
+        //             this.idToData.set(data.id, data);
+        //             results.push(new Ok({ id: data.id, status: "closed" }));
+        //         });
+        //     }
+        // } else {
+        //     // just set status as open and handle when opening workspace?
+        // }
         this.updatePersistentData();
         return results;
     }
@@ -372,7 +456,7 @@ export default class WorkspaceManager {
         for (const id of ids) {
             const data = this.idToData.get(id);
             if (data) {
-                const openPath = this.getOpenPath(data);
+                const openPath = this.getExercisePath(data);
                 delSync(openPath, { force: true });
                 this.pathToId.delete(openPath);
                 this.idToData.delete(id);
@@ -394,13 +478,13 @@ export default class WorkspaceManager {
         }
     }
 
-    public isExerciseOpen(id: number): boolean {
-        const data = this.idToData.get(id);
-        if (data) {
-            return data.status === ExerciseStatus.OPEN;
-        }
-        return false;
-    }
+    // public isExerciseOpen(id: number): boolean {
+    //     const data = this.idToData.get(id);
+    //     if (data) {
+    //         return data.status === ExerciseStatus.OPEN;
+    //     }
+    //     return false;
+    // }
 
     /**
      * ExerciseStatus is not missing.
@@ -418,31 +502,28 @@ export default class WorkspaceManager {
         if (!data) {
             return new Err(new Error("Invalid exercise ID"));
         }
-        switch (data.status) {
-            case ExerciseStatus.OPEN:
-                return new Ok(this.getOpenPath(data));
-            case ExerciseStatus.CLOSED:
-                return new Ok(this.getClosedPath(data.id));
-            default:
-                return new Err(new Error("Exercise data missing"));
+        const path = this.getExercisePath(data);
+        if (!fs.existsSync(path)) {
+            new Err(new Error(`Exercise data missing ${path}`));
         }
+        return new Ok(path);
     }
 
-    private updatePersistentData(): void {
-        this.storage.updateExerciseData(Array.from(this.idToData.values()));
-    }
+    // public getClosedPath(id: number): string {
+    //     return path.join(this.resources.getClosedExercisesFolderPath(), id.toString());
+    // }
 
-    public getClosedPath(id: number): string {
-        return path.join(this.resources.getClosedExercisesFolderPath(), id.toString());
-    }
-
-    public getOpenPath(exerciseData: LocalExerciseData): string {
+    private getExercisePath(exerciseData: LocalExerciseData): string {
         return path.join(
             this.resources.getExercisesFolderPath(),
             exerciseData.organization,
             exerciseData.course,
             exerciseData.name,
         );
+    }
+
+    private updatePersistentData(): void {
+        this.storage.updateExerciseData(Array.from(this.idToData.values()));
     }
 
     /**

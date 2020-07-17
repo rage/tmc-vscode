@@ -116,18 +116,19 @@ export type TestResultData = {
     disabled?: boolean;
 };
 
-export type ExerciseStatus =
+export type UIExerciseStatus =
     | "closed"
     | "downloading"
     | "downloadFailed"
     | "expired"
+    | "missing"
     | "new"
     | "opened";
 
 export interface ExerciseStatusChange {
     command: "exerciseStatusChange";
     exerciseId: number;
-    status: ExerciseStatus;
+    status: UIExerciseStatus;
 }
 
 export interface SetUpdateables {

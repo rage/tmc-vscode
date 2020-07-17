@@ -13,7 +13,7 @@ import { OldSubmission } from "../api/types";
 import { askForItem, showError, showNotification, showProgressNotification } from "../api/vscode";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus } from "../config/types";
-import { ExerciseStatus as TextStatus, WebviewMessage } from "../ui/types";
+import { UIExerciseStatus as TextStatus, WebviewMessage } from "../ui/types";
 import { Logger } from "../utils";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 
@@ -263,6 +263,7 @@ export async function resetExercise(
     ui.setStatusBar(`Resetting exercise ${exerciseData.val.name}`);
 
     const slug = exerciseData.val.organization;
+    await closeExercises(actionContext, [id]);
     workspaceManager.deleteExercise(id);
     await tmc.downloadExercise(id, slug);
     ui.setStatusBar(`Exercise ${exerciseData.val.name} resetted successfully`, 10000);
@@ -281,21 +282,20 @@ export async function openExercises(
 
     const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
     const result = workspaceManager.openExercise(...filterIds);
-    const errors = result.filter((file) => file.err);
-
+    const errors = result.filter((file) => file.err).map((err) => err.val as Error);
+    Logger.warn("Open Errors", ...errors);
     if (errors.length !== 0) {
-        errors.forEach((e) =>
-            Logger.error("Error when opening file", e.mapErr((err) => err.message).val),
-        );
+        errors.forEach((e) => Logger.error("Error when opening file", e.message));
         return new Err(new Error("Something went wrong while opening exercises."));
     }
+    Logger.warn("Open Result", ...result);
     ui.webview.postMessage(
-        ...filterIds.map<{ key: string; message: WebviewMessage }>((exerciseId) => ({
-            key: `exercise-${exerciseId}-status`,
+        ...result.map<{ key: string; message: WebviewMessage }>((ex) => ({
+            key: `exercise-${ex.unwrap().id}-status`,
             message: {
                 command: "exerciseStatusChange",
-                exerciseId,
-                status: "opened",
+                exerciseId: ex.unwrap().id,
+                status: ex.unwrap().status,
             },
         })),
     );
@@ -314,21 +314,21 @@ export async function closeExercises(
 
     const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
     const result = workspaceManager.closeExercise(...filterIds);
-    const errors = result.filter((file) => file.err);
+    const errors = result.filter((file) => file.err).map((err) => err.val as Error);
 
+    Logger.warn("Close Errors", ...errors);
     if (errors.length !== 0) {
-        errors.forEach((e) =>
-            Logger.error("Error when closing file", e.mapErr((err) => err.message).val),
-        );
-        return new Err(new Error("Something went wrong while closing exercises."));
+        errors.forEach((e) => Logger.error("Error when opening file", e.message));
+        return new Err(new Error("Something went wrong while opening exercises."));
     }
+    Logger.warn("Close Result", ...result);
     ui.webview.postMessage(
-        ...filterIds.map<{ key: string; message: WebviewMessage }>((exerciseId) => ({
-            key: `exercise-${exerciseId}-status`,
+        ...result.map<{ key: string; message: WebviewMessage }>((ex) => ({
+            key: `exercise-${ex.unwrap().id}-status`,
             message: {
                 command: "exerciseStatusChange",
-                exerciseId,
-                status: "closed",
+                exerciseId: ex.unwrap().id,
+                status: ex.unwrap().status,
             },
         })),
     );
