@@ -314,7 +314,6 @@ export default class TMC {
     public async downloadOldExercise(
         exerciseId: number,
         submissionId: number,
-        insider: boolean,
     ): Promise<Result<string, Error>> {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
@@ -377,7 +376,7 @@ export default class TMC {
             );
         });
 
-        this.workspaceManager.openExercise(insider, exerciseId);
+        this.workspaceManager.openExercise(exerciseId);
 
         delSync(archivePath, { force: true });
         delSync(oldSubmissionTempPath, { force: true });

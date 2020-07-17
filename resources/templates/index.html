@@ -32,6 +32,14 @@
                     </button>
                     <h3>{{this.title}} <small class="text-muted">({{this.name}})</small></h3>
                     <p>{{this.description}}</p>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        onclick="openCourseWorkspace(event, '{{this.name}}')"
+                        aria-label="Open course workspace"
+                    >
+                        <span aria-hidden="true">Open course workspace</span>
+                    </button>
                     <p>
                         {{#if this.nextDeadline}} {{this.nextDeadline}} {{else}}
                         <span
@@ -99,6 +107,11 @@
             function removeCourse(event, id) {
                 event.stopPropagation(); // Don't send onclick event upwards
                 vscode.postMessage({ type: "removeCourse", id });
+            }
+
+            function openCourseWorkspace(event, name) {
+                event.stopPropagation(); // Don't send onclick event upwards
+                vscode.postMessage({ type: "openCourseWorkspace", name });
             }
 
             function downloadNewExercises(event, ids, courseName, organizationSlug, courseId) {

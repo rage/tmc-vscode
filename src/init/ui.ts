@@ -48,9 +48,6 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.treeDP.registerAction("My courses", [LOGGED_IN], () => {
         displayUserCourses(actionContext);
     });
-    ui.treeDP.registerAction("Open exercise workspace", [WORKSPACE_OPEN.not], () => {
-        openWorkspace(actionContext);
-    });
     ui.treeDP.registerAction("Settings", [], () => {
         openSettings(actionContext);
     });
@@ -153,6 +150,15 @@ export function registerUiActions(actionContext: ActionContext): void {
                 await displayUserCourses(actionContext);
                 showNotification(`${course.name} was removed from courses.`);
             }
+        },
+    );
+    ui.webview.registerHandler(
+        "openCourseWorkspace",
+        async (msg: { type?: "openCourseWorkspace"; name?: string }) => {
+            if (!(msg.type && msg.name)) {
+                return;
+            }
+            openWorkspace(actionContext, msg.name);
         },
     );
     ui.webview.registerHandler(
@@ -265,7 +271,6 @@ export function registerUiActions(actionContext: ActionContext): void {
                 Logger.error(res.val.message);
                 showError(res.val.message);
             }
-            workspaceManager.restartWatcher();
             openSettings(actionContext);
         }
     });

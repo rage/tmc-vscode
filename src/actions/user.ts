@@ -5,19 +5,26 @@
  */
 
 import du = require("du");
+import * as fs from "fs-extra";
+import path = require("path");
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { OldSubmission, SubmissionFeedback } from "../api/types";
 import { askForConfirmation, showError, showNotification } from "../api/vscode";
-import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
+import {
+    EXAM_SUBMISSION_RESULT,
+    EXAM_TEST_RESULT,
+    NOTIFICATION_DELAY,
+    WORKSPACE_SETTINGS_INSIDER,
+} from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
 import { AuthorizationError, ConnectionError } from "../errors";
 import { TestResultData, VisibilityGroups } from "../ui/types";
 import {
     formatSizeInBytes,
     getCurrentExerciseData,
-    isWorkspaceOpen,
+    isCorrectWorkspaceOpen,
     Logger,
     LogLevel,
     parseFeedbackQuestion,
@@ -432,12 +439,12 @@ export async function checkForNewExercises(
 /**
  * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
  */
-export async function openWorkspace(actionContext: ActionContext): Promise<void> {
+export async function openWorkspace(actionContext: ActionContext, name: string): Promise<void> {
     const { resources, vsc } = actionContext;
     const currentWorkspaceFile = vsc.getWorkspaceFile();
-    const tmcWorkspaceFile = vsc.toUri(resources.getWorkspaceFilePath());
+    const tmcWorkspaceFile = vsc.toUri(resources.getWorkspaceFilePath(name));
 
-    if (!isWorkspaceOpen(resources)) {
+    if (!isCorrectWorkspaceOpen(resources, name)) {
         Logger.log(`Current workspace: ${currentWorkspaceFile}`);
         Logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
         if (
@@ -446,14 +453,27 @@ export async function openWorkspace(actionContext: ActionContext): Promise<void>
                 "Do you want to open TMC workspace and close the current one?",
             ))
         ) {
+            if (!fs.existsSync(tmcWorkspaceFile.fsPath)) {
+                fs.writeFileSync(
+                    path.join(resources.getWorkspaceFolderPath(), name + ".code-workspace"),
+                    JSON.stringify(WORKSPACE_SETTINGS_INSIDER),
+                );
+            }
             vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
             // Restarts VSCode
         } else {
             const choice = "Close current and open TMC Workspace";
             await showError("Please close your current workspace before using TestMyCode.", [
                 choice,
-                (): Thenable<unknown> =>
-                    vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile),
+                (): Thenable<unknown> => {
+                    if (!fs.existsSync(tmcWorkspaceFile.fsPath)) {
+                        fs.writeFileSync(
+                            path.join(resources.getWorkspaceFolderPath(), name + ".code-workspace"),
+                            JSON.stringify(WORKSPACE_SETTINGS_INSIDER),
+                        );
+                    }
+                    return vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+                },
             ]);
         }
     }

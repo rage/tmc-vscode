@@ -277,10 +277,10 @@ export async function openExercises(
     actionContext: ActionContext,
     ids: number[],
 ): Promise<Result<number[], Error>> {
-    const { workspaceManager, ui, settings } = actionContext;
+    const { workspaceManager, ui } = actionContext;
 
     const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
-    const result = workspaceManager.openExercise(settings.isInsider(), ...filterIds);
+    const result = workspaceManager.openExercise(...filterIds);
     const errors = result.filter((file) => file.err);
 
     if (errors.length !== 0) {
@@ -310,10 +310,10 @@ export async function closeExercises(
     actionContext: ActionContext,
     ids: number[],
 ): Promise<Result<number[], Error>> {
-    const { workspaceManager, ui, settings } = actionContext;
+    const { workspaceManager, ui } = actionContext;
 
     const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
-    const result = workspaceManager.closeExercise(settings.isInsider(), ...filterIds);
+    const result = workspaceManager.closeExercise(...filterIds);
     const errors = result.filter((file) => file.err);
 
     if (errors.length !== 0) {
@@ -345,7 +345,7 @@ export async function downloadOldSubmissions(
     actionContext: ActionContext,
     exerciseId: number,
 ): Promise<void> {
-    const { tmc, workspaceManager, settings } = actionContext;
+    const { tmc, workspaceManager } = actionContext;
 
     const exercise = workspaceManager.getExerciseDataById(exerciseId);
     if (exercise.err) {
@@ -390,11 +390,7 @@ export async function downloadOldSubmissions(
         return;
     }
 
-    const oldSub = await tmc.downloadOldExercise(
-        exercise.val.id,
-        submission.id,
-        settings.isInsider(),
-    );
+    const oldSub = await tmc.downloadOldExercise(exercise.val.id, submission.id);
     if (oldSub.err) {
         const message = `Something went wrong while downloading old submission for exercise: ${oldSub.val}`;
         Logger.error(message);

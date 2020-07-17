@@ -11,6 +11,9 @@ import { Logger } from "../utils/logger";
 import { showError } from "./vscode";
 import WorkspaceManager from "./workspaceManager";
 
+/**
+ * Deprecate.
+ */
 export default class WorkspaceWatcher {
     private readonly folderTree: Map<string, Map<string, Set<string>>> = new Map();
     private readonly resources: Resources;

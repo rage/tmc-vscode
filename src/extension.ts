@@ -1,3 +1,4 @@
+import * as fs from "fs-extra";
 import * as vscode from "vscode";
 
 import { checkForExerciseUpdates, checkForNewExercises, openSettings } from "./actions";
@@ -73,6 +74,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         userData,
         workspaceManager,
     };
+
+    const allExerciseData = workspaceManager.getAllExercises();
+    Logger.warn("Data", allExerciseData);
+    allExerciseData?.forEach(async (ex) => {
+        if (fs.existsSync(workspaceManager.getClosedPath(ex.id))) {
+            const ok = await workspaceManager.moveFolder(
+                workspaceManager.getClosedPath(ex.id),
+                workspaceManager.getOpenPath(ex),
+            );
+            if (ok.err) {
+                Logger.error("Error while moving", ok.val);
+            }
+        }
+    });
 
     if (settings.isInsider()) {
         Logger.warn("Using insider version.");
