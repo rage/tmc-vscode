@@ -139,7 +139,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.webview.registerHandler(
         "removeCourse",
         async (msg: { type?: "removeCourse"; id?: number }) => {
-            if (!(msg.type && msg.id)) {
+            if (!(msg.type && msg.id !== undefined)) {
                 return;
             }
             const course = actionContext.userData.getCourse(msg.id);
@@ -158,7 +158,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.webview.registerHandler(
         "courseDetails",
         async (msg: { type?: "courseDetails"; id?: number; useCache?: boolean }) => {
-            if (!(msg.type && msg.id)) {
+            if (!(msg.type && msg.id !== undefined)) {
                 return;
             }
             const courseId: number = msg.id;

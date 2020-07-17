@@ -143,7 +143,7 @@
         "ui-test": "npm run ui-test:setup && npm run ui-test:compile && npm run ui-test:run",
         "ui-test:compile": "tsc ./src/ui-test/*.ts --rootDir src --outDir out",
         "ui-test:compile-and-run": "npm run ui-test:compile && npm run ui-test:run",
-        "ui-test:run": "extest run-tests out/ui-test/**.test.js",
+        "ui-test:run": "extest run-tests out/ui-test/*.test.js",
         "ui-test:setup": "cross-env NODE_ENV=development BACKEND=local extest setup-tests",
         "webpack": "webpack",
         "webpack:watch": "webpack --watch --info-verbosity verbose"
@@ -191,7 +191,7 @@
         "ttypescript": "^1.5.10",
         "typemoq": "^2.1.0",
         "typescript": "^3.9.5",
-        "vscode-extension-tester": "^3.0.2",
+        "vscode-extension-tester": "^3.1.0",
         "vscode-test": "^1.4.0",
         "webpack": "^4.42.1",
         "webpack-cli": "^3.3.11",
