@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import {
     closeExercises,
     downloadOldSubmissions,
+    openExercises,
     pasteExercise,
     resetExercise,
     selectAction,
@@ -107,7 +108,7 @@ export function registerCommands(
             const editor = vscode.window.activeTextEditor;
             const resource = editor?.document.uri;
             await resetExercise(actionContext, exerciseId);
-            workspaceManager.openExercise(exerciseId);
+            await openExercises(actionContext, [exerciseId]);
 
             if (editor && resource) {
                 vscode.commands.executeCommand<undefined>(

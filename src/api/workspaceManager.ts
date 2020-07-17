@@ -64,6 +64,15 @@ export default class WorkspaceManager {
         }
     }
 
+    public updateExercisesStatus(id: number, status: ExerciseStatus): void {
+        const data = this.idToData.get(id);
+        if (data) {
+            data.status = status;
+            this.idToData.set(id, data);
+            this.updatePersistentData();
+        }
+    }
+
     /**
      * Creates a unique human-readable directory path for an exercise and persistently manages its
      * relation to exercise's actual id.
@@ -221,9 +230,9 @@ export default class WorkspaceManager {
      * Opens exercise by moving it to workspace folder.
      * @param id Exercise ID to open
      */
-    public openExercise(
+    public async openExercise(
         ...ids: number[]
-    ): Result<{ id: number; status: UIExerciseStatus }, Error>[] {
+    ): Promise<Result<{ id: number; status: UIExerciseStatus }, Error>[]> {
         const results: Result<{ id: number; status: UIExerciseStatus }, Error>[] = [];
         const data = this.idToData.get(ids[0]);
         if (!data) {
@@ -294,7 +303,7 @@ export default class WorkspaceManager {
                 }
             });
         }
-        this.updatePersistentData();
+        await this.updatePersistentData();
         return results;
     }
 
@@ -302,9 +311,9 @@ export default class WorkspaceManager {
      * Closes exercise by moving it away from workspace.
      * @param id Exercise ID to close
      */
-    public closeExercise(
+    public async closeExercise(
         ...ids: number[]
-    ): Result<{ id: number; status: UIExerciseStatus }, Error>[] {
+    ): Promise<Result<{ id: number; status: UIExerciseStatus }, Error>[]> {
         const results: Result<{ id: number; status: UIExerciseStatus }, Error>[] = [];
         const data = this.idToData.get(ids[0]);
         if (!data) {
@@ -379,72 +388,7 @@ export default class WorkspaceManager {
                 }
             });
         }
-        // if (isCorrectWorkspaceOpen(this.resources, data.course)) {
-        //     const currentlyOpenFolders = vscode.workspace.workspaceFolders;
-        //     if (!currentlyOpenFolders) {
-        //         // User closed all folders manually?
-        //         results.push(
-        //             new Err(new Error("No exercises or the root folder .tmc open in workspace")),
-        //         );
-        //         return results;
-        //     }
-        //     let currentlyOpenFoldersUris: vscode.Uri[] = currentlyOpenFolders.map((f) => f.uri);
-        //     if (currentlyOpenFolders[0].name === ".tmc") {
-        //         currentlyOpenFoldersUris = _.slice(currentlyOpenFoldersUris, 1);
-        //     } else {
-        //         // Add it back as first folder?
-        //     }
-
-        //     const dataIds: LocalExerciseData[] = [];
-        //     const toCloseFoldersUris: vscode.Uri[] = [];
-        //     ids.forEach((id) => {
-        //         const data = this.idToData.get(id);
-        //         if (data && data.status === ExerciseStatus.OPEN) {
-        //             const openPath = this.getExercisePath(data);
-        //             if (!fs.existsSync(openPath)) {
-        //                 this.setMissing(id);
-        //                 results.push(new Ok({ id: data.id, status: "new" }));
-        //                 return;
-        //             }
-        //             dataIds.push(data);
-        //             toCloseFoldersUris.push(vscode.Uri.file(openPath));
-        //         } else {
-        //             // Data not found or status different than closed?
-        //             // Or how could we end up here...
-        //         }
-        //     });
-        //     const errors = results.filter((res) => res.err);
-        //     if (errors.length !== 0) {
-        //         return results;
-        //     }
-        //     currentlyOpenFoldersUris = currentlyOpenFoldersUris.filter(
-        //         (f) => !fs.existsSync(f.path),
-        //     );
-        //     const toCloseDifferenceFoldersUris = _.differenceBy(
-        //         currentlyOpenFoldersUris,
-        //         toCloseFoldersUris,
-        //         "path",
-        //     );
-        //     const toReOpenAsWorkspaceArg = toCloseDifferenceFoldersUris
-        //         .sort()
-        //         .map((e) => ({ uri: e }));
-        //     const success = vscode.workspace.updateWorkspaceFolders(
-        //         1,
-        //         currentlyOpenFolders.length - 1,
-        //         ...toReOpenAsWorkspaceArg,
-        //     );
-
-        //     if (success) {
-        //         dataIds.forEach((data) => {
-        //             data.status = ExerciseStatus.CLOSED;
-        //             this.idToData.set(data.id, data);
-        //             results.push(new Ok({ id: data.id, status: "closed" }));
-        //         });
-        //     }
-        // } else {
-        //     // just set status as open and handle when opening workspace?
-        // }
-        this.updatePersistentData();
+        await this.updatePersistentData();
         return results;
     }
 
@@ -452,7 +396,7 @@ export default class WorkspaceManager {
      * Deletes exercise from disk if present and clears all data related to it.
      * @param exerciseId Exercise ID to delete
      */
-    public deleteExercise(...ids: number[]): void {
+    public async deleteExercise(...ids: number[]): Promise<void> {
         for (const id of ids) {
             const data = this.idToData.get(id);
             if (data) {
@@ -462,7 +406,7 @@ export default class WorkspaceManager {
                 this.idToData.delete(id);
             }
         }
-        this.updatePersistentData();
+        await this.updatePersistentData();
     }
 
     public getAllExercises(): LocalExerciseData[] {
@@ -522,8 +466,8 @@ export default class WorkspaceManager {
         );
     }
 
-    private updatePersistentData(): void {
-        this.storage.updateExerciseData(Array.from(this.idToData.values()));
+    private async updatePersistentData(): Promise<void> {
+        return this.storage.updateExerciseData(Array.from(this.idToData.values()));
     }
 
     /**

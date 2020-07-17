@@ -303,7 +303,7 @@ export default class TMC {
 
         if (extractResult.err) {
             Logger.error("Extracting failed", extractResult);
-            this.workspaceManager.deleteExercise(id);
+            await this.workspaceManager.deleteExercise(id);
         }
 
         delSync(archivePath, { force: true });
@@ -376,7 +376,7 @@ export default class TMC {
             );
         });
 
-        this.workspaceManager.openExercise(exerciseId);
+        // this.workspaceManager.openExercise(exerciseId);
 
         delSync(archivePath, { force: true });
         delSync(oldSubmissionTempPath, { force: true });

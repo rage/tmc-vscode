@@ -191,7 +191,7 @@ export async function checkForExerciseUpdates(
                         actionContext,
                         Array.from(coursesToUpdate.values()),
                     );
-                    openExercises(actionContext, _.intersection(openAfter, successful));
+                    await openExercises(actionContext, _.intersection(openAfter, successful));
                 },
             ],
             [
@@ -264,7 +264,9 @@ export async function resetExercise(
 
     const slug = exerciseData.val.organization;
     await closeExercises(actionContext, [id]);
-    workspaceManager.deleteExercise(id);
+    await vscode.commands.executeCommand("workbench.action.files.save");
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    await workspaceManager.deleteExercise(id);
     await tmc.downloadExercise(id, slug);
     ui.setStatusBar(`Exercise ${exerciseData.val.name} resetted successfully`, 10000);
     return Ok.EMPTY;
@@ -281,14 +283,14 @@ export async function openExercises(
     const { workspaceManager, ui } = actionContext;
 
     const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
-    const result = workspaceManager.openExercise(...filterIds);
+    const result = await workspaceManager.openExercise(...filterIds);
     const errors = result.filter((file) => file.err).map((err) => err.val as Error);
-    Logger.warn("Open Errors", ...errors);
+
     if (errors.length !== 0) {
         errors.forEach((e) => Logger.error("Error when opening file", e.message));
         return new Err(new Error("Something went wrong while opening exercises."));
     }
-    Logger.warn("Open Result", ...result);
+
     ui.webview.postMessage(
         ...result.map<{ key: string; message: WebviewMessage }>((ex) => ({
             key: `exercise-${ex.unwrap().id}-status`,
@@ -313,15 +315,14 @@ export async function closeExercises(
     const { workspaceManager, ui } = actionContext;
 
     const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
-    const result = workspaceManager.closeExercise(...filterIds);
+    const result = await workspaceManager.closeExercise(...filterIds);
     const errors = result.filter((file) => file.err).map((err) => err.val as Error);
 
-    Logger.warn("Close Errors", ...errors);
     if (errors.length !== 0) {
-        errors.forEach((e) => Logger.error("Error when opening file", e.message));
+        errors.forEach((e: Error) => Logger.error("Error when opening file", e.message));
         return new Err(new Error("Something went wrong while opening exercises."));
     }
-    Logger.warn("Close Result", ...result);
+
     ui.webview.postMessage(
         ...result.map<{ key: string; message: WebviewMessage }>((ex) => ({
             key: `exercise-${ex.unwrap().id}-status`,
@@ -397,4 +398,5 @@ export async function downloadOldSubmissions(
         showError(message);
         return;
     }
+    await openExercises(actionContext, [exercise.val.id]);
 }

@@ -122,7 +122,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 });
             }
             const successful = await downloadExercises(actionContext, [downloads]);
-            openExercises(actionContext, _.intersection(openAfter, successful));
+            await openExercises(actionContext, _.intersection(openAfter, successful));
         },
     );
     ui.webview.registerHandler("addCourse", async () => {

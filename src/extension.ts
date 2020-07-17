@@ -9,11 +9,13 @@ import WorkspaceManager from "./api/workspaceManager";
 import { DEBUG_MODE, EXERCISE_CHECK_INTERVAL } from "./config/constants";
 import Settings from "./config/settings";
 import Storage from "./config/storage";
+import { ExerciseStatus } from "./config/types";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import * as init from "./init";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
+import { isCorrectWorkspaceOpen } from "./utils";
 import { Logger, LogLevel } from "./utils/logger";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
@@ -49,6 +51,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     Logger.log(`VSCode version: ${vsc.getVSCodeVersion()}`);
     Logger.log(`TMC extension version: ${resources.extensionVersion}`);
     Logger.log(`Python extension version: ${vsc.getExtensionVersion("ms-python.python")}`);
+    Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
     const tmc = new TMC(storage, resources);
@@ -76,6 +79,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         workspaceManager,
     };
 
+    // Migration plan to move all exercises from closed-exercises
     const allExerciseData = workspaceManager.getAllExercises();
     allExerciseData?.forEach(async (ex) => {
         const closedPath = path.join(resources.getClosedExercisesFolderPath(), ex.id.toString());
@@ -92,6 +96,52 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         }
     });
+
+    if (
+        vscode.workspace.name &&
+        isCorrectWorkspaceOpen(resources, vscode.workspace.name.split(" ")[0])
+    ) {
+        Logger.log("TMC Workspace identified, listening for folder changes.");
+        vscode.workspace.onDidChangeWorkspaceFolders((listener) => {
+            Logger.warn("Removed folders manually from workspace", listener);
+            listener.removed.forEach((item) => {
+                const exercise = workspaceManager.getExerciseDataByPath(item.uri.fsPath);
+                if (
+                    exercise.ok &&
+                    exercise.val.status !== ExerciseStatus.MISSING &&
+                    exercise.val.status === ExerciseStatus.OPEN
+                ) {
+                    workspaceManager.updateExercisesStatus(exercise.val.id, ExerciseStatus.CLOSED);
+                    ui.webview.postMessage({
+                        key: `exercise-${exercise.val.id}-status`,
+                        message: {
+                            command: "exerciseStatusChange",
+                            exerciseId: exercise.val.id,
+                            status: "closed",
+                        },
+                    });
+                }
+            });
+            listener.added.forEach((item) => {
+                const exercise = workspaceManager.getExerciseDataByPath(item.uri.fsPath);
+                if (
+                    exercise.ok &&
+                    exercise.val.status !== ExerciseStatus.MISSING &&
+                    exercise.val.status === ExerciseStatus.CLOSED
+                ) {
+                    workspaceManager.updateExercisesStatus(exercise.val.id, ExerciseStatus.OPEN);
+                    ui.webview.postMessage({
+                        key: `exercise-${exercise.val.id}-status`,
+                        message: {
+                            command: "exerciseStatusChange",
+                            exerciseId: exercise.val.id,
+                            status: "opened",
+                        },
+                    });
+                }
+            });
+        });
+    }
 
     if (settings.isInsider()) {
         Logger.warn("Using insider version.");

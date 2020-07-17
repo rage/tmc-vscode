@@ -413,7 +413,7 @@ export async function checkForNewExercises(
                     "Download",
                     async (): Promise<void> => {
                         userData.clearNewExercises(course.id);
-                        openExercises(
+                        await openExercises(
                             actionContext,
                             await downloadExercises(actionContext, [
                                 {

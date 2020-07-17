@@ -474,6 +474,7 @@ function script() {
                 "click",
                 function () {
                     refreshButton.disabled = true;
+                    // eslint-disable-next-line max-len
                     refreshButton.innerHTML = `<span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>Refreshing`;
                     vscode.postMessage({
                         type: "courseDetails",
