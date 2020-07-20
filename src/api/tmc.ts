@@ -26,7 +26,6 @@ import {
     AuthorizationError,
     ConnectionError,
     RuntimeError,
-    TimeoutError,
 } from "../errors";
 import { displayProgrammerError, downloadFile } from "../utils/";
 import { Logger } from "../utils/logger";
@@ -514,65 +513,72 @@ export default class TMC {
     private executeLangsAction(
         tmcLangsAction: TmcLangsAction,
     ): [Promise<Result<TmcLangsResponse, Error>>, () => void] {
-        const javaCommand = (command: string, ...args: string[]): string =>
-            `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ` +
-            `${command} ${args.join(" ")}`;
+        let executable = this.resources.getJavaPath();
+        let args: string[] | undefined;
+        const env: { [key: string]: string } = {};
 
-        const rustCoreCommand = (command: string, ...args: string[]): string =>
-            `"${this.resources.getCliPath()}" core --client-name ${CLIENT_NAME} ` +
-            `${command} ${args.join(" ")}`;
+        const javaCommand = (...preArgs: string[]): void => {
+            args = ["-jar", this.resources.getTmcLangsPath(), ...preArgs];
+        };
 
-        const rustCommand = (command: string, ...args: string[]): string =>
-            `"${this.resources.getCliPath()}" ${command} ${args.join(" ")}`;
+        const rustCommand = (core: "core" | "", ...preArgs: string[]): void => {
+            executable = this.resources.getCliPath();
+            Logger.warn("Using experimental feature");
+            env.RUST_LOG = "debug";
+            const coreArgs = core === "core" ? ["core", "--client-name", CLIENT_NAME] : [];
+            args = coreArgs.concat(preArgs);
+        };
 
         const nextTempOutputPath = (): string =>
             path.join(this.resources.getDataPath(), `temp_${this.nextLangsJsonId++ % 10}.json`);
 
-        let command: string | undefined;
-        const env: { [key: string]: string } = {};
         let outputPath = "";
         switch (tmcLangsAction.action) {
             case "compress-project":
-                command = javaCommand(
+                javaCommand(
                     "compress-project",
-                    `--exercisePath="${tmcLangsAction.exerciseFolderPath}"`,
-                    `--outputPath="${(outputPath = tmcLangsAction.archivePath)}"`,
+                    `--exercisePath=${tmcLangsAction.exerciseFolderPath}`,
+                    `--outputPath=${(outputPath = tmcLangsAction.archivePath)}`,
                 );
                 break;
             case "extract-project":
-                command = javaCommand(
+                javaCommand(
                     tmcLangsAction.action,
-                    `--exercisePath="${tmcLangsAction.archivePath}"`,
-                    `--outputPath="${(outputPath = tmcLangsAction.exerciseFolderPath)}"`,
+                    `--exercisePath=${tmcLangsAction.archivePath}`,
+                    `--outputPath=${(outputPath = tmcLangsAction.exerciseFolderPath)}`,
                 );
                 break;
             case "get-exercise-packaging-configuration":
-                command = javaCommand(
+                javaCommand(
                     "get-exercise-packaging-configuration",
-                    `--exercisePath="${tmcLangsAction.exerciseFolderPath}"`,
+                    `--exercisePath=${tmcLangsAction.exerciseFolderPath}`,
+                    `--outputPath=${(outputPath = nextTempOutputPath())}`,
                 );
                 break;
             case "logged-in-insider":
-                command = rustCoreCommand("logged-in");
+                rustCommand("core", "logged-in");
                 break;
             case "login-insider":
-                command = rustCoreCommand("login", `--set-access-token ${tmcLangsAction.token}`);
+                rustCommand("core", "login", "--set-access-token", tmcLangsAction.token);
                 break;
             case "logout-insider":
-                command = rustCoreCommand("logout");
+                rustCommand("core", "logout");
                 break;
             case "run-tests":
-                command = javaCommand(
+                javaCommand(
                     "run-tests",
-                    `--exercisePath="${tmcLangsAction.exerciseFolderPath}"`,
-                    `--outputPath="${(outputPath = nextTempOutputPath())}"`,
+                    `--exercisePath=${tmcLangsAction.exerciseFolderPath}`,
+                    `--outputPath=${(outputPath = nextTempOutputPath())}`,
                 );
                 break;
             case "run-tests-insider":
-                command = rustCommand(
+                rustCommand(
+                    "",
                     "run-tests",
-                    `--exercise-path "${tmcLangsAction.exerciseFolderPath}"`,
-                    `--output-path "${(outputPath = nextTempOutputPath())}"`,
+                    "--exercise-path",
+                    tmcLangsAction.exerciseFolderPath,
+                    "--output-path",
+                    (outputPath = nextTempOutputPath()),
                 );
                 if (tmcLangsAction.executablePath) {
                     env.TMC_LANGS_PYTHON_EXEC = tmcLangsAction.executablePath;
@@ -580,90 +586,56 @@ export default class TMC {
                 break;
         }
 
-        let showInsiderWarning = false;
-        switch (tmcLangsAction.action) {
-            case "logged-in-insider":
-            case "login-insider":
-            case "logout-insider":
-            case "run-tests-insider":
-                showInsiderWarning = true;
-                env.RUST_LOG = "debug";
-        }
-
-        if (showInsiderWarning) {
-            Logger.warn("Using experimental feature", command);
-        }
-
         let active = true;
-        let error: cp.ExecException | undefined;
-        let interrupted = false;
-        let [stdoutExec, stderrExec] = ["", ""];
+        const stdout: string[] = [];
+        const stderr: string[] = [];
+        const langsProcess = (): [cp.ChildProcessWithoutNullStreams, Promise<number | null>] => {
+            Logger.log(executable, args);
+            const cprocess = cp.spawn(executable, args, { env: { ...process.env, ...env } });
+            return [
+                cprocess,
+                new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        kill(cprocess.pid);
+                        reject("Process didn't seem to finish or was taking a really long time.");
+                    }, TMC_LANGS_TIMEOUT);
+                    cprocess.on("error", (error) => {
+                        clearTimeout(timeout);
+                        reject(error);
+                    });
+                    cprocess.on("exit", (code) => {
+                        clearTimeout(timeout);
+                        resolve(code);
+                    });
+                    cprocess.stdout.on("data", (data) => {
+                        Logger.log("Langs:\n", data.toString());
+                        stdout.push(data.toString());
+                    });
+                    cprocess.stderr.on("data", (data) => {
+                        Logger.warn("Langs:\n", data.toString());
+                        stderr.push(data.toString());
+                    });
+                }),
+            ];
+        };
 
-        Logger.log(command);
-        const cprocess = cp.exec(
-            command,
-            { env: { ...process.env, ...env } },
-            (err, stdout, stderr) => {
-                active = false;
-                stdoutExec = stdout;
-                stderrExec = stderr;
-                if (err) {
-                    Logger.error(`Process raised error: ${command}`, err, stdout, stderr);
-                    error = err;
-                }
-            },
-        );
+        const [cprocess, resultPromise] = langsProcess();
 
         const interrupt = (): void => {
             if (active) {
-                Logger.log(`Killing TMC-Langs process ${cprocess.pid}`);
+                active = false;
                 kill(cprocess.pid);
-                interrupted = true;
             }
         };
 
-        const processResult: Promise<Result<[string, string], Error>> = new Promise((resolve) => {
-            const timeout = setTimeout(() => {
-                interrupt();
-                return resolve(
-                    new Err(
-                        new TimeoutError(
-                            "Process didn't seem to finish or was taking a really long time.",
-                        ),
-                    ),
-                );
-            }, TMC_LANGS_TIMEOUT);
-
-            cprocess.on("exit", (code) => {
-                clearTimeout(timeout);
-                if (error) {
-                    return resolve(new Err(error));
-                } else if (interrupted) {
-                    return resolve(new Err(new RuntimeError("TMC-Langs process was killed.")));
-                } else if (code !== null && code > 0) {
-                    return resolve(new Err(new Error("Unknown error")));
-                }
-                const stdout = (cprocess.stdout?.read() || "") as string;
-                const stderr = (cprocess.stderr?.read() || "") as string;
-                return resolve(new Ok([stdout, stderr]));
-            });
-        });
-
         const processResultHandler = async (): Promise<Result<TmcLangsResponse, Error>> => {
-            const result = await processResult;
-            if (error) {
+            try {
+                await resultPromise;
+            } catch (error) {
                 return new Err(error);
             }
 
-            if (result.err) {
-                return new Err(result.val);
-            }
-
-            const stdout = result.val[0] ? result.val[0] : stdoutExec;
-            const stderr = result.val[1] ? result.val[1] : stderrExec;
-            const logs = { stdout, stderr };
-
-            Logger.log("Logs", stdout, stderr);
+            const logs = { stdout: stdout.toString(), stderr: stderr.toString() };
 
             const action = tmcLangsAction.action;
             if (action === "extract-project" || action === "compress-project") {
@@ -674,15 +646,14 @@ export default class TMC {
                 response: JSON.parse(fs.readFileSync(outputPath, "utf8")),
                 logs,
             };
-            // del.sync(outputPath, { force: true });
             Logger.log("Temp JSON data", readResult.response);
             if (is<TmcLangsResponse>(readResult)) {
                 return new Ok(readResult);
             }
 
-            Logger.error("Unexpected response JSON type", result.val);
+            Logger.error("Unexpected response JSON type", readResult);
             Logger.show();
-            return new Err(new Error("Unexpected response JSON type"));
+            return new Err(new RuntimeError("Unexpected response JSON type"));
         };
 
         return [processResultHandler(), interrupt];
