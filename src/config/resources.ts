@@ -3,7 +3,7 @@ import * as path from "path";
 
 import { Logger } from "../utils";
 
-import { WORKSPACE_SETTINGS_INSIDER } from "./constants";
+import { WORKSPACE_SETTINGS } from "./constants";
 
 export default class Resources {
     public readonly cssFolder: string;
@@ -71,10 +71,7 @@ export default class Resources {
             courseName + ".code-workspace",
         );
         if (!fs.existsSync(tmcWorkspaceFilePath)) {
-            fs.writeFileSync(
-                tmcWorkspaceFilePath,
-                JSON.stringify({ ...WORKSPACE_SETTINGS_INSIDER }),
-            );
+            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ ...WORKSPACE_SETTINGS }));
             Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
         }
     }

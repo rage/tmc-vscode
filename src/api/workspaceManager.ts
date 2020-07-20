@@ -7,13 +7,13 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import Resources from "../config/resources";
-import Settings from "../config/settings";
 import Storage from "../config/storage";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
 import { UIExerciseStatus } from "../ui/types";
 import { isCorrectWorkspaceOpen } from "../utils";
 
 import { ExerciseDetails } from "./types";
+import WorkspaceWatcher from "./workspaceWatcher";
 
 /**
  * Class for managing, opening and closing of exercises on disk.
@@ -23,20 +23,18 @@ export default class WorkspaceManager {
     private readonly idToData: Map<number, LocalExerciseData>;
     private readonly storage: Storage;
     private readonly resources: Resources;
-    private readonly settings: Settings;
 
     // Data for the workspace filesystem event watcher
-    // private readonly watcher: WorkspaceWatcher;
+    private readonly watcher: WorkspaceWatcher;
 
     /**
      * Creates a new instance of the WorkspaceManager class.
      * @param storage Storage object for persistent data storing
      * @param resources Resources instance for constructing the exercise path
      */
-    constructor(storage: Storage, resources: Resources, settings: Settings) {
+    constructor(storage: Storage, resources: Resources) {
         this.storage = storage;
         this.resources = resources;
-        this.settings = settings;
         const storedData = this.storage.getExerciseData();
         if (storedData) {
             this.idToData = new Map(storedData.map((x) => [x.id, x]));
@@ -46,8 +44,8 @@ export default class WorkspaceManager {
             this.pathToId = new Map();
         }
         this.workspaceIntegrityCheck();
-        // this.watcher = new WorkspaceWatcher(this, resources);
-        // this.watcher.start();
+        this.watcher = new WorkspaceWatcher(resources);
+        this.watcher.start();
     }
 
     public updateExerciseData(

@@ -72,12 +72,6 @@ export async function downloadFile(
     return Ok.EMPTY;
 }
 
-export function isWorkspaceOpen(resources: Resources): boolean {
-    const currentWorkspaceFile = vscode.workspace.workspaceFile;
-    const tmcWorkspaceFile = vscode.Uri.file(resources.getWorkspaceFilePath());
-    return currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString();
-}
-
 export function isCorrectWorkspaceOpen(resources: Resources, courseName: string): boolean {
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
     const tmcWorkspaceFile = vscode.Uri.file(resources.getWorkspaceFilePath(courseName));

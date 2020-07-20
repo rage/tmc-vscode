@@ -19,7 +19,7 @@ import {
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
 import { askForConfirmation, showError, showNotification } from "../api/vscode";
 import { ExerciseStatus } from "../config/types";
-import { isWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
+import { isCorrectWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -28,14 +28,12 @@ import { isWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { tmc, workspaceManager, ui, resources, settings } = actionContext;
+    const { tmc, workspaceManager, ui, resources, settings, vsc } = actionContext;
     Logger.log("Initializing UI Actions");
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
-    const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
 
     const visibilityGroups = {
         LOGGED_IN,
-        WORKSPACE_OPEN,
     };
 
     // Register UI actions
@@ -222,8 +220,8 @@ export function registerUiActions(actionContext: ActionContext): void {
         if (!msg.type) {
             return;
         }
-
-        const open = isWorkspaceOpen(resources);
+        const workspace = vsc.getWorkspaceName();
+        const open = workspace ? isCorrectWorkspaceOpen(resources, workspace) : false;
 
         const old = resources.getDataPath();
         const options: vscode.OpenDialogOptions = {
@@ -261,13 +259,10 @@ export function registerUiActions(actionContext: ActionContext): void {
                 ]);
                 resources.setDataPath(newPath);
                 await settings.updateSetting({ setting: "dataPath", value: newPath });
-                if (open) {
+                if (open && workspace) {
                     // Opening a workspace restarts VSCode (v1.44)
-                    vscode.commands.executeCommand(
-                        "vscode.openFolder",
-                        vscode.Uri.file(
-                            path.join(newPath, "TMC workspace", "TMC Exercises.code-workspace"),
-                        ),
+                    await vsc.openFolder(
+                        path.join(newPath, "TMC workspace", workspace, ".code-workspace"),
                     );
                 }
             } else {

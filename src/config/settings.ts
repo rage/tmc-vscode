@@ -1,7 +1,7 @@
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { isWorkspaceOpen } from "../utils";
+import { isCorrectWorkspaceOpen } from "../utils";
 import { Logger, LogLevel } from "../utils/logger";
 
 import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
@@ -31,26 +31,12 @@ export default class Settings {
     }
 
     private verifyWorkspaceSettingsIntegrity(): void {
-        if (isWorkspaceOpen(this.resources)) {
+        const workspace = vscode.workspace.name;
+        if (workspace && isCorrectWorkspaceOpen(this.resources, workspace.split(" ")[0])) {
             Logger.log("TMC Workspace open, verifying workspace settings integrity.");
             this.setFilesExcludeInWorkspace(this.settings.hideMetaFiles);
-            this.verifyFoldersInWorkspace();
             this.verifyWatcherPatternExclusion();
             this.updateWorkspaceSetting("python.terminal.executeInFileDir", true);
-        }
-    }
-
-    /**
-     * Checks that the necessary root folders are open in the workspace and opens them if they
-     * aren't. Doesn't remove user added folders from workspace.
-     */
-    private verifyFoldersInWorkspace(): void {
-        if (isWorkspaceOpen(this.resources)) {
-            vscode.workspace.updateWorkspaceFolders(
-                vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders.length : 0,
-                null,
-                { uri: vscode.Uri.file(this.resources.getExercisesFolderPath()) },
-            );
         }
     }
 
@@ -135,7 +121,8 @@ export default class Settings {
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private async updateWorkspaceSetting(section: string, value: any): Promise<void> {
-        if (isWorkspaceOpen(this.resources)) {
+        const workspace = vscode.workspace.name;
+        if (workspace && isCorrectWorkspaceOpen(this.resources, workspace.split(" ")[0])) {
             const oldValue = this.getWorkspaceSettings(section);
             let newValue = value;
             if (value instanceof Object) {
@@ -152,7 +139,8 @@ export default class Settings {
      * @param section A dot-separated identifier.
      */
     public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration | undefined {
-        if (isWorkspaceOpen(this.resources)) {
+        const workspace = vscode.workspace.name;
+        if (workspace && isCorrectWorkspaceOpen(this.resources, workspace.split(" ")[0])) {
             return vscode.workspace.getConfiguration(
                 section,
                 vscode.Uri.file(this.resources.getWorkspaceFilePath()),

@@ -64,24 +64,13 @@ export const WATCHER_EXCLUDE = {
     "**/.tmc.json": true,
 };
 
-export const WORKSPACE_SETTINGS_INSIDER = {
+export const WORKSPACE_SETTINGS = {
     folders: [{ path: ".tmc" }],
     settings: {
         "workbench.editor.closeOnFileDelete": true,
         "files.autoSave": "onFocusChange",
         "files.exclude": { ...HIDE_META_FILES },
         "files.watcherExclude": { ...WATCHER_EXCLUDE },
-    },
-};
-
-export const WORKSPACE_SETTINGS = {
-    folders: [{ path: "Exercises" }],
-    settings: {
-        "workbench.editor.closeOnFileDelete": true,
-        "files.autoSave": "onFocusChange",
-        "files.exclude": { ...HIDE_META_FILES },
-        "files.watcherExclude": { ...WATCHER_EXCLUDE },
-        "python.terminal.executeInFileDir": true,
     },
 };
 

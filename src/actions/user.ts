@@ -8,7 +8,6 @@ import du = require("du");
 import * as fs from "fs-extra";
 import path = require("path");
 import { Err, Ok, Result } from "ts-results";
-import * as vscode from "vscode";
 
 import { OldSubmission, SubmissionFeedback } from "../api/types";
 import { askForConfirmation, showError, showNotification } from "../api/vscode";
@@ -16,7 +15,7 @@ import {
     EXAM_SUBMISSION_RESULT,
     EXAM_TEST_RESULT,
     NOTIFICATION_DELAY,
-    WORKSPACE_SETTINGS_INSIDER,
+    WORKSPACE_SETTINGS,
 } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
 import { AuthorizationError, ConnectionError } from "../errors";
@@ -442,7 +441,7 @@ export async function checkForNewExercises(
 export async function openWorkspace(actionContext: ActionContext, name: string): Promise<void> {
     const { resources, vsc } = actionContext;
     const currentWorkspaceFile = vsc.getWorkspaceFile();
-    const tmcWorkspaceFile = vsc.toUri(resources.getWorkspaceFilePath(name));
+    const tmcWorkspaceFile = resources.getWorkspaceFilePath(name);
 
     if (!isCorrectWorkspaceOpen(resources, name)) {
         Logger.log(`Current workspace: ${currentWorkspaceFile}`);
@@ -453,26 +452,26 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
                 "Do you want to open TMC workspace and close the current one?",
             ))
         ) {
-            if (!fs.existsSync(tmcWorkspaceFile.fsPath)) {
+            if (!fs.existsSync(tmcWorkspaceFile)) {
                 fs.writeFileSync(
                     path.join(resources.getWorkspaceFolderPath(), name + ".code-workspace"),
-                    JSON.stringify(WORKSPACE_SETTINGS_INSIDER),
+                    JSON.stringify({ ...WORKSPACE_SETTINGS }),
                 );
             }
-            vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+            vsc.openFolder(tmcWorkspaceFile);
             // Restarts VSCode
         } else {
             const choice = "Close current and open TMC Workspace";
             await showError("Please close your current workspace before using TestMyCode.", [
                 choice,
                 (): Thenable<unknown> => {
-                    if (!fs.existsSync(tmcWorkspaceFile.fsPath)) {
+                    if (!fs.existsSync(tmcWorkspaceFile)) {
                         fs.writeFileSync(
                             path.join(resources.getWorkspaceFolderPath(), name + ".code-workspace"),
-                            JSON.stringify(WORKSPACE_SETTINGS_INSIDER),
+                            JSON.stringify({ ...WORKSPACE_SETTINGS }),
                         );
                     }
-                    return vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+                    return vsc.openFolder(tmcWorkspaceFile);
                 },
             ]);
         }
@@ -567,7 +566,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
  * @param id ID of the course to remove
  */
 export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
-    const { userData, workspaceManager } = actionContext;
+    const { userData, workspaceManager, resources } = actionContext;
     const course = userData.getCourse(id);
     Logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
     await closeExercises(
@@ -580,6 +579,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
         .map((e) => e.id);
     Logger.log(`Removing ${missingIds.length} exercise data with Missing status`);
     workspaceManager.deleteExercise(...missingIds);
+    fs.removeSync(path.join(resources.getWorkspaceFolderPath(), course.name, ".code-workspace"));
     userData.deleteCourse(id);
 }
 
