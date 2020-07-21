@@ -337,8 +337,8 @@ function script() {
                 break;
             case "new":
                 html = (
-                    <span class="badge badge-dark" data-status="new">
-                        expired
+                    <span class="badge badge-success" data-status="new">
+                        new!
                     </span>
                 );
                 break;
@@ -474,7 +474,8 @@ function script() {
                 "click",
                 function () {
                     refreshButton.disabled = true;
-                    refreshButton.innerHTML = `<span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>Refreshing`;
+                    refreshButton.innerHTML =
+                        '<span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>Refreshing';
                     vscode.postMessage({
                         type: "courseDetails",
                         id: parseInt(course.courseId),
