@@ -295,7 +295,7 @@ async function ensureLogin(
         if (!loginMsg.username || !loginMsg.password) {
             continue;
         }
-        const authResult = await tmc.authenticate(loginMsg.username, loginMsg.password);
+        const authResult = await tmc.authenticate(loginMsg.username, loginMsg.password, false);
         if (authResult.err && authResult.val instanceof ConnectionError) {
             return new Err(authResult.val);
         }

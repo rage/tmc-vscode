@@ -43,6 +43,7 @@ import {
     SubmissionResponse,
     SubmissionStatusReport,
     TMCApiResponse,
+    TmcLangsAccessToken,
     TmcLangsAction,
     TmcLangsFilePath,
     TmcLangsPath,
@@ -106,10 +107,35 @@ export default class TMC {
      * @param password Password
      * @returns A boolean determining success, and a human readable error description.
      */
-    public async authenticate(username: string, password: string): Promise<Result<void, Error>> {
+    public async authenticate(
+        username: string,
+        password: string,
+        insider: boolean,
+    ): Promise<Result<void, Error>> {
         if (this.token) {
             throw new Error("Authentication token already exists.");
         }
+        if (insider) {
+            const login = await this.executeLangsAction({
+                action: "login-insider",
+                password,
+                username,
+            })[0];
+            if (login.err) {
+                return new Err(new AuthenticationError(login.val.message));
+            }
+            const data = await this.checkApiResponse(
+                this.executeLangsAction({ action: "logged-in-insider" })[0],
+                createIs<TmcLangsAccessToken>(),
+            );
+            if (data.err) {
+                return new Err(new Error("Failed to read token"));
+            }
+            this.token = new ClientOauth2.Token(this.oauth2, data.val.response.tokenData);
+            this.storage.updateAuthenticationToken(this.token.data);
+            return Ok.EMPTY;
+        }
+
         try {
             this.token = await this.oauth2.owner.getToken(username, password);
         } catch (err) {
@@ -118,7 +144,7 @@ export default class TMC {
             } else if (err.code === "EUNAVAILABLE") {
                 return new Err(new ConnectionError("Connection error"));
             }
-            Logger.error(err, "Unknown authentication error:");
+            Logger.error("Unknown authentication error:", err);
             return new Err(new Error("Unknown error: " + err.code));
         }
         this.storage.updateAuthenticationToken(this.token.data);
@@ -512,9 +538,10 @@ export default class TMC {
      */
     private executeLangsAction(
         tmcLangsAction: TmcLangsAction,
-    ): [Promise<Result<TmcLangsResponse, Error>>, () => void] {
+    ): [Promise<Result<TmcLangsResponse | void, Error>>, () => void] {
         let executable = this.resources.getJavaPath();
         let args: string[] | undefined;
+        let stdin: string | undefined;
         const env: { [key: string]: string } = {};
 
         const javaCommand = (...preArgs: string[]): void => {
@@ -559,7 +586,8 @@ export default class TMC {
                 rustCommand("core", "logged-in");
                 break;
             case "login-insider":
-                rustCommand("core", "login", "--set-access-token", tmcLangsAction.token);
+                rustCommand("core", "login", "--email", tmcLangsAction.username);
+                stdin = tmcLangsAction.password;
                 break;
             case "logout-insider":
                 rustCommand("core", "logout");
@@ -584,14 +612,18 @@ export default class TMC {
                     env.TMC_LANGS_PYTHON_EXEC = tmcLangsAction.executablePath;
                 }
                 break;
+            case "set-token-insider":
+                rustCommand("core", "login", "--set-access-token", tmcLangsAction.token);
+                break;
         }
 
         let active = true;
         const stdout: string[] = [];
         const stderr: string[] = [];
         const langsProcess = (): [cp.ChildProcessWithoutNullStreams, Promise<number | null>] => {
-            Logger.log(executable, args);
+            Logger.log(executable, JSON.stringify(args));
             const cprocess = cp.spawn(executable, args, { env: { ...process.env, ...env } });
+            stdin && cprocess.stdin.write(stdin + "\n");
             return [
                 cprocess,
                 new Promise((resolve, reject) => {
@@ -628,7 +660,7 @@ export default class TMC {
             }
         };
 
-        const processResultHandler = async (): Promise<Result<TmcLangsResponse, Error>> => {
+        const processResultHandler = async (): Promise<Result<TmcLangsResponse | void, Error>> => {
             try {
                 await resultPromise;
             } catch (error) {
@@ -637,9 +669,28 @@ export default class TMC {
 
             const logs = { stdout: stdout.toString(), stderr: stderr.toString() };
 
-            const action = tmcLangsAction.action;
-            if (action === "extract-project" || action === "compress-project") {
-                return new Ok({ response: outputPath, logs });
+            switch (tmcLangsAction.action) {
+                case "extract-project":
+                case "compress-project":
+                    return new Ok({ response: outputPath, logs });
+                case "logged-in-insider": {
+                    const data = JSON.parse(stdout.join(""));
+                    if (data.message) {
+                        return new Err(new Error("Failed to get token"));
+                    }
+                    if (!is<ClientOauth2.Data>(data)) {
+                        return new Err(new Error("Malformed token data from TMC Langs"));
+                    }
+                    return new Ok({ response: { tokenData: data } });
+                }
+                case "login-insider": {
+                    const data = stdout.join("");
+                    if (data.trim() !== "") {
+                        const message = JSON.parse(data).error?.message;
+                        return new Err(new AuthenticationError(message || "Failed to parse error"));
+                    }
+                    return Ok.EMPTY;
+                }
             }
 
             const readResult = {

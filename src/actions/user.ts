@@ -42,13 +42,13 @@ export async function login(
     password: string,
     visibilityGroups: VisibilityGroups,
 ): Promise<Result<void, Error>> {
-    const { tmc, ui } = actionContext;
+    const { settings, tmc, ui } = actionContext;
 
     if (!username || !password) {
         return new Err(new Error("Username and password may not be empty."));
     }
 
-    const result = await tmc.authenticate(username, password);
+    const result = await tmc.authenticate(username, password, settings.isInsider());
     if (result.err) {
         return new Err(result.val);
     }

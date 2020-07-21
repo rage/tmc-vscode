@@ -1,3 +1,5 @@
+import { Data as TokenData } from "client-oauth2";
+
 /**
  * TMC Api Response types
  */
@@ -268,6 +270,12 @@ interface LangsGetExercisePackagingConfiguration {
 
 interface LangsLogin {
     action: "login-insider";
+    username: string;
+    password: string;
+}
+
+interface LangsSetTokenInsider {
+    action: "set-token-insider";
     token: string;
 }
 
@@ -275,12 +283,20 @@ interface LangsLogin {
  * TMC-langs.jar Actions
  * Insider version toggle.
  */
+
+export type TmcLangsAccessToken = {
+    response: {
+        tokenData: TokenData;
+    };
+};
+
 export type TmcLangsAction =
     | LangsArchiveProject
     | LangsRunTests
     | LangsRunTestsInsider
     | LangsGetExercisePackagingConfiguration
     | LangsLogin
+    | LangsSetTokenInsider
     | {
           action: "logged-in-insider" | "logout-insider";
       };
@@ -348,6 +364,7 @@ export type TmcLangsFilePath = {
 } & TmcLangsLogs;
 
 export type TmcLangsResponse =
+    | TmcLangsAccessToken
     | TmcLangsPath
     | TmcLangsTestResultsJava
     | TmcLangsTestResultsRust
