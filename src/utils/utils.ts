@@ -220,15 +220,16 @@ export async function removeOldData(oldDataObject: {
     return new Ok(`Time exceeded, will not remove data from ${oldDataObject.path}`);
 }
 
+/**
+ * VSCode function that watches TMC workspace changes and syncs states accordingly.
+ * @param actionContext
+ */
 export function watchForWorkspaceChanges(actionContext: ActionContext): void {
     const { resources, vsc, workspaceManager, ui } = actionContext;
-    if (
-        vscode.workspace.name &&
-        isCorrectWorkspaceOpen(resources, vscode.workspace.name.split(" ")[0])
-    ) {
+    const currentWorkspace = vsc.getWorkspaceName();
+    if (currentWorkspace && isCorrectWorkspaceOpen(resources, currentWorkspace)) {
         Logger.log("TMC Workspace identified, listening for folder changes.");
         vscode.workspace.onDidChangeWorkspaceFolders((listener) => {
-            const currentWorkspace = vsc.getWorkspaceName();
             const foldersToRemove: vscode.Uri[] = [];
 
             listener.removed.forEach((item) => {
@@ -269,16 +270,19 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
                         },
                     });
                 } else if (exercise.ok && currentWorkspace !== exercise.val.course) {
-                    item.name !== ".tmc"
-                        ? foldersToRemove.push(vscode.Uri.file(item.uri.fsPath))
-                        : null;
+                    foldersToRemove.push(vsc.toUri(item.uri.fsPath));
                 } else if (exercise.err) {
-                    item.name !== ".tmc"
-                        ? foldersToRemove.push(vscode.Uri.file(item.uri.fsPath))
-                        : null;
+                    Logger.warn(
+                        "Added folder that isn't part of any course.",
+                        exercise.val.message,
+                        exercise.val.stack,
+                    );
+                    foldersToRemove.push(vsc.toUri(item.uri.fsPath));
                 }
             });
+
             if (foldersToRemove.length !== 0) {
+                Logger.log("Folders that was added.", foldersToRemove);
                 showNotification(
                     `Exercises or folders you added to this workspace are not
                     part of the current course ${currentWorkspace} and will be removed later.`,

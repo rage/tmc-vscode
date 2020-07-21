@@ -237,14 +237,14 @@ export default class WorkspaceManager {
         const courseExercises = this.getExercisesByCourseName(courseName);
 
         if (isCorrectWorkspaceOpen(this.resources, courseName)) {
-            const success = this.handleWorkspaceChanges(true, courseExercises, ...ids);
+            const success = await this.handleWorkspaceChanges(true, courseExercises, ...ids);
             if (!success) {
                 results.push(
                     new Err(new Error("Something went wrong while trying to open exercises.")),
                 );
                 return results;
             }
-            vscode.commands.executeCommand("workbench.files.action.collapseExplorerFolders");
+            await vscode.commands.executeCommand("workbench.files.action.collapseExplorerFolders");
         }
         results = await this.setStatus(ExerciseStatus.CLOSED, ExerciseStatus.OPEN, ...ids);
         await this.updatePersistentData();
@@ -263,7 +263,7 @@ export default class WorkspaceManager {
 
         const courseExercises = this.getExercisesByCourseName(courseName);
         if (isCorrectWorkspaceOpen(this.resources, courseName)) {
-            const success = this.handleWorkspaceChanges(false, courseExercises, ...ids);
+            const success = await this.handleWorkspaceChanges(false, courseExercises, ...ids);
             if (!success) {
                 results.push(
                     new Err(new Error("Something went wrong while trying to close exercises.")),
@@ -300,11 +300,11 @@ export default class WorkspaceManager {
         return results;
     }
 
-    private handleWorkspaceChanges(
+    private async handleWorkspaceChanges(
         handleAsOpen: boolean,
         exercises: LocalExerciseData[],
         ...ids: number[]
-    ): boolean {
+    ): Promise<boolean> {
         const currentlyOpenFolders = vscode.workspace.workspaceFolders;
         let tmcFolderAsRoot = true;
 
@@ -377,7 +377,7 @@ export default class WorkspaceManager {
                     Logger.warn(
                         "Folder .tmc is not as root. Re-opening every exercise and setting .tmc as root.",
                     );
-                    vscode.commands.executeCommand("workbench.action.closeAllEditors");
+                    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
                     success = vscode.workspace.updateWorkspaceFolders(
                         0,
                         currentlyOpenFolders.length,
@@ -388,7 +388,7 @@ export default class WorkspaceManager {
                 if (toOpenAsWorkspaceArg.length === 0) {
                     tmcFolderAsRoot
                         ? null
-                        : vscode.commands.executeCommand("workbench.action.closeAllEditors");
+                        : await vscode.commands.executeCommand("workbench.action.closeAllEditors");
                     success = vscode.workspace.updateWorkspaceFolders(
                         tmcFolderAsRoot ? 1 : 0,
                         tmcFolderAsRoot
@@ -399,7 +399,7 @@ export default class WorkspaceManager {
                 } else {
                     tmcFolderAsRoot
                         ? null
-                        : vscode.commands.executeCommand("workbench.action.closeAllEditors");
+                        : await vscode.commands.executeCommand("workbench.action.closeAllEditors");
                     success = vscode.workspace.updateWorkspaceFolders(
                         tmcFolderAsRoot ? 1 : 0,
                         tmcFolderAsRoot ? null : currentlyOpenFolders.length,

@@ -450,7 +450,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
             ))
         ) {
             if (!fs.existsSync(tmcWorkspaceFile)) {
-                resources.createWorkspaceFile(name);
+                await resources.createWorkspaceFile(name);
             }
             vsc.openFolder(tmcWorkspaceFile);
             // Restarts VSCode
@@ -458,15 +458,16 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
             const choice = "Close current and open TMC Workspace";
             await showError("Please close your current workspace before using TestMyCode.", [
                 choice,
-                (): Thenable<unknown> => {
+                async (): Promise<Thenable<unknown>> => {
                     if (!fs.existsSync(tmcWorkspaceFile)) {
-                        resources.createWorkspaceFile(name);
+                        await resources.createWorkspaceFile(name);
                     }
                     return vsc.openFolder(tmcWorkspaceFile);
                 },
             ]);
         }
     } else if (currentWorkspaceFile?.fsPath === tmcWorkspaceFile) {
+        Logger.log("Workspace already open, changing focus to this workspace.");
         await vsc.openFolder(tmcWorkspaceFile);
         await vsc.executeCommand("workbench.files.action.focusFilesExplorer");
     }
@@ -550,7 +551,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         material_url: courseSettings.material_url,
     };
     userData.addCourse(localData);
-    resources.createWorkspaceFile(courseDetails.name);
+    await resources.createWorkspaceFile(courseDetails.name);
     await displayUserCourses(actionContext);
     return Ok.EMPTY;
 }

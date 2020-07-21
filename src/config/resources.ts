@@ -16,7 +16,6 @@ export default class Resources {
 
     private readonly tmcLangsPathRelative: string;
     private readonly tmcWorkspaceFolderPathRelative: string;
-    private readonly tmcWorkspaceFilePathRelative: string;
     private readonly tmcExercisesFolderPathRelative: string;
     private readonly tmcClosedExercisesFolderPathRelative: string;
 
@@ -28,7 +27,6 @@ export default class Resources {
         tmcDataFolder: string,
         tmcLangsPathRelative: string,
         tmcWorkspaceFolderPathRelative: string,
-        tmcWorkspaceFilePathRelative: string,
         tmcExercisesFolderPathRelative: string,
         tmcClosedExercisesFolderPathRelative: string,
         javaPath: string,
@@ -41,7 +39,6 @@ export default class Resources {
         this.tmcDataFolder = tmcDataFolder;
         this.tmcLangsPathRelative = tmcLangsPathRelative;
         this.tmcWorkspaceFolderPathRelative = tmcWorkspaceFolderPathRelative;
-        this.tmcWorkspaceFilePathRelative = tmcWorkspaceFilePathRelative;
         this.tmcExercisesFolderPathRelative = tmcExercisesFolderPathRelative;
         this.tmcClosedExercisesFolderPathRelative = tmcClosedExercisesFolderPathRelative;
         this.javaPath = javaPath;
@@ -64,27 +61,24 @@ export default class Resources {
         return path.join(this.tmcDataFolder, this.tmcWorkspaceFolderPathRelative);
     }
 
-    public createWorkspaceFile(courseName: string): void {
+    public async createWorkspaceFile(courseName: string): Promise<void> {
         const tmcWorkspaceFilePath = path.join(
             this.tmcDataFolder,
             this.tmcWorkspaceFolderPathRelative,
             courseName + ".code-workspace",
         );
         if (!fs.existsSync(tmcWorkspaceFilePath)) {
-            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ ...WORKSPACE_SETTINGS }));
+            await fs.writeFile(tmcWorkspaceFilePath, JSON.stringify({ ...WORKSPACE_SETTINGS }));
             Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
         }
     }
 
-    public getWorkspaceFilePath(courseName?: string): string {
-        if (courseName) {
-            return path.join(
-                this.tmcDataFolder,
-                this.tmcWorkspaceFolderPathRelative,
-                courseName + ".code-workspace",
-            );
-        }
-        return path.join(this.tmcDataFolder, this.tmcWorkspaceFilePathRelative);
+    public getWorkspaceFilePath(courseName: string): string {
+        return path.join(
+            this.tmcDataFolder,
+            this.tmcWorkspaceFolderPathRelative,
+            courseName + ".code-workspace",
+        );
     }
 
     public getExercisesFolderPath(): string {

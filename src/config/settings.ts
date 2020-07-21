@@ -36,7 +36,6 @@ export default class Settings {
             Logger.log("TMC Workspace open, verifying workspace settings integrity.");
             this.setFilesExcludeInWorkspace(this.settings.hideMetaFiles);
             this.verifyWatcherPatternExclusion();
-            this.updateWorkspaceSetting("python.terminal.executeInFileDir", true);
         }
     }
 
@@ -129,7 +128,10 @@ export default class Settings {
                 newValue = { ...oldValue, ...value };
             }
             await vscode.workspace
-                .getConfiguration(undefined, vscode.Uri.file(this.resources.getWorkspaceFilePath()))
+                .getConfiguration(
+                    undefined,
+                    vscode.Uri.file(this.resources.getWorkspaceFilePath(workspace.split(" ")[0])),
+                )
                 .update(section, newValue, vscode.ConfigurationTarget.Workspace);
         }
     }
@@ -143,7 +145,7 @@ export default class Settings {
         if (workspace && isCorrectWorkspaceOpen(this.resources, workspace.split(" ")[0])) {
             return vscode.workspace.getConfiguration(
                 section,
-                vscode.Uri.file(this.resources.getWorkspaceFilePath()),
+                vscode.Uri.file(this.resources.getWorkspaceFilePath(workspace.split(" ")[0])),
             );
         }
     }
