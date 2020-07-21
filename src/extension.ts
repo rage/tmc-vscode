@@ -95,10 +95,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     }
 
-    init.registerUiActions(actionContext);
+    const authenticated = await tmc.isAuthenticated(settings.isInsider());
+    if (authenticated.err) {
+        showError("Failed to check if authenticated");
+        Logger.error("Failed to check if authenticated", authenticated.val.message);
+        Logger.show();
+        return;
+    }
+
+    init.registerUiActions(actionContext, authenticated.val);
     init.registerCommands(context, actionContext);
 
-    if (tmc.isAuthenticated()) {
+    if (authenticated.val) {
         checkForExerciseUpdates(actionContext);
         checkForNewExercises(actionContext);
     }
@@ -107,8 +115,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         clearInterval(maintenanceInterval);
     }
 
-    maintenanceInterval = setInterval(() => {
-        if (tmc.isAuthenticated()) {
+    maintenanceInterval = setInterval(async () => {
+        const authenticated = await tmc.isAuthenticated(settings.isInsider());
+        if (authenticated.err) {
+            Logger.error("Failed to check if authenticated", authenticated.val.message);
+        }
+        if (authenticated.val === true) {
             checkForExerciseUpdates(actionContext);
             checkForNewExercises(actionContext);
         }

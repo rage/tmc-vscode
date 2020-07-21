@@ -27,10 +27,10 @@ import { isWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
  * @param ui The User Interface object
  * @param tmc The TMC API object
  */
-export function registerUiActions(actionContext: ActionContext): void {
-    const { tmc, workspaceManager, ui, resources, settings } = actionContext;
+export function registerUiActions(actionContext: ActionContext, authenticated: boolean): void {
+    const { workspaceManager, ui, resources, settings } = actionContext;
     Logger.log("Initializing UI Actions");
-    const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
+    const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated);
     const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
 
     const visibilityGroups = {
@@ -295,12 +295,22 @@ export function registerUiActions(actionContext: ActionContext): void {
 
     ui.webview.registerHandler(
         "insiderVersion",
-        (msg: { type?: "insiderVersion"; data?: boolean }) => {
+        async (msg: { type?: "insiderVersion"; data?: boolean }) => {
             if (!(msg.type && msg.data !== undefined)) {
                 return;
             }
             settings.updateSetting({ setting: "insiderVersion", value: msg.data });
-            openSettings(actionContext);
+            const authenticated = await actionContext.tmc.isAuthenticated(msg.data);
+            if (authenticated.err) {
+                showError("Failed to check insider authentication");
+                Logger.error("Failed to check insider authentication", authenticated.val);
+            }
+            ui.treeDP.updateVisibility([
+                authenticated.val === true
+                    ? visibilityGroups.LOGGED_IN
+                    : visibilityGroups.LOGGED_IN.not,
+            ]);
+            await openSettings(actionContext);
         },
     );
 

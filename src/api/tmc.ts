@@ -154,17 +154,50 @@ export default class TMC {
     /**
      * Logs out by deleting the authentication token.
      */
-    public deauthenticate(): void {
+    public async deauthenticate(isInsider: boolean): Promise<Result<void, Error>> {
+        if (isInsider) {
+            const result = await this.executeLangsAction({ action: "logout-insider" })[0];
+            if (result.err) {
+                return result;
+            }
+        }
         this.token = undefined;
         this.storage.updateAuthenticationToken(undefined);
+        return Ok.EMPTY;
     }
 
     /**
      * TODO: actually check if the token is valid
      * @returns whether an authentication token is present
      */
-    public isAuthenticated(): boolean {
-        return this.token !== undefined;
+    public async isAuthenticated(isInsider: boolean): Promise<Result<boolean, Error>> {
+        if (isInsider) {
+            const result = await this.executeLangsAction({ action: "logged-in-insider" })[0];
+            if (result.err) {
+                return result;
+            }
+            if (is<TmcLangsAccessToken>(result.val)) {
+                // Non-insider compatibility: keep stored token up to date
+                this.token = this.token = new ClientOauth2.Token(
+                    this.oauth2,
+                    result.val.response.tokenData,
+                );
+                this.storage.updateAuthenticationToken(this.token.data);
+                return new Ok(true);
+            } else if (this.token) {
+                // If token exists but Langs didn't have it, pass it on.
+                const result2 = await this.executeLangsAction({
+                    action: "set-token-insider",
+                    token: JSON.stringify(this.token.data),
+                })[0];
+                if (result2.err) {
+                    return result2;
+                }
+                return new Ok(true);
+            }
+            return new Ok(false);
+        }
+        return new Ok(this.token !== undefined);
     }
 
     /**
@@ -691,6 +724,9 @@ export default class TMC {
                     }
                     return Ok.EMPTY;
                 }
+                case "logout-insider":
+                case "set-token-insider":
+                    return Ok.EMPTY;
             }
 
             const readResult = {

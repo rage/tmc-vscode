@@ -65,8 +65,14 @@ export async function logout(
     visibility: VisibilityGroups,
 ): Promise<void> {
     if (await askForConfirmation("Are you sure you want to log out?")) {
-        const { tmc, ui } = actionContext;
-        tmc.deauthenticate();
+        const { settings, tmc, ui } = actionContext;
+        const result = await tmc.deauthenticate(settings.isInsider());
+        if (result.err) {
+            showError("Failed to log out.");
+            Logger.error("Failed to log out", result.val);
+            Logger.show();
+            return;
+        }
         ui.webview.dispose();
         ui.treeDP.updateVisibility([visibility.LOGGED_IN.not]);
         showNotification("Logged out from TestMyCode.");
