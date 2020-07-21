@@ -37,10 +37,11 @@ export default class WorkspaceWatcher {
         });
     }
 
-    private verifyWorkspaceRootFile(): void {
+    public verifyWorkspaceRootFile(): void {
         const rootFileFolder = path.join(this.resources.getWorkspaceFolderPath(), ".tmc");
         const pathToRootFile = path.join(rootFileFolder, WORKSPACE_ROOT_FILE);
         if (!fs.existsSync(pathToRootFile)) {
+            Logger.log(`Creating ${pathToRootFile}`);
             fs.mkdirSync(rootFileFolder, { recursive: true });
             fs.writeFileSync(pathToRootFile, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
         } else if (
@@ -56,7 +57,7 @@ export default class WorkspaceWatcher {
         const rootFilePath = path.join(basedir, ".tmc", WORKSPACE_ROOT_FILE);
 
         if (path.relative(rootFilePath, targetPath) === "") {
-            Logger.log(`Root file deleted ${targetPath}, fixing.`);
+            Logger.log(`Root file deleted ${targetPath}, fixing issue.`);
             if (!fs.existsSync(path.join(basedir, ".tmc"))) {
                 fs.mkdirSync(path.join(basedir, ".tmc"), { recursive: true });
             }

@@ -11,12 +11,7 @@ import { Err, Ok, Result } from "ts-results";
 
 import { OldSubmission, SubmissionFeedback } from "../api/types";
 import { askForConfirmation, showError, showNotification } from "../api/vscode";
-import {
-    EXAM_SUBMISSION_RESULT,
-    EXAM_TEST_RESULT,
-    NOTIFICATION_DELAY,
-    WORKSPACE_SETTINGS,
-} from "../config/constants";
+import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
 import { AuthorizationError, ConnectionError } from "../errors";
 import { TestResultData, VisibilityGroups } from "../ui/types";
@@ -419,8 +414,10 @@ export async function checkForNewExercises(
                                     courseId: course.id,
                                     exerciseIds: course.newExercises,
                                     organizationSlug: course.organization,
+                                    courseName: course.name,
                                 },
                             ]),
+                            course.name,
                         );
                     },
                 ],
@@ -453,10 +450,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
             ))
         ) {
             if (!fs.existsSync(tmcWorkspaceFile)) {
-                fs.writeFileSync(
-                    path.join(resources.getWorkspaceFolderPath(), name + ".code-workspace"),
-                    JSON.stringify({ ...WORKSPACE_SETTINGS }),
-                );
+                resources.createWorkspaceFile(name);
             }
             vsc.openFolder(tmcWorkspaceFile);
             // Restarts VSCode
@@ -466,10 +460,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
                 choice,
                 (): Thenable<unknown> => {
                     if (!fs.existsSync(tmcWorkspaceFile)) {
-                        fs.writeFileSync(
-                            path.join(resources.getWorkspaceFolderPath(), name + ".code-workspace"),
-                            JSON.stringify({ ...WORKSPACE_SETTINGS }),
-                        );
+                        resources.createWorkspaceFile(name);
                     }
                     return vsc.openFolder(tmcWorkspaceFile);
                 },
@@ -572,6 +563,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
     await closeExercises(
         actionContext,
         course.exercises.map((e) => e.id),
+        course.name,
     );
     const exercises = workspaceManager.getExercisesByCourseName(course.name);
     const missingIds = exercises

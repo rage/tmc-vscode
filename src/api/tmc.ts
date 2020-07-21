@@ -376,8 +376,6 @@ export default class TMC {
             );
         });
 
-        // this.workspaceManager.openExercise(exerciseId);
-
         delSync(archivePath, { force: true });
         delSync(oldSubmissionTempPath, { force: true });
 

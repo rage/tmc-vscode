@@ -108,7 +108,7 @@ export function registerCommands(
             const editor = vscode.window.activeTextEditor;
             const resource = editor?.document.uri;
             await resetExercise(actionContext, exerciseId);
-            await openExercises(actionContext, [exerciseId]);
+            await openExercises(actionContext, [exerciseId], exerciseData.val.course);
 
             if (editor && resource) {
                 vscode.commands.executeCommand<undefined>(
@@ -155,13 +155,22 @@ export function registerCommands(
             }
 
             const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
+            if (exerciseData.err) {
+                Logger.error("The data for this exercise seems to be missing");
+                showError("The data for this exercise seems to be missing");
+                return;
+            }
             if (
                 userData.getPassed(exerciseId) ||
                 (await askForConfirmation(
                     `Are you sure you want to close uncompleted exercise ${exerciseData.val.name}?`,
                 ))
             ) {
-                const result = await closeExercises(actionContext, [exerciseId]);
+                const result = await closeExercises(
+                    actionContext,
+                    [exerciseId],
+                    exerciseData.val.course,
+                );
                 if (result.err) {
                     Logger.error(result.val.message);
                     showError(result.val.message);

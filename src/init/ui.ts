@@ -1,4 +1,3 @@
-import * as _ from "lodash";
 import * as path from "path";
 import * as vscode from "vscode";
 
@@ -18,7 +17,6 @@ import {
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
 import { askForConfirmation, showError, showNotification } from "../api/vscode";
-import { ExerciseStatus } from "../config/types";
 import { isCorrectWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
 
 /**
@@ -101,15 +99,11 @@ export function registerUiActions(actionContext: ActionContext): void {
             ) {
                 return;
             }
-            const openAfter = msg.ids.filter(
-                (id) =>
-                    workspaceManager.getExerciseDataById(id).mapErr(() => undefined).val?.status !==
-                    ExerciseStatus.CLOSED,
-            );
             const downloads: CourseExerciseDownloads = {
                 courseId: msg.courseId,
                 exerciseIds: msg.ids,
                 organizationSlug: msg.organizationSlug,
+                courseName: msg.courseName,
             };
             if (msg.mode === "download") {
                 await actionContext.userData.clearNewExercises(msg.courseId);
@@ -120,7 +114,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 });
             }
             const successful = await downloadExercises(actionContext, [downloads]);
-            await openExercises(actionContext, _.intersection(openAfter, successful));
+            await openExercises(actionContext, successful, downloads.courseName);
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
@@ -181,11 +175,11 @@ export function registerUiActions(actionContext: ActionContext): void {
     );
     ui.webview.registerHandler(
         "openSelected",
-        async (msg: { type?: "openSelected"; ids?: number[] }) => {
-            if (!(msg.type && msg.ids)) {
+        async (msg: { type?: "openSelected"; ids?: number[]; courseName?: string }) => {
+            if (!(msg.type && msg.ids && msg.courseName)) {
                 return;
             }
-            const result = await openExercises(actionContext, msg.ids);
+            const result = await openExercises(actionContext, msg.ids, msg.courseName);
             if (result.err) {
                 Logger.error(
                     `Error while opening exercises - ${result.val.message}`,
@@ -201,11 +195,11 @@ export function registerUiActions(actionContext: ActionContext): void {
     );
     ui.webview.registerHandler(
         "closeSelected",
-        async (msg: { type?: "closeSelected"; ids?: number[] }) => {
-            if (!(msg.type && msg.ids)) {
+        async (msg: { type?: "closeSelected"; ids?: number[]; courseName?: string }) => {
+            if (!(msg.type && msg.ids && msg.courseName)) {
                 return;
             }
-            const result = await closeExercises(actionContext, msg.ids);
+            const result = await closeExercises(actionContext, msg.ids, msg.courseName);
             if (result.err) {
                 Logger.error(`Error while closing exercises - ${result.val.message}`);
                 const buttons: Array<[string, () => void]> = [];

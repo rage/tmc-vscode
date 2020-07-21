@@ -25,6 +25,7 @@ export interface CourseExerciseDownloads {
     courseId: number;
     exerciseIds: number[];
     organizationSlug: string;
+    courseName: string;
 }
 
 export type FeedbackQuestion = {

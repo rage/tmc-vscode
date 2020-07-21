@@ -65,6 +65,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const workspaceManager = new WorkspaceManager(storage, resources);
+    await workspaceManager.initialize();
     tmc.setWorkspaceManager(workspaceManager);
     const userData = new UserData(storage);
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
@@ -103,16 +104,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ) {
         Logger.log("TMC Workspace identified, listening for folder changes.");
         vscode.workspace.onDidChangeWorkspaceFolders((listener) => {
-            Logger.warn(
-                "Removed folders manually from workspace, fixing state for exercises.",
-                listener,
-            );
+            const currentWorkspace = vsc.getWorkspaceName();
+            let exercisePartOfCorrectWorkspace = true;
             listener.removed.forEach((item) => {
                 const exercise = workspaceManager.getExerciseDataByPath(item.uri.fsPath);
                 if (
                     exercise.ok &&
                     exercise.val.status !== ExerciseStatus.MISSING &&
-                    exercise.val.status === ExerciseStatus.OPEN
+                    exercise.val.status === ExerciseStatus.OPEN &&
+                    currentWorkspace === exercise.val.course
                 ) {
                     workspaceManager.updateExercisesStatus(exercise.val.id, ExerciseStatus.CLOSED);
                     ui.webview.postMessage({
@@ -130,7 +130,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 if (
                     exercise.ok &&
                     exercise.val.status !== ExerciseStatus.MISSING &&
-                    exercise.val.status === ExerciseStatus.CLOSED
+                    exercise.val.status === ExerciseStatus.CLOSED &&
+                    currentWorkspace === exercise.val.course
                 ) {
                     workspaceManager.updateExercisesStatus(exercise.val.id, ExerciseStatus.OPEN);
                     ui.webview.postMessage({
@@ -141,8 +142,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                             status: "opened",
                         },
                     });
+                } else if (exercise.ok && currentWorkspace !== exercise.val.course) {
+                    exercisePartOfCorrectWorkspace = false;
                 }
             });
+            if (!exercisePartOfCorrectWorkspace) {
+                showNotification(
+                    `Exercises or folders you tried to add are not part of the current course ${currentWorkspace}`,
+                );
+                // Remove from workspace
+            }
         });
     }
 

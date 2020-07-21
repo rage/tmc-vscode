@@ -278,12 +278,12 @@ function script() {
 
     /**@param {number[]} ids*/
     function openExercises(ids) {
-        vscode.postMessage({ type: "openSelected", ids });
+        vscode.postMessage({ type: "openSelected", ids, courseName: course.courseName });
     }
 
     /**@param {number[]} ids*/
     function closeExercises(ids) {
-        vscode.postMessage({ type: "closeSelected", ids });
+        vscode.postMessage({ type: "closeSelected", ids, courseName: course.courseName });
     }
 
     /**

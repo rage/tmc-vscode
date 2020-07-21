@@ -12,7 +12,6 @@ import * as vscode from "vscode";
 import { OldSubmission } from "../api/types";
 import { askForItem, showError, showNotification, showProgressNotification } from "../api/vscode";
 import { NOTIFICATION_DELAY } from "../config/constants";
-import { ExerciseStatus } from "../config/types";
 import { UIExerciseStatus as TextStatus, WebviewMessage } from "../ui/types";
 import { Logger } from "../utils";
 import { dateToString, parseDate } from "../utils/dateDeadline";
@@ -168,7 +167,12 @@ export async function checkForExerciseUpdates(
         });
 
         if (exerciseIds.length > 0) {
-            coursesToUpdate.set(course.id, { courseId: course.id, exerciseIds, organizationSlug });
+            coursesToUpdate.set(course.id, {
+                courseId: course.id,
+                exerciseIds,
+                organizationSlug,
+                courseName: course.name,
+            });
             count += exerciseIds.length;
         }
     }
@@ -179,19 +183,17 @@ export async function checkForExerciseUpdates(
             [
                 "Download",
                 async (): Promise<void> => {
-                    const exerciseIds = Array.from(coursesToUpdate.values())
-                        .map((x) => x.exerciseIds)
-                        .reduce((acc, next) => acc.concat(next), []);
-                    const openAfter = exerciseIds.filter(
-                        (id) =>
-                            workspaceManager.getExerciseDataById(id).mapErr(() => undefined).val
-                                ?.status !== ExerciseStatus.CLOSED,
-                    );
                     const successful = await downloadExercises(
                         actionContext,
                         Array.from(coursesToUpdate.values()),
                     );
-                    await openExercises(actionContext, _.intersection(openAfter, successful));
+                    coursesToUpdate.forEach((courseDL) => {
+                        openExercises(
+                            actionContext,
+                            _.intersection(successful, courseDL.exerciseIds),
+                            courseDL.courseName,
+                        );
+                    });
                 },
             ],
             [
@@ -263,7 +265,7 @@ export async function resetExercise(
     ui.setStatusBar(`Resetting exercise ${exerciseData.val.name}`);
 
     const slug = exerciseData.val.organization;
-    await closeExercises(actionContext, [id]);
+    await closeExercises(actionContext, [id], exerciseData.val.course);
     await vscode.commands.executeCommand("workbench.action.files.save");
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
     await workspaceManager.deleteExercise(id);
@@ -279,11 +281,12 @@ export async function resetExercise(
 export async function openExercises(
     actionContext: ActionContext,
     ids: number[],
+    courseName: string,
 ): Promise<Result<number[], Error>> {
     const { workspaceManager, ui } = actionContext;
 
     const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
-    const result = await workspaceManager.openExercise(...filterIds);
+    const result = await workspaceManager.openExercise(courseName, ...filterIds);
     const errors = result.filter((file) => file.err).map((err) => err.val as Error);
 
     if (errors.length !== 0) {
@@ -311,11 +314,12 @@ export async function openExercises(
 export async function closeExercises(
     actionContext: ActionContext,
     ids: number[],
+    courseName: string,
 ): Promise<Result<number[], Error>> {
     const { workspaceManager, ui } = actionContext;
 
     const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
-    const result = await workspaceManager.closeExercise(...filterIds);
+    const result = await workspaceManager.closeExercise(courseName, ...filterIds);
     const errors = result.filter((file) => file.err).map((err) => err.val as Error);
 
     if (errors.length !== 0) {
@@ -398,5 +402,5 @@ export async function downloadOldSubmissions(
         showError(message);
         return;
     }
-    await openExercises(actionContext, [exercise.val.id]);
+    await openExercises(actionContext, [exercise.val.id], exercise.val.course);
 }
