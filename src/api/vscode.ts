@@ -33,6 +33,10 @@ export default class VSC {
         return vscode.version;
     }
 
+    public async executeCommand(command: string): Promise<void> {
+        return vscode.commands.executeCommand(command);
+    }
+
     /**
      * Returns python executable path for ms-python.python extension.
      */

@@ -285,12 +285,11 @@ export async function openExercises(
 ): Promise<Result<number[], Error>> {
     const { workspaceManager, ui } = actionContext;
 
-    const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
-    const result = await workspaceManager.openExercise(courseName, ...filterIds);
+    const result = await workspaceManager.openExercise(courseName, ...ids);
     const errors = result.filter((file) => file.err).map((err) => err.val as Error);
 
     if (errors.length !== 0) {
-        errors.forEach((e) => Logger.error("Error when opening file", e.message));
+        errors.forEach((e) => Logger.error("Error when opening file", e.message, e.stack));
         return new Err(new Error("Something went wrong while opening exercises."));
     }
 
@@ -304,7 +303,7 @@ export async function openExercises(
             },
         })),
     );
-    return new Ok(filterIds);
+    return new Ok(ids);
 }
 
 /**
@@ -318,8 +317,7 @@ export async function closeExercises(
 ): Promise<Result<number[], Error>> {
     const { workspaceManager, ui } = actionContext;
 
-    const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
-    const result = await workspaceManager.closeExercise(courseName, ...filterIds);
+    const result = await workspaceManager.closeExercise(courseName, ...ids);
     const errors = result.filter((file) => file.err).map((err) => err.val as Error);
 
     if (errors.length !== 0) {
@@ -337,7 +335,7 @@ export async function closeExercises(
             },
         })),
     );
-    return new Ok(filterIds);
+    return new Ok(ids);
 }
 
 /**

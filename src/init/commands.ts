@@ -175,6 +175,7 @@ export function registerCommands(
                     Logger.error(result.val.message);
                     showError(result.val.message);
                 }
+                vscode.commands.executeCommand("workbench.action.closeActiveEditor");
             }
         }),
     );

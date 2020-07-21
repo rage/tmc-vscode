@@ -72,6 +72,17 @@ function component(data) {
                 ) : null}
                 <div class="row py-1">
                     <div class="col-md">
+                        <button
+                            class="btn btn-primary"
+                            id="open-workspace"
+                            aria-label="Open workspace"
+                        >
+                            Open workspace
+                        </button>
+                    </div>
+                </div>
+                <div class="row py-1">
+                    <div class="col-md">
                         <div
                             class="alert alert-warning"
                             id="update-notification"
@@ -453,6 +464,7 @@ function script() {
             ).innerText = `Open in workspace ${opened} / ${allExercises}`;
         }
         document.getElementById("refresh-button").disabled = totalDownloading > 0;
+        document.getElementById("open-workspace").disabled = totalDownloading > 0;
     }
 
     document.addEventListener("DOMContentLoaded", function () {
@@ -484,6 +496,14 @@ function script() {
                 },
                 { once: true },
             );
+        }
+
+        // Open workspace
+        const workspaceButton = document.getElementById("open-workspace");
+        if (workspaceButton) {
+            workspaceButton.addEventListener("click", function () {
+                vscode.postMessage({ type: "openCourseWorkspace", name: course.courseName });
+            });
         }
 
         // Course details

@@ -246,7 +246,7 @@ export default class WorkspaceManager {
             }
             vscode.commands.executeCommand("workbench.files.action.collapseExplorerFolders");
         }
-        results = this.setStatus(ExerciseStatus.CLOSED, ExerciseStatus.OPEN, ...ids);
+        results = await this.setStatus(ExerciseStatus.CLOSED, ExerciseStatus.OPEN, ...ids);
         await this.updatePersistentData();
         return results;
     }
@@ -271,24 +271,24 @@ export default class WorkspaceManager {
                 return results;
             }
         }
-        results = this.setStatus(ExerciseStatus.OPEN, ExerciseStatus.CLOSED, ...ids);
+        results = await this.setStatus(ExerciseStatus.OPEN, ExerciseStatus.CLOSED, ...ids);
 
         await this.updatePersistentData();
         return results;
     }
 
-    private setStatus(
+    private async setStatus(
         oldStatus: ExerciseStatus,
         newStatus: ExerciseStatus,
         ...ids: number[]
-    ): Result<{ id: number; status: UIExerciseStatus }, Error>[] {
+    ): Promise<Result<{ id: number; status: UIExerciseStatus }, Error>[]> {
         const results: Result<{ id: number; status: UIExerciseStatus }, Error>[] = [];
         const uistatus = newStatus === ExerciseStatus.OPEN ? "opened" : "closed";
-        ids.forEach((id) => {
+        ids.forEach(async (id) => {
             const data = this.idToData.get(id);
             if (data && data.status === oldStatus) {
                 if (!fs.existsSync(this.getExercisePath(data))) {
-                    this.setMissing(id);
+                    await this.setMissing(id);
                     results.push(new Ok({ id: data.id, status: "new" }));
                     return;
                 }
@@ -322,7 +322,6 @@ export default class WorkspaceManager {
                 if (data && data.status === ExerciseStatus.CLOSED) {
                     const openPath = this.getExercisePath(data);
                     if (!fs.existsSync(openPath)) {
-                        this.setMissing(id);
                         return;
                     }
                     toOpen.push(vscode.Uri.file(openPath));
@@ -334,7 +333,6 @@ export default class WorkspaceManager {
                 if (data && data.status === ExerciseStatus.OPEN) {
                     const openPath = this.getExercisePath(data);
                     if (!fs.existsSync(openPath)) {
-                        this.setMissing(id);
                         return;
                     }
                     toClose.push(vscode.Uri.file(openPath));
@@ -379,6 +377,7 @@ export default class WorkspaceManager {
                     Logger.warn(
                         "Folder .tmc is not as root. Re-opening every exercise and setting .tmc as root.",
                     );
+                    vscode.commands.executeCommand("workbench.action.closeAllEditors");
                     success = vscode.workspace.updateWorkspaceFolders(
                         0,
                         currentlyOpenFolders.length,
@@ -387,6 +386,9 @@ export default class WorkspaceManager {
                 }
             } else {
                 if (toOpenAsWorkspaceArg.length === 0) {
+                    tmcFolderAsRoot
+                        ? null
+                        : vscode.commands.executeCommand("workbench.action.closeAllEditors");
                     success = vscode.workspace.updateWorkspaceFolders(
                         tmcFolderAsRoot ? 1 : 0,
                         tmcFolderAsRoot
@@ -395,9 +397,12 @@ export default class WorkspaceManager {
                         ...toOpenAsWorkspaceArg,
                     );
                 } else {
+                    tmcFolderAsRoot
+                        ? null
+                        : vscode.commands.executeCommand("workbench.action.closeAllEditors");
                     success = vscode.workspace.updateWorkspaceFolders(
                         tmcFolderAsRoot ? 1 : 0,
-                        null,
+                        tmcFolderAsRoot ? null : currentlyOpenFolders.length,
                         ...toOpenAsWorkspaceArg,
                     );
                 }
@@ -427,12 +432,12 @@ export default class WorkspaceManager {
         return Array.from(this.idToData.values());
     }
 
-    public setMissing(id: number): void {
+    public async setMissing(id: number): Promise<void> {
         const data = this.idToData.get(id);
         if (data) {
             data.status = ExerciseStatus.MISSING;
             this.idToData.set(id, data);
-            this.updatePersistentData();
+            await this.updatePersistentData();
         }
     }
 

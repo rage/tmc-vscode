@@ -5,15 +5,17 @@ import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { FeedbackQuestion } from "../actions/types";
+import { ActionContext, FeedbackQuestion } from "../actions/types";
 import { SubmissionFeedbackQuestion } from "../api/types";
 import { showNotification } from "../api/vscode";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
-import { LocalExerciseData } from "../config/types";
+import { ExerciseStatus, LocalExerciseData } from "../config/types";
 import { ConnectionError } from "../errors";
 
 import { superfluousPropertiesEnabled } from "./env";
+
+import { Logger } from ".";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be
@@ -216,4 +218,73 @@ export async function removeOldData(oldDataObject: {
         return new Ok(`Removed successfully from ${oldDataObject.path}`);
     }
     return new Ok(`Time exceeded, will not remove data from ${oldDataObject.path}`);
+}
+
+export function watchForWorkspaceChanges(actionContext: ActionContext): void {
+    const { resources, vsc, workspaceManager, ui } = actionContext;
+    if (
+        vscode.workspace.name &&
+        isCorrectWorkspaceOpen(resources, vscode.workspace.name.split(" ")[0])
+    ) {
+        Logger.log("TMC Workspace identified, listening for folder changes.");
+        vscode.workspace.onDidChangeWorkspaceFolders((listener) => {
+            const currentWorkspace = vsc.getWorkspaceName();
+            const foldersToRemove: vscode.Uri[] = [];
+
+            listener.removed.forEach((item) => {
+                const exercise = workspaceManager.getExerciseDataByPath(item.uri.fsPath);
+                if (
+                    exercise.ok &&
+                    exercise.val.status !== ExerciseStatus.MISSING &&
+                    exercise.val.status === ExerciseStatus.OPEN &&
+                    currentWorkspace === exercise.val.course
+                ) {
+                    workspaceManager.updateExercisesStatus(exercise.val.id, ExerciseStatus.CLOSED);
+                    ui.webview.postMessage({
+                        key: `exercise-${exercise.val.id}-status`,
+                        message: {
+                            command: "exerciseStatusChange",
+                            exerciseId: exercise.val.id,
+                            status: "closed",
+                        },
+                    });
+                }
+            });
+
+            listener.added.forEach((item) => {
+                const exercise = workspaceManager.getExerciseDataByPath(item.uri.fsPath);
+                if (
+                    exercise.ok &&
+                    exercise.val.status !== ExerciseStatus.MISSING &&
+                    exercise.val.status === ExerciseStatus.CLOSED &&
+                    currentWorkspace === exercise.val.course
+                ) {
+                    workspaceManager.updateExercisesStatus(exercise.val.id, ExerciseStatus.OPEN);
+                    ui.webview.postMessage({
+                        key: `exercise-${exercise.val.id}-status`,
+                        message: {
+                            command: "exerciseStatusChange",
+                            exerciseId: exercise.val.id,
+                            status: "opened",
+                        },
+                    });
+                } else if (exercise.ok && currentWorkspace !== exercise.val.course) {
+                    item.name !== ".tmc"
+                        ? foldersToRemove.push(vscode.Uri.file(item.uri.fsPath))
+                        : null;
+                } else if (exercise.err) {
+                    item.name !== ".tmc"
+                        ? foldersToRemove.push(vscode.Uri.file(item.uri.fsPath))
+                        : null;
+                }
+            });
+            if (foldersToRemove.length !== 0) {
+                showNotification(
+                    `Exercises or folders you added to this workspace are not
+                    part of the current course ${currentWorkspace} and will be removed later.`,
+                    ["Ok", (): void => {}],
+                );
+            }
+        });
+    }
 }

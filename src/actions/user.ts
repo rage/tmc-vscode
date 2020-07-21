@@ -439,10 +439,10 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
     const { resources, vsc } = actionContext;
     const currentWorkspaceFile = vsc.getWorkspaceFile();
     const tmcWorkspaceFile = resources.getWorkspaceFilePath(name);
+    Logger.log(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
+    Logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
 
     if (!isCorrectWorkspaceOpen(resources, name)) {
-        Logger.log(`Current workspace: ${currentWorkspaceFile}`);
-        Logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
         if (
             !currentWorkspaceFile ||
             (await askForConfirmation(
@@ -466,6 +466,9 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
                 },
             ]);
         }
+    } else if (currentWorkspaceFile?.fsPath === tmcWorkspaceFile) {
+        await vsc.openFolder(tmcWorkspaceFile);
+        await vsc.executeCommand("workbench.files.action.focusFilesExplorer");
     }
 }
 
