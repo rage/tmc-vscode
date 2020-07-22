@@ -709,7 +709,7 @@ export default class TMC {
                 case "logged-in-insider": {
                     const data = JSON.parse(stdout.join(""));
                     if (data.message) {
-                        return new Err(new Error("Failed to get token"));
+                        return Ok.EMPTY;
                     }
                     if (!is<ClientOauth2.Data>(data)) {
                         return new Err(new Error("Malformed token data from TMC Langs"));
