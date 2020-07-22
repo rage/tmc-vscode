@@ -490,6 +490,7 @@ export default class TMC {
      */
     public async submitExercise(
         id: number,
+        isInsider: boolean,
         params?: Map<string, string>,
     ): Promise<Result<SubmissionResponse, Error>> {
         if (!this.workspaceManager) {
@@ -499,6 +500,18 @@ export default class TMC {
 
         if (exerciseFolderPath.err) {
             return new Err(new Error("Couldn't get the exercise path"));
+        }
+
+        if (isInsider) {
+            const isPaste = params?.has("paste");
+            return this.checkApiResponse(
+                this.executeLangsAction({
+                    action: isPaste ? "paste-insider" : "submit-insider",
+                    submissionPath: exerciseFolderPath.val,
+                    submissionUrl: `${this.tmcApiUrl}core/exercises/${id}/submissions`,
+                })[0],
+                createIs<SubmissionResponse>(),
+            );
         }
 
         const compressResult = await this.checkApiResponse(
@@ -625,6 +638,18 @@ export default class TMC {
             case "logout-insider":
                 rustCommand("core", "logout");
                 break;
+            case "paste-insider":
+                rustCommand(
+                    "core",
+                    "paste",
+                    "--locale",
+                    "eng",
+                    "--submission-path",
+                    tmcLangsAction.submissionPath,
+                    "--submission-url",
+                    tmcLangsAction.submissionUrl,
+                );
+                break;
             case "run-tests":
                 javaCommand(
                     "run-tests",
@@ -647,6 +672,16 @@ export default class TMC {
                 break;
             case "set-token-insider":
                 rustCommand("core", "login", "--set-access-token", tmcLangsAction.token);
+                break;
+            case "submit-insider":
+                rustCommand(
+                    "core",
+                    "submit",
+                    "--submission-path",
+                    tmcLangsAction.submissionPath,
+                    "--submission-url",
+                    tmcLangsAction.submissionUrl,
+                );
                 break;
         }
 
@@ -694,6 +729,16 @@ export default class TMC {
         };
 
         const processResultHandler = async (): Promise<Result<TmcLangsResponse | void, Error>> => {
+            // ASAP: Strongly check types once Rust Langs has proper support
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const parseJsonFromStdout = (stdout: string): any[] => {
+                const trimmed = stdout.trim();
+                if (!stdout.match(/^\s*{/) || !stdout.match(/}\s*$/)) {
+                    return [stdout];
+                }
+                return JSON.parse(`[${trimmed.replace(/}\s*{/g, "},{")}]`);
+            };
+
             try {
                 await resultPromise;
             } catch (error) {
@@ -719,7 +764,7 @@ export default class TMC {
                 case "login-insider": {
                     const data = stdout.join("");
                     if (data.trim() !== "") {
-                        const message = JSON.parse(data).error?.message;
+                        const message = parseJsonFromStdout(data)[0].error?.message;
                         return new Err(new AuthenticationError(message || "Failed to parse error"));
                     }
                     return Ok.EMPTY;
@@ -727,6 +772,21 @@ export default class TMC {
                 case "logout-insider":
                 case "set-token-insider":
                     return Ok.EMPTY;
+                case "paste-insider":
+                case "submit-insider": {
+                    try {
+                        const data = parseJsonFromStdout(stdout.join(""));
+                        console.log(data);
+                        const response = data[data.length - 1];
+                        if (is<SubmissionResponse>(data[data.length - 1])) {
+                            return new Ok(response);
+                        } else {
+                            return new Err(new Error("Malformed response"));
+                        }
+                    } catch (e) {
+                        return new Err(e);
+                    }
+                }
             }
 
             const readResult = {

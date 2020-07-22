@@ -252,17 +252,6 @@ interface LangsArchiveProject {
     exerciseFolderPath: string;
 }
 
-interface LangsRunTests {
-    action: "run-tests";
-    exerciseFolderPath: string;
-}
-
-interface LangsRunTestsInsider {
-    action: "run-tests-insider";
-    exerciseFolderPath: string;
-    executablePath: string | undefined;
-}
-
 interface LangsGetExercisePackagingConfiguration {
     action: "get-exercise-packaging-configuration";
     exerciseFolderPath: string;
@@ -274,32 +263,52 @@ interface LangsLogin {
     password: string;
 }
 
+interface LangsRunTests {
+    action: "run-tests";
+    exerciseFolderPath: string;
+}
+
+interface LangsRunTestsInsider {
+    action: "run-tests-insider";
+    exerciseFolderPath: string;
+    executablePath: string | undefined;
+}
+
+interface LangsPasteInsider {
+    action: "paste-insider";
+    submissionPath: string;
+    submissionUrl: string;
+}
+
 interface LangsSetTokenInsider {
     action: "set-token-insider";
     token: string;
 }
 
-/**
- * TMC-langs.jar Actions
- * Insider version toggle.
- */
+interface LangsSubmitInsider {
+    action: "submit-insider";
+    submissionPath: string;
+    submissionUrl: string;
+}
+
+export type TmcLangsAction =
+    | LangsArchiveProject
+    | LangsGetExercisePackagingConfiguration
+    | LangsLogin
+    | LangsPasteInsider
+    | LangsRunTests
+    | LangsRunTestsInsider
+    | LangsSetTokenInsider
+    | LangsSubmitInsider
+    | {
+          action: "logged-in-insider" | "logout-insider";
+      };
 
 export type TmcLangsAccessToken = {
     response: {
         tokenData: TokenData;
     };
 };
-
-export type TmcLangsAction =
-    | LangsArchiveProject
-    | LangsRunTests
-    | LangsRunTestsInsider
-    | LangsGetExercisePackagingConfiguration
-    | LangsLogin
-    | LangsSetTokenInsider
-    | {
-          action: "logged-in-insider" | "logout-insider";
-      };
 
 export type TmcLangsLogs = {
     logs: {
@@ -366,6 +375,7 @@ export type TmcLangsFilePath = {
 export type TmcLangsResponse =
     | TmcLangsAccessToken
     | TmcLangsPath
+    | SubmissionResponse
     | TmcLangsTestResultsJava
     | TmcLangsTestResultsRust
     | TmcLangsFilePath;

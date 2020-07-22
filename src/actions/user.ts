@@ -198,11 +198,19 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
  * @param tempView Existing TemporaryWebview to use if any
  */
 export async function submitExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, temporaryWebviewProvider, tmc, vsc, userData, workspaceManager } = actionContext;
+    const {
+        ui,
+        settings,
+        temporaryWebviewProvider,
+        tmc,
+        vsc,
+        userData,
+        workspaceManager,
+    } = actionContext;
     Logger.log(
         `Submitting exercise ${workspaceManager.getExerciseDataById(id).val.name} to server`,
     );
-    const submitResult = await tmc.submitExercise(id);
+    const submitResult = await tmc.submitExercise(id, settings.isInsider());
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         const message = `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`;
@@ -366,10 +374,10 @@ export async function pasteExercise(
     actionContext: ActionContext,
     id: number,
 ): Promise<string | undefined> {
-    const { tmc } = actionContext;
+    const { settings, tmc } = actionContext;
     const params = new Map<string, string>();
     params.set("paste", "1");
-    const submitResult = await tmc.submitExercise(id, params);
+    const submitResult = await tmc.submitExercise(id, settings.isInsider(), params);
 
     const errorMessage = "Failed to send exercise to TMC pastebin";
     if (submitResult.err) {
