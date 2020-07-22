@@ -1,4 +1,4 @@
-import { ActivityBar, By, EditorView, WebElement, WebView } from "vscode-extension-tester";
+import { ActivityBar, EditorView, WebElement, WebView } from "vscode-extension-tester";
 
 import { waitForElements } from "./utils";
 
@@ -11,11 +11,7 @@ const openTMCSideBar = async (
 ): Promise<Map<string, WebElement>> => {
     const content = (await activityBar.getViewControl("TestMyCode").openView()).getContent();
     const sections = await waitForElements(() => content.getSections());
-    const elements = await waitForElements(
-        () => sections[0].findElements(By.css("div[role='treeitem']")),
-        undefined,
-        timeout,
-    );
+    const elements = await waitForElements(() => sections[0].getVisibleItems(), undefined, timeout);
 
     return new Map<string, WebElement>(
         await Promise.all(
@@ -30,9 +26,11 @@ const openTMCSideBar = async (
  */
 const operateTMCWebview = async (
     editorView: EditorView,
+    title: string,
+    groupIndex: number,
     operation: (weview: WebView) => Promise<void>,
 ): Promise<void> => {
-    const webview = (await editorView.openEditor("TestMyCode")) as WebView;
+    const webview = (await editorView.openEditor(title, groupIndex)) as WebView;
     await webview.switchToFrame();
     await operation(webview);
     await webview.switchBack();

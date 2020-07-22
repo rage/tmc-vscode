@@ -8,19 +8,23 @@
 
     <body>
         <div class="container container-fluid">
-            <h1>My courses</h1>
+            <h1 data-se="my-courses-title">My courses</h1>
 
-            {{#if courses}}
+            {{#unless courses}}
+            <h4>No courses selected</h4>
+            {{/unless}}
             <div>
                 <input
                     type="button"
                     onclick="addCourse()"
                     class="btn btn-primary mb-4 mt-2"
                     value="Add new course"
+                    data-se="add-new-course"
                 />
             </div>
+
             {{#each courses}}
-            <div class="row org-row border-current-color">
+            <div class="row org-row border-current-color" data-se="course-card">
                 <div class="col-md" onclick="fetchCourseDetails({{this.id}})">
                     <button
                         type="button"
@@ -86,17 +90,7 @@
                     {{/if}}
                 </div>
             </div>
-            {{/each}} {{else}}
-            <div>
-                <h4>No courses selected</h4>
-                <input
-                    type="button"
-                    onclick="addCourse()"
-                    class="btn btn-primary"
-                    value="Add new course"
-                />
-            </div>
-            {{/if}}
+            {{/each}}
         </div>
 
         <script>
