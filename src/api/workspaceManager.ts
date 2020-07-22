@@ -82,19 +82,26 @@ export default class WorkspaceManager {
      * @param organizationSlug Organization slug used in the creation of exercise path
      * @param exerciseDetails Exercise details used in the creation of exercise path
      */
-    public createExerciseDownloadPath(
+    public async createExerciseDownloadPath(
         softDeadline: string | null,
         organizationSlug: string,
         checksum: string,
         exerciseDetails: ExerciseDetails,
-    ): Result<string, Error> {
+    ): Promise<Result<string, Error>> {
         if (this.idToData.has(exerciseDetails.exercise_id)) {
             const data = this.idToData.get(exerciseDetails.exercise_id);
             if (!data) {
                 return new Err(new Error("Data integrity error"));
             }
             if (data.status === ExerciseStatus.MISSING) {
-                this.deleteExercise(exerciseDetails.exercise_id);
+                await this.deleteExercise(exerciseDetails.exercise_id);
+            } else if (data.checksum !== checksum) {
+                if (data.status === ExerciseStatus.OPEN) {
+                    await this.closeExercise(
+                        exerciseDetails.course_name,
+                        exerciseDetails.exercise_id,
+                    );
+                }
             } else {
                 return new Err(new Error("Exercise already downloaded"));
             }

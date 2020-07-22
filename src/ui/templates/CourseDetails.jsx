@@ -385,7 +385,7 @@ function script() {
             }
         }
         if (ids.length > 0) {
-            vscode.postMessage({ type: type, ids });
+            vscode.postMessage({ type: type, ids, courseName: course.courseName });
         }
     }
 

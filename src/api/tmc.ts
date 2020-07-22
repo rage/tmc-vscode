@@ -281,7 +281,7 @@ export default class TMC {
         }
 
         // TODO: Extract to a different location and handle pass that to ExerciseManager
-        const exercisePath = this.workspaceManager.createExerciseDownloadPath(
+        const exercisePath = await this.workspaceManager.createExerciseDownloadPath(
             exercise.soft_deadline,
             organizationSlug,
             exercise.checksum,
@@ -751,6 +751,7 @@ export default class TMC {
                 new ApiError(`${response.status} - ${response.statusText} - ${errorText}`),
             );
         } catch (error) {
+            Logger.error("TMC Api request failed with error", error);
             return new Err(new ConnectionError("Connection error: " + error.name));
         }
     }

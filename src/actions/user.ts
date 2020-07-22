@@ -406,13 +406,14 @@ export async function checkForNewExercises(
                 [
                     "Download",
                     async (): Promise<void> => {
-                        userData.clearNewExercises(course.id);
+                        const newIds = Array.from(course.newExercises);
+                        await userData.clearNewExercises(course.id);
                         await openExercises(
                             actionContext,
                             await downloadExercises(actionContext, [
                                 {
                                     courseId: course.id,
-                                    exerciseIds: course.newExercises,
+                                    exerciseIds: newIds,
                                     organizationSlug: course.organization,
                                     courseName: course.name,
                                 },

@@ -143,7 +143,7 @@ export async function checkForExerciseUpdates(
     courseId?: number,
     updateCheckOptions?: UpdateCheckOptions,
 ): Promise<CourseExerciseDownloads[]> {
-    const { tmc, userData, workspaceManager } = actionContext;
+    const { tmc, userData, workspaceManager, ui } = actionContext;
 
     const coursesToUpdate: Map<number, CourseExerciseDownloads> = new Map();
     let count = 0;
@@ -187,8 +187,12 @@ export async function checkForExerciseUpdates(
                         actionContext,
                         Array.from(coursesToUpdate.values()),
                     );
-                    coursesToUpdate.forEach((courseDL) => {
-                        openExercises(
+                    ui.webview.postMessage({
+                        key: "course-updates",
+                        message: { command: "setUpdateables", exerciseIds: [] },
+                    });
+                    coursesToUpdate.forEach(async (courseDL) => {
+                        await openExercises(
                             actionContext,
                             _.intersection(successful, courseDL.exerciseIds),
                             courseDL.courseName,
