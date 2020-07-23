@@ -8,9 +8,7 @@ import * as vscode from "vscode";
 import { FeedbackQuestion } from "../actions/types";
 import { SubmissionFeedbackQuestion } from "../api/types";
 import { showNotification } from "../api/vscode";
-import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
-import { LocalExerciseData } from "../config/types";
 import { ConnectionError } from "../errors";
 
 import { superfluousPropertiesEnabled } from "./env";
@@ -72,9 +70,9 @@ export async function downloadFile(
     return Ok.EMPTY;
 }
 
-export function isWorkspaceOpen(resources: Resources): boolean {
+export function isCorrectWorkspaceOpen(resources: Resources, courseName: string): boolean {
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
-    const tmcWorkspaceFile = vscode.Uri.file(resources.getWorkspaceFilePath());
+    const tmcWorkspaceFile = vscode.Uri.file(resources.getWorkspaceFilePath(courseName));
     return currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString();
 }
 
@@ -113,30 +111,6 @@ export function formatSizeInBytes(size: number, precision = 3): string {
     }
 
     return `${cSize.toPrecision(targetPrecision)} ${suffix}`;
-}
-
-/**
- * Get the Exercise ID for the currently open text editor
- */
-export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number | undefined {
-    const editorPath = vscode.window.activeTextEditor?.document.fileName;
-    if (!editorPath) {
-        return undefined;
-    }
-    return workspaceManager.getExercisePath(editorPath);
-}
-
-/**
- * Get the Exercise data for the currently open text editor
- */
-export function getCurrentExerciseData(
-    workspaceManager: WorkspaceManager,
-): Result<LocalExerciseData, Error> {
-    const id = getCurrentExerciseId(workspaceManager);
-    if (!id) {
-        return new Err(new Error("Currently open editor is not part of a TMC exercise"));
-    }
-    return workspaceManager.getExerciseDataById(id);
 }
 
 /**

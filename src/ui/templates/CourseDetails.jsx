@@ -72,6 +72,17 @@ function component(data) {
                 ) : null}
                 <div class="row py-1">
                     <div class="col-md">
+                        <button
+                            class="btn btn-primary"
+                            id="open-workspace"
+                            aria-label="Open workspace"
+                        >
+                            Open workspace
+                        </button>
+                    </div>
+                </div>
+                <div class="row py-1">
+                    <div class="col-md">
                         <div
                             class="alert alert-warning"
                             id="update-notification"
@@ -278,12 +289,12 @@ function script() {
 
     /**@param {number[]} ids*/
     function openExercises(ids) {
-        vscode.postMessage({ type: "openSelected", ids });
+        vscode.postMessage({ type: "openSelected", ids, courseName: course.courseName });
     }
 
     /**@param {number[]} ids*/
     function closeExercises(ids) {
-        vscode.postMessage({ type: "closeSelected", ids });
+        vscode.postMessage({ type: "closeSelected", ids, courseName: course.courseName });
     }
 
     /**
@@ -374,7 +385,7 @@ function script() {
             }
         }
         if (ids.length > 0) {
-            vscode.postMessage({ type: type, ids });
+            vscode.postMessage({ type: type, ids, courseName: course.courseName });
         }
     }
 
@@ -453,6 +464,7 @@ function script() {
             ).innerText = `Open in workspace ${opened} / ${allExercises}`;
         }
         document.getElementById("refresh-button").disabled = totalDownloading > 0;
+        document.getElementById("open-workspace").disabled = totalDownloading > 0;
     }
 
     document.addEventListener("DOMContentLoaded", function () {
@@ -484,6 +496,14 @@ function script() {
                 },
                 { once: true },
             );
+        }
+
+        // Open workspace
+        const workspaceButton = document.getElementById("open-workspace");
+        if (workspaceButton) {
+            workspaceButton.addEventListener("click", function () {
+                vscode.postMessage({ type: "openCourseWorkspace", name: course.courseName });
+            });
         }
 
         // Course details

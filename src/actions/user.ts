@@ -4,9 +4,11 @@
  * -------------------------------------------------------------------------------------------------
  */
 
+import { sync as delSync } from "del";
 import du = require("du");
+import * as fs from "fs-extra";
+import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
-import * as vscode from "vscode";
 
 import { OldSubmission, SubmissionFeedback } from "../api/types";
 import { askForConfirmation, showError, showNotification } from "../api/vscode";
@@ -16,8 +18,7 @@ import { AuthorizationError, ConnectionError } from "../errors";
 import { TestResultData, VisibilityGroups } from "../ui/types";
 import {
     formatSizeInBytes,
-    getCurrentExerciseData,
-    isWorkspaceOpen,
+    isCorrectWorkspaceOpen,
     Logger,
     LogLevel,
     parseFeedbackQuestion,
@@ -339,7 +340,7 @@ export async function getOldSubmissions(
     actionContext: ActionContext,
 ): Promise<Result<OldSubmission[], Error>> {
     const { tmc, workspaceManager } = actionContext;
-    const currentExercise = getCurrentExerciseData(workspaceManager);
+    const currentExercise = workspaceManager.getCurrentExerciseData();
     if (currentExercise.err) {
         return new Err(new Error("Exercise not found in workspacemanager"));
     }
@@ -405,16 +406,19 @@ export async function checkForNewExercises(
                 [
                     "Download",
                     async (): Promise<void> => {
-                        userData.clearNewExercises(course.id);
-                        openExercises(
+                        const newIds = Array.from(course.newExercises);
+                        await userData.clearNewExercises(course.id);
+                        await openExercises(
                             actionContext,
                             await downloadExercises(actionContext, [
                                 {
                                     courseId: course.id,
-                                    exerciseIds: course.newExercises,
+                                    exerciseIds: newIds,
                                     organizationSlug: course.organization,
+                                    courseName: course.name,
                                 },
                             ]),
+                            course.name,
                         );
                     },
                 ],
@@ -432,30 +436,41 @@ export async function checkForNewExercises(
 /**
  * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
  */
-export async function openWorkspace(actionContext: ActionContext): Promise<void> {
-    const { resources, vsc } = actionContext;
+export async function openWorkspace(actionContext: ActionContext, name: string): Promise<void> {
+    const { resources, vsc, workspaceManager } = actionContext;
     const currentWorkspaceFile = vsc.getWorkspaceFile();
-    const tmcWorkspaceFile = vsc.toUri(resources.getWorkspaceFilePath());
+    const tmcWorkspaceFile = resources.getWorkspaceFilePath(name);
+    Logger.log(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
+    Logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
 
-    if (!isWorkspaceOpen(resources)) {
-        Logger.log(`Current workspace: ${currentWorkspaceFile}`);
-        Logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
+    if (!isCorrectWorkspaceOpen(resources, name)) {
         if (
             !currentWorkspaceFile ||
             (await askForConfirmation(
                 "Do you want to open TMC workspace and close the current one?",
             ))
         ) {
-            vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile);
+            if (!fs.existsSync(tmcWorkspaceFile)) {
+                workspaceManager.createWorkspaceFile(name);
+            }
+            await vsc.openFolder(tmcWorkspaceFile);
             // Restarts VSCode
         } else {
             const choice = "Close current and open TMC Workspace";
             await showError("Please close your current workspace before using TestMyCode.", [
                 choice,
-                (): Thenable<unknown> =>
-                    vscode.commands.executeCommand("vscode.openFolder", tmcWorkspaceFile),
+                async (): Promise<Thenable<unknown>> => {
+                    if (!fs.existsSync(tmcWorkspaceFile)) {
+                        workspaceManager.createWorkspaceFile(name);
+                    }
+                    return vsc.openFolder(tmcWorkspaceFile);
+                },
             ]);
         }
+    } else if (currentWorkspaceFile?.fsPath === tmcWorkspaceFile) {
+        Logger.log("Workspace already open, changing focus to this workspace.");
+        await vsc.openFolder(tmcWorkspaceFile);
+        await vsc.executeCommand("workbench.files.action.focusFilesExplorer");
     }
 }
 
@@ -485,7 +500,7 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
  * Adds a new course to user's courses.
  */
 export async function addNewCourse(actionContext: ActionContext): Promise<Result<void, Error>> {
-    const { tmc, userData } = actionContext;
+    const { tmc, userData, workspaceManager } = actionContext;
     Logger.log("Adding new course");
     const orgAndCourse = await selectOrganizationAndCourse(actionContext);
 
@@ -494,25 +509,25 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
     }
 
     const courseDetailsResult = await tmc.getCourseDetails(orgAndCourse.val.course);
-    const courseExercises = await tmc.getCourseExercises(orgAndCourse.val.course);
-    const courseSettings = await tmc.getCourseSettings(orgAndCourse.val.course);
+    const courseExercisesResult = await tmc.getCourseExercises(orgAndCourse.val.course);
+    const courseSettingsResult = await tmc.getCourseSettings(orgAndCourse.val.course);
     if (courseDetailsResult.err) {
         return new Err(courseDetailsResult.val);
     }
-    if (courseExercises.err) {
-        return new Err(courseExercises.val);
+    if (courseExercisesResult.err) {
+        return new Err(courseExercisesResult.val);
     }
-    if (courseSettings.err) {
-        return new Err(courseSettings.val);
+    if (courseSettingsResult.err) {
+        return new Err(courseSettingsResult.val);
     }
 
     const courseDetails = courseDetailsResult.val.course;
-    const exercises = courseExercises.val;
-    const settings = courseSettings.val;
+    const courseExercises = courseExercisesResult.val;
+    const courseSettings = courseSettingsResult.val;
 
     let availablePoints = 0;
     let awardedPoints = 0;
-    exercises.forEach((x) => {
+    courseExercises.forEach((x) => {
         availablePoints += x.available_points.length;
         awardedPoints += x.awarded_points.length;
     });
@@ -530,13 +545,14 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         organization: orgAndCourse.val.organization,
         availablePoints: availablePoints,
         awardedPoints: awardedPoints,
-        perhapsExamMode: settings.hide_submission_results,
+        perhapsExamMode: courseSettings.hide_submission_results,
         newExercises: [],
         notifyAfter: 0,
-        disabled: settings.disabled_status === "enabled" ? false : true,
-        material_url: settings.material_url,
+        disabled: courseSettings.disabled_status === "enabled" ? false : true,
+        material_url: courseSettings.material_url,
     };
     userData.addCourse(localData);
+    workspaceManager.createWorkspaceFile(courseDetails.name);
     await displayUserCourses(actionContext);
     return Ok.EMPTY;
 }
@@ -546,12 +562,13 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
  * @param id ID of the course to remove
  */
 export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
-    const { userData, workspaceManager } = actionContext;
+    const { userData, workspaceManager, resources } = actionContext;
     const course = userData.getCourse(id);
     Logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
     await closeExercises(
         actionContext,
         course.exercises.map((e) => e.id),
+        course.name,
     );
     const exercises = workspaceManager.getExercisesByCourseName(course.name);
     const missingIds = exercises
@@ -559,6 +576,9 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
         .map((e) => e.id);
     Logger.log(`Removing ${missingIds.length} exercise data with Missing status`);
     workspaceManager.deleteExercise(...missingIds);
+    delSync(path.join(resources.getWorkspaceFolderPath(), course.name, ".code-workspace"), {
+        force: true,
+    });
     userData.deleteCourse(id);
 }
 

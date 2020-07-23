@@ -36,15 +36,25 @@
                     </button>
                     <h3>{{this.title}} <small class="text-muted">({{this.name}})</small></h3>
                     <p>{{this.description}}</p>
-                    <p>
-                        {{#if this.nextDeadline}} {{this.nextDeadline}} {{else}}
-                        <span
-                            class="spinner-border spinner-border-sm"
-                            role="status"
-                            aria-hidden="true"
-                        ></span>
-                        {{/if}}
-                    </p>
+                    <div class="row">
+                        <div class="col-md">
+                            {{#if this.nextDeadline}} {{this.nextDeadline}} {{else}}
+                            <span
+                                class="float-left spinner-border spinner-border-sm"
+                                role="status"
+                                aria-hidden="true"
+                            ></span>
+                            {{/if}}
+                            <button
+                                type="button"
+                                class="float-right btn btn-primary"
+                                onclick="openCourseWorkspace(event, '{{this.name}}')"
+                                aria-label="Open workspace"
+                            >
+                                <span aria-hidden="true">Open workspace</span>
+                            </button>
+                        </div>
+                    </div>
                     {{#if this.disabled}}
                     <div role="alert" class="alert alert-info">
                         This course has been disabled and exercises can't be downloaded or submitted
@@ -93,6 +103,11 @@
             function removeCourse(event, id) {
                 event.stopPropagation(); // Don't send onclick event upwards
                 vscode.postMessage({ type: "removeCourse", id });
+            }
+
+            function openCourseWorkspace(event, name) {
+                event.stopPropagation(); // Don't send onclick event upwards
+                vscode.postMessage({ type: "openCourseWorkspace", name });
             }
 
             function downloadNewExercises(event, ids, courseName, organizationSlug, courseId) {

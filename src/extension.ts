@@ -1,3 +1,5 @@
+import * as fs from "fs-extra";
+import * as path from "path";
 import * as vscode from "vscode";
 
 import { checkForExerciseUpdates, checkForNewExercises, openSettings } from "./actions";
@@ -33,6 +35,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const settingsResult = await init.settingsInitialization(storage, resources);
     const settings = new Settings(storage, settingsResult, resources);
+    await settings.verifyWorkspaceSettingsIntegrity();
     Logger.configure(settings.getLogLevel());
 
     const vsc = new VSC(settings);
@@ -47,6 +50,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     Logger.log(`VSCode version: ${vsc.getVSCodeVersion()}`);
     Logger.log(`TMC extension version: ${resources.extensionVersion}`);
     Logger.log(`Python extension version: ${vsc.getExtensionVersion("ms-python.python")}`);
+    Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
     const tmc = new TMC(storage, resources);
@@ -60,6 +64,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const workspaceManager = new WorkspaceManager(storage, resources);
+    await workspaceManager.initialize();
     tmc.setWorkspaceManager(workspaceManager);
     const userData = new UserData(storage);
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
@@ -73,6 +78,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         userData,
         workspaceManager,
     };
+
+    // Migration plan to move all exercises from closed-exercises
+    const allExerciseData = workspaceManager.getAllExercises();
+    const oldTMCWorkspace = path.join(
+        resources.getWorkspaceFolderPath(),
+        "TMC Exercises.code-workspace",
+    );
+    if (fs.existsSync(oldTMCWorkspace)) {
+        fs.removeSync(oldTMCWorkspace);
+    }
+    allExerciseData?.forEach(async (ex) => {
+        const closedPath = path.join(resources.getClosedExercisesFolderPath(), ex.id.toString());
+        const openPath = path.join(
+            resources.getExercisesFolderPath(),
+            ex.organization,
+            ex.course,
+            ex.name,
+        );
+        if (fs.existsSync(closedPath)) {
+            const ok = await workspaceManager.moveFolder(closedPath, openPath);
+            if (ok.err) {
+                Logger.error("Error while moving", ok.val);
+            }
+        }
+    });
 
     if (settings.isInsider()) {
         Logger.warn("Using insider version.");
@@ -113,6 +143,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             checkForNewExercises(actionContext);
         }
     }, EXERCISE_CHECK_INTERVAL);
+
+    init.watchForWorkspaceChanges(actionContext);
 }
 
 export function deactivate(): void {

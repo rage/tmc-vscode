@@ -1,7 +1,7 @@
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { isWorkspaceOpen } from "../utils";
+import { isCorrectWorkspaceOpen } from "../utils";
 import { Logger, LogLevel } from "../utils/logger";
 
 import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
@@ -27,31 +27,14 @@ export default class Settings {
         this.storage = storage;
         this.resources = resources;
         this.settings = settings;
-        this.updateExtensionSettingsToStorage(settings);
-        this.verifyWorkspaceSettingsIntegrity();
     }
 
-    private verifyWorkspaceSettingsIntegrity(): void {
-        if (isWorkspaceOpen(this.resources)) {
+    public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
+        const workspace = vscode.workspace.name;
+        if (workspace && isCorrectWorkspaceOpen(this.resources, workspace.split(" ")[0])) {
             Logger.log("TMC Workspace open, verifying workspace settings integrity.");
-            this.setFilesExcludeInWorkspace(this.settings.hideMetaFiles);
-            this.verifyFoldersInWorkspace();
-            this.verifyWatcherPatternExclusion();
-            this.updateWorkspaceSetting("python.terminal.executeInFileDir", true);
-        }
-    }
-
-    /**
-     * Checks that the necessary root folders are open in the workspace and opens them if they
-     * aren't. Doesn't remove user added folders from workspace.
-     */
-    private verifyFoldersInWorkspace(): void {
-        if (isWorkspaceOpen(this.resources)) {
-            vscode.workspace.updateWorkspaceFolders(
-                vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders.length : 0,
-                null,
-                { uri: vscode.Uri.file(this.resources.getExercisesFolderPath()) },
-            );
+            await this.setFilesExcludeInWorkspace(this.settings.hideMetaFiles);
+            await this.verifyWatcherPatternExclusion();
         }
     }
 
@@ -60,8 +43,8 @@ export default class Settings {
      * .vscode folder needs to be unwatched, otherwise adding settings to WorkspaceFolder level
      * doesn't work. For example defining Python interpreter for the Exercise folder.
      */
-    private verifyWatcherPatternExclusion(): void {
-        this.updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
+    private async verifyWatcherPatternExclusion(): Promise<void> {
+        await this.updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
     }
 
     /**
@@ -69,7 +52,7 @@ export default class Settings {
      * @param settings ExtensionSettings object
      */
     public async updateExtensionSettingsToStorage(settings: ExtensionSettings): Promise<void> {
-        this.storage.updateExtensionSettings(settings);
+        await this.storage.updateExtensionSettings(settings);
     }
 
     /**
@@ -78,7 +61,7 @@ export default class Settings {
      * @param {ExtensionSettingsData} data ExtensionSettingsData object, for example { setting:
      * 'dataPath', value: '~/newpath' }
      */
-    public updateSetting(data: ExtensionSettingsData): void {
+    public async updateSetting(data: ExtensionSettingsData): Promise<void> {
         switch (data.setting) {
             case "insiderVersion":
                 this.settings.insiderVersion = data.value;
@@ -98,7 +81,7 @@ export default class Settings {
                 break;
         }
         Logger.log("Updated settings data", data);
-        this.updateExtensionSettingsToStorage(this.settings);
+        await this.updateExtensionSettingsToStorage(this.settings);
     }
 
     public getLogLevel(): LogLevel {
@@ -124,9 +107,9 @@ export default class Settings {
      * Keeps all user/workspace defined excluding patterns.
      * @param hide true to hide meta files in TMC workspace.
      */
-    private setFilesExcludeInWorkspace(hide: boolean): void {
+    private async setFilesExcludeInWorkspace(hide: boolean): Promise<void> {
         const value = hide ? HIDE_META_FILES : SHOW_META_FILES;
-        this.updateWorkspaceSetting("files.exclude", value);
+        await this.updateWorkspaceSetting("files.exclude", value);
     }
 
     /**
@@ -135,15 +118,19 @@ export default class Settings {
      * @param value The new value
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private updateWorkspaceSetting(section: string, value: any): void {
-        if (isWorkspaceOpen(this.resources)) {
+    private async updateWorkspaceSetting(section: string, value: any): Promise<void> {
+        const workspace = vscode.workspace.name;
+        if (workspace && isCorrectWorkspaceOpen(this.resources, workspace.split(" ")[0])) {
             const oldValue = this.getWorkspaceSettings(section);
             let newValue = value;
             if (value instanceof Object) {
                 newValue = { ...oldValue, ...value };
             }
-            vscode.workspace
-                .getConfiguration(undefined, vscode.Uri.file(this.resources.getWorkspaceFilePath()))
+            await vscode.workspace
+                .getConfiguration(
+                    undefined,
+                    vscode.Uri.file(this.resources.getWorkspaceFilePath(workspace.split(" ")[0])),
+                )
                 .update(section, newValue, vscode.ConfigurationTarget.Workspace);
         }
     }
@@ -153,10 +140,11 @@ export default class Settings {
      * @param section A dot-separated identifier.
      */
     public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration | undefined {
-        if (isWorkspaceOpen(this.resources)) {
+        const workspace = vscode.workspace.name;
+        if (workspace && isCorrectWorkspaceOpen(this.resources, workspace.split(" ")[0])) {
             return vscode.workspace.getConfiguration(
                 section,
-                vscode.Uri.file(this.resources.getWorkspaceFilePath()),
+                vscode.Uri.file(this.resources.getWorkspaceFilePath(workspace.split(" ")[0])),
             );
         }
     }

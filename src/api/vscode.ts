@@ -21,12 +21,20 @@ export default class VSC {
         return vscode.workspace.workspaceFile;
     }
 
+    public getWorkspaceName(): string | undefined {
+        return vscode.workspace.name?.split(" ")[0];
+    }
+
     public getExtensionVersion(extension: string): string | undefined {
         return vscode.extensions.getExtension(extension)?.packageJSON.version;
     }
 
     public getVSCodeVersion(): string {
         return vscode.version;
+    }
+
+    public async executeCommand(command: string): Promise<void> {
+        return vscode.commands.executeCommand(command);
     }
 
     /**
@@ -84,6 +92,10 @@ export default class VSC {
 
     public toUri(uri: string): vscode.Uri {
         return vscode.Uri.file(uri);
+    }
+
+    public async openFolder(path: string): Promise<void> {
+        await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(path));
     }
 }
 

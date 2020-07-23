@@ -106,10 +106,23 @@ export async function resourceInitialization(
     }
 
     const tmcWorkspacePathRelative = "TMC workspace";
-    const tmcWorkspaceFilePathRelative = path.join("TMC workspace", "TMC Exercises.code-workspace");
     const tmcExercisesFolderPathRelative = path.join("TMC workspace", "Exercises");
     const tmcClosedExercisesFolderPathRelative = "closed-exercises";
     const tmcLangsPathRelative = TMC_JAR_NAME;
+
+    // Verify that all course .code-workspaces are in-place on startup.
+    const userData = storage.getUserData();
+    userData?.courses.forEach((course) => {
+        const tmcWorkspaceFilePath = path.join(
+            tmcDataPath,
+            tmcWorkspacePathRelative,
+            course.name + ".code-workspace",
+        );
+        if (!fs.existsSync(tmcWorkspaceFilePath)) {
+            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
+            Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
+        }
+    });
 
     if (!fs.existsSync(tmcDataPath)) {
         fs.mkdirSync(tmcDataPath, { recursive: true });
@@ -120,12 +133,6 @@ export async function resourceInitialization(
     if (!fs.existsSync(tmcWorkspacePath)) {
         fs.mkdirSync(tmcWorkspacePath);
         Logger.log(`Created tmc workspace directory at ${tmcWorkspacePath}`);
-    }
-
-    const tmcWorkspaceFilePath = path.join(tmcDataPath, tmcWorkspaceFilePathRelative);
-    if (!fs.existsSync(tmcWorkspaceFilePath)) {
-        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
-        Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
     }
 
     const tmcExercisesFolderPath = path.join(tmcDataPath, tmcExercisesFolderPathRelative);
@@ -216,7 +223,6 @@ export async function resourceInitialization(
         tmcDataPath,
         tmcLangsPathRelative,
         tmcWorkspacePathRelative,
-        tmcWorkspaceFilePathRelative,
         tmcExercisesFolderPathRelative,
         tmcClosedExercisesFolderPathRelative,
         javaPath,
