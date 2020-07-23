@@ -4,9 +4,10 @@
  * -------------------------------------------------------------------------------------------------
  */
 
+import { sync as delSync } from "del";
 import du = require("du");
 import * as fs from "fs-extra";
-import path = require("path");
+import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 
 import { OldSubmission, SubmissionFeedback } from "../api/types";
@@ -17,7 +18,6 @@ import { AuthorizationError, ConnectionError } from "../errors";
 import { TestResultData, VisibilityGroups } from "../ui/types";
 import {
     formatSizeInBytes,
-    getCurrentExerciseData,
     isCorrectWorkspaceOpen,
     Logger,
     LogLevel,
@@ -340,7 +340,7 @@ export async function getOldSubmissions(
     actionContext: ActionContext,
 ): Promise<Result<OldSubmission[], Error>> {
     const { tmc, workspaceManager } = actionContext;
-    const currentExercise = getCurrentExerciseData(workspaceManager);
+    const currentExercise = workspaceManager.getCurrentExerciseData();
     if (currentExercise.err) {
         return new Err(new Error("Exercise not found in workspacemanager"));
     }
@@ -437,7 +437,7 @@ export async function checkForNewExercises(
  * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
  */
 export async function openWorkspace(actionContext: ActionContext, name: string): Promise<void> {
-    const { resources, vsc } = actionContext;
+    const { resources, vsc, workspaceManager } = actionContext;
     const currentWorkspaceFile = vsc.getWorkspaceFile();
     const tmcWorkspaceFile = resources.getWorkspaceFilePath(name);
     Logger.log(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
@@ -451,9 +451,9 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
             ))
         ) {
             if (!fs.existsSync(tmcWorkspaceFile)) {
-                await resources.createWorkspaceFile(name);
+                workspaceManager.createWorkspaceFile(name);
             }
-            vsc.openFolder(tmcWorkspaceFile);
+            await vsc.openFolder(tmcWorkspaceFile);
             // Restarts VSCode
         } else {
             const choice = "Close current and open TMC Workspace";
@@ -461,7 +461,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
                 choice,
                 async (): Promise<Thenable<unknown>> => {
                     if (!fs.existsSync(tmcWorkspaceFile)) {
-                        await resources.createWorkspaceFile(name);
+                        workspaceManager.createWorkspaceFile(name);
                     }
                     return vsc.openFolder(tmcWorkspaceFile);
                 },
@@ -500,7 +500,7 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
  * Adds a new course to user's courses.
  */
 export async function addNewCourse(actionContext: ActionContext): Promise<Result<void, Error>> {
-    const { tmc, userData, resources } = actionContext;
+    const { tmc, userData, workspaceManager } = actionContext;
     Logger.log("Adding new course");
     const orgAndCourse = await selectOrganizationAndCourse(actionContext);
 
@@ -552,7 +552,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         material_url: courseSettings.material_url,
     };
     userData.addCourse(localData);
-    await resources.createWorkspaceFile(courseDetails.name);
+    workspaceManager.createWorkspaceFile(courseDetails.name);
     await displayUserCourses(actionContext);
     return Ok.EMPTY;
 }
@@ -576,7 +576,9 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
         .map((e) => e.id);
     Logger.log(`Removing ${missingIds.length} exercise data with Missing status`);
     workspaceManager.deleteExercise(...missingIds);
-    fs.removeSync(path.join(resources.getWorkspaceFolderPath(), course.name, ".code-workspace"));
+    delSync(path.join(resources.getWorkspaceFolderPath(), course.name, ".code-workspace"), {
+        force: true,
+    });
     userData.deleteCourse(id);
 }
 

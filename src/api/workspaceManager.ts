@@ -6,13 +6,15 @@ import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import { WORKSPACE_SETTINGS } from "../config/constants";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
-import { UIExerciseStatus } from "../ui/types";
+import * as UITypes from "../ui/types";
 import { isCorrectWorkspaceOpen, Logger } from "../utils";
 
 import { ExerciseDetails } from "./types";
+import { showNotification } from "./vscode";
 import WorkspaceWatcher from "./workspaceWatcher";
 
 /**
@@ -174,10 +176,32 @@ export default class WorkspaceManager {
     }
 
     /**
+     * Get the Exercise ID for the currently open text editor
+     */
+    public getCurrentExerciseId(): number | undefined {
+        const editorPath = vscode.window.activeTextEditor?.document.fileName;
+        if (!editorPath) {
+            return undefined;
+        }
+        return this.checkIfPathIsExercise(editorPath);
+    }
+
+    /**
+     * Get the Exercise data for the currently open text editor
+     */
+    public getCurrentExerciseData(): Result<LocalExerciseData, Error> {
+        const id = this.getCurrentExerciseId();
+        if (!id) {
+            return new Err(new Error("Currently open editor is not part of a TMC exercise"));
+        }
+        return this.getExerciseDataById(id);
+    }
+
+    /**
      * Checks if a given file is a part of a TMC exercise and returns its id if it is
      * @param filePath
      */
-    public checkExerciseIdByPath(filePath: string): number | undefined {
+    public checkIfPathIsExercise(filePath: string): number | undefined {
         const exerciseFolderPath = this.resources.getExercisesFolderPath();
         const relation = path.relative(exerciseFolderPath, filePath);
 
@@ -238,24 +262,25 @@ export default class WorkspaceManager {
     public async openExercise(
         courseName: string,
         ...ids: number[]
-    ): Promise<Result<{ id: number; status: UIExerciseStatus }, Error>[]> {
-        let results: Result<{ id: number; status: UIExerciseStatus }, Error>[] = [];
+    ): Promise<Result<{ id: number; status: UITypes.ExerciseStatus }[], Error>> {
+        let results: { id: number; status: UITypes.ExerciseStatus }[] = [];
 
         const courseExercises = this.getExercisesByCourseName(courseName);
 
         if (isCorrectWorkspaceOpen(this.resources, courseName)) {
-            const success = await this.handleWorkspaceChanges(true, courseExercises, ...ids);
-            if (!success) {
-                results.push(
-                    new Err(new Error("Something went wrong while trying to open exercises.")),
+            const result = await this.handleWorkspaceChanges(true, courseExercises, ...ids);
+            if (result.err) {
+                return new Err(
+                    new Error(
+                        `Something went wrong while trying to open exercises. ${result.val.message}`,
+                    ),
                 );
-                return results;
             }
             await vscode.commands.executeCommand("workbench.files.action.collapseExplorerFolders");
         }
         results = await this.setStatus(ExerciseStatus.CLOSED, ExerciseStatus.OPEN, ...ids);
         await this.updatePersistentData();
-        return results;
+        return new Ok(results);
     }
 
     /**
@@ -265,43 +290,44 @@ export default class WorkspaceManager {
     public async closeExercise(
         courseName: string,
         ...ids: number[]
-    ): Promise<Result<{ id: number; status: UIExerciseStatus }, Error>[]> {
-        let results: Result<{ id: number; status: UIExerciseStatus }, Error>[] = [];
+    ): Promise<Result<{ id: number; status: UITypes.ExerciseStatus }[], Error>> {
+        let results: { id: number; status: UITypes.ExerciseStatus }[] = [];
 
         const courseExercises = this.getExercisesByCourseName(courseName);
         if (isCorrectWorkspaceOpen(this.resources, courseName)) {
-            const success = await this.handleWorkspaceChanges(false, courseExercises, ...ids);
-            if (!success) {
-                results.push(
-                    new Err(new Error("Something went wrong while trying to close exercises.")),
+            const result = await this.handleWorkspaceChanges(false, courseExercises, ...ids);
+            if (result.err) {
+                return new Err(
+                    new Error(
+                        `Something went wrong while trying to close exercises. ${result.val.message}`,
+                    ),
                 );
-                return results;
             }
         }
         results = await this.setStatus(ExerciseStatus.OPEN, ExerciseStatus.CLOSED, ...ids);
 
         await this.updatePersistentData();
-        return results;
+        return new Ok(results);
     }
 
     private async setStatus(
         oldStatus: ExerciseStatus,
         newStatus: ExerciseStatus,
         ...ids: number[]
-    ): Promise<Result<{ id: number; status: UIExerciseStatus }, Error>[]> {
-        const results: Result<{ id: number; status: UIExerciseStatus }, Error>[] = [];
+    ): Promise<Array<{ id: number; status: UITypes.ExerciseStatus }>> {
+        const results: Array<{ id: number; status: UITypes.ExerciseStatus }> = [];
         const uistatus = newStatus === ExerciseStatus.OPEN ? "opened" : "closed";
         ids.forEach(async (id) => {
             const data = this.idToData.get(id);
             if (data && data.status === oldStatus) {
                 if (!fs.existsSync(this.getExercisePath(data))) {
                     await this.setMissing(id);
-                    results.push(new Ok({ id: data.id, status: "new" }));
+                    results.push({ id: data.id, status: "new" });
                     return;
                 }
                 data.status = newStatus;
                 this.idToData.set(data.id, data);
-                results.push(new Ok({ id: data.id, status: uistatus }));
+                results.push({ id: data.id, status: uistatus });
             }
         });
         return results;
@@ -311,8 +337,11 @@ export default class WorkspaceManager {
         handleAsOpen: boolean,
         exercises: LocalExerciseData[],
         ...ids: number[]
-    ): Promise<boolean> {
+    ): Promise<Result<void, Error>> {
         const currentlyOpenFolders = vscode.workspace.workspaceFolders;
+        if (currentlyOpenFolders === undefined) {
+            return new Err(new Error("Currently open workspace returned undefined."));
+        }
         let tmcFolderAsRoot = true;
 
         // Select all open exercises for course.
@@ -323,39 +352,25 @@ export default class WorkspaceManager {
         const toClose: vscode.Uri[] = [];
         const toOpen: vscode.Uri[] = [];
 
-        if (handleAsOpen) {
-            ids.forEach((id) => {
-                const data = this.idToData.get(id);
-                if (data && data.status === ExerciseStatus.CLOSED) {
-                    const openPath = this.getExercisePath(data);
-                    if (!fs.existsSync(openPath)) {
-                        return;
-                    }
-                    toOpen.push(vscode.Uri.file(openPath));
+        const statusToCheck = handleAsOpen ? ExerciseStatus.CLOSED : ExerciseStatus.OPEN;
+        ids.forEach((id) => {
+            const data = this.idToData.get(id);
+            if (data && data.status === statusToCheck) {
+                const openPath = this.getExercisePath(data);
+                if (!fs.existsSync(openPath)) {
+                    return;
                 }
-            });
-        } else {
-            ids.forEach((id) => {
-                const data = this.idToData.get(id);
-                if (data && data.status === ExerciseStatus.OPEN) {
-                    const openPath = this.getExercisePath(data);
-                    if (!fs.existsSync(openPath)) {
-                        return;
-                    }
+                if (handleAsOpen) {
+                    toOpen.push(vscode.Uri.file(openPath));
+                } else {
                     toClose.push(vscode.Uri.file(openPath));
                 }
-            });
-        }
+            }
+        });
 
-        if (currentlyOpenFolders && currentlyOpenFolders.length === 0) {
-            Logger.warn("No folders are opened in TMC Workspace.");
-            this.watcher.verifyWorkspaceRootFile();
-            allOpen.push(
-                vscode.Uri.file(path.join(this.resources.getWorkspaceFolderPath(), ".tmc")),
-            );
-            tmcFolderAsRoot = false;
-        } else if (currentlyOpenFolders && currentlyOpenFolders[0].name !== ".tmc") {
+        if (currentlyOpenFolders.length === 0 || currentlyOpenFolders[0].name !== ".tmc") {
             Logger.warn("The .tmc folder is not set as root folder.");
+            this.watcher.verifyWorkspaceRootFile();
             allOpen.push(
                 vscode.Uri.file(path.join(this.resources.getWorkspaceFolderPath(), ".tmc")),
             );
@@ -371,51 +386,20 @@ export default class WorkspaceManager {
         toOpenAsWorkspaceArg = toOpenAsWorkspaceArg.sort().map((e) => ({ uri: e }));
 
         let success = true;
-        if (currentlyOpenFolders !== undefined) {
-            if (currentlyOpenFolders.length > 1 && toOpenAsWorkspaceArg.length !== 0) {
-                if (tmcFolderAsRoot) {
-                    success = vscode.workspace.updateWorkspaceFolders(
-                        1,
-                        currentlyOpenFolders.length - 1,
-                        ...toOpenAsWorkspaceArg,
-                    );
-                } else {
-                    // Restarts vscode
-                    Logger.warn(
-                        "Folder .tmc is not as root. Re-opening every exercise and setting .tmc as root.",
-                    );
-                    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-                    success = vscode.workspace.updateWorkspaceFolders(
-                        0,
-                        currentlyOpenFolders.length,
-                        ...toOpenAsWorkspaceArg,
-                    );
-                }
-            } else {
-                if (toOpenAsWorkspaceArg.length === 0) {
-                    tmcFolderAsRoot
-                        ? null
-                        : await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-                    success = vscode.workspace.updateWorkspaceFolders(
-                        tmcFolderAsRoot ? 1 : 0,
-                        tmcFolderAsRoot
-                            ? currentlyOpenFolders.length - 1
-                            : currentlyOpenFolders.length,
-                        ...toOpenAsWorkspaceArg,
-                    );
-                } else {
-                    tmcFolderAsRoot
-                        ? null
-                        : await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-                    success = vscode.workspace.updateWorkspaceFolders(
-                        tmcFolderAsRoot ? 1 : 0,
-                        tmcFolderAsRoot ? null : currentlyOpenFolders.length,
-                        ...toOpenAsWorkspaceArg,
-                    );
-                }
-            }
+        const start = tmcFolderAsRoot ? 1 : 0;
+        const remove = currentlyOpenFolders.length - start;
+        if (!tmcFolderAsRoot) {
+            await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+            showNotification("The workspace first folder is not .tmc, fixing issue.");
         }
-        return success;
+
+        success = vscode.workspace.updateWorkspaceFolders(
+            start,
+            remove > 0 ? remove : null,
+            ...toOpenAsWorkspaceArg,
+        );
+
+        return success ? Ok.EMPTY : new Err(new Error("Failed to handle workspace changes."));
     }
 
     /**
@@ -448,17 +432,6 @@ export default class WorkspaceManager {
         }
     }
 
-    /**
-     * ExerciseStatus is not missing.
-     */
-    public exerciseExists(id: number): boolean {
-        const data = this.idToData.get(id);
-        if (data) {
-            return data.status !== ExerciseStatus.MISSING;
-        }
-        return false;
-    }
-
     public getExercisePathById(id: number): Result<string, Error> {
         const data = this.idToData.get(id);
         if (!data) {
@@ -482,6 +455,17 @@ export default class WorkspaceManager {
 
     private async updatePersistentData(): Promise<void> {
         return this.storage.updateExerciseData(Array.from(this.idToData.values()));
+    }
+
+    public createWorkspaceFile(courseName: string): void {
+        const tmcWorkspaceFilePath = path.join(
+            this.resources.getWorkspaceFolderPath(),
+            courseName + ".code-workspace",
+        );
+        if (!fs.existsSync(tmcWorkspaceFilePath)) {
+            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
+            Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
+        }
     }
 
     /**

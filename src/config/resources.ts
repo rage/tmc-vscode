@@ -1,9 +1,4 @@
-import * as fs from "fs-extra";
 import * as path from "path";
-
-import { Logger } from "../utils";
-
-import { WORKSPACE_SETTINGS } from "./constants";
 
 export default class Resources {
     public readonly cssFolder: string;
@@ -59,18 +54,6 @@ export default class Resources {
 
     public getWorkspaceFolderPath(): string {
         return path.join(this.tmcDataFolder, this.tmcWorkspaceFolderPathRelative);
-    }
-
-    public async createWorkspaceFile(courseName: string): Promise<void> {
-        const tmcWorkspaceFilePath = path.join(
-            this.tmcDataFolder,
-            this.tmcWorkspaceFolderPathRelative,
-            courseName + ".code-workspace",
-        );
-        if (!fs.existsSync(tmcWorkspaceFilePath)) {
-            await fs.writeFile(tmcWorkspaceFilePath, JSON.stringify({ ...WORKSPACE_SETTINGS }));
-            Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
-        }
     }
 
     public getWorkspaceFilePath(courseName: string): string {

@@ -5,17 +5,13 @@ import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { ActionContext, FeedbackQuestion } from "../actions/types";
+import { FeedbackQuestion } from "../actions/types";
 import { SubmissionFeedbackQuestion } from "../api/types";
 import { showNotification } from "../api/vscode";
-import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
-import { ExerciseStatus, LocalExerciseData } from "../config/types";
 import { ConnectionError } from "../errors";
 
 import { superfluousPropertiesEnabled } from "./env";
-
-import { Logger } from ".";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be
@@ -118,30 +114,6 @@ export function formatSizeInBytes(size: number, precision = 3): string {
 }
 
 /**
- * Get the Exercise ID for the currently open text editor
- */
-export function getCurrentExerciseId(workspaceManager: WorkspaceManager): number | undefined {
-    const editorPath = vscode.window.activeTextEditor?.document.fileName;
-    if (!editorPath) {
-        return undefined;
-    }
-    return workspaceManager.checkExerciseIdByPath(editorPath);
-}
-
-/**
- * Get the Exercise data for the currently open text editor
- */
-export function getCurrentExerciseData(
-    workspaceManager: WorkspaceManager,
-): Result<LocalExerciseData, Error> {
-    const id = getCurrentExerciseId(workspaceManager);
-    if (!id) {
-        return new Err(new Error("Currently open editor is not part of a TMC exercise"));
-    }
-    return workspaceManager.getExerciseDataById(id);
-}
-
-/**
  * Return bootstrap striped, animated progress bar div as string
  * @param percentDone How much done of the progress
  */
@@ -218,77 +190,4 @@ export async function removeOldData(oldDataObject: {
         return new Ok(`Removed successfully from ${oldDataObject.path}`);
     }
     return new Ok(`Time exceeded, will not remove data from ${oldDataObject.path}`);
-}
-
-/**
- * VSCode function that watches TMC workspace changes and syncs states accordingly.
- * @param actionContext
- */
-export function watchForWorkspaceChanges(actionContext: ActionContext): void {
-    const { resources, vsc, workspaceManager, ui } = actionContext;
-    const currentWorkspace = vsc.getWorkspaceName();
-    if (currentWorkspace && isCorrectWorkspaceOpen(resources, currentWorkspace)) {
-        Logger.log("TMC Workspace identified, listening for folder changes.");
-        vscode.workspace.onDidChangeWorkspaceFolders((listener) => {
-            const foldersToRemove: vscode.Uri[] = [];
-
-            listener.removed.forEach((item) => {
-                const exercise = workspaceManager.getExerciseDataByPath(item.uri.fsPath);
-                if (
-                    exercise.ok &&
-                    exercise.val.status !== ExerciseStatus.MISSING &&
-                    exercise.val.status === ExerciseStatus.OPEN &&
-                    currentWorkspace === exercise.val.course
-                ) {
-                    workspaceManager.updateExercisesStatus(exercise.val.id, ExerciseStatus.CLOSED);
-                    ui.webview.postMessage({
-                        key: `exercise-${exercise.val.id}-status`,
-                        message: {
-                            command: "exerciseStatusChange",
-                            exerciseId: exercise.val.id,
-                            status: "closed",
-                        },
-                    });
-                }
-            });
-
-            listener.added.forEach((item) => {
-                const exercise = workspaceManager.getExerciseDataByPath(item.uri.fsPath);
-                if (
-                    exercise.ok &&
-                    exercise.val.status !== ExerciseStatus.MISSING &&
-                    exercise.val.status === ExerciseStatus.CLOSED &&
-                    currentWorkspace === exercise.val.course
-                ) {
-                    workspaceManager.updateExercisesStatus(exercise.val.id, ExerciseStatus.OPEN);
-                    ui.webview.postMessage({
-                        key: `exercise-${exercise.val.id}-status`,
-                        message: {
-                            command: "exerciseStatusChange",
-                            exerciseId: exercise.val.id,
-                            status: "opened",
-                        },
-                    });
-                } else if (exercise.ok && currentWorkspace !== exercise.val.course) {
-                    foldersToRemove.push(vsc.toUri(item.uri.fsPath));
-                } else if (exercise.err) {
-                    Logger.warn(
-                        "Added folder that isn't part of any course.",
-                        exercise.val.message,
-                        exercise.val.stack,
-                    );
-                    foldersToRemove.push(vsc.toUri(item.uri.fsPath));
-                }
-            });
-
-            if (foldersToRemove.length !== 0) {
-                Logger.log("Folders that was added.", foldersToRemove);
-                showNotification(
-                    `Exercises or folders you added to this workspace are not
-                    part of the current course ${currentWorkspace} and will be removed later.`,
-                    ["Ok", (): void => {}],
-                );
-            }
-        });
-    }
 }

@@ -119,7 +119,7 @@ export async function resourceInitialization(
             course.name + ".code-workspace",
         );
         if (!fs.existsSync(tmcWorkspaceFilePath)) {
-            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify({ ...WORKSPACE_SETTINGS }));
+            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
             Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
         }
     });

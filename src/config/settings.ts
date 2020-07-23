@@ -27,15 +27,14 @@ export default class Settings {
         this.storage = storage;
         this.resources = resources;
         this.settings = settings;
-        this.verifyWorkspaceSettingsIntegrity();
     }
 
-    private verifyWorkspaceSettingsIntegrity(): void {
+    public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
         const workspace = vscode.workspace.name;
         if (workspace && isCorrectWorkspaceOpen(this.resources, workspace.split(" ")[0])) {
             Logger.log("TMC Workspace open, verifying workspace settings integrity.");
-            this.setFilesExcludeInWorkspace(this.settings.hideMetaFiles);
-            this.verifyWatcherPatternExclusion();
+            await this.setFilesExcludeInWorkspace(this.settings.hideMetaFiles);
+            await this.verifyWatcherPatternExclusion();
         }
     }
 

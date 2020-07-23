@@ -1,5 +1,5 @@
 import * as fs from "fs-extra";
-import path = require("path");
+import * as path from "path";
 import * as vscode from "vscode";
 
 import { checkForExerciseUpdates, checkForNewExercises, openSettings } from "./actions";
@@ -14,7 +14,6 @@ import { validateAndFix } from "./config/validate";
 import * as init from "./init";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
-import { watchForWorkspaceChanges } from "./utils";
 import { Logger, LogLevel } from "./utils/logger";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
@@ -36,6 +35,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const settingsResult = await init.settingsInitialization(storage, resources);
     const settings = new Settings(storage, settingsResult, resources);
+    await settings.verifyWorkspaceSettingsIntegrity();
     Logger.configure(settings.getLogLevel());
 
     const vsc = new VSC(settings);
@@ -144,7 +144,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     }, EXERCISE_CHECK_INTERVAL);
 
-    watchForWorkspaceChanges(actionContext);
+    init.watchForWorkspaceChanges(actionContext);
 }
 
 export function deactivate(): void {

@@ -37,6 +37,9 @@ export default class WorkspaceWatcher {
         });
     }
 
+    /**
+     * Verifies that .tmc/ file exists and it's contents is correct.
+     */
     public verifyWorkspaceRootFile(): void {
         const rootFileFolder = path.join(this.resources.getWorkspaceFolderPath(), ".tmc");
         const pathToRootFile = path.join(rootFileFolder, WORKSPACE_ROOT_FILE);

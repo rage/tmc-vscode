@@ -6,14 +6,9 @@
 
 import { Err, Ok, Result } from "ts-results";
 
-import { ExerciseStatus } from "../config/types";
+import * as ConfigTypes from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
-import {
-    CourseDetailsExercise,
-    CourseDetailsExerciseGroup,
-    UIExerciseStatus as TextStatus,
-    WebviewMessage,
-} from "../ui/types";
+import * as UITypes from "../ui/types";
 import { chooseDeadline, dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utils/";
 
 import { ActionContext } from "./types";
@@ -93,11 +88,14 @@ export async function displayLocalCourseDetails(
 ): Promise<void> {
     const { ui, tmc, userData, workspaceManager } = actionContext;
 
-    const mapStatus = (status: ExerciseStatus, expired: boolean): TextStatus => {
+    const mapStatus = (
+        status: ConfigTypes.ExerciseStatus,
+        expired: boolean,
+    ): UITypes.ExerciseStatus => {
         switch (status) {
-            case ExerciseStatus.CLOSED:
+            case ConfigTypes.ExerciseStatus.CLOSED:
                 return "closed";
-            case ExerciseStatus.OPEN:
+            case ConfigTypes.ExerciseStatus.OPEN:
                 return "opened";
             default:
                 return expired ? "expired" : "new";
@@ -108,8 +106,8 @@ export async function displayLocalCourseDetails(
     Logger.log(`Display course view for ${course.name}`);
 
     const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
-    const exerciseData = new Map<string, CourseDetailsExerciseGroup>();
-    const initialState: Array<{ key: string; message: WebviewMessage }> = [];
+    const exerciseData = new Map<string, UITypes.CourseDetailsExerciseGroup>();
+    const initialState: Array<{ key: string; message: UITypes.WebviewMessage }> = [];
     const apiCourse = (await tmc.getCourseDetails(courseId, true)).mapErr(() => undefined).val
         ?.course;
     const currentDate = new Date();
@@ -126,7 +124,11 @@ export async function displayLocalCourseDetails(
         const name = nameMatch?.[2] || "";
         let exData = workspaceExercises.find((d) => d.id === ex.id);
         const apiExercise = apiCourse?.exercises.find((e) => e.id === ex.id);
-        if ((!exData || exData.status === ExerciseStatus.MISSING) && apiCourse && apiExercise) {
+        if (
+            (!exData || exData.status === ConfigTypes.ExerciseStatus.MISSING) &&
+            apiCourse &&
+            apiExercise
+        ) {
             exData = {
                 id: ex.id,
                 name: ex.name,
@@ -135,7 +137,7 @@ export async function displayLocalCourseDetails(
                 deadline: apiExercise.deadline,
                 organization: course.organization,
                 softDeadline: apiExercise.soft_deadline,
-                status: ExerciseStatus.MISSING,
+                status: ConfigTypes.ExerciseStatus.MISSING,
             };
         }
         if (!exData) {
@@ -154,7 +156,7 @@ export async function displayLocalCourseDetails(
                 ),
             },
         });
-        const entry: CourseDetailsExercise = {
+        const entry: UITypes.CourseDetailsExercise = {
             id: ex.id,
             name,
             passed: course.exercises.find((ce) => ce.id === ex.id)?.passed || false,

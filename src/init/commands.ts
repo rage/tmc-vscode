@@ -12,7 +12,7 @@ import {
 } from "../actions";
 import { ActionContext } from "../actions/types";
 import { askForConfirmation, showError, showNotification } from "../api/vscode";
-import { getCurrentExerciseData, getCurrentExerciseId, Logger } from "../utils/";
+import { Logger } from "../utils/";
 
 // TODO: Fix error handling so user receives better error messages.
 const errorMessage = "Currently open editor is not part of a TMC exercise";
@@ -30,7 +30,7 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("selectAction", async () => {
-            const exerciseData = getCurrentExerciseData(workspaceManager);
+            const exerciseData = workspaceManager.getCurrentExerciseData();
             if (exerciseData.err) {
                 Logger.error(exerciseData.val.message);
                 showError(exerciseData.val.message);
@@ -42,7 +42,7 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("uploadArchive", async () => {
-            const exerciseId = getCurrentExerciseId(workspaceManager);
+            const exerciseId = workspaceManager.getCurrentExerciseId();
             if (!exerciseId) {
                 Logger.error(errorMessage);
                 showError(errorMessage);
@@ -54,7 +54,7 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("pasteExercise", async () => {
-            const exerciseId = getCurrentExerciseId(workspaceManager);
+            const exerciseId = workspaceManager.getCurrentExerciseId();
             if (exerciseId) {
                 const link = await pasteExercise(actionContext, exerciseId);
                 link &&
@@ -71,7 +71,7 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("runTests", async () => {
-            const exerciseId = getCurrentExerciseId(workspaceManager);
+            const exerciseId = workspaceManager.getCurrentExerciseId();
             if (!exerciseId) {
                 Logger.error(errorMessage);
                 showError(errorMessage);
@@ -83,7 +83,7 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("resetExercise", async () => {
-            const exerciseId = getCurrentExerciseId(workspaceManager);
+            const exerciseId = workspaceManager.getCurrentExerciseId();
             if (!exerciseId) {
                 Logger.error(errorMessage);
                 showError(errorMessage);
@@ -124,7 +124,7 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("downloadOldSubmission", async () => {
-            const exerciseId = getCurrentExerciseId(workspaceManager);
+            const exerciseId = workspaceManager.getCurrentExerciseId();
             if (!exerciseId) {
                 Logger.error(errorMessage);
                 showError(errorMessage);
@@ -147,7 +147,7 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("closeExercise", async () => {
-            const exerciseId = getCurrentExerciseId(workspaceManager);
+            const exerciseId = workspaceManager.getCurrentExerciseId();
             if (!exerciseId) {
                 Logger.error(errorMessage);
                 showError(errorMessage);
