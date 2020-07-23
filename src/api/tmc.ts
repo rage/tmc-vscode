@@ -721,9 +721,11 @@ export default class TMC {
 
         const [cprocess, resultPromise] = langsProcess();
 
+        let interrupted = false;
         const interrupt = (): void => {
             if (active) {
                 active = false;
+                interrupted = true;
                 kill(cprocess.pid);
             }
         };
@@ -742,7 +744,11 @@ export default class TMC {
             try {
                 await resultPromise;
             } catch (error) {
-                return new Err(error);
+                return new Err(new Error(error));
+            }
+
+            if (interrupted) {
+                return new Err(new RuntimeError("TMC Langs process was killed."));
             }
 
             const logs = { stdout: stdout.toString(), stderr: stderr.toString() };
