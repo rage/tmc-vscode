@@ -272,26 +272,6 @@ export type TmcLangsLogs = {
     };
 };
 
-export type TmcLangsTestResultJava = {
-    name: string;
-    successful: boolean;
-    message: string;
-    valgrindFailed: boolean;
-    points: string[];
-    exception?: string[];
-};
-
-export type TmcLangsTestResultsJava = {
-    response: {
-        status: string;
-        testResults: TmcLangsTestResultJava[];
-        logs: {
-            stdout?: number[];
-            stderr?: number[];
-        };
-    } | null;
-} & TmcLangsLogs;
-
 export type TmcLangsTestResultRust = {
     name: string;
     successful: boolean;
@@ -327,4 +307,4 @@ export type TmcLangsFilePath = {
     };
 } & TmcLangsLogs;
 
-export type TmcLangsResponse = TmcLangsPath | TmcLangsTestResultsJava | TmcLangsFilePath;
+export type TmcLangsResponse = TmcLangsPath | TmcLangsFilePath;

@@ -47,7 +47,6 @@ import {
     TmcLangsFilePath,
     TmcLangsPath,
     TmcLangsResponse,
-    TmcLangsTestResultsJava,
     TmcLangsTestResultsRust,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
@@ -500,7 +499,7 @@ export default class TMC {
         id: number,
         isInsider: boolean,
         executablePath?: string,
-    ): [Promise<Result<TmcLangsTestResultsJava | TmcLangsTestResultsRust, Error>>, () => void] {
+    ): [Promise<Result<TmcLangsTestResultsRust, Error>>, () => void] {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
@@ -509,66 +508,48 @@ export default class TMC {
             return [Promise.resolve(new Err(new Error("???"))), (): void => {}];
         }
 
-        // -- Insider implementation --
-        if (isInsider) {
-            const env: { [key: string]: string } = {};
-            if (executablePath) {
-                env.TMC_LANGS_PYTHON_EXEC = executablePath;
-            }
-            const outputPath = this.nextTempOutputPath();
-            const { interrupt, result } = this.executeLangsRustProcess({
-                args: [
-                    "run-tests",
-                    "--exercise-path",
-                    exerciseFolderPath.val,
-                    "--output-path",
-                    this.nextTempOutputPath(),
-                ],
-                core: false,
-                env,
-            });
-
-            // Temp copypaste, read results from stdout when using new rust version
-            const postResult: Promise<Result<TmcLangsTestResultsRust, Error>> = result.then(
-                (res) => {
-                    if (res.err) {
-                        return res;
-                    }
-
-                    const readResult = {
-                        response: JSON.parse(fs.readFileSync(outputPath, "utf8")),
-                        logs: {
-                            stdout: res.val.stdout.join(""),
-                            stderr: res.val.stderr,
-                        },
-                    };
-
-                    if (is<TmcLangsTestResultsRust>(readResult)) {
-                        return new Ok(readResult);
-                    }
-
-                    Logger.error("Unexpected response JSON type", readResult);
-                    Logger.show();
-                    return new Err(new RuntimeError("Unexpected response JSON type"));
-                },
-            );
-
-            return [postResult, interrupt];
+        const env: { [key: string]: string } = {};
+        if (isInsider && executablePath) {
+            env.TMC_LANGS_PYTHON_EXEC = executablePath;
         }
-        // -- End of insider implementation --
-
-        const [testRunner, interrupt] = this.executeLangsAction({
-            action: "run-tests",
-            exerciseFolderPath: exerciseFolderPath.val,
+        const outputPath = this.nextTempOutputPath();
+        const { interrupt, result } = this.executeLangsRustProcess({
+            args: [
+                "run-tests",
+                "--exercise-path",
+                exerciseFolderPath.val,
+                "--output-path",
+                this.nextTempOutputPath(),
+            ],
+            core: false,
+            env,
+            onStdout: (res) => Logger.log("Langs", res),
         });
 
-        return [
-            this.checkApiResponse(
-                testRunner,
-                createIs<TmcLangsTestResultsJava | TmcLangsTestResultsRust>(),
-            ),
-            interrupt,
-        ];
+        // Temp copypaste, read results from stdout when using new rust version
+        const postResult: Promise<Result<TmcLangsTestResultsRust, Error>> = result.then((res) => {
+            if (res.err) {
+                return res;
+            }
+
+            const readResult = {
+                response: JSON.parse(fs.readFileSync(outputPath, "utf8")),
+                logs: {
+                    stdout: res.val.stdout.join(""),
+                    stderr: res.val.stderr,
+                },
+            };
+
+            if (is<TmcLangsTestResultsRust>(readResult)) {
+                return new Ok(readResult);
+            }
+
+            Logger.error("Unexpected response JSON type", readResult);
+            Logger.show();
+            return new Err(new RuntimeError("Unexpected response JSON type"));
+        });
+
+        return [postResult, interrupt];
     }
 
     /**
@@ -708,7 +689,7 @@ export default class TMC {
         let active = true;
         let interrupted = false;
         const cprocess = cp.spawn(executable, core ? CORE_ARGS.concat(args) : args, {
-            env: { ...process.env, ...env },
+            env: { ...process.env, ...env, RUST_LOG: "debug" },
         });
         stdin && cprocess.stdin.write(stdin + "\n");
 
@@ -726,22 +707,24 @@ export default class TMC {
                 resolve(code);
             });
             cprocess.stderr.on("data", (chunk) => {
-                Logger.log("RustLangs:\n", JSON.stringify(chunk));
-                onStderr?.(chunk);
-                stderr = stderr.concat(chunk);
+                const data = chunk.toString();
+                stderr = stderr.concat(data);
+                onStderr?.(data);
             });
             cprocess.stdout.on("data", (chunk) => {
                 try {
-                    const json = JSON.parse(chunk.toString());
-                    if (is<LangsResponse>(json)) {
-                        onStdout?.(json);
-                        stdout = stdout.concat(json);
-                    } else {
+                    // Check against broken and output
+                    const prepared = `[${chunk.toString().trim().replace(/}\s*{/g, "},{")}]`;
+                    const json = JSON.parse(prepared);
+                    if (!is<LangsResponse[]>(json)) {
                         Logger.error(
                             "Langs response didn't match expected type, received: ",
                             chunk.toString(),
                         );
+                        return;
                     }
+                    stdout = stdout.concat(json);
+                    onStdout?.(json[json.length - 1]);
                 } catch (e) {
                     Logger.warn("Failed to parse langs response, received: ", chunk.toString());
                 }
