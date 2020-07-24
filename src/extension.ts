@@ -14,6 +14,7 @@ import { validateAndFix } from "./config/validate";
 import * as init from "./init";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
+import { ExerciseDecorator } from "./utils/exerciseDecorator";
 import { Logger, LogLevel } from "./utils/logger";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
@@ -68,6 +69,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tmc.setWorkspaceManager(workspaceManager);
     const userData = new UserData(storage);
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
+    const exerciseDecorator = new ExerciseDecorator(userData, workspaceManager);
+    context.subscriptions.push(exerciseDecorator);
+
     const actionContext = {
         resources,
         settings,
@@ -77,6 +81,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ui,
         userData,
         workspaceManager,
+        exerciseDecorator,
     };
 
     // Migration plan to move all exercises from closed-exercises
@@ -145,6 +150,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }, EXERCISE_CHECK_INTERVAL);
 
     init.watchForWorkspaceChanges(actionContext);
+    init.decorateCompletedExercises(actionContext);
 }
 
 export function deactivate(): void {

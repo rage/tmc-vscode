@@ -6,6 +6,7 @@ import Settings from "../config/settings";
 import { UserData } from "../config/userdata";
 import TemporaryWebviewProvider from "../ui/temporaryWebviewProvider";
 import UI from "../ui/ui";
+import { ExerciseDecorator } from "../utils/exerciseDecorator";
 
 export type ActionContext = {
     resources: Resources;
@@ -16,6 +17,7 @@ export type ActionContext = {
     ui: UI;
     userData: UserData;
     workspaceManager: WorkspaceManager;
+    exerciseDecorator: ExerciseDecorator;
 };
 
 /**

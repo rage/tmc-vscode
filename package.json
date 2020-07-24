@@ -1,4 +1,5 @@
 {
+    "enableProposedApi": true,
     "name": "test-my-code",
     "displayName": "TestMyCode",
     "description": "TestMyCode extension for Visual Studio Code",

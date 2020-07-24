@@ -5,3 +5,4 @@ dist
 out
 test-resources/
 .vscode-test/
+vscode.proposed.d.ts
