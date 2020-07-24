@@ -52,12 +52,28 @@ import {
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
 
+type LangsResponse = {
+    data: unknown | null;
+    message: string | null;
+    "percent-done": number;
+    result:
+        | "logged-in"
+        | "logged-out"
+        | "not-logged-in"
+        | "error"
+        | "running"
+        | "sent-data"
+        | "retrieved-data"
+        | "executed-command";
+    status: "successful" | "crashed" | "in-progress";
+};
+
 interface RustProcessArgs {
     args: string[];
     core: boolean;
     env?: { [key: string]: string };
     onStderr?: (data: string) => void;
-    onStdout?: (data: string) => void;
+    onStdout?: (data: LangsResponse) => void;
     stdin?: string;
 }
 
@@ -67,28 +83,13 @@ type RustProcessRunner = {
         Result<
             {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                stderr: any[];
+                stderr: string;
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                stdout: any[];
+                stdout: LangsResponse[];
             },
             Error
         >
     >;
-};
-
-interface ProcessArgs {
-    args: string[];
-    executable: string;
-    env?: { [key: string]: string };
-    stdin?: string;
-    onStderr(data: string): void;
-    onStdout(data: string): void;
-}
-
-type ProcessRunner = {
-    interrupted: boolean;
-    interrupt(): void;
-    result: Promise<number | null>;
 };
 
 /**
@@ -163,10 +164,8 @@ export default class TMC {
                 return new Err(new AuthenticationError(loginResult.val.message));
             }
             const login = loginResult.val.stdout[0];
-            if (login !== "") {
-                return new Err(
-                    new AuthenticationError(login.error?.message || "Failed to parse error"),
-                );
+            if (login.status !== "successful") {
+                return new Err(new AuthenticationError(login.message || "Failed to parse error"));
             }
 
             // Non-Insider compatibility: Get token from langs and store it. This relies on a side
@@ -224,23 +223,24 @@ export default class TMC {
                 return loggedInResult;
             }
 
-            if (loggedInResult.val.stdout[0].message !== undefined) {
-                // As of rust langs 0.1.7-alpha, message means no.
+            const response = loggedInResult.val.stdout[0];
+            if (response.result === "not-logged-in") {
                 if (!this.token) {
                     return new Ok(false);
                 }
+
                 // Insider compatibility: If token exists but Langs didn't have it, pass it on.
-                console.warn(this.token.data);
                 const setTokenResult = await this.executeLangsRustProcess({
                     args: ["login", "--set-access-token", this.token.data.access_token],
                     core: true,
                 }).result;
+
                 if (setTokenResult.err) {
                     return setTokenResult;
                 }
-            } else if (is<ClientOauth2.Data>(loggedInResult.val.stdout[0])) {
+            } else if (response.result === "logged-in" && is<ClientOauth2.Data>(response.data)) {
                 // Non-insider compatibility: keep stored token up to date
-                this.token = new ClientOauth2.Token(this.oauth2, loggedInResult.val.stdout[0]);
+                this.token = new ClientOauth2.Token(this.oauth2, response.data);
                 this.storage.updateAuthenticationToken(this.token.data);
             }
         }
@@ -539,7 +539,7 @@ export default class TMC {
                         response: JSON.parse(fs.readFileSync(outputPath, "utf8")),
                         logs: {
                             stdout: res.val.stdout.join(""),
-                            stderr: res.val.stderr.join(""),
+                            stderr: res.val.stderr,
                         },
                     };
 
@@ -622,9 +622,12 @@ export default class TMC {
             }
 
             const response = processResult.val.stdout[processResult.val.stdout.length - 1];
-            return is<SubmissionResponse>(response)
-                ? new Ok(response)
-                : new Err(new Error("Expected SubmissionResponse"));
+            if (response.status === "successful" && response.data) {
+                return is<SubmissionResponse>(response.data)
+                    ? new Ok(response.data)
+                    : new Err(new Error("Expected SubmissionResponse"));
+            }
+            return new Err(new Error("Submitting to paste failed: " + response.message));
         }
         // -- End of insider implementation --
 
@@ -693,27 +696,11 @@ export default class TMC {
     }
 
     private executeLangsRustProcess(commandArgs: RustProcessArgs): RustProcessRunner {
-        const { args, core, env, stdin } = commandArgs;
+        const { args, core, env, onStderr, onStdout, stdin } = commandArgs;
         const CORE_ARGS = ["core", "--client-name", CLIENT_NAME];
 
-        let stdout = "";
+        let stdout: LangsResponse[] = [];
         let stderr = "";
-
-        const onStderr = (data: string): void => {
-            Logger.log("RustLangs:\n", JSON.stringify(data));
-            stderr = stderr.concat(data);
-        };
-
-        const onStdout = (data: string): void => {
-            Logger.log("RustLangs:\n", JSON.stringify(data));
-            stdout = stdout.concat(data);
-        };
-
-        // ASAP: Parse langs output to object
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const parseOutput = (chunk: any): string => {
-            return chunk.toString();
-        };
 
         const executable = this.resources.getCliPath();
         Logger.log(executable, JSON.stringify(args));
@@ -738,8 +725,27 @@ export default class TMC {
                 clearTimeout(timeout);
                 resolve(code);
             });
-            cprocess.stderr.on("data", (chunk) => onStderr(parseOutput(chunk)));
-            cprocess.stdout.on("data", (chunk) => onStdout(parseOutput(chunk)));
+            cprocess.stderr.on("data", (chunk) => {
+                Logger.log("RustLangs:\n", JSON.stringify(chunk));
+                onStderr?.(chunk);
+                stderr = stderr.concat(chunk);
+            });
+            cprocess.stdout.on("data", (chunk) => {
+                try {
+                    const json = JSON.parse(chunk.toString());
+                    if (is<LangsResponse>(json)) {
+                        onStdout?.(json);
+                        stdout = stdout.concat(json);
+                    } else {
+                        Logger.error(
+                            "Langs response didn't match expected type, received: ",
+                            chunk.toString(),
+                        );
+                    }
+                } catch (e) {
+                    Logger.warn("Failed to parse langs response, received: ", chunk.toString());
+                }
+            });
         });
 
         const interrupt = (): void => {
@@ -751,15 +757,6 @@ export default class TMC {
         };
 
         const result = (async (): RustProcessRunner["result"] => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const parseJsonFromOutput = (output: string): any[] => {
-                const trimmed = output.trim();
-                if (!trimmed.match(/^\s*{/) || !trimmed.match(/}\s*$/)) {
-                    return [trimmed];
-                }
-                return JSON.parse(`[${trimmed.replace(/}\s*{/g, "},{")}]`);
-            };
-
             try {
                 await processResult;
             } catch (error) {
@@ -771,60 +768,12 @@ export default class TMC {
             }
 
             return new Ok({
-                stderr: parseJsonFromOutput(stderr),
-                stdout: parseJsonFromOutput(stdout),
+                stderr,
+                stdout,
             });
         })();
 
         return { interrupt, result };
-    }
-
-    private executeLangsProcess(processArgs: ProcessArgs): ProcessRunner {
-        const { args, env, executable, stdin, onStderr, onStdout } = processArgs;
-
-        // ASAP: Parse langs output to object
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const parseOutput = (chunk: any): string => {
-            return chunk.toString();
-        };
-
-        Logger.log(executable, JSON.stringify(args));
-
-        let active = true;
-        let interrupted = false;
-        const cprocess = cp.spawn(executable, args, { env: { ...process.env, ...env } });
-        stdin && cprocess.stdin.write(stdin + "\n");
-
-        const result = new Promise<number | null>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                kill(cprocess.pid);
-                reject("Process didn't seem to finish or was taking a really long time.");
-            }, TMC_LANGS_TIMEOUT);
-            cprocess.on("error", (error) => {
-                clearTimeout(timeout);
-                reject(error);
-            });
-            cprocess.on("exit", (code) => {
-                clearTimeout(timeout);
-                resolve(code);
-            });
-            cprocess.stderr.on("data", (chunk) => onStderr(parseOutput(chunk)));
-            cprocess.stdout.on("data", (chunk) => onStdout(parseOutput(chunk)));
-        });
-
-        const interrupt = (): void => {
-            if (active) {
-                active = false;
-                interrupted = true;
-                kill(cprocess.pid);
-            }
-        };
-
-        return {
-            interrupt,
-            interrupted,
-            result,
-        };
     }
 
     private nextTempOutputPath(): string {
