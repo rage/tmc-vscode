@@ -1,5 +1,3 @@
-import { Data as TokenData } from "client-oauth2";
-
 /**
  * TMC Api Response types
  */
@@ -257,58 +255,15 @@ interface LangsGetExercisePackagingConfiguration {
     exerciseFolderPath: string;
 }
 
-interface LangsLogin {
-    action: "login-insider";
-    username: string;
-    password: string;
-}
-
 interface LangsRunTests {
     action: "run-tests";
     exerciseFolderPath: string;
 }
 
-interface LangsRunTestsInsider {
-    action: "run-tests-insider";
-    exerciseFolderPath: string;
-    executablePath: string | undefined;
-}
-
-interface LangsPasteInsider {
-    action: "paste-insider";
-    submissionPath: string;
-    submissionUrl: string;
-}
-
-interface LangsSetTokenInsider {
-    action: "set-token-insider";
-    token: string;
-}
-
-interface LangsSubmitInsider {
-    action: "submit-insider";
-    submissionPath: string;
-    submissionUrl: string;
-}
-
 export type TmcLangsAction =
     | LangsArchiveProject
     | LangsGetExercisePackagingConfiguration
-    | LangsLogin
-    | LangsPasteInsider
-    | LangsRunTests
-    | LangsRunTestsInsider
-    | LangsSetTokenInsider
-    | LangsSubmitInsider
-    | {
-          action: "logged-in-insider" | "logout-insider";
-      };
-
-export type TmcLangsAccessToken = {
-    response: {
-        tokenData: TokenData;
-    };
-};
+    | LangsRunTests;
 
 export type TmcLangsLogs = {
     logs: {
@@ -372,10 +327,4 @@ export type TmcLangsFilePath = {
     };
 } & TmcLangsLogs;
 
-export type TmcLangsResponse =
-    | TmcLangsAccessToken
-    | TmcLangsPath
-    | SubmissionResponse
-    | TmcLangsTestResultsJava
-    | TmcLangsTestResultsRust
-    | TmcLangsFilePath;
+export type TmcLangsResponse = TmcLangsPath | TmcLangsTestResultsJava | TmcLangsFilePath;

@@ -43,7 +43,6 @@ import {
     SubmissionResponse,
     SubmissionStatusReport,
     TMCApiResponse,
-    TmcLangsAccessToken,
     TmcLangsAction,
     TmcLangsFilePath,
     TmcLangsPath,
@@ -52,6 +51,45 @@ import {
     TmcLangsTestResultsRust,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
+
+interface RustProcessArgs {
+    args: string[];
+    core: boolean;
+    env?: { [key: string]: string };
+    onStderr?: (data: string) => void;
+    onStdout?: (data: string) => void;
+    stdin?: string;
+}
+
+type RustProcessRunner = {
+    interrupt(): void;
+    result: Promise<
+        Result<
+            {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                stderr: any[];
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                stdout: any[];
+            },
+            Error
+        >
+    >;
+};
+
+interface ProcessArgs {
+    args: string[];
+    executable: string;
+    env?: { [key: string]: string };
+    stdin?: string;
+    onStderr(data: string): void;
+    onStdout(data: string): void;
+}
+
+type ProcessRunner = {
+    interrupted: boolean;
+    interrupt(): void;
+    result: Promise<number | null>;
+};
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -116,24 +154,25 @@ export default class TMC {
             throw new Error("Authentication token already exists.");
         }
         if (insider) {
-            const login = await this.executeLangsAction({
-                action: "login-insider",
-                password,
-                username,
-            })[0];
-            if (login.err) {
-                return new Err(new AuthenticationError(login.val.message));
+            const loginResult = await this.executeLangsRustProcess({
+                args: ["login", "--email", username],
+                core: true,
+                stdin: password,
+            }).result;
+            if (loginResult.err) {
+                return new Err(new AuthenticationError(loginResult.val.message));
             }
-            const data = await this.checkApiResponse(
-                this.executeLangsAction({ action: "logged-in-insider" })[0],
-                createIs<TmcLangsAccessToken>(),
-            );
-            if (data.err) {
-                return new Err(new Error("Failed to read token"));
+            const login = loginResult.val.stdout[0];
+            if (login !== "") {
+                return new Err(
+                    new AuthenticationError(login.error?.message || "Failed to parse error"),
+                );
             }
-            this.token = new ClientOauth2.Token(this.oauth2, data.val.response.tokenData);
-            this.storage.updateAuthenticationToken(this.token.data);
-            return Ok.EMPTY;
+
+            // Non-Insider compatibility: Get token from langs and store it. This relies on a side
+            // effect but can be removed once token is no longer used.
+            const getTokenResult = await this.isAuthenticated(true);
+            return getTokenResult.ok ? Ok.EMPTY : getTokenResult;
         }
 
         try {
@@ -156,9 +195,13 @@ export default class TMC {
      */
     public async deauthenticate(isInsider: boolean): Promise<Result<void, Error>> {
         if (isInsider) {
-            const result = await this.executeLangsAction({ action: "logout-insider" })[0];
-            if (result.err) {
-                return result;
+            const logoutResult = await this.executeLangsRustProcess({
+                args: ["logout"],
+                core: true,
+            }).result;
+
+            if (logoutResult.err) {
+                return logoutResult;
             }
         }
         this.token = undefined;
@@ -172,30 +215,34 @@ export default class TMC {
      */
     public async isAuthenticated(isInsider: boolean): Promise<Result<boolean, Error>> {
         if (isInsider) {
-            const result = await this.executeLangsAction({ action: "logged-in-insider" })[0];
-            if (result.err) {
-                return result;
+            const loggedInResult = await this.executeLangsRustProcess({
+                args: ["logged-in"],
+                core: true,
+            }).result;
+
+            if (loggedInResult.err) {
+                return loggedInResult;
             }
-            if (is<TmcLangsAccessToken>(result.val)) {
-                // Non-insider compatibility: keep stored token up to date
-                this.token = this.token = new ClientOauth2.Token(
-                    this.oauth2,
-                    result.val.response.tokenData,
-                );
-                this.storage.updateAuthenticationToken(this.token.data);
-                return new Ok(true);
-            } else if (this.token) {
-                // If token exists but Langs didn't have it, pass it on.
-                const result2 = await this.executeLangsAction({
-                    action: "set-token-insider",
-                    token: JSON.stringify(this.token.data),
-                })[0];
-                if (result2.err) {
-                    return result2;
+
+            if (loggedInResult.val.stdout[0].message !== undefined) {
+                // As of rust langs 0.1.7-alpha, message means no.
+                if (!this.token) {
+                    return new Ok(false);
                 }
-                return new Ok(true);
+                // Insider compatibility: If token exists but Langs didn't have it, pass it on.
+                console.warn(this.token.data);
+                const setTokenResult = await this.executeLangsRustProcess({
+                    args: ["login", "--set-access-token", this.token.data.access_token],
+                    core: true,
+                }).result;
+                if (setTokenResult.err) {
+                    return setTokenResult;
+                }
+            } else if (is<ClientOauth2.Data>(loggedInResult.val.stdout[0])) {
+                // Non-insider compatibility: keep stored token up to date
+                this.token = new ClientOauth2.Token(this.oauth2, loggedInResult.val.stdout[0]);
+                this.storage.updateAuthenticationToken(this.token.data);
             }
-            return new Ok(false);
         }
         return new Ok(this.token !== undefined);
     }
@@ -462,18 +509,58 @@ export default class TMC {
             return [Promise.resolve(new Err(new Error("???"))), (): void => {}];
         }
 
-        const [testRunner, interrupt] = this.executeLangsAction(
-            isInsider
-                ? {
-                      action: "run-tests-insider",
-                      exerciseFolderPath: exerciseFolderPath.val,
-                      executablePath,
-                  }
-                : {
-                      action: "run-tests",
-                      exerciseFolderPath: exerciseFolderPath.val,
-                  },
-        );
+        // -- Insider implementation --
+        if (isInsider) {
+            const env: { [key: string]: string } = {};
+            if (executablePath) {
+                env.TMC_LANGS_PYTHON_EXEC = executablePath;
+            }
+            const outputPath = this.nextTempOutputPath();
+            const { interrupt, result } = this.executeLangsRustProcess({
+                args: [
+                    "run-tests",
+                    "--exercise-path",
+                    exerciseFolderPath.val,
+                    "--output-path",
+                    this.nextTempOutputPath(),
+                ],
+                core: false,
+                env,
+            });
+
+            // Temp copypaste, read results from stdout when using new rust version
+            const postResult: Promise<Result<TmcLangsTestResultsRust, Error>> = result.then(
+                (res) => {
+                    if (res.err) {
+                        return res;
+                    }
+
+                    const readResult = {
+                        response: JSON.parse(fs.readFileSync(outputPath, "utf8")),
+                        logs: {
+                            stdout: res.val.stdout.join(""),
+                            stderr: res.val.stderr.join(""),
+                        },
+                    };
+
+                    if (is<TmcLangsTestResultsRust>(readResult)) {
+                        return new Ok(readResult);
+                    }
+
+                    Logger.error("Unexpected response JSON type", readResult);
+                    Logger.show();
+                    return new Err(new RuntimeError("Unexpected response JSON type"));
+                },
+            );
+
+            return [postResult, interrupt];
+        }
+        // -- End of insider implementation --
+
+        const [testRunner, interrupt] = this.executeLangsAction({
+            action: "run-tests",
+            exerciseFolderPath: exerciseFolderPath.val,
+        });
 
         return [
             this.checkApiResponse(
@@ -502,17 +589,44 @@ export default class TMC {
             return new Err(new Error("Couldn't get the exercise path"));
         }
 
+        // -- Insider implementation --
         if (isInsider) {
             const isPaste = params?.has("paste");
-            return this.checkApiResponse(
-                this.executeLangsAction({
-                    action: isPaste ? "paste-insider" : "submit-insider",
-                    submissionPath: exerciseFolderPath.val,
-                    submissionUrl: `${this.tmcApiUrl}core/exercises/${id}/submissions`,
-                })[0],
-                createIs<SubmissionResponse>(),
-            );
+            const submitUrl = `${this.tmcApiUrl}core/exercises/${id}/submissions`;
+            const processResult = isPaste
+                ? await this.executeLangsRustProcess({
+                      args: [
+                          "paste",
+                          "--locale",
+                          "eng",
+                          "--submission-path",
+                          exerciseFolderPath.val,
+                          "--submission-url",
+                          submitUrl,
+                      ],
+                      core: true,
+                  }).result
+                : await this.executeLangsRustProcess({
+                      args: [
+                          "submit",
+                          "--submission-path",
+                          exerciseFolderPath.val,
+                          "--submission-url",
+                          submitUrl,
+                      ],
+                      core: true,
+                  }).result;
+
+            if (processResult.err) {
+                return processResult;
+            }
+
+            const response = processResult.val.stdout[processResult.val.stdout.length - 1];
+            return is<SubmissionResponse>(response)
+                ? new Ok(response)
+                : new Err(new Error("Expected SubmissionResponse"));
         }
+        // -- End of insider implementation --
 
         const compressResult = await this.checkApiResponse(
             this.executeLangsAction({
@@ -578,14 +692,157 @@ export default class TMC {
         );
     }
 
+    private executeLangsRustProcess(commandArgs: RustProcessArgs): RustProcessRunner {
+        const { args, core, env, stdin } = commandArgs;
+        const CORE_ARGS = ["core", "--client-name", CLIENT_NAME];
+
+        let stdout = "";
+        let stderr = "";
+
+        const onStderr = (data: string): void => {
+            Logger.log("RustLangs:\n", JSON.stringify(data));
+            stderr = stderr.concat(data);
+        };
+
+        const onStdout = (data: string): void => {
+            Logger.log("RustLangs:\n", JSON.stringify(data));
+            stdout = stdout.concat(data);
+        };
+
+        // ASAP: Parse langs output to object
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const parseOutput = (chunk: any): string => {
+            return chunk.toString();
+        };
+
+        const executable = this.resources.getCliPath();
+        Logger.log(executable, JSON.stringify(args));
+
+        let active = true;
+        let interrupted = false;
+        const cprocess = cp.spawn(executable, core ? CORE_ARGS.concat(args) : args, {
+            env: { ...process.env, ...env },
+        });
+        stdin && cprocess.stdin.write(stdin + "\n");
+
+        const processResult = new Promise<number | null>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                kill(cprocess.pid);
+                reject("Process didn't seem to finish or was taking a really long time.");
+            }, TMC_LANGS_TIMEOUT);
+            cprocess.on("error", (error) => {
+                clearTimeout(timeout);
+                reject(error);
+            });
+            cprocess.on("exit", (code) => {
+                clearTimeout(timeout);
+                resolve(code);
+            });
+            cprocess.stderr.on("data", (chunk) => onStderr(parseOutput(chunk)));
+            cprocess.stdout.on("data", (chunk) => onStdout(parseOutput(chunk)));
+        });
+
+        const interrupt = (): void => {
+            if (active) {
+                active = false;
+                interrupted = true;
+                kill(cprocess.pid);
+            }
+        };
+
+        const result = (async (): RustProcessRunner["result"] => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const parseJsonFromOutput = (output: string): any[] => {
+                const trimmed = output.trim();
+                if (!trimmed.match(/^\s*{/) || !trimmed.match(/}\s*$/)) {
+                    return [trimmed];
+                }
+                return JSON.parse(`[${trimmed.replace(/}\s*{/g, "},{")}]`);
+            };
+
+            try {
+                await processResult;
+            } catch (error) {
+                return new Err(new Error(error));
+            }
+
+            if (interrupted) {
+                return new Err(new RuntimeError("TMC Langs process was killed."));
+            }
+
+            return new Ok({
+                stderr: parseJsonFromOutput(stderr),
+                stdout: parseJsonFromOutput(stdout),
+            });
+        })();
+
+        return { interrupt, result };
+    }
+
+    private executeLangsProcess(processArgs: ProcessArgs): ProcessRunner {
+        const { args, env, executable, stdin, onStderr, onStdout } = processArgs;
+
+        // ASAP: Parse langs output to object
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const parseOutput = (chunk: any): string => {
+            return chunk.toString();
+        };
+
+        Logger.log(executable, JSON.stringify(args));
+
+        let active = true;
+        let interrupted = false;
+        const cprocess = cp.spawn(executable, args, { env: { ...process.env, ...env } });
+        stdin && cprocess.stdin.write(stdin + "\n");
+
+        const result = new Promise<number | null>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                kill(cprocess.pid);
+                reject("Process didn't seem to finish or was taking a really long time.");
+            }, TMC_LANGS_TIMEOUT);
+            cprocess.on("error", (error) => {
+                clearTimeout(timeout);
+                reject(error);
+            });
+            cprocess.on("exit", (code) => {
+                clearTimeout(timeout);
+                resolve(code);
+            });
+            cprocess.stderr.on("data", (chunk) => onStderr(parseOutput(chunk)));
+            cprocess.stdout.on("data", (chunk) => onStdout(parseOutput(chunk)));
+        });
+
+        const interrupt = (): void => {
+            if (active) {
+                active = false;
+                interrupted = true;
+                kill(cprocess.pid);
+            }
+        };
+
+        return {
+            interrupt,
+            interrupted,
+            result,
+        };
+    }
+
+    private nextTempOutputPath(): string {
+        return path.join(this.resources.getDataPath(), `temp_${this.nextLangsJsonId++ % 10}.json`);
+    }
+
     /**
      * Executes external tmc-langs process with given arguments.
+     *
+     * @deprecated this function works and will be removed anyway with java so there's no point in
+     * fixing the copypaste.
+     *
      * @param tmcLangsAction Tmc-langs command and arguments
      */
     private executeLangsAction(
         tmcLangsAction: TmcLangsAction,
-    ): [Promise<Result<TmcLangsResponse | void, Error>>, () => void] {
-        let executable = this.resources.getJavaPath();
+    ): [Promise<Result<TmcLangsResponse, Error>>, () => void] {
+        const executable = this.resources.getJavaPath();
         let args: string[] | undefined;
         let stdin: string | undefined;
         const env: { [key: string]: string } = {};
@@ -593,17 +850,6 @@ export default class TMC {
         const javaCommand = (...preArgs: string[]): void => {
             args = ["-jar", this.resources.getTmcLangsPath(), ...preArgs];
         };
-
-        const rustCommand = (core: "core" | "", ...preArgs: string[]): void => {
-            executable = this.resources.getCliPath();
-            Logger.warn("Using experimental feature");
-            env.RUST_LOG = "debug";
-            const coreArgs = core === "core" ? ["core", "--client-name", CLIENT_NAME] : [];
-            args = coreArgs.concat(preArgs);
-        };
-
-        const nextTempOutputPath = (): string =>
-            path.join(this.resources.getDataPath(), `temp_${this.nextLangsJsonId++ % 10}.json`);
 
         let outputPath = "";
         switch (tmcLangsAction.action) {
@@ -625,62 +871,14 @@ export default class TMC {
                 javaCommand(
                     "get-exercise-packaging-configuration",
                     `--exercisePath=${tmcLangsAction.exerciseFolderPath}`,
-                    `--outputPath=${(outputPath = nextTempOutputPath())}`,
-                );
-                break;
-            case "logged-in-insider":
-                rustCommand("core", "logged-in");
-                break;
-            case "login-insider":
-                rustCommand("core", "login", "--email", tmcLangsAction.username);
-                stdin = tmcLangsAction.password;
-                break;
-            case "logout-insider":
-                rustCommand("core", "logout");
-                break;
-            case "paste-insider":
-                rustCommand(
-                    "core",
-                    "paste",
-                    "--locale",
-                    "eng",
-                    "--submission-path",
-                    tmcLangsAction.submissionPath,
-                    "--submission-url",
-                    tmcLangsAction.submissionUrl,
+                    `--outputPath=${(outputPath = this.nextTempOutputPath())}`,
                 );
                 break;
             case "run-tests":
                 javaCommand(
                     "run-tests",
                     `--exercisePath=${tmcLangsAction.exerciseFolderPath}`,
-                    `--outputPath=${(outputPath = nextTempOutputPath())}`,
-                );
-                break;
-            case "run-tests-insider":
-                rustCommand(
-                    "",
-                    "run-tests",
-                    "--exercise-path",
-                    tmcLangsAction.exerciseFolderPath,
-                    "--output-path",
-                    (outputPath = nextTempOutputPath()),
-                );
-                if (tmcLangsAction.executablePath) {
-                    env.TMC_LANGS_PYTHON_EXEC = tmcLangsAction.executablePath;
-                }
-                break;
-            case "set-token-insider":
-                rustCommand("core", "login", "--set-access-token", tmcLangsAction.token);
-                break;
-            case "submit-insider":
-                rustCommand(
-                    "core",
-                    "submit",
-                    "--submission-path",
-                    tmcLangsAction.submissionPath,
-                    "--submission-url",
-                    tmcLangsAction.submissionUrl,
+                    `--outputPath=${(outputPath = this.nextTempOutputPath())}`,
                 );
                 break;
         }
@@ -730,17 +928,7 @@ export default class TMC {
             }
         };
 
-        const processResultHandler = async (): Promise<Result<TmcLangsResponse | void, Error>> => {
-            // ASAP: Strongly check types once Rust Langs has proper support
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const parseJsonFromStdout = (stdout: string): any[] => {
-                const trimmed = stdout.trim();
-                if (!stdout.match(/^\s*{/) || !stdout.match(/}\s*$/)) {
-                    return [stdout];
-                }
-                return JSON.parse(`[${trimmed.replace(/}\s*{/g, "},{")}]`);
-            };
-
+        const processResultHandler = async (): Promise<Result<TmcLangsResponse, Error>> => {
             try {
                 await resultPromise;
             } catch (error) {
@@ -757,42 +945,6 @@ export default class TMC {
                 case "extract-project":
                 case "compress-project":
                     return new Ok({ response: outputPath, logs });
-                case "logged-in-insider": {
-                    const data = JSON.parse(stdout.join(""));
-                    if (data.message) {
-                        return Ok.EMPTY;
-                    }
-                    if (!is<ClientOauth2.Data>(data)) {
-                        return new Err(new Error("Malformed token data from TMC Langs"));
-                    }
-                    return new Ok({ response: { tokenData: data } });
-                }
-                case "login-insider": {
-                    const data = stdout.join("");
-                    if (data.trim() !== "") {
-                        const message = parseJsonFromStdout(data)[0].error?.message;
-                        return new Err(new AuthenticationError(message || "Failed to parse error"));
-                    }
-                    return Ok.EMPTY;
-                }
-                case "logout-insider":
-                case "set-token-insider":
-                    return Ok.EMPTY;
-                case "paste-insider":
-                case "submit-insider": {
-                    try {
-                        const data = parseJsonFromStdout(stdout.join(""));
-                        console.log(data);
-                        const response = data[data.length - 1];
-                        if (is<SubmissionResponse>(data[data.length - 1])) {
-                            return new Ok(response);
-                        } else {
-                            return new Err(new Error("Malformed response"));
-                        }
-                    } catch (e) {
-                        return new Err(e);
-                    }
-                }
             }
 
             const readResult = {
