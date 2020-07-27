@@ -81,9 +81,7 @@ type RustProcessRunner = {
     result: Promise<
         Result<
             {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 stderr: string;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 stdout: LangsResponse[];
             },
             Error
@@ -102,6 +100,7 @@ export default class TMC {
     private readonly tmcApiUrl: string;
     private readonly tmcDefaultHeaders: { client: string; client_version: string };
     private workspaceManager?: WorkspaceManager;
+    private readonly isInsider: () => boolean;
 
     private readonly cache: Map<string, TMCApiResponse>;
 
@@ -110,7 +109,7 @@ export default class TMC {
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage, resources: Resources) {
+    constructor(storage: Storage, resources: Resources, isInsider: () => boolean) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: ACCESS_TOKEN_URI,
             clientId: CLIENT_ID,
@@ -128,6 +127,7 @@ export default class TMC {
             client: CLIENT_NAME,
             client_version: resources.extensionVersion,
         };
+        this.isInsider = isInsider;
     }
 
     public setWorkspaceManager(workspaceManager: WorkspaceManager): void {
@@ -148,12 +148,12 @@ export default class TMC {
     public async authenticate(
         username: string,
         password: string,
-        insider: boolean,
+        isInsider?: boolean,
     ): Promise<Result<void, Error>> {
         if (this.token) {
             throw new Error("Authentication token already exists.");
         }
-        if (insider) {
+        if (isInsider === true || this.isInsider()) {
             const loginResult = await this.executeLangsRustProcess({
                 args: ["login", "--email", username],
                 core: true,
@@ -169,7 +169,7 @@ export default class TMC {
 
             // Non-Insider compatibility: Get token from langs and store it. This relies on a side
             // effect but can be removed once token is no longer used.
-            const getTokenResult = await this.isAuthenticated(true);
+            const getTokenResult = await this.isAuthenticated();
             return getTokenResult.ok ? Ok.EMPTY : getTokenResult;
         }
 
@@ -191,8 +191,8 @@ export default class TMC {
     /**
      * Logs out by deleting the authentication token.
      */
-    public async deauthenticate(isInsider: boolean): Promise<Result<void, Error>> {
-        if (isInsider) {
+    public async deauthenticate(): Promise<Result<void, Error>> {
+        if (this.isInsider()) {
             const logoutResult = await this.executeLangsRustProcess({
                 args: ["logout"],
                 core: true,
@@ -211,8 +211,8 @@ export default class TMC {
      * TODO: actually check if the token is valid
      * @returns whether an authentication token is present
      */
-    public async isAuthenticated(isInsider: boolean): Promise<Result<boolean, Error>> {
-        if (isInsider) {
+    public async isAuthenticated(isInsider?: boolean): Promise<Result<boolean, Error>> {
+        if (isInsider === true || this.isInsider()) {
             const loggedInResult = await this.executeLangsRustProcess({
                 args: ["logged-in"],
                 core: true,
@@ -497,7 +497,6 @@ export default class TMC {
      */
     public runTests(
         id: number,
-        isInsider: boolean,
         executablePath?: string,
     ): [Promise<Result<TmcLangsTestResultsRust, Error>>, () => void] {
         if (!this.workspaceManager) {
@@ -509,7 +508,7 @@ export default class TMC {
         }
 
         const env: { [key: string]: string } = {};
-        if (isInsider && executablePath) {
+        if (this.isInsider() && executablePath) {
             env.TMC_LANGS_PYTHON_EXEC = executablePath;
         }
         const outputPath = this.nextTempOutputPath();
@@ -519,7 +518,7 @@ export default class TMC {
                 "--exercise-path",
                 exerciseFolderPath.val,
                 "--output-path",
-                this.nextTempOutputPath(),
+                outputPath,
             ],
             core: false,
             env,
@@ -558,7 +557,6 @@ export default class TMC {
      */
     public async submitExercise(
         id: number,
-        isInsider: boolean,
         params?: Map<string, string>,
     ): Promise<Result<SubmissionResponse, Error>> {
         if (!this.workspaceManager) {
@@ -571,7 +569,7 @@ export default class TMC {
         }
 
         // -- Insider implementation --
-        if (isInsider) {
+        if (this.isInsider()) {
             const isPaste = params?.has("paste");
             const submitUrl = `${this.tmcApiUrl}core/exercises/${id}/submissions`;
             const processResult = isPaste

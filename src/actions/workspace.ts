@@ -223,7 +223,7 @@ export async function resetExercise(
     id: number,
     options?: ResetOptions,
 ): Promise<Result<void, Error>> {
-    const { settings, tmc, ui, workspaceManager } = actionContext;
+    const { tmc, ui, workspaceManager } = actionContext;
 
     const exerciseData = workspaceManager.getExerciseDataById(id);
 
@@ -247,7 +247,7 @@ export async function resetExercise(
     if (submitFirst === undefined) {
         return Ok.EMPTY;
     } else if (submitFirst) {
-        const submitResult = await tmc.submitExercise(id, settings.isInsider());
+        const submitResult = await tmc.submitExercise(id);
         if (submitResult.err) {
             const message = `Reset canceled, failed to submit exercise: ${submitResult.val.name} - ${submitResult.val.message}`;
             Logger.error(message);

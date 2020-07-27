@@ -49,7 +49,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     Logger.log(`Python extension version: ${vsc.getExtensionVersion("ms-python.python")}`);
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
-    const tmc = new TMC(storage, resources);
+    const tmc = new TMC(storage, resources, () => settings.isInsider());
 
     const validationResult = await validateAndFix(storage, tmc, ui, resources);
     if (validationResult.err) {
@@ -95,7 +95,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     }
 
-    const authenticated = await tmc.isAuthenticated(settings.isInsider());
+    const authenticated = await tmc.isAuthenticated();
     if (authenticated.err) {
         showError("Failed to check if authenticated");
         Logger.error("Failed to check if authenticated", authenticated.val.message);
@@ -116,7 +116,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     maintenanceInterval = setInterval(async () => {
-        const authenticated = await tmc.isAuthenticated(settings.isInsider());
+        const authenticated = await tmc.isAuthenticated();
         if (authenticated.err) {
             Logger.error("Failed to check if authenticated", authenticated.val.message);
         }

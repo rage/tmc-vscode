@@ -42,13 +42,13 @@ export async function login(
     password: string,
     visibilityGroups: VisibilityGroups,
 ): Promise<Result<void, Error>> {
-    const { settings, tmc, ui } = actionContext;
+    const { tmc, ui } = actionContext;
 
     if (!username || !password) {
         return new Err(new Error("Username and password may not be empty."));
     }
 
-    const result = await tmc.authenticate(username, password, settings.isInsider());
+    const result = await tmc.authenticate(username, password);
     if (result.err) {
         return new Err(result.val);
     }
@@ -65,8 +65,8 @@ export async function logout(
     visibility: VisibilityGroups,
 ): Promise<void> {
     if (await askForConfirmation("Are you sure you want to log out?")) {
-        const { settings, tmc, ui } = actionContext;
-        const result = await tmc.deauthenticate(settings.isInsider());
+        const { tmc, ui } = actionContext;
+        const result = await tmc.deauthenticate();
         if (result.err) {
             showError("Failed to log out.");
             Logger.error("Failed to log out", result.val);
@@ -110,7 +110,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
 
     if (!courseExamMode.perhapsExamMode) {
         const executablePath = vsc.getActiveEditorExecutablePath();
-        const [testRunner, interrupt] = tmc.runTests(id, settings.isInsider(), executablePath);
+        const [testRunner, interrupt] = tmc.runTests(id, executablePath);
         let aborted = false;
         const exerciseName = exerciseDetails.val.name;
 
@@ -198,19 +198,11 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
  * @param tempView Existing TemporaryWebview to use if any
  */
 export async function submitExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const {
-        ui,
-        settings,
-        temporaryWebviewProvider,
-        tmc,
-        vsc,
-        userData,
-        workspaceManager,
-    } = actionContext;
+    const { ui, temporaryWebviewProvider, tmc, vsc, userData, workspaceManager } = actionContext;
     Logger.log(
         `Submitting exercise ${workspaceManager.getExerciseDataById(id).val.name} to server`,
     );
-    const submitResult = await tmc.submitExercise(id, settings.isInsider());
+    const submitResult = await tmc.submitExercise(id);
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         const message = `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`;
@@ -374,10 +366,10 @@ export async function pasteExercise(
     actionContext: ActionContext,
     id: number,
 ): Promise<string | undefined> {
-    const { settings, tmc } = actionContext;
+    const { tmc } = actionContext;
     const params = new Map<string, string>();
     params.set("paste", "1");
-    const submitResult = await tmc.submitExercise(id, settings.isInsider(), params);
+    const submitResult = await tmc.submitExercise(id, params);
 
     const errorMessage = "Failed to send exercise to TMC pastebin";
     if (submitResult.err) {
