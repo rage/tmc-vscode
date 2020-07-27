@@ -252,6 +252,11 @@ function component(data) {
                             </button>
                         </div>
                         <div class="col-md-3">
+                            <button class="btn btn-primary m-1 w-100" id="download-selected">
+                                Download
+                            </button>
+                        </div>
+                        <div class="col-md-3">
                             <button class="btn btn-primary m-1 w-100" id="clear-all-selections">
                                 Clear selections
                             </button>
@@ -385,6 +390,9 @@ function script() {
             }
         }
         if (ids.length > 0) {
+            if (type === "downloadExercises") {
+                downloadSelectedExercises(ids, "download");
+            }
             vscode.postMessage({ type: type, ids, courseName: course.courseName });
         }
     }
@@ -620,6 +628,9 @@ function script() {
 
         document.getElementById("close-selected").addEventListener("click", function () {
             handleSelected("closeSelected");
+        });
+        document.getElementById("download-selected").addEventListener("click", function () {
+            handleSelected("downloadExercises");
         });
     });
 

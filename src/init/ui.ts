@@ -114,7 +114,9 @@ export function registerUiActions(actionContext: ActionContext): void {
                 });
             }
             const successful = await downloadExercises(actionContext, [downloads]);
-            await openExercises(actionContext, successful, downloads.courseName);
+            if (successful.length !== 0) {
+                await openExercises(actionContext, successful, downloads.courseName);
+            }
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
