@@ -4,6 +4,7 @@ import {
     closeExercises,
     downloadOldSubmissions,
     openExercises,
+    openWorkspace,
     pasteExercise,
     resetExercise,
     selectAction,
@@ -11,7 +12,8 @@ import {
     testExercise,
 } from "../actions";
 import { ActionContext } from "../actions/types";
-import { askForConfirmation, showError, showNotification } from "../api/vscode";
+import { askForConfirmation, askForItem, showError, showNotification } from "../api/vscode";
+import { LocalCourseData } from "../config/types";
 import { Logger } from "../utils/";
 
 // TODO: Fix error handling so user receives better error messages.
@@ -176,6 +178,24 @@ export function registerCommands(
                     showError(result.val.message);
                 }
                 vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+            }
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("switchWorkspace", async () => {
+            const courses = userData.getCourses();
+            const currentWorkspace = vscode.workspace.name?.split(" ")[0];
+            const courseWorkspace = await askForItem(
+                "Select a course workspace to open",
+                false,
+                ...courses.map<[string, LocalCourseData]>((c) => [
+                    c.name === currentWorkspace ? `${c.name} (Open)` : c.name,
+                    c,
+                ]),
+            );
+            if (courseWorkspace) {
+                openWorkspace(actionContext, courseWorkspace.name);
             }
         }),
     );
