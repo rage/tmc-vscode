@@ -41,7 +41,8 @@
         "onCommand:runTests",
         "onCommand:resetExercise",
         "onCommand:uploadArchive",
-        "onCommand:selectAction"
+        "onCommand:selectAction",
+        "onCommand:switchWorkspace"
     ],
     "main": "./dist/extension",
     "contributes": {
@@ -70,6 +71,10 @@
             {
                 "command": "resetExercise",
                 "title": "TMC - Reset exercise"
+            },
+            {
+                "command": "switchWorkspace",
+                "title": "TMC - Switch course workspace"
             },
             {
                 "command": "runTests",
