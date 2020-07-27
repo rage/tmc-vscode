@@ -255,15 +255,7 @@ interface LangsGetExercisePackagingConfiguration {
     exerciseFolderPath: string;
 }
 
-interface LangsRunTests {
-    action: "run-tests";
-    exerciseFolderPath: string;
-}
-
-export type TmcLangsAction =
-    | LangsArchiveProject
-    | LangsGetExercisePackagingConfiguration
-    | LangsRunTests;
+export type TmcLangsAction = LangsArchiveProject | LangsGetExercisePackagingConfiguration;
 
 export type TmcLangsLogs = {
     logs: {
