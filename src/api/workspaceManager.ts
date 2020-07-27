@@ -357,13 +357,16 @@ export default class WorkspaceManager {
             const data = this.idToData.get(id);
             if (data && data.status === statusToCheck) {
                 const openPath = this.getExercisePath(data);
+                const openAsUri = vscode.Uri.file(openPath);
                 if (!fs.existsSync(openPath)) {
+                    toOpen.push(openAsUri);
+                    toClose.push(openAsUri);
                     return;
                 }
                 if (handleAsOpen) {
-                    toOpen.push(vscode.Uri.file(openPath));
+                    toOpen.push(openAsUri);
                 } else {
-                    toClose.push(vscode.Uri.file(openPath));
+                    toClose.push(openAsUri);
                 }
             }
         });
