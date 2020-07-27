@@ -78,17 +78,14 @@ interface RustProcessArgs {
     stdin?: string;
 }
 
+type RustProcessLogs = {
+    stderr: string;
+    stdout: LangsResponse[];
+};
+
 type RustProcessRunner = {
     interrupt(): void;
-    result: Promise<
-        Result<
-            {
-                stderr: string;
-                stdout: LangsResponse[];
-            },
-            Error
-        >
-    >;
+    result: Promise<Result<RustProcessLogs, Error>>;
 };
 
 /**
@@ -105,6 +102,7 @@ export default class TMC {
     private readonly isInsider: () => boolean;
 
     private readonly cache: Map<string, TMCApiResponse>;
+    private readonly rustCache: Map<string, LangsResponse>;
 
     private nextLangsJsonId = 0;
 
@@ -125,6 +123,7 @@ export default class TMC {
         this.resources = resources;
         this.tmcApiUrl = TMC_API_URL;
         this.cache = new Map();
+        this.rustCache = new Map();
         this.tmcDefaultHeaders = {
             client: CLIENT_NAME,
             client_version: resources.extensionVersion,
@@ -257,21 +256,43 @@ export default class TMC {
      * @returns a list of organizations
      */
     public getOrganizations(cache = false): Promise<Result<Organization[], Error>> {
-        return this.checkApiResponse(
-            this.tmcApiRequest("org.json", cache),
-            createIs<Organization[]>(),
-        );
+        if (this.isInsider()) {
+            return this.unwrapLastTMCLangsResponse(
+                { args: ["get-organizations"], core: true },
+                createIs<Organization[]>(),
+                cache,
+            );
+        } else {
+            return this.checkApiResponse(
+                this.tmcApiRequest("org.json", cache),
+                createIs<Organization[]>(),
+            );
+        }
     }
 
     /**
      * @returns one Organization information
      * @param slug Organization slug/id
      */
-    public getOrganization(slug: string, cache = false): Promise<Result<Organization, Error>> {
-        return this.checkApiResponse(
-            this.tmcApiRequest(`org/${slug}.json`, cache),
-            createIs<Organization>(),
-        );
+    public async getOrganization(
+        slug: string,
+        cache = false,
+    ): Promise<Result<Organization, Error>> {
+        if (this.isInsider()) {
+            const organizations = await this.getOrganizations(cache);
+            if (organizations.err) {
+                return organizations;
+            }
+            const organization = organizations.val.find((o) => o.slug === slug);
+            return organization
+                ? new Ok(organization)
+                : new Err(new Error("Given slug didn't match with any organizations."));
+        } else {
+            return this.checkApiResponse(
+                this.tmcApiRequest(`org/${slug}.json`, cache),
+                createIs<Organization>(),
+            );
+        }
     }
 
     /**
@@ -279,21 +300,44 @@ export default class TMC {
      * @returns a list of courses belonging to the currently selected organization
      */
     public getCourses(organization: string, cache = false): Promise<Result<Course[], Error>> {
-        return this.checkApiResponse(
-            this.tmcApiRequest(`core/org/${organization}/courses`, cache),
-            createIs<Course[]>(),
-        );
+        if (this.isInsider()) {
+            return this.unwrapLastTMCLangsResponse(
+                { args: ["list-courses", "--organization", organization], core: true },
+                createIs<Course[]>(),
+                cache,
+            );
+        } else {
+            return this.checkApiResponse(
+                this.tmcApiRequest(`core/org/${organization}/courses`, cache),
+                createIs<Course[]>(),
+            );
+        }
     }
 
     /**
      * @param id course id
      * @returns a detailed description for the specified course
      */
-    public getCourseDetails(id: number, cache = false): Promise<Result<CourseDetails, Error>> {
-        return this.checkApiResponse(
-            this.tmcApiRequest(`core/courses/${id}`, cache),
-            createIs<CourseDetails>(),
-        );
+    public async getCourseDetails(
+        id: number,
+        cache = false,
+    ): Promise<Result<CourseDetails, Error>> {
+        if (this.isInsider()) {
+            const course = await this.unwrapLastTMCLangsResponse(
+                {
+                    args: ["get-course-details", "--course-id", id.toString()],
+                    core: true,
+                },
+                createIs<CourseDetails["course"]>(),
+                cache,
+            );
+            return course.map((c) => ({ course: c }));
+        } else {
+            return this.checkApiResponse(
+                this.tmcApiRequest(`core/courses/${id}`, cache),
+                createIs<CourseDetails>(),
+            );
+        }
     }
 
     /**
@@ -313,7 +357,10 @@ export default class TMC {
      * @returns return list of courses exercises. Each exercise carry info about available points
      * that can be gained from an exercise
      */
-    public getCourseExercises(id: number, cache = false): Promise<Result<CourseExercise[], Error>> {
+    public async getCourseExercises(
+        id: number,
+        cache = false,
+    ): Promise<Result<CourseExercise[], Error>> {
         return this.checkApiResponse(
             this.tmcApiRequest(`courses/${id}/exercises`, cache),
             createIs<CourseExercise[]>(),
@@ -538,11 +585,6 @@ export default class TMC {
                 return res;
             }
 
-            const errorCheck = this.checkTMCLangsResponse(_.last(res.val.stdout));
-            if (errorCheck.err) {
-                return errorCheck;
-            }
-
             const readResult = {
                 response: JSON.parse(fs.readFileSync(outputPath, "utf8")),
                 logs: {
@@ -663,15 +705,29 @@ export default class TMC {
         feedbackUrl: string,
         feedback: SubmissionFeedback,
     ): Promise<Result<SubmissionFeedbackResponse, Error>> {
-        const params = new url.URLSearchParams();
-        feedback.status.forEach((answer, index) => {
-            params.append(`answers[${index}][question_id]`, answer.question_id.toString());
-            params.append(`answers[${index}][answer]`, answer.answer);
-        });
-        return this.checkApiResponse(
-            this.tmcApiRequest(feedbackUrl, false, "post", params),
-            createIs<SubmissionFeedbackResponse>(),
-        );
+        if (this.isInsider()) {
+            const feedbackArgs = feedback.status.reduce<string[]>(
+                (acc, next) => acc.concat("--feedback", next.question_id.toString(), next.answer),
+                [],
+            );
+            return this.unwrapLastTMCLangsResponse(
+                {
+                    args: ["send-feedback", ...feedbackArgs, "--feedback-url", feedbackUrl],
+                    core: true,
+                },
+                createIs<SubmissionFeedbackResponse>(),
+            );
+        } else {
+            const params = new url.URLSearchParams();
+            feedback.status.forEach((answer, index) => {
+                params.append(`answers[${index}][question_id]`, answer.question_id.toString());
+                params.append(`answers[${index}][answer]`, answer.answer);
+            });
+            return this.checkApiResponse(
+                this.tmcApiRequest(feedbackUrl, false, "post", params),
+                createIs<SubmissionFeedbackResponse>(),
+            );
+        }
     }
 
     /**
@@ -950,6 +1006,41 @@ export default class TMC {
             return new Err(new Error(message));
         }
         return Ok.EMPTY;
+    }
+
+    private async unwrapLastTMCLangsResponse<T>(
+        langsArgs: RustProcessArgs,
+        checker: (object: unknown) => object is T,
+        cache = false,
+    ): Promise<Result<T, Error>> {
+        const cacheKey = langsArgs.args.join("-");
+        if (cache) {
+            const cached = this.rustCache.get(langsArgs.args.join("-"));
+            if (cached) {
+                return new Ok(cached.data as T);
+            }
+        }
+        const result = await this.executeLangsRustProcess(langsArgs).result;
+        if (result.err) {
+            return result;
+        }
+        const responses = result.val.stdout;
+        if (responses.length === 0) {
+            return new Err(new Error("Langs response missing"));
+        }
+        const last = _.last(responses);
+        if (last === undefined) {
+            return new Err(new Error("No langs response received"));
+        }
+        const check = this.checkTMCLangsResponse(last);
+        if (check.err) {
+            return check;
+        }
+        if (!checker(last.data)) {
+            return new Err(new Error("Incorrect response type"));
+        }
+        this.rustCache.set(cacheKey, last);
+        return new Ok(last.data);
     }
 
     /**

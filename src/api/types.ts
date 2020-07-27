@@ -61,9 +61,9 @@ export type Exercise = {
     valgrind_strategy: string;
     code_review_requests_enabled: boolean;
     run_tests_locally_action_enabled: boolean;
-    latest_submission_url?: string;
-    latest_submission_id?: number;
-    solution_zip_url?: string;
+    latest_submission_url?: string | null;
+    latest_submission_id?: number | null;
+    solution_zip_url?: string | null;
 };
 
 /**
