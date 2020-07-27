@@ -3,6 +3,7 @@ import * as ClientOauth2 from "client-oauth2";
 import { sync as delSync } from "del";
 import * as FormData from "form-data";
 import * as fs from "fs";
+import * as _ from "lodash";
 import * as fetch from "node-fetch";
 import * as path from "path";
 import * as kill from "tree-kill";
@@ -164,8 +165,9 @@ export default class TMC {
                 return new Err(new AuthenticationError(loginResult.val.message));
             }
             const login = loginResult.val.stdout[0];
-            if (login.status !== "successful") {
-                return new Err(new AuthenticationError(login.message || "Failed to parse error"));
+            const errorCheck = this.checkTMCLangsResponse(login);
+            if (errorCheck.err) {
+                return errorCheck;
             }
 
             // Non-Insider compatibility: Get token from langs and store it. This relies on a side
@@ -224,6 +226,10 @@ export default class TMC {
             }
 
             const response = loggedInResult.val.stdout[0];
+            const checked = this.checkTMCLangsResponse(response);
+            if (checked.err) {
+                return checked;
+            }
             if (response.result === "not-logged-in") {
                 if (!this.token) {
                     return new Ok(false);
@@ -530,6 +536,11 @@ export default class TMC {
         const postResult: Promise<Result<TmcLangsTestResultsRust, Error>> = result.then((res) => {
             if (res.err) {
                 return res;
+            }
+
+            const errorCheck = this.checkTMCLangsResponse(_.last(res.val.stdout));
+            if (errorCheck.err) {
+                return errorCheck;
             }
 
             const readResult = {
@@ -922,6 +933,23 @@ export default class TMC {
                 : new Err(new ApiError("Incorrect response type"));
         }
         return new Err(result.val);
+    }
+
+    /**
+     * Checks langs response for generic errors.
+     */
+    private checkTMCLangsResponse(langsResult?: LangsResponse): Result<void, Error> {
+        if (langsResult === undefined) {
+            return new Err(new Error("No langs response provided"));
+        }
+        const message = langsResult.message || "null";
+        if (langsResult.status === "crashed") {
+            return new Err(new Error("Langs process crashed: " + message));
+        }
+        if (langsResult.result === "error") {
+            return new Err(new Error(message));
+        }
+        return Ok.EMPTY;
     }
 
     /**
