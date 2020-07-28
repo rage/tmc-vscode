@@ -12,8 +12,7 @@ import * as vscode from "vscode";
 import { OldSubmission } from "../api/types";
 import { askForItem, showError, showNotification, showProgressNotification } from "../api/vscode";
 import { NOTIFICATION_DELAY } from "../config/constants";
-import { ExerciseStatus } from "../config/types";
-import { ExerciseStatus as TextStatus, WebviewMessage } from "../ui/types";
+import * as UITypes from "../ui/types";
 import { Logger } from "../utils";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 
@@ -36,19 +35,21 @@ export async function downloadExercises(
 
     interface StatusChange {
         exerciseId: number;
-        status: TextStatus;
+        status: UITypes.ExerciseStatus;
     }
 
     const postChange = (...changes: StatusChange[]): void =>
         ui.webview.postMessage(
-            ...changes.map<{ key: string; message: WebviewMessage }>(({ exerciseId, status }) => ({
-                key: `exercise-${exerciseId}-status`,
-                message: {
-                    command: "exerciseStatusChange",
-                    exerciseId,
-                    status,
-                },
-            })),
+            ...changes.map<{ key: string; message: UITypes.WebviewMessage }>(
+                ({ exerciseId, status }) => ({
+                    key: `exercise-${exerciseId}-status`,
+                    message: {
+                        command: "exerciseStatusChange",
+                        exerciseId,
+                        status,
+                    },
+                }),
+            ),
         );
 
     type DownloadState = {
@@ -144,7 +145,7 @@ export async function checkForExerciseUpdates(
     courseId?: number,
     updateCheckOptions?: UpdateCheckOptions,
 ): Promise<CourseExerciseDownloads[]> {
-    const { tmc, userData, workspaceManager } = actionContext;
+    const { tmc, userData, workspaceManager, ui } = actionContext;
 
     const coursesToUpdate: Map<number, CourseExerciseDownloads> = new Map();
     let count = 0;
@@ -168,7 +169,12 @@ export async function checkForExerciseUpdates(
         });
 
         if (exerciseIds.length > 0) {
-            coursesToUpdate.set(course.id, { courseId: course.id, exerciseIds, organizationSlug });
+            coursesToUpdate.set(course.id, {
+                courseId: course.id,
+                exerciseIds,
+                organizationSlug,
+                courseName: course.name,
+            });
             count += exerciseIds.length;
         }
     }
@@ -179,19 +185,21 @@ export async function checkForExerciseUpdates(
             [
                 "Download",
                 async (): Promise<void> => {
-                    const exerciseIds = Array.from(coursesToUpdate.values())
-                        .map((x) => x.exerciseIds)
-                        .reduce((acc, next) => acc.concat(next), []);
-                    const openAfter = exerciseIds.filter(
-                        (id) =>
-                            workspaceManager.getExerciseDataById(id).mapErr(() => undefined).val
-                                ?.status !== ExerciseStatus.CLOSED,
-                    );
                     const successful = await downloadExercises(
                         actionContext,
                         Array.from(coursesToUpdate.values()),
                     );
-                    openExercises(actionContext, _.intersection(openAfter, successful));
+                    ui.webview.postMessage({
+                        key: "course-updates",
+                        message: { command: "setUpdateables", exerciseIds: [] },
+                    });
+                    coursesToUpdate.forEach(async (courseDL) => {
+                        await openExercises(
+                            actionContext,
+                            _.intersection(successful, courseDL.exerciseIds),
+                            courseDL.courseName,
+                        );
+                    });
                 },
             ],
             [
@@ -263,7 +271,10 @@ export async function resetExercise(
     ui.setStatusBar(`Resetting exercise ${exerciseData.val.name}`);
 
     const slug = exerciseData.val.organization;
-    workspaceManager.deleteExercise(id);
+    await closeExercises(actionContext, [id], exerciseData.val.course);
+    await vscode.commands.executeCommand("workbench.action.files.save");
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    await workspaceManager.deleteExercise(id);
     await tmc.downloadExercise(id, slug);
     ui.setStatusBar(`Exercise ${exerciseData.val.name} resetted successfully`, 10000);
     return Ok.EMPTY;
@@ -276,30 +287,28 @@ export async function resetExercise(
 export async function openExercises(
     actionContext: ActionContext,
     ids: number[],
+    courseName: string,
 ): Promise<Result<number[], Error>> {
     const { workspaceManager, ui } = actionContext;
 
-    const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
-    const result = workspaceManager.openExercise(...filterIds);
-    const errors = result.filter((file) => file.err);
+    const result = await workspaceManager.openExercise(courseName, ...ids);
 
-    if (errors.length !== 0) {
-        errors.forEach((e) =>
-            Logger.error("Error when opening file", e.mapErr((err) => err.message).val),
-        );
+    if (result.err) {
+        Logger.error("Error when opening file", result.val.message, result.val.stack);
         return new Err(new Error("Something went wrong while opening exercises."));
     }
+
     ui.webview.postMessage(
-        ...filterIds.map<{ key: string; message: WebviewMessage }>((exerciseId) => ({
-            key: `exercise-${exerciseId}-status`,
+        ...result.val.map<{ key: string; message: UITypes.WebviewMessage }>((ex) => ({
+            key: `exercise-${ex.id}-status`,
             message: {
                 command: "exerciseStatusChange",
-                exerciseId,
-                status: "opened",
+                exerciseId: ex.id,
+                status: ex.status,
             },
         })),
     );
-    return new Ok(filterIds);
+    return new Ok(ids);
 }
 
 /**
@@ -309,30 +318,28 @@ export async function openExercises(
 export async function closeExercises(
     actionContext: ActionContext,
     ids: number[],
+    courseName: string,
 ): Promise<Result<number[], Error>> {
     const { workspaceManager, ui } = actionContext;
 
-    const filterIds = ids.filter((id) => workspaceManager.exerciseExists(id));
-    const result = workspaceManager.closeExercise(...filterIds);
-    const errors = result.filter((file) => file.err);
+    const result = await workspaceManager.closeExercise(courseName, ...ids);
 
-    if (errors.length !== 0) {
-        errors.forEach((e) =>
-            Logger.error("Error when closing file", e.mapErr((err) => err.message).val),
-        );
-        return new Err(new Error("Something went wrong while closing exercises."));
+    if (result.err) {
+        Logger.error("Error when opening file", result.val.message, result.val.stack);
+        return new Err(new Error("Something went wrong while opening exercises."));
     }
+
     ui.webview.postMessage(
-        ...filterIds.map<{ key: string; message: WebviewMessage }>((exerciseId) => ({
-            key: `exercise-${exerciseId}-status`,
+        ...result.val.map<{ key: string; message: UITypes.WebviewMessage }>((ex) => ({
+            key: `exercise-${ex.id}-status`,
             message: {
                 command: "exerciseStatusChange",
-                exerciseId,
-                status: "closed",
+                exerciseId: ex.id,
+                status: ex.status,
             },
         })),
     );
-    return new Ok(filterIds);
+    return new Ok(ids);
 }
 
 /**
@@ -397,4 +404,5 @@ export async function downloadOldSubmissions(
         showError(message);
         return;
     }
+    await openExercises(actionContext, [exercise.val.id], exercise.val.course);
 }

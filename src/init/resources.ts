@@ -1,4 +1,4 @@
-import del = require("del");
+import { sync as delSync } from "del";
 import * as fs from "fs-extra";
 import * as glob from "glob";
 import * as path from "path";
@@ -43,11 +43,11 @@ export async function resourceInitialization(
     let javaPath: string;
     const javaDownloadPath = path.join(tmcDataPath, "java");
     const javaDownloadPathTemp = path.join(tmcDataPath, "javaTemp");
-    del.sync(path.join(javaDownloadPathTemp), { force: true });
+    delSync(path.join(javaDownloadPathTemp), { force: true });
 
     if (await isJavaPresent()) {
         javaPath = "java";
-        del.sync(javaDownloadPath.split(path.sep).join("/"), { force: true });
+        delSync(javaDownloadPath.split(path.sep).join("/"), { force: true });
     } else {
         fs.mkdirSync(javaDownloadPathTemp, { recursive: true });
         // Glob patterns should use / as separator on all platforms
@@ -92,9 +92,9 @@ export async function resourceInitialization(
                     .pipe(unzipper.Extract({ path: javaDownloadPathTemp }))
                     .promise();
             });
-            del.sync(javaDownloadPath, { force: true });
+            delSync(javaDownloadPath, { force: true });
             fs.renameSync(javaDownloadPathTemp, javaDownloadPath);
-            del.sync(archivePath, { force: true });
+            delSync(archivePath, { force: true });
 
             paths = glob.sync(javaBinaryGlob);
             if (paths.length === 0) {
@@ -106,10 +106,23 @@ export async function resourceInitialization(
     }
 
     const tmcWorkspacePathRelative = "TMC workspace";
-    const tmcWorkspaceFilePathRelative = path.join("TMC workspace", "TMC Exercises.code-workspace");
     const tmcExercisesFolderPathRelative = path.join("TMC workspace", "Exercises");
     const tmcClosedExercisesFolderPathRelative = "closed-exercises";
     const tmcLangsPathRelative = TMC_JAR_NAME;
+
+    // Verify that all course .code-workspaces are in-place on startup.
+    const userData = storage.getUserData();
+    userData?.courses.forEach((course) => {
+        const tmcWorkspaceFilePath = path.join(
+            tmcDataPath,
+            tmcWorkspacePathRelative,
+            course.name + ".code-workspace",
+        );
+        if (!fs.existsSync(tmcWorkspaceFilePath)) {
+            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
+            Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
+        }
+    });
 
     if (!fs.existsSync(tmcDataPath)) {
         fs.mkdirSync(tmcDataPath, { recursive: true });
@@ -120,12 +133,6 @@ export async function resourceInitialization(
     if (!fs.existsSync(tmcWorkspacePath)) {
         fs.mkdirSync(tmcWorkspacePath);
         Logger.log(`Created tmc workspace directory at ${tmcWorkspacePath}`);
-    }
-
-    const tmcWorkspaceFilePath = path.join(tmcDataPath, tmcWorkspaceFilePathRelative);
-    if (!fs.existsSync(tmcWorkspaceFilePath)) {
-        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
-        Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
     }
 
     const tmcExercisesFolderPath = path.join(tmcDataPath, tmcExercisesFolderPathRelative);
@@ -153,7 +160,7 @@ export async function resourceInitialization(
 
     const tmcLangsPath = path.join(tmcDataPath, tmcLangsPathRelative);
     if (!fs.existsSync(tmcLangsPath)) {
-        del.sync(path.join(tmcDataPath, "*.jar"), { force: true });
+        delSync(path.join(tmcDataPath, "*.jar"), { force: true });
         const [tmcLangsResult] = await showProgressNotification(
             "Downloading required files...",
             async (p) =>
@@ -183,6 +190,7 @@ export async function resourceInitialization(
     const cliPath = path.join(tmcDataPath, "cli", executable);
     const cliUrl = TMC_LANGS_RUST_DL_URL + executable;
     if (!fs.existsSync(cliPath)) {
+        delSync(path.join(tmcDataPath, "cli", "tmc-langs-cli*"), { force: true });
         Logger.log("Downloading CLI from", cliUrl, "to", cliPath);
         const [tmcLangsRustCLI] = await showProgressNotification(
             "Downloading required files...",
@@ -216,7 +224,6 @@ export async function resourceInitialization(
         tmcDataPath,
         tmcLangsPathRelative,
         tmcWorkspacePathRelative,
-        tmcWorkspaceFilePathRelative,
         tmcExercisesFolderPathRelative,
         tmcClosedExercisesFolderPathRelative,
         javaPath,

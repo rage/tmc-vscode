@@ -38,6 +38,10 @@ export async function selectAction(
             async (): Promise<void> =>
                 await vscode.commands.executeCommand("downloadOldSubmission"),
         ],
+        [
+            "Change course workspace",
+            async (): Promise<void> => await vscode.commands.executeCommand("switchWorkspace"),
+        ],
     ];
 
     (

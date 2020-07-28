@@ -11,6 +11,7 @@ declare const __TMC_JAR_URL__: string;
 declare const __TMC_LANGS_RUST_DL_URL__: string;
 declare const __TMC_LANGS_RUST_VERSION__: string;
 
+import FAQ from "../../docs/FAQ.md";
 import { SubmissionResultReport } from "../api/types";
 
 export const ACCESS_TOKEN_URI = __ACCESS_TOKEN_URI__;
@@ -67,13 +68,12 @@ export const WATCHER_EXCLUDE = {
 };
 
 export const WORKSPACE_SETTINGS = {
-    folders: [{ path: "Exercises" }],
+    folders: [{ path: ".tmc" }],
     settings: {
         "workbench.editor.closeOnFileDelete": true,
         "files.autoSave": "onFocusChange",
         "files.exclude": { ...HIDE_META_FILES },
         "files.watcherExclude": { ...WATCHER_EXCLUDE },
-        "python.terminal.executeInFileDir": true,
     },
 };
 
@@ -91,23 +91,11 @@ export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Sec
 
 /**
  * If changed WORKSPACEROOTFILE is changed, remember to update
- * "workspaceContains:**\TMC-Readme.txt", with the new name below
+ * "workspaceContains:**\TMC-Readme.md", with the new name below
  */
-export const WORKSPACE_ROOT_FILE = "TMC-Readme.txt";
+export const WORKSPACE_ROOT_FILE = "TMC-Readme.md";
 
-export const WORKSPACE_ROOT_FILE_TEXT = `
-The TMC Extension activates on startup if following conditions are met:
-    - The TMC Workspace is open in your Visual Studio Code editor
-    - ${WORKSPACE_ROOT_FILE} is found in the TMC Workspace root folder (i.e. Exercises).
-
-Workspace:
-    The Workspace contains all currently open exercises for each course. 
-    You can manage the status of the exercises via the TMC extension.
-
-    NB! 
-    Please manage, i.e. close, open and download, exercises only via the TMC extension or by using our premade commands. 
-    Moving/deleting/renaming folders manually currently breaks the TMC extensions state and could potentially remove files and folders automatically.
-    Files and folders can only be created under the exercise folders, all other will be automatically deleted.`;
+export const WORKSPACE_ROOT_FILE_TEXT = FAQ;
 
 export const EXAM_TEST_RESULT = {
     testResult: {

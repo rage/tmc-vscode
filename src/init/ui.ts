@@ -1,4 +1,3 @@
-import * as _ from "lodash";
 import * as path from "path";
 import * as vscode from "vscode";
 
@@ -18,8 +17,7 @@ import {
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
 import { askForConfirmation, showError, showNotification } from "../api/vscode";
-import { ExerciseStatus } from "../config/types";
-import { isWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
+import { isCorrectWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -28,14 +26,12 @@ import { isWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext, authenticated: boolean): void {
-    const { workspaceManager, ui, resources, settings } = actionContext;
+    const { workspaceManager, ui, resources, settings, vsc } = actionContext;
     Logger.log("Initializing UI Actions");
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated);
-    const WORKSPACE_OPEN = ui.treeDP.createVisibilityGroup(isWorkspaceOpen(resources));
 
     const visibilityGroups = {
         LOGGED_IN,
-        WORKSPACE_OPEN,
     };
 
     // Register UI actions
@@ -47,9 +43,6 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
     });
     ui.treeDP.registerAction("My courses", [LOGGED_IN], () => {
         displayUserCourses(actionContext);
-    });
-    ui.treeDP.registerAction("Open exercise workspace", [WORKSPACE_OPEN.not], () => {
-        openWorkspace(actionContext);
     });
     ui.treeDP.registerAction("Settings", [], () => {
         openSettings(actionContext);
@@ -106,15 +99,11 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
             ) {
                 return;
             }
-            const openAfter = msg.ids.filter(
-                (id) =>
-                    workspaceManager.getExerciseDataById(id).mapErr(() => undefined).val?.status !==
-                    ExerciseStatus.CLOSED,
-            );
             const downloads: CourseExerciseDownloads = {
                 courseId: msg.courseId,
                 exerciseIds: msg.ids,
                 organizationSlug: msg.organizationSlug,
+                courseName: msg.courseName,
             };
             if (msg.mode === "download") {
                 await actionContext.userData.clearNewExercises(msg.courseId);
@@ -125,7 +114,9 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
                 });
             }
             const successful = await downloadExercises(actionContext, [downloads]);
-            openExercises(actionContext, _.intersection(openAfter, successful));
+            if (successful.length !== 0) {
+                await openExercises(actionContext, successful, downloads.courseName);
+            }
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
@@ -156,6 +147,15 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
         },
     );
     ui.webview.registerHandler(
+        "openCourseWorkspace",
+        async (msg: { type?: "openCourseWorkspace"; name?: string }) => {
+            if (!(msg.type && msg.name)) {
+                return;
+            }
+            openWorkspace(actionContext, msg.name);
+        },
+    );
+    ui.webview.registerHandler(
         "courseDetails",
         async (msg: { type?: "courseDetails"; id?: number; useCache?: boolean }) => {
             if (!(msg.type && msg.id !== undefined)) {
@@ -177,13 +177,16 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
     );
     ui.webview.registerHandler(
         "openSelected",
-        async (msg: { type?: "openSelected"; ids?: number[] }) => {
-            if (!(msg.type && msg.ids)) {
+        async (msg: { type?: "openSelected"; ids?: number[]; courseName?: string }) => {
+            if (!(msg.type && msg.ids && msg.courseName)) {
                 return;
             }
-            const result = await openExercises(actionContext, msg.ids);
+            const result = await openExercises(actionContext, msg.ids, msg.courseName);
             if (result.err) {
-                Logger.error(`Error while opening exercises - ${result.val.message}`, result.val);
+                Logger.error(
+                    `Error while opening exercises - ${result.val.message}`,
+                    result.val.stack,
+                );
                 const buttons: Array<[string, () => void]> = [];
                 settings.getLogLevel() !== LogLevel.None
                     ? buttons.push(["Open logs", (): void => Logger.show()])
@@ -194,11 +197,11 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
     );
     ui.webview.registerHandler(
         "closeSelected",
-        async (msg: { type?: "closeSelected"; ids?: number[] }) => {
-            if (!(msg.type && msg.ids)) {
+        async (msg: { type?: "closeSelected"; ids?: number[]; courseName?: string }) => {
+            if (!(msg.type && msg.ids && msg.courseName)) {
                 return;
             }
-            const result = await closeExercises(actionContext, msg.ids);
+            const result = await closeExercises(actionContext, msg.ids, msg.courseName);
             if (result.err) {
                 Logger.error(`Error while closing exercises - ${result.val.message}`);
                 const buttons: Array<[string, () => void]> = [];
@@ -213,8 +216,8 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
         if (!msg.type) {
             return;
         }
-
-        const open = isWorkspaceOpen(resources);
+        const workspace = vsc.getWorkspaceName();
+        const open = workspace ? isCorrectWorkspaceOpen(resources, workspace) : false;
 
         const old = resources.getDataPath();
         const options: vscode.OpenDialogOptions = {
@@ -244,39 +247,35 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
             if (res.ok) {
                 Logger.log(`Moved workspace folder from ${old} to ${newPath}`);
                 if (!res.val) {
-                    settings.updateSetting({ setting: "oldDataPath", value: old });
+                    await settings.updateSetting({ setting: "oldDataPath", value: old });
                 }
                 showNotification(`TMC Data was successfully moved to ${newPath}`, [
                     "OK",
                     (): void => {},
                 ]);
                 resources.setDataPath(newPath);
-                settings.updateSetting({ setting: "dataPath", value: newPath });
-                if (open) {
+                await settings.updateSetting({ setting: "dataPath", value: newPath });
+                if (open && workspace) {
                     // Opening a workspace restarts VSCode (v1.44)
-                    vscode.commands.executeCommand(
-                        "vscode.openFolder",
-                        vscode.Uri.file(
-                            path.join(newPath, "TMC workspace", "TMC Exercises.code-workspace"),
-                        ),
+                    await vsc.openFolder(
+                        path.join(newPath, "TMC workspace", workspace, ".code-workspace"),
                     );
                 }
             } else {
                 Logger.error(res.val.message);
                 showError(res.val.message);
             }
-            workspaceManager.restartWatcher();
             openSettings(actionContext);
         }
     });
 
     ui.webview.registerHandler(
         "changeLogLevel",
-        (msg: { type?: "changeLogLevel"; data?: LogLevel }) => {
+        async (msg: { type?: "changeLogLevel"; data?: LogLevel }) => {
             if (!(msg.type && msg.data)) {
                 return;
             }
-            settings.updateSetting({ setting: "logLevel", value: msg.data });
+            await settings.updateSetting({ setting: "logLevel", value: msg.data });
             Logger.configure(msg.data);
             openSettings(actionContext);
         },
@@ -284,11 +283,11 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
 
     ui.webview.registerHandler(
         "hideMetaFiles",
-        (msg: { type?: "hideMetaFiles"; data?: boolean }) => {
+        async (msg: { type?: "hideMetaFiles"; data?: boolean }) => {
             if (!(msg.type && msg.data !== undefined)) {
                 return;
             }
-            settings.updateSetting({ setting: "hideMetaFiles", value: msg.data });
+            await settings.updateSetting({ setting: "hideMetaFiles", value: msg.data });
             openSettings(actionContext);
         },
     );
@@ -299,7 +298,7 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
             if (!(msg.type && msg.data !== undefined)) {
                 return;
             }
-            settings.updateSetting({ setting: "insiderVersion", value: msg.data });
+            await settings.updateSetting({ setting: "insiderVersion", value: msg.data });
             const authenticated = await actionContext.tmc.isAuthenticated(msg.data);
             if (authenticated.err) {
                 showError("Failed to check insider authentication");
