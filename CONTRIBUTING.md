@@ -1,7 +1,5 @@
 # Contributing
 
-Please also read [tmc-vscode-documents](https://github.com/rage/tmc-vscode-documents).
-
 ## Where to begin?
 
 You can start by looking through the [`issues`](https://github.com/rage/tmc-vscode/issues).

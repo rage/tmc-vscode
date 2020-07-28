@@ -11,6 +11,7 @@ declare const __TMC_JAR_URL__: string;
 declare const __TMC_LANGS_RUST_DL_URL__: string;
 declare const __TMC_LANGS_RUST_VERSION__: string;
 
+import FAQ from "../../docs/FAQ.md";
 import { SubmissionResultReport } from "../api/types";
 
 export const ACCESS_TOKEN_URI = __ACCESS_TOKEN_URI__;
@@ -88,12 +89,11 @@ export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Sec
 
 /**
  * If changed WORKSPACEROOTFILE is changed, remember to update
- * "workspaceContains:**\TMC-Readme.txt", with the new name below
+ * "workspaceContains:**\TMC-Readme.md", with the new name below
  */
-export const WORKSPACE_ROOT_FILE = "TMC-Readme.txt";
+export const WORKSPACE_ROOT_FILE = "TMC-Readme.md";
 
-export const WORKSPACE_ROOT_FILE_TEXT = `Please do not remove/move/delete/close this folder, otherwise the TMC extension will not work properly.
-Read more: https://github.com/microsoft/vscode/issues/69335`;
+export const WORKSPACE_ROOT_FILE_TEXT = FAQ;
 
 export const EXAM_TEST_RESULT = {
     testResult: {

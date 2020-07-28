@@ -82,5 +82,11 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
                 );
             }
         });
+
+        vscode.workspace.onDidOpenTextDocument(async (doc) => {
+            if (doc.languageId === "markdown") {
+                await vscode.commands.executeCommand("markdown.showPreview", doc.uri);
+            }
+        });
     }
 }
