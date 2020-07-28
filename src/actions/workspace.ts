@@ -231,7 +231,7 @@ export async function resetExercise(
     id: number,
     options?: ResetOptions,
 ): Promise<Result<void, Error>> {
-    const { ui, tmc, workspaceManager } = actionContext;
+    const { tmc, ui, workspaceManager } = actionContext;
 
     const exerciseData = workspaceManager.getExerciseDataById(id);
 

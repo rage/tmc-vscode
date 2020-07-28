@@ -25,10 +25,10 @@ import { isCorrectWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
  * @param ui The User Interface object
  * @param tmc The TMC API object
  */
-export function registerUiActions(actionContext: ActionContext): void {
-    const { tmc, workspaceManager, ui, resources, settings, vsc } = actionContext;
+export function registerUiActions(actionContext: ActionContext, authenticated: boolean): void {
+    const { workspaceManager, ui, resources, settings, vsc } = actionContext;
     Logger.log("Initializing UI Actions");
-    const LOGGED_IN = ui.treeDP.createVisibilityGroup(tmc.isAuthenticated());
+    const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated);
 
     const visibilityGroups = {
         LOGGED_IN,
@@ -299,7 +299,17 @@ export function registerUiActions(actionContext: ActionContext): void {
                 return;
             }
             await settings.updateSetting({ setting: "insiderVersion", value: msg.data });
-            openSettings(actionContext);
+            const authenticated = await actionContext.tmc.isAuthenticated(msg.data);
+            if (authenticated.err) {
+                showError("Failed to check insider authentication");
+                Logger.error("Failed to check insider authentication", authenticated.val);
+            }
+            ui.treeDP.updateVisibility([
+                authenticated.val === true
+                    ? visibilityGroups.LOGGED_IN
+                    : visibilityGroups.LOGGED_IN.not,
+            ]);
+            await openSettings(actionContext);
         },
     );
 

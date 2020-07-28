@@ -67,7 +67,13 @@ export async function logout(
 ): Promise<void> {
     if (await askForConfirmation("Are you sure you want to log out?")) {
         const { tmc, ui } = actionContext;
-        tmc.deauthenticate();
+        const result = await tmc.deauthenticate();
+        if (result.err) {
+            showError("Failed to log out.");
+            Logger.error("Failed to log out", result.val);
+            Logger.show();
+            return;
+        }
         ui.webview.dispose();
         ui.treeDP.updateVisibility([visibility.LOGGED_IN.not]);
         showNotification("Logged out from TestMyCode.");
@@ -105,7 +111,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
 
     if (!courseExamMode.perhapsExamMode) {
         const executablePath = vsc.getActiveEditorExecutablePath();
-        const [testRunner, interrupt] = tmc.runTests(id, settings.isInsider(), executablePath);
+        const [testRunner, interrupt] = tmc.runTests(id, executablePath);
         let aborted = false;
         const exerciseName = exerciseDetails.val.name;
 

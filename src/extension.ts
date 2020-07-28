@@ -53,7 +53,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
-    const tmc = new TMC(storage, resources);
+    const tmc = new TMC(storage, resources, () => settings.isInsider());
 
     const validationResult = await validateAndFix(storage, tmc, ui, resources);
     if (validationResult.err) {
@@ -125,10 +125,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     }
 
-    init.registerUiActions(actionContext);
+    const authenticated = await tmc.isAuthenticated();
+    if (authenticated.err) {
+        showError("Failed to check if authenticated");
+        Logger.error("Failed to check if authenticated", authenticated.val.message);
+        Logger.show();
+        return;
+    }
+
+    init.registerUiActions(actionContext, authenticated.val);
     init.registerCommands(context, actionContext);
 
-    if (tmc.isAuthenticated()) {
+    if (authenticated.val) {
         checkForExerciseUpdates(actionContext);
         checkForNewExercises(actionContext);
     }
@@ -137,8 +145,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         clearInterval(maintenanceInterval);
     }
 
-    maintenanceInterval = setInterval(() => {
-        if (tmc.isAuthenticated()) {
+    maintenanceInterval = setInterval(async () => {
+        const authenticated = await tmc.isAuthenticated();
+        if (authenticated.err) {
+            Logger.error("Failed to check if authenticated", authenticated.val.message);
+        } else if (authenticated.val) {
             checkForExerciseUpdates(actionContext);
             checkForNewExercises(actionContext);
         }

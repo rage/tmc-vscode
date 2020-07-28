@@ -61,9 +61,9 @@ export type Exercise = {
     valgrind_strategy: string;
     code_review_requests_enabled: boolean;
     run_tests_locally_action_enabled: boolean;
-    latest_submission_url?: string;
-    latest_submission_id?: number;
-    solution_zip_url?: string;
+    latest_submission_url?: string | null;
+    latest_submission_id?: number | null;
+    solution_zip_url?: string | null;
 };
 
 /**
@@ -244,26 +244,18 @@ export type OldSubmission = {
     paste_key: string | null;
 };
 
-/**
- * TMC-langs.jar Actions
- * Insider version toggle.
- */
-export type TmcLangsAction =
-    | {
-          action: "extract-project" | "compress-project";
-          archivePath: string;
-          exerciseFolderPath: string;
-      }
-    | {
-          action: "run-tests";
-          exerciseFolderPath: string;
-          executablePath: string | undefined;
-          isInsider: boolean;
-      }
-    | {
-          action: "get-exercise-packaging-configuration";
-          exerciseFolderPath: string;
-      };
+interface LangsArchiveProject {
+    action: "extract-project" | "compress-project";
+    archivePath: string;
+    exerciseFolderPath: string;
+}
+
+interface LangsGetExercisePackagingConfiguration {
+    action: "get-exercise-packaging-configuration";
+    exerciseFolderPath: string;
+}
+
+export type TmcLangsAction = LangsArchiveProject | LangsGetExercisePackagingConfiguration;
 
 export type TmcLangsLogs = {
     logs: {
@@ -271,26 +263,6 @@ export type TmcLangsLogs = {
         stderr: string;
     };
 };
-
-export type TmcLangsTestResultJava = {
-    name: string;
-    successful: boolean;
-    message: string;
-    valgrindFailed: boolean;
-    points: string[];
-    exception?: string[];
-};
-
-export type TmcLangsTestResultsJava = {
-    response: {
-        status: string;
-        testResults: TmcLangsTestResultJava[];
-        logs: {
-            stdout?: number[];
-            stderr?: number[];
-        };
-    } | null;
-} & TmcLangsLogs;
 
 export type TmcLangsTestResultRust = {
     name: string;
@@ -327,8 +299,4 @@ export type TmcLangsFilePath = {
     };
 } & TmcLangsLogs;
 
-export type TmcLangsResponse =
-    | TmcLangsPath
-    | TmcLangsTestResultsJava
-    | TmcLangsTestResultsRust
-    | TmcLangsFilePath;
+export type TmcLangsResponse = TmcLangsPath | TmcLangsFilePath;

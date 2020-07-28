@@ -3,6 +3,7 @@ import * as ClientOauth2 from "client-oauth2";
 import { sync as delSync } from "del";
 import * as FormData from "form-data";
 import * as fs from "fs";
+import * as _ from "lodash";
 import * as fetch from "node-fetch";
 import * as path from "path";
 import * as kill from "tree-kill";
@@ -13,6 +14,7 @@ import * as url from "url";
 import {
     ACCESS_TOKEN_URI,
     CLIENT_ID,
+    CLIENT_NAME,
     CLIENT_SECRET,
     TMC_API_URL,
     TMC_LANGS_TIMEOUT,
@@ -47,10 +49,50 @@ import {
     TmcLangsFilePath,
     TmcLangsPath,
     TmcLangsResponse,
-    TmcLangsTestResultsJava,
     TmcLangsTestResultsRust,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
+
+interface RustProcessArgs {
+    args: string[];
+    core: boolean;
+    env?: { [key: string]: string };
+    onStderr?: (data: string) => void;
+    onStdout?: (data: UncheckedLangsResponse) => void;
+    stdin?: string;
+}
+
+type RustProcessLogs = {
+    stderr: string;
+    stdout: UncheckedLangsResponse[];
+};
+
+type RustProcessRunner = {
+    interrupt(): void;
+    result: Promise<Result<RustProcessLogs, Error>>;
+};
+
+interface UncheckedLangsResponse {
+    data: unknown;
+    message: string | null;
+    "percent-done": number;
+    result:
+        | "logged-in"
+        | "logged-out"
+        | "not-logged-in"
+        | "error"
+        | "running"
+        | "sent-data"
+        | "retrieved-data"
+        | "executed-command";
+    status: "successful" | "crashed" | "in-progress";
+}
+
+interface LangsResponse<T> extends UncheckedLangsResponse {
+    data: T;
+    result: Exclude<UncheckedLangsResponse["result"], "error">;
+    status: Exclude<UncheckedLangsResponse["status"], "crashed">;
+}
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -63,15 +105,17 @@ export default class TMC {
     private readonly tmcApiUrl: string;
     private readonly tmcDefaultHeaders: { client: string; client_version: string };
     private workspaceManager?: WorkspaceManager;
+    private readonly isInsider: () => boolean;
 
     private readonly cache: Map<string, TMCApiResponse>;
+    private readonly rustCache: Map<string, LangsResponse<unknown>>;
 
     private nextLangsJsonId = 0;
 
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
-    constructor(storage: Storage, resources: Resources) {
+    constructor(storage: Storage, resources: Resources, isInsider: () => boolean) {
         this.oauth2 = new ClientOauth2({
             accessTokenUri: ACCESS_TOKEN_URI,
             clientId: CLIENT_ID,
@@ -85,10 +129,12 @@ export default class TMC {
         this.resources = resources;
         this.tmcApiUrl = TMC_API_URL;
         this.cache = new Map();
+        this.rustCache = new Map();
         this.tmcDefaultHeaders = {
-            client: "vscode_plugin",
+            client: CLIENT_NAME,
             client_version: resources.extensionVersion,
         };
+        this.isInsider = isInsider;
     }
 
     public setWorkspaceManager(workspaceManager: WorkspaceManager): void {
@@ -106,10 +152,33 @@ export default class TMC {
      * @param password Password
      * @returns A boolean determining success, and a human readable error description.
      */
-    public async authenticate(username: string, password: string): Promise<Result<void, Error>> {
+    public async authenticate(
+        username: string,
+        password: string,
+        isInsider?: boolean,
+    ): Promise<Result<void, Error>> {
         if (this.token) {
             throw new Error("Authentication token already exists.");
         }
+        if (isInsider === true || this.isInsider()) {
+            const loginResult = await this.executeLangsCommand(
+                {
+                    args: ["login", "--email", username, "--base64"],
+                    core: true,
+                    stdin: Buffer.from(password).toString("base64"),
+                },
+                createIs<unknown>(),
+            );
+            if (loginResult.err) {
+                return new Err(new AuthenticationError(loginResult.val.message));
+            }
+
+            // Non-Insider compatibility: Get token from langs and store it. This relies on a side
+            // effect but can be removed once token is no longer used.
+            const getTokenResult = await this.isAuthenticated();
+            return getTokenResult.ok ? Ok.EMPTY : getTokenResult;
+        }
+
         try {
             this.token = await this.oauth2.owner.getToken(username, password);
         } catch (err) {
@@ -118,7 +187,7 @@ export default class TMC {
             } else if (err.code === "EUNAVAILABLE") {
                 return new Err(new ConnectionError("Connection error"));
             }
-            Logger.error(err, "Unknown authentication error:");
+            Logger.error("Unknown authentication error:", err);
             return new Err(new Error("Unknown error: " + err.code));
         }
         this.storage.updateAuthenticationToken(this.token.data);
@@ -128,38 +197,107 @@ export default class TMC {
     /**
      * Logs out by deleting the authentication token.
      */
-    public deauthenticate(): void {
+    public async deauthenticate(): Promise<Result<void, Error>> {
+        if (this.isInsider()) {
+            const logoutResult = await this.executeLangsCommand(
+                {
+                    args: ["logout"],
+                    core: true,
+                },
+                createIs<unknown>(),
+            );
+            if (logoutResult.err) {
+                return logoutResult;
+            }
+        }
         this.token = undefined;
         this.storage.updateAuthenticationToken(undefined);
+        return Ok.EMPTY;
     }
 
     /**
      * TODO: actually check if the token is valid
      * @returns whether an authentication token is present
      */
-    public isAuthenticated(): boolean {
-        return this.token !== undefined;
+    public async isAuthenticated(isInsider?: boolean): Promise<Result<boolean, Error>> {
+        if (isInsider === true || this.isInsider()) {
+            const loggedInResult = await this.executeLangsCommand(
+                {
+                    args: ["logged-in"],
+                    core: true,
+                },
+                createIs<ClientOauth2.Data | null>(),
+            );
+            if (loggedInResult.err) {
+                return loggedInResult;
+            }
+            const response = loggedInResult.val;
+            if (response.result === "not-logged-in") {
+                if (!this.token) {
+                    return new Ok(false);
+                }
+
+                // Insider compatibility: If token exists but Langs didn't have it, pass it on.
+                const setTokenResult = await this.executeLangsCommand(
+                    {
+                        args: ["login", "--set-access-token", this.token.data.access_token],
+                        core: true,
+                    },
+                    createIs<unknown>(),
+                );
+                if (setTokenResult.err) {
+                    return setTokenResult;
+                }
+            } else if (response.result === "logged-in" && response.data) {
+                // Non-insider compatibility: keep stored token up to date
+                this.token = new ClientOauth2.Token(this.oauth2, response.data);
+                this.storage.updateAuthenticationToken(this.token.data);
+            }
+        }
+        return new Ok(this.token !== undefined);
     }
 
     /**
      * @returns a list of organizations
      */
-    public getOrganizations(cache = false): Promise<Result<Organization[], Error>> {
-        return this.checkApiResponse(
-            this.tmcApiRequest("org.json", cache),
-            createIs<Organization[]>(),
-        );
+    public async getOrganizations(cache = false): Promise<Result<Organization[], Error>> {
+        if (this.isInsider()) {
+            return this.executeLangsCommand(
+                { args: ["get-organizations"], core: true },
+                createIs<Organization[]>(),
+                cache,
+            ).then((res) => res.map((r) => r.data));
+        } else {
+            return this.checkApiResponse(
+                this.tmcApiRequest("org.json", cache),
+                createIs<Organization[]>(),
+            );
+        }
     }
 
     /**
      * @returns one Organization information
      * @param slug Organization slug/id
      */
-    public getOrganization(slug: string, cache = false): Promise<Result<Organization, Error>> {
-        return this.checkApiResponse(
-            this.tmcApiRequest(`org/${slug}.json`, cache),
-            createIs<Organization>(),
-        );
+    public async getOrganization(
+        slug: string,
+        cache = false,
+    ): Promise<Result<Organization, Error>> {
+        if (this.isInsider()) {
+            const organizations = await this.getOrganizations(cache);
+            if (organizations.err) {
+                return organizations;
+            }
+            const organization = organizations.val.find((o) => o.slug === slug);
+            return organization
+                ? new Ok(organization)
+                : new Err(new Error("Given slug didn't match with any organizations."));
+        } else {
+            return this.checkApiResponse(
+                this.tmcApiRequest(`org/${slug}.json`, cache),
+                createIs<Organization>(),
+            );
+        }
     }
 
     /**
@@ -167,21 +305,43 @@ export default class TMC {
      * @returns a list of courses belonging to the currently selected organization
      */
     public getCourses(organization: string, cache = false): Promise<Result<Course[], Error>> {
-        return this.checkApiResponse(
-            this.tmcApiRequest(`core/org/${organization}/courses`, cache),
-            createIs<Course[]>(),
-        );
+        if (this.isInsider()) {
+            return this.executeLangsCommand(
+                { args: ["list-courses", "--organization", organization], core: true },
+                createIs<Course[]>(),
+                cache,
+            ).then((res) => res.map((r) => r.data));
+        } else {
+            return this.checkApiResponse(
+                this.tmcApiRequest(`core/org/${organization}/courses`, cache),
+                createIs<Course[]>(),
+            );
+        }
     }
 
     /**
      * @param id course id
      * @returns a detailed description for the specified course
      */
-    public getCourseDetails(id: number, cache = false): Promise<Result<CourseDetails, Error>> {
-        return this.checkApiResponse(
-            this.tmcApiRequest(`core/courses/${id}`, cache),
-            createIs<CourseDetails>(),
-        );
+    public async getCourseDetails(
+        id: number,
+        cache = false,
+    ): Promise<Result<CourseDetails, Error>> {
+        if (this.isInsider()) {
+            return this.executeLangsCommand(
+                {
+                    args: ["get-course-details", "--course-id", id.toString()],
+                    core: true,
+                },
+                createIs<CourseDetails["course"]>(),
+                cache,
+            ).then((res) => res.map((r) => ({ course: r.data })));
+        } else {
+            return this.checkApiResponse(
+                this.tmcApiRequest(`core/courses/${id}`, cache),
+                createIs<CourseDetails>(),
+            );
+        }
     }
 
     /**
@@ -201,7 +361,10 @@ export default class TMC {
      * @returns return list of courses exercises. Each exercise carry info about available points
      * that can be gained from an exercise
      */
-    public getCourseExercises(id: number, cache = false): Promise<Result<CourseExercise[], Error>> {
+    public async getCourseExercises(
+        id: number,
+        cache = false,
+    ): Promise<Result<CourseExercise[], Error>> {
         return this.checkApiResponse(
             this.tmcApiRequest(`courses/${id}/exercises`, cache),
             createIs<CourseExercise[]>(),
@@ -390,9 +553,8 @@ export default class TMC {
      */
     public runTests(
         id: number,
-        isInsider: boolean,
-        executablePath?: string,
-    ): [Promise<Result<TmcLangsTestResultsJava | TmcLangsTestResultsRust, Error>>, () => void] {
+        pythonExecutablePath?: string,
+    ): [Promise<Result<TmcLangsTestResultsRust, Error>>, () => void] {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
@@ -401,20 +563,48 @@ export default class TMC {
             return [Promise.resolve(new Err(new Error("???"))), (): void => {}];
         }
 
-        const [testRunner, interrupt] = this.executeLangsAction({
-            action: "run-tests",
-            exerciseFolderPath: exerciseFolderPath.val,
-            executablePath,
-            isInsider,
+        const env: { [key: string]: string } = {};
+        if (this.isInsider() && pythonExecutablePath) {
+            env.TMC_LANGS_PYTHON_EXEC = pythonExecutablePath;
+        }
+        const outputPath = this.nextTempOutputPath();
+        const { interrupt, result } = this.spawnLangsProcess({
+            args: [
+                "run-tests",
+                "--exercise-path",
+                exerciseFolderPath.val,
+                "--output-path",
+                outputPath,
+            ],
+            core: false,
+            env,
+            onStderr: (data) => Logger.log("Rust Langs", data),
         });
 
-        return [
-            this.checkApiResponse(
-                testRunner,
-                createIs<TmcLangsTestResultsJava | TmcLangsTestResultsRust>(),
-            ),
-            interrupt,
-        ];
+        // Temp copypaste, read results from stdout when using new rust version
+        const postResult: Promise<Result<TmcLangsTestResultsRust, Error>> = result.then((res) => {
+            if (res.err) {
+                return res;
+            }
+
+            const readResult = {
+                response: JSON.parse(fs.readFileSync(outputPath, "utf8")),
+                logs: {
+                    stdout: res.val.stdout.join(""),
+                    stderr: res.val.stderr,
+                },
+            };
+
+            if (is<TmcLangsTestResultsRust>(readResult)) {
+                return new Ok(readResult);
+            }
+
+            Logger.error("Unexpected response JSON type", readResult);
+            Logger.show();
+            return new Err(new RuntimeError("Unexpected response JSON type"));
+        });
+
+        return [postResult, interrupt];
     }
 
     /**
@@ -433,6 +623,40 @@ export default class TMC {
         if (exerciseFolderPath.err) {
             return new Err(new Error("Couldn't get the exercise path"));
         }
+
+        // -- Insider implementation --
+        if (this.isInsider()) {
+            const isPaste = params?.has("paste");
+            const submitUrl = `${this.tmcApiUrl}core/exercises/${id}/submissions`;
+            const args = isPaste
+                ? [
+                      "paste",
+                      "--locale",
+                      "eng",
+                      "--submission-path",
+                      exerciseFolderPath.val,
+                      "--submission-url",
+                      submitUrl,
+                  ]
+                : [
+                      "submit",
+                      "--submission-path",
+                      exerciseFolderPath.val,
+                      "--submission-url",
+                      submitUrl,
+                  ];
+            const processResult = await this.executeLangsCommand(
+                { args, core: true },
+                createIs<SubmissionResponse>(),
+            );
+
+            if (processResult.err) {
+                return processResult;
+            }
+
+            return new Ok(processResult.val.data);
+        }
+        // -- End of insider implementation --
 
         const compressResult = await this.checkApiResponse(
             this.executeLangsAction({
@@ -475,15 +699,29 @@ export default class TMC {
         feedbackUrl: string,
         feedback: SubmissionFeedback,
     ): Promise<Result<SubmissionFeedbackResponse, Error>> {
-        const params = new url.URLSearchParams();
-        feedback.status.forEach((answer, index) => {
-            params.append(`answers[${index}][question_id]`, answer.question_id.toString());
-            params.append(`answers[${index}][answer]`, answer.answer);
-        });
-        return this.checkApiResponse(
-            this.tmcApiRequest(feedbackUrl, false, "post", params),
-            createIs<SubmissionFeedbackResponse>(),
-        );
+        if (this.isInsider()) {
+            const feedbackArgs = feedback.status.reduce<string[]>(
+                (acc, next) => acc.concat("--feedback", next.question_id.toString(), next.answer),
+                [],
+            );
+            return this.executeLangsCommand(
+                {
+                    args: ["send-feedback", ...feedbackArgs, "--feedback-url", feedbackUrl],
+                    core: true,
+                },
+                createIs<SubmissionFeedbackResponse>(),
+            ).then((res) => res.map((r) => r.data));
+        } else {
+            const params = new url.URLSearchParams();
+            feedback.status.forEach((answer, index) => {
+                params.append(`answers[${index}][question_id]`, answer.question_id.toString());
+                params.append(`answers[${index}][answer]`, answer.answer);
+            });
+            return this.checkApiResponse(
+                this.tmcApiRequest(feedbackUrl, false, "post", params),
+                createIs<SubmissionFeedbackResponse>(),
+            );
+        }
     }
 
     /**
@@ -499,7 +737,159 @@ export default class TMC {
     }
 
     /**
+     * Executes a tmc-langs-cli process with given arguments to the completion and handles
+     * validation for the last response received from the process.
+     *
+     * @param langsArgs Command arguments passed on to spawnLangsProcess.
+     * @param checker Checker function used to validate the type of data-property.
+     * @param useCache Whether to try fetching the data from cache instead of running the process.
+     * @returns Result that resolves to a checked LansResponse.
+     */
+    private async executeLangsCommand<T>(
+        langsArgs: RustProcessArgs,
+        checker: (object: unknown) => object is T,
+        useCache = false,
+    ): Promise<Result<LangsResponse<T>, Error>> {
+        const cacheKey = langsArgs.args.join("-");
+        if (useCache) {
+            const cached = this.rustCache.get(cacheKey);
+            if (cached && checker(cached.data)) {
+                return new Ok({ ...cached, data: cached.data });
+            }
+            // This should NEVER have to happen
+            Logger.error("Cached data didn't match the expected type, re-fetching...");
+        }
+        const result = await this.spawnLangsProcess(langsArgs).result;
+        if (result.err) {
+            return result;
+        }
+        const last = _.last(result.val.stdout);
+        if (last === undefined) {
+            return new Err(new Error("No langs response received"));
+        }
+        const checked = this.checkLangsResponse(last, checker);
+        if (checked.err) {
+            return checked;
+        }
+        this.rustCache.set(cacheKey, checked.val);
+        return new Ok(checked.val);
+    }
+
+    /**
+     * Checks langs response for generic errors.
+     */
+    private checkLangsResponse<T>(
+        langsResponse: UncheckedLangsResponse,
+        checker: (object: unknown) => object is T,
+    ): Result<LangsResponse<T>, Error> {
+        const { data, result, status } = langsResponse;
+        const message = langsResponse.message || "null";
+        if (status === "crashed") {
+            return new Err(new Error("Langs process crashed: " + message));
+        }
+        if (result === "error") {
+            return new Err(new Error(message));
+        }
+        if (!checker(data)) {
+            return new Err(new Error("Unexpected response data type."));
+        }
+        return new Ok({ ...langsResponse, data, result, status });
+    }
+
+    /**
+     * Spawns a new tmc-langs-cli process with given arguments.
+     *
+     * @returns Rust process runner.
+     */
+    private spawnLangsProcess(commandArgs: RustProcessArgs): RustProcessRunner {
+        const { args, core, env, onStderr, onStdout, stdin } = commandArgs;
+        const CORE_ARGS = ["core", "--client-name", CLIENT_NAME];
+
+        let stdout: UncheckedLangsResponse[] = [];
+        let stderr = "";
+
+        const executable = this.resources.getCliPath();
+        Logger.log(JSON.stringify(executable) + " " + args.map((a) => JSON.stringify(a)).join(" "));
+
+        let active = true;
+        let interrupted = false;
+        const cprocess = cp.spawn(executable, core ? CORE_ARGS.concat(args) : args, {
+            env: { ...process.env, ...env, RUST_LOG: "debug" },
+        });
+        stdin && cprocess.stdin.write(stdin + "\n");
+
+        const processResult = new Promise<number | null>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                kill(cprocess.pid);
+                reject("Process didn't seem to finish or was taking a really long time.");
+            }, TMC_LANGS_TIMEOUT);
+            cprocess.on("error", (error) => {
+                clearTimeout(timeout);
+                reject(error);
+            });
+            cprocess.on("exit", (code) => {
+                clearTimeout(timeout);
+                resolve(code);
+            });
+            cprocess.stderr.on("data", (chunk) => {
+                const data = chunk.toString();
+                stderr = stderr.concat(data);
+                onStderr?.(data);
+            });
+            cprocess.stdout.on("data", (chunk) => {
+                try {
+                    // Check against broken and output
+                    const prepared = `[${chunk.toString().trim().replace(/}\s*{/g, "},{")}]`;
+                    const json = JSON.parse(prepared);
+                    if (!is<UncheckedLangsResponse[]>(json)) {
+                        Logger.error(
+                            "Langs response didn't match expected type, received: ",
+                            chunk.toString(),
+                        );
+                        return;
+                    }
+                    stdout = stdout.concat(json);
+                    onStdout?.(json[json.length - 1]);
+                } catch (e) {
+                    Logger.warn("Failed to parse langs response, received: ", chunk.toString());
+                }
+            });
+        });
+
+        const interrupt = (): void => {
+            if (active) {
+                active = false;
+                interrupted = true;
+                kill(cprocess.pid);
+            }
+        };
+
+        const result = (async (): RustProcessRunner["result"] => {
+            try {
+                await processResult;
+            } catch (error) {
+                return new Err(new Error(error));
+            }
+
+            if (interrupted) {
+                return new Err(new RuntimeError("TMC Langs process was killed."));
+            }
+
+            return new Ok({
+                stderr,
+                stdout,
+            });
+        })();
+
+        return { interrupt, result };
+    }
+
+    /**
      * Executes external tmc-langs process with given arguments.
+     *
+     * @deprecated this function works and will be removed anyway with java so there's no point in
+     * fixing the copypaste.
+     *
      * @param tmcLangsAction Tmc-langs command and arguments
      */
     private executeLangsAction(
@@ -508,11 +898,6 @@ export default class TMC {
         const action = tmcLangsAction.action;
         let exercisePath = "";
         let outputPath = "";
-        let executablePath: string | undefined = undefined;
-        /**
-         * Insider version toggle.
-         */
-        let insider = false;
 
         switch (tmcLangsAction.action) {
             case "extract-project":
@@ -527,64 +912,33 @@ export default class TMC {
                     tmcLangsAction.exerciseFolderPath,
                 ];
                 break;
-            case "run-tests":
-                executablePath = tmcLangsAction.executablePath;
-                exercisePath = tmcLangsAction.exerciseFolderPath;
-                outputPath = path.join(
-                    this.resources.getDataPath(),
-                    `temp_${this.nextLangsJsonId++}.json`,
-                );
-                insider = tmcLangsAction.isInsider;
-                break;
             case "get-exercise-packaging-configuration":
                 exercisePath = tmcLangsAction.exerciseFolderPath;
-                outputPath = path.join(
-                    this.resources.getDataPath(),
-                    `temp_${this.nextLangsJsonId++}.json`,
-                );
+                outputPath = this.nextTempOutputPath();
                 break;
         }
 
-        Logger.log("ExecutablePath", executablePath);
+        const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
+        const arg1 = `--outputPath="${outputPath}"`;
 
-        const arg0 = exercisePath
-            ? insider
-                ? `--exercise-path "${exercisePath}"`
-                : `--exercisePath="${exercisePath}"`
-            : "";
-        const arg1 = insider ? `--output-path "${outputPath}"` : `--outputPath="${outputPath}"`;
+        const command = `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
 
-        /**
-         * Insider version toggle.
-         */
-        let command = "";
-        if (insider) {
-            command = `"${this.resources.getCliPath()}" ${action} ${arg0} ${arg1}`;
-            Logger.warn("Using experimental feature", command);
-        } else {
-            command = `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
-            Logger.log(command);
-        }
+        Logger.log(command);
 
         let active = true;
         let error: cp.ExecException | undefined;
         let interrupted = false;
         let [stdoutExec, stderrExec] = ["", ""];
-        const currentEnvVar = process.env;
 
-        const cprocess = cp.exec(
-            command,
-            insider ? { env: { ...currentEnvVar, RUST_LOG: "debug" } } : {},
-            (err, stdout, stderr) => {
-                active = false;
-                stdoutExec = stdout;
-                stderrExec = stderr;
-                if (err) {
-                    Logger.error(`Process raised error: ${command}`, err, stdout, stderr);
-                    error = err;
-                }
-            },
-        );
+        const cprocess = cp.exec(command, (err, stdout, stderr) => {
+            active = false;
+            stdoutExec = stdout;
+            stderrExec = stderr;
+            if (err) {
+                Logger.error(`Process raised error: ${command}`, err, stdout, stderr);
+                error = err;
+            }
+        });
 
         const interrupt = (): void => {
             if (active) {
@@ -659,6 +1013,23 @@ export default class TMC {
             }),
             interrupt,
         ];
+    }
+
+    /**
+     * @deprecated Rust langs should eventually read the output from STDOUT. Java will be
+     * completely removed.
+     *
+     * @returns Next temporary json file for passing to TMC-langs.
+     */
+    private nextTempOutputPath(): string {
+        const next = path.join(
+            this.resources.getDataPath(),
+            `temp_${this.nextLangsJsonId++ % 10}.json`,
+        );
+        if (fs.existsSync(next)) {
+            delSync(next, { force: true });
+        }
+        return next;
     }
 
     /**

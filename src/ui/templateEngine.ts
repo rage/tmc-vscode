@@ -7,11 +7,7 @@ import * as handlebars from "handlebars";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import {
-    SubmissionResultReport,
-    TmcLangsTestResultJava,
-    TmcLangsTestResultRust,
-} from "../api/types";
+import { SubmissionResultReport, TmcLangsTestResultRust } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, numbersToString, parseTestResultsText } from "../utils/";
 
@@ -102,19 +98,17 @@ export default class TemplateEngine {
         /**
          * Progress bar for running tests and submission.
          */
-        handlebars.registerHelper(
-            "progress_bar",
-            (exercises: TmcLangsTestResultRust[] | TmcLangsTestResultJava[]) => {
-                const length = exercises.length;
-                let passedAmount = 0;
-                for (const exer of exercises) {
-                    if (exer.successful) {
-                        passedAmount = passedAmount + 1;
-                    }
+        handlebars.registerHelper("progress_bar", (exercises: TmcLangsTestResultRust[]) => {
+            const length = exercises.length;
+            let passedAmount = 0;
+            for (const exer of exercises) {
+                if (exer.successful) {
+                    passedAmount = passedAmount + 1;
                 }
-                passedAmount = Math.round((passedAmount / length) * 100);
-                const notPassed = 100 - passedAmount;
-                return `<div class="progress" style="width: 100%">
+            }
+            passedAmount = Math.round((passedAmount / length) * 100);
+            const notPassed = 100 - passedAmount;
+            return `<div class="progress" style="width: 100%">
                         <div class="progress-bar bg-success" role="progressbar" style="width: ${passedAmount}%" aria-valuenow="${passedAmount}" aria-valuemin="0" aria-valuemax="100">
                             ${passedAmount} %
                         </div>
@@ -122,8 +116,7 @@ export default class TemplateEngine {
                             ${passedAmount === 0 ? "0 %" : ""}
                         </div>
                     </div>`;
-            },
-        );
+        });
 
         /**
          * Returns the progress of submission status from TMC server
@@ -157,10 +150,7 @@ export default class TemplateEngine {
 
         handlebars.registerHelper(
             "show_test_results",
-            (
-                testResults: TmcLangsTestResultJava[] | TmcLangsTestResultRust[],
-                showAll: boolean,
-            ) => {
+            (testResults: TmcLangsTestResultRust[], showAll: boolean) => {
                 if (!testResults) {
                     return;
                 }
