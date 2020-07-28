@@ -118,7 +118,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     "Read more...",
                     (): void =>
                         vsc.openUri(
-                            "https://github.com/rage/tmc-vscode-documents/blob/master/insider.md",
+                            "https://github.com/rage/tmc-vscode/blob/master/docs/insider.md",
                         ),
                 ],
             );

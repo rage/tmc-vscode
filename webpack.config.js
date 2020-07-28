@@ -46,17 +46,11 @@ const config = () => {
         module: {
             rules: [
                 {
-                    test: /\.ts$/,
+                    test: /\.css$/i,
                     exclude: /node_modules/,
                     use: [
                         {
-                            loader: "ts-loader",
-                            options: {
-                                compiler: "ttypescript",
-                                configFile: isDevelopmentMode
-                                    ? "tsconfig.json"
-                                    : "tsconfig.production.json",
-                            },
+                            loader: "raw-loader",
                         },
                     ],
                 },
@@ -74,6 +68,30 @@ const config = () => {
                                         { pragma: "createElement" },
                                     ],
                                 ],
+                            },
+                        },
+                    ],
+                },
+                {
+                    test: /\.md$/i,
+                    exclude: /node_modules/,
+                    use: [
+                        {
+                            loader: "raw-loader",
+                        },
+                    ],
+                },
+                {
+                    test: /\.ts$/,
+                    exclude: /node_modules/,
+                    use: [
+                        {
+                            loader: "ts-loader",
+                            options: {
+                                compiler: "ttypescript",
+                                configFile: isDevelopmentMode
+                                    ? "tsconfig.json"
+                                    : "tsconfig.production.json",
                             },
                         },
                     ],

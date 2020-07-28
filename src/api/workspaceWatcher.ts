@@ -7,7 +7,7 @@ import Resources from "../config/resources";
 import { Logger } from "../utils/logger";
 
 /**
- * Used to watch that the TMC-Readme.txt file exists in TMC Workspace/".tmc" path.
+ * Used to watch that the TMC-Readme.md file exists in TMC Workspace/".tmc" path.
  */
 export default class WorkspaceWatcher {
     private readonly resources: Resources;
