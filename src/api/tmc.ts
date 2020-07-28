@@ -156,9 +156,9 @@ export default class TMC {
         }
         if (isInsider === true || this.isInsider()) {
             const loginResult = await this.executeLangsRustProcess({
-                args: ["login", "--email", username],
+                args: ["login", "--email", username, "--base64"],
                 core: true,
-                stdin: password,
+                stdin: Buffer.from(password).toString("base64"),
             }).result;
             if (loginResult.err) {
                 return new Err(new AuthenticationError(loginResult.val.message));
