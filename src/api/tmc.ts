@@ -53,8 +53,27 @@ import {
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
 
-type LangsResponse = {
-    data: unknown | null;
+interface RustProcessArgs {
+    args: string[];
+    core: boolean;
+    env?: { [key: string]: string };
+    onStderr?: (data: string) => void;
+    onStdout?: (data: UncheckedLangsResponse) => void;
+    stdin?: string;
+}
+
+type RustProcessLogs = {
+    stderr: string;
+    stdout: UncheckedLangsResponse[];
+};
+
+type RustProcessRunner = {
+    interrupt(): void;
+    result: Promise<Result<RustProcessLogs, Error>>;
+};
+
+interface UncheckedLangsResponse {
+    data: unknown;
     message: string | null;
     "percent-done": number;
     result:
@@ -67,26 +86,13 @@ type LangsResponse = {
         | "retrieved-data"
         | "executed-command";
     status: "successful" | "crashed" | "in-progress";
-};
-
-interface RustProcessArgs {
-    args: string[];
-    core: boolean;
-    env?: { [key: string]: string };
-    onStderr?: (data: string) => void;
-    onStdout?: (data: LangsResponse) => void;
-    stdin?: string;
 }
 
-type RustProcessLogs = {
-    stderr: string;
-    stdout: LangsResponse[];
-};
-
-type RustProcessRunner = {
-    interrupt(): void;
-    result: Promise<Result<RustProcessLogs, Error>>;
-};
+interface LangsResponse<T> extends UncheckedLangsResponse {
+    data: T;
+    result: Exclude<UncheckedLangsResponse["result"], "error">;
+    status: Exclude<UncheckedLangsResponse["status"], "crashed">;
+}
 
 /**
  * A Class for interacting with the TestMyCode service, including authentication
@@ -102,7 +108,7 @@ export default class TMC {
     private readonly isInsider: () => boolean;
 
     private readonly cache: Map<string, TMCApiResponse>;
-    private readonly rustCache: Map<string, LangsResponse>;
+    private readonly rustCache: Map<string, LangsResponse<unknown>>;
 
     private nextLangsJsonId = 0;
 
@@ -155,18 +161,16 @@ export default class TMC {
             throw new Error("Authentication token already exists.");
         }
         if (isInsider === true || this.isInsider()) {
-            const loginResult = await this.executeLangsRustProcess({
-                args: ["login", "--email", username, "--base64"],
-                core: true,
-                stdin: Buffer.from(password).toString("base64"),
-            }).result;
+            const loginResult = await this.executeLangsCommand(
+                {
+                    args: ["login", "--email", username, "--base64"],
+                    core: true,
+                    stdin: Buffer.from(password).toString("base64"),
+                },
+                createIs<unknown>(),
+            );
             if (loginResult.err) {
                 return new Err(new AuthenticationError(loginResult.val.message));
-            }
-            const login = loginResult.val.stdout[0];
-            const errorCheck = this.checkTMCLangsResponse(login);
-            if (errorCheck.err) {
-                return errorCheck;
             }
 
             // Non-Insider compatibility: Get token from langs and store it. This relies on a side
@@ -195,11 +199,13 @@ export default class TMC {
      */
     public async deauthenticate(): Promise<Result<void, Error>> {
         if (this.isInsider()) {
-            const logoutResult = await this.executeLangsRustProcess({
-                args: ["logout"],
-                core: true,
-            }).result;
-
+            const logoutResult = await this.executeLangsCommand(
+                {
+                    args: ["logout"],
+                    core: true,
+                },
+                createIs<unknown>(),
+            );
             if (logoutResult.err) {
                 return logoutResult;
             }
@@ -215,35 +221,34 @@ export default class TMC {
      */
     public async isAuthenticated(isInsider?: boolean): Promise<Result<boolean, Error>> {
         if (isInsider === true || this.isInsider()) {
-            const loggedInResult = await this.executeLangsRustProcess({
-                args: ["logged-in"],
-                core: true,
-            }).result;
-
+            const loggedInResult = await this.executeLangsCommand(
+                {
+                    args: ["logged-in"],
+                    core: true,
+                },
+                createIs<ClientOauth2.Data | null>(),
+            );
             if (loggedInResult.err) {
                 return loggedInResult;
             }
-
-            const response = loggedInResult.val.stdout[0];
-            const checked = this.checkTMCLangsResponse(response);
-            if (checked.err) {
-                return checked;
-            }
+            const response = loggedInResult.val;
             if (response.result === "not-logged-in") {
                 if (!this.token) {
                     return new Ok(false);
                 }
 
                 // Insider compatibility: If token exists but Langs didn't have it, pass it on.
-                const setTokenResult = await this.executeLangsRustProcess({
-                    args: ["login", "--set-access-token", this.token.data.access_token],
-                    core: true,
-                }).result;
-
+                const setTokenResult = await this.executeLangsCommand(
+                    {
+                        args: ["login", "--set-access-token", this.token.data.access_token],
+                        core: true,
+                    },
+                    createIs<unknown>(),
+                );
                 if (setTokenResult.err) {
                     return setTokenResult;
                 }
-            } else if (response.result === "logged-in" && is<ClientOauth2.Data>(response.data)) {
+            } else if (response.result === "logged-in" && response.data) {
                 // Non-insider compatibility: keep stored token up to date
                 this.token = new ClientOauth2.Token(this.oauth2, response.data);
                 this.storage.updateAuthenticationToken(this.token.data);
@@ -255,13 +260,13 @@ export default class TMC {
     /**
      * @returns a list of organizations
      */
-    public getOrganizations(cache = false): Promise<Result<Organization[], Error>> {
+    public async getOrganizations(cache = false): Promise<Result<Organization[], Error>> {
         if (this.isInsider()) {
-            return this.unwrapLastTMCLangsResponse(
+            return this.executeLangsCommand(
                 { args: ["get-organizations"], core: true },
                 createIs<Organization[]>(),
                 cache,
-            );
+            ).then((res) => res.map((r) => r.data));
         } else {
             return this.checkApiResponse(
                 this.tmcApiRequest("org.json", cache),
@@ -301,11 +306,11 @@ export default class TMC {
      */
     public getCourses(organization: string, cache = false): Promise<Result<Course[], Error>> {
         if (this.isInsider()) {
-            return this.unwrapLastTMCLangsResponse(
+            return this.executeLangsCommand(
                 { args: ["list-courses", "--organization", organization], core: true },
                 createIs<Course[]>(),
                 cache,
-            );
+            ).then((res) => res.map((r) => r.data));
         } else {
             return this.checkApiResponse(
                 this.tmcApiRequest(`core/org/${organization}/courses`, cache),
@@ -323,15 +328,14 @@ export default class TMC {
         cache = false,
     ): Promise<Result<CourseDetails, Error>> {
         if (this.isInsider()) {
-            const course = await this.unwrapLastTMCLangsResponse(
+            return this.executeLangsCommand(
                 {
                     args: ["get-course-details", "--course-id", id.toString()],
                     core: true,
                 },
                 createIs<CourseDetails["course"]>(),
                 cache,
-            );
-            return course.map((c) => ({ course: c }));
+            ).then((res) => res.map((r) => ({ course: r.data })));
         } else {
             return this.checkApiResponse(
                 this.tmcApiRequest(`core/courses/${id}`, cache),
@@ -566,7 +570,7 @@ export default class TMC {
             env.TMC_LANGS_PYTHON_EXEC = executablePath;
         }
         const outputPath = this.nextTempOutputPath();
-        const { interrupt, result } = this.executeLangsRustProcess({
+        const { interrupt, result } = this.spawnLangsProcess({
             args: [
                 "run-tests",
                 "--exercise-path",
@@ -626,41 +630,33 @@ export default class TMC {
         if (this.isInsider()) {
             const isPaste = params?.has("paste");
             const submitUrl = `${this.tmcApiUrl}core/exercises/${id}/submissions`;
-            const processResult = isPaste
-                ? await this.executeLangsRustProcess({
-                      args: [
-                          "paste",
-                          "--locale",
-                          "eng",
-                          "--submission-path",
-                          exerciseFolderPath.val,
-                          "--submission-url",
-                          submitUrl,
-                      ],
-                      core: true,
-                  }).result
-                : await this.executeLangsRustProcess({
-                      args: [
-                          "submit",
-                          "--submission-path",
-                          exerciseFolderPath.val,
-                          "--submission-url",
-                          submitUrl,
-                      ],
-                      core: true,
-                  }).result;
+            const args = isPaste
+                ? [
+                      "paste",
+                      "--locale",
+                      "eng",
+                      "--submission-path",
+                      exerciseFolderPath.val,
+                      "--submission-url",
+                      submitUrl,
+                  ]
+                : [
+                      "submit",
+                      "--submission-path",
+                      exerciseFolderPath.val,
+                      "--submission-url",
+                      submitUrl,
+                  ];
+            const processResult = await this.executeLangsCommand(
+                { args, core: true },
+                createIs<SubmissionResponse>(),
+            );
 
             if (processResult.err) {
                 return processResult;
             }
 
-            const response = processResult.val.stdout[processResult.val.stdout.length - 1];
-            if (response.status === "successful" && response.data) {
-                return is<SubmissionResponse>(response.data)
-                    ? new Ok(response.data)
-                    : new Err(new Error("Expected SubmissionResponse"));
-            }
-            return new Err(new Error("Submitting to paste failed: " + response.message));
+            return new Ok(processResult.val.data);
         }
         // -- End of insider implementation --
 
@@ -710,13 +706,13 @@ export default class TMC {
                 (acc, next) => acc.concat("--feedback", next.question_id.toString(), next.answer),
                 [],
             );
-            return this.unwrapLastTMCLangsResponse(
+            return this.executeLangsCommand(
                 {
                     args: ["send-feedback", ...feedbackArgs, "--feedback-url", feedbackUrl],
                     core: true,
                 },
                 createIs<SubmissionFeedbackResponse>(),
-            );
+            ).then((res) => res.map((r) => r.data));
         } else {
             const params = new url.URLSearchParams();
             feedback.status.forEach((answer, index) => {
@@ -742,11 +738,75 @@ export default class TMC {
         );
     }
 
-    private executeLangsRustProcess(commandArgs: RustProcessArgs): RustProcessRunner {
+    /**
+     * Executes a tmc-langs-cli process with given arguments to the completion and handles
+     * validation for the last response received from the process.
+     *
+     * @param langsArgs Command arguments passed on to spawnLangsProcess.
+     * @param checker Checker function used to validate the type of data-property.
+     * @param useCache Whether to try fetching the data from cache instead of running the process.
+     * @returns Result that resolves to a checked LansResponse.
+     */
+    private async executeLangsCommand<T>(
+        langsArgs: RustProcessArgs,
+        checker: (object: unknown) => object is T,
+        useCache = false,
+    ): Promise<Result<LangsResponse<T>, Error>> {
+        const cacheKey = langsArgs.args.join("-");
+        if (useCache) {
+            const cached = this.rustCache.get(langsArgs.args.join("-"));
+            if (cached && checker(cached.data)) {
+                return new Ok({ ...cached, data: cached.data });
+            }
+            // This should NEVER have to happen
+            Logger.error("Cached data didn't match the expected type, re-fetching...");
+        }
+        const result = await this.spawnLangsProcess(langsArgs).result;
+        if (result.err) {
+            return result;
+        }
+        const last = _.last(result.val.stdout);
+        if (last === undefined) {
+            return new Err(new Error("No langs response received"));
+        }
+        const checked = this.checkLangsResponse(last, checker);
+        if (checked.err) {
+            return checked;
+        }
+        this.rustCache.set(cacheKey, checked.val);
+        return new Ok(checked.val);
+    }
+
+    /**
+     * Checks langs response for generic errors.
+     */
+    private checkLangsResponse<T>(
+        langsResponse: UncheckedLangsResponse,
+        checker: (object: unknown) => object is T,
+    ): Result<LangsResponse<T>, Error> {
+        const message = langsResponse.message || "null";
+        if (langsResponse.status === "crashed") {
+            return new Err(new Error("Langs process crashed: " + message));
+        }
+        if (langsResponse.result === "error") {
+            return new Err(new Error(message));
+        }
+        if (!checker(langsResponse.data)) {
+            return new Err(new Error("Unexpected response data type."));
+        }
+        return new Ok(langsResponse as LangsResponse<T>);
+    }
+
+    /**
+     * Spawns a new tmc-langs-cli process with given arguments.
+     *
+     * @returns Rust process runner.
+     */
+    private spawnLangsProcess(commandArgs: RustProcessArgs): RustProcessRunner {
         const { args, core, env, onStderr, onStdout, stdin } = commandArgs;
         const CORE_ARGS = ["core", "--client-name", CLIENT_NAME];
 
-        let stdout: LangsResponse[] = [];
+        let stdout: UncheckedLangsResponse[] = [];
         let stderr = "";
 
         const executable = this.resources.getCliPath();
@@ -782,7 +842,7 @@ export default class TMC {
                     // Check against broken and output
                     const prepared = `[${chunk.toString().trim().replace(/}\s*{/g, "},{")}]`;
                     const json = JSON.parse(prepared);
-                    if (!is<LangsResponse[]>(json)) {
+                    if (!is<UncheckedLangsResponse[]>(json)) {
                         Logger.error(
                             "Langs response didn't match expected type, received: ",
                             chunk.toString(),
@@ -823,17 +883,6 @@ export default class TMC {
         })();
 
         return { interrupt, result };
-    }
-
-    private nextTempOutputPath(): string {
-        const next = path.join(
-            this.resources.getDataPath(),
-            `temp_${this.nextLangsJsonId++ % 10}.json`,
-        );
-        if (fs.existsSync(next)) {
-            delSync(next, { force: true });
-        }
-        return next;
     }
 
     /**
@@ -968,6 +1017,23 @@ export default class TMC {
     }
 
     /**
+     * @deprecated Rust langs should eventually read the output from STDOUT. Java will be
+     * completely removed.
+     *
+     * @returns Next temporary json file for passing to TMC-langs.
+     */
+    private nextTempOutputPath(): string {
+        const next = path.join(
+            this.resources.getDataPath(),
+            `temp_${this.nextLangsJsonId++ % 10}.json`,
+        );
+        if (fs.existsSync(next)) {
+            delSync(next, { force: true });
+        }
+        return next;
+    }
+
+    /**
      * Unwraps the response, checks the type, and rewraps it with the type error possibly included
      *
      * Note that the current type checking method requires the type checker to be passed as a
@@ -989,58 +1055,6 @@ export default class TMC {
                 : new Err(new ApiError("Incorrect response type"));
         }
         return new Err(result.val);
-    }
-
-    /**
-     * Checks langs response for generic errors.
-     */
-    private checkTMCLangsResponse(langsResult?: LangsResponse): Result<void, Error> {
-        if (langsResult === undefined) {
-            return new Err(new Error("No langs response provided"));
-        }
-        const message = langsResult.message || "null";
-        if (langsResult.status === "crashed") {
-            return new Err(new Error("Langs process crashed: " + message));
-        }
-        if (langsResult.result === "error") {
-            return new Err(new Error(message));
-        }
-        return Ok.EMPTY;
-    }
-
-    private async unwrapLastTMCLangsResponse<T>(
-        langsArgs: RustProcessArgs,
-        checker: (object: unknown) => object is T,
-        cache = false,
-    ): Promise<Result<T, Error>> {
-        const cacheKey = langsArgs.args.join("-");
-        if (cache) {
-            const cached = this.rustCache.get(langsArgs.args.join("-"));
-            if (cached) {
-                return new Ok(cached.data as T);
-            }
-        }
-        const result = await this.executeLangsRustProcess(langsArgs).result;
-        if (result.err) {
-            return result;
-        }
-        const responses = result.val.stdout;
-        if (responses.length === 0) {
-            return new Err(new Error("Langs response missing"));
-        }
-        const last = _.last(responses);
-        if (last === undefined) {
-            return new Err(new Error("No langs response received"));
-        }
-        const check = this.checkTMCLangsResponse(last);
-        if (check.err) {
-            return check;
-        }
-        if (!checker(last.data)) {
-            return new Err(new Error("Incorrect response type"));
-        }
-        this.rustCache.set(cacheKey, last);
-        return new Ok(last.data);
     }
 
     /**
