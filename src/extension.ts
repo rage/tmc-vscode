@@ -149,8 +149,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const authenticated = await tmc.isAuthenticated();
         if (authenticated.err) {
             Logger.error("Failed to check if authenticated", authenticated.val.message);
-        }
-        if (authenticated.val === true) {
+        } else if (authenticated.val) {
             checkForExerciseUpdates(actionContext);
             checkForNewExercises(actionContext);
         }

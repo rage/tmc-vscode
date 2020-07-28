@@ -553,7 +553,7 @@ export default class TMC {
      */
     public runTests(
         id: number,
-        executablePath?: string,
+        pythonExecutablePath?: string,
     ): [Promise<Result<TmcLangsTestResultsRust, Error>>, () => void] {
         if (!this.workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
@@ -564,8 +564,8 @@ export default class TMC {
         }
 
         const env: { [key: string]: string } = {};
-        if (this.isInsider() && executablePath) {
-            env.TMC_LANGS_PYTHON_EXEC = executablePath;
+        if (this.isInsider() && pythonExecutablePath) {
+            env.TMC_LANGS_PYTHON_EXEC = pythonExecutablePath;
         }
         const outputPath = this.nextTempOutputPath();
         const { interrupt, result } = this.spawnLangsProcess({
@@ -578,7 +578,7 @@ export default class TMC {
             ],
             core: false,
             env,
-            onStdout: (res) => Logger.log("Langs", res),
+            onStderr: (data) => Logger.log("Rust Langs", data),
         });
 
         // Temp copypaste, read results from stdout when using new rust version
@@ -752,7 +752,7 @@ export default class TMC {
     ): Promise<Result<LangsResponse<T>, Error>> {
         const cacheKey = langsArgs.args.join("-");
         if (useCache) {
-            const cached = this.rustCache.get(langsArgs.args.join("-"));
+            const cached = this.rustCache.get(cacheKey);
             if (cached && checker(cached.data)) {
                 return new Ok({ ...cached, data: cached.data });
             }
@@ -782,17 +782,18 @@ export default class TMC {
         langsResponse: UncheckedLangsResponse,
         checker: (object: unknown) => object is T,
     ): Result<LangsResponse<T>, Error> {
+        const { data, result, status } = langsResponse;
         const message = langsResponse.message || "null";
-        if (langsResponse.status === "crashed") {
+        if (status === "crashed") {
             return new Err(new Error("Langs process crashed: " + message));
         }
-        if (langsResponse.result === "error") {
+        if (result === "error") {
             return new Err(new Error(message));
         }
-        if (!checker(langsResponse.data)) {
+        if (!checker(data)) {
             return new Err(new Error("Unexpected response data type."));
         }
-        return new Ok(langsResponse as LangsResponse<T>);
+        return new Ok({ ...langsResponse, data, result, status });
     }
 
     /**
@@ -808,7 +809,7 @@ export default class TMC {
         let stderr = "";
 
         const executable = this.resources.getCliPath();
-        Logger.log(executable, JSON.stringify(args));
+        Logger.log(JSON.stringify(executable) + " " + args.map((a) => JSON.stringify(a)).join(" "));
 
         let active = true;
         let interrupted = false;
@@ -929,7 +930,7 @@ export default class TMC {
         let interrupted = false;
         let [stdoutExec, stderrExec] = ["", ""];
 
-        const process = cp.exec(command, (err, stdout, stderr) => {
+        const cprocess = cp.exec(command, (err, stdout, stderr) => {
             active = false;
             stdoutExec = stdout;
             stderrExec = stderr;
@@ -941,8 +942,8 @@ export default class TMC {
 
         const interrupt = (): void => {
             if (active) {
-                Logger.log(`Killing TMC-Langs process ${process.pid}`);
-                kill(process.pid);
+                Logger.log(`Killing TMC-Langs process ${cprocess.pid}`);
+                kill(cprocess.pid);
                 interrupted = true;
             }
         };
@@ -959,7 +960,7 @@ export default class TMC {
                 );
             }, TMC_LANGS_TIMEOUT);
 
-            process.on("exit", (code) => {
+            cprocess.on("exit", (code) => {
                 clearTimeout(timeout);
                 if (error) {
                     return resolve(new Err(error));
@@ -968,8 +969,8 @@ export default class TMC {
                 } else if (code !== null && code > 0) {
                     return resolve(new Err(new Error("Unknown error")));
                 }
-                const stdout = (process.stdout?.read() || "") as string;
-                const stderr = (process.stderr?.read() || "") as string;
+                const stdout = (cprocess.stdout?.read() || "") as string;
+                const stderr = (cprocess.stderr?.read() || "") as string;
                 return resolve(new Ok([stdout, stderr]));
             });
         });
