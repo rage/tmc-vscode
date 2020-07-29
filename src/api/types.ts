@@ -273,20 +273,10 @@ export type TmcLangsTestResultRust = {
 };
 
 export type TmcLangsTestResultsRust = {
-    response: {
-        status:
-            | "PASSED"
-            | "TESTS_FAILED"
-            | "COMPILE_FAILED"
-            | "TESTRUN_INTERRUPTED"
-            | "GENERIC_ERROR";
-        testResults: TmcLangsTestResultRust[];
-        logs: {
-            stdout?: number[];
-            stderr?: number[];
-        };
-    } | null;
-} & TmcLangsLogs;
+    status: "PASSED" | "TESTS_FAILED" | "COMPILE_FAILED" | "TESTRUN_INTERRUPTED" | "GENERIC_ERROR";
+    testResults: TmcLangsTestResultRust[];
+    logs: unknown;
+};
 
 export type TmcLangsPath = {
     response: string;
