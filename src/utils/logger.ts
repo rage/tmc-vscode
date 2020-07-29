@@ -2,13 +2,10 @@ import { OutputChannel, Uri, window } from "vscode";
 
 import { DEBUG_MODE, OUTPUT_CHANNEL_NAME } from "../config/constants";
 
-const emptyStr = "";
-
 export enum LogLevel {
     None = "none",
     Errors = "errors",
     Verbose = "verbose",
-    Debug = "debug",
 }
 
 const channel = `[${OUTPUT_CHANNEL_NAME}]`;
@@ -36,104 +33,48 @@ export class Logger {
         }
     }
 
-    static debug(message: string | undefined, ...params: unknown[]): void {
-        if (this.level !== LogLevel.Debug && !Logger.isDebugging) return;
-        if (Logger.isDebugging) {
-            console.log(this.timestamp, channel, message || emptyStr, ...params);
-        }
-        if (this.output !== undefined && this.level === LogLevel.Debug) {
-            this.output.appendLine(
-                `${this.timestamp} [DEBUG] ${message || emptyStr}${this.toLoggableParams(
-                    true,
-                    params,
-                )}`,
-            );
+    static debug(...params: unknown[]): void {
+        if (DEBUG_MODE && this.output !== undefined) {
+            console.log(this.timestamp, "[DEBUG]", ...params);
+            this.output.appendLine(`${this.timestamp} [DEBUG] ${this.toLoggableParams(params)}`);
         }
     }
 
-    static error(message?: string, ...params: unknown[]): void {
-        if (this.level === LogLevel.None && !Logger.isDebugging) return;
+    static error(...params: unknown[]): void {
+        if (this.level === LogLevel.None && !DEBUG_MODE) return;
 
-        if (Logger.isDebugging) {
-            console.error(this.timestamp, channel, message || emptyStr, ...params);
+        if (DEBUG_MODE) {
+            console.error(this.timestamp, channel, ...params);
         }
 
         if (this.output !== undefined && this.level !== LogLevel.None) {
-            this.output.appendLine(
-                `${this.timestamp} [ERROR] ${message || emptyStr}${this.toLoggableParams(
-                    false,
-                    params,
-                )}`,
-            );
+            this.output.appendLine(`${this.timestamp} [ERROR] ${this.toLoggableParams(params)}`);
         }
     }
 
-    static log(message: string, ...params: unknown[]): void {
-        if (
-            this.level !== LogLevel.Verbose &&
-            this.level !== LogLevel.Debug &&
-            !Logger.isDebugging
-        ) {
+    static log(...params: unknown[]): void {
+        if (this.level !== LogLevel.Verbose && !DEBUG_MODE) {
             return;
         }
 
-        if (Logger.isDebugging) {
-            console.log(this.timestamp, channel, message || emptyStr, ...params);
+        if (DEBUG_MODE) {
+            console.log(this.timestamp, channel, ...params);
         }
 
-        if (
-            this.output !== undefined &&
-            (this.level === LogLevel.Verbose || this.level === LogLevel.Debug)
-        ) {
-            this.output.appendLine(
-                `${this.timestamp} [INFO] ${message || emptyStr}${this.toLoggableParams(
-                    false,
-                    params,
-                )}`,
-            );
+        if (this.output !== undefined && (this.level === LogLevel.Verbose || DEBUG_MODE)) {
+            this.output.appendLine(`${this.timestamp} [INFO] ${this.toLoggableParams(params)}`);
         }
     }
 
-    static logWithDebugParams(message: string, ...params: unknown[]): void {
-        if (
-            this.level !== LogLevel.Verbose &&
-            this.level !== LogLevel.Debug &&
-            !Logger.isDebugging
-        ) {
-            return;
-        }
+    static warn(...params: unknown[]): void {
+        if (this.level === LogLevel.None && !DEBUG_MODE) return;
 
-        if (Logger.isDebugging) {
-            console.log(this.timestamp, channel, message || emptyStr, ...params);
-        }
-
-        if (
-            this.output !== undefined &&
-            (this.level === LogLevel.Verbose || this.level === LogLevel.Debug)
-        ) {
-            this.output.appendLine(
-                `${this.timestamp} [INFO] ${message || emptyStr}${this.toLoggableParams(
-                    true,
-                    params,
-                )}`,
-            );
-        }
-    }
-
-    static warn(message: string, ...params: unknown[]): void {
-        if (this.level === LogLevel.None && !Logger.isDebugging) return;
-
-        if (Logger.isDebugging) {
-            console.warn(this.timestamp, channel, message || emptyStr, ...params);
+        if (DEBUG_MODE) {
+            console.warn(this.timestamp, channel, ...params);
         }
 
         if (this.output !== undefined && this.level !== LogLevel.None) {
-            this.output.appendLine(
-                `${this.timestamp} [WARNING] ${message || emptyStr}${this.toLoggableParams(
-                    false,
-                    params,
-                )}`,
-            );
+            this.output.appendLine(`${this.timestamp} [WARNING] ${this.toLoggableParams(params)}`);
         }
     }
 
@@ -141,10 +82,13 @@ export class Logger {
         if (this.output === undefined) {
             return;
         }
-        this.output.show();
+        if (this.level !== LogLevel.None) {
+            this.output.show();
+        }
     }
 
     static toLoggable(p: unknown): string {
+        if (p instanceof Error) return `${p.name} \u2014 ${p.message} \u2014 ${p.stack}`;
         if (typeof p !== "object") return String(p);
         if (p instanceof Uri) return `Uri(${p.toString(true)})`;
 
@@ -160,27 +104,11 @@ export class Logger {
         return `[${now
             .toISOString()
             .replace(/T/, " ")
-            .replace(/\..+/, emptyStr)}:${`00${now.getUTCMilliseconds()}`.slice(-3)}]`;
+            .replace(/\..+/, "")}:${`00${now.getUTCMilliseconds()}`.slice(-3)}]`;
     }
 
-    private static toLoggableParams(debugOnly: boolean, params: unknown[]): string {
-        if (
-            params.length === 0 ||
-            (debugOnly && this.level !== LogLevel.Debug && !Logger.isDebugging)
-        ) {
-            return emptyStr;
-        }
-
-        const loggableParams = params.map((p) => this.toLoggable(p)).join(", ");
-        return loggableParams.length !== 0 ? ` \u2014 ${loggableParams}` : emptyStr;
-    }
-
-    private static _isDebugging: boolean | undefined;
-    static get isDebugging(): boolean {
-        if (this._isDebugging === undefined) {
-            this._isDebugging = DEBUG_MODE;
-        }
-
-        return this._isDebugging;
+    private static toLoggableParams(params: unknown[]): string {
+        const loggableParams = params.map((p) => this.toLoggable(p)).join("\n");
+        return loggableParams.length !== 0 ? loggableParams : "";
     }
 }

@@ -37,70 +37,80 @@
         "workspaceContains:**/.tmcproject.json",
         "workspaceContains:**/.tmc.json",
         "onView:tmcView",
-        "onCommand:closeExercise",
-        "onCommand:runTests",
-        "onCommand:resetExercise",
-        "onCommand:uploadArchive",
-        "onCommand:selectAction",
-        "onCommand:switchWorkspace"
+        "onCommand:tmc.closeExercise",
+        "onCommand:tmc.runTests",
+        "onCommand:tmc.resetExercise",
+        "onCommand:tmc.uploadArchive",
+        "onCommand:tmc.selectAction",
+        "onCommand:tmc.switchWorkspace"
     ],
     "main": "./dist/extension",
     "contributes": {
         "commands": [
             {
                 "command": "tmcView.activateEntry",
-                "title": "Activate"
+                "title": "Activate",
+                "category": "TestMyCode"
             },
             {
-                "command": "selectAction",
-                "title": "TMC - Menu",
-                "icon": "media/menu.svg"
+                "command": "tmc.selectAction",
+                "title": "Menu",
+                "icon": "media/menu.svg",
+                "category": "TestMyCode"
             },
             {
-                "command": "closeExercise",
-                "title": "TMC - Close exercise"
+                "command": "tmc.closeExercise",
+                "title": "Close exercise",
+                "category": "TestMyCode"
             },
             {
-                "command": "uploadArchive",
-                "title": "TMC - Submit solution"
+                "command": "tmc.uploadArchive",
+                "title": "Submit solution",
+                "category": "TestMyCode"
             },
             {
-                "command": "pasteExercise",
-                "title": "TMC - Paste exercise"
+                "command": "tmc.pasteExercise",
+                "title": "Paste exercise",
+                "category": "TestMyCode"
             },
             {
-                "command": "resetExercise",
-                "title": "TMC - Reset exercise"
+                "command": "tmc.resetExercise",
+                "title": "Reset exercise",
+                "category": "TestMyCode"
             },
             {
-                "command": "switchWorkspace",
-                "title": "TMC - Switch course workspace"
+                "command": "tmc.switchWorkspace",
+                "title": "Switch course workspace",
+                "category": "TestMyCode"
             },
             {
-                "command": "runTests",
-                "title": "TMC - Run tests",
-                "icon": "media/test.svg"
+                "command": "tmc.runTests",
+                "title": "Run tests",
+                "icon": "media/test.svg",
+                "category": "TestMyCode"
             },
             {
-                "command": "downloadOldSubmission",
-                "title": "TMC - Get exercise submissions"
+                "command": "tmc.downloadOldSubmission",
+                "title": "Get exercise submissions",
+                "category": "TestMyCode"
             },
             {
-                "command": "cleanExercise",
-                "title": "TMC - Clean exercise"
+                "command": "tmc.cleanExercise",
+                "title": "Clean exercise",
+                "category": "TestMyCode"
             }
         ],
         "keybindings": [
             {
-                "command": "runTests",
+                "command": "tmc.runTests",
                 "key": "ctrl+shift+t"
             },
             {
-                "command": "closeExercise",
+                "command": "tmc.closeExercise",
                 "key": "ctrl+shift+c"
             },
             {
-                "command": "selectAction",
+                "command": "tmc.selectAction",
                 "key": "ctrl+shift+a"
             }
         ],
@@ -113,12 +123,12 @@
             ],
             "editor/title": [
                 {
-                    "command": "runTests",
+                    "command": "tmc.runTests",
                     "group": "navigation@0",
                     "when": "resourceScheme == file && tmcWorkspaceActive"
                 },
                 {
-                    "command": "selectAction",
+                    "command": "tmc.selectAction",
                     "group": "navigation@1",
                     "when": "resourceScheme == file && tmcWorkspaceActive"
                 }

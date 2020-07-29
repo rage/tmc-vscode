@@ -32,10 +32,10 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("selectAction", async () => {
+        vscode.commands.registerCommand("tmc.selectAction", async () => {
             const exerciseData = workspaceManager.getCurrentExerciseData();
             if (exerciseData.err) {
-                Logger.error(exerciseData.val.message);
+                Logger.error(exerciseData.val.message, exerciseData.val);
                 showError(exerciseData.val.message);
                 return;
             }
@@ -44,7 +44,7 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("uploadArchive", async () => {
+        vscode.commands.registerCommand("tmc.uploadArchive", async () => {
             const exerciseId = workspaceManager.getCurrentExerciseId();
             if (!exerciseId) {
                 Logger.error(errorMessage);
@@ -56,7 +56,7 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("pasteExercise", async () => {
+        vscode.commands.registerCommand("tmc.pasteExercise", async () => {
             const exerciseId = workspaceManager.getCurrentExerciseId();
             if (exerciseId) {
                 const link = await pasteExercise(actionContext, exerciseId);
@@ -73,7 +73,7 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("runTests", async () => {
+        vscode.commands.registerCommand("tmc.runTests", async () => {
             const exerciseId = workspaceManager.getCurrentExerciseId();
             if (!exerciseId) {
                 Logger.error(errorMessage);
@@ -85,7 +85,7 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("resetExercise", async () => {
+        vscode.commands.registerCommand("tmc.resetExercise", async () => {
             const exerciseId = workspaceManager.getCurrentExerciseId();
             if (!exerciseId) {
                 Logger.error(errorMessage);
@@ -94,8 +94,9 @@ export function registerCommands(
             }
             const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
             if (exerciseData.err) {
-                Logger.error("The data for this exercise seems to be missing");
-                showError("The data for this exercise seems to be missing");
+                const message = "The data for this exercise seems to be missing.";
+                Logger.error(message, exerciseData.val);
+                showError(message);
                 return;
             }
 
@@ -110,8 +111,23 @@ export function registerCommands(
 
             const editor = vscode.window.activeTextEditor;
             const resource = editor?.document.uri;
-            await resetExercise(actionContext, exerciseId);
-            await openExercises(actionContext, [exerciseId], exerciseData.val.course);
+            const resetResult = await resetExercise(actionContext, exerciseId);
+            if (resetResult.err) {
+                const message = "Failed to reset currently open exercise.";
+                Logger.error(message, resetResult.val);
+                showError(message);
+                return;
+            }
+            const openResult = await openExercises(
+                actionContext,
+                [exerciseId],
+                exerciseData.val.course,
+            );
+            if (openResult.err) {
+                const message = "Failed to open exercise after reset.";
+                Logger.error(message, openResult.val);
+                showError(message);
+            }
 
             if (editor && resource) {
                 vscode.commands.executeCommand<undefined>(
@@ -126,7 +142,7 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("downloadOldSubmission", async () => {
+        vscode.commands.registerCommand("tmc.downloadOldSubmission", async () => {
             const exerciseId = workspaceManager.getCurrentExerciseId();
             if (!exerciseId) {
                 Logger.error(errorMessage);
@@ -149,7 +165,7 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("closeExercise", async () => {
+        vscode.commands.registerCommand("tmc.closeExercise", async () => {
             const exerciseId = workspaceManager.getCurrentExerciseId();
             if (!exerciseId) {
                 Logger.error(errorMessage);
@@ -159,8 +175,9 @@ export function registerCommands(
 
             const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
             if (exerciseData.err) {
-                Logger.error("The data for this exercise seems to be missing");
-                showError("The data for this exercise seems to be missing");
+                const message = "The data for this exercise seems to be missing.";
+                Logger.error(message, exerciseData.val);
+                showError(message);
                 return;
             }
             if (
@@ -175,8 +192,10 @@ export function registerCommands(
                     exerciseData.val.course,
                 );
                 if (result.err) {
-                    Logger.error(result.val.message);
-                    showError(result.val.message);
+                    const message = "Error when closing exercise.";
+                    Logger.error(message, result.val);
+                    showError(message);
+                    return;
                 }
                 vscode.commands.executeCommand("workbench.action.closeActiveEditor");
             }
@@ -184,14 +203,14 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("switchWorkspace", async () => {
+        vscode.commands.registerCommand("tmc.switchWorkspace", async () => {
             const courses = userData.getCourses();
             const currentWorkspace = vscode.workspace.name?.split(" ")[0];
             const courseWorkspace = await askForItem(
                 "Select a course workspace to open",
                 false,
                 ...courses.map<[string, LocalCourseData]>((c) => [
-                    c.name === currentWorkspace ? `${c.name} (Open)` : c.name,
+                    c.name === currentWorkspace ? `${c.name} (Currently open)` : c.name,
                     c,
                 ]),
             );
@@ -202,7 +221,7 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("cleanExercise", async () => {
+        vscode.commands.registerCommand("tmc.cleanExercise", async () => {
             const exerciseId = workspaceManager.getCurrentExerciseId();
             if (!exerciseId) {
                 Logger.error(errorMessage);
@@ -211,7 +230,9 @@ export function registerCommands(
             }
             const result = await cleanExercise(actionContext, exerciseId);
             if (result.err) {
-                showError("Failed to clean exercise.");
+                const message = "Failed to clean exercise.";
+                Logger.error(message, result.val);
+                showError(message);
             }
         }),
     );

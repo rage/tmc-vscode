@@ -23,28 +23,28 @@ export async function selectAction(
         ["Submit to server", (): Promise<void> => submitExercise(actionContext, exercise.id)],
         [
             "Upload to TMC Pastebin",
-            (): Thenable<void> => vscode.commands.executeCommand("pasteExercise"),
+            (): Thenable<void> => vscode.commands.executeCommand("tmc.pasteExercise"),
         ],
         [
             "Close exercise (CTRL + SHIFT + C)",
-            async (): Promise<void> => await vscode.commands.executeCommand("closeExercise"),
+            async (): Promise<void> => await vscode.commands.executeCommand("tmc.closeExercise"),
         ],
         [
             "Reset exercise",
-            async (): Promise<void> => await vscode.commands.executeCommand("resetExercise"),
+            async (): Promise<void> => await vscode.commands.executeCommand("tmc.resetExercise"),
         ],
         [
             "Download old submission",
             async (): Promise<void> =>
-                await vscode.commands.executeCommand("downloadOldSubmission"),
+                await vscode.commands.executeCommand("tmc.downloadOldSubmission"),
         ],
         [
             "Clean exercise meta files",
-            async (): Promise<void> => await vscode.commands.executeCommand("cleanExercise"),
+            async (): Promise<void> => await vscode.commands.executeCommand("tmc.cleanExercise"),
         ],
         [
             "Change course workspace",
-            async (): Promise<void> => await vscode.commands.executeCommand("switchWorkspace"),
+            async (): Promise<void> => await vscode.commands.executeCommand("tmc.switchWorkspace"),
         ],
     ];
 

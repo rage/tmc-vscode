@@ -20,7 +20,6 @@ import {
     formatSizeInBytes,
     isCorrectWorkspaceOpen,
     Logger,
-    LogLevel,
     parseFeedbackQuestion,
     sleep,
 } from "../utils/";
@@ -69,9 +68,9 @@ export async function logout(
         const { tmc, ui } = actionContext;
         const result = await tmc.deauthenticate();
         if (result.err) {
-            showError("Failed to log out.");
-            Logger.error("Failed to log out", result.val);
-            Logger.show();
+            const message = "Failed to log out.";
+            showError(message);
+            Logger.error(message, result.val);
             return;
         }
         ui.webview.dispose();
@@ -84,19 +83,11 @@ export async function logout(
  * Tests an exercise while keeping the user informed
  */
 export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const {
-        ui,
-        tmc,
-        userData,
-        workspaceManager,
-        temporaryWebviewProvider,
-        vsc,
-        settings,
-    } = actionContext;
+    const { ui, tmc, userData, workspaceManager, temporaryWebviewProvider, vsc } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
-        const message = `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`;
-        Logger.error(message);
+        const message = "Getting exercise details failed when testing exercise.";
+        Logger.error(message, exerciseDetails.val);
         showError(message);
         return;
     }
@@ -150,19 +141,9 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
                 },
             });
             temporaryWebviewProvider.addToRecycables(temp);
-            const message = `Exercise test run failed: ${testResult.val.name} - ${testResult.val.message}`;
-            Logger.error(message);
-            showError(
-                message,
-                settings.getLogLevel() !== LogLevel.None
-                    ? [
-                          "Show logs",
-                          (): void => {
-                              Logger.show();
-                          },
-                      ]
-                    : ["Ok", (): void => {}],
-            );
+            const message = "Exercise test run failed.";
+            Logger.error(message, testResult.val);
+            showError(message);
             return;
         }
         ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
@@ -206,8 +187,8 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
     const submitResult = await tmc.submitExercise(id);
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
-        const message = `Getting exercise details failed: ${exerciseDetails.val.name} - ${exerciseDetails.val.message}`;
-        Logger.error(message);
+        const message = "Getting exercise details failed when submitting exercise.";
+        Logger.error(message, exerciseDetails.val);
         showError(message);
         return;
     }
@@ -225,8 +206,8 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
                 }
             },
         });
-        const message = `Exercise submission failed: ${submitResult.val.name} - ${submitResult.val.message}`;
-        Logger.error(message);
+        const message = "Exercise submission failed.";
+        Logger.error(message, submitResult.val);
         showError(message);
         return;
     }
@@ -278,8 +259,8 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
     while (getStatus) {
         const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
         if (statusResult.err) {
-            const message = `Failed getting submission status: ${statusResult.val.name} - ${statusResult.val.message}`;
-            Logger.error(message);
+            const message = "Failed getting submission status.";
+            Logger.error(message, statusResult.val);
             showError(message);
             break;
         }
@@ -372,15 +353,15 @@ export async function pasteExercise(
     params.set("paste", "1");
     const submitResult = await tmc.submitExercise(id, params);
 
-    const errorMessage = "Failed to send exercise to TMC pastebin";
+    const errorMessage = "Failed to send exercise to TMC pastebin.";
     if (submitResult.err) {
         Logger.error(errorMessage, submitResult.val);
-        showError(`${errorMessage}: ${submitResult.val.message}`);
+        showError(errorMessage);
         return undefined;
     } else if (!submitResult.val.paste_url) {
         const notProvided = "Paste link was not provided by the server.";
-        Logger.warn(errorMessage, notProvided);
-        showError(`${errorMessage}: ${notProvided}`);
+        Logger.warn(errorMessage, notProvided, submitResult.val);
+        showError(errorMessage + " " + notProvided);
         return undefined;
     }
 
@@ -414,7 +395,7 @@ export async function checkForNewExercises(
                     async (): Promise<void> => {
                         const newIds = Array.from(course.newExercises);
                         await userData.clearNewExercises(course.id);
-                        await openExercises(
+                        const openResult = await openExercises(
                             actionContext,
                             await downloadExercises(actionContext, [
                                 {
@@ -426,6 +407,11 @@ export async function checkForNewExercises(
                             ]),
                             course.name,
                         );
+                        if (openResult.err) {
+                            const message = "Failed to open new exercises.";
+                            Logger.error(message, openResult.val);
+                            showError(message);
+                        }
                     },
                 ],
                 [
@@ -488,8 +474,9 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
     Logger.log("Display extension settings");
     const extensionSettings = await settings.getExtensionSettings();
     if (extensionSettings.err) {
-        Logger.error("Failed to fetch Settings: ", extensionSettings);
-        showError(`Failed to fetch Settings: ${extensionSettings.val}`);
+        const message = "Failed to fetch Settings.";
+        Logger.error(message, extensionSettings.val);
+        showError(message);
         return;
     }
     ui.webview.setContentFromTemplate(
@@ -571,11 +558,16 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
     const { userData, workspaceManager, resources } = actionContext;
     const course = userData.getCourse(id);
     Logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
-    await closeExercises(
+    const closeResult = await closeExercises(
         actionContext,
         course.exercises.map((e) => e.id),
         course.name,
     );
+    if (closeResult.err) {
+        const message = "Failed to close exercises while removing course.";
+        Logger.error(message, closeResult.val);
+        showError(message);
+    }
     const exercises = workspaceManager.getExercisesByCourseName(course.name);
     const missingIds = exercises
         .filter((e) => e.status === ExerciseStatus.MISSING)

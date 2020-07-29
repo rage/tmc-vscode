@@ -26,8 +26,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const resourcesResult = await init.resourceInitialization(context, storage);
     if (resourcesResult.err) {
-        const message = `TestMyCode Initialization failed: ${resourcesResult.val}`;
-        Logger.error(message);
+        const message = "TestMyCode Initialization failed.";
+        Logger.error(message, resourcesResult.val);
         showError(message);
         return;
     }
@@ -57,8 +57,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const validationResult = await validateAndFix(storage, tmc, ui, resources);
     if (validationResult.err) {
-        const message = `Data reconstruction failed: ${validationResult.val.message}`;
-        Logger.error(message);
+        const message = "Data reconstruction failed.";
+        Logger.error(message, validationResult.val);
         showError(message);
         return;
     }
@@ -99,7 +99,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (fs.existsSync(closedPath)) {
             const ok = await workspaceManager.moveFolder(closedPath, openPath);
             if (ok.err) {
-                Logger.error("Error while moving", ok.val);
+                const message = "Error while moving folders.";
+                Logger.error(message, ok.val);
+                showError(message);
             }
         }
     });

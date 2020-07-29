@@ -51,6 +51,7 @@ import {
     TmcLangsResponse,
     TmcLangsTestResultsRust,
 } from "./types";
+import { showError } from "./vscode";
 import WorkspaceManager from "./workspaceManager";
 
 interface RustProcessArgs {
@@ -481,7 +482,7 @@ export default class TMC {
             );
 
             if (downloadResult.err) {
-                Logger.error("Downloading failed", downloadResult.val.message);
+                Logger.error("Downloading failed", downloadResult.val);
                 await this.workspaceManager.deleteExercise(id);
             }
 
@@ -519,7 +520,7 @@ export default class TMC {
             );
 
             if (extractResult.err) {
-                Logger.error("Extracting failed", extractResult);
+                Logger.error("Extracting failed", extractResult.val);
                 await this.workspaceManager.deleteExercise(id);
             }
 
@@ -1093,7 +1094,7 @@ export default class TMC {
                     }
 
                     Logger.error("Unexpected response JSON type", result.val);
-                    Logger.show();
+                    showError("Unexpected response JSON type.");
                     return resolve(new Err(new Error("Unexpected response JSON type")));
                 });
             }),

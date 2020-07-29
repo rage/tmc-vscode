@@ -6,7 +6,7 @@
 
 import * as _ from "lodash";
 import * as pLimit from "p-limit";
-import { Err, Ok, Result } from "ts-results";
+import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { OldSubmission } from "../api/types";
@@ -76,7 +76,7 @@ export async function downloadExercises(
                     failed.push(state);
                     Logger.error(
                         `Failed to download ${state.organizationSlug}/${state.name}`,
-                        res.val.message,
+                        res.val,
                     );
                 }
                 resolve();
@@ -121,11 +121,9 @@ export async function downloadExercises(
     );
 
     if (failed.length > 0) {
-        Logger.warn("Some exercises failed to download");
-        showError("Some exercises failed to download, please try again later.", [
-            "Details",
-            (): void => Logger.show(),
-        ]);
+        const message = "Some exercises failed to download, please try again later.";
+        Logger.warn(message);
+        showError(message);
     }
 
     return successful.map((x) => x.id);
@@ -194,11 +192,16 @@ export async function checkForExerciseUpdates(
                         message: { command: "setUpdateables", exerciseIds: [] },
                     });
                     coursesToUpdate.forEach(async (courseDL) => {
-                        await openExercises(
+                        const openResult = await openExercises(
                             actionContext,
                             _.intersection(successful, courseDL.exerciseIds),
                             courseDL.courseName,
                         );
+                        if (openResult.err) {
+                            const message = "Failed to open updated exercises.";
+                            Logger.error(message, openResult.val);
+                            showError(message);
+                        }
                     });
                 },
             ],
@@ -227,7 +230,6 @@ export async function cleanExercise(
 
     const cleanResult = await tmc.clean(id);
     if (cleanResult.err) {
-        Logger.error(cleanResult.val.message);
         return cleanResult;
     }
     return Ok.EMPTY;
@@ -254,9 +256,10 @@ export async function resetExercise(
     const exerciseData = workspaceManager.getExerciseDataById(id);
 
     if (exerciseData.err) {
-        const message = "The data for this exercise seems to be missing";
+        const message = "Reset exercise: The data for this exercise seems to be missing";
+        Logger.error(message, exerciseData.val);
         showError(message);
-        return new Err(exerciseData.val);
+        return exerciseData;
     }
 
     const submitFirst =
@@ -275,25 +278,31 @@ export async function resetExercise(
     } else if (submitFirst) {
         const submitResult = await tmc.submitExercise(id);
         if (submitResult.err) {
-            const message = `Reset canceled, failed to submit exercise: ${submitResult.val.name} - ${submitResult.val.message}`;
-            Logger.error(message);
-            showError(message);
+            Logger.error("Reset canceled, failed to submit exercise.");
             ui.setStatusBar(
                 `Something went wrong while resetting exercise ${exerciseData.val.name}`,
                 10000,
             );
-            return new Err(submitResult.val);
+            return submitResult;
         }
     }
 
     ui.setStatusBar(`Resetting exercise ${exerciseData.val.name}`);
 
     const slug = exerciseData.val.organization;
-    await closeExercises(actionContext, [id], exerciseData.val.course);
+    const closeResult = await closeExercises(actionContext, [id], exerciseData.val.course);
+    if (closeResult.err) {
+        const message = "Failed to close exercise when resetting.";
+        Logger.error(message);
+        return closeResult;
+    }
     await vscode.commands.executeCommand("workbench.action.files.save");
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
     await workspaceManager.deleteExercise(id);
-    await tmc.downloadExercise(id, slug);
+    const dlResult = await tmc.downloadExercise(id, slug);
+    if (dlResult.err) {
+        return dlResult;
+    }
     ui.setStatusBar(`Exercise ${exerciseData.val.name} resetted successfully`, 10000);
     return Ok.EMPTY;
 }
@@ -312,8 +321,7 @@ export async function openExercises(
     const result = await workspaceManager.openExercise(courseName, ...ids);
 
     if (result.err) {
-        Logger.error("Error when opening file", result.val.message, result.val.stack);
-        return new Err(new Error("Something went wrong while opening exercises."));
+        return result;
     }
 
     ui.webview.postMessage(
@@ -343,8 +351,7 @@ export async function closeExercises(
     const result = await workspaceManager.closeExercise(courseName, ...ids);
 
     if (result.err) {
-        Logger.error("Error when opening file", result.val.message, result.val.stack);
-        return new Err(new Error("Something went wrong while opening exercises."));
+        return result;
     }
 
     ui.webview.postMessage(
@@ -374,15 +381,15 @@ export async function downloadOldSubmissions(
 
     const exercise = workspaceManager.getExerciseDataById(exerciseId);
     if (exercise.err) {
-        Logger.error("Exercise data missing");
+        Logger.error("Exercise data missing", exercise.val);
         showError("Exercise data missing");
         return;
     }
 
     const response = await getOldSubmissions(actionContext);
     if (response.err) {
-        const message = `Something went wrong while fetching old submissions: ${response.val.message}`;
-        Logger.error(message);
+        const message = "Something went wrong while fetching old submissions.";
+        Logger.error(message, response.val);
         showError(message);
         return;
     }
@@ -409,18 +416,24 @@ export async function downloadOldSubmissions(
 
     const resetResult = await resetExercise(actionContext, exerciseId);
     if (resetResult.err) {
-        const message = `Something went wrong while downloading old submission for exercise: ${resetResult.val}`;
-        Logger.error(message);
+        const message = "Something went wrong while resetting exercise.";
+        Logger.error(message, resetResult.val);
         showError(message);
         return;
     }
 
     const oldSub = await tmc.downloadOldExercise(exercise.val.id, submission.id);
     if (oldSub.err) {
-        const message = `Something went wrong while downloading old submission for exercise: ${oldSub.val}`;
-        Logger.error(message);
+        const message = "Something went wrong while downloading old submission for exercise.";
+        Logger.error(message, oldSub.val);
         showError(message);
         return;
     }
-    await openExercises(actionContext, [exercise.val.id], exercise.val.course);
+    const openResult = await openExercises(actionContext, [exercise.val.id], exercise.val.course);
+    if (openResult.err) {
+        const message = "Failed to open exercise after downloading old submission.";
+        Logger.error(message, openResult.val);
+        showError(message);
+        return;
+    }
 }
