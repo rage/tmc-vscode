@@ -168,10 +168,10 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
         Logger.log(`Tests finished for ${exerciseName}`);
         data = {
-            testResult: testResult.val.response,
+            testResult: testResult.val,
             id,
             exerciseName,
-            tmcLogs: testResult.val.logs,
+            tmcLogs: {},
             disabled: userData.getCourseByName(exerciseDetails.val.course).disabled,
         };
     }

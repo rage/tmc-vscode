@@ -664,27 +664,19 @@ export default class TMC {
             onStderr: (data) => Logger.log("Rust Langs", data),
         });
 
-        // Temp copypaste, read results from stdout when using new rust version
         const postResult: Promise<Result<TmcLangsTestResultsRust, Error>> = result.then((res) => {
             if (res.err) {
                 return res;
             }
 
-            const readResult = {
-                response: JSON.parse(fs.readFileSync(outputPath, "utf8")),
-                logs: {
-                    stdout: res.val.stdout.join(""),
-                    stderr: res.val.stderr,
-                },
-            };
-
-            if (is<TmcLangsTestResultsRust>(readResult)) {
-                return new Ok(readResult);
+            const last = _.last(res.val.stdout);
+            if (!last) {
+                return new Err(new Error("Langs response missing"));
             }
 
-            Logger.error("Unexpected response JSON type", readResult);
-            Logger.show();
-            return new Err(new RuntimeError("Unexpected response JSON type"));
+            return this.checkLangsResponse(last, createIs<TmcLangsTestResultsRust>()).map(
+                (r) => r.data,
+            );
         });
 
         return [postResult, interrupt];
@@ -723,6 +715,7 @@ export default class TMC {
                   ]
                 : [
                       "submit",
+                      "--dont-block",
                       "--submission-path",
                       exerciseFolderPath.val,
                       "--submission-url",
@@ -889,7 +882,13 @@ export default class TMC {
      */
     private spawnLangsProcess(commandArgs: RustProcessArgs): RustProcessRunner {
         const { args, core, env, onStderr, onStdout, stdin } = commandArgs;
-        const CORE_ARGS = ["core", "--client-name", CLIENT_NAME];
+        const CORE_ARGS = [
+            "core",
+            "--client-name",
+            CLIENT_NAME,
+            "--client-version",
+            this.resources.extensionVersion,
+        ];
 
         let stdout: UncheckedLangsResponse[] = [];
         let stderr = "";
