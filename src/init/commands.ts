@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import {
+    cleanExercise,
     closeExercises,
     downloadOldSubmissions,
     openExercises,
@@ -196,6 +197,21 @@ export function registerCommands(
             );
             if (courseWorkspace) {
                 openWorkspace(actionContext, courseWorkspace.name);
+            }
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("cleanExercise", async () => {
+            const exerciseId = workspaceManager.getCurrentExerciseId();
+            if (!exerciseId) {
+                Logger.error(errorMessage);
+                showError(errorMessage);
+                return;
+            }
+            const result = await cleanExercise(actionContext, exerciseId);
+            if (result.err) {
+                showError("Failed to clean exercise.");
             }
         }),
     );

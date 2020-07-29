@@ -39,6 +39,10 @@ export async function selectAction(
                 await vscode.commands.executeCommand("downloadOldSubmission"),
         ],
         [
+            "Clean exercise meta files",
+            async (): Promise<void> => await vscode.commands.executeCommand("cleanExercise"),
+        ],
+        [
             "Change course workspace",
             async (): Promise<void> => await vscode.commands.executeCommand("switchWorkspace"),
         ],

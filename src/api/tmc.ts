@@ -257,6 +257,28 @@ export default class TMC {
         return new Ok(this.token !== undefined);
     }
 
+    public async clean(id: number): Promise<Result<void, Error>> {
+        if (!this.workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
+        }
+
+        const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
+        if (exerciseFolderPath.err) {
+            return new Err(new Error("Couldn't find exercise path for exercise"));
+        }
+
+        const result = await this.executeLangsCommand(
+            { args: ["clean", "--exercise-path", exerciseFolderPath.val], core: false },
+            createIs<unknown>(),
+            false,
+        );
+        if (result.err) {
+            return result;
+        }
+
+        return Ok.EMPTY;
+    }
+
     /**
      * @returns a list of organizations
      */
@@ -846,6 +868,9 @@ export default class TMC {
         const { data, result, status } = langsResponse;
         const message = langsResponse.message || "null";
         if (status === "crashed") {
+            if (is<string[]>(data)) {
+                Logger.error(data.join("\n"));
+            }
             return new Err(new Error("Langs process crashed: " + message));
         }
         if (result === "error") {
