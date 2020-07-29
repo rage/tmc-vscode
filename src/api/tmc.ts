@@ -715,6 +715,7 @@ export default class TMC {
                   ]
                 : [
                       "submit",
+                      "--dont-block",
                       "--submission-path",
                       exerciseFolderPath.val,
                       "--submission-url",
