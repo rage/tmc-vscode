@@ -215,6 +215,24 @@ export async function checkForExerciseUpdates(
     return Array.from(coursesToUpdate.values());
 }
 
+/**
+ * Removes language specific meta files from exercise directory.
+ * @param id ID of the exercise to reset.
+ */
+export async function cleanExercise(
+    actionContext: ActionContext,
+    id: number,
+): Promise<Result<void, Error>> {
+    const { tmc } = actionContext;
+
+    const cleanResult = await tmc.clean(id);
+    if (cleanResult.err) {
+        Logger.error(cleanResult.val.message);
+        return cleanResult;
+    }
+    return Ok.EMPTY;
+}
+
 interface ResetOptions {
     /** Whether to submit current state, asks user if not defined. */
     submitCurrent?: boolean;
