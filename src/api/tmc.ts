@@ -416,26 +416,14 @@ export default class TMC {
         }
         const archivePath = path.join(`${this.resources.getDataPath()}`, `${id}.zip`);
 
-        const result = await downloadFile(
-            `${this.tmcApiUrl}core/exercises/${id}/download`,
-            archivePath,
-            this.tmcDefaultHeaders,
-            this.token,
-            progressCallback,
-        );
-        if (result.err) {
-            return new Err(result.val);
-        }
-
         const detailsResult = await this.getExerciseDetails(id, true);
         if (detailsResult.err) {
-            return new Err(detailsResult.val);
+            return detailsResult;
         }
 
         const courseResult = await this.getCourseDetails(detailsResult.val.course_id);
-
         if (courseResult.err) {
-            return new Err(courseResult.val);
+            return courseResult;
         }
 
         const exercise = courseResult.val.course.exercises.find((x) => x.id === id);
@@ -443,35 +431,80 @@ export default class TMC {
             return new Err(new Error("Exercise somehow missing from course"));
         }
 
-        // TODO: Extract to a different location and handle pass that to ExerciseManager
-        const exercisePath = await this.workspaceManager.createExerciseDownloadPath(
-            exercise.soft_deadline,
-            organizationSlug,
-            exercise.checksum,
-            detailsResult.val,
-        );
+        if (this.isInsider()) {
+            // TODO post-insider: Pass this location directly to this function
+            const exercisePath = await this.workspaceManager.createExerciseDownloadPath(
+                exercise.soft_deadline,
+                organizationSlug,
+                exercise.checksum,
+                detailsResult.val,
+            );
 
-        if (exercisePath.err) {
-            return new Err(exercisePath.val);
-        }
+            if (exercisePath.err) {
+                return exercisePath;
+            }
 
-        const extractResult = await this.checkApiResponse(
-            this.executeLangsAction({
-                action: "extract-project",
+            const downloadResult = await this.executeLangsCommand(
+                {
+                    args: [
+                        "download-or-update-exercises",
+                        "--exercise",
+                        id.toString(),
+                        exercisePath.val,
+                    ],
+                    core: true,
+                },
+                createIs<unknown>(),
+                false,
+            );
+
+            if (downloadResult.err) {
+                Logger.error("Downloading failed", downloadResult.val.message);
+                await this.workspaceManager.deleteExercise(id);
+            }
+
+            return Ok.EMPTY;
+        } else {
+            const result = await downloadFile(
+                `${this.tmcApiUrl}core/exercises/${id}/download`,
                 archivePath,
-                exerciseFolderPath: exercisePath.val,
-            })[0],
-            createIs<TmcLangsPath>(),
-        );
+                this.tmcDefaultHeaders,
+                this.token,
+                progressCallback,
+            );
+            if (result.err) {
+                return result;
+            }
 
-        if (extractResult.err) {
-            Logger.error("Extracting failed", extractResult);
-            await this.workspaceManager.deleteExercise(id);
+            const exercisePath = await this.workspaceManager.createExerciseDownloadPath(
+                exercise.soft_deadline,
+                organizationSlug,
+                exercise.checksum,
+                detailsResult.val,
+            );
+
+            if (exercisePath.err) {
+                return exercisePath;
+            }
+
+            const extractResult = await this.checkApiResponse(
+                this.executeLangsAction({
+                    action: "extract-project",
+                    archivePath,
+                    exerciseFolderPath: exercisePath.val,
+                })[0],
+                createIs<TmcLangsPath>(),
+            );
+
+            if (extractResult.err) {
+                Logger.error("Extracting failed", extractResult);
+                await this.workspaceManager.deleteExercise(id);
+            }
+
+            delSync(archivePath, { force: true });
+
+            return Ok.EMPTY;
         }
-
-        delSync(archivePath, { force: true });
-
-        return Ok.EMPTY;
     }
 
     public async downloadOldExercise(
@@ -486,6 +519,34 @@ export default class TMC {
         if (exercisePath.err) {
             return new Err(new Error("Couldn't find exercise path for exercise"));
         }
+
+        // TODO: Finish insider version when this command is fixed in Langs
+        // -- Insider implementation --
+        /* if (this.isInsider()) {
+            const asd = await this.executeLangsCommand(
+                {
+                    args: [
+                        "download-old-submission",
+                        "--exercise-id",
+                        exerciseId.toString(),
+                        "--submission-id",
+                        submissionId.toString(),
+                        "--output-path",
+                        exercisePath.val,
+                    ],
+                    core: true,
+                    onStderr: (e) => Logger.warn("e", e),
+                    onStdout: (o) => Logger.warn("o", JSON.stringify(o)),
+                },
+                createIs<unknown>(),
+                false,
+            );
+            if (asd.err) {
+                return asd;
+            }
+            return new Ok("Old submission downloaded succesfully");
+        } */
+        // -- End of insider implementation --
 
         const exPath = exercisePath.val + "/";
         const userFilePaths = await this.checkApiResponse(
