@@ -115,7 +115,16 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
             }
             const successful = await downloadExercises(actionContext, [downloads]);
             if (successful.length !== 0) {
-                await openExercises(actionContext, successful, downloads.courseName);
+                const openResult = await openExercises(
+                    actionContext,
+                    successful,
+                    downloads.courseName,
+                );
+                if (openResult.err) {
+                    const message = "Failed to open exercises after download.";
+                    Logger.error(message, openResult.val);
+                    showError(message);
+                }
             }
         },
     );
@@ -183,15 +192,9 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
             }
             const result = await openExercises(actionContext, msg.ids, msg.courseName);
             if (result.err) {
-                Logger.error(
-                    `Error while opening exercises - ${result.val.message}`,
-                    result.val.stack,
-                );
-                const buttons: Array<[string, () => void]> = [];
-                settings.getLogLevel() !== LogLevel.None
-                    ? buttons.push(["Open logs", (): void => Logger.show()])
-                    : buttons.push(["Ok", (): void => {}]);
-                showError(`${result.val.name} - ${result.val.message}`, ...buttons);
+                const message = "Error while opening exercises.";
+                Logger.error(message, result.val);
+                showError(message);
             }
         },
     );
@@ -203,12 +206,9 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
             }
             const result = await closeExercises(actionContext, msg.ids, msg.courseName);
             if (result.err) {
-                Logger.error(`Error while closing exercises - ${result.val.message}`);
-                const buttons: Array<[string, () => void]> = [];
-                settings.getLogLevel() !== LogLevel.None
-                    ? buttons.push(["Open logs", (): void => Logger.show()])
-                    : buttons.push(["Ok", (): void => {}]);
-                showError(`${result.val.name} - ${result.val.message}`, ...buttons);
+                const message = "Error while closing selected exercises.";
+                Logger.error(message, result.val);
+                showError(message);
             }
         },
     );
@@ -262,7 +262,7 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
                     );
                 }
             } else {
-                Logger.error(res.val.message);
+                Logger.error(res.val);
                 showError(res.val.message);
             }
             openSettings(actionContext);

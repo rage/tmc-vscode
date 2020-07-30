@@ -51,6 +51,7 @@ import {
     TmcLangsResponse,
     TmcLangsTestResultsRust,
 } from "./types";
+import { showError } from "./vscode";
 import WorkspaceManager from "./workspaceManager";
 
 interface RustProcessArgs {
@@ -264,7 +265,7 @@ export default class TMC {
 
         const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
         if (exerciseFolderPath.err) {
-            return new Err(new Error("Couldn't find exercise path for exercise"));
+            return exerciseFolderPath;
         }
 
         const result = await this.executeLangsCommand(
@@ -481,7 +482,7 @@ export default class TMC {
             );
 
             if (downloadResult.err) {
-                Logger.error("Downloading failed", downloadResult.val.message);
+                Logger.error("Downloading failed", downloadResult.val);
                 await this.workspaceManager.deleteExercise(id);
             }
 
@@ -519,7 +520,7 @@ export default class TMC {
             );
 
             if (extractResult.err) {
-                Logger.error("Extracting failed", extractResult);
+                Logger.error("Extracting failed", extractResult.val);
                 await this.workspaceManager.deleteExercise(id);
             }
 
@@ -539,7 +540,7 @@ export default class TMC {
 
         const exercisePath = this.workspaceManager.getExercisePathById(exerciseId);
         if (exercisePath.err) {
-            return new Err(new Error("Couldn't find exercise path for exercise"));
+            exercisePath;
         }
 
         // TODO: Finish insider version when this command is fixed in Langs
@@ -580,7 +581,7 @@ export default class TMC {
         );
 
         if (userFilePaths.err) {
-            return new Err(new Error("Couldn't resolve userfiles from exercise files"));
+            return userFilePaths;
         }
 
         const archivePath = path.join(`${this.resources.getDataPath()}`, `${submissionId}.zip`);
@@ -592,7 +593,7 @@ export default class TMC {
         );
 
         if (downloadResult.err) {
-            return new Err(downloadResult.val);
+            return downloadResult;
         }
 
         const oldSubmissionTempPath = path.join(this.resources.getDataPath(), "temp");
@@ -606,12 +607,12 @@ export default class TMC {
         );
 
         if (extractResult.err) {
-            return new Err(new Error("Something went wrong while extracting the submission."));
+            return extractResult;
         }
 
         const closedExPath = this.workspaceManager.getExercisePathById(exerciseId);
         if (closedExPath.err) {
-            return new Err(new Error("?????"));
+            return closedExPath;
         }
 
         userFilePaths.val.response.studentFilePaths.forEach((dataPath) => {
@@ -643,7 +644,7 @@ export default class TMC {
         }
         const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
         if (exerciseFolderPath.err) {
-            return [Promise.resolve(new Err(new Error("???"))), (): void => {}];
+            return [Promise.resolve(exerciseFolderPath), (): void => {}];
         }
 
         const env: { [key: string]: string } = {};
@@ -696,7 +697,7 @@ export default class TMC {
         const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
 
         if (exerciseFolderPath.err) {
-            return new Err(new Error("Couldn't get the exercise path"));
+            return exerciseFolderPath;
         }
 
         // -- Insider implementation --
@@ -743,7 +744,7 @@ export default class TMC {
             createIs<TmcLangsPath>(),
         );
         if (compressResult.err) {
-            return new Err(compressResult.val);
+            return compressResult;
         }
 
         const archivePath = compressResult.val.response as string;
@@ -862,11 +863,14 @@ export default class TMC {
         const message = langsResponse.message || "null";
         if (status === "crashed") {
             if (is<string[]>(data)) {
-                Logger.error(data.join("\n"));
+                Logger.error("TMC Langs crashed.", data.join("\n"));
             }
             return new Err(new Error("Langs process crashed: " + message));
         }
         if (result === "error") {
+            if (is<string[]>(data)) {
+                Logger.error("TMC Langs errored.", data.join("\n"));
+            }
             return new Err(new Error(message));
         }
         if (!checker(data)) {
@@ -1068,7 +1072,7 @@ export default class TMC {
                     }
 
                     if (result.err) {
-                        return resolve(new Err(result.val));
+                        return resolve(result);
                     }
 
                     const stdout = result.val[0] ? result.val[0] : stdoutExec;
@@ -1092,7 +1096,7 @@ export default class TMC {
                     }
 
                     Logger.error("Unexpected response JSON type", result.val);
-                    Logger.show();
+                    showError("Unexpected response JSON type.");
                     return resolve(new Err(new Error("Unexpected response JSON type")));
                 });
             }),

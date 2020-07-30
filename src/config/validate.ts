@@ -26,7 +26,7 @@ export async function validateAndFix(
     if (!is<LocalExerciseData[]>(exerciseData) && is<unknown[]>(exerciseData)) {
         const login = await ensureLogin(tmc, ui, resources);
         if (login.err) {
-            return new Err(login.val);
+            return login;
         }
 
         Logger.log("Fixing workspacemanager data");
@@ -94,7 +94,7 @@ export async function validateAndFix(
     if (!is<{ courses: LocalCourseData[] }>(userData) && is<{ courses: unknown[] }>(userData)) {
         const login = await ensureLogin(tmc, ui, resources);
         if (login.err) {
-            return new Err(login.val);
+            return login;
         }
         Logger.log("Fixing userdata");
 
@@ -225,7 +225,7 @@ async function findCourseInfo(
 ): Promise<Result<number, Error>> {
     const coursesResult = await tmc.getCourses(org, true);
     if (coursesResult.err) {
-        return new Err(coursesResult.val);
+        return coursesResult;
     }
 
     const courseId = coursesResult.val.find((x) => x.name === course)?.id;
@@ -242,7 +242,7 @@ async function getCourseDetails(
 ): Promise<Result<CourseDetails, Error>> {
     const courseId = await findCourseInfo(tmc, org, course);
     if (courseId.err) {
-        return new Err(courseId.val);
+        return courseId;
     }
     return tmc.getCourseDetails(courseId.val, true);
 }
@@ -254,7 +254,7 @@ async function getCourseExercises(
 ): Promise<Result<CourseExercise[], Error>> {
     const courseId = await findCourseInfo(tmc, org, course);
     if (courseId.err) {
-        return new Err(courseId.val);
+        return courseId;
     }
     return tmc.getCourseExercises(courseId.val, true);
 }
@@ -266,7 +266,7 @@ async function getCourseSettings(
 ): Promise<Result<CourseSettings, Error>> {
     const courseId = await findCourseInfo(tmc, org, course);
     if (courseId.err) {
-        return new Err(courseId.val);
+        return courseId;
     }
     return tmc.getCourseSettings(courseId.val, true);
 }

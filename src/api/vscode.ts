@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import Settings from "../config/settings";
-import { Logger } from "../utils/logger";
+import { Logger, LogLevel } from "../utils/logger";
 
 /**
  * A Class for interacting with Visual Studio Code.
@@ -63,7 +63,9 @@ export default class VSC {
                 return this.settings.getWorkspaceSettings()?.get<string>("python.pythonPath");
             }
         } catch (error) {
-            Logger.error(error, "Some error while fetching python execution string");
+            const message = "Error while fetching python executable string";
+            Logger.error(message, error);
+            showError(message);
             return undefined;
         }
     }
@@ -143,10 +145,16 @@ export async function showError(
     error: string,
     ...items: Array<[string, () => void]>
 ): Promise<void> {
+    const items2 =
+        items.length > 0
+            ? items
+            : Logger.level === LogLevel.None
+            ? items.concat([["Ok", (): void => {}]])
+            : items.concat([["Details", (): void => Logger.show()]]);
     return vscode.window
-        .showErrorMessage(`TestMyCode: ${error}`, ...items.map((item) => item[0]))
+        .showErrorMessage(`TestMyCode: ${error}`, ...items2.map((item) => item[0]))
         .then((selection) => {
-            items.find((item) => item[0] === selection)?.[1]();
+            items2.find((item) => item[0] === selection)?.[1]();
         });
 }
 

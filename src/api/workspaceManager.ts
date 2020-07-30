@@ -232,12 +232,14 @@ export default class WorkspaceManager {
         try {
             fs.moveSync(oldPath, newPath);
         } catch (err) {
+            Logger.error(err);
             if (fs.existsSync(newPath) && (await du(oldPath)) < (await du(newPath))) {
                 return new Ok(false);
             }
             try {
                 fs.removeSync(newPath);
             } catch (err2) {
+                Logger.error(err2);
                 return new Err(
                     new Error(
                         "Folder move operation failed, " +
@@ -270,11 +272,7 @@ export default class WorkspaceManager {
         if (isCorrectWorkspaceOpen(this.resources, courseName)) {
             const result = await this.handleWorkspaceChanges(true, courseExercises, ...ids);
             if (result.err) {
-                return new Err(
-                    new Error(
-                        `Something went wrong while trying to open exercises. ${result.val.message}`,
-                    ),
-                );
+                return result;
             }
             await vscode.commands.executeCommand("workbench.files.action.collapseExplorerFolders");
         }
@@ -297,11 +295,7 @@ export default class WorkspaceManager {
         if (isCorrectWorkspaceOpen(this.resources, courseName)) {
             const result = await this.handleWorkspaceChanges(false, courseExercises, ...ids);
             if (result.err) {
-                return new Err(
-                    new Error(
-                        `Something went wrong while trying to close exercises. ${result.val.message}`,
-                    ),
-                );
+                return result;
             }
         }
         results = await this.setStatus(ExerciseStatus.OPEN, ExerciseStatus.CLOSED, ...ids);
@@ -390,19 +384,30 @@ export default class WorkspaceManager {
 
         let success = true;
         const start = tmcFolderAsRoot ? 1 : 0;
-        const remove = currentlyOpenFolders.length - start;
+        const toRemove = currentlyOpenFolders.length - start;
+        const remove = toRemove > 0 ? toRemove : null;
+
         if (!tmcFolderAsRoot) {
             await vscode.commands.executeCommand("workbench.action.closeAllEditors");
             showNotification("The workspace first folder is not .tmc, fixing issue.");
         }
 
-        success = vscode.workspace.updateWorkspaceFolders(
-            start,
-            remove > 0 ? remove : null,
-            ...toOpenAsWorkspaceArg,
-        );
+        success = vscode.workspace.updateWorkspaceFolders(start, remove, ...toOpenAsWorkspaceArg);
 
-        return success ? Ok.EMPTY : new Err(new Error("Failed to handle workspace changes."));
+        if (
+            success ||
+            _.differenceBy(currentlyOpenFolders, toOpenAsWorkspaceArg, "uri.path").length <= 1
+        ) {
+            return Ok.EMPTY;
+        }
+        Logger.log("Currently open folders", currentlyOpenFolders);
+        Logger.error(
+            "Failed to execute vscode.workspace.updateWorkspaceFolders with params",
+            start,
+            remove,
+            toOpenAsWorkspaceArg,
+        );
+        return new Err(new Error("Failed to handle workspace changes."));
     }
 
     /**

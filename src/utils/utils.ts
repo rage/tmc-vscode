@@ -12,6 +12,7 @@ import Resources from "../config/resources";
 import { ConnectionError } from "../errors";
 
 import { superfluousPropertiesEnabled } from "./env";
+import { Logger } from "./logger";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be
@@ -50,6 +51,7 @@ export async function downloadFile(
             });
         }
     } catch (error) {
+        Logger.error(error);
         return new Err(new ConnectionError("Connection error: " + error.name));
     }
 
@@ -64,6 +66,7 @@ export async function downloadFile(
             }),
         );
     } catch (error) {
+        Logger.error(error);
         return new Err(new Error("Writing to file failed: " + error));
     }
 

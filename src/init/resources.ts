@@ -174,7 +174,7 @@ export async function resourceInitialization(
         );
 
         if (tmcLangsResult.err) {
-            return new Err(tmcLangsResult.val);
+            return tmcLangsResult;
         }
         Logger.log(`${TMC_JAR_URL} downloaded`);
     }
@@ -211,7 +211,7 @@ export async function resourceInitialization(
             await fs.fchmod(fd, 0o111);
             await fs.close(fd);
         } catch (e) {
-            Logger.error("Error", e);
+            Logger.error("Error changing permissions for CLI", e);
         }
         Logger.log("CLI at", cliPath);
     }
