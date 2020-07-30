@@ -384,22 +384,27 @@ export default class WorkspaceManager {
 
         let success = true;
         const start = tmcFolderAsRoot ? 1 : 0;
-        const remove = currentlyOpenFolders.length - start;
+        const toRemove = currentlyOpenFolders.length - start;
+        const remove = toRemove > 0 ? toRemove : null;
+
         if (!tmcFolderAsRoot) {
             await vscode.commands.executeCommand("workbench.action.closeAllEditors");
             showNotification("The workspace first folder is not .tmc, fixing issue.");
         }
-        const end = remove > 0 ? remove : null;
-        success = vscode.workspace.updateWorkspaceFolders(start, end, ...toOpenAsWorkspaceArg);
 
-        if (success) {
+        success = vscode.workspace.updateWorkspaceFolders(start, remove, ...toOpenAsWorkspaceArg);
+
+        if (
+            success ||
+            _.differenceBy(currentlyOpenFolders, toOpenAsWorkspaceArg, "uri.path").length <= 1
+        ) {
             return Ok.EMPTY;
         }
         Logger.log("Currently open folders", currentlyOpenFolders);
         Logger.error(
             "Failed to execute vscode.workspace.updateWorkspaceFolders with params",
             start,
-            end,
+            remove,
             toOpenAsWorkspaceArg,
         );
         return new Err(new Error("Failed to handle workspace changes."));
