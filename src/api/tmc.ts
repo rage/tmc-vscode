@@ -929,8 +929,9 @@ export default class TMC {
             this.resources.extensionVersion,
         ];
 
-        let stdout: UncheckedLangsResponse[] = [];
         let stderr = "";
+        let stdout: UncheckedLangsResponse[] = [];
+        let stdoutRaw = "";
 
         const executable = this.resources.getCliPath();
         Logger.log(JSON.stringify(executable) + " " + args.map((a) => JSON.stringify(a)).join(" "));
@@ -957,13 +958,14 @@ export default class TMC {
             });
             cprocess.stderr.on("data", (chunk) => {
                 const data = chunk.toString();
-                stderr = stderr.concat(data);
+                stderr += data;
                 onStderr?.(data);
             });
             cprocess.stdout.on("data", (chunk) => {
+                const data = chunk.toString();
                 try {
                     // Check against broken and output
-                    const prepared = `[${chunk.toString().trim().replace(/}\s*{/g, "},{")}]`;
+                    const prepared = `[${stdoutRaw}${data.trim().replace(/}\s*{/g, "},{")}]`;
                     const json = JSON.parse(prepared);
                     if (!is<UncheckedLangsResponse[]>(json)) {
                         Logger.error(
@@ -973,9 +975,13 @@ export default class TMC {
                         return;
                     }
                     stdout = stdout.concat(json);
+                    stdoutRaw = "";
                     onStdout?.(json[json.length - 1]);
                 } catch (e) {
-                    Logger.warn("Failed to parse langs response, received: ", chunk.toString());
+                    Logger.debug(
+                        "Failed to parse langs response, data will be appended to next event",
+                    );
+                    stdoutRaw = stdoutRaw += data;
                 }
             });
         });
@@ -992,11 +998,15 @@ export default class TMC {
             try {
                 await processResult;
             } catch (error) {
-                return new Err(new Error(error));
+                return new Err(new RuntimeError(error));
             }
 
             if (interrupted) {
                 return new Err(new RuntimeError("TMC Langs process was killed."));
+            }
+
+            if (stdoutRaw !== "") {
+                Logger.warn("Failed to parse some TMC Langs output");
             }
 
             return new Ok({
