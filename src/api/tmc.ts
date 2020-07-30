@@ -307,14 +307,11 @@ export default class TMC {
         cache = false,
     ): Promise<Result<Organization, Error>> {
         if (this.isInsider()) {
-            const organizations = await this.getOrganizations(cache);
-            if (organizations.err) {
-                return organizations;
-            }
-            const organization = organizations.val.find((o) => o.slug === slug);
-            return organization
-                ? new Ok(organization)
-                : new Err(new Error("Given slug didn't match with any organizations."));
+            return this.executeLangsCommand(
+                { args: ["get-organization", "--organization", slug], core: true },
+                createIs<Organization>(),
+                cache,
+            ).then((res) => res.map((r) => r.data));
         } else {
             return this.checkApiResponse(
                 this.tmcApiRequest(`org/${slug}.json`, cache),
@@ -330,7 +327,7 @@ export default class TMC {
     public getCourses(organization: string, cache = false): Promise<Result<Course[], Error>> {
         if (this.isInsider()) {
             return this.executeLangsCommand(
-                { args: ["list-courses", "--organization", organization], core: true },
+                { args: ["get-courses", "--organization", organization], core: true },
                 createIs<Course[]>(),
                 cache,
             ).then((res) => res.map((r) => r.data));
@@ -372,6 +369,20 @@ export default class TMC {
      * @returns course settings for the specified course
      */
     public getCourseSettings(id: number, cache = false): Promise<Result<CourseSettings, Error>> {
+        // Wait for next rust version
+        /* if (this.isInsider()) {
+            return this.executeLangsCommand(
+                {
+                    args: ["get-course-settings", "--course-id", id.toString()],
+                    core: true,
+                    onStderr: (data) => Logger.log(data),
+                    onStdout: (data) => Logger.log("gurn", JSON.stringify(data)),
+                },
+                createIs<CourseSettings>(),
+                cache,
+            ).then(res => res.map(r => r.data));
+        } else {
+        } */
         return this.checkApiResponse(
             this.tmcApiRequest(`courses/${id}`, cache),
             createIs<CourseSettings>(),
@@ -388,10 +399,21 @@ export default class TMC {
         id: number,
         cache = false,
     ): Promise<Result<CourseExercise[], Error>> {
-        return this.checkApiResponse(
-            this.tmcApiRequest(`courses/${id}/exercises`, cache),
-            createIs<CourseExercise[]>(),
-        );
+        if (this.isInsider()) {
+            return this.executeLangsCommand(
+                {
+                    args: ["get-course-exercises", "--course-id", id.toString()],
+                    core: true,
+                },
+                createIs<CourseExercise[]>(),
+                cache,
+            ).then((res) => res.map((r) => r.data));
+        } else {
+            return this.checkApiResponse(
+                this.tmcApiRequest(`courses/${id}/exercises`, cache),
+                createIs<CourseExercise[]>(),
+            );
+        }
     }
 
     /**
@@ -402,10 +424,21 @@ export default class TMC {
         id: number,
         cache = false,
     ): Promise<Result<ExerciseDetails, Error>> {
-        return this.checkApiResponse(
-            this.tmcApiRequest(`core/exercises/${id}`, cache),
-            createIs<ExerciseDetails>(),
-        );
+        if (this.isInsider()) {
+            return this.executeLangsCommand(
+                {
+                    args: ["get-exercise-details", "--exercise-id", id.toString()],
+                    core: true,
+                },
+                createIs<ExerciseDetails>(),
+                cache,
+            ).then((res) => res.map((r) => r.data));
+        } else {
+            return this.checkApiResponse(
+                this.tmcApiRequest(`core/exercises/${id}`, cache),
+                createIs<ExerciseDetails>(),
+            );
+        }
     }
 
     /**
