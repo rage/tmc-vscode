@@ -75,7 +75,7 @@ export async function resourceInitialization(
                             archivePath,
                             undefined,
                             undefined,
-                            (progress: number, increment: number) =>
+                            (_progress: number, increment: number) =>
                                 p.report({
                                     increment,
                                 }),
@@ -169,7 +169,7 @@ export async function resourceInitialization(
                     tmcLangsPath,
                     undefined,
                     undefined,
-                    (progress: number, increment: number) => p.report({ increment }),
+                    (_progress: number, increment: number) => p.report({ increment }),
                 ),
         );
 
@@ -190,17 +190,17 @@ export async function resourceInitialization(
     const cliPath = path.join(tmcDataPath, "cli", executable);
     const cliUrl = TMC_LANGS_RUST_DL_URL + executable;
     if (!fs.existsSync(cliPath)) {
-        delSync(path.join(tmcDataPath, "cli", "tmc-langs-cli*"), { force: true });
+        delSync(path.join(tmcDataPath, "cli"), { force: true });
         Logger.log("Downloading CLI from", cliUrl, "to", cliPath);
         const [tmcLangsRustCLI] = await showProgressNotification(
             "Downloading required files...",
             async (p) =>
-                downloadFile(
+                await downloadFile(
                     cliUrl,
                     cliPath,
                     undefined,
                     undefined,
-                    (progress: number, increment: number) => p.report({ increment }),
+                    (_progress: number, increment: number) => p.report({ increment }),
                 ),
         );
         if (tmcLangsRustCLI.err) {
