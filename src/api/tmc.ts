@@ -1060,7 +1060,9 @@ export default class TMC {
                 }
                 const stdout = (cprocess.stdout?.read() || "") as string;
                 const stderr = (cprocess.stderr?.read() || "") as string;
-                return resolve(new Ok([stdout, stderr]));
+                return resolve(
+                    Ok<[string, string]>([stdout, stderr]),
+                );
             });
         });
 

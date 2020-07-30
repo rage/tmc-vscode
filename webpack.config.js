@@ -7,7 +7,7 @@ const glob = require("glob");
 const path = require("path");
 const TerserPlugin = require("terser-webpack-plugin");
 const webpack = require("webpack");
-const merge = require("webpack-merge");
+const merge = require("webpack-merge").merge;
 
 const { localApi, productionApi } = require("./config");
 
