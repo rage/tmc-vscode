@@ -201,10 +201,7 @@ export default class TMC {
     public async deauthenticate(): Promise<Result<void, Error>> {
         if (this.isInsider()) {
             const logoutResult = await this.executeLangsCommand(
-                {
-                    args: ["logout"],
-                    core: true,
-                },
+                { args: ["logout"], core: true },
                 createIs<unknown>(),
             );
             if (logoutResult.err) {
@@ -223,10 +220,7 @@ export default class TMC {
     public async isAuthenticated(isInsider?: boolean): Promise<Result<boolean, Error>> {
         if (isInsider === true || this.isInsider()) {
             const loggedInResult = await this.executeLangsCommand(
-                {
-                    args: ["logged-in"],
-                    core: true,
-                },
+                { args: ["logged-in"], core: true },
                 createIs<ClientOauth2.Data | null>(),
             );
             if (loggedInResult.err) {
@@ -837,13 +831,21 @@ export default class TMC {
     /**
      * Function which returns old submissions as list from the server
      */
-    public async fetchOldSubmissionIds(
-        exerciseId: number,
-    ): Promise<Result<OldSubmission[], Error>> {
-        return this.checkApiResponse(
-            this.tmcApiRequest(`exercises/${exerciseId}/users/current/submissions`, false),
-            createIs<OldSubmission[]>(),
-        );
+    public async getOldSubmissions(exerciseId: number): Promise<Result<OldSubmission[], Error>> {
+        if (this.isInsider()) {
+            return this.executeLangsCommand(
+                {
+                    args: ["get-exercise-submissions", "--exercise-id", exerciseId.toString()],
+                    core: true,
+                },
+                createIs<OldSubmission[]>(),
+            ).then((res) => res.map((r) => r.data));
+        } else {
+            return this.checkApiResponse(
+                this.tmcApiRequest(`exercises/${exerciseId}/users/current/submissions`, false),
+                createIs<OldSubmission[]>(),
+            );
+        }
     }
 
     /**
