@@ -870,11 +870,14 @@ export default class TMC {
         const message = langsResponse.message || "null";
         if (status === "crashed") {
             if (is<string[]>(data)) {
-                Logger.error(data.join("\n"));
+                Logger.error("TMC Langs crashed.", data.join("\n"));
             }
             return new Err(new Error("Langs process crashed: " + message));
         }
         if (result === "error") {
+            if (is<string[]>(data)) {
+                Logger.error("TMC Langs errored.", data.join("\n"));
+            }
             return new Err(new Error(message));
         }
         if (!checker(data)) {
