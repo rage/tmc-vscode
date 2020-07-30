@@ -174,7 +174,7 @@ export async function resourceInitialization(
         );
 
         if (tmcLangsResult.err) {
-            return new Err(tmcLangsResult.val);
+            return tmcLangsResult;
         }
         Logger.log(`${TMC_JAR_URL} downloaded`);
     }

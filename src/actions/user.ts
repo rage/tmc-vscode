@@ -50,7 +50,7 @@ export async function login(
 
     const result = await tmc.authenticate(username, password);
     if (result.err) {
-        return new Err(result.val);
+        return result;
     }
 
     ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
@@ -329,11 +329,11 @@ export async function getOldSubmissions(
     const { tmc, workspaceManager } = actionContext;
     const currentExercise = workspaceManager.getCurrentExerciseData();
     if (currentExercise.err) {
-        return new Err(new Error("Exercise not found in workspacemanager"));
+        return currentExercise;
     }
     const result = await tmc.fetchOldSubmissionIds(currentExercise.val.id);
     if (result.err) {
-        return new Err(new Error("Couldn't fetch old submissions"));
+        return result;
     }
 
     return new Ok(result.val);
@@ -498,20 +498,20 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
     const orgAndCourse = await selectOrganizationAndCourse(actionContext);
 
     if (orgAndCourse.err) {
-        return new Err(orgAndCourse.val);
+        return orgAndCourse;
     }
 
     const courseDetailsResult = await tmc.getCourseDetails(orgAndCourse.val.course);
     const courseExercisesResult = await tmc.getCourseExercises(orgAndCourse.val.course);
     const courseSettingsResult = await tmc.getCourseSettings(orgAndCourse.val.course);
     if (courseDetailsResult.err) {
-        return new Err(courseDetailsResult.val);
+        return courseDetailsResult;
     }
     if (courseExercisesResult.err) {
-        return new Err(courseExercisesResult.val);
+        return courseExercisesResult;
     }
     if (courseSettingsResult.err) {
-        return new Err(courseSettingsResult.val);
+        return courseSettingsResult;
     }
 
     const courseDetails = courseDetailsResult.val.course;

@@ -265,7 +265,7 @@ export default class TMC {
 
         const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
         if (exerciseFolderPath.err) {
-            return new Err(new Error("Couldn't find exercise path for exercise"));
+            return exerciseFolderPath;
         }
 
         const result = await this.executeLangsCommand(
@@ -540,7 +540,7 @@ export default class TMC {
 
         const exercisePath = this.workspaceManager.getExercisePathById(exerciseId);
         if (exercisePath.err) {
-            return new Err(new Error("Couldn't find exercise path for exercise"));
+            exercisePath;
         }
 
         // TODO: Finish insider version when this command is fixed in Langs
@@ -581,7 +581,7 @@ export default class TMC {
         );
 
         if (userFilePaths.err) {
-            return new Err(new Error("Couldn't resolve userfiles from exercise files"));
+            return userFilePaths;
         }
 
         const archivePath = path.join(`${this.resources.getDataPath()}`, `${submissionId}.zip`);
@@ -593,7 +593,7 @@ export default class TMC {
         );
 
         if (downloadResult.err) {
-            return new Err(downloadResult.val);
+            return downloadResult;
         }
 
         const oldSubmissionTempPath = path.join(this.resources.getDataPath(), "temp");
@@ -607,12 +607,12 @@ export default class TMC {
         );
 
         if (extractResult.err) {
-            return new Err(new Error("Something went wrong while extracting the submission."));
+            return extractResult;
         }
 
         const closedExPath = this.workspaceManager.getExercisePathById(exerciseId);
         if (closedExPath.err) {
-            return new Err(new Error("?????"));
+            return closedExPath;
         }
 
         userFilePaths.val.response.studentFilePaths.forEach((dataPath) => {
@@ -644,7 +644,7 @@ export default class TMC {
         }
         const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
         if (exerciseFolderPath.err) {
-            return [Promise.resolve(new Err(new Error("???"))), (): void => {}];
+            return [Promise.resolve(exerciseFolderPath), (): void => {}];
         }
 
         const env: { [key: string]: string } = {};
@@ -705,7 +705,7 @@ export default class TMC {
         const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
 
         if (exerciseFolderPath.err) {
-            return new Err(new Error("Couldn't get the exercise path"));
+            return exerciseFolderPath;
         }
 
         // -- Insider implementation --
@@ -751,7 +751,7 @@ export default class TMC {
             createIs<TmcLangsPath>(),
         );
         if (compressResult.err) {
-            return new Err(compressResult.val);
+            return compressResult;
         }
 
         const archivePath = compressResult.val.response as string;
@@ -1070,7 +1070,7 @@ export default class TMC {
                     }
 
                     if (result.err) {
-                        return resolve(new Err(result.val));
+                        return resolve(result);
                     }
 
                     const stdout = result.val[0] ? result.val[0] : stdoutExec;

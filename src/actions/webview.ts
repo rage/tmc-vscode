@@ -233,7 +233,7 @@ export async function selectCourse(
     const result = await tmc.getCourses(orgSlug);
 
     if (result.err) {
-        return new Err(result.val);
+        return result;
     }
     const courses = result.val.sort((course1, course2) => course1.name.localeCompare(course2.name));
     const organization = (await tmc.getOrganization(orgSlug)).unwrap();
@@ -275,7 +275,7 @@ export async function selectOrganization(
 
     const result = await tmc.getOrganizations();
     if (result.err) {
-        return new Err(result.val);
+        return result;
     }
     const organizations = result.val.sort((org1, org2) => org1.name.localeCompare(org2.name));
     const pinned = organizations.filter((organization) => organization.pinned);
@@ -322,14 +322,14 @@ export async function selectOrganizationAndCourse(
         const orgResult = await selectOrganization(actionContext, tempView);
         if (orgResult.err) {
             tempView.dispose();
-            return new Err(orgResult.val);
+            return orgResult;
         }
         Logger.log(`Organization slug ${orgResult.val} selected`);
         organizationSlug = orgResult.val;
         const courseResult = await selectCourse(actionContext, organizationSlug, tempView);
         if (courseResult.err) {
             tempView.dispose();
-            return new Err(courseResult.val);
+            return courseResult;
         }
         if (courseResult.val.changeOrg) {
             continue;
