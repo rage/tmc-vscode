@@ -31,7 +31,7 @@ export type TemplateData =
     | ({ templateName: "course" } & CourseData)
     | ({ templateName: "error" } & ErrorData)
     | ({ templateName: "index" } & IndexData)
-    | ({ templateName: "login" } & loginData)
+    | ({ templateName: "login" } & LoginData)
     | ({ templateName: "organization" } & OrganizationData)
     | ({ templateName: "running-tests" } & RunningTestsData)
     | ({ templateName: "settings" } & SettingsData)
@@ -76,7 +76,7 @@ export type IndexData = {
     courses: Array<LocalCourseData & { completedPrc: string }>;
 };
 
-export type loginData = {
+export type LoginData = {
     error?: string;
 };
 

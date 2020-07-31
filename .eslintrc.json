@@ -17,7 +17,7 @@
         "SharedArrayBuffer": "readonly"
     },
     "parser": "@typescript-eslint/parser",
-    "plugins": ["@typescript-eslint", "import", "prettier"],
+    "plugins": ["@typescript-eslint", "import", "prettier", "sort-class-members"],
     "settings": {
         "import/core-modules": ["vscode"]
     },
@@ -36,6 +36,39 @@
         "@typescript-eslint/no-empty-function": "off",
         "@typescript-eslint/no-var-requires": "off",
         "@typescript-eslint/semi": ["error"],
+        "@typescript-eslint/lines-between-class-members": [
+            "error",
+            "always",
+            { "exceptAfterSingleLine": true }
+        ],
+        "@typescript-eslint/naming-convention": [
+            "error",
+            {
+                "selector": "function",
+                "format": ["camelCase"]
+            },
+            {
+                "selector": "method",
+                "modifiers": ["public"],
+                "format": ["camelCase"]
+            },
+            {
+                "selector": "method",
+                "modifiers": ["private"],
+                "format": ["camelCase"],
+                "leadingUnderscore": "require"
+            },
+            {
+                "selector": "property",
+                "modifiers": ["private"],
+                "format": ["camelCase"],
+                "leadingUnderscore": "require"
+            },
+            {
+                "selector": "typeLike",
+                "format": ["PascalCase"]
+            }
+        ],
         "eqeqeq": ["error"],
         "max-len": [
             "warn",
@@ -50,6 +83,22 @@
             {
                 "ignoreCase": true,
                 "ignoreDeclarationSort": true
+            }
+        ],
+        "sort-class-members/sort-class-members": [
+            2,
+            {
+                "order": [
+                    "[static-properties]",
+                    "[static-methods]",
+                    "[properties]",
+                    "[conventional-private-properties]",
+                    "constructor",
+                    "[methods]",
+                    "[conventional-private-methods]",
+                    "[everything-else]"
+                ],
+                "accessorPairPositioning": "getThenSet"
             }
         ],
         "import/order": [

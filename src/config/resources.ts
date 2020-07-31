@@ -5,14 +5,13 @@ export default class Resources {
     public readonly htmlFolder: string;
     public readonly mediaFolder: string;
     public readonly extensionVersion: string;
-    private tmcDataFolder: string;
-    private javaPath: string;
-    private cliPath: string;
-
-    private readonly tmcLangsPathRelative: string;
-    private readonly tmcWorkspaceFolderPathRelative: string;
-    private readonly tmcExercisesFolderPathRelative: string;
-    private readonly tmcClosedExercisesFolderPathRelative: string;
+    private readonly _tmcLangsPathRelative: string;
+    private readonly _tmcWorkspaceFolderPathRelative: string;
+    private readonly _tmcExercisesFolderPathRelative: string;
+    private readonly _tmcClosedExercisesFolderPathRelative: string;
+    private _tmcDataFolder: string;
+    private _javaPath: string;
+    private _cliPath: string;
 
     constructor(
         cssFolder: string,
@@ -31,56 +30,56 @@ export default class Resources {
         this.extensionVersion = extensionVersion;
         this.htmlFolder = htmlFolder;
         this.mediaFolder = mediaFolder;
-        this.tmcDataFolder = tmcDataFolder;
-        this.tmcLangsPathRelative = tmcLangsPathRelative;
-        this.tmcWorkspaceFolderPathRelative = tmcWorkspaceFolderPathRelative;
-        this.tmcExercisesFolderPathRelative = tmcExercisesFolderPathRelative;
-        this.tmcClosedExercisesFolderPathRelative = tmcClosedExercisesFolderPathRelative;
-        this.javaPath = javaPath;
-        this.cliPath = cliPath;
+        this._tmcDataFolder = tmcDataFolder;
+        this._tmcLangsPathRelative = tmcLangsPathRelative;
+        this._tmcWorkspaceFolderPathRelative = tmcWorkspaceFolderPathRelative;
+        this._tmcExercisesFolderPathRelative = tmcExercisesFolderPathRelative;
+        this._tmcClosedExercisesFolderPathRelative = tmcClosedExercisesFolderPathRelative;
+        this._javaPath = javaPath;
+        this._cliPath = cliPath;
     }
 
     public setDataPath(dataPath: string): void {
-        this.tmcDataFolder = dataPath;
+        this._tmcDataFolder = dataPath;
     }
 
     public getCliPath(): string {
-        return this.cliPath;
+        return this._cliPath;
     }
 
     public getTmcLangsPath(): string {
-        return path.join(this.tmcDataFolder, this.tmcLangsPathRelative);
+        return path.join(this._tmcDataFolder, this._tmcLangsPathRelative);
     }
 
     public getWorkspaceFolderPath(): string {
-        return path.join(this.tmcDataFolder, this.tmcWorkspaceFolderPathRelative);
+        return path.join(this._tmcDataFolder, this._tmcWorkspaceFolderPathRelative);
     }
 
     public getWorkspaceFilePath(courseName: string): string {
         return path.join(
-            this.tmcDataFolder,
-            this.tmcWorkspaceFolderPathRelative,
+            this._tmcDataFolder,
+            this._tmcWorkspaceFolderPathRelative,
             courseName + ".code-workspace",
         );
     }
 
     public getExercisesFolderPath(): string {
-        return path.join(this.tmcDataFolder, this.tmcExercisesFolderPathRelative);
+        return path.join(this._tmcDataFolder, this._tmcExercisesFolderPathRelative);
     }
 
     public getClosedExercisesFolderPath(): string {
-        return path.join(this.tmcDataFolder, this.tmcClosedExercisesFolderPathRelative);
+        return path.join(this._tmcDataFolder, this._tmcClosedExercisesFolderPathRelative);
     }
 
     public getDataPath(): string {
-        return this.tmcDataFolder;
+        return this._tmcDataFolder;
     }
 
     public getJavaPath(): string {
-        return this.javaPath;
+        return this._javaPath;
     }
 
     public setJavaPath(javaPath: string): void {
-        this.javaPath = javaPath;
+        this._javaPath = javaPath;
     }
 }

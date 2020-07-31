@@ -13,14 +13,16 @@ const channel = `[${OUTPUT_CHANNEL_NAME}]`;
 export class Logger {
     static output: OutputChannel | undefined;
 
+    private static _level: LogLevel = LogLevel.None;
+
     static configure(level: LogLevel): void {
         this.level = level;
     }
 
-    private static _level: LogLevel = LogLevel.None;
     static get level(): LogLevel {
         return this._level;
     }
+
     static set level(value: LogLevel) {
         this._level = value;
         if (value === LogLevel.None) {
@@ -35,8 +37,8 @@ export class Logger {
 
     static debug(...params: unknown[]): void {
         if (DEBUG_MODE && this.output !== undefined) {
-            console.log(this.timestamp, "[DEBUG]", ...params);
-            this.output.appendLine(`${this.timestamp} [DEBUG] ${this.toLoggableParams(params)}`);
+            console.log(this._timestamp, "[DEBUG]", ...params);
+            this.output.appendLine(`${this._timestamp} [DEBUG] ${this._toLoggableParams(params)}`);
         }
     }
 
@@ -44,11 +46,11 @@ export class Logger {
         if (this.level === LogLevel.None && !DEBUG_MODE) return;
 
         if (DEBUG_MODE) {
-            console.error(this.timestamp, channel, ...params);
+            console.error(this._timestamp, channel, ...params);
         }
 
         if (this.output !== undefined && this.level !== LogLevel.None) {
-            this.output.appendLine(`${this.timestamp} [ERROR] ${this.toLoggableParams(params)}`);
+            this.output.appendLine(`${this._timestamp} [ERROR] ${this._toLoggableParams(params)}`);
         }
     }
 
@@ -58,11 +60,11 @@ export class Logger {
         }
 
         if (DEBUG_MODE) {
-            console.log(this.timestamp, channel, ...params);
+            console.log(this._timestamp, channel, ...params);
         }
 
         if (this.output !== undefined && (this.level === LogLevel.Verbose || DEBUG_MODE)) {
-            this.output.appendLine(`${this.timestamp} [INFO] ${this.toLoggableParams(params)}`);
+            this.output.appendLine(`${this._timestamp} [INFO] ${this._toLoggableParams(params)}`);
         }
     }
 
@@ -70,11 +72,13 @@ export class Logger {
         if (this.level === LogLevel.None && !DEBUG_MODE) return;
 
         if (DEBUG_MODE) {
-            console.warn(this.timestamp, channel, ...params);
+            console.warn(this._timestamp, channel, ...params);
         }
 
         if (this.output !== undefined && this.level !== LogLevel.None) {
-            this.output.appendLine(`${this.timestamp} [WARNING] ${this.toLoggableParams(params)}`);
+            this.output.appendLine(
+                `${this._timestamp} [WARNING] ${this._toLoggableParams(params)}`,
+            );
         }
     }
 
@@ -99,7 +103,7 @@ export class Logger {
         }
     }
 
-    private static get timestamp(): string {
+    private static get _timestamp(): string {
         const now = new Date();
         return `[${now
             .toISOString()
@@ -107,7 +111,7 @@ export class Logger {
             .replace(/\..+/, "")}:${`00${now.getUTCMilliseconds()}`.slice(-3)}]`;
     }
 
-    private static toLoggableParams(params: unknown[]): string {
+    private static _toLoggableParams(params: unknown[]): string {
         const loggableParams = params.map((p) => this.toLoggable(p)).join("\n");
         return loggableParams.length !== 0 ? loggableParams : "";
     }

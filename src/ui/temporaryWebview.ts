@@ -22,17 +22,17 @@ interface TemporaryWebviewContent {
 export default class TemporaryWebview {
     public disposed: boolean;
 
-    private panel: vscode.WebviewPanel;
-    private ui: UI;
-    private iconPath: vscode.Uri;
-    private cssPath: string;
-    private handlerDisposer?: vscode.Disposable;
+    private _panel: vscode.WebviewPanel;
+    private _ui: UI;
+    private _iconPath: vscode.Uri;
+    private _cssPath: string;
+    private _handlerDisposer?: vscode.Disposable;
 
     constructor(resources: Resources, ui: UI) {
-        this.ui = ui;
-        this.cssPath = resources.cssFolder;
-        this.iconPath = vscode.Uri.file(`${resources.mediaFolder}/TMC.svg`);
-        this.panel = this.createPanel();
+        this._ui = ui;
+        this._cssPath = resources.cssFolder;
+        this._iconPath = vscode.Uri.file(`${resources.mediaFolder}/TMC.svg`);
+        this._panel = this._createPanel();
         this.disposed = false;
     }
 
@@ -41,46 +41,46 @@ export default class TemporaryWebview {
      * @param templateData Data to be displayed in template
      */
     public async setContent(content: TemporaryWebviewContent): Promise<void> {
-        this.handlerDisposer?.dispose();
+        this._handlerDisposer?.dispose();
         if (this.disposed) {
-            this.panel = this.createPanel();
+            this._panel = this._createPanel();
             this.disposed = false;
         }
-        this.panel.title = content.title;
-        this.panel.webview.html = await this.ui.webview.templateEngine.getTemplate(
-            this.panel.webview,
+        this._panel.title = content.title;
+        this._panel.webview.html = await this._ui.webview.templateEngine.getTemplate(
+            this._panel.webview,
             content.template,
         );
-        this.handlerDisposer = this.panel.webview.onDidReceiveMessage(content.messageHandler);
-        this.panel.reveal(undefined, true);
+        this._handlerDisposer = this._panel.webview.onDidReceiveMessage(content.messageHandler);
+        this._panel.reveal(undefined, true);
     }
 
     public isVisible(): boolean {
-        return this.panel.visible;
+        return this._panel.visible;
     }
 
     public postMessage(message: unknown): void {
-        this.panel?.webview.postMessage(message);
+        this._panel?.webview.postMessage(message);
     }
 
     /**
      * Closes the webview
      */
     public dispose(): void {
-        this.panel.dispose();
+        this._panel.dispose();
     }
 
-    private createPanel(): vscode.WebviewPanel {
+    private _createPanel(): vscode.WebviewPanel {
         const panel = vscode.window.createWebviewPanel("tmctemp", "TMC", vscode.ViewColumn.Two, {
             enableScripts: true,
-            localResourceRoots: [vscode.Uri.file(this.cssPath)],
+            localResourceRoots: [vscode.Uri.file(this._cssPath)],
         });
         panel.onDidDispose(() => {
-            this.handlerDisposer?.dispose();
-            this.handlerDisposer = undefined;
+            this._handlerDisposer?.dispose();
+            this._handlerDisposer = undefined;
             this.disposed = true;
         });
-        panel.iconPath = this.iconPath;
+        panel.iconPath = this._iconPath;
         panel.webview.html = EMPTY_HTML_DOCUMENT;
         return panel;
     }
