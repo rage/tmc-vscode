@@ -73,6 +73,11 @@ type RustProcessRunner = {
     result: Promise<Result<RustProcessLogs, Error>>;
 };
 
+/**
+ * Schema for Responses returned by TMC-langs.
+ *
+ * https://github.com/rage/tmc-langs-rust/blob/master/tmc-langs-cli/src/output.rs
+ */
 interface UncheckedLangsResponse {
     data: unknown;
     message: string | null;
@@ -82,10 +87,16 @@ interface UncheckedLangsResponse {
         | "logged-out"
         | "not-logged-in"
         | "error"
-        | "running"
         | "sent-data"
         | "retrieved-data"
-        | "executed-command";
+        | "executed-command"
+        | "downloading"
+        | "compressing"
+        | "extracting"
+        | "processing"
+        | "sending"
+        | "waiting-for-results"
+        | "finished";
     status: "successful" | "crashed" | "in-progress";
 }
 
@@ -363,24 +374,21 @@ export default class TMC {
      * @returns course settings for the specified course
      */
     public getCourseSettings(id: number, cache = false): Promise<Result<CourseSettings, Error>> {
-        // Wait for next rust version
-        /* if (this.isInsider()) {
+        if (this.isInsider()) {
             return this.executeLangsCommand(
                 {
                     args: ["get-course-settings", "--course-id", id.toString()],
                     core: true,
-                    onStderr: (data) => Logger.log(data),
-                    onStdout: (data) => Logger.log("gurn", JSON.stringify(data)),
                 },
                 createIs<CourseSettings>(),
                 cache,
-            ).then(res => res.map(r => r.data));
+            ).then((res) => res.map((r) => r.data));
         } else {
-        } */
-        return this.checkApiResponse(
-            this.tmcApiRequest(`courses/${id}`, cache),
-            createIs<CourseSettings>(),
-        );
+            return this.checkApiResponse(
+                this.tmcApiRequest(`courses/${id}`, cache),
+                createIs<CourseSettings>(),
+            );
+        }
     }
 
     /**
@@ -567,7 +575,7 @@ export default class TMC {
 
         const exercisePath = this.workspaceManager.getExercisePathById(exerciseId);
         if (exercisePath.err) {
-            exercisePath;
+            return exercisePath;
         }
 
         // TODO: Finish insider version when this command is fixed in Langs
@@ -678,15 +686,8 @@ export default class TMC {
         if (this.isInsider() && pythonExecutablePath) {
             env.TMC_LANGS_PYTHON_EXEC = pythonExecutablePath;
         }
-        const outputPath = this.nextTempOutputPath();
         const { interrupt, result } = this.spawnLangsProcess({
-            args: [
-                "run-tests",
-                "--exercise-path",
-                exerciseFolderPath.val,
-                "--output-path",
-                outputPath,
-            ],
+            args: ["run-tests", "--exercise-path", exerciseFolderPath.val],
             core: false,
             env,
             onStderr: (data) => Logger.log("Rust Langs", data),
@@ -863,13 +864,15 @@ export default class TMC {
         useCache = false,
     ): Promise<Result<LangsResponse<T>, Error>> {
         const cacheKey = langsArgs.args.join("-");
-        if (useCache) {
-            const cached = this.rustCache.get(cacheKey);
-            if (cached && checker(cached.data)) {
+        let cached: LangsResponse<unknown> | undefined;
+        if (useCache && (cached = this.rustCache.get(cacheKey))) {
+            if (checker(cached.data)) {
                 return new Ok({ ...cached, data: cached.data });
+            } else {
+                // This should NEVER have to happen
+                Logger.error("Cached data for key didn't match the expected type, re-fetching...");
+                Logger.debug(cacheKey, cached.data);
             }
-            // This should NEVER have to happen
-            Logger.error("Cached data didn't match the expected type, re-fetching...");
         }
         const result = await this.spawnLangsProcess(langsArgs).result;
         if (result.err) {
