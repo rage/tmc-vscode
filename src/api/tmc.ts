@@ -933,8 +933,8 @@ export default class TMC {
         ];
 
         let stderr = "";
-        let stdout: UncheckedLangsResponse[] = [];
-        let stdoutRaw = "";
+        const stdout: UncheckedLangsResponse[] = [];
+        let stdoutBuffer = "";
 
         const executable = this.resources.getCliPath();
         Logger.log(JSON.stringify(executable) + " " + args.map((a) => JSON.stringify(a)).join(" "));
@@ -965,26 +965,22 @@ export default class TMC {
                 onStderr?.(data);
             });
             cprocess.stdout.on("data", (chunk) => {
-                const data = chunk.toString();
-                try {
-                    // Check against broken and output
-                    const prepared = `[${stdoutRaw}${data.trim().replace(/}\s*{/g, "},{")}]`;
-                    const json = JSON.parse(prepared);
-                    if (!is<UncheckedLangsResponse[]>(json)) {
-                        Logger.error(
-                            "Langs response didn't match expected type, received: ",
-                            chunk.toString(),
-                        );
-                        return;
+                const parts = (stdoutBuffer + chunk.toString()).split("\n");
+                stdoutBuffer = parts.pop() || "";
+                for (const part of parts) {
+                    try {
+                        const json = JSON.parse(part.trim());
+                        if (is<UncheckedLangsResponse>(json)) {
+                            stdout.push(json);
+                            onStdout?.(json);
+                        } else {
+                            Logger.error("TMC-langs response didn't match expected type");
+                            Logger.debug(part);
+                        }
+                    } catch (e) {
+                        Logger.warn("Failed to parse TMC-langs output");
+                        Logger.debug(part);
                     }
-                    stdout = stdout.concat(json);
-                    stdoutRaw = "";
-                    onStdout?.(json[json.length - 1]);
-                } catch (e) {
-                    Logger.debug(
-                        "Failed to parse langs response, data will be appended to next event",
-                    );
-                    stdoutRaw = stdoutRaw += data;
                 }
             });
         });
@@ -1008,8 +1004,9 @@ export default class TMC {
                 return new Err(new RuntimeError("TMC Langs process was killed."));
             }
 
-            if (stdoutRaw !== "") {
+            if (stdoutBuffer !== "") {
                 Logger.warn("Failed to parse some TMC Langs output");
+                Logger.debug(stdoutBuffer);
             }
 
             return new Ok({
