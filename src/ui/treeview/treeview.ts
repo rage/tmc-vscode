@@ -8,21 +8,21 @@ import { Visibility } from "./visibility";
  * A class for managing the TMC menu treeview.
  */
 export default class TmcMenuTree {
-    private readonly treeDP: TmcMenuTreeDataProvider;
-    private readonly visibility: Visibility;
-    private nextId: number;
-    private readonly treeview: vscode.TreeView<TMCAction>;
+    private readonly _treeDP: TmcMenuTreeDataProvider;
+    private readonly _visibility: Visibility;
+    private readonly _treeview: vscode.TreeView<TMCAction>;
+    private _nextId: number;
 
     /**
      * Creates and registers a new instance of TMCMenuTree with given viewId.
      * @param viewId Id of the view passed to `vscode.window.registerTreeDataProvider`
      */
     constructor(viewId: string) {
-        this.treeDP = new TmcMenuTreeDataProvider();
-        this.treeview = vscode.window.createTreeView(viewId, { treeDataProvider: this.treeDP });
+        this._treeDP = new TmcMenuTreeDataProvider();
+        this._treeview = vscode.window.createTreeView(viewId, { treeDataProvider: this._treeDP });
 
-        this.visibility = new Visibility();
-        this.nextId = 1;
+        this._visibility = new Visibility();
+        this._nextId = 1;
     }
 
     /**
@@ -38,11 +38,11 @@ export default class TmcMenuTree {
         groups: Array<VisibilityGroup | VisibilityGroupNegated>,
         onClick: () => void,
     ): void {
-        const id = (this.nextId++).toString();
+        const id = (this._nextId++).toString();
 
         // Use internal classes
-        this.visibility.registerAction(id, groups);
-        this.treeDP.registerAction(label, id, onClick, this.visibility.getVisible(id));
+        this._visibility.registerAction(id, groups);
+        this._treeDP.registerAction(label, id, onClick, this._visibility.getVisible(id));
     }
 
     /**
@@ -52,7 +52,7 @@ export default class TmcMenuTree {
      */
     public createVisibilityGroup(visible?: boolean): VisibilityGroup {
         // Use internal class
-        return this.visibility.createGroup(visible ? visible : false);
+        return this._visibility.createGroup(visible ? visible : false);
     }
 
     /**
@@ -74,15 +74,15 @@ export default class TmcMenuTree {
 
         // Collect changes from each update
         groups.forEach((group) => {
-            changes = changes.concat(this.visibility.setGroupVisible(group));
+            changes = changes.concat(this._visibility.setGroupVisible(group));
         });
 
         // Apply changes
-        changes.forEach(([id, isVisible]) => this.treeDP.setVisibility(id, isVisible));
+        changes.forEach(([id, isVisible]) => this._treeDP.setVisibility(id, isVisible));
 
         // Refresh if necessary
         if (changes.length > 0) {
-            this.treeDP.refresh();
+            this._treeDP.refresh();
         }
     }
 }
@@ -99,17 +99,17 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
     /**
      * @implements {vscode.TreeDataProvider<TMCAction>}
      */
-    private refreshEventEmitter: vscode.EventEmitter<TMCAction | undefined>;
+    private _refreshEventEmitter: vscode.EventEmitter<TMCAction | undefined>;
 
-    private actions: Map<string, { action: TMCAction; visible: boolean }>;
+    private _actions: Map<string, { action: TMCAction; visible: boolean }>;
 
     /**
      * Creates new instance of TMC treeview.
      */
     public constructor() {
-        this.refreshEventEmitter = new vscode.EventEmitter<TMCAction | undefined>();
-        this.onDidChangeTreeData = this.refreshEventEmitter.event;
-        this.actions = new Map<string, { action: TMCAction; visible: boolean }>();
+        this._refreshEventEmitter = new vscode.EventEmitter<TMCAction | undefined>();
+        this.onDidChangeTreeData = this._refreshEventEmitter.event;
+        this._actions = new Map<string, { action: TMCAction; visible: boolean }>();
     }
 
     /**
@@ -118,7 +118,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
     public getChildren(element?: TMCAction | undefined): TMCAction[] {
         if (element === undefined) {
             const actionList: TMCAction[] = [];
-            for (const action of this.actions) {
+            for (const action of this._actions) {
                 if (action[1].visible) {
                     actionList.push(action[1].action);
                 }
@@ -146,10 +146,10 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
      * Internal logic for TmcMenuTree.registerAction
      */
     public registerAction(label: string, id: string, onClick: () => void, visible: boolean): void {
-        if (this.actions.get(label) !== undefined) {
+        if (this._actions.get(label) !== undefined) {
             throw new Error("Action already registered");
         }
-        this.actions.set(id, {
+        this._actions.set(id, {
             action: new TMCAction(
                 label,
                 { command: "tmcView.activateEntry", title: "", arguments: [onClick] },
@@ -164,7 +164,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
      * Internal logic for TmcMenuTree.registerAction
      */
     public setVisibility(id: string, visible: boolean): void {
-        const action = this.actions.get(id);
+        const action = this._actions.get(id);
 
         if (action) {
             action.visible = visible;
@@ -177,7 +177,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
      * Triggers a treeview refresh
      */
     public refresh(): void {
-        this.refreshEventEmitter.fire(undefined);
+        this._refreshEventEmitter.fire(undefined);
     }
 
     /**
@@ -186,7 +186,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TMCAction> {
      * @param id
      */
     public getAction(id: string): { action: TMCAction; visible: boolean } | undefined {
-        return this.actions.get(id);
+        return this._actions.get(id);
     }
 }
 

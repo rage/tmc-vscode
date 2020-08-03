@@ -7,10 +7,10 @@ import { Logger, LogLevel } from "../utils/logger";
  * A Class for interacting with Visual Studio Code.
  */
 export default class VSC {
-    private readonly settings: Settings;
+    private readonly _settings: Settings;
 
     constructor(settings: Settings) {
-        this.settings = settings;
+        this._settings = settings;
     }
 
     public async activate(): Promise<void> {
@@ -38,9 +38,39 @@ export default class VSC {
     }
 
     /**
+     * Get the active text editor and figure out the language ID
+     * and the executable path from recommended extensions
+     * If languageID not supported, returns undefined.
+     */
+    public getActiveEditorExecutablePath(): string | undefined {
+        const resource = vscode.window.activeTextEditor;
+        if (!resource) {
+            return undefined;
+        }
+        Logger.log("Active text document language:", resource.document.languageId);
+        switch (resource.document.languageId) {
+            case "python":
+                return this._getPythonPath(resource.document);
+        }
+        return undefined;
+    }
+
+    public openUri(uri: string): void {
+        vscode.env.openExternal(vscode.Uri.parse(uri));
+    }
+
+    public toUri(uri: string): vscode.Uri {
+        return vscode.Uri.file(uri);
+    }
+
+    public async openFolder(path: string): Promise<void> {
+        await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(path));
+    }
+
+    /**
      * Returns python executable path for ms-python.python extension.
      */
-    private getPythonPath(document: vscode.TextDocument): string | undefined {
+    private _getPythonPath(document: vscode.TextDocument): string | undefined {
         try {
             const extension = vscode.extensions.getExtension("ms-python.python");
             if (!extension) {
@@ -60,7 +90,7 @@ export default class VSC {
                     : extension.exports.settings.getExecutionCommand(document.uri);
                 return execCommand.join(" ");
             } else {
-                return this.settings.getWorkspaceSettings()?.get<string>("python.pythonPath");
+                return this._settings.getWorkspaceSettings()?.get<string>("python.pythonPath");
             }
         } catch (error) {
             const message = "Error while fetching python executable string";
@@ -68,36 +98,6 @@ export default class VSC {
             showError(message);
             return undefined;
         }
-    }
-
-    /**
-     * Get the active text editor and figure out the language ID
-     * and the executable path from recommended extensions
-     * If languageID not supported, returns undefined.
-     */
-    public getActiveEditorExecutablePath(): string | undefined {
-        const resource = vscode.window.activeTextEditor;
-        if (!resource) {
-            return undefined;
-        }
-        Logger.log("Active text document language:", resource.document.languageId);
-        switch (resource.document.languageId) {
-            case "python":
-                return this.getPythonPath(resource.document);
-        }
-        return undefined;
-    }
-
-    public openUri(uri: string): void {
-        vscode.env.openExternal(vscode.Uri.parse(uri));
-    }
-
-    public toUri(uri: string): vscode.Uri {
-        return vscode.Uri.file(uri);
-    }
-
-    public async openFolder(path: string): Promise<void> {
-        await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(path));
     }
 }
 

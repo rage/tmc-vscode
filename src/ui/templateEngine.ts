@@ -15,18 +15,18 @@ import { CourseDetails, Webview } from "./templates";
 import { TemplateData } from "./types";
 
 export default class TemplateEngine {
-    private cssPath: string;
-    private htmlPath: string;
-    private cache: Map<string, HandlebarsTemplateDelegate<unknown>>;
-    private cssBlob: string;
+    private _cssPath: string;
+    private _htmlPath: string;
+    private _cache: Map<string, HandlebarsTemplateDelegate<unknown>>;
+    private _cssBlob: string;
 
     constructor(resources: Resources) {
-        this.cssPath = resources.cssFolder;
-        this.htmlPath = resources.htmlFolder;
-        this.cache = new Map();
-        this.cssBlob =
-            fs.readFileSync(path.join(this.cssPath, "bootstrap.min.css"), "utf8") +
-            fs.readFileSync(path.join(this.cssPath, "style.css"), "utf8");
+        this._cssPath = resources.cssFolder;
+        this._htmlPath = resources.htmlFolder;
+        this._cache = new Map();
+        this._cssBlob =
+            fs.readFileSync(path.join(this._cssPath, "bootstrap.min.css"), "utf8") +
+            fs.readFileSync(path.join(this._cssPath, "style.css"), "utf8");
         /**
          * Logo path for organizations
          */
@@ -248,7 +248,7 @@ export default class TemplateEngine {
     public async getTemplate(webview: vscode.Webview, templateData: TemplateData): Promise<string> {
         const cspBlob = `<meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; img-src https:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';" />`;
-        const cssBlob = this.cssBlob;
+        const cssBlob = this._cssBlob;
 
         if (templateData.templateName === "course-details") {
             return Webview.render({
@@ -260,9 +260,9 @@ export default class TemplateEngine {
         }
 
         const name = templateData.templateName;
-        const p = path.join(this.htmlPath, `${name}.html`);
+        const p = path.join(this._htmlPath, `${name}.html`);
         let template: HandlebarsTemplateDelegate<unknown>;
-        const cacheResult = this.cache.get(name);
+        const cacheResult = this._cache.get(name);
         if (cacheResult) {
             template = cacheResult;
         } else {

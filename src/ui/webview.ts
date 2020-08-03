@@ -13,19 +13,18 @@ import { TemplateData, WebviewMessage } from "./types";
 export default class TmcWebview {
     public readonly templateEngine: TemplateEngine;
 
-    private readonly extensionContext: vscode.ExtensionContext;
-    private readonly messageHandlers: Map<string, (msg: { [key: string]: unknown }) => void>;
-    private readonly webviewState: Map<string, unknown>;
-    private listenerDisposer?: vscode.Disposable;
+    private readonly _extensionContext: vscode.ExtensionContext;
+    private readonly _messageHandlers: Map<string, (msg: { [key: string]: unknown }) => void>;
+    private readonly _webviewState: Map<string, unknown>;
+    private readonly _resources: Resources;
+    private _listenerDisposer?: vscode.Disposable;
 
     /**
      * NOTE: use [[getPanel]] to correctly handle disposed instances
      */
-    private panel: vscode.WebviewPanel | undefined;
+    private _panel: vscode.WebviewPanel | undefined;
 
-    private readonly resources: Resources;
-
-    private stateId = 0;
+    private _stateId = 0;
 
     /**
      * Creates a new TmcWebview instance used by the UI class.
@@ -33,11 +32,11 @@ export default class TmcWebview {
      * CSS stylesheet.
      */
     constructor(extensionContext: vscode.ExtensionContext, resources: Resources) {
-        this.extensionContext = extensionContext;
-        this.messageHandlers = new Map();
-        this.webviewState = new Map();
+        this._extensionContext = extensionContext;
+        this._messageHandlers = new Map();
+        this._webviewState = new Map();
         this.templateEngine = new TemplateEngine(resources);
-        this.resources = resources;
+        this._resources = resources;
     }
 
     /**
@@ -50,18 +49,18 @@ export default class TmcWebview {
         forceUpdate = false,
         initialState?: Array<{ key: string; message: WebviewMessage }>,
     ): Promise<void> {
-        this.stateId++;
-        const panel = this.getPanel();
+        this._stateId++;
+        const panel = this._getPanel();
         const html = await this.templateEngine.getTemplate(panel.webview, templateData);
         if (forceUpdate) {
             panel.webview.html = html + " ";
         }
         panel.webview.html = html;
-        this.listenerDisposer?.dispose();
-        this.webviewState.clear();
-        this.listenerDisposer = panel.onDidChangeViewState((event) => {
+        this._listenerDisposer?.dispose();
+        this._webviewState.clear();
+        this._listenerDisposer = panel.onDidChangeViewState((event) => {
             if (event.webviewPanel.visible) {
-                panel.webview.postMessage(Array.from(this.webviewState.values()));
+                panel.webview.postMessage(Array.from(this._webviewState.values()));
             }
         });
         panel.reveal();
@@ -76,9 +75,9 @@ export default class TmcWebview {
      */
     public postMessage(...messages: Array<{ key: string; message: WebviewMessage }>): void {
         for (const { key, message } of messages) {
-            this.webviewState.set(key, message);
+            this._webviewState.set(key, message);
         }
-        this.panel?.webview.postMessage(messages.map((m) => m.message));
+        this._panel?.webview.postMessage(messages.map((m) => m.message));
     }
 
     /**
@@ -90,44 +89,48 @@ export default class TmcWebview {
         messageId: string,
         handler: (msg: { [key: string]: unknown }) => void,
     ): void {
-        if (this.messageHandlers.get(messageId) !== undefined) {
+        if (this._messageHandlers.get(messageId) !== undefined) {
             return;
         }
-        this.messageHandlers.set(messageId, handler);
+        this._messageHandlers.set(messageId, handler);
     }
 
     /**
      * Closes the Webview.
      */
     public dispose(): void {
-        this.panel?.dispose();
+        this._panel?.dispose();
+    }
+
+    public getStateId(): number {
+        return this._stateId;
     }
 
     /**
      * Re-creates the webview panel if it has been disposed and returns it
      * @return A webview panel with strong freshness guarantees
      */
-    private getPanel(): vscode.WebviewPanel {
-        if (this.panel === undefined) {
-            this.panel = vscode.window.createWebviewPanel(
+    private _getPanel(): vscode.WebviewPanel {
+        if (this._panel === undefined) {
+            this._panel = vscode.window.createWebviewPanel(
                 "tmcmenu",
                 "TestMyCode",
                 vscode.ViewColumn.One,
                 {
                     enableScripts: true,
-                    localResourceRoots: [vscode.Uri.file(this.resources.cssFolder)],
+                    localResourceRoots: [vscode.Uri.file(this._resources.cssFolder)],
                 },
             );
-            this.panel.onDidDispose(
+            this._panel.onDidDispose(
                 () => {
-                    this.panel = undefined;
+                    this._panel = undefined;
                 },
                 this,
-                this.extensionContext.subscriptions,
+                this._extensionContext.subscriptions,
             );
-            this.panel.webview.onDidReceiveMessage(
+            this._panel.webview.onDidReceiveMessage(
                 (msg: { type: string; [x: string]: string }) => {
-                    const handler = this.messageHandlers.get(msg.type);
+                    const handler = this._messageHandlers.get(msg.type);
                     if (handler) {
                         handler(msg);
                     } else {
@@ -135,15 +138,13 @@ export default class TmcWebview {
                     }
                 },
                 this,
-                this.extensionContext.subscriptions,
+                this._extensionContext.subscriptions,
             );
-            this.panel.iconPath = vscode.Uri.file(path.join(this.resources.mediaFolder, "TMC.svg"));
-            this.panel.webview.html = EMPTY_HTML_DOCUMENT;
+            this._panel.iconPath = vscode.Uri.file(
+                path.join(this._resources.mediaFolder, "TMC.svg"),
+            );
+            this._panel.webview.html = EMPTY_HTML_DOCUMENT;
         }
-        return this.panel;
-    }
-
-    public getStateId(): number {
-        return this.stateId;
+        return this._panel;
     }
 }

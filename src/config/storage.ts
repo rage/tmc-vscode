@@ -7,14 +7,14 @@ import { ExtensionSettings, LocalCourseData, LocalExerciseData } from "./types";
  * Interface class for accessing stored TMC configuration and data.
  */
 export default class Storage {
-    private context: vscode.ExtensionContext;
+    private _context: vscode.ExtensionContext;
 
     /**
      * Creates new instance of the TMC storage access object.
      * @param context context of the extension where all data is stored
      */
     constructor(context: vscode.ExtensionContext) {
-        this.context = context;
+        this._context = context;
     }
 
     /**
@@ -22,23 +22,23 @@ export default class Storage {
      * @returns currently stored authentication token or undefined if not set
      */
     public getAuthenticationToken(): oauth2.Data | undefined {
-        return this.context.globalState.get("token");
+        return this._context.globalState.get("token");
     }
 
     public getExerciseData(): LocalExerciseData[] | undefined {
-        return this.context.globalState.get("exerciseData");
+        return this._context.globalState.get("exerciseData");
     }
 
     public getUserData(): { courses: LocalCourseData[] } | undefined {
-        return this.context.globalState.get("userData");
+        return this._context.globalState.get("userData");
     }
 
     public getExtensionSettings(): ExtensionSettings | undefined {
-        return this.context.globalState.get("extensionSettings");
+        return this._context.globalState.get("extensionSettings");
     }
 
     public getExtensionVersion(): string | undefined {
-        return this.context.globalState.get("extensionVersion");
+        return this._context.globalState.get("extensionVersion");
     }
 
     /**
@@ -48,22 +48,22 @@ export default class Storage {
     public async updateAuthenticationToken(
         authenticationToken: oauth2.Data | undefined,
     ): Promise<void> {
-        await this.context.globalState.update("token", authenticationToken);
+        await this._context.globalState.update("token", authenticationToken);
     }
 
     public async updateExerciseData(exerciseData: LocalExerciseData[] | undefined): Promise<void> {
-        await this.context.globalState.update("exerciseData", exerciseData);
+        await this._context.globalState.update("exerciseData", exerciseData);
     }
 
     public async updateUserData(userData: { courses: LocalCourseData[] }): Promise<void> {
-        await this.context.globalState.update("userData", userData);
+        await this._context.globalState.update("userData", userData);
     }
 
     public async updateExtensionSettings(settings: ExtensionSettings): Promise<void> {
-        await this.context.globalState.update("extensionSettings", settings);
+        await this._context.globalState.update("extensionSettings", settings);
     }
 
     public async updateExtensionVersion(version: string): Promise<void> {
-        await this.context.globalState.update("extensionVersion", version);
+        await this._context.globalState.update("extensionVersion", version);
     }
 }

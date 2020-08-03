@@ -110,50 +110,50 @@ interface LangsResponse<T> extends UncheckedLangsResponse {
  * A Class for interacting with the TestMyCode service, including authentication
  */
 export default class TMC {
-    private readonly oauth2: ClientOauth2;
-    private token: ClientOauth2.Token | undefined;
-    private readonly storage: Storage;
-    private readonly resources: Resources;
-    private readonly tmcApiUrl: string;
-    private readonly tmcDefaultHeaders: { client: string; client_version: string };
-    private workspaceManager?: WorkspaceManager;
-    private readonly isInsider: () => boolean;
+    private readonly _oauth2: ClientOauth2;
+    private readonly _storage: Storage;
+    private readonly _resources: Resources;
+    private readonly _tmcApiUrl: string;
+    private readonly _tmcDefaultHeaders: { client: string; client_version: string };
+    private readonly _isInsider: () => boolean;
+    private readonly _cache: Map<string, TMCApiResponse>;
+    private readonly _rustCache: Map<string, LangsResponse<unknown>>;
+    private _token: ClientOauth2.Token | undefined;
 
-    private readonly cache: Map<string, TMCApiResponse>;
-    private readonly rustCache: Map<string, LangsResponse<unknown>>;
+    private _workspaceManager?: WorkspaceManager;
 
-    private nextLangsJsonId = 0;
+    private _nextLangsJsonId = 0;
 
     /**
      * Create the TMC service interaction class, includes setting up OAuth2 information
      */
     constructor(storage: Storage, resources: Resources, isInsider: () => boolean) {
-        this.oauth2 = new ClientOauth2({
+        this._oauth2 = new ClientOauth2({
             accessTokenUri: ACCESS_TOKEN_URI,
             clientId: CLIENT_ID,
             clientSecret: CLIENT_SECRET,
         });
-        this.storage = storage;
+        this._storage = storage;
         const authToken = storage.getAuthenticationToken();
         if (authToken) {
-            this.token = new ClientOauth2.Token(this.oauth2, authToken);
+            this._token = new ClientOauth2.Token(this._oauth2, authToken);
         }
-        this.resources = resources;
-        this.tmcApiUrl = TMC_API_URL;
-        this.cache = new Map();
-        this.rustCache = new Map();
-        this.tmcDefaultHeaders = {
+        this._resources = resources;
+        this._tmcApiUrl = TMC_API_URL;
+        this._cache = new Map();
+        this._rustCache = new Map();
+        this._tmcDefaultHeaders = {
             client: CLIENT_NAME,
             client_version: resources.extensionVersion,
         };
-        this.isInsider = isInsider;
+        this._isInsider = isInsider;
     }
 
     public setWorkspaceManager(workspaceManager: WorkspaceManager): void {
-        if (this.workspaceManager) {
+        if (this._workspaceManager) {
             throw displayProgrammerError("WorkspaceManager already assigned");
         }
-        this.workspaceManager = workspaceManager;
+        this._workspaceManager = workspaceManager;
     }
 
     /**
@@ -169,11 +169,11 @@ export default class TMC {
         password: string,
         isInsider?: boolean,
     ): Promise<Result<void, Error>> {
-        if (this.token) {
+        if (this._token) {
             throw new Error("Authentication token already exists.");
         }
-        if (isInsider === true || this.isInsider()) {
-            const loginResult = await this.executeLangsCommand(
+        if (isInsider === true || this._isInsider()) {
+            const loginResult = await this._executeLangsCommand(
                 {
                     args: ["login", "--email", username, "--base64"],
                     core: true,
@@ -192,7 +192,7 @@ export default class TMC {
         }
 
         try {
-            this.token = await this.oauth2.owner.getToken(username, password);
+            this._token = await this._oauth2.owner.getToken(username, password);
         } catch (err) {
             if (err.code === "EAUTH") {
                 return new Err(new AuthenticationError("Incorrect username and/or password"));
@@ -202,7 +202,7 @@ export default class TMC {
             Logger.error("Unknown authentication error:", err);
             return new Err(new Error("Unknown error: " + err.code));
         }
-        this.storage.updateAuthenticationToken(this.token.data);
+        this._storage.updateAuthenticationToken(this._token.data);
         return Ok.EMPTY;
     }
 
@@ -210,8 +210,8 @@ export default class TMC {
      * Logs out by deleting the authentication token.
      */
     public async deauthenticate(): Promise<Result<void, Error>> {
-        if (this.isInsider()) {
-            const logoutResult = await this.executeLangsCommand(
+        if (this._isInsider()) {
+            const logoutResult = await this._executeLangsCommand(
                 { args: ["logout"], core: true },
                 createIs<unknown>(),
             );
@@ -219,8 +219,8 @@ export default class TMC {
                 return logoutResult;
             }
         }
-        this.token = undefined;
-        this.storage.updateAuthenticationToken(undefined);
+        this._token = undefined;
+        this._storage.updateAuthenticationToken(undefined);
         return Ok.EMPTY;
     }
 
@@ -229,8 +229,8 @@ export default class TMC {
      * @returns whether an authentication token is present
      */
     public async isAuthenticated(isInsider?: boolean): Promise<Result<boolean, Error>> {
-        if (isInsider === true || this.isInsider()) {
-            const loggedInResult = await this.executeLangsCommand(
+        if (isInsider === true || this._isInsider()) {
+            const loggedInResult = await this._executeLangsCommand(
                 { args: ["logged-in"], core: true },
                 createIs<ClientOauth2.Data | null>(),
             );
@@ -239,14 +239,14 @@ export default class TMC {
             }
             const response = loggedInResult.val;
             if (response.result === "not-logged-in") {
-                if (!this.token) {
+                if (!this._token) {
                     return new Ok(false);
                 }
 
                 // Insider compatibility: If token exists but Langs didn't have it, pass it on.
-                const setTokenResult = await this.executeLangsCommand(
+                const setTokenResult = await this._executeLangsCommand(
                     {
-                        args: ["login", "--set-access-token", this.token.data.access_token],
+                        args: ["login", "--set-access-token", this._token.data.access_token],
                         core: true,
                     },
                     createIs<unknown>(),
@@ -256,24 +256,24 @@ export default class TMC {
                 }
             } else if (response.result === "logged-in" && response.data) {
                 // Non-insider compatibility: keep stored token up to date
-                this.token = new ClientOauth2.Token(this.oauth2, response.data);
-                this.storage.updateAuthenticationToken(this.token.data);
+                this._token = new ClientOauth2.Token(this._oauth2, response.data);
+                this._storage.updateAuthenticationToken(this._token.data);
             }
         }
-        return new Ok(this.token !== undefined);
+        return new Ok(this._token !== undefined);
     }
 
     public async clean(id: number): Promise<Result<void, Error>> {
-        if (!this.workspaceManager) {
+        if (!this._workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
 
-        const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
+        const exerciseFolderPath = this._workspaceManager.getExercisePathById(id);
         if (exerciseFolderPath.err) {
             return exerciseFolderPath;
         }
 
-        const result = await this.executeLangsCommand(
+        const result = await this._executeLangsCommand(
             { args: ["clean", "--exercise-path", exerciseFolderPath.val], core: false },
             createIs<unknown>(),
             false,
@@ -289,15 +289,15 @@ export default class TMC {
      * @returns a list of organizations
      */
     public async getOrganizations(cache = false): Promise<Result<Organization[], Error>> {
-        if (this.isInsider()) {
-            return this.executeLangsCommand(
+        if (this._isInsider()) {
+            return this._executeLangsCommand(
                 { args: ["get-organizations"], core: true },
                 createIs<Organization[]>(),
                 cache,
             ).then((res) => res.map((r) => r.data));
         } else {
-            return this.checkApiResponse(
-                this.tmcApiRequest("org.json", cache),
+            return this._checkApiResponse(
+                this._tmcApiRequest("org.json", cache),
                 createIs<Organization[]>(),
             );
         }
@@ -311,15 +311,18 @@ export default class TMC {
         slug: string,
         cache = false,
     ): Promise<Result<Organization, Error>> {
-        if (this.isInsider()) {
-            return this.executeLangsCommand(
-                { args: ["get-organization", "--organization", slug], core: true },
-                createIs<Organization>(),
-                cache,
-            ).then((res) => res.map((r) => r.data));
+        if (this._isInsider()) {
+            const organizations = await this.getOrganizations(cache);
+            if (organizations.err) {
+                return organizations;
+            }
+            const organization = organizations.val.find((o) => o.slug === slug);
+            return organization
+                ? new Ok(organization)
+                : new Err(new Error("Given slug didn't match with any organizations."));
         } else {
-            return this.checkApiResponse(
-                this.tmcApiRequest(`org/${slug}.json`, cache),
+            return this._checkApiResponse(
+                this._tmcApiRequest(`org/${slug}.json`, cache),
                 createIs<Organization>(),
             );
         }
@@ -330,15 +333,15 @@ export default class TMC {
      * @returns a list of courses belonging to the currently selected organization
      */
     public getCourses(organization: string, cache = false): Promise<Result<Course[], Error>> {
-        if (this.isInsider()) {
-            return this.executeLangsCommand(
-                { args: ["get-courses", "--organization", organization], core: true },
+        if (this._isInsider()) {
+            return this._executeLangsCommand(
+                { args: ["list-courses", "--organization", organization], core: true },
                 createIs<Course[]>(),
                 cache,
             ).then((res) => res.map((r) => r.data));
         } else {
-            return this.checkApiResponse(
-                this.tmcApiRequest(`core/org/${organization}/courses`, cache),
+            return this._checkApiResponse(
+                this._tmcApiRequest(`core/org/${organization}/courses`, cache),
                 createIs<Course[]>(),
             );
         }
@@ -352,8 +355,8 @@ export default class TMC {
         id: number,
         cache = false,
     ): Promise<Result<CourseDetails, Error>> {
-        if (this.isInsider()) {
-            return this.executeLangsCommand(
+        if (this._isInsider()) {
+            return this._executeLangsCommand(
                 {
                     args: ["get-course-details", "--course-id", id.toString()],
                     core: true,
@@ -362,8 +365,8 @@ export default class TMC {
                 cache,
             ).then((res) => res.map((r) => ({ course: r.data })));
         } else {
-            return this.checkApiResponse(
-                this.tmcApiRequest(`core/courses/${id}`, cache),
+            return this._checkApiResponse(
+                this._tmcApiRequest(`core/courses/${id}`, cache),
                 createIs<CourseDetails>(),
             );
         }
@@ -374,8 +377,8 @@ export default class TMC {
      * @returns course settings for the specified course
      */
     public getCourseSettings(id: number, cache = false): Promise<Result<CourseSettings, Error>> {
-        if (this.isInsider()) {
-            return this.executeLangsCommand(
+        if (this._isInsider()) {
+            return this._executeLangsCommand(
                 {
                     args: ["get-course-settings", "--course-id", id.toString()],
                     core: true,
@@ -384,8 +387,8 @@ export default class TMC {
                 cache,
             ).then((res) => res.map((r) => r.data));
         } else {
-            return this.checkApiResponse(
-                this.tmcApiRequest(`courses/${id}`, cache),
+            return this._checkApiResponse(
+                this._tmcApiRequest(`courses/${id}`, cache),
                 createIs<CourseSettings>(),
             );
         }
@@ -401,8 +404,8 @@ export default class TMC {
         id: number,
         cache = false,
     ): Promise<Result<CourseExercise[], Error>> {
-        if (this.isInsider()) {
-            return this.executeLangsCommand(
+        if (this._isInsider()) {
+            return this._executeLangsCommand(
                 {
                     args: ["get-course-exercises", "--course-id", id.toString()],
                     core: true,
@@ -411,8 +414,8 @@ export default class TMC {
                 cache,
             ).then((res) => res.map((r) => r.data));
         } else {
-            return this.checkApiResponse(
-                this.tmcApiRequest(`courses/${id}/exercises`, cache),
+            return this._checkApiResponse(
+                this._tmcApiRequest(`courses/${id}/exercises`, cache),
                 createIs<CourseExercise[]>(),
             );
         }
@@ -426,8 +429,8 @@ export default class TMC {
         id: number,
         cache = false,
     ): Promise<Result<ExerciseDetails, Error>> {
-        if (this.isInsider()) {
-            return this.executeLangsCommand(
+        if (this._isInsider()) {
+            return this._executeLangsCommand(
                 {
                     args: ["get-exercise-details", "--exercise-id", id.toString()],
                     core: true,
@@ -436,8 +439,8 @@ export default class TMC {
                 cache,
             ).then((res) => res.map((r) => r.data));
         } else {
-            return this.checkApiResponse(
-                this.tmcApiRequest(`core/exercises/${id}`, cache),
+            return this._checkApiResponse(
+                this._tmcApiRequest(`core/exercises/${id}`, cache),
                 createIs<ExerciseDetails>(),
             );
         }
@@ -450,11 +453,11 @@ export default class TMC {
     public async getSubmissionStatus(
         submissionUrl: string,
     ): Promise<Result<SubmissionStatusReport, Error>> {
-        if (!this.token) {
+        if (!this._token) {
             throw new Error("User not logged in!");
         }
-        return this.checkApiResponse(
-            this.tmcApiRequest(submissionUrl),
+        return this._checkApiResponse(
+            this._tmcApiRequest(submissionUrl),
             createIs<SubmissionStatusReport>(),
         );
     }
@@ -469,10 +472,10 @@ export default class TMC {
         organizationSlug: string,
         progressCallback?: (downloadedPct: number, increment: number) => void,
     ): Promise<Result<void, Error>> {
-        if (!this.workspaceManager) {
+        if (!this._workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assigned");
         }
-        const archivePath = path.join(`${this.resources.getDataPath()}`, `${id}.zip`);
+        const archivePath = path.join(`${this._resources.getDataPath()}`, `${id}.zip`);
 
         const detailsResult = await this.getExerciseDetails(id, true);
         if (detailsResult.err) {
@@ -489,9 +492,9 @@ export default class TMC {
             return new Err(new Error("Exercise somehow missing from course"));
         }
 
-        if (this.isInsider()) {
+        if (this._isInsider()) {
             // TODO post-insider: Pass this location directly to this function
-            const exercisePath = await this.workspaceManager.createExerciseDownloadPath(
+            const exercisePath = await this._workspaceManager.createExerciseDownloadPath(
                 exercise.soft_deadline,
                 organizationSlug,
                 exercise.checksum,
@@ -502,7 +505,7 @@ export default class TMC {
                 return exercisePath;
             }
 
-            const downloadResult = await this.executeLangsCommand(
+            const downloadResult = await this._executeLangsCommand(
                 {
                     args: [
                         "download-or-update-exercises",
@@ -518,23 +521,23 @@ export default class TMC {
 
             if (downloadResult.err) {
                 Logger.error("Downloading failed", downloadResult.val);
-                await this.workspaceManager.deleteExercise(id);
+                await this._workspaceManager.deleteExercise(id);
             }
 
             return Ok.EMPTY;
         } else {
             const result = await downloadFile(
-                `${this.tmcApiUrl}core/exercises/${id}/download`,
+                `${this._tmcApiUrl}core/exercises/${id}/download`,
                 archivePath,
-                this.tmcDefaultHeaders,
-                this.token,
+                this._tmcDefaultHeaders,
+                this._token,
                 progressCallback,
             );
             if (result.err) {
                 return result;
             }
 
-            const exercisePath = await this.workspaceManager.createExerciseDownloadPath(
+            const exercisePath = await this._workspaceManager.createExerciseDownloadPath(
                 exercise.soft_deadline,
                 organizationSlug,
                 exercise.checksum,
@@ -545,8 +548,8 @@ export default class TMC {
                 return exercisePath;
             }
 
-            const extractResult = await this.checkApiResponse(
-                this.executeLangsAction({
+            const extractResult = await this._checkApiResponse(
+                this._executeLangsAction({
                     action: "extract-project",
                     archivePath,
                     exerciseFolderPath: exercisePath.val,
@@ -556,7 +559,7 @@ export default class TMC {
 
             if (extractResult.err) {
                 Logger.error("Extracting failed", extractResult.val);
-                await this.workspaceManager.deleteExercise(id);
+                await this._workspaceManager.deleteExercise(id);
             }
 
             delSync(archivePath, { force: true });
@@ -569,11 +572,11 @@ export default class TMC {
         exerciseId: number,
         submissionId: number,
     ): Promise<Result<string, Error>> {
-        if (!this.workspaceManager) {
+        if (!this._workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
 
-        const exercisePath = this.workspaceManager.getExercisePathById(exerciseId);
+        const exercisePath = this._workspaceManager.getExercisePathById(exerciseId);
         if (exercisePath.err) {
             return exercisePath;
         }
@@ -607,8 +610,8 @@ export default class TMC {
         // -- End of insider implementation --
 
         const exPath = exercisePath.val + "/";
-        const userFilePaths = await this.checkApiResponse(
-            this.executeLangsAction({
+        const userFilePaths = await this._checkApiResponse(
+            this._executeLangsAction({
                 action: "get-exercise-packaging-configuration",
                 exerciseFolderPath: exPath,
             })[0],
@@ -619,21 +622,21 @@ export default class TMC {
             return userFilePaths;
         }
 
-        const archivePath = path.join(`${this.resources.getDataPath()}`, `${submissionId}.zip`);
+        const archivePath = path.join(`${this._resources.getDataPath()}`, `${submissionId}.zip`);
         const downloadResult = await downloadFile(
-            `${this.tmcApiUrl}core/submissions/${submissionId}/download`,
+            `${this._tmcApiUrl}core/submissions/${submissionId}/download`,
             archivePath,
-            this.tmcDefaultHeaders,
-            this.token,
+            this._tmcDefaultHeaders,
+            this._token,
         );
 
         if (downloadResult.err) {
             return downloadResult;
         }
 
-        const oldSubmissionTempPath = path.join(this.resources.getDataPath(), "temp");
-        const extractResult = await this.checkApiResponse(
-            this.executeLangsAction({
+        const oldSubmissionTempPath = path.join(this._resources.getDataPath(), "temp");
+        const extractResult = await this._checkApiResponse(
+            this._executeLangsAction({
                 action: "extract-project",
                 archivePath,
                 exerciseFolderPath: oldSubmissionTempPath,
@@ -645,7 +648,7 @@ export default class TMC {
             return extractResult;
         }
 
-        const closedExPath = this.workspaceManager.getExercisePathById(exerciseId);
+        const closedExPath = this._workspaceManager.getExercisePathById(exerciseId);
         if (closedExPath.err) {
             return closedExPath;
         }
@@ -674,19 +677,19 @@ export default class TMC {
         id: number,
         pythonExecutablePath?: string,
     ): [Promise<Result<TmcLangsTestResultsRust, Error>>, () => void] {
-        if (!this.workspaceManager) {
+        if (!this._workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
-        const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
+        const exerciseFolderPath = this._workspaceManager.getExercisePathById(id);
         if (exerciseFolderPath.err) {
             return [Promise.resolve(exerciseFolderPath), (): void => {}];
         }
 
         const env: { [key: string]: string } = {};
-        if (this.isInsider() && pythonExecutablePath) {
+        if (this._isInsider() && pythonExecutablePath) {
             env.TMC_LANGS_PYTHON_EXEC = pythonExecutablePath;
         }
-        const { interrupt, result } = this.spawnLangsProcess({
+        const { interrupt, result } = this._spawnLangsProcess({
             args: ["run-tests", "--exercise-path", exerciseFolderPath.val],
             core: false,
             env,
@@ -703,7 +706,7 @@ export default class TMC {
                 return new Err(new Error("Langs response missing"));
             }
 
-            return this.checkLangsResponse(last, createIs<TmcLangsTestResultsRust>()).map(
+            return this._checkLangsResponse(last, createIs<TmcLangsTestResultsRust>()).map(
                 (r) => r.data,
             );
         });
@@ -719,19 +722,19 @@ export default class TMC {
         id: number,
         params?: Map<string, string>,
     ): Promise<Result<SubmissionResponse, Error>> {
-        if (!this.workspaceManager) {
+        if (!this._workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
-        const exerciseFolderPath = this.workspaceManager.getExercisePathById(id);
+        const exerciseFolderPath = this._workspaceManager.getExercisePathById(id);
 
         if (exerciseFolderPath.err) {
             return exerciseFolderPath;
         }
 
         // -- Insider implementation --
-        if (this.isInsider()) {
+        if (this._isInsider()) {
             const isPaste = params?.has("paste");
-            const submitUrl = `${this.tmcApiUrl}core/exercises/${id}/submissions`;
+            const submitUrl = `${this._tmcApiUrl}core/exercises/${id}/submissions`;
             const args = isPaste
                 ? [
                       "paste",
@@ -750,7 +753,7 @@ export default class TMC {
                       "--submission-url",
                       submitUrl,
                   ];
-            const processResult = await this.executeLangsCommand(
+            const processResult = await this._executeLangsCommand(
                 { args, core: true },
                 createIs<SubmissionResponse>(),
             );
@@ -763,10 +766,10 @@ export default class TMC {
         }
         // -- End of insider implementation --
 
-        const compressResult = await this.checkApiResponse(
-            this.executeLangsAction({
+        const compressResult = await this._checkApiResponse(
+            this._executeLangsAction({
                 action: "compress-project",
-                archivePath: path.join(`${this.resources.getDataPath()}`, `${id}-new.zip`),
+                archivePath: path.join(`${this._resources.getDataPath()}`, `${id}-new.zip`),
                 exerciseFolderPath: exerciseFolderPath.val,
             })[0],
             createIs<TmcLangsPath>(),
@@ -783,8 +786,8 @@ export default class TMC {
             });
         }
         form.append("submission[file]", fs.createReadStream(archivePath));
-        return this.checkApiResponse(
-            this.tmcApiRequest(
+        return this._checkApiResponse(
+            this._tmcApiRequest(
                 `core/exercises/${id}/submissions`,
                 false,
                 "post",
@@ -804,12 +807,12 @@ export default class TMC {
         feedbackUrl: string,
         feedback: SubmissionFeedback,
     ): Promise<Result<SubmissionFeedbackResponse, Error>> {
-        if (this.isInsider()) {
+        if (this._isInsider()) {
             const feedbackArgs = feedback.status.reduce<string[]>(
                 (acc, next) => acc.concat("--feedback", next.question_id.toString(), next.answer),
                 [],
             );
-            return this.executeLangsCommand(
+            return this._executeLangsCommand(
                 {
                     args: ["send-feedback", ...feedbackArgs, "--feedback-url", feedbackUrl],
                     core: true,
@@ -822,8 +825,8 @@ export default class TMC {
                 params.append(`answers[${index}][question_id]`, answer.question_id.toString());
                 params.append(`answers[${index}][answer]`, answer.answer);
             });
-            return this.checkApiResponse(
-                this.tmcApiRequest(feedbackUrl, false, "post", params),
+            return this._checkApiResponse(
+                this._tmcApiRequest(feedbackUrl, false, "post", params),
                 createIs<SubmissionFeedbackResponse>(),
             );
         }
@@ -833,8 +836,8 @@ export default class TMC {
      * Function which returns old submissions as list from the server
      */
     public async getOldSubmissions(exerciseId: number): Promise<Result<OldSubmission[], Error>> {
-        if (this.isInsider()) {
-            return this.executeLangsCommand(
+        if (this._isInsider()) {
+            return this._executeLangsCommand(
                 {
                     args: ["get-exercise-submissions", "--exercise-id", exerciseId.toString()],
                     core: true,
@@ -842,8 +845,8 @@ export default class TMC {
                 createIs<OldSubmission[]>(),
             ).then((res) => res.map((r) => r.data));
         } else {
-            return this.checkApiResponse(
-                this.tmcApiRequest(`exercises/${exerciseId}/users/current/submissions`, false),
+            return this._checkApiResponse(
+                this._tmcApiRequest(`exercises/${exerciseId}/users/current/submissions`, false),
                 createIs<OldSubmission[]>(),
             );
         }
@@ -858,14 +861,14 @@ export default class TMC {
      * @param useCache Whether to try fetching the data from cache instead of running the process.
      * @returns Result that resolves to a checked LansResponse.
      */
-    private async executeLangsCommand<T>(
+    private async _executeLangsCommand<T>(
         langsArgs: RustProcessArgs,
         checker: (object: unknown) => object is T,
         useCache = false,
     ): Promise<Result<LangsResponse<T>, Error>> {
         const cacheKey = langsArgs.args.join("-");
         let cached: LangsResponse<unknown> | undefined;
-        if (useCache && (cached = this.rustCache.get(cacheKey))) {
+        if (useCache && (cached = this._rustCache.get(cacheKey))) {
             if (checker(cached.data)) {
                 return new Ok({ ...cached, data: cached.data });
             } else {
@@ -874,7 +877,7 @@ export default class TMC {
                 Logger.debug(cacheKey, cached.data);
             }
         }
-        const result = await this.spawnLangsProcess(langsArgs).result;
+        const result = await this._spawnLangsProcess(langsArgs).result;
         if (result.err) {
             return result;
         }
@@ -882,18 +885,18 @@ export default class TMC {
         if (last === undefined) {
             return new Err(new Error("No langs response received"));
         }
-        const checked = this.checkLangsResponse(last, checker);
+        const checked = this._checkLangsResponse(last, checker);
         if (checked.err) {
             return checked;
         }
-        this.rustCache.set(cacheKey, checked.val);
+        this._rustCache.set(cacheKey, checked.val);
         return new Ok(checked.val);
     }
 
     /**
      * Checks langs response for generic errors.
      */
-    private checkLangsResponse<T>(
+    private _checkLangsResponse<T>(
         langsResponse: UncheckedLangsResponse,
         checker: (object: unknown) => object is T,
     ): Result<LangsResponse<T>, Error> {
@@ -901,7 +904,9 @@ export default class TMC {
         const message = langsResponse.message || "null";
         if (status === "crashed") {
             if (is<string[]>(data)) {
-                Logger.error("TMC Langs crashed.", data.join("\n"));
+                const msg = "Langs process crashed: ";
+                Logger.error(msg, data.join("\n"));
+                return new Err(new RuntimeError(msg + message, data.join("\n")));
             }
             return new Err(new Error("Langs process crashed: " + message));
         }
@@ -922,21 +927,21 @@ export default class TMC {
      *
      * @returns Rust process runner.
      */
-    private spawnLangsProcess(commandArgs: RustProcessArgs): RustProcessRunner {
+    private _spawnLangsProcess(commandArgs: RustProcessArgs): RustProcessRunner {
         const { args, core, env, onStderr, onStdout, stdin } = commandArgs;
         const CORE_ARGS = [
             "core",
             "--client-name",
             CLIENT_NAME,
             "--client-version",
-            this.resources.extensionVersion,
+            this._resources.extensionVersion,
         ];
 
         let stderr = "";
         const stdout: UncheckedLangsResponse[] = [];
         let stdoutBuffer = "";
 
-        const executable = this.resources.getCliPath();
+        const executable = this._resources.getCliPath();
         Logger.log(JSON.stringify(executable) + " " + args.map((a) => JSON.stringify(a)).join(" "));
 
         let active = true;
@@ -1026,7 +1031,7 @@ export default class TMC {
      *
      * @param tmcLangsAction Tmc-langs command and arguments
      */
-    private executeLangsAction(
+    private _executeLangsAction(
         tmcLangsAction: TmcLangsAction,
     ): [Promise<Result<TmcLangsResponse, Error>>, () => void] {
         const action = tmcLangsAction.action;
@@ -1048,14 +1053,14 @@ export default class TMC {
                 break;
             case "get-exercise-packaging-configuration":
                 exercisePath = tmcLangsAction.exerciseFolderPath;
-                outputPath = this.nextTempOutputPath();
+                outputPath = this._nextTempOutputPath();
                 break;
         }
 
         const arg0 = exercisePath ? `--exercisePath="${exercisePath}"` : "";
         const arg1 = `--outputPath="${outputPath}"`;
 
-        const command = `${this.resources.getJavaPath()} -jar "${this.resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
+        const command = `${this._resources.getJavaPath()} -jar "${this._resources.getTmcLangsPath()}" ${action} ${arg0} ${arg1}`;
 
         Logger.log(command);
 
@@ -1157,10 +1162,10 @@ export default class TMC {
      *
      * @returns Next temporary json file for passing to TMC-langs.
      */
-    private nextTempOutputPath(): string {
+    private _nextTempOutputPath(): string {
         const next = path.join(
-            this.resources.getDataPath(),
-            `temp_${this.nextLangsJsonId++ % 10}.json`,
+            this._resources.getDataPath(),
+            `temp_${this._nextLangsJsonId++ % 10}.json`,
         );
         if (fs.existsSync(next)) {
             delSync(next, { force: true });
@@ -1179,7 +1184,7 @@ export default class TMC {
      *
      * @returns A type checked response
      */
-    private async checkApiResponse<T, U>(
+    private async _checkApiResponse<T, U>(
         response: Promise<Result<U, Error>>,
         checker: (object: unknown) => object is T,
     ): Promise<Result<T, Error>> {
@@ -1201,7 +1206,7 @@ export default class TMC {
      * @param body Optional data body for the request.
      * @param headers Headers for the request.
      */
-    private async tmcApiRequest(
+    private async _tmcApiRequest(
         endpoint: string,
         cache = false,
         method: "get" | "post" = "get",
@@ -1209,7 +1214,7 @@ export default class TMC {
         headers: { [key: string]: string } = {},
     ): Promise<Result<TMCApiResponse, Error>> {
         if (cache) {
-            const cacheResult = this.cache.get(method + endpoint);
+            const cacheResult = this._cache.get(method + endpoint);
             if (cacheResult) {
                 return new Ok(cacheResult);
             }
@@ -1219,13 +1224,13 @@ export default class TMC {
             body,
             headers,
             method,
-            url: endpoint.startsWith("https://") ? endpoint : this.tmcApiUrl + endpoint,
+            url: endpoint.startsWith("https://") ? endpoint : this._tmcApiUrl + endpoint,
         };
 
-        Object.assign(request.headers, this.tmcDefaultHeaders);
+        Object.assign(request.headers, this._tmcDefaultHeaders);
 
-        if (this.token) {
-            request = this.token.sign(request);
+        if (this._token) {
+            request = this._token.sign(request);
         }
 
         try {
@@ -1235,7 +1240,7 @@ export default class TMC {
                     const responseObject = await response.json();
                     if (is<TMCApiResponse>(responseObject)) {
                         if (cache) {
-                            this.cache.set(method + endpoint, responseObject);
+                            this._cache.set(method + endpoint, responseObject);
                         }
                         return new Ok(responseObject);
                     }

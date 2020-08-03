@@ -15,7 +15,12 @@ function component(webviewProps) {
             <head>
                 <meta
                     http-equiv="Content-Security-Policy"
-                    content={`default-src 'none'; img-src https:; style-src ${cspSource} 'unsafe-inline'; script-src 'unsafe-inline';`}
+                    content={
+                        "default-src 'none';" +
+                        "img-src https:;" +
+                        `style-src ${cspSource} 'unsafe-inline';` +
+                        "script-src 'unsafe-inline';`"
+                    }
                 />
                 <meta charset="UTF-8" />
                 <style>{cssBlob}</style>
