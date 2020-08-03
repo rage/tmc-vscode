@@ -118,7 +118,10 @@ export default class TmcWebview {
                 vscode.ViewColumn.One,
                 {
                     enableScripts: true,
-                    localResourceRoots: [vscode.Uri.file(this._resources.cssFolder)],
+                    localResourceRoots: [
+                        vscode.Uri.file(this._resources.cssFolder),
+                        vscode.Uri.file(this._resources.mediaFolder),
+                    ],
                 },
             );
             this._panel.onDidDispose(

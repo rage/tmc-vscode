@@ -132,9 +132,14 @@ export interface ExerciseStatusChange {
     status: ExerciseStatus;
 }
 
+export interface SetInsiderStatus {
+    command: "setInsiderStatus";
+    enabled: boolean;
+}
+
 export interface SetUpdateables {
     command: "setUpdateables";
     exerciseIds: number[];
 }
 
-export type WebviewMessage = ExerciseStatusChange | SetUpdateables;
+export type WebviewMessage = ExerciseStatusChange | SetInsiderStatus | SetUpdateables;

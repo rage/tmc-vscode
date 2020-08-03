@@ -292,24 +292,44 @@ export function registerUiActions(actionContext: ActionContext, authenticated: b
         },
     );
 
+    // Temp duplication reducer until all insider toggle commands come from jsx webviews.
+    const toggleInsider = async (enabled: boolean): Promise<boolean> => {
+        await settings.updateSetting({ setting: "insiderVersion", value: enabled });
+        const authenticated = await actionContext.tmc.isAuthenticated();
+        if (authenticated.err) {
+            showError("Failed to check insider authentication");
+            Logger.error("Failed to check insider authentication", authenticated.val);
+        }
+        ui.treeDP.updateVisibility([
+            authenticated.val === true
+                ? visibilityGroups.LOGGED_IN
+                : visibilityGroups.LOGGED_IN.not,
+        ]);
+        return enabled;
+    };
+
     ui.webview.registerHandler(
-        "insiderVersion",
-        async (msg: { type?: "insiderVersion"; data?: boolean }) => {
+        "insiderVersionLegacy",
+        async (msg: { type?: "insiderVersionLegacy"; data?: boolean }) => {
             if (!(msg.type && msg.data !== undefined)) {
                 return;
             }
-            await settings.updateSetting({ setting: "insiderVersion", value: msg.data });
-            const authenticated = await actionContext.tmc.isAuthenticated(msg.data);
-            if (authenticated.err) {
-                showError("Failed to check insider authentication");
-                Logger.error("Failed to check insider authentication", authenticated.val);
-            }
-            ui.treeDP.updateVisibility([
-                authenticated.val === true
-                    ? visibilityGroups.LOGGED_IN
-                    : visibilityGroups.LOGGED_IN.not,
-            ]);
+            await toggleInsider(msg.data);
             await openSettings(actionContext);
+        },
+    );
+
+    ui.webview.registerHandler(
+        "insiderStatus",
+        async (msg: { type?: "insiderStatus"; data?: boolean }) => {
+            if (!(msg.type && msg.data !== undefined)) {
+                return;
+            }
+            const enabled = await toggleInsider(msg.data);
+            ui.webview.postMessage({
+                key: "insiderStatus",
+                message: { command: "setInsiderStatus", enabled },
+            });
         },
     );
 

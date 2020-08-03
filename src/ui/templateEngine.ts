@@ -260,9 +260,13 @@ export default class TemplateEngine {
                 });
             case "welcome":
                 return Webview.render({
-                    children: Welcome.component(templateData),
+                    children: Welcome.component({
+                        ...templateData,
+                        tmcLogoFile: webview.asWebviewUri(templateData.tmcLogoFile),
+                    }),
                     cspSource: webview.cspSource,
                     cssBlob,
+                    script: Welcome.script,
                 });
         }
 
