@@ -357,6 +357,29 @@ export default class WorkspaceManager {
         }
     }
 
+    public addWorkspaceRecommendation(workspace: string, extension: string): void {
+        const pathToWorkspace = path.join(this._resources.getWorkspaceFilePath(workspace));
+        const workspaceData = JSON.parse(fs.readFileSync(pathToWorkspace, "utf-8"));
+        const recommendations: string[] | undefined = workspaceData.extensions?.recommendations;
+        if (recommendations) {
+            if (recommendations.includes(extension)) {
+                return;
+            }
+            Logger.debug("Current recommendations", recommendations);
+            const newRecommendations = recommendations.concat(extension);
+            const newWorkspaceData = { ...workspaceData, extensions: { ...newRecommendations } };
+            Logger.debug("Workspace data", newWorkspaceData);
+            fs.writeFileSync(pathToWorkspace, JSON.stringify(newWorkspaceData));
+        } else {
+            const workspaceDataRecommend = {
+                ...workspaceData,
+                extensions: { recommendations: [extension] },
+            };
+            Logger.debug("New recommendations", workspaceDataRecommend);
+            fs.writeFileSync(pathToWorkspace, JSON.stringify(workspaceDataRecommend));
+        }
+    }
+
     private async _handleWorkspaceChanges(
         handleAsOpen: boolean,
         exercises: LocalExerciseData[],
