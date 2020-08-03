@@ -73,6 +73,11 @@ type RustProcessRunner = {
     result: Promise<Result<RustProcessLogs, Error>>;
 };
 
+/**
+ * Schema for Responses returned by TMC-langs.
+ *
+ * https://github.com/rage/tmc-langs-rust/blob/master/tmc-langs-cli/src/output.rs
+ */
 interface UncheckedLangsResponse {
     data: unknown;
     message: string | null;
@@ -82,10 +87,16 @@ interface UncheckedLangsResponse {
         | "logged-out"
         | "not-logged-in"
         | "error"
-        | "running"
         | "sent-data"
         | "retrieved-data"
-        | "executed-command";
+        | "executed-command"
+        | "downloading"
+        | "compressing"
+        | "extracting"
+        | "processing"
+        | "sending"
+        | "waiting-for-results"
+        | "finished";
     status: "successful" | "crashed" | "in-progress";
 }
 
@@ -201,10 +212,7 @@ export default class TMC {
     public async deauthenticate(): Promise<Result<void, Error>> {
         if (this._isInsider()) {
             const logoutResult = await this._executeLangsCommand(
-                {
-                    args: ["logout"],
-                    core: true,
-                },
+                { args: ["logout"], core: true },
                 createIs<unknown>(),
             );
             if (logoutResult.err) {
@@ -223,10 +231,7 @@ export default class TMC {
     public async isAuthenticated(isInsider?: boolean): Promise<Result<boolean, Error>> {
         if (isInsider === true || this._isInsider()) {
             const loggedInResult = await this._executeLangsCommand(
-                {
-                    args: ["logged-in"],
-                    core: true,
-                },
+                { args: ["logged-in"], core: true },
                 createIs<ClientOauth2.Data | null>(),
             );
             if (loggedInResult.err) {
@@ -372,10 +377,21 @@ export default class TMC {
      * @returns course settings for the specified course
      */
     public getCourseSettings(id: number, cache = false): Promise<Result<CourseSettings, Error>> {
-        return this._checkApiResponse(
-            this._tmcApiRequest(`courses/${id}`, cache),
-            createIs<CourseSettings>(),
-        );
+        if (this._isInsider()) {
+            return this._executeLangsCommand(
+                {
+                    args: ["get-course-settings", "--course-id", id.toString()],
+                    core: true,
+                },
+                createIs<CourseSettings>(),
+                cache,
+            ).then((res) => res.map((r) => r.data));
+        } else {
+            return this._checkApiResponse(
+                this._tmcApiRequest(`courses/${id}`, cache),
+                createIs<CourseSettings>(),
+            );
+        }
     }
 
     /**
@@ -388,10 +404,21 @@ export default class TMC {
         id: number,
         cache = false,
     ): Promise<Result<CourseExercise[], Error>> {
-        return this._checkApiResponse(
-            this._tmcApiRequest(`courses/${id}/exercises`, cache),
-            createIs<CourseExercise[]>(),
-        );
+        if (this._isInsider()) {
+            return this._executeLangsCommand(
+                {
+                    args: ["get-course-exercises", "--course-id", id.toString()],
+                    core: true,
+                },
+                createIs<CourseExercise[]>(),
+                cache,
+            ).then((res) => res.map((r) => r.data));
+        } else {
+            return this._checkApiResponse(
+                this._tmcApiRequest(`courses/${id}/exercises`, cache),
+                createIs<CourseExercise[]>(),
+            );
+        }
     }
 
     /**
@@ -402,10 +429,21 @@ export default class TMC {
         id: number,
         cache = false,
     ): Promise<Result<ExerciseDetails, Error>> {
-        return this._checkApiResponse(
-            this._tmcApiRequest(`core/exercises/${id}`, cache),
-            createIs<ExerciseDetails>(),
-        );
+        if (this._isInsider()) {
+            return this._executeLangsCommand(
+                {
+                    args: ["get-exercise-details", "--exercise-id", id.toString()],
+                    core: true,
+                },
+                createIs<ExerciseDetails>(),
+                cache,
+            ).then((res) => res.map((r) => r.data));
+        } else {
+            return this._checkApiResponse(
+                this._tmcApiRequest(`core/exercises/${id}`, cache),
+                createIs<ExerciseDetails>(),
+            );
+        }
     }
 
     /**
@@ -540,7 +578,7 @@ export default class TMC {
 
         const exercisePath = this._workspaceManager.getExercisePathById(exerciseId);
         if (exercisePath.err) {
-            exercisePath;
+            return exercisePath;
         }
 
         // TODO: Finish insider version when this command is fixed in Langs
@@ -651,15 +689,8 @@ export default class TMC {
         if (this._isInsider() && pythonExecutablePath) {
             env.TMC_LANGS_PYTHON_EXEC = pythonExecutablePath;
         }
-        const outputPath = this._nextTempOutputPath();
         const { interrupt, result } = this._spawnLangsProcess({
-            args: [
-                "run-tests",
-                "--exercise-path",
-                exerciseFolderPath.val,
-                "--output-path",
-                outputPath,
-            ],
+            args: ["run-tests", "--exercise-path", exerciseFolderPath.val],
             core: false,
             env,
             onStderr: (data) => Logger.log("Rust Langs", data),
@@ -804,13 +835,21 @@ export default class TMC {
     /**
      * Function which returns old submissions as list from the server
      */
-    public async fetchOldSubmissionIds(
-        exerciseId: number,
-    ): Promise<Result<OldSubmission[], Error>> {
-        return this._checkApiResponse(
-            this._tmcApiRequest(`exercises/${exerciseId}/users/current/submissions`, false),
-            createIs<OldSubmission[]>(),
-        );
+    public async getOldSubmissions(exerciseId: number): Promise<Result<OldSubmission[], Error>> {
+        if (this._isInsider()) {
+            return this._executeLangsCommand(
+                {
+                    args: ["get-exercise-submissions", "--exercise-id", exerciseId.toString()],
+                    core: true,
+                },
+                createIs<OldSubmission[]>(),
+            ).then((res) => res.map((r) => r.data));
+        } else {
+            return this._checkApiResponse(
+                this._tmcApiRequest(`exercises/${exerciseId}/users/current/submissions`, false),
+                createIs<OldSubmission[]>(),
+            );
+        }
     }
 
     /**
@@ -828,13 +867,15 @@ export default class TMC {
         useCache = false,
     ): Promise<Result<LangsResponse<T>, Error>> {
         const cacheKey = langsArgs.args.join("-");
-        if (useCache) {
-            const cached = this._rustCache.get(cacheKey);
-            if (cached && checker(cached.data)) {
+        let cached: LangsResponse<unknown> | undefined;
+        if (useCache && (cached = this._rustCache.get(cacheKey))) {
+            if (checker(cached.data)) {
                 return new Ok({ ...cached, data: cached.data });
+            } else {
+                // This should NEVER have to happen
+                Logger.error("Cached data for key didn't match the expected type, re-fetching...");
+                Logger.debug(cacheKey, cached.data);
             }
-            // This should NEVER have to happen
-            Logger.error("Cached data didn't match the expected type, re-fetching...");
         }
         const result = await this._spawnLangsProcess(langsArgs).result;
         if (result.err) {
@@ -896,8 +937,9 @@ export default class TMC {
             this._resources.extensionVersion,
         ];
 
-        let stdout: UncheckedLangsResponse[] = [];
         let stderr = "";
+        const stdout: UncheckedLangsResponse[] = [];
+        let stdoutBuffer = "";
 
         const executable = this._resources.getCliPath();
         Logger.log(JSON.stringify(executable) + " " + args.map((a) => JSON.stringify(a)).join(" "));
@@ -924,25 +966,26 @@ export default class TMC {
             });
             cprocess.stderr.on("data", (chunk) => {
                 const data = chunk.toString();
-                stderr = stderr.concat(data);
+                stderr += data;
                 onStderr?.(data);
             });
             cprocess.stdout.on("data", (chunk) => {
-                try {
-                    // Check against broken and output
-                    const prepared = `[${chunk.toString().trim().replace(/}\s*{/g, "},{")}]`;
-                    const json = JSON.parse(prepared);
-                    if (!is<UncheckedLangsResponse[]>(json)) {
-                        Logger.error(
-                            "Langs response didn't match expected type, received: ",
-                            chunk.toString(),
-                        );
-                        return;
+                const parts = (stdoutBuffer + chunk.toString()).split("\n");
+                stdoutBuffer = parts.pop() || "";
+                for (const part of parts) {
+                    try {
+                        const json = JSON.parse(part.trim());
+                        if (is<UncheckedLangsResponse>(json)) {
+                            stdout.push(json);
+                            onStdout?.(json);
+                        } else {
+                            Logger.error("TMC-langs response didn't match expected type");
+                            Logger.debug(part);
+                        }
+                    } catch (e) {
+                        Logger.warn("Failed to parse TMC-langs output");
+                        Logger.debug(part);
                     }
-                    stdout = stdout.concat(json);
-                    onStdout?.(json[json.length - 1]);
-                } catch (e) {
-                    Logger.warn("Failed to parse langs response, received: ", chunk.toString());
                 }
             });
         });
@@ -959,11 +1002,16 @@ export default class TMC {
             try {
                 await processResult;
             } catch (error) {
-                return new Err(new Error(error));
+                return new Err(new RuntimeError(error));
             }
 
             if (interrupted) {
                 return new Err(new RuntimeError("TMC Langs process was killed."));
+            }
+
+            if (stdoutBuffer !== "") {
+                Logger.warn("Failed to parse some TMC Langs output");
+                Logger.debug(stdoutBuffer);
             }
 
             return new Ok({

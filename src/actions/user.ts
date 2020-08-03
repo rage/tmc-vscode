@@ -331,7 +331,7 @@ export async function getOldSubmissions(
     if (currentExercise.err) {
         return currentExercise;
     }
-    const result = await tmc.fetchOldSubmissionIds(currentExercise.val.id);
+    const result = await tmc.getOldSubmissions(currentExercise.val.id);
     if (result.err) {
         return result;
     }
