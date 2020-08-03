@@ -110,20 +110,6 @@ export async function resourceInitialization(
     const tmcClosedExercisesFolderPathRelative = "closed-exercises";
     const tmcLangsPathRelative = TMC_JAR_NAME;
 
-    // Verify that all course .code-workspaces are in-place on startup.
-    const userData = storage.getUserData();
-    userData?.courses.forEach((course) => {
-        const tmcWorkspaceFilePath = path.join(
-            tmcDataPath,
-            tmcWorkspacePathRelative,
-            course.name + ".code-workspace",
-        );
-        if (!fs.existsSync(tmcWorkspaceFilePath)) {
-            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
-            Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
-        }
-    });
-
     if (!fs.existsSync(tmcDataPath)) {
         fs.mkdirSync(tmcDataPath, { recursive: true });
         Logger.log(`Created tmc data directory at ${tmcDataPath}`);
@@ -178,6 +164,20 @@ export async function resourceInitialization(
         }
         Logger.log(`${TMC_JAR_URL} downloaded`);
     }
+
+    // Verify that all course .code-workspaces are in-place on startup.
+    const userData = storage.getUserData();
+    userData?.courses.forEach((course) => {
+        const tmcWorkspaceFilePath = path.join(
+            tmcDataPath,
+            tmcWorkspacePathRelative,
+            course.name + ".code-workspace",
+        );
+        if (!fs.existsSync(tmcWorkspaceFilePath)) {
+            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
+            Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
+        }
+    });
 
     /**
      * Insider version toggle.
