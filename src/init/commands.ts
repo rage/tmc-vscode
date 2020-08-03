@@ -24,7 +24,7 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
 ): void {
-    const { ui, workspaceManager, userData } = actionContext;
+    const { resources, ui, userData, workspaceManager } = actionContext;
     Logger.log("Registering TMC VSCode commands");
 
     context.subscriptions.push(
@@ -234,6 +234,15 @@ export function registerCommands(
                 Logger.error(message, result.val);
                 showError(message);
             }
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("tmc.welcome", async () => {
+            ui.webview.setContentFromTemplate({
+                templateName: "welcome",
+                version: resources.extensionVersion,
+            });
         }),
     );
 }

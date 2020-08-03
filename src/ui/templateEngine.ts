@@ -11,7 +11,7 @@ import { SubmissionResultReport, TmcLangsTestResultRust } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, numbersToString, parseTestResultsText } from "../utils/";
 
-import { CourseDetails, Webview } from "./templates";
+import { CourseDetails, Webview, Welcome } from "./templates";
 import { TemplateData } from "./types";
 
 export default class TemplateEngine {
@@ -250,14 +250,23 @@ export default class TemplateEngine {
         content="default-src 'none'; img-src https:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';" />`;
         const cssBlob = this._cssBlob;
 
-        if (templateData.templateName === "course-details") {
-            return Webview.render({
-                children: CourseDetails.component(templateData),
-                cssBlob,
-                cspSource: webview.cspSource,
-                script: CourseDetails.script,
-            });
+        switch (templateData.templateName) {
+            case "course-details":
+                return Webview.render({
+                    children: CourseDetails.component(templateData),
+                    cssBlob,
+                    cspSource: webview.cspSource,
+                    script: CourseDetails.script,
+                });
+            case "welcome":
+                return Webview.render({
+                    children: Welcome.component(templateData),
+                    cspSource: webview.cspSource,
+                    cssBlob,
+                });
         }
+
+        // -- Use legacy webview instead --
 
         const name = templateData.templateName;
         const p = path.join(this._htmlPath, `${name}.html`);

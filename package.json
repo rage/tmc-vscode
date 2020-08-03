@@ -41,7 +41,8 @@
         "onCommand:tmc.resetExercise",
         "onCommand:tmc.uploadArchive",
         "onCommand:tmc.selectAction",
-        "onCommand:tmc.switchWorkspace"
+        "onCommand:tmc.switchWorkspace",
+        "onCommand:tmc.welcome"
     ],
     "main": "./dist/extension",
     "contributes": {
@@ -96,6 +97,11 @@
             {
                 "command": "tmc.cleanExercise",
                 "title": "Clean exercise",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.welcome",
+                "title": "Welcome",
                 "category": "TestMyCode"
             }
         ],

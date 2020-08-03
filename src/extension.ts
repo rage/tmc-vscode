@@ -158,6 +158,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }, EXERCISE_CHECK_INTERVAL);
 
     init.watchForWorkspaceChanges(actionContext);
+
+    if (previousVersion !== currentVersion) {
+        await vscode.commands.executeCommand("tmc.welcome");
+    }
 }
 
 export function deactivate(): void {
