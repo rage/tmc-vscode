@@ -84,8 +84,55 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
         });
 
         vscode.workspace.onDidOpenTextDocument(async (doc) => {
-            if (doc.languageId === "markdown") {
-                await vscode.commands.executeCommand("markdown.showPreview", doc.uri);
+            const workspace = vscode.workspace.name?.split(" ")[0];
+            if (workspace && isCorrectWorkspaceOpen(resources, workspace)) {
+                const languageId = doc.languageId;
+                Logger.debug("Text document languageId", languageId);
+                switch (languageId) {
+                    case "c":
+                    case "cpp":
+                    case "objective-c":
+                    case "objective-cpp":
+                        if (!vscode.extensions.getExtension("ms-vscode.cpptools")) {
+                            workspaceManager.addWorkspaceRecommendation(
+                                workspace,
+                                "ms-vscode.cpptools",
+                            );
+                        }
+                        break;
+                    case "csharp":
+                        if (!vscode.extensions.getExtension("ms-dotnettools.csharp")) {
+                            workspaceManager.addWorkspaceRecommendation(
+                                workspace,
+                                "ms-dotnettools.csharp",
+                            );
+                        }
+                        break;
+                    case "markdown":
+                        await vscode.commands.executeCommand("markdown.showPreview", doc.uri);
+                        break;
+                    case "r":
+                        if (!vscode.extensions.getExtension("ikuyadeu.r")) {
+                            workspaceManager.addWorkspaceRecommendation(workspace, "ikuyadeu.r");
+                        }
+                        break;
+                    case "python":
+                        if (!vscode.extensions.getExtension("ms-python.python")) {
+                            workspaceManager.addWorkspaceRecommendation(
+                                workspace,
+                                "ms-python.python",
+                            );
+                        }
+                        break;
+                    case "java":
+                        if (!vscode.extensions.getExtension("vscjava.vscode-java-pack")) {
+                            workspaceManager.addWorkspaceRecommendation(
+                                workspace,
+                                "vscjava.vscode-java-pack",
+                            );
+                        }
+                        break;
+                }
             }
         });
     }
