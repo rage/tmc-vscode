@@ -29,7 +29,7 @@ import {
     RuntimeError,
     TimeoutError,
 } from "../errors";
-import { displayProgrammerError, downloadFile } from "../utils/";
+import { displayProgrammerError, downloadFile, sleep } from "../utils/";
 import { Logger } from "../utils/logger";
 
 import {
@@ -335,7 +335,7 @@ export default class TMC {
     public getCourses(organization: string, cache = false): Promise<Result<Course[], Error>> {
         if (this._isInsider()) {
             return this._executeLangsCommand(
-                { args: ["list-courses", "--organization", organization], core: true },
+                { args: ["get-courses", "--organization", organization], core: true },
                 createIs<Course[]>(),
                 cache,
             ).then((res) => res.map((r) => r.data));
@@ -1001,6 +1001,10 @@ export default class TMC {
         const result = (async (): RustProcessRunner["result"] => {
             try {
                 await processResult;
+                while (!cprocess.stdout.destroyed) {
+                    Logger.debug("Cros", cprocess.stdout.destroyed);
+                    await sleep(10);
+                }
             } catch (error) {
                 return new Err(new RuntimeError(error));
             }
