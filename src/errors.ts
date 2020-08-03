@@ -1,8 +1,9 @@
-class BaseError implements Error {
+class BaseError extends Error {
     public readonly name: string = "BaseError";
-    public message: string;
-    constructor(message?: string) {
-        this.message = message ? message : "";
+    public details: string;
+    constructor(message?: string, details?: string) {
+        super(message);
+        this.details = details ? details : "";
     }
 }
 

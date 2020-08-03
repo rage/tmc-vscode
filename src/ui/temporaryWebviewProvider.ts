@@ -7,8 +7,8 @@ import UI from "./ui";
  * A helper class for an easy access to a recycled pool of Temporary Webviews.
  */
 export default class TemporaryWebviewProvider {
-    private temporaryWebviewPool: TemporaryWebview[];
-    private createNewWebview: () => TemporaryWebview;
+    private _temporaryWebviewPool: TemporaryWebview[];
+    private _createNewWebview: () => TemporaryWebview;
 
     /**
      * Creates a new instance of TemporaryWebviewProvider.
@@ -16,8 +16,8 @@ export default class TemporaryWebviewProvider {
      * @param ui A ui instance that is passed to temporary webview constructors.
      */
     constructor(resources: Resources, ui: UI) {
-        this.temporaryWebviewPool = [];
-        this.createNewWebview = (): TemporaryWebview => new TemporaryWebview(resources, ui);
+        this._temporaryWebviewPool = [];
+        this._createNewWebview = (): TemporaryWebview => new TemporaryWebview(resources, ui);
     }
 
     /**
@@ -27,15 +27,15 @@ export default class TemporaryWebviewProvider {
      */
     public getTemporaryWebview(): TemporaryWebview {
         let visible: TemporaryWebview | undefined;
-        this.temporaryWebviewPool = this.temporaryWebviewPool.filter((tw) => !tw.disposed);
-        const visibleIndex = this.temporaryWebviewPool.findIndex((tw) => tw.isVisible());
+        this._temporaryWebviewPool = this._temporaryWebviewPool.filter((tw) => !tw.disposed);
+        const visibleIndex = this._temporaryWebviewPool.findIndex((tw) => tw.isVisible());
         if (visibleIndex >= 0) {
-            visible = this.temporaryWebviewPool[visibleIndex];
-            this.temporaryWebviewPool = this.temporaryWebviewPool.filter(
+            visible = this._temporaryWebviewPool[visibleIndex];
+            this._temporaryWebviewPool = this._temporaryWebviewPool.filter(
                 (tw, i) => i !== visibleIndex,
             );
         }
-        return visible || this.temporaryWebviewPool.pop() || this.createNewWebview();
+        return visible || this._temporaryWebviewPool.pop() || this._createNewWebview();
     }
 
     /**
@@ -44,7 +44,7 @@ export default class TemporaryWebviewProvider {
      */
     public addToRecycables(temporaryWebview: TemporaryWebview): void {
         if (!temporaryWebview.disposed) {
-            this.temporaryWebviewPool.push(temporaryWebview);
+            this._temporaryWebviewPool.push(temporaryWebview);
         }
     }
 }

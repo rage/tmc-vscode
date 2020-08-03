@@ -21,13 +21,13 @@ import WorkspaceWatcher from "./workspaceWatcher";
  * Class for managing, opening and closing of exercises on disk.
  */
 export default class WorkspaceManager {
-    private readonly pathToId: Map<string, number>;
-    private readonly idToData: Map<number, LocalExerciseData>;
-    private readonly storage: Storage;
-    private readonly resources: Resources;
+    private readonly _pathToId: Map<string, number>;
+    private readonly _idToData: Map<number, LocalExerciseData>;
+    private readonly _storage: Storage;
+    private readonly _resources: Resources;
 
     // Data for the workspace filesystem event watcher
-    private readonly watcher: WorkspaceWatcher;
+    private readonly _watcher: WorkspaceWatcher;
 
     /**
      * Creates a new instance of the WorkspaceManager class.
@@ -35,23 +35,23 @@ export default class WorkspaceManager {
      * @param resources Resources instance for constructing the exercise path
      */
     constructor(storage: Storage, resources: Resources) {
-        this.storage = storage;
-        this.resources = resources;
-        const storedData = this.storage.getExerciseData();
+        this._storage = storage;
+        this._resources = resources;
+        const storedData = this._storage.getExerciseData();
         if (storedData) {
-            this.idToData = new Map(storedData.map((x) => [x.id, x]));
-            this.pathToId = new Map(storedData.map((x) => [this.getExercisePath(x), x.id]));
+            this._idToData = new Map(storedData.map((x) => [x.id, x]));
+            this._pathToId = new Map(storedData.map((x) => [this._getExercisePath(x), x.id]));
         } else {
-            this.idToData = new Map();
-            this.pathToId = new Map();
+            this._idToData = new Map();
+            this._pathToId = new Map();
         }
-        this.watcher = new WorkspaceWatcher(resources);
+        this._watcher = new WorkspaceWatcher(resources);
     }
 
     public async initialize(): Promise<void> {
         Logger.log("Initializing workspace");
-        await this.workspaceIntegrityCheck();
-        this.watcher.start();
+        await this._workspaceIntegrityCheck();
+        this._watcher.start();
     }
 
     public updateExerciseData(
@@ -59,21 +59,21 @@ export default class WorkspaceManager {
         softDeadline: string | null,
         hardDeadline: string | null,
     ): void {
-        const data = this.idToData.get(id);
+        const data = this._idToData.get(id);
         if (data) {
             data.deadline = hardDeadline;
             data.softDeadline = softDeadline;
-            this.idToData.set(id, data);
-            this.updatePersistentData();
+            this._idToData.set(id, data);
+            this._updatePersistentData();
         }
     }
 
     public updateExercisesStatus(id: number, status: ExerciseStatus): void {
-        const data = this.idToData.get(id);
+        const data = this._idToData.get(id);
         if (data) {
             data.status = status;
-            this.idToData.set(id, data);
-            this.updatePersistentData();
+            this._idToData.set(id, data);
+            this._updatePersistentData();
         }
     }
 
@@ -90,8 +90,8 @@ export default class WorkspaceManager {
         checksum: string,
         exerciseDetails: ExerciseDetails,
     ): Promise<Result<string, Error>> {
-        if (this.idToData.has(exerciseDetails.exercise_id)) {
-            const data = this.idToData.get(exerciseDetails.exercise_id);
+        if (this._idToData.has(exerciseDetails.exercise_id)) {
+            const data = this._idToData.get(exerciseDetails.exercise_id);
             if (!data) {
                 return new Err(new Error("Data integrity error"));
             }
@@ -108,15 +108,15 @@ export default class WorkspaceManager {
                 return new Err(new Error("Exercise already downloaded"));
             }
         }
-        const exerciseFolderPath = this.resources.getExercisesFolderPath();
+        const exerciseFolderPath = this._resources.getExercisesFolderPath();
         const exercisePath = path.join(
             exerciseFolderPath,
             organizationSlug,
             exerciseDetails.course_name,
             exerciseDetails.exercise_name,
         );
-        this.pathToId.set(exercisePath, exerciseDetails.exercise_id);
-        this.idToData.set(exerciseDetails.exercise_id, {
+        this._pathToId.set(exercisePath, exerciseDetails.exercise_id);
+        this._idToData.set(exerciseDetails.exercise_id, {
             checksum,
             course: exerciseDetails.course_name,
             deadline: exerciseDetails.deadline,
@@ -126,7 +126,7 @@ export default class WorkspaceManager {
             organization: organizationSlug,
             softDeadline: softDeadline,
         });
-        this.updatePersistentData();
+        this._updatePersistentData();
         return new Ok(exercisePath);
     }
 
@@ -135,7 +135,7 @@ export default class WorkspaceManager {
      * @param exerciseFolder Path to exercise folder used for matching with the data
      */
     public getExerciseDataByPath(exerciseFolder: string): Result<LocalExerciseData, Error> {
-        const id = this.pathToId.get(exerciseFolder);
+        const id = this._pathToId.get(exerciseFolder);
         if (!id) {
             return new Err(new Error(`Exercise ID not found for ${exerciseFolder}`));
         }
@@ -147,7 +147,7 @@ export default class WorkspaceManager {
      * @param exerciseFolder Path to exercise folder used for matching with the data
      */
     public getExerciseDataById(id: number): Result<LocalExerciseData, Error> {
-        const data = this.idToData.get(id);
+        const data = this._idToData.get(id);
         if (!data) {
             return new Err(new Error(`Exercise data missing for ${id}`));
         }
@@ -156,7 +156,7 @@ export default class WorkspaceManager {
 
     public getExercisesByCourseName(courseName: string): LocalExerciseData[] {
         const exercises: LocalExerciseData[] = [];
-        for (const data of this.idToData.values()) {
+        for (const data of this._idToData.values()) {
             if (data.course === courseName) {
                 exercises.push(data);
             }
@@ -169,7 +169,7 @@ export default class WorkspaceManager {
      * @param exerciseFolder Path to exercise folder used for matching with the id
      */
     public getExerciseIdByPath(exerciseFolder: string): Result<number, Error> {
-        const id = this.pathToId.get(exerciseFolder);
+        const id = this._pathToId.get(exerciseFolder);
         return id !== undefined
             ? new Ok(id)
             : new Err(new Error(`Exercise ID not found for ${exerciseFolder}`));
@@ -202,7 +202,7 @@ export default class WorkspaceManager {
      * @param filePath
      */
     public checkIfPathIsExercise(filePath: string): number | undefined {
-        const exerciseFolderPath = this.resources.getExercisesFolderPath();
+        const exerciseFolderPath = this._resources.getExercisesFolderPath();
         const relation = path.relative(exerciseFolderPath, filePath);
 
         if (relation.startsWith("..")) {
@@ -269,15 +269,15 @@ export default class WorkspaceManager {
 
         const courseExercises = this.getExercisesByCourseName(courseName);
 
-        if (isCorrectWorkspaceOpen(this.resources, courseName)) {
-            const result = await this.handleWorkspaceChanges(true, courseExercises, ...ids);
+        if (isCorrectWorkspaceOpen(this._resources, courseName)) {
+            const result = await this._handleWorkspaceChanges(true, courseExercises, ...ids);
             if (result.err) {
                 return result;
             }
             await vscode.commands.executeCommand("workbench.files.action.collapseExplorerFolders");
         }
-        results = await this.setStatus(ExerciseStatus.CLOSED, ExerciseStatus.OPEN, ...ids);
-        await this.updatePersistentData();
+        results = await this._setStatus(ExerciseStatus.CLOSED, ExerciseStatus.OPEN, ...ids);
+        await this._updatePersistentData();
         return new Ok(results);
     }
 
@@ -292,42 +292,72 @@ export default class WorkspaceManager {
         let results: { id: number; status: UITypes.ExerciseStatus }[] = [];
 
         const courseExercises = this.getExercisesByCourseName(courseName);
-        if (isCorrectWorkspaceOpen(this.resources, courseName)) {
-            const result = await this.handleWorkspaceChanges(false, courseExercises, ...ids);
+        if (isCorrectWorkspaceOpen(this._resources, courseName)) {
+            const result = await this._handleWorkspaceChanges(false, courseExercises, ...ids);
             if (result.err) {
                 return result;
             }
         }
-        results = await this.setStatus(ExerciseStatus.OPEN, ExerciseStatus.CLOSED, ...ids);
+        results = await this._setStatus(ExerciseStatus.OPEN, ExerciseStatus.CLOSED, ...ids);
 
-        await this.updatePersistentData();
+        await this._updatePersistentData();
         return new Ok(results);
     }
 
-    private async setStatus(
-        oldStatus: ExerciseStatus,
-        newStatus: ExerciseStatus,
-        ...ids: number[]
-    ): Promise<Array<{ id: number; status: UITypes.ExerciseStatus }>> {
-        const results: Array<{ id: number; status: UITypes.ExerciseStatus }> = [];
-        const uistatus = newStatus === ExerciseStatus.OPEN ? "opened" : "closed";
-        ids.forEach(async (id) => {
-            const data = this.idToData.get(id);
-            if (data && data.status === oldStatus) {
-                if (!fs.existsSync(this.getExercisePath(data))) {
-                    await this.setMissing(id);
-                    results.push({ id: data.id, status: "new" });
-                    return;
-                }
-                data.status = newStatus;
-                this.idToData.set(data.id, data);
-                results.push({ id: data.id, status: uistatus });
+    /**
+     * Deletes exercise from disk if present and clears all data related to it.
+     * @param exerciseId Exercise ID to delete
+     */
+    public async deleteExercise(...ids: number[]): Promise<void> {
+        for (const id of ids) {
+            const data = this._idToData.get(id);
+            if (data) {
+                const openPath = this._getExercisePath(data);
+                delSync(openPath, { force: true });
+                this._pathToId.delete(openPath);
+                this._idToData.delete(id);
             }
-        });
-        return results;
+        }
+        await this._updatePersistentData();
     }
 
-    private async handleWorkspaceChanges(
+    public getAllExercises(): LocalExerciseData[] {
+        return Array.from(this._idToData.values());
+    }
+
+    public async setMissing(id: number): Promise<void> {
+        const data = this._idToData.get(id);
+        if (data) {
+            data.status = ExerciseStatus.MISSING;
+            this._idToData.set(id, data);
+            await this._updatePersistentData();
+        }
+    }
+
+    public getExercisePathById(id: number): Result<string, Error> {
+        const data = this._idToData.get(id);
+        if (!data) {
+            return new Err(new Error("Invalid exercise ID"));
+        }
+        const path = this._getExercisePath(data);
+        if (!fs.existsSync(path)) {
+            new Err(new Error(`Exercise data missing ${path}`));
+        }
+        return new Ok(path);
+    }
+
+    public createWorkspaceFile(courseName: string): void {
+        const tmcWorkspaceFilePath = path.join(
+            this._resources.getWorkspaceFolderPath(),
+            courseName + ".code-workspace",
+        );
+        if (!fs.existsSync(tmcWorkspaceFilePath)) {
+            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
+            Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
+        }
+    }
+
+    private async _handleWorkspaceChanges(
         handleAsOpen: boolean,
         exercises: LocalExerciseData[],
         ...ids: number[]
@@ -341,16 +371,16 @@ export default class WorkspaceManager {
         // Select all open exercises for course.
         const allOpen: vscode.Uri[] = exercises
             .filter((ex) => ex.status === ExerciseStatus.OPEN)
-            .map((ex) => vscode.Uri.file(this.getExercisePath(ex)));
+            .map((ex) => vscode.Uri.file(this._getExercisePath(ex)));
 
         const toClose: vscode.Uri[] = [];
         const toOpen: vscode.Uri[] = [];
 
         const statusToCheck = handleAsOpen ? ExerciseStatus.CLOSED : ExerciseStatus.OPEN;
         ids.forEach((id) => {
-            const data = this.idToData.get(id);
+            const data = this._idToData.get(id);
             if (data && data.status === statusToCheck) {
-                const openPath = this.getExercisePath(data);
+                const openPath = this._getExercisePath(data);
                 const openAsUri = vscode.Uri.file(openPath);
                 if (!fs.existsSync(openPath)) {
                     toOpen.push(openAsUri);
@@ -367,9 +397,9 @@ export default class WorkspaceManager {
 
         if (currentlyOpenFolders.length === 0 || currentlyOpenFolders[0].name !== ".tmc") {
             Logger.warn("The .tmc folder is not set as root folder.");
-            this.watcher.verifyWorkspaceRootFile();
+            this._watcher.verifyWorkspaceRootFile();
             allOpen.push(
-                vscode.Uri.file(path.join(this.resources.getWorkspaceFolderPath(), ".tmc")),
+                vscode.Uri.file(path.join(this._resources.getWorkspaceFolderPath(), ".tmc")),
             );
             tmcFolderAsRoot = false;
         }
@@ -410,82 +440,52 @@ export default class WorkspaceManager {
         return new Err(new Error("Failed to handle workspace changes."));
     }
 
-    /**
-     * Deletes exercise from disk if present and clears all data related to it.
-     * @param exerciseId Exercise ID to delete
-     */
-    public async deleteExercise(...ids: number[]): Promise<void> {
-        for (const id of ids) {
-            const data = this.idToData.get(id);
-            if (data) {
-                const openPath = this.getExercisePath(data);
-                delSync(openPath, { force: true });
-                this.pathToId.delete(openPath);
-                this.idToData.delete(id);
+    private async _setStatus(
+        oldStatus: ExerciseStatus,
+        newStatus: ExerciseStatus,
+        ...ids: number[]
+    ): Promise<Array<{ id: number; status: UITypes.ExerciseStatus }>> {
+        const results: Array<{ id: number; status: UITypes.ExerciseStatus }> = [];
+        const uistatus = newStatus === ExerciseStatus.OPEN ? "opened" : "closed";
+        ids.forEach(async (id) => {
+            const data = this._idToData.get(id);
+            if (data && data.status === oldStatus) {
+                if (!fs.existsSync(this._getExercisePath(data))) {
+                    await this.setMissing(id);
+                    results.push({ id: data.id, status: "new" });
+                    return;
+                }
+                data.status = newStatus;
+                this._idToData.set(data.id, data);
+                results.push({ id: data.id, status: uistatus });
             }
-        }
-        await this.updatePersistentData();
+        });
+        return results;
     }
 
-    public getAllExercises(): LocalExerciseData[] {
-        return Array.from(this.idToData.values());
-    }
-
-    public async setMissing(id: number): Promise<void> {
-        const data = this.idToData.get(id);
-        if (data) {
-            data.status = ExerciseStatus.MISSING;
-            this.idToData.set(id, data);
-            await this.updatePersistentData();
-        }
-    }
-
-    public getExercisePathById(id: number): Result<string, Error> {
-        const data = this.idToData.get(id);
-        if (!data) {
-            return new Err(new Error("Invalid exercise ID"));
-        }
-        const path = this.getExercisePath(data);
-        if (!fs.existsSync(path)) {
-            new Err(new Error(`Exercise data missing ${path}`));
-        }
-        return new Ok(path);
-    }
-
-    private getExercisePath(exerciseData: LocalExerciseData): string {
+    private _getExercisePath(exerciseData: LocalExerciseData): string {
         return path.join(
-            this.resources.getExercisesFolderPath(),
+            this._resources.getExercisesFolderPath(),
             exerciseData.organization,
             exerciseData.course,
             exerciseData.name,
         );
     }
 
-    private async updatePersistentData(): Promise<void> {
-        return this.storage.updateExerciseData(Array.from(this.idToData.values()));
-    }
-
-    public createWorkspaceFile(courseName: string): void {
-        const tmcWorkspaceFilePath = path.join(
-            this.resources.getWorkspaceFolderPath(),
-            courseName + ".code-workspace",
-        );
-        if (!fs.existsSync(tmcWorkspaceFilePath)) {
-            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
-            Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
-        }
+    private async _updatePersistentData(): Promise<void> {
+        return this._storage.updateExerciseData(Array.from(this._idToData.values()));
     }
 
     /**
      * Checks to make sure all the folders are in place,
      * should be run at startup before the watcher is initialized
      */
-    private async workspaceIntegrityCheck(): Promise<void> {
+    private async _workspaceIntegrityCheck(): Promise<void> {
         const workspaceAndCourseName = vscode.workspace.name?.split(" ")[0];
         Logger.log(`Workspace integrity check for ${workspaceAndCourseName}`);
         if (
             workspaceAndCourseName &&
-            isCorrectWorkspaceOpen(this.resources, workspaceAndCourseName)
+            isCorrectWorkspaceOpen(this._resources, workspaceAndCourseName)
         ) {
             const exercises = this.getExercisesByCourseName(workspaceAndCourseName);
             const openIds: number[] = exercises

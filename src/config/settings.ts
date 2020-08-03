@@ -19,32 +19,25 @@ import { ExtensionSettings, ExtensionSettingsData } from "./types";
  * extension.
  */
 export default class Settings {
-    private readonly storage: Storage;
-    private readonly resources: Resources;
-    private settings: ExtensionSettings;
+    private readonly _storage: Storage;
+
+    private readonly _resources: Resources;
+
+    private _settings: ExtensionSettings;
 
     constructor(storage: Storage, settings: ExtensionSettings, resources: Resources) {
-        this.storage = storage;
-        this.resources = resources;
-        this.settings = settings;
+        this._storage = storage;
+        this._resources = resources;
+        this._settings = settings;
     }
 
     public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
         const workspace = vscode.workspace.name;
-        if (workspace && isCorrectWorkspaceOpen(this.resources, workspace.split(" ")[0])) {
+        if (workspace && isCorrectWorkspaceOpen(this._resources, workspace.split(" ")[0])) {
             Logger.log("TMC Workspace open, verifying workspace settings integrity.");
-            await this.setFilesExcludeInWorkspace(this.settings.hideMetaFiles);
-            await this.verifyWatcherPatternExclusion();
+            await this._setFilesExcludeInWorkspace(this._settings.hideMetaFiles);
+            await this._verifyWatcherPatternExclusion();
         }
-    }
-
-    /**
-     * Makes sure that folders and its contents aren't deleted by our watcher.
-     * .vscode folder needs to be unwatched, otherwise adding settings to WorkspaceFolder level
-     * doesn't work. For example defining Python interpreter for the Exercise folder.
-     */
-    private async verifyWatcherPatternExclusion(): Promise<void> {
-        await this.updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
     }
 
     /**
@@ -52,7 +45,7 @@ export default class Settings {
      * @param settings ExtensionSettings object
      */
     public async updateExtensionSettingsToStorage(settings: ExtensionSettings): Promise<void> {
-        await this.storage.updateExtensionSettings(settings);
+        await this._storage.updateExtensionSettings(settings);
     }
 
     /**
@@ -64,28 +57,28 @@ export default class Settings {
     public async updateSetting(data: ExtensionSettingsData): Promise<void> {
         switch (data.setting) {
             case "insiderVersion":
-                this.settings.insiderVersion = data.value;
+                this._settings.insiderVersion = data.value;
                 break;
             case "dataPath":
-                this.settings.dataPath = data.value;
+                this._settings.dataPath = data.value;
                 break;
             case "oldDataPath":
-                this.settings.oldDataPath = { path: data.value, timestamp: Date.now() };
+                this._settings.oldDataPath = { path: data.value, timestamp: Date.now() };
                 break;
             case "logLevel":
-                this.settings.logLevel = data.value;
+                this._settings.logLevel = data.value;
                 break;
             case "hideMetaFiles":
-                this.settings.hideMetaFiles = data.value;
-                this.setFilesExcludeInWorkspace(data.value);
+                this._settings.hideMetaFiles = data.value;
+                this._setFilesExcludeInWorkspace(data.value);
                 break;
         }
         Logger.log("Updated settings data", data);
-        await this.updateExtensionSettingsToStorage(this.settings);
+        await this.updateExtensionSettingsToStorage(this._settings);
     }
 
     public getLogLevel(): LogLevel {
-        return this.settings.logLevel;
+        return this._settings.logLevel;
     }
 
     /**
@@ -94,7 +87,7 @@ export default class Settings {
      * @returns ExtensionSettings object or error
      */
     public async getExtensionSettings(): Promise<Result<ExtensionSettings, Error>> {
-        const settings = this.storage.getExtensionSettings();
+        const settings = this._storage.getExtensionSettings();
         if (!settings) {
             const msg = "Could not find settings from storage.";
             return new Err(new Error(msg));
@@ -103,13 +96,31 @@ export default class Settings {
     }
 
     /**
+     * Returns the section for the Workspace setting. If undefined, returns all settings.
+     * @param section A dot-separated identifier.
+     */
+    public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration | undefined {
+        const workspace = vscode.workspace.name?.split(" ")[0];
+        if (workspace && isCorrectWorkspaceOpen(this._resources, workspace)) {
+            return vscode.workspace.getConfiguration(
+                section,
+                vscode.Uri.file(this._resources.getWorkspaceFilePath(workspace)),
+            );
+        }
+    }
+
+    public isInsider(): boolean {
+        return this._settings.insiderVersion;
+    }
+
+    /**
      * Updates files.exclude values in TMC Workspace.code-workspace.
      * Keeps all user/workspace defined excluding patterns.
      * @param hide true to hide meta files in TMC workspace.
      */
-    private async setFilesExcludeInWorkspace(hide: boolean): Promise<void> {
+    private async _setFilesExcludeInWorkspace(hide: boolean): Promise<void> {
         const value = hide ? HIDE_META_FILES : SHOW_META_FILES;
-        await this.updateWorkspaceSetting("files.exclude", value);
+        await this._updateWorkspaceSetting("files.exclude", value);
     }
 
     /**
@@ -117,10 +128,9 @@ export default class Settings {
      * @param section Configuration name, supports dotted names.
      * @param value The new value
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private async updateWorkspaceSetting(section: string, value: any): Promise<void> {
-        const workspace = vscode.workspace.name;
-        if (workspace && isCorrectWorkspaceOpen(this.resources, workspace.split(" ")[0])) {
+    private async _updateWorkspaceSetting(section: string, value: unknown): Promise<void> {
+        const workspace = vscode.workspace.name?.split(" ")[0];
+        if (workspace && isCorrectWorkspaceOpen(this._resources, workspace)) {
             const oldValue = this.getWorkspaceSettings(section);
             let newValue = value;
             if (value instanceof Object) {
@@ -129,27 +139,18 @@ export default class Settings {
             await vscode.workspace
                 .getConfiguration(
                     undefined,
-                    vscode.Uri.file(this.resources.getWorkspaceFilePath(workspace.split(" ")[0])),
+                    vscode.Uri.file(this._resources.getWorkspaceFilePath(workspace)),
                 )
                 .update(section, newValue, vscode.ConfigurationTarget.Workspace);
         }
     }
 
     /**
-     * Returns the section for the Workspace setting. If undefined, returns all settings.
-     * @param section A dot-separated identifier.
+     * Makes sure that folders and its contents aren't deleted by our watcher.
+     * .vscode folder needs to be unwatched, otherwise adding settings to WorkspaceFolder level
+     * doesn't work. For example defining Python interpreter for the Exercise folder.
      */
-    public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration | undefined {
-        const workspace = vscode.workspace.name;
-        if (workspace && isCorrectWorkspaceOpen(this.resources, workspace.split(" ")[0])) {
-            return vscode.workspace.getConfiguration(
-                section,
-                vscode.Uri.file(this.resources.getWorkspaceFilePath(workspace.split(" ")[0])),
-            );
-        }
-    }
-
-    public isInsider(): boolean {
-        return this.settings.insiderVersion;
+    private async _verifyWatcherPatternExclusion(): Promise<void> {
+        await this._updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
     }
 }

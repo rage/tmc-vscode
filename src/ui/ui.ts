@@ -18,8 +18,8 @@ export default class UI {
      */
     public webview: TmcWebview;
 
-    private statusbar: vscode.StatusBarItem;
-    private statusBarTimeout: NodeJS.Timeout;
+    private _statusbar: vscode.StatusBarItem;
+    private _statusBarTimeout: NodeJS.Timeout;
 
     /**
      * Creates an UI object and (temporarily) initializes it with login-related content
@@ -32,8 +32,8 @@ export default class UI {
     ) {
         this.webview = new TmcWebview(extensionContext, resources);
         this.treeDP = new TmcMenuTree("tmcView");
-        this.statusbar = statusbaritem;
-        this.statusBarTimeout = setTimeout(() => {}, 0);
+        this._statusbar = statusbaritem;
+        this._statusBarTimeout = setTimeout(() => {}, 0);
     }
 
     /**
@@ -46,19 +46,19 @@ export default class UI {
     }
 
     public setStatusBar(text: string, timeout?: number): void {
-        clearTimeout(this.statusBarTimeout);
+        clearTimeout(this._statusBarTimeout);
         if (timeout) {
-            this.statusbar.text = `${text}`;
-            this.statusBarTimeout = setTimeout(() => {
-                this.statusbar.hide();
+            this._statusbar.text = `${text}`;
+            this._statusBarTimeout = setTimeout(() => {
+                this._statusbar.hide();
             }, timeout);
         } else {
-            this.statusbar.text = `${text}`;
+            this._statusbar.text = `${text}`;
         }
-        this.statusbar.show();
+        this._statusbar.show();
     }
 
     public hideStatusBar(): void {
-        this.statusbar.hide();
+        this._statusbar.hide();
     }
 }

@@ -10,13 +10,13 @@ import { Logger } from "../utils/logger";
  * Used to watch that the TMC-Readme.md file exists in TMC Workspace/".tmc" path.
  */
 export default class WorkspaceWatcher {
-    private readonly resources: Resources;
-    private watcher: vscode.FileSystemWatcher;
+    private readonly _resources: Resources;
+    private _watcher: vscode.FileSystemWatcher;
 
     constructor(resources: Resources) {
-        this.resources = resources;
-        this.watcher = vscode.workspace.createFileSystemWatcher(
-            this.resources.getWorkspaceFolderPath() + "/**",
+        this._resources = resources;
+        this._watcher = vscode.workspace.createFileSystemWatcher(
+            this._resources.getWorkspaceFolderPath() + "/**",
             true,
             false,
             false,
@@ -25,14 +25,14 @@ export default class WorkspaceWatcher {
 
     public start(): void {
         this.verifyWorkspaceRootFile();
-        this.watcher.onDidDelete((x) => {
+        this._watcher.onDidDelete((x) => {
             if (x.fsPath.includes(".tmc")) {
-                this.fileDeleteAction(x.fsPath);
+                this._fileDeleteAction(x.fsPath);
             }
         });
-        this.watcher.onDidChange((x) => {
+        this._watcher.onDidChange((x) => {
             if (x.fsPath.includes(".tmc")) {
-                this.fileChangeAction(x.fsPath);
+                this._fileChangeAction(x.fsPath);
             }
         });
     }
@@ -41,7 +41,7 @@ export default class WorkspaceWatcher {
      * Verifies that .tmc/ file exists and it's contents is correct.
      */
     public verifyWorkspaceRootFile(): void {
-        const rootFileFolder = path.join(this.resources.getWorkspaceFolderPath(), ".tmc");
+        const rootFileFolder = path.join(this._resources.getWorkspaceFolderPath(), ".tmc");
         const pathToRootFile = path.join(rootFileFolder, WORKSPACE_ROOT_FILE);
         if (!fs.existsSync(pathToRootFile)) {
             Logger.log(`Creating ${pathToRootFile}`);
@@ -55,8 +55,8 @@ export default class WorkspaceWatcher {
         }
     }
 
-    private fileDeleteAction(targetPath: string): void {
-        const basedir = this.resources.getWorkspaceFolderPath();
+    private _fileDeleteAction(targetPath: string): void {
+        const basedir = this._resources.getWorkspaceFolderPath();
         const rootFilePath = path.join(basedir, ".tmc", WORKSPACE_ROOT_FILE);
 
         if (path.relative(rootFilePath, targetPath) === "") {
@@ -69,9 +69,9 @@ export default class WorkspaceWatcher {
         }
     }
 
-    private fileChangeAction(targetPath: string): void {
+    private _fileChangeAction(targetPath: string): void {
         const rootFilePath = path.join(
-            this.resources.getWorkspaceFolderPath(),
+            this._resources.getWorkspaceFolderPath(),
             ".tmc",
             WORKSPACE_ROOT_FILE,
         );
