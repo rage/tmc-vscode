@@ -137,7 +137,7 @@ function component(props) {
                     </p>
                     <h4>Java replacement</h4>
                     <p>
-                        The extension uses a middleware called TMC-langs to handle some of its
+                        The extension uses a middleware called TMC-langs to handle many of its
                         features. As TMC-langs was written in Java, it caused an external dependency
                         for this extension. A Rust replacement was already featured silently in
                         version 0.9.0 for the purpose of running tests for some users. This feature
@@ -188,7 +188,7 @@ function component(props) {
                     <ul>
                         <li>
                             <a href="https://www.helsinki.fi/en/researchgroups/data-driven-education">
-                                RAGE Website
+                                Website
                             </a>
                         </li>
                         <li>
@@ -217,13 +217,16 @@ function component(props) {
                     </ul>
                 </div>
                 <div class="sidebar_group">
-                    <h4>Links</h4>
+                    <h4>TestMyCode Resources</h4>
                     <ul>
                         <li>
                             <a href="http://mooc.fi/">mooc.fi</a>
                         </li>
                         <li>
                             <a href="https://tmc.mooc.fi">tmc.mooc.fi</a>
+                        </li>
+                        <li>
+                            <a href="https://github.com/rage/tmc-langs-rust">TMC-langs Rust</a>
                         </li>
                     </ul>
                 </div>
