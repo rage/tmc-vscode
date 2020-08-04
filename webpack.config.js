@@ -105,15 +105,13 @@ const config = () => {
             }),
         ],
     };
-
-    /**@type {import('webpack').Configuration}*/
-    const devConfig = {
+    /**@returns {import('webpack').Configuration}*/
+    const devConfig = () => ({
         mode: "development",
         devtool: "inline-source-map",
-    };
-
-    /**@type {import('webpack').Configuration}*/
-    const prodConfig = {
+    });
+    /**@returns {import('webpack').Configuration}*/
+    const prodConfig = () => ({
         mode: "production",
         optimization: {
             minimizer: [
@@ -127,14 +125,14 @@ const config = () => {
                 }),
             ],
         },
-    };
+    });
 
     console.log(
         `Webpack building in ${isDevelopmentMode ? "development" : "production"} configuration.`,
     );
     console.log(`Configured backend: ${apiConfig.__TMC_API_URL__}`);
 
-    return merge(commonConfig, isDevelopmentMode ? devConfig : prodConfig);
+    return merge(commonConfig, isDevelopmentMode ? devConfig() : prodConfig());
 };
 
 module.exports = config;
