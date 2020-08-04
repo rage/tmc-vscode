@@ -17,9 +17,9 @@ function component(webviewProps) {
                     http-equiv="Content-Security-Policy"
                     content={
                         "default-src 'none';" +
-                        "img-src https:;" +
+                        `img-src ${cspSource} https:;` +
                         `style-src ${cspSource} 'unsafe-inline';` +
-                        "script-src 'unsafe-inline';`"
+                        "script-src 'unsafe-inline';"
                     }
                 />
                 <meta charset="UTF-8" />

@@ -4,6 +4,7 @@ import { Course, Organization, SubmissionStatusReport } from "../api/types";
 import Storage from "../config/storage";
 import { ExtensionSettings, LocalCourseData } from "../config/types";
 
+import { WelcomeProps } from "./templates/Welcome";
 import UI from "./ui";
 
 export type HandlerContext = {
@@ -37,7 +38,8 @@ export type TemplateData =
     | ({ templateName: "settings" } & SettingsData)
     | ({ templateName: "submission-result" } & SubmissionResultData)
     | ({ templateName: "submission-status" } & SubmissionStatusData)
-    | ({ templateName: "test-result" } & TestResultData);
+    | ({ templateName: "test-result" } & TestResultData)
+    | ({ templateName: "welcome" } & WelcomeProps);
 
 export type CourseDetailsData = {
     course: LocalCourseData;
@@ -130,9 +132,14 @@ export interface ExerciseStatusChange {
     status: ExerciseStatus;
 }
 
+export interface SetInsiderStatus {
+    command: "setInsiderStatus";
+    enabled: boolean;
+}
+
 export interface SetUpdateables {
     command: "setUpdateables";
     exerciseIds: number[];
 }
 
-export type WebviewMessage = ExerciseStatusChange | SetUpdateables;
+export type WebviewMessage = ExerciseStatusChange | SetInsiderStatus | SetUpdateables;
