@@ -14,7 +14,7 @@ import { validateAndFix } from "./config/validate";
 import * as init from "./init";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
-import { Logger, LogLevel } from "./utils/logger";
+import { Logger, LogLevel, semVerCompare } from "./utils";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 
@@ -159,7 +159,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     init.watchForWorkspaceChanges(actionContext);
 
-    if (previousVersion !== currentVersion) {
+    const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor");
+    if (versionDiff === undefined || versionDiff > 0) {
         await vscode.commands.executeCommand("tmc.welcome");
     }
 }
