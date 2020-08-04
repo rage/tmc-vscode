@@ -13,7 +13,7 @@ import { OldSubmission } from "../api/types";
 import { askForItem, showError, showNotification, showProgressNotification } from "../api/vscode";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import * as UITypes from "../ui/types";
-import { Logger } from "../utils";
+import { Logger, sleep } from "../utils";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 
 import { ActionContext, CourseExerciseDownloads } from "./types";
@@ -251,7 +251,7 @@ export async function resetExercise(
     id: number,
     options?: ResetOptions,
 ): Promise<Result<void, Error>> {
-    const { tmc, ui, workspaceManager } = actionContext;
+    const { settings, tmc, ui, workspaceManager } = actionContext;
 
     const exerciseData = workspaceManager.getExerciseDataById(id);
 
@@ -298,10 +298,22 @@ export async function resetExercise(
     }
     await vscode.commands.executeCommand("workbench.action.files.save");
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
-    await workspaceManager.deleteExercise(id);
-    const dlResult = await tmc.downloadExercise(id, slug);
-    if (dlResult.err) {
-        return dlResult;
+    if (settings.isInsider()) {
+        const resetResult = await tmc.resetExercise(id);
+        if (resetResult.err) {
+            Logger.warn("Reset failed, attempting again after a while.", resetResult.val);
+            await sleep(6000);
+            const resetResult2 = await tmc.resetExercise(id);
+            if (resetResult2.err) {
+                return resetResult2;
+            }
+        }
+    } else {
+        await workspaceManager.deleteExercise(id);
+        const dlResult = await tmc.downloadExercise(id, slug);
+        if (dlResult.err) {
+            return dlResult;
+        }
     }
     ui.setStatusBar(`Exercise ${exerciseData.val.name} resetted successfully`, 10000);
     return Ok.EMPTY;
@@ -429,6 +441,7 @@ export async function downloadOldSubmissions(
         showError(message);
         return;
     }
+
     const openResult = await openExercises(actionContext, [exercise.val.id], exercise.val.course);
     if (openResult.err) {
         const message = "Failed to open exercise after downloading old submission.";
