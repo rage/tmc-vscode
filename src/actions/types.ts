@@ -5,6 +5,7 @@ import Resources from "../config/resources";
 import Settings from "../config/settings";
 import { UserData } from "../config/userdata";
 import TemporaryWebviewProvider from "../ui/temporaryWebviewProvider";
+import { VisibilityGroups } from "../ui/types";
 import UI from "../ui/ui";
 
 export type ActionContext = {
@@ -16,6 +17,7 @@ export type ActionContext = {
     ui: UI;
     userData: UserData;
     workspaceManager: WorkspaceManager;
+    visibilityGroups: VisibilityGroups;
 };
 
 /**

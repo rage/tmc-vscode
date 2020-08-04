@@ -2,9 +2,9 @@ import * as fs from "fs-extra";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { checkForExerciseUpdates, checkForNewExercises, openSettings } from "./actions";
+import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import TMC from "./api/tmc";
-import VSC, { showError, showNotification } from "./api/vscode";
+import VSC, { showError } from "./api/vscode";
 import WorkspaceManager from "./api/workspaceManager";
 import { DEBUG_MODE, EXERCISE_CHECK_INTERVAL } from "./config/constants";
 import Settings from "./config/settings";
@@ -63,6 +63,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
     }
 
+    const authenticated = await tmc.isAuthenticated();
+    if (authenticated.err) {
+        showError("Failed to check if authenticated");
+        Logger.error("Failed to check if authenticated", authenticated.val.message);
+        Logger.show();
+        return;
+    }
+
+    const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated.val);
+    const visibilityGroups = {
+        LOGGED_IN,
+    };
+
     const workspaceManager = new WorkspaceManager(storage, resources);
     await workspaceManager.initialize();
     tmc.setWorkspaceManager(workspaceManager);
@@ -77,6 +90,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ui,
         userData,
         workspaceManager,
+        visibilityGroups,
     };
 
     // Migration plan to move all exercises from closed-exercises
@@ -106,36 +120,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     });
 
-    if (settings.isInsider()) {
-        Logger.warn("Using insider version.");
-        if (currentVersion !== previousVersion) {
-            showNotification(
-                "A new version of the extension has been released. " +
-                    "You are using the insider version of the TMC extension. " +
-                    "This means you will receive new feature updates prior to their release. " +
-                    "You can opt-out from insider version via our settings. ",
-                ["OK", (): void => {}],
-                ["Go to settings", (): Promise<void> => openSettings(actionContext)],
-                [
-                    "Read more...",
-                    (): void =>
-                        vsc.openUri(
-                            "https://github.com/rage/tmc-vscode/blob/master/docs/insider.md",
-                        ),
-                ],
-            );
-        }
-    }
-
-    const authenticated = await tmc.isAuthenticated();
-    if (authenticated.err) {
-        showError("Failed to check if authenticated");
-        Logger.error("Failed to check if authenticated", authenticated.val.message);
-        Logger.show();
-        return;
-    }
-
-    init.registerUiActions(actionContext, authenticated.val);
+    init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
 
     if (authenticated.val) {

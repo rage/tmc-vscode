@@ -64,6 +64,26 @@
                 "category": "TestMyCode"
             },
             {
+                "command": "tmc.myCourses",
+                "title": "Display My courses",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.courseDetails",
+                "title": "Go to course details...",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.login",
+                "title": "Log in",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.logout",
+                "title": "Log out",
+                "category": "TestMyCode"
+            },
+            {
                 "command": "tmc.uploadArchive",
                 "title": "Submit solution",
                 "category": "TestMyCode"
@@ -84,6 +104,11 @@
                 "category": "TestMyCode"
             },
             {
+                "command": "tmc.openSettings",
+                "title": "Settings",
+                "category": "TestMyCode"
+            },
+            {
                 "command": "tmc.runTests",
                 "title": "Run tests",
                 "icon": "media/test.svg",
@@ -91,7 +116,7 @@
             },
             {
                 "command": "tmc.downloadOldSubmission",
-                "title": "Get exercise submissions",
+                "title": "Download old submission",
                 "category": "TestMyCode"
             },
             {
@@ -108,15 +133,20 @@
         "keybindings": [
             {
                 "command": "tmc.runTests",
-                "key": "ctrl+shift+t"
+                "key": "ctrl+shift+t",
+                "mac": "cmd+shift+t"
             },
             {
                 "command": "tmc.closeExercise",
-                "key": "ctrl+shift+c"
+                "key": "ctrl+shift+c",
+                "mac": "cmd+shift+c"
             },
             {
-                "command": "tmc.selectAction",
-                "key": "ctrl+shift+a"
+                "command": "workbench.action.quickOpen",
+                "key": "ctrl+shift+a",
+                "mac": "cmd+shift+a",
+                "args": ">TestMyCode: ",
+                "when": "editorTextFocus && tmcWorkspaceActive"
             }
         ],
         "menus": {

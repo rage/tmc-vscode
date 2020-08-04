@@ -205,6 +205,11 @@ function component(props) {
                             <a href="https://github.com/rage/tmc-vscode">GitHub</a>
                         </li>
                         <li>
+                            <a href="https://github.com/rage/tmc-vscode/blob/master/docs/insider.md">
+                                Insiders
+                            </a>
+                        </li>
+                        <li>
                             <a href="https://github.com/rage/tmc-vscode/blob/master/LICENSE">
                                 License
                             </a>

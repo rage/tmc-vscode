@@ -4,12 +4,14 @@ import * as vscode from "vscode";
 import {
     cleanExercise,
     closeExercises,
+    displayLocalCourseDetails,
+    displayUserCourses,
     downloadOldSubmissions,
     openExercises,
+    openSettings,
     openWorkspace,
     pasteExercise,
     resetExercise,
-    selectAction,
     submitExercise,
     testExercise,
 } from "../actions";
@@ -40,7 +42,11 @@ export function registerCommands(
                 showError(exerciseData.val.message);
                 return;
             }
-            selectAction(actionContext, exerciseData.val);
+            vscode.commands.executeCommand(
+                "workbench.action.quickOpen",
+                ">TestMyCode: ",
+                "editorTextFocus && tmcWorkspaceActive",
+            );
         }),
     );
 
@@ -235,6 +241,71 @@ export function registerCommands(
                 Logger.error(message, result.val);
                 showError(message);
             }
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("tmc.openSettings", async () => {
+            openSettings(actionContext);
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("tmc.myCourses", async () => {
+            displayUserCourses(actionContext);
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("tmc.courseDetails", async () => {
+            const courses = userData.getCourses();
+            const options: [string, () => Thenable<void>][] = [];
+            for (const course of courses) {
+                options.push([
+                    course.name,
+                    async (): Promise<void> => displayLocalCourseDetails(actionContext, course.id),
+                ]);
+            }
+            (
+                await askForItem<() => Thenable<unknown>>(
+                    "Which course page do you want to open?",
+                    false,
+                    ...options,
+                )
+            )?.();
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("tmc.login", async () => {
+            const username = await vscode.window.showInputBox({
+                placeHolder: "Enter username",
+                prompt: "Please enter your TMC username",
+            });
+            const password = await vscode.window.showInputBox({
+                placeHolder: "Enter password",
+                prompt: "Please enter your TMC password",
+                password: true,
+            });
+            if (username && password) {
+                const authed = await actionContext.tmc.authenticate(username, password);
+                if (authed.err) {
+                    showError(`Failed to login. ${authed.val.message}.`);
+                    return;
+                }
+                ui.treeDP.updateVisibility([actionContext.visibilityGroups.LOGGED_IN]);
+            }
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("tmc.logout", async () => {
+            const deauth = await actionContext.tmc.deauthenticate();
+            if (deauth.err) {
+                showError(`Failed to logout. ${deauth.val.message}`);
+                return;
+            }
+            ui.treeDP.updateVisibility([actionContext.visibilityGroups.LOGGED_IN.not]);
         }),
     );
 
