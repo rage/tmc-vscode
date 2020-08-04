@@ -63,6 +63,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
     }
 
+    const authenticated = await tmc.isAuthenticated();
+    if (authenticated.err) {
+        showError("Failed to check if authenticated");
+        Logger.error("Failed to check if authenticated", authenticated.val.message);
+        Logger.show();
+        return;
+    }
+
+    const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated.val);
+    const visibilityGroups = {
+        LOGGED_IN,
+    };
+
     const workspaceManager = new WorkspaceManager(storage, resources);
     await workspaceManager.initialize();
     tmc.setWorkspaceManager(workspaceManager);
@@ -77,6 +90,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ui,
         userData,
         workspaceManager,
+        visibilityGroups,
     };
 
     // Migration plan to move all exercises from closed-exercises
@@ -127,15 +141,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     }
 
-    const authenticated = await tmc.isAuthenticated();
-    if (authenticated.err) {
-        showError("Failed to check if authenticated");
-        Logger.error("Failed to check if authenticated", authenticated.val.message);
-        Logger.show();
-        return;
-    }
-
-    init.registerUiActions(actionContext, authenticated.val);
+    init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
 
     if (authenticated.val) {

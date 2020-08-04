@@ -25,23 +25,18 @@ import { isCorrectWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
  * @param ui The User Interface object
  * @param tmc The TMC API object
  */
-export function registerUiActions(actionContext: ActionContext, authenticated: boolean): void {
-    const { workspaceManager, ui, resources, settings, vsc } = actionContext;
+export function registerUiActions(actionContext: ActionContext): void {
+    const { workspaceManager, ui, resources, settings, vsc, visibilityGroups } = actionContext;
     Logger.log("Initializing UI Actions");
-    const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated);
-
-    const visibilityGroups = {
-        LOGGED_IN,
-    };
 
     // Register UI actions
-    ui.treeDP.registerAction("Log out", [LOGGED_IN], () => {
+    ui.treeDP.registerAction("Log out", [visibilityGroups.LOGGED_IN], () => {
         logout(actionContext, visibilityGroups);
     });
-    ui.treeDP.registerAction("Log in", [LOGGED_IN.not], () => {
+    ui.treeDP.registerAction("Log in", [visibilityGroups.LOGGED_IN.not], () => {
         ui.webview.setContentFromTemplate({ templateName: "login" });
     });
-    ui.treeDP.registerAction("My courses", [LOGGED_IN], () => {
+    ui.treeDP.registerAction("My courses", [visibilityGroups.LOGGED_IN], () => {
         displayUserCourses(actionContext);
     });
     ui.treeDP.registerAction("Settings", [], () => {

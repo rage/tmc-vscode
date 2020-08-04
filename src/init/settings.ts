@@ -33,8 +33,7 @@ export async function settingsInitialization(
         }
         Logger.log("Tried to remove old data", result);
     }
-    const insiderVersion =
-        settings?.insiderVersion !== undefined ? settings.insiderVersion : Math.random() < 0.1;
+    const insiderVersion = settings?.insiderVersion !== undefined ? settings.insiderVersion : false;
     const tmcDataPath = settings?.dataPath || resources.getDataPath();
     const logLevel = insiderVersion
         ? LogLevel.Verbose
