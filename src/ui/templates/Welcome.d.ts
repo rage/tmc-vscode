@@ -3,6 +3,7 @@ import { Uri } from "vscode";
 interface WelcomeProps {
     /** Version if the plugin to show to the user. */
     version: string;
+    newWorkspace: Uri;
     tmcLogoFile: Uri;
 }
 
