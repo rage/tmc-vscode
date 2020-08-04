@@ -1,3 +1,4 @@
+import * as path from "path";
 import * as vscode from "vscode";
 
 import {
@@ -26,7 +27,7 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
 ): void {
-    const { ui, userData, workspaceManager } = actionContext;
+    const { resources, settings, ui, userData, workspaceManager } = actionContext;
     Logger.log("Registering TMC VSCode commands");
 
     context.subscriptions.push(
@@ -305,6 +306,31 @@ export function registerCommands(
                 return;
             }
             ui.treeDP.updateVisibility([actionContext.visibilityGroups.LOGGED_IN.not]);
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("tmc.welcome", async () => {
+            ui.webview.setContentFromTemplate(
+                {
+                    templateName: "welcome",
+                    version: resources.extensionVersion,
+                    newWorkspace: vscode.Uri.file(
+                        path.join(resources.mediaFolder, "welcome_new_workspace.png"),
+                    ),
+                    openNewWorkspace: vscode.Uri.file(
+                        path.join(resources.mediaFolder, "welcome_open_new_workspace.png"),
+                    ),
+                    tmcLogoFile: vscode.Uri.file(path.join(resources.mediaFolder, "TMC.png")),
+                },
+                false,
+                [
+                    {
+                        key: "insiderStatus",
+                        message: { command: "setInsiderStatus", enabled: settings.isInsider() },
+                    },
+                ],
+            );
         }),
     );
 }

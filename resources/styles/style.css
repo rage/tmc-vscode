@@ -54,6 +54,72 @@ body.vscode-high-contrast tbody tr:nth-of-type(odd) {
     padding-top: 20px;
 }
 
+.welcome-container {
+    max-width: 1100px;
+    min-width: 500px;
+    display: grid;
+    grid-template-areas:
+        'header header'
+        'info sidebar'
+        'content sidebar';
+    grid-template-columns: repeat(1,1fr min-content);
+    margin: 1em auto;
+    grid-gap: 1em 3em;
+}
+
+.info_area {
+    grid-area: info;
+    font-size: 1rem;
+    font-weight: 200;
+}
+
+.content_area {
+    grid-area: content;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-weight: 200;
+    padding: 1em 1em;
+}
+
+body.vscode-dark .content_area {
+    background-color: var(--vscode-editor-background);
+    filter: brightness(120%);
+}
+
+body.vscode-light .content_area {
+    background-color: var(--vscode-editor-background);
+    filter: brightness(80%);
+}
+
+.content_section {
+    padding: 1em;
+    margin-bottom: 1em;
+}
+
+.sidebar {
+    grid-area: sidebar;
+    align-self: flex-start;
+    font-size: 0.8rem;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.sidebar_group {
+    margin-top: 1em;
+}
+
+.sidebar_group ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.sidebar_group li {
+    white-space: nowrap;
+}
+
+
 .border-current-color {
     border: 1px solid currentColor !important;
     border-radius: 5px;

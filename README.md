@@ -23,7 +23,7 @@ Instructions on how to install and use the extension in Visual Studio Code can b
 
 ### Commands
 
-All predefined commands are related to the currently open and active exercise file in the editor. A list of available commands can be found under the `TMC Menu` button located at the top right for an active editor.
+A list of available commands can be found under the `TMC Menu` button located at the top right for an active editor.
 
 ### JRE source
 

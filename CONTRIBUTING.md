@@ -2,7 +2,7 @@
 
 ## Where to begin?
 
-You can start by looking through the [`issues`](https://github.com/rage/tmc-vscode/issues).
+You can start by looking through the issues marked with label [`good first issue`](https://github.com/rage/tmc-vscode/labels/good%20first%20issue).
 
 ### Getting the code
 
@@ -61,4 +61,4 @@ vsce package
 
 ## Submitting a Pull Request
 
-Please follow the instructions in the [PR template](.github/PULL_REQUEST_TEMPLATE.md).
+Submit a pull request and tag the issues in the body using "Resolves #id" or "Fixes #id".
