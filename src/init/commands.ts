@@ -247,6 +247,9 @@ export function registerCommands(
                     newWorkspace: vscode.Uri.file(
                         path.join(resources.mediaFolder, "welcome_new_workspace.png"),
                     ),
+                    openNewWorkspace: vscode.Uri.file(
+                        path.join(resources.mediaFolder, "welcome_open_new_workspace.png"),
+                    ),
                     tmcLogoFile: vscode.Uri.file(path.join(resources.mediaFolder, "TMC.png")),
                 },
                 false,

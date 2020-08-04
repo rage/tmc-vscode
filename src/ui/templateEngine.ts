@@ -263,6 +263,7 @@ export default class TemplateEngine {
                     children: Welcome.component({
                         ...templateData,
                         newWorkspace: webview.asWebviewUri(templateData.newWorkspace),
+                        openNewWorkspace: webview.asWebviewUri(templateData.openNewWorkspace),
                         tmcLogoFile: webview.asWebviewUri(templateData.tmcLogoFile),
                     }),
                     cspSource: webview.cspSource,

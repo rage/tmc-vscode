@@ -4,6 +4,7 @@ interface WelcomeProps {
     /** Version if the plugin to show to the user. */
     version: string;
     newWorkspace: Uri;
+    openNewWorkspace: Uri;
     tmcLogoFile: Uri;
 }
 
