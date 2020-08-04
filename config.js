@@ -2,7 +2,7 @@
 "use strict";
 
 const TMC_JAR_NAME = "tmc-langs-cli-0.8.5-SNAPSHOT.jar";
-const TMC_LANGS_RUST_VERSION = "0.1.11-alpha";
+const TMC_LANGS_RUST_VERSION = "0.1.12-alpha";
 
 const localApi = {
     __ACCESS_TOKEN_URI__: JSON.stringify("http://localhost:4001/oauth/token"),

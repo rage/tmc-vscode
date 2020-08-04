@@ -97,7 +97,7 @@ interface UncheckedLangsResponse {
         | "sending"
         | "waiting-for-results"
         | "finished";
-    status: "successful" | "crashed" | "in-progress";
+    status: "finished" | "crashed" | "in-progress";
 }
 
 interface LangsResponse<T> extends UncheckedLangsResponse {
