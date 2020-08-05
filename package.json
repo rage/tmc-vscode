@@ -36,10 +36,12 @@
         "workspaceContains:**/.tmcproject.json",
         "workspaceContains:**/.tmc.json",
         "onView:tmcView",
-        "onCommand:tmc.closeExercise",
-        "onCommand:tmc.runTests",
-        "onCommand:tmc.resetExercise",
-        "onCommand:tmc.uploadArchive",
+        "onCommand:tmc.addNewCourse",
+        "onCommand:tmc.courseDetails",
+        "onCommand:tmc.login",
+        "onCommand:tmc.logout",
+        "onCommand:tmc.myCourses",
+        "onCommand:tmc.openSettings",
         "onCommand:tmc.selectAction",
         "onCommand:tmc.switchWorkspace",
         "onCommand:tmc.welcome"
@@ -53,54 +55,43 @@
                 "category": "TestMyCode"
             },
             {
-                "command": "tmc.selectAction",
-                "title": "Menu",
-                "icon": "media/menu.svg",
+                "command": "tmc.addNewCourse",
+                "title": "Add New Course...",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.cleanExercise",
+                "title": "Clean Exercise",
                 "category": "TestMyCode"
             },
             {
                 "command": "tmc.closeExercise",
-                "title": "Close exercise",
-                "category": "TestMyCode"
-            },
-            {
-                "command": "tmc.myCourses",
-                "title": "Display My courses",
+                "title": "Close Exercise",
                 "category": "TestMyCode"
             },
             {
                 "command": "tmc.courseDetails",
-                "title": "Go to course details...",
+                "title": "Go to Course Details...",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.downloadOldSubmission",
+                "title": "Download Old Submission",
                 "category": "TestMyCode"
             },
             {
                 "command": "tmc.login",
-                "title": "Log in",
+                "title": "Log In",
                 "category": "TestMyCode"
             },
             {
                 "command": "tmc.logout",
-                "title": "Log out",
+                "title": "Log Out",
                 "category": "TestMyCode"
             },
             {
-                "command": "tmc.uploadArchive",
-                "title": "Submit solution",
-                "category": "TestMyCode"
-            },
-            {
-                "command": "tmc.pasteExercise",
-                "title": "Paste exercise",
-                "category": "TestMyCode"
-            },
-            {
-                "command": "tmc.resetExercise",
-                "title": "Reset exercise",
-                "category": "TestMyCode"
-            },
-            {
-                "command": "tmc.switchWorkspace",
-                "title": "Switch course workspace",
+                "command": "tmc.myCourses",
+                "title": "Display My Courses",
                 "category": "TestMyCode"
             },
             {
@@ -109,19 +100,35 @@
                 "category": "TestMyCode"
             },
             {
+                "command": "tmc.pasteExercise",
+                "title": "Paste Exercise",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.resetExercise",
+                "title": "Reset Exercise",
+                "category": "TestMyCode"
+            },
+            {
                 "command": "tmc.runTests",
-                "title": "Run tests",
+                "title": "Run Tests",
                 "icon": "media/test.svg",
                 "category": "TestMyCode"
             },
             {
-                "command": "tmc.downloadOldSubmission",
-                "title": "Download old submission",
+                "command": "tmc.selectAction",
+                "title": "Action Menu",
+                "icon": "media/menu.svg",
                 "category": "TestMyCode"
             },
             {
-                "command": "tmc.cleanExercise",
-                "title": "Clean exercise",
+                "command": "tmc.switchWorkspace",
+                "title": "Switch Course Workspace",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.uploadArchive",
+                "title": "Submit Solution",
                 "category": "TestMyCode"
             },
             {
@@ -132,21 +139,22 @@
         ],
         "keybindings": [
             {
-                "command": "tmc.runTests",
-                "key": "ctrl+shift+t",
-                "mac": "cmd+shift+t"
-            },
-            {
                 "command": "tmc.closeExercise",
                 "key": "ctrl+shift+c",
-                "mac": "cmd+shift+c"
+                "mac": "cmd+shift+c",
+                "when": "tmcWorkspaceActive"
             },
             {
-                "command": "workbench.action.quickOpen",
+                "command": "tmc.runTests",
+                "key": "ctrl+shift+t",
+                "mac": "cmd+shift+t",
+                "when": "tmcWorkspaceActive"
+            },
+            {
+                "command": "tmc.selectAction",
                 "key": "ctrl+shift+a",
                 "mac": "cmd+shift+a",
-                "args": ">TestMyCode: ",
-                "when": "editorTextFocus && tmcWorkspaceActive"
+                "when": "tmcWorkspaceActive"
             }
         ],
         "menus": {

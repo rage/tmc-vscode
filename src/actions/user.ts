@@ -489,21 +489,34 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
     );
 }
 
+interface NewCourseOptions {
+    organization?: string;
+    course?: number;
+}
 /**
  * Adds a new course to user's courses.
  */
-export async function addNewCourse(actionContext: ActionContext): Promise<Result<void, Error>> {
+export async function addNewCourse(
+    actionContext: ActionContext,
+    options?: NewCourseOptions,
+): Promise<Result<void, Error>> {
     const { tmc, userData, workspaceManager } = actionContext;
     Logger.log("Adding new course");
-    const orgAndCourse = await selectOrganizationAndCourse(actionContext);
+    let organization = options?.organization;
+    let course = options?.course;
 
-    if (orgAndCourse.err) {
-        return orgAndCourse;
+    if (!organization || !course) {
+        const orgAndCourse = await selectOrganizationAndCourse(actionContext);
+        if (orgAndCourse.err) {
+            return orgAndCourse;
+        }
+        organization = orgAndCourse.val.organization;
+        course = orgAndCourse.val.course;
     }
 
-    const courseDetailsResult = await tmc.getCourseDetails(orgAndCourse.val.course);
-    const courseExercisesResult = await tmc.getCourseExercises(orgAndCourse.val.course);
-    const courseSettingsResult = await tmc.getCourseSettings(orgAndCourse.val.course);
+    const courseDetailsResult = await tmc.getCourseDetails(course);
+    const courseExercisesResult = await tmc.getCourseExercises(course);
+    const courseSettingsResult = await tmc.getCourseSettings(course);
     if (courseDetailsResult.err) {
         return courseDetailsResult;
     }
@@ -535,7 +548,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<Result
         id: courseDetails.id,
         name: courseDetails.name,
         title: courseDetails.title,
-        organization: orgAndCourse.val.organization,
+        organization: organization,
         availablePoints: availablePoints,
         awardedPoints: awardedPoints,
         perhapsExamMode: courseSettings.hide_submission_results,

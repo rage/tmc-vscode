@@ -2,6 +2,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import {
+    addNewCourse,
     cleanExercise,
     closeExercises,
     displayLocalCourseDetails,
@@ -27,7 +28,7 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
 ): void {
-    const { resources, settings, ui, userData, workspaceManager } = actionContext;
+    const { resources, settings, ui, userData, workspaceManager, tmc } = actionContext;
     Logger.log("Registering TMC VSCode commands");
 
     context.subscriptions.push(
@@ -36,16 +37,10 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("tmc.selectAction", async () => {
-            const exerciseData = workspaceManager.getCurrentExerciseData();
-            if (exerciseData.err) {
-                Logger.error(exerciseData.val.message, exerciseData.val);
-                showError(exerciseData.val.message);
-                return;
-            }
             vscode.commands.executeCommand(
                 "workbench.action.quickOpen",
                 ">TestMyCode: ",
-                "editorTextFocus && tmcWorkspaceActive",
+                "tmcWorkspaceActive",
             );
         }),
     );
@@ -306,6 +301,52 @@ export function registerCommands(
                 return;
             }
             ui.treeDP.updateVisibility([actionContext.visibilityGroups.LOGGED_IN.not]);
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("tmc.addNewCourse", async () => {
+            const organizations = await tmc.getOrganizations();
+            if (organizations.err) {
+                const message = "Failed to fetch organizations.";
+                showError(message);
+                Logger.error(message, organizations.val);
+                return;
+            }
+            const chosenOrg = await askForItem<string>(
+                "Which organization?",
+                false,
+                ...organizations.val.map<[string, string]>((org) => [org.name, org.slug]),
+            );
+            if (chosenOrg === undefined) {
+                return;
+            }
+
+            const courses = await tmc.getCourses(chosenOrg);
+            if (courses.err) {
+                const message = `Failed to fetch organization courses for ${chosenOrg}`;
+                showError(message);
+                Logger.error(message, courses.val);
+                return;
+            }
+            const chosenCourse = await askForItem<number>(
+                "Which course?",
+                false,
+                ...courses.val.map<[string, number]>((course) => [course.name, course.id]),
+            );
+            if (chosenCourse === undefined) {
+                return;
+            }
+
+            const result = await addNewCourse(actionContext, {
+                organization: chosenOrg,
+                course: chosenCourse,
+            });
+            if (result.err) {
+                const message = "Failed to add course via menu.";
+                showError(message);
+                Logger.error(message, result.val);
+            }
         }),
     );
 

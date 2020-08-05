@@ -6,7 +6,11 @@ import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { WORKSPACE_SETTINGS } from "../config/constants";
+import {
+    WORKSPACE_ROOT_FILE,
+    WORKSPACE_ROOT_FILE_TEXT,
+    WORKSPACE_SETTINGS,
+} from "../config/constants";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
@@ -15,7 +19,6 @@ import { isCorrectWorkspaceOpen, Logger } from "../utils";
 
 import { ExerciseDetails } from "./types";
 import { showNotification } from "./vscode";
-import WorkspaceWatcher from "./workspaceWatcher";
 
 /**
  * Class for managing, opening and closing of exercises on disk.
@@ -25,9 +28,7 @@ export default class WorkspaceManager {
     private readonly _idToData: Map<number, LocalExerciseData>;
     private readonly _storage: Storage;
     private readonly _resources: Resources;
-
-    // Data for the workspace filesystem event watcher
-    private readonly _watcher: WorkspaceWatcher;
+    private _watcher: vscode.FileSystemWatcher;
 
     /**
      * Creates a new instance of the WorkspaceManager class.
@@ -45,13 +46,25 @@ export default class WorkspaceManager {
             this._idToData = new Map();
             this._pathToId = new Map();
         }
-        this._watcher = new WorkspaceWatcher(resources);
+        this._watcher = vscode.workspace.createFileSystemWatcher(
+            this._resources.getWorkspaceFolderPath() + "/**",
+            true,
+            true,
+            false,
+        );
     }
 
     public async initialize(): Promise<void> {
         Logger.log("Initializing workspace");
         await this._workspaceIntegrityCheck();
-        this._watcher.start();
+    }
+
+    public startWatcher(): void {
+        Logger.log("Starting workspace watcher.");
+        this._verifyWorkspaceRootFile();
+        this._watcher.onDidDelete((x) => {
+            this._fileDeleteAction(x.fsPath);
+        });
     }
 
     public updateExerciseData(
@@ -274,7 +287,6 @@ export default class WorkspaceManager {
             if (result.err) {
                 return result;
             }
-            await vscode.commands.executeCommand("workbench.files.action.collapseExplorerFolders");
         }
         results = await this._setStatus(ExerciseStatus.CLOSED, ExerciseStatus.OPEN, ...ids);
         await this._updatePersistentData();
@@ -395,7 +407,7 @@ export default class WorkspaceManager {
         const allOpen: vscode.Uri[] = exercises
             .filter((ex) => ex.status === ExerciseStatus.OPEN)
             .map((ex) => vscode.Uri.file(this._getExercisePath(ex)));
-
+        Logger.debug("All status open", allOpen);
         const toClose: vscode.Uri[] = [];
         const toOpen: vscode.Uri[] = [];
 
@@ -417,25 +429,27 @@ export default class WorkspaceManager {
                 }
             }
         });
+        Logger.debug("To open", toOpen);
+        Logger.debug("To close", toClose);
 
         if (currentlyOpenFolders.length === 0 || currentlyOpenFolders[0].name !== ".tmc") {
             Logger.warn("The .tmc folder is not set as root folder.");
-            this._watcher.verifyWorkspaceRootFile();
+            this._verifyWorkspaceRootFile();
             allOpen.push(
                 vscode.Uri.file(path.join(this._resources.getWorkspaceFolderPath(), ".tmc")),
             );
             tmcFolderAsRoot = false;
         }
 
-        let toOpenAsWorkspaceArg = [];
+        let foldersToAdd = [];
         if (!handleAsOpen) {
-            toOpenAsWorkspaceArg = _.differenceBy(allOpen, toClose, "path");
+            foldersToAdd = _.differenceBy(allOpen, toClose, "path");
         } else {
-            toOpenAsWorkspaceArg = _.unionBy(allOpen, toOpen, "path");
+            foldersToAdd = _.unionBy(allOpen, toOpen, "path");
         }
-        toOpenAsWorkspaceArg = toOpenAsWorkspaceArg.sort().map((e) => ({ uri: e }));
-
-        let success = true;
+        foldersToAdd = foldersToAdd.sort().map((e) => ({ uri: e }));
+        Logger.debug("Folders to add", foldersToAdd);
+        Logger.debug("Currently open", currentlyOpenFolders);
         const start = tmcFolderAsRoot ? 1 : 0;
         const toRemove = currentlyOpenFolders.length - start;
         const remove = toRemove > 0 ? toRemove : null;
@@ -445,20 +459,21 @@ export default class WorkspaceManager {
             showNotification("The workspace first folder is not .tmc, fixing issue.");
         }
 
-        success = vscode.workspace.updateWorkspaceFolders(start, remove, ...toOpenAsWorkspaceArg);
+        const success = vscode.workspace.updateWorkspaceFolders(start, remove, ...foldersToAdd);
 
-        if (
-            success ||
-            _.differenceBy(currentlyOpenFolders, toOpenAsWorkspaceArg, "uri.path").length <= 1
-        ) {
+        if (success || _.differenceBy(currentlyOpenFolders, foldersToAdd, "uri.path").length <= 1) {
             return Ok.EMPTY;
         }
+        Logger.log("Handle as open", handleAsOpen);
         Logger.log("Currently open folders", currentlyOpenFolders);
+        Logger.log("All open status", allOpen);
+        Logger.log("To open", toOpen);
+        Logger.log("To close", toClose);
         Logger.error(
             "Failed to execute vscode.workspace.updateWorkspaceFolders with params",
             start,
             remove,
-            toOpenAsWorkspaceArg,
+            foldersToAdd,
         );
         return new Err(new Error("Failed to handle workspace changes."));
     }
@@ -515,6 +530,42 @@ export default class WorkspaceManager {
                 .filter((ex) => ex.status === ExerciseStatus.OPEN)
                 .map((ex) => ex.id);
             await this.openExercise(workspaceAndCourseName, ...openIds);
+        }
+    }
+
+    /**
+     * Event listener function for workspace watcher delete.
+     * @param targetPath Path to deleted item
+     */
+    private _fileDeleteAction(targetPath: string): void {
+        const basedir = this._resources.getWorkspaceFolderPath();
+        const rootFilePath = path.join(basedir, ".tmc", WORKSPACE_ROOT_FILE);
+        Logger.debug("Target path deleted", targetPath);
+        if (path.relative(rootFilePath, targetPath) === "") {
+            Logger.log(`Root file deleted ${targetPath}, fixing issue.`);
+            if (!fs.existsSync(path.join(basedir, ".tmc"))) {
+                fs.mkdirSync(path.join(basedir, ".tmc"), { recursive: true });
+            }
+            fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
+            return;
+        }
+    }
+
+    /**
+     * Verifies that .tmc/ file exists and its contents is correct.
+     */
+    private _verifyWorkspaceRootFile(): void {
+        const rootFileFolder = path.join(this._resources.getWorkspaceFolderPath(), ".tmc");
+        const pathToRootFile = path.join(rootFileFolder, WORKSPACE_ROOT_FILE);
+        if (!fs.existsSync(pathToRootFile)) {
+            Logger.log(`Creating ${pathToRootFile}`);
+            fs.mkdirSync(rootFileFolder, { recursive: true });
+            fs.writeFileSync(pathToRootFile, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
+        } else if (
+            fs.readFileSync(pathToRootFile, { encoding: "utf-8" }) !== WORKSPACE_ROOT_FILE_TEXT
+        ) {
+            Logger.log(`Rewriting ${WORKSPACE_ROOT_FILE_TEXT} at ${pathToRootFile}`);
+            fs.writeFileSync(pathToRootFile, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
         }
     }
 }

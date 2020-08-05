@@ -120,6 +120,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     });
 
+    // Start watcher after migration.
+    workspaceManager.startWatcher();
+
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
 

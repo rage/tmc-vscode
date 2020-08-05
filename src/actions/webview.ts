@@ -4,6 +4,7 @@
  * -------------------------------------------------------------------------------------------------
  */
 
+import * as fs from "fs-extra";
 import { Err, Ok, Result } from "ts-results";
 
 import * as ConfigTypes from "../config/types";
@@ -88,15 +89,23 @@ export async function displayLocalCourseDetails(
 ): Promise<void> {
     const { ui, tmc, userData, workspaceManager } = actionContext;
 
+    const checkFolderExistence = (exerciseId: number): boolean => {
+        const exercisePath = workspaceManager.getExercisePathById(exerciseId);
+        if (exercisePath.err) {
+            return false;
+        }
+        return fs.existsSync(exercisePath.val);
+    };
+
     const mapStatus = (
-        status: ConfigTypes.ExerciseStatus,
+        exercise: ConfigTypes.LocalExerciseData,
         expired: boolean,
     ): UITypes.ExerciseStatus => {
-        switch (status) {
+        switch (exercise.status) {
             case ConfigTypes.ExerciseStatus.CLOSED:
-                return "closed";
+                return checkFolderExistence(exercise.id) ? "closed" : "missing";
             case ConfigTypes.ExerciseStatus.OPEN:
-                return "opened";
+                return checkFolderExistence(exercise.id) ? "opened" : "missing";
             default:
                 return expired ? "expired" : "new";
         }
@@ -150,10 +159,7 @@ export async function displayLocalCourseDetails(
             message: {
                 command: "exerciseStatusChange",
                 exerciseId: exData.id,
-                status: mapStatus(
-                    exData.status,
-                    hardDeadline !== null && currentDate >= hardDeadline,
-                ),
+                status: mapStatus(exData, hardDeadline !== null && currentDate >= hardDeadline),
             },
         });
         const entry: UITypes.CourseDetailsExercise = {

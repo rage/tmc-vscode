@@ -19,7 +19,8 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
     const currentWorkspace = vsc.getWorkspaceName();
     if (currentWorkspace && isCorrectWorkspaceOpen(resources, currentWorkspace)) {
         Logger.log("TMC Workspace identified, listening for folder changes.");
-        vscode.workspace.onDidChangeWorkspaceFolders((listener) => {
+        vscode.workspace.onDidChangeWorkspaceFolders(async (listener) => {
+            Logger.debug("Listener", listener);
             const foldersToRemove: vscode.Uri[] = [];
 
             listener.removed.forEach((item) => {
@@ -79,6 +80,15 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
                     `Exercises or folders you added to this workspace are not
                     part of the current course ${currentWorkspace} and will be removed later.`,
                     ["Ok", (): void => {}],
+                );
+            }
+            /** For less clutter on explorer tree.
+             * If user opened more than 5 exercises we collapse all folders.
+             * Currently this command doesn't take arguments, which folders to collapse.
+             */
+            if (listener.added.length > 5) {
+                await vscode.commands.executeCommand(
+                    "workbench.files.action.collapseExplorerFolders",
                 );
             }
         });

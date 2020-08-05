@@ -359,7 +359,11 @@ function script() {
                 );
                 break;
             default:
-                html = <span data-status="unknown">{element.dataset.workspaceStatus}</span>;
+                html = (
+                    <span class="badge badge-warning" data-status="unknown">
+                        {element.dataset.workspaceStatus}
+                    </span>
+                );
                 break;
         }
         element.innerHTML = html;
@@ -441,6 +445,7 @@ function script() {
                         break;
                     case "new":
                     case "expired":
+                    case "missing":
                         downloadable.push(exerciseTableRow[j].id);
                         break;
                 }
