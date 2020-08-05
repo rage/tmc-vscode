@@ -29,7 +29,7 @@ import {
     RuntimeError,
     TimeoutError,
 } from "../errors";
-import { displayProgrammerError, downloadFile } from "../utils/";
+import { displayProgrammerError, downloadFile, sleep } from "../utils/";
 import { Logger } from "../utils/logger";
 
 import {
@@ -97,7 +97,7 @@ interface UncheckedLangsResponse {
         | "sending"
         | "waiting-for-results"
         | "finished";
-    status: "successful" | "crashed" | "in-progress";
+    status: "finished" | "crashed" | "in-progress";
 }
 
 interface LangsResponse<T> extends UncheckedLangsResponse {
@@ -335,7 +335,7 @@ export default class TMC {
     public getCourses(organization: string, cache = false): Promise<Result<Course[], Error>> {
         if (this._isInsider()) {
             return this._executeLangsCommand(
-                { args: ["list-courses", "--organization", organization], core: true },
+                { args: ["get-courses", "--organization", organization], core: true },
                 createIs<Course[]>(),
                 cache,
             ).then((res) => res.map((r) => r.data));
@@ -715,6 +715,42 @@ export default class TMC {
     }
 
     /**
+     * Resets the given exercise, reverting it to its original template.
+     * @param id Id of the exercise.
+     * @param submissionUrl Url where to optionally submit the exercise beforehand.
+     */
+    public async resetExercise(id: number, submissionUrl?: string): Promise<Result<void, Error>> {
+        if (!this._workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
+        }
+        const exerciseFolderPath = this._workspaceManager.getExercisePathById(id);
+        if (exerciseFolderPath.err) {
+            return exerciseFolderPath;
+        }
+
+        const flags = submissionUrl ? ["--save-old-state"] : [];
+        const args = [
+            "reset-exercise",
+            ...flags,
+            "--exercise-id",
+            id.toString(),
+            "--exercise-path",
+            exerciseFolderPath.val,
+        ];
+        if (submissionUrl) {
+            args.push("--submission-url", submissionUrl);
+        }
+
+        const result = await this._executeLangsCommand({ args, core: true }, createIs<unknown>());
+        if (result.err) {
+            return result;
+        }
+
+        Logger.debug("reset-exercise", result.val);
+        return Ok.EMPTY;
+    }
+
+    /**
      * Archives and submits the specified exercise to the TMC server
      * @param id Exercise id
      */
@@ -942,32 +978,48 @@ export default class TMC {
         let stdoutBuffer = "";
 
         const executable = this._resources.getCliPath();
-        Logger.log(JSON.stringify(executable) + " " + args.map((a) => JSON.stringify(a)).join(" "));
+        const executableArgs = core ? CORE_ARGS.concat(args) : args;
 
         let active = true;
         let interrupted = false;
-        const cprocess = cp.spawn(executable, core ? CORE_ARGS.concat(args) : args, {
+        Logger.log([executable, ...executableArgs].map((x) => JSON.stringify(x)).join(" "));
+        const cprocess = cp.spawn(executable, executableArgs, {
             env: { ...process.env, ...env, RUST_LOG: "debug" },
         });
         stdin && cprocess.stdin.write(stdin + "\n");
 
         const processResult = new Promise<number | null>((resolve, reject) => {
+            // let resultCode: number | null = null;
+            // let stdoutEnded = false;
+
+            // TODO: move to rust
             const timeout = setTimeout(() => {
                 kill(cprocess.pid);
                 reject("Process didn't seem to finish or was taking a really long time.");
             }, TMC_LANGS_TIMEOUT);
+
             cprocess.on("error", (error) => {
                 clearTimeout(timeout);
                 reject(error);
-            });
-            cprocess.on("exit", (code) => {
-                clearTimeout(timeout);
-                resolve(code);
             });
             cprocess.stderr.on("data", (chunk) => {
                 const data = chunk.toString();
                 stderr += data;
                 onStderr?.(data);
+            });
+            // cprocess.stdout.on("end", () => {
+            //     stdoutEnded = true;
+            //     if (resultCode) {
+            //         clearTimeout(timeout);
+            //         resolve(resultCode);
+            //     }
+            // });
+            cprocess.on("exit", (code) => {
+                // resultCode = code;
+                // if (stdoutEnded) {
+                clearTimeout(timeout);
+                resolve(code);
+                // }
             });
             cprocess.stdout.on("data", (chunk) => {
                 const parts = (stdoutBuffer + chunk.toString()).split("\n");
@@ -990,17 +1042,13 @@ export default class TMC {
             });
         });
 
-        const interrupt = (): void => {
-            if (active) {
-                active = false;
-                interrupted = true;
-                kill(cprocess.pid);
-            }
-        };
-
         const result = (async (): RustProcessRunner["result"] => {
             try {
                 await processResult;
+                while (!cprocess.stdout.destroyed) {
+                    Logger.debug("stdout still active, waiting...");
+                    await sleep(50);
+                }
             } catch (error) {
                 return new Err(new RuntimeError(error));
             }
@@ -1019,6 +1067,14 @@ export default class TMC {
                 stdout,
             });
         })();
+
+        const interrupt = (): void => {
+            if (active) {
+                active = false;
+                interrupted = true;
+                kill(cprocess.pid);
+            }
+        };
 
         return { interrupt, result };
     }
