@@ -13,7 +13,7 @@ import { OldSubmission } from "../api/types";
 import { askForItem, showError, showNotification, showProgressNotification } from "../api/vscode";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import * as UITypes from "../ui/types";
-import { Logger, sleep } from "../utils";
+import { Logger } from "../utils";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 
 import { ActionContext, CourseExerciseDownloads } from "./types";
@@ -301,12 +301,7 @@ export async function resetExercise(
     if (settings.isInsider()) {
         const resetResult = await tmc.resetExercise(id);
         if (resetResult.err) {
-            Logger.warn("Reset failed, attempting again after a while.", resetResult.val);
-            await sleep(6000);
-            const resetResult2 = await tmc.resetExercise(id);
-            if (resetResult2.err) {
-                return resetResult2;
-            }
+            return resetResult;
         }
     } else {
         await workspaceManager.deleteExercise(id);

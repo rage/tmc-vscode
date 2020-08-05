@@ -989,8 +989,8 @@ export default class TMC {
         stdin && cprocess.stdin.write(stdin + "\n");
 
         const processResult = new Promise<number | null>((resolve, reject) => {
-            let resultCode: number | null = null;
-            let stdoutEnded = false;
+            // let resultCode: number | null = null;
+            // let stdoutEnded = false;
 
             // TODO: move to rust
             const timeout = setTimeout(() => {
@@ -1007,19 +1007,19 @@ export default class TMC {
                 stderr += data;
                 onStderr?.(data);
             });
-            cprocess.stdout.on("end", () => {
-                stdoutEnded = true;
-                if (resultCode) {
-                    clearTimeout(timeout);
-                    resolve(resultCode);
-                }
-            });
+            // cprocess.stdout.on("end", () => {
+            //     stdoutEnded = true;
+            //     if (resultCode) {
+            //         clearTimeout(timeout);
+            //         resolve(resultCode);
+            //     }
+            // });
             cprocess.on("exit", (code) => {
-                resultCode = code;
-                if (stdoutEnded) {
-                    clearTimeout(timeout);
-                    resolve(code);
-                }
+                // resultCode = code;
+                // if (stdoutEnded) {
+                clearTimeout(timeout);
+                resolve(code);
+                // }
             });
             cprocess.stdout.on("data", (chunk) => {
                 const parts = (stdoutBuffer + chunk.toString()).split("\n");
@@ -1047,7 +1047,7 @@ export default class TMC {
                 await processResult;
                 while (!cprocess.stdout.destroyed) {
                     Logger.debug("stdout still active, waiting...");
-                    await sleep(100);
+                    await sleep(50);
                 }
             } catch (error) {
                 return new Err(new RuntimeError(error));
