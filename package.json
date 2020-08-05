@@ -37,20 +37,13 @@
         "workspaceContains:**/.tmc.json",
         "onView:tmcView",
         "onCommand:tmc.addNewCourse",
-        "onCommand:tmc.cleanExercise",
-        "onCommand:tmc.closeExercise",
         "onCommand:tmc.courseDetails",
-        "onCommand:tmc.downloadOldSubmission",
         "onCommand:tmc.login",
         "onCommand:tmc.logout",
         "onCommand:tmc.myCourses",
         "onCommand:tmc.openSettings",
-        "onCommand:tmc.pasteExercise",
-        "onCommand:tmc.resetExercise",
-        "onCommand:tmc.runTests",
         "onCommand:tmc.selectAction",
         "onCommand:tmc.switchWorkspace",
-        "onCommand:tmc.uploadArchive",
         "onCommand:tmc.welcome"
     ],
     "main": "./dist/extension",
@@ -148,17 +141,20 @@
             {
                 "command": "tmc.closeExercise",
                 "key": "ctrl+shift+c",
-                "mac": "cmd+shift+c"
+                "mac": "cmd+shift+c",
+                "when": "tmcWorkspaceActive"
             },
             {
                 "command": "tmc.runTests",
                 "key": "ctrl+shift+t",
-                "mac": "cmd+shift+t"
+                "mac": "cmd+shift+t",
+                "when": "tmcWorkspaceActive"
             },
             {
                 "command": "tmc.selectAction",
                 "key": "ctrl+shift+a",
-                "mac": "cmd+shift+a"
+                "mac": "cmd+shift+a",
+                "when": "tmcWorkspaceActive"
             }
         ],
         "menus": {

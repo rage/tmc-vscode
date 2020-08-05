@@ -306,32 +306,38 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("tmc.addNewCourse", async () => {
-            const organization = await tmc.getOrganizations();
-            if (organization.err) {
-                showError("Failed to pick organization.");
-                Logger.error("Failed to pick organization.", organization.val);
+            const organizations = await tmc.getOrganizations();
+            if (organizations.err) {
+                const message = "Failed to fetch organizations.";
+                showError(message);
+                Logger.error(message, organizations.val);
+                return;
             }
-            const orgOptions: [string, string][] = [];
-            for (const org of organization) {
-                orgOptions.push([org.name, org.slug]);
-            }
-            const chosenOrg = await askForItem<string>("Which organization?", false, ...orgOptions);
+            const chosenOrg = await askForItem<string>(
+                "Which organization?",
+                false,
+                ...organizations.val.map<[string, string]>((org) => [org.name, org.slug]),
+            );
             if (chosenOrg === undefined) {
                 return;
             }
+
             const courses = await tmc.getCourses(chosenOrg);
             if (courses.err) {
-                showError("Failed to pick course.");
-                Logger.error("Failed to pick course.", courses.val);
+                const message = `Failed to fetch organization courses for ${chosenOrg}`;
+                showError(message);
+                Logger.error(message, courses.val);
+                return;
             }
-            const courseOptions: [string, number][] = [];
-            for (const course of courses) {
-                courseOptions.push([course.name, course.id]);
-            }
-            const chosenCourse = await askForItem<number>("Which course?", false, ...courseOptions);
+            const chosenCourse = await askForItem<number>(
+                "Which course?",
+                false,
+                ...courses.val.map<[string, number]>((course) => [course.name, course.id]),
+            );
             if (chosenCourse === undefined) {
                 return;
             }
+
             const result = await addNewCourse(actionContext, {
                 organization: chosenOrg,
                 course: chosenCourse,
