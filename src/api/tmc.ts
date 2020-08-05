@@ -989,22 +989,37 @@ export default class TMC {
         stdin && cprocess.stdin.write(stdin + "\n");
 
         const processResult = new Promise<number | null>((resolve, reject) => {
+            let resultCode: number | null = null;
+            let stdoutEnded = false;
+
+            // TODO: move to rust
             const timeout = setTimeout(() => {
                 kill(cprocess.pid);
                 reject("Process didn't seem to finish or was taking a really long time.");
             }, TMC_LANGS_TIMEOUT);
+
             cprocess.on("error", (error) => {
                 clearTimeout(timeout);
                 reject(error);
-            });
-            cprocess.on("exit", (code) => {
-                clearTimeout(timeout);
-                resolve(code);
             });
             cprocess.stderr.on("data", (chunk) => {
                 const data = chunk.toString();
                 stderr += data;
                 onStderr?.(data);
+            });
+            cprocess.stdout.on("end", () => {
+                stdoutEnded = true;
+                if (resultCode) {
+                    clearTimeout(timeout);
+                    resolve(resultCode);
+                }
+            });
+            cprocess.on("exit", (code) => {
+                resultCode = code;
+                if (stdoutEnded) {
+                    clearTimeout(timeout);
+                    resolve(code);
+                }
             });
             cprocess.stdout.on("data", (chunk) => {
                 const parts = (stdoutBuffer + chunk.toString()).split("\n");
@@ -1027,20 +1042,12 @@ export default class TMC {
             });
         });
 
-        const interrupt = (): void => {
-            if (active) {
-                active = false;
-                interrupted = true;
-                kill(cprocess.pid);
-            }
-        };
-
         const result = (async (): RustProcessRunner["result"] => {
             try {
                 await processResult;
                 while (!cprocess.stdout.destroyed) {
                     Logger.debug("stdout still active, waiting...");
-                    await sleep(10);
+                    await sleep(100);
                 }
             } catch (error) {
                 return new Err(new RuntimeError(error));
@@ -1060,6 +1067,14 @@ export default class TMC {
                 stdout,
             });
         })();
+
+        const interrupt = (): void => {
+            if (active) {
+                active = false;
+                interrupted = true;
+                kill(cprocess.pid);
+            }
+        };
 
         return { interrupt, result };
     }
