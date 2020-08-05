@@ -2,6 +2,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import {
+    addNewCourse,
     cleanExercise,
     closeExercises,
     displayLocalCourseDetails,
@@ -27,7 +28,7 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
 ): void {
-    const { resources, settings, ui, userData, workspaceManager } = actionContext;
+    const { resources, settings, ui, userData, workspaceManager, tmc } = actionContext;
     Logger.log("Registering TMC VSCode commands");
 
     context.subscriptions.push(
@@ -36,16 +37,10 @@ export function registerCommands(
 
     context.subscriptions.push(
         vscode.commands.registerCommand("tmc.selectAction", async () => {
-            const exerciseData = workspaceManager.getCurrentExerciseData();
-            if (exerciseData.err) {
-                Logger.error(exerciseData.val.message, exerciseData.val);
-                showError(exerciseData.val.message);
-                return;
-            }
             vscode.commands.executeCommand(
                 "workbench.action.quickOpen",
                 ">TestMyCode: ",
-                "editorTextFocus && tmcWorkspaceActive",
+                "tmcWorkspaceActive",
             );
         }),
     );
@@ -306,6 +301,46 @@ export function registerCommands(
                 return;
             }
             ui.treeDP.updateVisibility([actionContext.visibilityGroups.LOGGED_IN.not]);
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("tmc.addNewCourse", async () => {
+            const organization = await tmc.getOrganizations();
+            if (organization.err) {
+                showError("Failed to pick organization.");
+                Logger.error("Failed to pick organization.", organization.val);
+            }
+            const orgOptions: [string, string][] = [];
+            for (const org of organization) {
+                orgOptions.push([org.name, org.slug]);
+            }
+            const chosenOrg = await askForItem<string>("Which organization?", false, ...orgOptions);
+            if (chosenOrg === undefined) {
+                return;
+            }
+            const courses = await tmc.getCourses(chosenOrg);
+            if (courses.err) {
+                showError("Failed to pick course.");
+                Logger.error("Failed to pick course.", courses.val);
+            }
+            const courseOptions: [string, number][] = [];
+            for (const course of courses) {
+                courseOptions.push([course.name, course.id]);
+            }
+            const chosenCourse = await askForItem<number>("Which course?", false, ...courseOptions);
+            if (chosenCourse === undefined) {
+                return;
+            }
+            const result = await addNewCourse(actionContext, {
+                organization: chosenOrg,
+                course: chosenCourse,
+            });
+            if (result.err) {
+                const message = "Failed to add course via menu.";
+                showError(message);
+                Logger.error(message, result.val);
+            }
         }),
     );
 

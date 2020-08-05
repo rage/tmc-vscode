@@ -32,12 +32,18 @@ function component(props) {
                     To use the TestMyCode environment you need to have an account registered at{" "}
                     <a href="https://tmc.mooc.fi">https://tmc.mooc.fi</a>. For setting up the
                     programming environment you should always refer to the course specific
-                    instructions.{" "}
-                    <a href="https://www.mooc.fi/en/installation/vscode#ohjelmoinnin-aloittaminen">
-                        Here
-                    </a>{" "}
-                    you can read instructions on how you can complete your first programming
-                    exercise using Visual Studio Code and TestMyCode extension.
+                    instructions.
+                    <br />
+                    If you are new to the TestMyCode extension in VSCode. Please read the
+                    instructions on how you can complete your first programming exercise by clicking
+                    the button below.
+                    <br />
+                    <a
+                        href="https://www.mooc.fi/en/installation/vscode#ohjelmoinnin-aloittaminen"
+                        class="btn btn-primary"
+                    >
+                        Read instructions
+                    </a>
                 </p>
             </div>
 
@@ -81,7 +87,7 @@ function component(props) {
                                         VSCode
                                     </li>
                                     <li>
-                                        Fixes issue with file handling when communicating with
+                                        Fixes issue with file handling when communicating using
                                         TMC-langs and other VSCode extensions
                                     </li>
                                 </ul>
