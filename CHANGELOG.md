@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.10.0] - 2020-08-10
+
+#### Added
+- Welcome page, displayed when major or minor version changes.
+- VSCode Commands for most TMC actions.
+- Extension recommendations for course workspaces based on file language.
+- Possibility to download individual exercises in Course Page.
+
+#### Changed
+- Local exercise tests runs with TMC-langs Rust.
+- Course specific workspaces using VSCode Multi-root workspaces.
+- Insider: Python executable path passed to TMC-langs Rust.
+- Insider: Most API Request handled externally by TMC-langs Rust.
+- Insider: Handle login and logout externally by TMC-langs Rust.
+- Insider: Exercise related actions uses TMC-langs Rust.
+
+#### Fixed
+- Remove old Rust CLI versions.
+
+#### Removed
+- Insider notification on extension activation.
+
+#### Security
+- Updated dependencies.
+
+
 ## [0.9.2] - 2020-07-21
 
 #### Fixed
