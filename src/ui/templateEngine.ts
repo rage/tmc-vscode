@@ -9,7 +9,7 @@ import * as vscode from "vscode";
 
 import { SubmissionResultReport, TmcLangsTestResultRust } from "../api/types";
 import Resources from "../config/resources";
-import { getProgressBar, numbersToString, parseTestResultsText } from "../utils/";
+import { getProgressBar, parseTestResultsText } from "../utils/";
 
 import { CourseDetails, Webview, Welcome } from "./templates";
 import { TemplateData } from "./types";
@@ -69,7 +69,7 @@ export default class TemplateEngine {
                         <input type='button' id='sendToPaste' value='Submit to TMC Paste' class='btn btn-primary' onclick='sendToPaste()' />
                     </div>`;
                 } else if (status === "COMPILE_FAILED") {
-                    return `<h1>COMPILE FAILED</h1><pre>${numbersToString(logs.stdout)}</pre>`;
+                    return `<h1>COMPILE FAILED</h1><pre>${logs.stdout}</pre>`;
                 } else {
                     return "<h1>Something went seriously wrong while running the tests</h1>";
                 }

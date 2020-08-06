@@ -106,6 +106,11 @@ interface LangsResponse<T> extends UncheckedLangsResponse {
     status: Exclude<UncheckedLangsResponse["status"], "crashed">;
 }
 
+interface LangsError {
+    http_status_code: number | null;
+    trace: string[];
+}
+
 /**
  * A Class for interacting with the TestMyCode service, including authentication
  */
@@ -947,13 +952,20 @@ export default class TMC {
             return new Err(new Error("Langs process crashed: " + message));
         }
         if (result === "error") {
-            if (is<string[]>(data)) {
-                Logger.error("TMC Langs errored.", data.join("\n"));
+            if (is<LangsError>(data)) {
+                const { http_status_code, trace } = data;
+                Logger.error("TMC Langs errored.", http_status_code, trace.join("\n"));
+                if (http_status_code === null) {
+                    return new Err(new RuntimeError(message, trace.join("\n")));
+                }
+                if (http_status_code === 403) {
+                    return new Err(new AuthorizationError(message));
+                }
             }
             return new Err(new Error(message));
         }
         if (!checker(data)) {
-            return new Err(new Error("Unexpected response data type."));
+            return new Err(new ApiError("Unexpected response data type."));
         }
         return new Ok({ ...langsResponse, data, result, status });
     }
