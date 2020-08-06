@@ -6,18 +6,18 @@
 
 import * as _ from "lodash";
 import * as pLimit from "p-limit";
-import { Ok, Result } from "ts-results";
+import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { OldSubmission } from "../api/types";
 import { askForItem, showError, showNotification, showProgressNotification } from "../api/vscode";
 import { NOTIFICATION_DELAY } from "../config/constants";
+import { ExerciseStatus } from "../config/types";
 import * as UITypes from "../ui/types";
 import { Logger } from "../utils";
 import { dateToString, parseDate } from "../utils/dateDeadline";
 
 import { ActionContext, CourseExerciseDownloads } from "./types";
-import { getOldSubmissions } from "./user";
 
 const limit = pLimit(3);
 
@@ -236,35 +236,41 @@ export async function cleanExercise(
 }
 
 interface ResetOptions {
+    /** Whether to open the exercise to workspace after reseting. */
+    openAfterwards?: boolean;
     /** Whether to submit current state, asks user if not defined. */
-    submitCurrent?: boolean;
+    submitFirst?: boolean;
 }
 
 /**
  * Resets an exercise to its initial state. Optionally submits the exercise beforehand.
  *
  * @param id ID of the exercise to reset.
- * @param options Optional parameters for predetermine action behavior.
+ * @param options Optional parameters that can be used to control the action behavior.
  */
 export async function resetExercise(
     actionContext: ActionContext,
     id: number,
     options?: ResetOptions,
-): Promise<Result<void, Error>> {
-    const { settings, tmc, ui, workspaceManager } = actionContext;
+): Promise<Result<boolean, Error>> {
+    const { settings, tmc, workspaceManager } = actionContext;
 
     const exerciseData = workspaceManager.getExerciseDataById(id);
-
     if (exerciseData.err) {
-        const message = "Reset exercise: The data for this exercise seems to be missing";
-        Logger.error(message, exerciseData.val);
-        showError(message);
         return exerciseData;
     }
 
+    const exercisePath = workspaceManager.getExercisePathById(id);
+    if (exercisePath.err) {
+        return exercisePath;
+    }
+
+    const exercise = exerciseData.val;
+    Logger.log(`Reseting exercise ${exercise.name}`);
+
     const submitFirst =
-        options?.submitCurrent !== undefined
-            ? options.submitCurrent
+        options?.submitFirst !== undefined
+            ? options.submitFirst
             : await askForItem(
                   "Do you want to save the current state of the exercise by submitting it to TMC Server?",
                   false,
@@ -274,44 +280,55 @@ export async function resetExercise(
               );
 
     if (submitFirst === undefined) {
-        return Ok.EMPTY;
+        Logger.debug("Answer for submitting first not provided, returning early.");
+        return Ok(false);
     } else if (submitFirst) {
         const submitResult = await tmc.submitExercise(id);
         if (submitResult.err) {
-            Logger.error("Reset canceled, failed to submit exercise.");
-            ui.setStatusBar(
-                `Something went wrong while resetting exercise ${exerciseData.val.name}`,
-                10000,
-            );
             return submitResult;
         }
+    } else {
+        Logger.debug("Didn't submit exercise before resetting.");
     }
 
-    ui.setStatusBar(`Resetting exercise ${exerciseData.val.name}`);
-
-    const slug = exerciseData.val.organization;
-    const closeResult = await closeExercises(actionContext, [id], exerciseData.val.course);
-    if (closeResult.err) {
-        const message = "Failed to close exercise when resetting.";
-        Logger.error(message);
-        return closeResult;
-    }
-    await vscode.commands.executeCommand("workbench.action.files.save");
-    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
     if (settings.isInsider()) {
+        Logger.warn("Using insider feature");
         const resetResult = await tmc.resetExercise(id);
         if (resetResult.err) {
             return resetResult;
         }
     } else {
+        // Try to remove files here because new workspace
+        const edit = new vscode.WorkspaceEdit();
+        edit.deleteFile(vscode.Uri.file(exercisePath.val), { recursive: true });
+        const removeResult = await vscode.workspace.applyEdit(edit);
+        if (!removeResult) {
+            return Err(new Error("Failed to remove previous files before reseting."));
+        }
+
+        Logger.debug("Closing exercise before resetting.");
+        if (exercise.status === ExerciseStatus.OPEN) {
+            const closeResult = await closeExercises(actionContext, [id], exercise.course);
+            if (closeResult.err) {
+                return closeResult;
+            }
+        }
+
         await workspaceManager.deleteExercise(id);
-        const dlResult = await tmc.downloadExercise(id, slug);
+        const dlResult = await tmc.downloadExercise(id, exercise.organization);
         if (dlResult.err) {
             return dlResult;
         }
+
+        if (options?.openAfterwards === true) {
+            const openResult = await openExercises(actionContext, [id], exercise.course);
+            if (openResult.err) {
+                return openResult;
+            }
+        }
     }
-    ui.setStatusBar(`Exercise ${exerciseData.val.name} resetted successfully`, 10000);
-    return Ok.EMPTY;
+
+    return Ok(true);
 }
 
 /**
@@ -380,36 +397,34 @@ export async function closeExercises(
  *
  * @param exerciseId exercise which older submission will be downloaded
  */
-export async function downloadOldSubmissions(
+export async function downloadOldSubmission(
     actionContext: ActionContext,
     exerciseId: number,
-): Promise<void> {
-    const { tmc, workspaceManager } = actionContext;
+): Promise<Result<boolean, Error>> {
+    const { settings, tmc, workspaceManager } = actionContext;
 
-    const exercise = workspaceManager.getExerciseDataById(exerciseId);
-    if (exercise.err) {
-        Logger.error("Exercise data missing", exercise.val);
-        showError("Exercise data missing");
-        return;
+    const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
+    if (exerciseData.err) {
+        return exerciseData;
+    }
+    const exercise = exerciseData.val;
+
+    Logger.debug("Fetching old submissions");
+    const submissionsResult = await tmc.getOldSubmissions(exerciseId);
+    if (submissionsResult.err) {
+        return submissionsResult;
     }
 
-    const response = await getOldSubmissions(actionContext);
-    if (response.err) {
-        const message = "Something went wrong while fetching old submissions.";
-        Logger.error(message, response.val);
-        showError(message);
-        return;
-    }
-    if (response.val.length === 0) {
-        Logger.log("No previous submissions found for exercise", exerciseId);
-        showNotification("No previous submissions found for this exercise.");
-        return;
+    if (submissionsResult.val.length === 0) {
+        Logger.log(`No previous submissions found for exercise ${exerciseId}`);
+        showNotification(`No previous submissions found for ${exercise.name}.`);
+        return Ok(false);
     }
 
     const submission = await askForItem(
-        exercise.val.name + ": Select a submission",
+        exerciseData.val.name + ": Select a submission",
         false,
-        ...response.val.map<[string, OldSubmission]>((a) => [
+        ...submissionsResult.val.map<[string, OldSubmission]>((a) => [
             dateToString(parseDate(a.processing_attempts_started_at)) +
                 "| " +
                 (a.all_tests_passed ? "Passed" : "Not passed"),
@@ -418,30 +433,34 @@ export async function downloadOldSubmissions(
     );
 
     if (!submission) {
-        return;
+        return Ok(false);
     }
 
-    const resetResult = await resetExercise(actionContext, exerciseId);
-    if (resetResult.err) {
-        const message = "Something went wrong while resetting exercise.";
-        Logger.error(message, resetResult.val);
-        showError(message);
-        return;
-    }
+    if (settings.isInsider()) {
+        console.warn("Using insider feature");
+        const downloadResult = await tmc.downloadOldSubmissionInsider(exerciseId, submission.id);
+        if (downloadResult.err) {
+            return downloadResult;
+        }
+    } else {
+        const resetResult = await resetExercise(actionContext, exerciseId);
+        if (resetResult.err) {
+            return resetResult;
+        }
 
-    const oldSub = await tmc.downloadOldExercise(exercise.val.id, submission.id);
-    if (oldSub.err) {
-        const message = "Something went wrong while downloading old submission for exercise.";
-        Logger.error(message, oldSub.val);
-        showError(message);
-        return;
-    }
+        const oldSub = await tmc.downloadOldExercise(exerciseData.val.id, submission.id);
+        if (oldSub.err) {
+            return oldSub;
+        }
 
-    const openResult = await openExercises(actionContext, [exercise.val.id], exercise.val.course);
-    if (openResult.err) {
-        const message = "Failed to open exercise after downloading old submission.";
-        Logger.error(message, openResult.val);
-        showError(message);
-        return;
+        const openResult = await openExercises(
+            actionContext,
+            [exerciseData.val.id],
+            exerciseData.val.course,
+        );
+        if (openResult.err) {
+            return openResult;
+        }
     }
+    return Ok(true);
 }

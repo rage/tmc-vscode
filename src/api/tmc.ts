@@ -573,6 +573,50 @@ export default class TMC {
         }
     }
 
+    /**
+     * Downloads an old submission for the given exercise.
+     *
+     * @param exerciseId ID of the exercise.
+     * @param submissionId ID of the exercise submission.
+     */
+    public async downloadOldSubmissionInsider(
+        exerciseId: number,
+        submissionId: number,
+    ): Promise<Result<void, Error>> {
+        if (!this._workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
+        }
+
+        const exercisePath = this._workspaceManager.getExercisePathById(exerciseId);
+        if (exercisePath.err) {
+            return exercisePath;
+        }
+
+        const downloadResult = await this._executeLangsCommand(
+            {
+                args: [
+                    "download-old-submission",
+                    "--exercise-id",
+                    exerciseId.toString(),
+                    "--submission-id",
+                    submissionId.toString(),
+                    "--output-path",
+                    exercisePath.val,
+                ],
+                core: true,
+                onStderr: (e) => Logger.warn("e", e),
+                onStdout: (o) => Logger.warn("o", JSON.stringify(o)),
+            },
+            createIs<unknown>(),
+            false,
+        );
+        if (downloadResult.err) {
+            return downloadResult;
+        }
+
+        return Ok.EMPTY;
+    }
+
     public async downloadOldExercise(
         exerciseId: number,
         submissionId: number,
@@ -585,34 +629,6 @@ export default class TMC {
         if (exercisePath.err) {
             return exercisePath;
         }
-
-        // TODO: Finish insider version when this command is fixed in Langs
-        // -- Insider implementation --
-        /* if (this.isInsider()) {
-            const asd = await this.executeLangsCommand(
-                {
-                    args: [
-                        "download-old-submission",
-                        "--exercise-id",
-                        exerciseId.toString(),
-                        "--submission-id",
-                        submissionId.toString(),
-                        "--output-path",
-                        exercisePath.val,
-                    ],
-                    core: true,
-                    onStderr: (e) => Logger.warn("e", e),
-                    onStdout: (o) => Logger.warn("o", JSON.stringify(o)),
-                },
-                createIs<unknown>(),
-                false,
-            );
-            if (asd.err) {
-                return asd;
-            }
-            return new Ok("Old submission downloaded succesfully");
-        } */
-        // -- End of insider implementation --
 
         const exPath = exercisePath.val + "/";
         const userFilePaths = await this._checkApiResponse(

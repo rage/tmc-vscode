@@ -7,8 +7,7 @@ import {
     closeExercises,
     displayLocalCourseDetails,
     displayUserCourses,
-    downloadOldSubmissions,
-    openExercises,
+    downloadOldSubmission,
     openSettings,
     openWorkspace,
     pasteExercise,
@@ -94,52 +93,28 @@ export function registerCommands(
                 showError(errorMessage);
                 return;
             }
-            const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
-            if (exerciseData.err) {
-                const message = "The data for this exercise seems to be missing.";
-                Logger.error(message, exerciseData.val);
-                showError(message);
-                return;
-            }
-
-            if (
-                !(await askForConfirmation(
-                    `Are you sure you want to reset exercise ${exerciseData.val.name}?`,
-                    false,
-                ))
-            ) {
-                return;
-            }
 
             const editor = vscode.window.activeTextEditor;
             const resource = editor?.document.uri;
-            const resetResult = await resetExercise(actionContext, exerciseId);
+
+            const resetResult = await resetExercise(actionContext, exerciseId, {
+                openAfterwards: true,
+            });
             if (resetResult.err) {
-                const message = "Failed to reset currently open exercise.";
-                Logger.error(message, resetResult.val);
-                showError(message);
+                Logger.error("Failed to reset exercise", resetResult.val);
+                showError(`Failed to reset exercise: ${resetResult.val.message}`);
                 return;
             }
-            const openResult = await openExercises(
-                actionContext,
-                [exerciseId],
-                exerciseData.val.course,
-            );
-            if (openResult.err) {
-                const message = "Failed to open exercise after reset.";
-                Logger.error(message, openResult.val);
-                showError(message);
+
+            Logger.log(`Exercise resetion was ${resetResult.val ? "successful" : "canceled"}.`);
+
+            if (!editor || !resource) {
+                Logger.warn(`Active file for exercise ${exerciseId} returned undefined?`);
+                return;
             }
 
-            if (editor && resource) {
-                vscode.commands.executeCommand<undefined>(
-                    "vscode.open",
-                    resource,
-                    editor.viewColumn,
-                );
-            } else {
-                Logger.warn(`Active file for exercise ${exerciseId} returned undefined?`);
-            }
+            Logger.debug(`Reopening original file "${resource.fsPath}"`);
+            await vscode.commands.executeCommand("vscode.open", resource, editor.viewColumn);
         }),
     );
 
@@ -151,18 +126,23 @@ export function registerCommands(
                 showError(errorMessage);
                 return;
             }
+
             const editor = vscode.window.activeTextEditor;
             const resource = editor?.document.uri;
-            await downloadOldSubmissions(actionContext, exerciseId);
-            if (editor && resource) {
-                vscode.commands.executeCommand<undefined>(
-                    "vscode.open",
-                    resource,
-                    editor.viewColumn,
-                );
-            } else {
-                Logger.warn(`Active file for exercise ${exerciseId} returned undefined?`);
+
+            const oldDownloadResult = await downloadOldSubmission(actionContext, exerciseId);
+            if (oldDownloadResult.err) {
+                Logger.error("Failed to download old submission", oldDownloadResult.val);
+                showError(`Failed to download old submission: ${oldDownloadResult.val.message}`);
+                return;
             }
+
+            if (!editor || !resource) {
+                Logger.warn(`Active file for exercise ${exerciseId} returned undefined?`);
+                return;
+            }
+
+            vscode.commands.executeCommand<undefined>("vscode.open", resource, editor.viewColumn);
         }),
     );
 

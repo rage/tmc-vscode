@@ -407,7 +407,7 @@ export default class WorkspaceManager {
         const allOpen: vscode.Uri[] = exercises
             .filter((ex) => ex.status === ExerciseStatus.OPEN)
             .map((ex) => vscode.Uri.file(this._getExercisePath(ex)));
-        Logger.debug("All status open", allOpen);
+        allOpen.length > 0 && Logger.debug("Exercises with opened status:", ...allOpen);
         const toClose: vscode.Uri[] = [];
         const toOpen: vscode.Uri[] = [];
 
@@ -429,8 +429,9 @@ export default class WorkspaceManager {
                 }
             }
         });
-        Logger.debug("To open", toOpen);
-        Logger.debug("To close", toClose);
+
+        toOpen.length > 0 && Logger.debug("Following exercises should be open:", ...toOpen);
+        toClose.length > 0 && Logger.debug("Following exercises should be closed:", ...toClose);
 
         if (currentlyOpenFolders.length === 0 || currentlyOpenFolders[0].name !== ".tmc") {
             Logger.warn("The .tmc folder is not set as root folder.");
@@ -448,8 +449,9 @@ export default class WorkspaceManager {
             foldersToAdd = _.unionBy(allOpen, toOpen, "path");
         }
         foldersToAdd = foldersToAdd.sort().map((e) => ({ uri: e }));
-        Logger.debug("Folders to add", foldersToAdd);
-        Logger.debug("Currently open", currentlyOpenFolders);
+        foldersToAdd.length > 0 &&
+            Logger.debug("Following folders will be opened:", ...foldersToAdd);
+        Logger.debug("Currently open", ...currentlyOpenFolders);
         const start = tmcFolderAsRoot ? 1 : 0;
         const toRemove = currentlyOpenFolders.length - start;
         const remove = toRemove > 0 ? toRemove : null;

@@ -10,7 +10,7 @@ import * as fs from "fs-extra";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 
-import { OldSubmission, SubmissionFeedback } from "../api/types";
+import { SubmissionFeedback } from "../api/types";
 import { askForConfirmation, showError, showNotification } from "../api/vscode";
 import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
@@ -317,26 +317,6 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
             );
         }
     }
-}
-
-/**
- * Gets all submission ids from currently selected courses and maps them to corresponding exercises
- *
- */
-export async function getOldSubmissions(
-    actionContext: ActionContext,
-): Promise<Result<OldSubmission[], Error>> {
-    const { tmc, workspaceManager } = actionContext;
-    const currentExercise = workspaceManager.getCurrentExerciseData();
-    if (currentExercise.err) {
-        return currentExercise;
-    }
-    const result = await tmc.getOldSubmissions(currentExercise.val.id);
-    if (result.err) {
-        return result;
-    }
-
-    return new Ok(result.val);
 }
 
 /**
