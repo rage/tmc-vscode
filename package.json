@@ -101,7 +101,7 @@
             },
             {
                 "command": "tmc.pasteExercise",
-                "title": "Paste Exercise",
+                "title": "Send Exercise to TMC Paste",
                 "category": "TestMyCode"
             },
             {

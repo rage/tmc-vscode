@@ -158,7 +158,7 @@ export class UserData {
     }
 
     /**
-     * Sets all storage data to undefined.
+     * Tries to set all storage data to undefined.
      */
     public async wipeDataFromStorage(): Promise<void> {
         return this._storage.wipeStorage();

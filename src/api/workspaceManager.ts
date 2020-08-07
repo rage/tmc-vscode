@@ -14,8 +14,9 @@ import {
 import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
+import { ExerciseExistsError } from "../errors";
 import * as UITypes from "../ui/types";
-import { isCorrectWorkspaceOpen, Logger } from "../utils";
+import { isCorrectWorkspaceOpen, Logger, sleep } from "../utils";
 
 import { ExerciseDetails } from "./types";
 import { showNotification } from "./vscode";
@@ -120,7 +121,7 @@ export default class WorkspaceManager {
             } else {
                 const path = this._getExercisePath(data);
                 if (fs.existsSync(path) && fs.readdirSync(path).length !== 0) {
-                    return new Err(new Error("Exercise already downloaded"));
+                    return new Err(new ExerciseExistsError("Exercise already downloaded"));
                 }
             }
         }
@@ -328,7 +329,17 @@ export default class WorkspaceManager {
             const data = this._idToData.get(id);
             if (data) {
                 const openPath = this._getExercisePath(data);
-                delSync(openPath, { force: true });
+                const deleted = delSync(openPath, { force: true });
+                Logger.debug("Delete exercise deleted", ...deleted);
+                // Remove for loop when rid of Java
+                for (let i = 0; i <= 15; i++) {
+                    await sleep(100);
+                    if (!fs.existsSync(openPath)) {
+                        break;
+                    }
+                    Logger.debug("Remove this DelSync for loop when rid of Java  " + i);
+                    delSync(openPath, { force: true });
+                }
                 this._pathToId.delete(openPath);
                 this._idToData.delete(id);
             }

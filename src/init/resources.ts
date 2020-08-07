@@ -183,10 +183,10 @@ export async function resourceInitialization(
      * Insider version toggle.
      */
     const platform = getPlatform();
-    Logger.log("Detected platform", platform);
-    Logger.log("Platform", process.platform, "Arch", process.arch);
+    Logger.log("Detected platform " + platform);
+    Logger.log("Platform " + process.platform + " Arch " + process.arch);
     const executable = getRustExecutable(platform);
-    Logger.log("Executable", executable);
+    Logger.log("Executable " + executable);
     const cliPath = path.join(tmcDataPath, "cli", executable);
     const cliUrl = TMC_LANGS_RUST_DL_URL + executable;
     if (!fs.existsSync(cliPath)) {
