@@ -4,6 +4,7 @@ import { Course, Organization, SubmissionStatusReport } from "../api/types";
 import Storage from "../config/storage";
 import { ExtensionSettings, LocalCourseData } from "../config/types";
 
+import { MyCoursesProps } from "./templates/MyCourses";
 import { WelcomeProps } from "./templates/Welcome";
 import UI from "./ui";
 
@@ -33,6 +34,7 @@ export type TemplateData =
     | ({ templateName: "error" } & ErrorData)
     | ({ templateName: "index" } & IndexData)
     | ({ templateName: "login" } & LoginData)
+    | ({ templateName: "my-courses" } & MyCoursesProps)
     | ({ templateName: "organization" } & OrganizationData)
     | ({ templateName: "running-tests" } & RunningTestsData)
     | ({ templateName: "settings" } & SettingsData)

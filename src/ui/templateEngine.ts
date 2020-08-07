@@ -11,7 +11,7 @@ import { SubmissionResultReport, TmcLangsTestResultRust } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, parseTestResultsText } from "../utils/";
 
-import { CourseDetails, Webview, Welcome } from "./templates";
+import { CourseDetails, MyCourses, Webview, Welcome } from "./templates";
 import { TemplateData } from "./types";
 
 export default class TemplateEngine {
@@ -257,6 +257,13 @@ export default class TemplateEngine {
                     cssBlob,
                     cspSource: webview.cspSource,
                     script: CourseDetails.script,
+                });
+            case "my-courses":
+                return Webview.render({
+                    children: MyCourses.component(templateData),
+                    cssBlob,
+                    cspSource: webview.cspSource,
+                    script: () => {},
                 });
             case "welcome":
                 return Webview.render({
