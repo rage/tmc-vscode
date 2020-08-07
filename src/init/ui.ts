@@ -107,9 +107,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 organizationSlug: msg.organizationSlug,
                 courseName: msg.courseName,
             };
-            if (msg.mode === "download") {
-                await actionContext.userData.clearNewExercises(msg.courseId);
-            } else if (msg.mode === "update") {
+            if (msg.mode === "update") {
                 ui.webview.postMessage({
                     key: "course-updates",
                     message: { command: "setUpdateables", exerciseIds: [] },
@@ -117,6 +115,9 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             const successful = await downloadExercises(actionContext, [downloads]);
             if (successful.length !== 0) {
+                if (msg.mode === "download") {
+                    await actionContext.userData.clearNewExercises(msg.courseId, successful);
+                }
                 const openResult = await openExercises(
                     actionContext,
                     successful,

@@ -1,3 +1,4 @@
+import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 
 import { Logger } from "../utils/logger";
@@ -117,13 +118,17 @@ export class UserData {
     /**
      * Clears the list of new exercises for a given course.
      */
-    public async clearNewExercises(courseId: number): Promise<Result<void, Error>> {
+    public async clearNewExercises(
+        courseId: number,
+        successful: number[],
+    ): Promise<Result<void, Error>> {
         const courseData = this._courses.get(courseId);
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
         Logger.log(`Clearing new exercises for ${courseData.name}`);
-        courseData.newExercises = [];
+        const successfullyDownloaded = _.difference(courseData.newExercises, successful);
+        courseData.newExercises = successfullyDownloaded;
         await this._updatePersistentData();
         return Ok.EMPTY;
     }

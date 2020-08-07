@@ -374,17 +374,18 @@ export async function checkForNewExercises(
                     "Download",
                     async (): Promise<void> => {
                         const newIds = Array.from(course.newExercises);
-                        await userData.clearNewExercises(course.id);
+                        const successful = await downloadExercises(actionContext, [
+                            {
+                                courseId: course.id,
+                                exerciseIds: newIds,
+                                organizationSlug: course.organization,
+                                courseName: course.name,
+                            },
+                        ]);
+                        await userData.clearNewExercises(course.id, successful);
                         const openResult = await openExercises(
                             actionContext,
-                            await downloadExercises(actionContext, [
-                                {
-                                    courseId: course.id,
-                                    exerciseIds: newIds,
-                                    organizationSlug: course.organization,
-                                    courseName: course.name,
-                                },
-                            ]),
+                            successful,
                             course.name,
                         );
                         if (openResult.err) {
