@@ -17,7 +17,14 @@ import {
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
 import { askForConfirmation, showError, showNotification } from "../api/vscode";
-import { isCorrectWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
+import {
+    getPlatform,
+    getRustExecutable,
+    isCorrectWorkspaceOpen,
+    Logger,
+    LogLevel,
+    sleep,
+} from "../utils/";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -249,6 +256,10 @@ export function registerUiActions(actionContext: ActionContext): void {
                     (): void => {},
                 ]);
                 resources.setDataPath(newPath);
+                const platform = getPlatform();
+                const executable = getRustExecutable(platform);
+                const cliPath = path.join(newPath, "cli", executable);
+                resources.setCliPath(cliPath);
                 await settings.updateSetting({ setting: "dataPath", value: newPath });
                 if (open && workspace) {
                     // Opening a workspace restarts VSCode (v1.44)

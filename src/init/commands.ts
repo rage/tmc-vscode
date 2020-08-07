@@ -1,3 +1,4 @@
+import * as fs from "fs-extra";
 import * as path from "path";
 import * as vscode from "vscode";
 
@@ -18,7 +19,8 @@ import {
 import { ActionContext } from "../actions/types";
 import { askForConfirmation, askForItem, showError, showNotification } from "../api/vscode";
 import { LocalCourseData } from "../config/types";
-import { Logger } from "../utils/";
+import { activate, deactivate } from "../extension";
+import { isCorrectWorkspaceOpen, Logger } from "../utils/";
 
 // TODO: Fix error handling so user receives better error messages.
 const errorMessage = "Currently open editor is not part of a TMC exercise";
@@ -352,6 +354,44 @@ export function registerCommands(
                     },
                 ],
             );
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("tmc.wipe", async () => {
+            const workspace = vscode.workspace.name?.split(" ")[0];
+            if (workspace && isCorrectWorkspaceOpen(resources, workspace)) {
+                showNotification(
+                    "Please close the TMC Workspace before wiping data and make sure you have closed all files related to TMC.",
+                    ["OK", (): void => {}],
+                );
+                return;
+            }
+            const wipe = await askForConfirmation(
+                "Are you sure you wan't to wipe all data for the TMC Extension?",
+                true,
+            );
+            if (!wipe) {
+                return;
+            }
+            const reallyWipe = await askForConfirmation(
+                "This action cannot be undone. This will permanently delete the extension data, exercises, settings...",
+                true,
+            );
+            if (reallyWipe) {
+                fs.removeSync(path.join(resources.getDataPath()));
+                await userData.wipeDataFromStorage();
+                ui.treeDP.updateVisibility([actionContext.visibilityGroups.LOGGED_IN.not]);
+                deactivate();
+                for (const sub of context.subscriptions) {
+                    try {
+                        sub.dispose();
+                    } catch (e) {
+                        Logger.error(e);
+                    }
+                }
+                activate(context);
+            }
         }),
     );
 }

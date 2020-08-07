@@ -152,6 +152,13 @@ export class UserData {
         return Ok.EMPTY;
     }
 
+    /**
+     * Sets all storage data to undefined.
+     */
+    public async wipeDataFromStorage(): Promise<void> {
+        return this._storage.wipeStorage();
+    }
+
     private _updatePersistentData(): Promise<void> {
         return this._storage.updateUserData({ courses: Array.from(this._courses.values()) });
     }
