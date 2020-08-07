@@ -96,7 +96,8 @@ interface UncheckedLangsResponse {
         | "processing"
         | "sending"
         | "waiting-for-results"
-        | "finished";
+        | "finished"
+        | "intermediate-step-finished";
     status: "finished" | "crashed" | "in-progress";
 }
 
@@ -107,7 +108,7 @@ interface LangsResponse<T> extends UncheckedLangsResponse {
 }
 
 interface LangsError {
-    http_status_code: number | null;
+    kind: string;
     trace: string[];
 }
 
@@ -969,16 +970,19 @@ export default class TMC {
         }
         if (result === "error") {
             if (is<LangsError>(data)) {
-                const { http_status_code, trace } = data;
-                Logger.error("TMC Langs errored.", http_status_code, trace.join("\n"));
-                if (http_status_code === null) {
-                    return new Err(new RuntimeError(message, trace.join("\n")));
-                }
-                if (http_status_code === 403) {
-                    return new Err(new AuthorizationError(message));
+                const { kind, trace } = data;
+                const traceString = trace.join("\n");
+                Logger.error("TMC Langs errored.", kind, traceString);
+                if (kind === "generic") {
+                    return new Err(new RuntimeError(message, traceString));
+                } else if (kind === "authorization-error") {
+                    return new Err(new AuthorizationError(message, traceString));
+                } else if (kind === "connection-error") {
+                    return new Err(new ConnectionError(message, traceString));
                 }
             }
-            return new Err(new Error(message));
+            Logger.error("Unexpected langs error type.");
+            return new Err(new ApiError(message));
         }
         if (!checker(data)) {
             return new Err(new ApiError("Unexpected response data type."));
