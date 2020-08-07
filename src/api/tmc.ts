@@ -96,7 +96,8 @@ interface UncheckedLangsResponse {
         | "processing"
         | "sending"
         | "waiting-for-results"
-        | "finished";
+        | "finished"
+        | "intermediate-step-finished";
     status: "finished" | "crashed" | "in-progress";
 }
 
@@ -104,6 +105,11 @@ interface LangsResponse<T> extends UncheckedLangsResponse {
     data: T;
     result: Exclude<UncheckedLangsResponse["result"], "error">;
     status: Exclude<UncheckedLangsResponse["status"], "crashed">;
+}
+
+interface LangsError {
+    kind: string;
+    trace: string[];
 }
 
 /**
@@ -568,6 +574,57 @@ export default class TMC {
         }
     }
 
+    /**
+     * Downloads an old submission for the given exercise.
+     *
+     * @param exerciseId ID of the exercise.
+     * @param submissionId ID of the exercise submission.
+     * @param saveOldState Whether to download
+     */
+    public async downloadOldSubmission(
+        exerciseId: number,
+        submissionId: number,
+        saveOldState: boolean,
+    ): Promise<Result<void, Error>> {
+        if (!this._workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
+        }
+
+        const exercisePath = this._workspaceManager.getExercisePathById(exerciseId);
+        if (exercisePath.err) {
+            return exercisePath;
+        }
+
+        const flags = saveOldState ? ["--save-old-state"] : [];
+        const args = [
+            "download-old-submission",
+            ...flags,
+            "--exercise-id",
+            exerciseId.toString(),
+            "--output-path",
+            exercisePath.val,
+            "--submission-id",
+            submissionId.toString(),
+        ];
+        if (saveOldState) {
+            args.push(
+                "--submission-url",
+                `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`,
+            );
+        }
+
+        const downloadResult = await this._executeLangsCommand(
+            { args, core: true },
+            createIs<unknown>(),
+            false,
+        );
+        if (downloadResult.err) {
+            return downloadResult;
+        }
+
+        return Ok.EMPTY;
+    }
+
     public async downloadOldExercise(
         exerciseId: number,
         submissionId: number,
@@ -580,34 +637,6 @@ export default class TMC {
         if (exercisePath.err) {
             return exercisePath;
         }
-
-        // TODO: Finish insider version when this command is fixed in Langs
-        // -- Insider implementation --
-        /* if (this.isInsider()) {
-            const asd = await this.executeLangsCommand(
-                {
-                    args: [
-                        "download-old-submission",
-                        "--exercise-id",
-                        exerciseId.toString(),
-                        "--submission-id",
-                        submissionId.toString(),
-                        "--output-path",
-                        exercisePath.val,
-                    ],
-                    core: true,
-                    onStderr: (e) => Logger.warn("e", e),
-                    onStdout: (o) => Logger.warn("o", JSON.stringify(o)),
-                },
-                createIs<unknown>(),
-                false,
-            );
-            if (asd.err) {
-                return asd;
-            }
-            return new Ok("Old submission downloaded succesfully");
-        } */
-        // -- End of insider implementation --
 
         const exPath = exercisePath.val + "/";
         const userFilePaths = await this._checkApiResponse(
@@ -716,29 +745,35 @@ export default class TMC {
 
     /**
      * Resets the given exercise, reverting it to its original template.
-     * @param id Id of the exercise.
-     * @param submissionUrl Url where to optionally submit the exercise beforehand.
+     * @param exerciseId Id of the exercise.
+     * @param saveOldState Whether to submit current state of the exercise before reseting it.
      */
-    public async resetExercise(id: number, submissionUrl?: string): Promise<Result<void, Error>> {
+    public async resetExercise(
+        exerciseId: number,
+        saveOldState: boolean,
+    ): Promise<Result<void, Error>> {
         if (!this._workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
-        const exerciseFolderPath = this._workspaceManager.getExercisePathById(id);
+        const exerciseFolderPath = this._workspaceManager.getExercisePathById(exerciseId);
         if (exerciseFolderPath.err) {
             return exerciseFolderPath;
         }
 
-        const flags = submissionUrl ? ["--save-old-state"] : [];
+        const flags = saveOldState ? ["--save-old-state"] : [];
         const args = [
             "reset-exercise",
             ...flags,
             "--exercise-id",
-            id.toString(),
+            exerciseId.toString(),
             "--exercise-path",
             exerciseFolderPath.val,
         ];
-        if (submissionUrl) {
-            args.push("--submission-url", submissionUrl);
+        if (saveOldState) {
+            args.push(
+                "--submission-url",
+                `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`,
+            );
         }
 
         const result = await this._executeLangsCommand({ args, core: true }, createIs<unknown>());
@@ -947,13 +982,23 @@ export default class TMC {
             return new Err(new Error("Langs process crashed: " + message));
         }
         if (result === "error") {
-            if (is<string[]>(data)) {
-                Logger.error("TMC Langs errored.", data.join("\n"));
+            if (is<LangsError>(data)) {
+                const { kind, trace } = data;
+                const traceString = trace.join("\n");
+                Logger.error("TMC Langs errored.", kind, traceString);
+                if (kind === "generic") {
+                    return new Err(new RuntimeError(message, traceString));
+                } else if (kind === "authorization-error") {
+                    return new Err(new AuthorizationError(message, traceString));
+                } else if (kind === "connection-error") {
+                    return new Err(new ConnectionError(message, traceString));
+                }
             }
-            return new Err(new Error(message));
+            Logger.error("Unexpected langs error type.");
+            return new Err(new ApiError(message));
         }
         if (!checker(data)) {
-            return new Err(new Error("Unexpected response data type."));
+            return new Err(new ApiError("Unexpected response data type."));
         }
         return new Ok({ ...langsResponse, data, result, status });
     }

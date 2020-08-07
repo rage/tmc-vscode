@@ -87,14 +87,6 @@ export function sleep(millis: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, millis));
 }
 
-/**
- * Convert Chars to a string
- * @param array Char numbers array
- */
-export function numbersToString(array: number[]): string {
-    return String.fromCharCode(...array);
-}
-
 export function formatSizeInBytes(size: number, precision = 3): string {
     let suffix = "B";
     let cSize = size;

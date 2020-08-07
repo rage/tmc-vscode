@@ -47,7 +47,7 @@ export default class VSC {
         if (!resource) {
             return undefined;
         }
-        Logger.log("Active text document language:", resource.document.languageId);
+        Logger.log("Active text document language: " + resource.document.languageId);
         switch (resource.document.languageId) {
             case "python":
                 return this._getPythonPath(resource.document);
