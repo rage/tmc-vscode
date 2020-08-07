@@ -97,7 +97,7 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
             const workspace = vscode.workspace.name?.split(" ")[0];
             if (workspace && isCorrectWorkspaceOpen(resources, workspace)) {
                 const languageId = doc.languageId;
-                Logger.debug("Text document languageId", languageId);
+                Logger.debug("Text document languageId " + languageId);
                 switch (languageId) {
                     case "c":
                     case "cpp":

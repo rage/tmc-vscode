@@ -17,7 +17,14 @@ import {
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
 import { askForConfirmation, showError, showNotification } from "../api/vscode";
-import { isCorrectWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
+import {
+    getPlatform,
+    getRustExecutable,
+    isCorrectWorkspaceOpen,
+    Logger,
+    LogLevel,
+    sleep,
+} from "../utils/";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -100,9 +107,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 organizationSlug: msg.organizationSlug,
                 courseName: msg.courseName,
             };
-            if (msg.mode === "download") {
-                await actionContext.userData.clearNewExercises(msg.courseId);
-            } else if (msg.mode === "update") {
+            if (msg.mode === "update") {
                 ui.webview.postMessage({
                     key: "course-updates",
                     message: { command: "setUpdateables", exerciseIds: [] },
@@ -110,6 +115,9 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             const successful = await downloadExercises(actionContext, [downloads]);
             if (successful.length !== 0) {
+                if (msg.mode === "download") {
+                    await actionContext.userData.clearNewExercises(msg.courseId, successful);
+                }
                 const openResult = await openExercises(
                     actionContext,
                     successful,
@@ -249,6 +257,10 @@ export function registerUiActions(actionContext: ActionContext): void {
                     (): void => {},
                 ]);
                 resources.setDataPath(newPath);
+                const platform = getPlatform();
+                const executable = getRustExecutable(platform);
+                const cliPath = path.join(newPath, "cli", executable);
+                resources.setCliPath(cliPath);
                 await settings.updateSetting({ setting: "dataPath", value: newPath });
                 if (open && workspace) {
                     // Opening a workspace restarts VSCode (v1.44)

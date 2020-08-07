@@ -47,6 +47,10 @@ export default class Resources {
         return this._cliPath;
     }
 
+    public setCliPath(cliPath: string): void {
+        this._cliPath = cliPath;
+    }
+
     public getTmcLangsPath(): string {
         return path.join(this._tmcDataFolder, this._tmcLangsPathRelative);
     }
