@@ -94,7 +94,11 @@ export async function displayLocalCourseDetails(
         if (exercisePath.err) {
             return false;
         }
-        return fs.existsSync(exercisePath.val);
+        if (!fs.existsSync(exercisePath.val) || fs.readdirSync(exercisePath.val).length === 0) {
+            workspaceManager.setMissing(exerciseId);
+            return false;
+        }
+        return true;
     };
 
     const mapStatus = (
