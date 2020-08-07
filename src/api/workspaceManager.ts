@@ -118,7 +118,10 @@ export default class WorkspaceManager {
                     );
                 }
             } else {
-                return new Err(new Error("Exercise already downloaded"));
+                const path = this._getExercisePath(data);
+                if (fs.existsSync(path) && fs.readdirSync(path).length !== 0) {
+                    return new Err(new Error("Exercise already downloaded"));
+                }
             }
         }
         const exerciseFolderPath = this._resources.getExercisesFolderPath();
