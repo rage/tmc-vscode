@@ -282,22 +282,24 @@ export async function resetExercise(
     if (submitFirst === undefined) {
         Logger.debug("Answer for submitting first not provided, returning early.");
         return Ok(false);
-    } else if (submitFirst) {
-        const submitResult = await tmc.submitExercise(id);
-        if (submitResult.err) {
-            return submitResult;
-        }
-    } else {
-        Logger.debug("Didn't submit exercise before resetting.");
     }
 
     if (settings.isInsider()) {
         Logger.warn("Using insider feature");
-        const resetResult = await tmc.resetExercise(id);
+        const resetResult = await tmc.resetExercise(id, submitFirst);
         if (resetResult.err) {
             return resetResult;
         }
     } else {
+        if (submitFirst) {
+            const submitResult = await tmc.submitExercise(id);
+            if (submitResult.err) {
+                return submitResult;
+            }
+        } else {
+            Logger.debug("Didn't submit exercise before resetting.");
+        }
+
         // Try to remove files here because new workspace
         const edit = new vscode.WorkspaceEdit();
         edit.deleteFile(vscode.Uri.file(exercisePath.val), { recursive: true });
@@ -391,6 +393,11 @@ export async function closeExercises(
     return new Ok(ids);
 }
 
+interface DownloadOldSubmissionOptions {
+    /** Whether to submit current state, asks user if not defined. */
+    submitFirst?: boolean;
+}
+
 /**
  * Looks for older submissions of the given exercise and lets user choose which one to download.
  * Uses resetExercise action before applying the contents of the actual submission.
@@ -400,6 +407,7 @@ export async function closeExercises(
 export async function downloadOldSubmission(
     actionContext: ActionContext,
     exerciseId: number,
+    options?: DownloadOldSubmissionOptions,
 ): Promise<Result<boolean, Error>> {
     const { settings, tmc, workspaceManager } = actionContext;
 
@@ -438,7 +446,27 @@ export async function downloadOldSubmission(
 
     if (settings.isInsider()) {
         console.warn("Using insider feature");
-        const downloadResult = await tmc.downloadOldSubmissionInsider(exerciseId, submission.id);
+        const submitFirst =
+            options?.submitFirst !== undefined
+                ? options.submitFirst
+                : await askForItem(
+                      "Do you want to save the current state of the exercise by submitting it to TMC Server?",
+                      false,
+                      ["Yes", true],
+                      ["No", false],
+                      ["Cancel", undefined],
+                  );
+
+        if (submitFirst === undefined) {
+            Logger.debug("Answer for submitting first not provided, returning early.");
+            return Ok(false);
+        }
+
+        const downloadResult = await tmc.downloadOldSubmission(
+            exerciseId,
+            submission.id,
+            submitFirst,
+        );
         if (downloadResult.err) {
             return downloadResult;
         }

@@ -579,10 +579,12 @@ export default class TMC {
      *
      * @param exerciseId ID of the exercise.
      * @param submissionId ID of the exercise submission.
+     * @param saveOldState Whether to download
      */
-    public async downloadOldSubmissionInsider(
+    public async downloadOldSubmission(
         exerciseId: number,
         submissionId: number,
+        saveOldState: boolean,
     ): Promise<Result<void, Error>> {
         if (!this._workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
@@ -593,21 +595,26 @@ export default class TMC {
             return exercisePath;
         }
 
+        const flags = saveOldState ? ["--save-old-state"] : [];
+        const args = [
+            "download-old-submission",
+            ...flags,
+            "--exercise-id",
+            exerciseId.toString(),
+            "--output-path",
+            exercisePath.val,
+            "--submission-id",
+            submissionId.toString(),
+        ];
+        if (saveOldState) {
+            args.push(
+                "--submission-url",
+                `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`,
+            );
+        }
+
         const downloadResult = await this._executeLangsCommand(
-            {
-                args: [
-                    "download-old-submission",
-                    "--exercise-id",
-                    exerciseId.toString(),
-                    "--submission-id",
-                    submissionId.toString(),
-                    "--output-path",
-                    exercisePath.val,
-                ],
-                core: true,
-                onStderr: (e) => Logger.warn("e", e),
-                onStdout: (o) => Logger.warn("o", JSON.stringify(o)),
-            },
+            { args, core: true },
             createIs<unknown>(),
             false,
         );
@@ -738,29 +745,35 @@ export default class TMC {
 
     /**
      * Resets the given exercise, reverting it to its original template.
-     * @param id Id of the exercise.
-     * @param submissionUrl Url where to optionally submit the exercise beforehand.
+     * @param exerciseId Id of the exercise.
+     * @param saveOldState Whether to submit current state of the exercise before reseting it.
      */
-    public async resetExercise(id: number, submissionUrl?: string): Promise<Result<void, Error>> {
+    public async resetExercise(
+        exerciseId: number,
+        saveOldState: boolean,
+    ): Promise<Result<void, Error>> {
         if (!this._workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
-        const exerciseFolderPath = this._workspaceManager.getExercisePathById(id);
+        const exerciseFolderPath = this._workspaceManager.getExercisePathById(exerciseId);
         if (exerciseFolderPath.err) {
             return exerciseFolderPath;
         }
 
-        const flags = submissionUrl ? ["--save-old-state"] : [];
+        const flags = saveOldState ? ["--save-old-state"] : [];
         const args = [
             "reset-exercise",
             ...flags,
             "--exercise-id",
-            id.toString(),
+            exerciseId.toString(),
             "--exercise-path",
             exerciseFolderPath.val,
         ];
-        if (submissionUrl) {
-            args.push("--submission-url", submissionUrl);
+        if (saveOldState) {
+            args.push(
+                "--submission-url",
+                `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`,
+            );
         }
 
         const result = await this._executeLangsCommand({ args, core: true }, createIs<unknown>());

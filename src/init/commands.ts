@@ -106,17 +106,12 @@ export function registerCommands(
                 Logger.error("Failed to reset exercise", resetResult.val);
                 showError(`Failed to reset exercise: ${resetResult.val.message}`);
                 return;
+            } else if (!resetResult.val) {
+                Logger.log("Didn't reset exercise.");
+            } else if (editor && resource) {
+                Logger.debug(`Reopening original file "${resource.fsPath}"`);
+                await vscode.commands.executeCommand("vscode.open", resource, editor.viewColumn);
             }
-
-            Logger.log(`Exercise resetion was ${resetResult.val ? "successful" : "canceled"}.`);
-
-            if (!editor || !resource) {
-                Logger.warn(`Active file for exercise ${exerciseId} returned undefined?`);
-                return;
-            }
-
-            Logger.debug(`Reopening original file "${resource.fsPath}"`);
-            await vscode.commands.executeCommand("vscode.open", resource, editor.viewColumn);
         }),
     );
 
@@ -136,15 +131,15 @@ export function registerCommands(
             if (oldDownloadResult.err) {
                 Logger.error("Failed to download old submission", oldDownloadResult.val);
                 showError(`Failed to download old submission: ${oldDownloadResult.val.message}`);
-                return;
+            } else if (!oldDownloadResult.val) {
+                Logger.log("Didn't download old exercise.");
+            } else if (editor && resource) {
+                vscode.commands.executeCommand<undefined>(
+                    "vscode.open",
+                    resource,
+                    editor.viewColumn,
+                );
             }
-
-            if (!editor || !resource) {
-                Logger.warn(`Active file for exercise ${exerciseId} returned undefined?`);
-                return;
-            }
-
-            vscode.commands.executeCommand<undefined>("vscode.open", resource, editor.viewColumn);
         }),
     );
 

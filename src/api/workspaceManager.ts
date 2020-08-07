@@ -407,7 +407,7 @@ export default class WorkspaceManager {
         const allOpen: vscode.Uri[] = exercises
             .filter((ex) => ex.status === ExerciseStatus.OPEN)
             .map((ex) => vscode.Uri.file(this._getExercisePath(ex)));
-        allOpen.length > 0 && Logger.debug("Exercises with opened status:", ...allOpen);
+        // allOpen.length > 0 && Logger.debug("Exercises with opened status:", ...allOpen);
         const toClose: vscode.Uri[] = [];
         const toOpen: vscode.Uri[] = [];
 
