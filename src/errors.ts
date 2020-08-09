@@ -11,6 +11,10 @@ export class ConnectionError extends BaseError {
     public readonly name = "ConnectionError";
 }
 
+export class ExerciseExistsError extends BaseError {
+    public readonly name = "ExerciseExistsError";
+}
+
 export class AuthenticationError extends BaseError {
     public readonly name = "AuthenticationError";
 }

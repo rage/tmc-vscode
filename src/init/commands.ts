@@ -363,20 +363,20 @@ export function registerCommands(
                 return;
             }
             const wipe = await askForConfirmation(
-                "Are you sure you wan't to wipe all data for the TMC Extension?",
+                "Are you sure you want to wipe all data for the TMC Extension?",
                 true,
             );
             if (!wipe) {
                 return;
             }
             const reallyWipe = await askForConfirmation(
-                "This action cannot be undone. This will permanently delete the extension data, exercises, settings...",
+                "This action cannot be undone. This might permanently delete the extension data, exercises, settings...",
                 true,
             );
             if (reallyWipe) {
+                await vscode.commands.executeCommand("tmc.logout");
                 fs.removeSync(path.join(resources.getDataPath()));
                 await userData.wipeDataFromStorage();
-                ui.treeDP.updateVisibility([actionContext.visibilityGroups.LOGGED_IN.not]);
                 deactivate();
                 for (const sub of context.subscriptions) {
                     try {

@@ -221,6 +221,13 @@ export function registerUiActions(actionContext: ActionContext): void {
         }
         const workspace = vsc.getWorkspaceName();
         const open = workspace ? isCorrectWorkspaceOpen(resources, workspace) : false;
+        if (open) {
+            showNotification(
+                "Please close the TMC workspace from VSCode File menu and try again.",
+                ["OK", (): void => {}],
+            );
+            return;
+        }
 
         const old = resources.getDataPath();
         const options: vscode.OpenDialogOptions = {
@@ -262,12 +269,6 @@ export function registerUiActions(actionContext: ActionContext): void {
                 const cliPath = path.join(newPath, "cli", executable);
                 resources.setCliPath(cliPath);
                 await settings.updateSetting({ setting: "dataPath", value: newPath });
-                if (open && workspace) {
-                    // Opening a workspace restarts VSCode (v1.44)
-                    await vsc.openFolder(
-                        path.join(newPath, "TMC workspace", workspace, ".code-workspace"),
-                    );
-                }
             } else {
                 Logger.error(res.val);
                 showError(res.val.message);

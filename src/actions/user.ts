@@ -429,16 +429,19 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
             await vsc.openFolder(tmcWorkspaceFile);
             // Restarts VSCode
         } else {
-            const choice = "Close current and open TMC Workspace";
-            await showError("Please close your current workspace before using TestMyCode.", [
-                choice,
-                async (): Promise<Thenable<unknown>> => {
-                    if (!fs.existsSync(tmcWorkspaceFile)) {
-                        workspaceManager.createWorkspaceFile(name);
-                    }
-                    return vsc.openFolder(tmcWorkspaceFile);
-                },
-            ]);
+            const choice = "Close current & open Course Workspace";
+            await showError(
+                "Please close the current workspace before opening a course workspace.",
+                [
+                    choice,
+                    async (): Promise<Thenable<unknown>> => {
+                        if (!fs.existsSync(tmcWorkspaceFile)) {
+                            workspaceManager.createWorkspaceFile(name);
+                        }
+                        return vsc.openFolder(tmcWorkspaceFile);
+                    },
+                ],
+            );
         }
     } else if (currentWorkspaceFile?.fsPath === tmcWorkspaceFile) {
         Logger.log("Workspace already open, changing focus to this workspace.");
