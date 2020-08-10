@@ -129,6 +129,9 @@ export class UserData {
         Logger.log(`Clearing new exercises for ${courseData.name}`);
         const successfullyDownloaded = _.difference(courseData.newExercises, successful);
         courseData.newExercises = successfullyDownloaded;
+        if (successfullyDownloaded.length === 0) {
+            courseData.notifyAfter = 0;
+        }
         await this._updatePersistentData();
         return Ok.EMPTY;
     }

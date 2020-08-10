@@ -75,6 +75,11 @@
                 "category": "TestMyCode"
             },
             {
+                "command": "tmc.downloadNewExercises",
+                "title": "Download new exercise for course...",
+                "category": "TestMyCode"
+            },
+            {
                 "command": "tmc.downloadOldSubmission",
                 "title": "Download Old Submission",
                 "category": "TestMyCode"
