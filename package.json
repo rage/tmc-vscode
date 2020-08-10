@@ -151,19 +151,16 @@
             {
                 "command": "tmc.closeExercise",
                 "key": "ctrl+shift+c",
-                "mac": "cmd+shift+c",
                 "when": "tmcWorkspaceActive"
             },
             {
                 "command": "tmc.runTests",
                 "key": "ctrl+shift+t",
-                "mac": "cmd+shift+t",
                 "when": "tmcWorkspaceActive"
             },
             {
                 "command": "tmc.selectAction",
                 "key": "ctrl+shift+a",
-                "mac": "cmd+shift+a",
                 "when": "tmcWorkspaceActive"
             }
         ],
