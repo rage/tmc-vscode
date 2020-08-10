@@ -263,7 +263,7 @@ export default class TemplateEngine {
                     children: MyCourses.component(templateData),
                     cssBlob,
                     cspSource: webview.cspSource,
-                    script: () => {},
+                    script: MyCourses.script,
                 });
             case "welcome":
                 return Webview.render({

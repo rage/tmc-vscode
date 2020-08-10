@@ -5,3 +5,4 @@ interface MyCoursesProps {
 }
 
 export function component(props: MyCoursesProps): unknown;
+export function script(): void;

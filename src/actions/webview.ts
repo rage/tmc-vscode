@@ -7,10 +7,11 @@
 import * as fs from "fs-extra";
 import { Err, Ok, Result } from "ts-results";
 
+import { Exercise } from "../api/types";
 import * as ConfigTypes from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
 import * as UITypes from "../ui/types";
-import { chooseDeadline, dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utils/";
+import { dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utils/";
 
 import { ActionContext } from "./types";
 import { updateCourse } from "./user";
@@ -27,57 +28,35 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
         return { ...course, completedPrc };
     });
 
-    // Display the page immediatedly before fetching any data from API
-    await ui.webview.setContentFromTemplate({ templateName: "index", courses });
+    ui.webview.setContentFromTemplate({
+        templateName: "my-courses",
+        courses: userData.getCourses(),
+    });
 
-    const uiState = ui.webview.getStateId();
-
-    /**  Tries to update courses from API;
-     * Also checks for disabled courses, if they are enabled again.
-     * When going to My Courses view.
-     */
-    const apiCourses = await Promise.all(
-        courses.map(async (course) => {
-            const exerciseResult = await tmc.getCourseDetails(course.id);
-            const deadlines = new Map<number, Date>();
-            if (exerciseResult.ok) {
-                exerciseResult.val.course.exercises.forEach((ex) => {
-                    if (ex.deadline) {
-                        deadlines.set(ex.id, parseDate(ex.deadline));
-                    }
-                    const chosenDeadline = chooseDeadline(ex);
-                    if (chosenDeadline.date) {
-                        deadlines.set(ex.id, chosenDeadline.date);
-                    }
-                });
-            }
-
-            await updateCourse(actionContext, course.id);
-            const updatedCourse = userData.getCourse(course.id);
-            course.disabled = updatedCourse.disabled;
-
-            const completedPrc = (
-                (updatedCourse.awardedPoints / updatedCourse.availablePoints) *
-                100
-            ).toFixed(2);
-            const newExercises = updatedCourse.newExercises;
-            const exercises = course.exercises.map((ex) => ({
-                ...ex,
-                deadline: deadlines.get(ex.id),
-            }));
-            const nextDeadline = parseNextDeadlineAfter(
-                new Date(),
-                exercises.map((exercise) => ({
-                    date: exercise.deadline || null,
-                    active: !exercise.passed,
-                })),
-            );
-            return { ...course, exercises, nextDeadline, completedPrc, newExercises };
-        }),
-    );
-    if (uiState === ui.webview.getStateId()) {
-        await ui.webview.setContentFromTemplate({ templateName: "index", courses: apiCourses });
-    }
+    const now = new Date();
+    courses.forEach(async (course) => {
+        await updateCourse(actionContext, course.id);
+        const exercises: Exercise[] = (await tmc.getCourseDetails(course.id, true))
+            .map((x) => x.course.exercises)
+            .unwrapOr([]);
+        const deadline = parseNextDeadlineAfter(
+            now,
+            exercises.map((x) => {
+                const softDeadline = x.soft_deadline ? parseDate(x.soft_deadline) : null;
+                const hardDeadline = x.deadline ? parseDate(x.deadline) : null;
+                return {
+                    active: true,
+                    date: (softDeadline && hardDeadline ? hardDeadline <= softDeadline : true)
+                        ? hardDeadline
+                        : softDeadline,
+                };
+            }) || [],
+        );
+        ui.webview.postMessage({
+            key: `course-${course.id}-next-deadline`,
+            message: { command: "setNextCourseDeadline", courseId: course.id, deadline },
+        });
+    });
 }
 
 /**

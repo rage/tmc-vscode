@@ -32,7 +32,6 @@ export type TemplateData =
     | ({ templateName: "course-details" } & CourseDetailsData)
     | ({ templateName: "course" } & CourseData)
     | ({ templateName: "error" } & ErrorData)
-    | ({ templateName: "index" } & IndexData)
     | ({ templateName: "login" } & LoginData)
     | ({ templateName: "my-courses" } & MyCoursesProps)
     | ({ templateName: "organization" } & OrganizationData)
@@ -74,10 +73,6 @@ export type CourseData = {
 
 export type ErrorData = {
     error: Error;
-};
-
-export type IndexData = {
-    courses: Array<LocalCourseData & { completedPrc: string }>;
 };
 
 export type LoginData = {
@@ -139,9 +134,19 @@ export interface SetInsiderStatus {
     enabled: boolean;
 }
 
+export interface SetNextCourseDeadline {
+    command: "setNextCourseDeadline";
+    deadline: string;
+    courseId: number;
+}
+
 export interface SetUpdateables {
     command: "setUpdateables";
     exerciseIds: number[];
 }
 
-export type WebviewMessage = ExerciseStatusChange | SetInsiderStatus | SetUpdateables;
+export type WebviewMessage =
+    | ExerciseStatusChange
+    | SetInsiderStatus
+    | SetNextCourseDeadline
+    | SetUpdateables;
