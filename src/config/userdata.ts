@@ -127,9 +127,9 @@ export class UserData {
             return new Err(new Error("Data missing"));
         }
         Logger.log(`Clearing new exercises for ${courseData.name}`);
-        const successfullyDownloaded = _.difference(courseData.newExercises, successful);
-        courseData.newExercises = successfullyDownloaded;
-        if (successfullyDownloaded.length === 0) {
+        const unSuccessfullyDownloaded = _.difference(courseData.newExercises, successful);
+        courseData.newExercises = unSuccessfullyDownloaded;
+        if (unSuccessfullyDownloaded.length === 0) {
             courseData.notifyAfter = 0;
         }
         await this._updatePersistentData();
