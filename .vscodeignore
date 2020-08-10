@@ -26,8 +26,13 @@ types/**
 config.js
 
 # Media
-**/*.png
-!media/TMC.png
+# Nothing hidden
+
+# Docs
+docs/architecture.md
+docs/development.md
+docs/extension-state.md
+docs/publish.md
 
 # Development backend
 backend/**

@@ -8,7 +8,9 @@ import {
     closeExercises,
     displayLocalCourseDetails,
     displayUserCourses,
+    downloadExercises,
     downloadOldSubmission,
+    openExercises,
     openSettings,
     openWorkspace,
     pasteExercise,
@@ -16,7 +18,7 @@ import {
     submitExercise,
     testExercise,
 } from "../actions";
-import { ActionContext } from "../actions/types";
+import { ActionContext, CourseExerciseDownloads } from "../actions/types";
 import { askForConfirmation, askForItem, showError, showNotification } from "../api/vscode";
 import { LocalCourseData } from "../config/types";
 import { activate, deactivate } from "../extension";
@@ -111,6 +113,50 @@ export function registerCommands(
             } else if (editor && resource) {
                 Logger.debug(`Reopening original file "${resource.fsPath}"`);
                 await vscode.commands.executeCommand("vscode.open", resource, editor.viewColumn);
+            }
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("tmc.downloadNewExercises", async () => {
+            const downloadNewExercises = async (courseId: number): Promise<void> => {
+                const course = userData.getCourse(courseId);
+                if (course.newExercises.length === 0) {
+                    showNotification(`There are no new exercises for the course ${course.name}.`, [
+                        "OK",
+                        (): void => {},
+                    ]);
+                    return;
+                }
+                const downloads: CourseExerciseDownloads = {
+                    courseId: course.id,
+                    exerciseIds: course.newExercises,
+                    organizationSlug: course.organization,
+                    courseName: course.name,
+                };
+                const successful = await downloadExercises(actionContext, [downloads]);
+                await userData.clearNewExercises(courseId, successful);
+                const openResult = await openExercises(
+                    actionContext,
+                    successful,
+                    downloads.courseName,
+                );
+                if (openResult.err) {
+                    const message = "Failed to open exercises after download.";
+                    Logger.error(message, openResult.val);
+                    showError(message);
+                }
+            };
+
+            const courses = userData.getCourses();
+            const courseId = await askForItem<number>(
+                "Download new exercises for course?",
+                false,
+                ...courses.map<[string, number]>((course) => [course.name, course.id]),
+            );
+
+            if (courseId) {
+                await downloadNewExercises(courseId);
             }
         }),
     );
