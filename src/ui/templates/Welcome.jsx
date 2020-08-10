@@ -187,6 +187,11 @@ function component(props) {
                                 Questions & Issues
                             </a>
                         </li>
+                        <li>
+                            <a href="https://github.com/rage/tmc-vscode/blob/master/docs/FAQ.md">
+                                FAQ
+                            </a>
+                        </li>
                     </ul>
                 </div>
                 <div class="sidebar_group">
