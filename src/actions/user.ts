@@ -380,7 +380,7 @@ export async function checkForNewExercises(
             message: {
                 command: "setNewExercises",
                 courseId: c.id,
-                exerciseIds: Array.from(c.newExercises),
+                exerciseIds: c.newExercises,
             },
         })),
     );
@@ -694,6 +694,8 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
         courseData.description = details.description || "";
         courseData.disabled = settings.disabled_status === "enabled" ? false : true;
         courseData.material_url = settings.material_url;
+
+        // TODO: Fix to wait promise
         userData.updateCourse(courseData);
 
         // Update course exercise data
@@ -707,7 +709,7 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
             message: {
                 command: "setNewExercises",
                 courseId: id,
-                exerciseIds: Array.from(userData.getCourse(id).newExercises),
+                exerciseIds: userData.getCourse(id).newExercises,
             },
         });
 

@@ -92,7 +92,7 @@ function component(props) {
                                     </li>
                                 </ul>
                             </p>
-                            <p>You can open a course workspace via "My courses" view.</p>
+                            <p>You can open a course workspace via "My Courses" view.</p>
                             <img style="margin-bottom: 2.5em;" src={openNewWorkspace} />
                         </div>
                     </div>

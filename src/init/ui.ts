@@ -43,7 +43,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.treeDP.registerAction("Log in", [visibilityGroups.LOGGED_IN.not], () => {
         ui.webview.setContentFromTemplate({ templateName: "login" });
     });
-    ui.treeDP.registerAction("My courses", [visibilityGroups.LOGGED_IN], () => {
+    ui.treeDP.registerAction("My Courses", [visibilityGroups.LOGGED_IN], () => {
         displayUserCourses(actionContext);
     });
     ui.treeDP.registerAction("Settings", [], () => {

@@ -5,16 +5,17 @@ import { fillLoginForm } from "./macros";
 import { openTMCSideBar, operateTMCWebview } from "./navigation";
 import { waitForElements } from "./utils";
 
-describe("Login tests", () => {
+describe("Login tests", function () {
     let activityBar: ActivityBar;
     let editorView: EditorView;
 
-    before(() => {
+    before(async function () {
         activityBar = new ActivityBar();
         editorView = new EditorView();
+        await editorView.closeAllEditors();
     });
 
-    afterEach(async () => {
+    afterEach(async function () {
         await editorView.closeAllEditors();
     });
 
@@ -24,12 +25,12 @@ describe("Login tests", () => {
 
     it("Clicking activity bar provides TMC treeview", () => {
         const test = async (): Promise<void> => {
-            await openTMCSideBar(activityBar, 10000);
+            await openTMCSideBar(activityBar);
         };
         return new Promise((resolve, reject) => test().then(resolve).catch(reject));
     }).timeout(10000);
 
-    it("Trying to log in with wrong credentials gives error", () => {
+    it("Trying to log in with wrong credentials gives error", function () {
         const test = async (): Promise<void> => {
             const buttons = await openTMCSideBar(activityBar, 1000);
             const loginButton = buttons.get("Log in") as WebElement;
@@ -63,9 +64,9 @@ describe("Login tests", () => {
         return new Promise((resolve, reject) => test().then(resolve).catch(reject));
     }).timeout(10000);
 
-    it("Logging in with correct credentials works and allows to see My Courses", () => {
+    it("Logging in with correct credentials works and allows to see My Courses", function () {
         const test = async (): Promise<void> => {
-            const buttons = await openTMCSideBar(activityBar, 1000);
+            const buttons = await openTMCSideBar(activityBar);
             const loginButton = buttons.get("Log in") as WebElement;
             expect(loginButton).to.be.instanceOf(
                 WebElement,
@@ -87,7 +88,7 @@ describe("Login tests", () => {
             await operateTMCWebview(editorView, "TestMyCode", 0, async (webview) => {
                 const headers = await waitForElements(
                     () => webview.findWebElements(By.css("h1")),
-                    async (e) => (await e.getText()) === "My courses",
+                    async (e) => (await e.getText()) === "My Courses",
                 );
                 expect(headers.length).to.be.equal(1);
             });
@@ -97,7 +98,7 @@ describe("Login tests", () => {
 });
 
 // Didn't run as a separate file, figure out later
-describe("Course page tests", () => {
+describe("Course page tests", function () {
     let activityBar: ActivityBar;
     let editorView: EditorView;
 
@@ -119,13 +120,13 @@ describe("Course page tests", () => {
         await editorView.closeAllEditors();
     });
 
-    it("Can view courses page", () => {
+    it("Can view courses page", function () {
         const test = async (): Promise<void> => {
             const buttons = await openTMCSideBar(activityBar);
-            const coursesButton = buttons.get("My courses") as WebElement;
+            const coursesButton = buttons.get("My Courses") as WebElement;
             expect(coursesButton).to.be.instanceOf(
                 WebElement,
-                "Expected to find WebElement `My courses`",
+                "Expected to find WebElement `My Courses`",
             );
 
             await coursesButton.click();
@@ -137,10 +138,10 @@ describe("Course page tests", () => {
     }).timeout(10000);
 
     // Can't get content of temp webview
-    it.skip("Can add new courses to courses list", () => {
+    it.skip("Can add new courses to courses list", function () {
         const test = async (): Promise<void> => {
             const buttons = await openTMCSideBar(activityBar);
-            const coursesButton = buttons.get("My courses") as WebElement;
+            const coursesButton = buttons.get("My Courses") as WebElement;
             await coursesButton.click();
             await operateTMCWebview(editorView, "TestMyCode", 0, async (webview) => {
                 const courses = await webview.findWebElements(By.css("[data-se='course-card']"));

@@ -22,7 +22,7 @@ import { checkForExerciseUpdates } from "./workspace";
  */
 export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
     const { userData, tmc, ui } = actionContext;
-    Logger.log("Displaying My courses view");
+    Logger.log("Displaying My Courses view");
 
     const courses = userData.getCourses();
     ui.webview.setContentFromTemplate(
@@ -113,7 +113,7 @@ export async function displayLocalCourseDetails(
     const currentDate = new Date();
 
     /* Emergency solution.
-    Match cached api data (obtained by entering My courses, which updates cache) to existing
+    Match cached api data (obtained by entering My Courses, which updates cache) to existing
     userdata for the webview, because we no longer show only downloaded exercises.
     (except offline mode) 
     */

@@ -46,7 +46,7 @@ export class UserData {
         if (this._courses.has(data.id)) {
             throw new Error("Trying to add an already existing course");
         }
-        Logger.log(`Adding course ${data.name} to My courses`);
+        Logger.log(`Adding course ${data.name} to My Courses`);
         this._courses.set(data.id, data);
         this._updatePersistentData();
     }

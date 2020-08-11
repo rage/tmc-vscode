@@ -17,7 +17,7 @@ SELECT * FROM ItemTable WHERE key = "moocfi.test-my-code";
 The saved data looks like this:
 ```javascript
     "userData": {
-        // Array of courses, which are shown in My courses view
+        // Array of courses, which are shown in My Courses view
         "courses": [
             {
                 "description": "TMC exercises for the course Data Analysis with Python - Spring 2020. ",
