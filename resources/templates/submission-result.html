@@ -121,6 +121,52 @@
             });
         }
 
+        function refreshCollapsibleHeight() {
+            // Deprecate this ASAP
+            const coll = document.getElementsByClassName("collapsible");
+            if (coll[0]) {
+                const content = coll[0].nextElementSibling;
+                content.style.maxHeight = content.scrollHeight + "px";
+            }
+        }
+
+        const coll = document.getElementsByClassName("collapsible");
+        if (coll[0]) {
+            coll[0].addEventListener("click", function () {
+                this.classList.toggle("active");
+                let content = this.nextElementSibling;
+                if (content.style.maxHeight) {
+                    content.style.maxHeight = null;
+                } else {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                }
+            });
+        }
+
+        function sendToPaste(idAsString) {
+            vscode.postMessage({ type: "sendToPaste", data: { exerciseId: idAsString } });
+        }
+
+        function copyText() {
+            const copyText = document.getElementById("copyPasteLink");
+            copyText.select();
+            document.execCommand("copy");
+            const copied = document.getElementById("copied");
+            copied.innerHTML = "Copied!";
+            refreshCollapsibleHeight();
+        }
+
+        window.addEventListener("message", function (event) {
+            const message = event.data;
+            switch (message.command) {
+                case "showPasteLink":
+                    document.getElementById("showPasteLink").style.display = "block";
+                    document.getElementById("copyPasteLink").value = message.pasteLink;
+                    refreshCollapsibleHeight();
+                    break;
+            }
+        });
+
         function showValue(slider, id) {
             document.getElementById(id).innerHTML =
                 slider.value === slider.min ? "-" : slider.value;
