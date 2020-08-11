@@ -10,12 +10,13 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { OldSubmission } from "../api/types";
-import { askForItem, showError, showNotification, showProgressNotification } from "../api/vscode";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus } from "../config/types";
+import { ExerciseExistsError } from "../errors";
 import * as UITypes from "../ui/types";
 import { Logger } from "../utils";
 import { dateToString, parseDate } from "../utils/dateDeadline";
+import { askForItem, showError, showNotification, showProgressNotification } from "../window";
 
 import { ActionContext, CourseExerciseDownloads } from "./types";
 
@@ -70,7 +71,7 @@ export async function downloadExercises(
                 process.report({ downloadedPct, increment }),
             ).then((res: Result<void, Error>) => {
                 postChange({ exerciseId: state.id, status: res.ok ? "closed" : "downloadFailed" });
-                if (res.ok) {
+                if (res.ok || res.val instanceof ExerciseExistsError) {
                     successful.push(state);
                 } else {
                     failed.push(state);

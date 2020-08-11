@@ -16,7 +16,6 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
-import { askForConfirmation, showError, showNotification } from "../api/vscode";
 import {
     getPlatform,
     getRustExecutable,
@@ -25,6 +24,7 @@ import {
     LogLevel,
     sleep,
 } from "../utils/";
+import { askForConfirmation, showError, showNotification } from "../window";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -33,7 +33,7 @@ import {
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { workspaceManager, ui, resources, settings, vsc, visibilityGroups } = actionContext;
+    const { workspaceManager, ui, resources, settings, visibilityGroups } = actionContext;
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
@@ -219,8 +219,15 @@ export function registerUiActions(actionContext: ActionContext): void {
         if (!msg.type) {
             return;
         }
-        const workspace = vsc.getWorkspaceName();
+        const workspace = vscode.workspace.name?.split(" ")[0];
         const open = workspace ? isCorrectWorkspaceOpen(resources, workspace) : false;
+        if (open) {
+            showNotification(
+                "Please close the TMC workspace from VSCode File menu and try again.",
+                ["OK", (): void => {}],
+            );
+            return;
+        }
 
         const old = resources.getDataPath();
         const options: vscode.OpenDialogOptions = {
@@ -262,12 +269,6 @@ export function registerUiActions(actionContext: ActionContext): void {
                 const cliPath = path.join(newPath, "cli", executable);
                 resources.setCliPath(cliPath);
                 await settings.updateSetting({ setting: "dataPath", value: newPath });
-                if (open && workspace) {
-                    // Opening a workspace restarts VSCode (v1.44)
-                    await vsc.openFolder(
-                        path.join(newPath, "TMC workspace", workspace, ".code-workspace"),
-                    );
-                }
             } else {
                 Logger.error(res.val);
                 showError(res.val.message);

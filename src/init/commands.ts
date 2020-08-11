@@ -8,7 +8,9 @@ import {
     closeExercises,
     displayLocalCourseDetails,
     displayUserCourses,
+    downloadExercises,
     downloadOldSubmission,
+    openExercises,
     openSettings,
     openWorkspace,
     pasteExercise,
@@ -16,11 +18,11 @@ import {
     submitExercise,
     testExercise,
 } from "../actions";
-import { ActionContext } from "../actions/types";
-import { askForConfirmation, askForItem, showError, showNotification } from "../api/vscode";
+import { ActionContext, CourseExerciseDownloads } from "../actions/types";
 import { LocalCourseData } from "../config/types";
 import { activate, deactivate } from "../extension";
 import { isCorrectWorkspaceOpen, Logger } from "../utils/";
+import { askForConfirmation, askForItem, showError, showNotification } from "../window";
 
 // TODO: Fix error handling so user receives better error messages.
 const errorMessage = "Currently open editor is not part of a TMC exercise";
@@ -111,6 +113,50 @@ export function registerCommands(
             } else if (editor && resource) {
                 Logger.debug(`Reopening original file "${resource.fsPath}"`);
                 await vscode.commands.executeCommand("vscode.open", resource, editor.viewColumn);
+            }
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand("tmc.downloadNewExercises", async () => {
+            const downloadNewExercises = async (courseId: number): Promise<void> => {
+                const course = userData.getCourse(courseId);
+                if (course.newExercises.length === 0) {
+                    showNotification(`There are no new exercises for the course ${course.name}.`, [
+                        "OK",
+                        (): void => {},
+                    ]);
+                    return;
+                }
+                const downloads: CourseExerciseDownloads = {
+                    courseId: course.id,
+                    exerciseIds: course.newExercises,
+                    organizationSlug: course.organization,
+                    courseName: course.name,
+                };
+                const successful = await downloadExercises(actionContext, [downloads]);
+                await userData.clearNewExercises(courseId, successful);
+                const openResult = await openExercises(
+                    actionContext,
+                    successful,
+                    downloads.courseName,
+                );
+                if (openResult.err) {
+                    const message = "Failed to open exercises after download.";
+                    Logger.error(message, openResult.val);
+                    showError(message);
+                }
+            };
+
+            const courses = userData.getCourses();
+            const courseId = await askForItem<number>(
+                "Download new exercises for course?",
+                false,
+                ...courses.map<[string, number]>((course) => [course.name, course.id]),
+            );
+
+            if (courseId) {
+                await downloadNewExercises(courseId);
             }
         }),
     );
@@ -363,20 +409,20 @@ export function registerCommands(
                 return;
             }
             const wipe = await askForConfirmation(
-                "Are you sure you wan't to wipe all data for the TMC Extension?",
+                "Are you sure you want to wipe all data for the TMC Extension?",
                 true,
             );
             if (!wipe) {
                 return;
             }
             const reallyWipe = await askForConfirmation(
-                "This action cannot be undone. This will permanently delete the extension data, exercises, settings...",
+                "This action cannot be undone. This might permanently delete the extension data, exercises, settings...",
                 true,
             );
             if (reallyWipe) {
+                await vscode.commands.executeCommand("tmc.logout");
                 fs.removeSync(path.join(resources.getDataPath()));
                 await userData.wipeDataFromStorage();
-                ui.treeDP.updateVisibility([actionContext.visibilityGroups.LOGGED_IN.not]);
                 deactivate();
                 for (const sub of context.subscriptions) {
                     try {

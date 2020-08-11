@@ -6,7 +6,6 @@ import { Err, Ok, Result } from "ts-results";
 import * as unzipper from "unzipper";
 import * as vscode from "vscode";
 
-import { showProgressNotification } from "../api/vscode";
 import {
     EXTENSION_ID,
     JAVA_ZIP_URLS,
@@ -21,6 +20,7 @@ import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { downloadFile, getPlatform, getRustExecutable, isJavaPresent } from "../utils/";
 import { Logger } from "../utils/logger";
+import { showProgressNotification } from "../window";
 
 /**
  * Checks if Java is present and performs resource initialization on extension activation
@@ -183,10 +183,10 @@ export async function resourceInitialization(
      * Insider version toggle.
      */
     const platform = getPlatform();
-    Logger.log("Detected platform", platform);
-    Logger.log("Platform", process.platform, "Arch", process.arch);
+    Logger.log("Detected platform " + platform);
+    Logger.log("Platform " + process.platform + " Arch " + process.arch);
     const executable = getRustExecutable(platform);
-    Logger.log("Executable", executable);
+    Logger.log("Executable " + executable);
     const cliPath = path.join(tmcDataPath, "cli", executable);
     const cliUrl = TMC_LANGS_RUST_DL_URL + executable;
     if (!fs.existsSync(cliPath)) {

@@ -9,9 +9,9 @@ import du = require("du");
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
+import * as vscode from "vscode";
 
 import { SubmissionFeedback } from "../api/types";
-import { askForConfirmation, showError, showNotification } from "../api/vscode";
 import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
 import { AuthorizationError, ConnectionError } from "../errors";
@@ -23,6 +23,12 @@ import {
     parseFeedbackQuestion,
     sleep,
 } from "../utils/";
+import {
+    askForConfirmation,
+    getActiveEditorExecutablePath,
+    showError,
+    showNotification,
+} from "../window";
 
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
@@ -83,7 +89,7 @@ export async function logout(
  * Tests an exercise while keeping the user informed
  */
 export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, tmc, userData, workspaceManager, temporaryWebviewProvider, vsc } = actionContext;
+    const { ui, tmc, userData, workspaceManager, temporaryWebviewProvider } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         const message = "Getting exercise details failed when testing exercise.";
@@ -101,7 +107,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
     if (!courseExamMode.perhapsExamMode) {
-        const executablePath = vsc.getActiveEditorExecutablePath();
+        const executablePath = getActiveEditorExecutablePath(actionContext);
         const [testRunner, interrupt] = tmc.runTests(id, executablePath);
         let aborted = false;
         const exerciseName = exerciseDetails.val.name;
@@ -180,7 +186,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
  * @param tempView Existing TemporaryWebview to use if any
  */
 export async function submitExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, temporaryWebviewProvider, tmc, vsc, userData, workspaceManager } = actionContext;
+    const { ui, temporaryWebviewProvider, tmc, userData, workspaceManager } = actionContext;
     Logger.log(
         `Submitting exercise ${workspaceManager.getExerciseDataById(id).val.name} to server`,
     );
@@ -227,7 +233,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
                 if (msg.type === "closeWindow") {
                     temp.dispose();
                 } else if (msg.type === "showInBrowser") {
-                    vsc.openUri(submitUrl);
+                    vscode.env.openExternal(vscode.Uri.parse(submitUrl));
                 }
             },
         });
@@ -245,9 +251,9 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
                 msg.data.feedback as SubmissionFeedback,
             );
         } else if (msg.type === "showInBrowser") {
-            vsc.openUri(submitResult.val.show_submission_url);
+            vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
         } else if (msg.type === "showSolutionInBrowser" && msg.data) {
-            vsc.openUri(msg.data.solutionUrl as string);
+            vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
         } else if (msg.type === "closeWindow") {
             temp.dispose();
         }
@@ -308,7 +314,9 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
                 [
                     "Open URL and move on...",
                     (): void => {
-                        vsc.openUri(submitResult.val.show_submission_url);
+                        vscode.env.openExternal(
+                            vscode.Uri.parse(submitResult.val.show_submission_url),
+                        );
                         getStatus = false;
                         temp.dispose();
                     },
@@ -429,9 +437,10 @@ export async function checkForNewExercises(
  * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
  */
 export async function openWorkspace(actionContext: ActionContext, name: string): Promise<void> {
-    const { resources, vsc, workspaceManager } = actionContext;
-    const currentWorkspaceFile = vsc.getWorkspaceFile();
+    const { resources, workspaceManager } = actionContext;
+    const currentWorkspaceFile = vscode.workspace.workspaceFile;
     const tmcWorkspaceFile = resources.getWorkspaceFilePath(name);
+    const workspaceAsUri = vscode.Uri.file(tmcWorkspaceFile);
     Logger.log(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
     Logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
 
@@ -445,24 +454,27 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
             if (!fs.existsSync(tmcWorkspaceFile)) {
                 workspaceManager.createWorkspaceFile(name);
             }
-            await vsc.openFolder(tmcWorkspaceFile);
+            await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri);
             // Restarts VSCode
         } else {
-            const choice = "Close current and open TMC Workspace";
-            await showError("Please close your current workspace before using TestMyCode.", [
-                choice,
-                async (): Promise<Thenable<unknown>> => {
-                    if (!fs.existsSync(tmcWorkspaceFile)) {
-                        workspaceManager.createWorkspaceFile(name);
-                    }
-                    return vsc.openFolder(tmcWorkspaceFile);
-                },
-            ]);
+            const choice = "Close current & open Course Workspace";
+            await showError(
+                "Please close the current workspace before opening a course workspace.",
+                [
+                    choice,
+                    async (): Promise<Thenable<unknown>> => {
+                        if (!fs.existsSync(tmcWorkspaceFile)) {
+                            workspaceManager.createWorkspaceFile(name);
+                        }
+                        return vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri);
+                    },
+                ],
+            );
         }
     } else if (currentWorkspaceFile?.fsPath === tmcWorkspaceFile) {
         Logger.log("Workspace already open, changing focus to this workspace.");
-        await vsc.openFolder(tmcWorkspaceFile);
-        await vsc.executeCommand("workbench.files.action.focusFilesExplorer");
+        await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri);
+        await vscode.commands.executeCommand("workbench.files.action.focusFilesExplorer");
     }
 }
 

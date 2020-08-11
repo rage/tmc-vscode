@@ -1,7 +1,11 @@
 // Place your settings in this file to overwrite default and user settings.
 {
     "files.exclude": {
-        "out": false
+        "out": false,
+        "**/.classpath": true,
+        "**/.project": true,
+        "**/.settings": true,
+        "**/.factorypath": true
     },
     "search.exclude": {
         "**/out": true

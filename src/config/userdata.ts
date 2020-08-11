@@ -127,8 +127,11 @@ export class UserData {
             return new Err(new Error("Data missing"));
         }
         Logger.log(`Clearing new exercises for ${courseData.name}`);
-        const successfullyDownloaded = _.difference(courseData.newExercises, successful);
-        courseData.newExercises = successfullyDownloaded;
+        const unSuccessfullyDownloaded = _.difference(courseData.newExercises, successful);
+        courseData.newExercises = unSuccessfullyDownloaded;
+        if (unSuccessfullyDownloaded.length === 0) {
+            courseData.notifyAfter = 0;
+        }
         await this._updatePersistentData();
         return Ok.EMPTY;
     }
@@ -158,7 +161,7 @@ export class UserData {
     }
 
     /**
-     * Sets all storage data to undefined.
+     * Tries to set all storage data to undefined.
      */
     public async wipeDataFromStorage(): Promise<void> {
         return this._storage.wipeStorage();

@@ -4,7 +4,6 @@ import * as vscode from "vscode";
 
 import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
 import TMC from "./api/tmc";
-import VSC, { showError } from "./api/vscode";
 import WorkspaceManager from "./api/workspaceManager";
 import { DEBUG_MODE, EXERCISE_CHECK_INTERVAL } from "./config/constants";
 import Settings from "./config/settings";
@@ -15,6 +14,7 @@ import * as init from "./init";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
 import { Logger, LogLevel, semVerCompare } from "./utils";
+import { showError } from "./window";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 
@@ -38,8 +38,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await settings.verifyWorkspaceSettingsIntegrity();
     Logger.configure(settings.getLogLevel());
 
-    const vsc = new VSC(settings);
-    await vsc.activate();
+    await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
 
     const currentVersion = resources.extensionVersion;
     const previousVersion = storage.getExtensionVersion();
@@ -47,9 +46,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         storage.updateExtensionVersion(currentVersion);
     }
 
-    Logger.log(`VSCode version: ${vsc.getVSCodeVersion()}`);
+    Logger.log(`VSCode version: ${vscode.version}`);
     Logger.log(`TMC extension version: ${resources.extensionVersion}`);
-    Logger.log(`Python extension version: ${vsc.getExtensionVersion("ms-python.python")}`);
     Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
@@ -86,7 +84,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         settings,
         temporaryWebviewProvider,
         tmc,
-        vsc,
         ui,
         userData,
         workspaceManager,

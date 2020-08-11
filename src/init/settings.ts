@@ -1,11 +1,11 @@
 import { is } from "typescript-is";
 
-import { showNotification } from "../api/vscode";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { ExtensionSettings } from "../config/types";
 import { removeOldData } from "../utils";
 import { Logger, LogLevel } from "../utils/logger";
+import { showNotification } from "../window";
 
 // TODO: Perhaps not initialize if everything is ok.
 /**

@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 
 import { ActionContext } from "../actions/types";
-import { showNotification } from "../api/vscode";
 import { ExerciseStatus } from "../config/types";
 import { isCorrectWorkspaceOpen, Logger } from "../utils";
+import { showNotification } from "../window";
 
 export * from "./commands";
 export * from "./resources";
@@ -15,12 +15,12 @@ export * from "./settings";
  * @param actionContext
  */
 export function watchForWorkspaceChanges(actionContext: ActionContext): void {
-    const { resources, vsc, workspaceManager, ui } = actionContext;
-    const currentWorkspace = vsc.getWorkspaceName();
+    const { resources, workspaceManager, ui } = actionContext;
+    const currentWorkspace = vscode.workspace.name?.split(" ")[0];
     if (currentWorkspace && isCorrectWorkspaceOpen(resources, currentWorkspace)) {
         Logger.log("TMC Workspace identified, listening for folder changes.");
         vscode.workspace.onDidChangeWorkspaceFolders(async (listener) => {
-            Logger.debug("Listener", listener);
+            Logger.debug("WatchForWorkspaceChanges listener", listener);
             const foldersToRemove: vscode.Uri[] = [];
 
             listener.removed.forEach((item) => {
@@ -61,7 +61,7 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
                         },
                     });
                 } else if (exercise.ok && currentWorkspace !== exercise.val.course) {
-                    foldersToRemove.push(vsc.toUri(item.uri.fsPath));
+                    foldersToRemove.push(vscode.Uri.file(item.uri.fsPath));
                 } else if (exercise.err) {
                     if (item.name !== ".tmc") {
                         Logger.warn(
@@ -69,7 +69,7 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
                             exercise.val.message,
                             exercise.val.stack,
                         );
-                        foldersToRemove.push(vsc.toUri(item.uri.fsPath));
+                        foldersToRemove.push(vscode.Uri.file(item.uri.fsPath));
                     }
                 }
             });
