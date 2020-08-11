@@ -88,7 +88,23 @@ export default class TemplateEngine {
                 <div class="alert alert-info">Your submission has been saved, but you can't see test results because this course is an exam.</div>
                 <input type='button' class='btn btn-primary' value='View submission in browser' onclick='showInBrowser()' />`;
             } else if (results.status === "fail") {
-                return "<h1>Some tests failed on the server</h1>";
+                // TODO: Get rid of this need help implementation asap.
+                const exerciseId = results.solution_url?.split("/");
+                const collapsed = `<button id='collapsible' class="collapsible">Need help?</button>
+                                    <div id='content-collapsible' style="height: auto;" class="content-collapsible">`;
+                const pasteLinkHTML = `<p id="showPasteLink" style="display: none;"><input style='width: 65%!important;' type="text" value="" id="copyPasteLink">
+                                    <button class='btn btn-primary' onclick="copyText()">Copy text</button><span class='ml-1' id="copied"></span></p>`;
+                if (exerciseId && exerciseId[4]) {
+                    return `<h1>Some tests failed on the server</h1>
+                    ${collapsed}
+                        <h5>Submit to TMC Paste</h5>
+                        <p>You can submit your code to TMC Paste and share the link to the course discussion channel and ask for help.</p>
+                        ${pasteLinkHTML}
+                        <input type='button' id='sendToPaste' value='Submit to TMC Paste' class='btn btn-primary' onclick='sendToPaste("${exerciseId[4]}")' />
+                    </div>`;
+                } else {
+                    return "<h1>Some tests failed on the server</h1>";
+                }
             } else if (results.status === "error") {
                 return `<h1>Server returned following error:
                         <pre style="font-size: 14px">${results.error}</pre>`;

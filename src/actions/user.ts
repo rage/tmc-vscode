@@ -256,6 +256,10 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
             vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
         } else if (msg.type === "closeWindow") {
             temp.dispose();
+        } else if (msg.type === "sendToPaste" && msg.data) {
+            Logger.debug(msg.data);
+            const pasteLink = await pasteExercise(actionContext, Number(msg.data.exerciseId));
+            pasteLink && temp.postMessage({ command: "showPasteLink", pasteLink });
         }
     };
 
