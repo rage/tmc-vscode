@@ -583,18 +583,12 @@ export default class TMC {
      */
     public async downloadOldSubmission(
         exerciseId: number,
+        exercisePath: string,
         submissionId: number,
         saveOldState: boolean,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        progressCallback?: (downloadedPct: number, increment: number) => void,
     ): Promise<Result<void, Error>> {
-        if (!this._workspaceManager) {
-            throw displayProgrammerError("WorkspaceManager not assinged");
-        }
-
-        const exercisePath = this._workspaceManager.getExercisePathById(exerciseId);
-        if (exercisePath.err) {
-            return exercisePath;
-        }
-
         const flags = saveOldState ? ["--save-old-state"] : [];
         const args = [
             "download-old-submission",
@@ -602,7 +596,7 @@ export default class TMC {
             "--exercise-id",
             exerciseId.toString(),
             "--output-path",
-            exercisePath.val,
+            exercisePath,
             "--submission-id",
             submissionId.toString(),
         ];

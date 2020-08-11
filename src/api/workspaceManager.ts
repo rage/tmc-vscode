@@ -113,6 +113,7 @@ export default class WorkspaceManager {
                 await this.deleteExercise(exerciseDetails.exercise_id);
             } else if (data.checksum !== checksum) {
                 if (data.status === ExerciseStatus.OPEN) {
+                    // This could cause race condition...
                     await this.closeExercise(
                         exerciseDetails.course_name,
                         exerciseDetails.exercise_id,
@@ -143,7 +144,7 @@ export default class WorkspaceManager {
             organization: organizationSlug,
             softDeadline: softDeadline,
         });
-        this._updatePersistentData();
+        await this._updatePersistentData();
         return new Ok(exercisePath);
     }
 
@@ -360,6 +361,15 @@ export default class WorkspaceManager {
         }
     }
 
+    public async setClosed(id: number): Promise<void> {
+        const data = this._idToData.get(id);
+        if (data) {
+            data.status = ExerciseStatus.CLOSED;
+            this._idToData.set(id, data);
+            await this._updatePersistentData();
+        }
+    }
+
     public getExercisePathById(id: number): Result<string, Error> {
         const data = this._idToData.get(id);
         if (!data) {
@@ -421,7 +431,7 @@ export default class WorkspaceManager {
         const allOpen: vscode.Uri[] = exercises
             .filter((ex) => ex.status === ExerciseStatus.OPEN)
             .map((ex) => vscode.Uri.file(this._getExercisePath(ex)));
-        // allOpen.length > 0 && Logger.debug("Exercises with opened status:", ...allOpen);
+        allOpen.length > 0 && Logger.debug("Exercises with opened status:", ...allOpen);
         const toClose: vscode.Uri[] = [];
         const toOpen: vscode.Uri[] = [];
 

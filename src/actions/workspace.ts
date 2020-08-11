@@ -4,6 +4,7 @@
  * -------------------------------------------------------------------------------------------------
  */
 
+import * as fs from "fs-extra";
 import * as _ from "lodash";
 import * as pLimit from "p-limit";
 import { Err, Ok, Result } from "ts-results";
@@ -14,8 +15,8 @@ import { NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus } from "../config/types";
 import { ExerciseExistsError } from "../errors";
 import * as UITypes from "../ui/types";
-import { Logger } from "../utils";
-import { dateToString, parseDate } from "../utils/dateDeadline";
+import { Logger, sleep } from "../utils";
+import { compareDates, dateToString, parseDate } from "../utils/dateDeadline";
 import { askForItem, showError, showNotification, showProgressNotification } from "../window";
 
 import { ActionContext, CourseExerciseDownloads } from "./types";
@@ -59,30 +60,77 @@ export async function downloadExercises(
         organizationSlug: string;
     };
 
+    let oldSubmissionDownloaded = false;
     const successful: DownloadState[] = [];
     const failed: DownloadState[] = [];
 
-    const task = (
+    const task = async (
         process: vscode.Progress<{ downloadedPct: number; increment: number }>,
         state: DownloadState,
-    ): Promise<void> =>
-        new Promise<void>((resolve) => {
-            tmc.downloadExercise(state.id, state.organizationSlug, (downloadedPct, increment) =>
-                process.report({ downloadedPct, increment }),
-            ).then((res: Result<void, Error>) => {
-                postChange({ exerciseId: state.id, status: res.ok ? "closed" : "downloadFailed" });
-                if (res.ok || res.val instanceof ExerciseExistsError) {
-                    successful.push(state);
-                } else {
-                    failed.push(state);
-                    Logger.error(
-                        `Failed to download ${state.organizationSlug}/${state.name}`,
-                        res.val,
-                    );
-                }
-                resolve();
+    ): Promise<void> => {
+        const oldSubmissions = await tmc.getOldSubmissions(state.id);
+        if (oldSubmissions.err || oldSubmissions.val.length === 0) {
+            await new Promise<void>((resolve) => {
+                tmc.downloadExercise(state.id, state.organizationSlug, (downloadedPct, increment) =>
+                    process.report({ downloadedPct, increment }),
+                ).then((res: Result<void, Error>) => {
+                    postChange({
+                        exerciseId: state.id,
+                        status: res.ok ? "closed" : "downloadFailed",
+                    });
+                    if (res.ok || res.val instanceof ExerciseExistsError) {
+                        successful.push(state);
+                    } else {
+                        failed.push(state);
+                        Logger.error(
+                            `Failed to download ${state.organizationSlug}/${state.name}`,
+                            res.val,
+                        );
+                    }
+                    resolve();
+                });
             });
-        });
+        } else {
+            const exercisePath = await createExerciseDownloadPath(
+                actionContext,
+                state.id,
+                state.organizationSlug,
+            );
+            await new Promise<void>((resolve, reject) => {
+                if (exercisePath.err) {
+                    return reject(exercisePath.val);
+                }
+                tmc.downloadOldSubmission(
+                    state.id,
+                    exercisePath.val,
+                    oldSubmissions.val.sort((a, b) =>
+                        compareDates(
+                            parseDate(b.processing_attempts_started_at),
+                            parseDate(a.processing_attempts_started_at),
+                        ),
+                    )[0].id,
+                    false,
+                    (downloadedPct, increment) => process.report({ downloadedPct, increment }),
+                ).then((res: Result<void, Error>) => {
+                    postChange({
+                        exerciseId: state.id,
+                        status: res.ok ? "closed" : "downloadFailed",
+                    });
+                    if (res.ok || res.val instanceof ExerciseExistsError) {
+                        oldSubmissionDownloaded = true;
+                        successful.push(state);
+                    } else {
+                        failed.push(state);
+                        Logger.error(
+                            `Failed to download ${state.organizationSlug}/${state.name}`,
+                            res.val,
+                        );
+                    }
+                    resolve();
+                });
+            });
+        }
+    };
 
     postChange(
         ...courseExerciseDownloads
@@ -115,9 +163,13 @@ export async function downloadExercises(
     await showProgressNotification(
         `Downloading ${exerciseStatuses.length} exercises...`,
         ...exerciseStatuses.map(
-            (state) => (
+            (state) => async (
                 p: vscode.Progress<{ downloadedPct: number; increment: number }>,
-            ): Promise<void> => limit(() => task(p, state)),
+            ): Promise<void> => {
+                // Need to wait here, so the notification pops up.
+                await sleep(10);
+                return limit(() => task(p, state));
+            },
         ),
     );
 
@@ -125,6 +177,13 @@ export async function downloadExercises(
         const message = "Some exercises failed to download, please try again later.";
         Logger.warn(message);
         showError(message);
+    }
+    if (oldSubmissionDownloaded) {
+        showNotification(
+            "Some downloaded exercises were restored to the state of your latest submission. " +
+                "If you wish to reset them to their original state, you can do so by using the TMC Menu (CTRL + SHIFT + A).",
+            ["OK", (): void => {}],
+        );
     }
 
     return successful.map((x) => x.id);
@@ -412,6 +471,11 @@ export async function downloadOldSubmission(
 ): Promise<Result<boolean, Error>> {
     const { settings, tmc, workspaceManager } = actionContext;
 
+    const exercisePath = workspaceManager.getExercisePathById(exerciseId);
+    if (exercisePath.err) {
+        return exercisePath;
+    }
+
     const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
     if (exerciseData.err) {
         return exerciseData;
@@ -465,6 +529,7 @@ export async function downloadOldSubmission(
 
         const downloadResult = await tmc.downloadOldSubmission(
             exerciseId,
+            exercisePath.val,
             submission.id,
             submitFirst,
         );
@@ -492,4 +557,56 @@ export async function downloadOldSubmission(
         }
     }
     return Ok(true);
+}
+
+/**
+ *
+ * @param actionContext
+ * @param exerciseId
+ * @param organizationSlug
+ */
+async function createExerciseDownloadPath(
+    actionContext: ActionContext,
+    exerciseId: number,
+    organizationSlug: string,
+): Promise<Result<string, Error>> {
+    const { tmc, workspaceManager } = actionContext;
+
+    // Return exercise path if data found in workspaceManager.
+    const exercisePathResult = workspaceManager.getExercisePathById(exerciseId);
+    if (exercisePathResult.ok) {
+        if (!fs.existsSync(exercisePathResult.val)) {
+            fs.mkdirSync(exercisePathResult.val, { recursive: true });
+            await workspaceManager.setClosed(exerciseId);
+        }
+        return exercisePathResult;
+    }
+
+    const detailsResult = await tmc.getExerciseDetails(exerciseId, true);
+    if (detailsResult.err) {
+        return detailsResult;
+    }
+
+    const courseResult = await tmc.getCourseDetails(detailsResult.val.course_id);
+    if (courseResult.err) {
+        return courseResult;
+    }
+
+    const exercise = courseResult.val.course.exercises.find((x) => x.id === exerciseId);
+    if (!exercise) {
+        return new Err(new Error("Exercise missing from the course"));
+    }
+
+    const exercisePath = await workspaceManager.createExerciseDownloadPath(
+        exercise.soft_deadline,
+        organizationSlug,
+        exercise.checksum,
+        detailsResult.val,
+    );
+
+    if (exercisePath.err) {
+        return exercisePath;
+    }
+
+    return exercisePath;
 }
