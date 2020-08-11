@@ -74,9 +74,22 @@
                                     <option value="verbose">verbose</option>
                                 </select>
                             </p>
-                            <button id="show-logs-btn" class="btn btn-primary" onclick="showLogs()">
-                                Show logs
-                            </button>
+                            <div id="btn-grp" class="btn-group mx-2">
+                                <button
+                                    id="show-logs-btn"
+                                    class="btn btn-primary"
+                                    onclick="showLogs()"
+                                >
+                                    Show logs
+                                </button>
+                                <button
+                                    id="open-logs-btn"
+                                    class="btn btn-primary"
+                                    onclick="openLogsFolder()"
+                                >
+                                    Open logs folder
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="card-transparent border-color my-1">
@@ -128,12 +141,16 @@
                 vscode.postMessage({ type: "showLogsToUser" });
             }
 
+            function openLogsFolder() {
+                vscode.postMessage({ type: "openLogsFolder" });
+            }
+
             const element = document.getElementById("log-level");
-            const button = document.getElementById("show-logs-btn");
+            const buttonGroup = document.getElementById("btn-grp");
             if (element.options[0].value.includes("none")) {
-                button.style.display = "none";
+                buttonGroup.style.display = "none";
             } else {
-                button.style.display = "block";
+                buttonGroup.style.display = "block";
             }
             element.addEventListener("change", function () {
                 const element = document.getElementById("log-level");
