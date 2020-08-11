@@ -110,7 +110,13 @@ const component = (props) => {
                     data-se="add-new-course"
                 />
             </div>
-            {courses.map(mapCourse).join("")}
+            {courses.length > 0 ? (
+                courses.map(mapCourse).join("")
+            ) : (
+                <div class="row">
+                    <div class="col-md">Add courses to start completing exercises.</div>
+                </div>
+            )}
         </div>
     );
 };
