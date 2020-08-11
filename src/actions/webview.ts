@@ -41,7 +41,20 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
     const now = new Date();
     courses.forEach(async (course) => {
         const courseId = course.id;
-        await updateCourse(actionContext, courseId);
+        const updateResult = await updateCourse(actionContext, courseId);
+        if (updateResult.err) {
+            Logger.error(`Failed to update course ${courseId}`, updateResult.val);
+            ui.webview.postMessage({
+                key: `course-${course.id}-next-deadline`,
+                message: {
+                    command: "setNextCourseDeadline",
+                    courseId,
+                    deadline: "Deadline unavailable",
+                },
+            });
+            return;
+        }
+
         const exercises: Exercise[] = (await tmc.getCourseDetails(courseId, true))
             .map((x) => x.course.exercises)
             .unwrapOr([]);
