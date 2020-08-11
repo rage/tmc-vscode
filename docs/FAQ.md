@@ -15,18 +15,18 @@ When the extension is active, you can press `CTRL + SHIFT + A` to see all the re
 
 ## How can I download the next part's exercises?
 
-On the left of Visual Studio Code, press the TMC icon, select `My courses` and click the course card you wish to download exercises for. Now you should be able to download the next part, if it is unlocked.
+On the left of Visual Studio Code, press the TMC icon, select `My Courses` and click the course card you wish to download exercises for. Now you should be able to download the next part, if it is unlocked.
 
 ## How can I download unlocked/new exercises for my course?
 
 Visual Studio Code will occasionally prompt you to download new exercises. 
-You can also download new exercises by pressing the TMC icon on the left in Visual Studio Code, select `My courses` and click the green `Download them!` button.  
+You can also download new exercises by pressing the TMC icon on the left in Visual Studio Code, select `My Courses` and click the green `Download them!` button.  
 You can also download new exercises by pressing `CTRL + SHIFT + A` and select action `Download new exercise for course...`.
 
 ## How do I download updates for exercises?
 
 Visual Studio Code will occasionally prompt you to download updates for exercises. 
-You can also download updates by pressing the TMC icon on the left in Visual Studio Code, select `My courses` and click the course card.  
+You can also download updates by pressing the TMC icon on the left in Visual Studio Code, select `My Courses` and click the course card.  
 If updates are available, you should see a red button labeled `Update exercises`.
 
 ## How do I wipe all data related to the TMC Extension?
