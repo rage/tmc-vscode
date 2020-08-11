@@ -23,22 +23,29 @@ import { checkForExerciseUpdates } from "./workspace";
 export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
     const { userData, tmc, ui } = actionContext;
     Logger.log("Displaying My courses view");
-    const courses = userData.getCourses().map((course) => {
-        const completedPrc = ((course.awardedPoints / course.availablePoints) * 100).toFixed(2);
-        return { ...course, completedPrc };
-    });
 
-    ui.webview.setContentFromTemplate({
-        templateName: "my-courses",
-        courses: userData.getCourses(),
-    });
+    const courses = userData.getCourses();
+    ui.webview.setContentFromTemplate(
+        { templateName: "my-courses", courses },
+        false,
+        courses.map((c) => ({
+            key: `course-${c.id}-new-exercises`,
+            message: {
+                command: "setNewExercises",
+                courseId: c.id,
+                exerciseIds: c.newExercises,
+            },
+        })),
+    );
 
     const now = new Date();
     courses.forEach(async (course) => {
-        await updateCourse(actionContext, course.id);
-        const exercises: Exercise[] = (await tmc.getCourseDetails(course.id, true))
+        const courseId = course.id;
+        await updateCourse(actionContext, courseId);
+        const exercises: Exercise[] = (await tmc.getCourseDetails(courseId, true))
             .map((x) => x.course.exercises)
             .unwrapOr([]);
+
         const deadline = parseNextDeadlineAfter(
             now,
             exercises.map((x) => {
@@ -52,9 +59,10 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
                 };
             }) || [],
         );
+
         ui.webview.postMessage({
             key: `course-${course.id}-next-deadline`,
-            message: { command: "setNextCourseDeadline", courseId: course.id, deadline },
+            message: { command: "setNextCourseDeadline", courseId, deadline },
         });
     });
 }

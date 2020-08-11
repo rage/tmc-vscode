@@ -140,6 +140,12 @@ export interface SetNextCourseDeadline {
     courseId: number;
 }
 
+export interface SetNewExercises {
+    command: "setNewExercises";
+    courseId: number;
+    exerciseIds: number[];
+}
+
 export interface SetUpdateables {
     command: "setUpdateables";
     exerciseIds: number[];
@@ -149,4 +155,5 @@ export type WebviewMessage =
     | ExerciseStatusChange
     | SetInsiderStatus
     | SetNextCourseDeadline
+    | SetNewExercises
     | SetUpdateables;
