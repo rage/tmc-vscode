@@ -17,9 +17,9 @@ import { ExerciseStatus, LocalExerciseData } from "../config/types";
 import { ExerciseExistsError } from "../errors";
 import * as UITypes from "../ui/types";
 import { isCorrectWorkspaceOpen, Logger, sleep } from "../utils";
+import { showNotification } from "../window";
 
 import { ExerciseDetails } from "./types";
-import { showNotification } from "./vscode";
 
 /**
  * Class for managing, opening and closing of exercises on disk.

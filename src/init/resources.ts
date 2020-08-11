@@ -6,7 +6,6 @@ import { Err, Ok, Result } from "ts-results";
 import * as unzipper from "unzipper";
 import * as vscode from "vscode";
 
-import { showProgressNotification } from "../api/vscode";
 import {
     EXTENSION_ID,
     JAVA_ZIP_URLS,
@@ -21,6 +20,7 @@ import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { downloadFile, getPlatform, getRustExecutable, isJavaPresent } from "../utils/";
 import { Logger } from "../utils/logger";
+import { showProgressNotification } from "../window";
 
 /**
  * Checks if Java is present and performs resource initialization on extension activation

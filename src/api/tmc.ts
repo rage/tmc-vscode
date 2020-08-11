@@ -31,6 +31,7 @@ import {
 } from "../errors";
 import { displayProgrammerError, downloadFile, sleep } from "../utils/";
 import { Logger } from "../utils/logger";
+import { showError } from "../window";
 
 import {
     Course,
@@ -51,7 +52,6 @@ import {
     TmcLangsResponse,
     TmcLangsTestResultsRust,
 } from "./types";
-import { showError } from "./vscode";
 import WorkspaceManager from "./workspaceManager";
 
 interface RustProcessArgs {

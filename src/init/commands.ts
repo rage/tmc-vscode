@@ -19,10 +19,10 @@ import {
     testExercise,
 } from "../actions";
 import { ActionContext, CourseExerciseDownloads } from "../actions/types";
-import { askForConfirmation, askForItem, showError, showNotification } from "../api/vscode";
 import { LocalCourseData } from "../config/types";
 import { activate, deactivate } from "../extension";
 import { isCorrectWorkspaceOpen, Logger } from "../utils/";
+import { askForConfirmation, askForItem, showError, showNotification } from "../window";
 
 // TODO: Fix error handling so user receives better error messages.
 const errorMessage = "Currently open editor is not part of a TMC exercise";
