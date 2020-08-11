@@ -15,7 +15,7 @@ import { SubmissionFeedback } from "../api/types";
 import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
 import { AuthorizationError, ConnectionError } from "../errors";
-import { TestResultData, VisibilityGroups } from "../ui/types";
+import { TestResultData, VisibilityGroups, WebviewMessage } from "../ui/types";
 import {
     formatSizeInBytes,
     isCorrectWorkspaceOpen,
@@ -368,7 +368,7 @@ export async function checkForNewExercises(
     actionContext: ActionContext,
     courseId?: number,
 ): Promise<void> {
-    const { userData } = actionContext;
+    const { ui, userData } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now() && !c.disabled);
     Logger.log(`Checking for new exercises for courses ${filteredCourses.map((c) => c.name)}`);
@@ -377,6 +377,17 @@ export async function checkForNewExercises(
         await updateCourse(actionContext, course.id);
         updatedCourses.push(userData.getCourse(course.id));
     }
+
+    ui.webview.postMessage(
+        ...updatedCourses.map<{ key: string; message: WebviewMessage }>((c) => ({
+            key: `course-${c.id}-new-exercises`,
+            message: {
+                command: "setNewExercises",
+                courseId: c.id,
+                exerciseIds: c.newExercises,
+            },
+        })),
+    );
 
     for (const course of updatedCourses) {
         if (course.newExercises.length > 0) {
@@ -395,6 +406,14 @@ export async function checkForNewExercises(
                             },
                         ]);
                         await userData.clearNewExercises(course.id, successful);
+                        ui.webview.postMessage({
+                            key: `course-${course.id}-new-exercises`,
+                            message: {
+                                command: "setNewExercises",
+                                courseId: course.id,
+                                exerciseIds: course.newExercises,
+                            },
+                        });
                         const openResult = await openExercises(
                             actionContext,
                             successful,
@@ -596,7 +615,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
  * @param id Course id
  */
 export async function updateCourse(actionContext: ActionContext, id: number): Promise<void> {
-    const { tmc, userData, workspaceManager } = actionContext;
+    const { tmc, ui, userData, workspaceManager } = actionContext;
     return Promise.all([
         tmc.getCourseDetails(id),
         tmc.getCourseExercises(id),
@@ -609,13 +628,13 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
             );
             showError(`Something went wrong while trying to refresh course data: ${message}`);
         };
-        const courseToDisable = (id: number): void => {
+        const courseToDisable = async (id: number): Promise<void> => {
             Logger.warn(
                 `Received 403 Forbidden Authorization Error, disabling course with id ${id}`,
             );
             const course = userData.getCourse(id);
             course.disabled = true;
-            userData.updateCourse(course);
+            await userData.updateCourse(course);
         };
         const warnOffline = (message: string): void => {
             Logger.warn(`Didn't fetch course updates, working offline: ${message}`);
@@ -679,6 +698,8 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
         courseData.description = details.description || "";
         courseData.disabled = settings.disabled_status === "enabled" ? false : true;
         courseData.material_url = settings.material_url;
+
+        // TODO: Fix to wait promise
         userData.updateCourse(courseData);
 
         // Update course exercise data
@@ -686,6 +707,16 @@ export async function updateCourse(actionContext: ActionContext, id: number): Pr
             id,
             details.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),
         );
+
+        ui.webview.postMessage({
+            key: `course-${id}-new-exercises`,
+            message: {
+                command: "setNewExercises",
+                courseId: id,
+                exerciseIds: userData.getCourse(id).newExercises,
+            },
+        });
+
         const [available, awarded] = exercises.reduce(
             (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
             [0, 0],
