@@ -348,6 +348,13 @@ export function registerUiActions(actionContext: ActionContext): void {
         Logger.show();
     });
 
+    ui.webview.registerHandler("openLogsFolder", (msg: { type?: "openLogsFolder" }) => {
+        if (!msg.type) {
+            return;
+        }
+        vscode.commands.executeCommand("workbench.action.openExtensionLogsFolder");
+    });
+
     ui.webview.registerHandler("openEditorDirection", (msg: { type?: "openEditorDirection" }) => {
         if (!msg.type) {
             return;
