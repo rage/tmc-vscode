@@ -13,8 +13,6 @@ const channel = `[${OUTPUT_CHANNEL_NAME}]`;
 export class Logger {
     static output: OutputChannel | undefined;
 
-    private static _level: LogLevel = LogLevel.None;
-
     static configure(level: LogLevel): void {
         this.level = level;
     }
@@ -102,6 +100,8 @@ export class Logger {
             return "<error>";
         }
     }
+
+    private static _level: LogLevel = LogLevel.None;
 
     private static get _timestamp(): string {
         const now = new Date();
