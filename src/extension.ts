@@ -38,7 +38,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await settings.verifyWorkspaceSettingsIntegrity();
     Logger.configure(settings.getLogLevel());
 
-    await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
+    await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
 
     const currentVersion = resources.extensionVersion;
     const previousVersion = storage.getExtensionVersion();
