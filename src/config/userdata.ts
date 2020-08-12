@@ -32,14 +32,13 @@ export class UserData {
         return Array.from(this._courses.values());
     }
 
-    public getCourse(id: number): LocalCourseData {
+    public getCourse(id: number): Readonly<LocalCourseData> {
         const course = this._courses.get(id);
         return course as LocalCourseData;
     }
 
-    public getCourseByName(name: string): LocalCourseData {
-        const course = this.getCourses().filter((x) => x.name === name);
-        return course[0];
+    public getCourseByName(name: string): Readonly<LocalCourseData> | undefined {
+        return this.getCourses().find((x) => x.name === name);
     }
 
     public addCourse(data: LocalCourseData): void {
