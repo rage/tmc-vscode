@@ -639,7 +639,8 @@ export default class TMC {
 
         const submitUrl = `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`;
 
-        return this._executeLangsCommand(
+        // Langs returns a string bug
+        const workaround = await this._executeLangsCommand(
             {
                 args: [
                     "submit",
@@ -652,8 +653,23 @@ export default class TMC {
                 onStdout: (res) =>
                     progressCallback?.(50 * res["percent-done"], res.message || undefined),
             },
-            createIs<SubmissionStatusReport>(),
+            createIs<string>(),
         ).then((res) => res.map((r) => r.data));
+
+        if (workaround.err) {
+            return workaround;
+        }
+
+        try {
+            const submissionResult = JSON.parse(workaround.val);
+            if (is<SubmissionStatusReport>(submissionResult)) {
+                return Ok(submissionResult);
+            } else {
+                return Err(new Error("Unexpected workaround response"));
+            }
+        } catch (e) {
+            return Err(new Error("Workaround failed"));
+        }
     }
 
     /**
