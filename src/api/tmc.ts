@@ -4,6 +4,7 @@ import * as _ from "lodash";
 import * as kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
+import * as vscode from "vscode";
 
 import {
     ACCESS_TOKEN_URI,
@@ -184,7 +185,12 @@ export default class TMC {
         // Non-Insider compatibility: Get token from langs and store it. This relies on a side
         // effect but can be removed once token is no longer used.
         const getTokenResult = await this.isAuthenticated();
-        return getTokenResult.ok ? Ok.EMPTY : getTokenResult;
+        if (getTokenResult.err) {
+            return getTokenResult;
+        }
+
+        await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", true);
+        return Ok.EMPTY;
     }
 
     /**
@@ -204,6 +210,7 @@ export default class TMC {
         const response = loggedInResult.val;
         if (response.result === "not-logged-in") {
             if (!this._token) {
+                await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
                 return new Ok(false);
             }
 
@@ -223,7 +230,10 @@ export default class TMC {
             this._token = new ClientOauth2.Token(this._oauth2, response.data);
             this._storage.updateAuthenticationToken(this._token.data);
         }
-        return new Ok(this._token !== undefined);
+
+        const authenticated = this._token !== undefined;
+        await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated);
+        return new Ok(authenticated);
     }
 
     /**
@@ -239,6 +249,7 @@ export default class TMC {
         }
         this._token = undefined;
         this._storage.updateAuthenticationToken(undefined);
+        await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
         return Ok.EMPTY;
     }
 

@@ -11,6 +11,7 @@ import { Exercise } from "../api/types";
 import * as ConfigTypes from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
 import * as UITypes from "../ui/types";
+import { WebviewMessage } from "../ui/types";
 import { dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utils/";
 
 import { ActionContext } from "./types";
@@ -25,23 +26,49 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
     Logger.log("Displaying My Courses view");
 
     const courses = userData.getCourses();
-    ui.webview.setContentFromTemplate(
-        { templateName: "my-courses", courses },
-        false,
-        courses.map((c) => ({
+    const newExercisesCourses: Array<{ key: string; message: WebviewMessage }> = courses.map(
+        (c) => ({
             key: `course-${c.id}-new-exercises`,
             message: {
                 command: "setNewExercises",
                 courseId: c.id,
-                exerciseIds: c.newExercises,
+                exerciseIds: c.disabled ? [] : c.newExercises,
             },
-        })),
+        }),
     );
+    const disabledStatusCourses: Array<{ key: string; message: WebviewMessage }> = courses.map(
+        (c) => ({
+            key: `course-${c.id}-disabled-notification`,
+            message: {
+                command: "setCourseDisabledStatus",
+                courseId: c.id,
+                disabled: c.disabled,
+            },
+        }),
+    );
+
+    ui.webview.setContentFromTemplate({ templateName: "my-courses", courses }, false, [
+        ...newExercisesCourses,
+        ...disabledStatusCourses,
+    ]);
 
     const now = new Date();
     courses.forEach(async (course) => {
         const courseId = course.id;
-        await updateCourse(actionContext, courseId);
+        const updateResult = await updateCourse(actionContext, courseId);
+        if (updateResult.err) {
+            Logger.error(`Failed to update course ${courseId}`, updateResult.val);
+            ui.webview.postMessage({
+                key: `course-${course.id}-next-deadline`,
+                message: {
+                    command: "setNextCourseDeadline",
+                    courseId,
+                    deadline: "Deadline unavailable",
+                },
+            });
+            return;
+        }
+
         const exercises: Exercise[] = (await tmc.getCourseDetails(courseId, true))
             .map((x) => x.course.exercises)
             .unwrapOr([]);
@@ -145,14 +172,24 @@ export async function displayLocalCourseDetails(
         }
         const softDeadline = exData.softDeadline ? parseDate(exData.softDeadline) : null;
         const hardDeadline = exData.deadline ? parseDate(exData.deadline) : null;
-        initialState.push({
-            key: `exercise-${exData.id}-status`,
-            message: {
-                command: "exerciseStatusChange",
-                exerciseId: exData.id,
-                status: mapStatus(exData, hardDeadline !== null && currentDate >= hardDeadline),
+        initialState.push(
+            {
+                key: `exercise-${exData.id}-status`,
+                message: {
+                    command: "exerciseStatusChange",
+                    exerciseId: exData.id,
+                    status: mapStatus(exData, hardDeadline !== null && currentDate >= hardDeadline),
+                },
             },
-        });
+            {
+                key: "course-disabled-notification",
+                message: {
+                    command: "setCourseDisabledStatus",
+                    courseId: course.id,
+                    disabled: course.disabled,
+                },
+            },
+        );
         const entry: UITypes.CourseDetailsExercise = {
             id: ex.id,
             name,

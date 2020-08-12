@@ -2,7 +2,7 @@ import * as fs from "fs-extra";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { checkForExerciseUpdates, checkForNewExercises } from "./actions";
+import { checkForCourseUpdates, checkForExerciseUpdates } from "./actions";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import { DEBUG_MODE, EXERCISE_CHECK_INTERVAL } from "./config/constants";
@@ -38,7 +38,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await settings.verifyWorkspaceSettingsIntegrity();
     Logger.configure(settings.getLogLevel());
 
-    await vscode.commands.executeCommand("setContext", "tmcWorkspaceActive", true);
+    await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
 
     const currentVersion = resources.extensionVersion;
     const previousVersion = storage.getExtensionVersion();
@@ -125,7 +125,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     if (authenticated.val) {
         checkForExerciseUpdates(actionContext);
-        checkForNewExercises(actionContext);
+        checkForCourseUpdates(actionContext);
     }
 
     if (maintenanceInterval) {
@@ -138,7 +138,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             Logger.error("Failed to check if authenticated", authenticated.val.message);
         } else if (authenticated.val) {
             checkForExerciseUpdates(actionContext);
-            checkForNewExercises(actionContext);
+            checkForCourseUpdates(actionContext);
         }
     }, EXERCISE_CHECK_INTERVAL);
 

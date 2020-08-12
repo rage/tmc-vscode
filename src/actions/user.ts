@@ -16,7 +16,7 @@ import { SubmissionFeedback } from "../api/types";
 import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
 import { AuthorizationError, ConnectionError } from "../errors";
-import { TestResultData, VisibilityGroups, WebviewMessage } from "../ui/types";
+import { TestResultData, VisibilityGroups } from "../ui/types";
 import {
     formatSizeInBytes,
     isCorrectWorkspaceOpen,
@@ -97,16 +97,12 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         showError(message);
         return;
     }
-    const courseExamMode = userData.getCourseByName(exerciseDetails.val.course);
 
-    let data: TestResultData = {
-        ...EXAM_TEST_RESULT,
-        id,
-        disabled: userData.getCourseByName(exerciseDetails.val.course).disabled,
-    };
+    const disabled = userData.getCourse(id).disabled;
+    let data: TestResultData = { ...EXAM_TEST_RESULT, id, disabled };
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
-    if (!courseExamMode.perhapsExamMode) {
+    if (disabled) {
         const executablePath = getActiveEditorExecutablePath(actionContext);
         const [testRunner, interrupt] = tmc.runTests(id, executablePath);
         let aborted = false;
@@ -159,7 +155,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             id,
             exerciseName,
             tmcLogs: {},
-            disabled: userData.getCourseByName(exerciseDetails.val.course).disabled,
+            disabled,
         };
     }
 
@@ -199,7 +195,6 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         showError(message);
         return;
     }
-
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
     const messageHandler = async (msg: {
@@ -224,7 +219,10 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         }
     };
 
-    const courseData = userData.getCourseByName(exerciseDetails.val.course);
+    // TODO: Check type properly
+    const courseData = userData.getCourseByName(exerciseDetails.val.course) as Readonly<
+        LocalCourseData
+    >;
     if (courseData.perhapsExamMode) {
         const submitResult = await tmc.submitExercise(id);
         if (submitResult.err) {
@@ -301,7 +299,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         if (statusData.feedback_questions) {
             feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
         }
-        courseId = userData.getCourseByName(statusData.course).id;
+        courseId = courseData.id;
     }
     Logger.debug("data", statusData);
     temp.setContent({
@@ -312,7 +310,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
     temporaryWebviewProvider.addToRecycables(temp);
     // Check for new exercises if exercise passed.
     if (courseId) {
-        checkForNewExercises(actionContext, courseId);
+        checkForCourseUpdates(actionContext, courseId);
     }
     checkForExerciseUpdates(actionContext);
 }
@@ -347,16 +345,16 @@ export async function pasteExercise(
 }
 
 /**
- * Finds new exercises for all user's courses and prompts to go download them.
+ * Check for course updates.
  * @param courseId If given, check only updates for that course.
  */
-export async function checkForNewExercises(
+export async function checkForCourseUpdates(
     actionContext: ActionContext,
     courseId?: number,
 ): Promise<void> {
     const { ui, userData } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
-    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now() && !c.disabled);
+    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
     Logger.log(`Checking for new exercises for courses ${filteredCourses.map((c) => c.name)}`);
     const updatedCourses: LocalCourseData[] = [];
     for (const course of filteredCourses) {
@@ -364,54 +362,46 @@ export async function checkForNewExercises(
         updatedCourses.push(userData.getCourse(course.id));
     }
 
-    ui.webview.postMessage(
-        ...updatedCourses.map<{ key: string; message: WebviewMessage }>((c) => ({
-            key: `course-${c.id}-new-exercises`,
+    const handleDownload = async (course: LocalCourseData): Promise<void> => {
+        const newIds = Array.from(course.newExercises);
+        ui.webview.postMessage({
+            key: `course-${course.id}-new-exercises`,
             message: {
                 command: "setNewExercises",
-                courseId: c.id,
-                exerciseIds: c.newExercises,
+                courseId: course.id,
+                exerciseIds: [],
             },
-        })),
-    );
+        });
+        const successful = await downloadExercises(actionContext, [
+            {
+                courseId: course.id,
+                exerciseIds: newIds,
+                organizationSlug: course.organization,
+                courseName: course.name,
+            },
+        ]);
+        await userData.clearNewExercises(course.id, successful);
+        ui.webview.postMessage({
+            key: `course-${course.id}-new-exercises`,
+            message: {
+                command: "setNewExercises",
+                courseId: course.id,
+                exerciseIds: course.newExercises,
+            },
+        });
+        const openResult = await openExercises(actionContext, successful, course.name);
+        if (openResult.err) {
+            const message = "Failed to open new exercises.";
+            Logger.error(message, openResult.val);
+            showError(message);
+        }
+    };
 
     for (const course of updatedCourses) {
-        if (course.newExercises.length > 0) {
+        if (course.newExercises.length > 0 && !course.disabled) {
             showNotification(
                 `Found ${course.newExercises.length} new exercises for ${course.name}. Do you wish to download them now?`,
-                [
-                    "Download",
-                    async (): Promise<void> => {
-                        const newIds = Array.from(course.newExercises);
-                        const successful = await downloadExercises(actionContext, [
-                            {
-                                courseId: course.id,
-                                exerciseIds: newIds,
-                                organizationSlug: course.organization,
-                                courseName: course.name,
-                            },
-                        ]);
-                        await userData.clearNewExercises(course.id, successful);
-                        ui.webview.postMessage({
-                            key: `course-${course.id}-new-exercises`,
-                            message: {
-                                command: "setNewExercises",
-                                courseId: course.id,
-                                exerciseIds: course.newExercises,
-                            },
-                        });
-                        const openResult = await openExercises(
-                            actionContext,
-                            successful,
-                            course.name,
-                        );
-                        if (openResult.err) {
-                            const message = "Failed to open new exercises.";
-                            Logger.error(message, openResult.val);
-                            showError(message);
-                        }
-                    },
-                ],
+                ["Download", async (): Promise<void> => handleDownload(course)],
                 [
                     "Remind me later",
                     (): void => {
@@ -596,121 +586,98 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
 }
 
 /**
- * Keeps the user course exercises, points and course data up to date.
- * Refreshes the userData.
- * @param id Course id
+ * Updates the given course by re-fetching all data from the server. Handles authorization and
+ * connection errors as successful operations where the data was not actually updated.
+ *
+ * @param courseId ID of the course to update.
+ * @returns Boolean value representing whether the data from server was succesfully received.
  */
-export async function updateCourse(actionContext: ActionContext, id: number): Promise<void> {
+export async function updateCourse(
+    actionContext: ActionContext,
+    courseId: number,
+): Promise<Result<boolean, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
-    return Promise.all([
-        tmc.getCourseDetails(id),
-        tmc.getCourseExercises(id),
-        tmc.getCourseSettings(id),
-    ]).then(([courseDetailsResult, courseExercisesResult, courseSettingsResult]) => {
-        const showErrorForResult = (endpoint: string, message: string, result: unknown): void => {
-            Logger.error(
-                `Error refreshing course data for courseId ${id}, ${endpoint} - ${message}`,
-                result,
-            );
-            showError(`Something went wrong while trying to refresh course data: ${message}`);
-        };
-        const courseToDisable = async (id: number): Promise<void> => {
-            Logger.warn(
-                `Received 403 Forbidden Authorization Error, disabling course with id ${id}`,
-            );
-            const course = userData.getCourse(id);
-            course.disabled = true;
-            await userData.updateCourse(course);
-        };
-        const warnOffline = (message: string): void => {
-            Logger.warn(`Didn't fetch course updates, working offline: ${message}`);
-        };
-
-        // Check if disabled course still returns error from API
-        if (userData.getCourse(id).disabled) {
-            Logger.log(`Checking if course with id ${id} still disabled.`);
-            if (courseDetailsResult.err || courseExercisesResult.err || courseSettingsResult.err) {
-                Logger.log("Course still disabled, can't receive data from API.");
-                return;
-            }
-            Logger.log("Received all necessary data from API, continuing to update course.");
-        }
-
-        if (courseDetailsResult.err) {
-            const message = `${courseDetailsResult.val.name} - ${courseDetailsResult.val.message}`;
-            if (courseDetailsResult.val instanceof AuthorizationError) {
-                courseToDisable(id);
-                return;
-            } else if (courseDetailsResult.val instanceof ConnectionError) {
-                warnOffline(message);
-                return;
-            }
-            showErrorForResult("courseDetailsResult", message, courseDetailsResult.val);
-            return;
-        }
-        if (courseExercisesResult.err) {
-            const message = `${courseExercisesResult.val.name} - ${courseExercisesResult.val.message}`;
-            if (courseExercisesResult.val instanceof AuthorizationError) {
-                courseToDisable(id);
-                return;
-            } else if (courseExercisesResult.val instanceof ConnectionError) {
-                warnOffline(message);
-                return;
-            }
-            showErrorForResult("courseExercisesResult", message, courseExercisesResult.val);
-            return;
-        }
-        if (courseSettingsResult.err) {
-            const message = `${courseSettingsResult.val.name} - ${courseSettingsResult.val.message}`;
-            if (courseSettingsResult.val instanceof AuthorizationError) {
-                courseToDisable(id);
-                return;
-            } else if (courseSettingsResult.val instanceof ConnectionError) {
-                warnOffline(message);
-                return;
-            }
-            showErrorForResult("courseSettingsResult", message, courseSettingsResult.val);
-            return;
-        }
-
-        const details = courseDetailsResult.val.course;
-        const exercises = courseExercisesResult.val;
-        const settings = courseSettingsResult.val;
-        Logger.log(`Refreshing data for course ${details.name} from API`);
-
-        // Update course data
-        const courseData = userData.getCourseByName(settings.name);
-        courseData.perhapsExamMode = settings.hide_submission_results;
-        courseData.description = details.description || "";
-        courseData.disabled = settings.disabled_status === "enabled" ? false : true;
-        courseData.material_url = settings.material_url;
-
-        // TODO: Fix to wait promise
-        userData.updateCourse(courseData);
-
-        // Update course exercise data
-        userData.updateExercises(
-            id,
-            details.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),
-        );
-
-        ui.webview.postMessage({
-            key: `course-${id}-new-exercises`,
-            message: {
-                command: "setNewExercises",
-                courseId: id,
-                exerciseIds: userData.getCourse(id).newExercises,
+    const postMessage = (courseId: number, disabled: boolean, exerciseIds: number[]): void => {
+        Logger.debug("Post message updatecourse", courseId, disabled, ...exerciseIds);
+        ui.webview.postMessage(
+            {
+                key: `course-${courseId}-new-exercises`,
+                message: {
+                    command: "setNewExercises",
+                    courseId,
+                    exerciseIds,
+                },
             },
-        });
-
-        const [available, awarded] = exercises.reduce(
-            (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
-            [0, 0],
+            {
+                key: `course-${courseId}-disabled-notification`,
+                message: {
+                    command: "setCourseDisabledStatus",
+                    courseId,
+                    disabled,
+                },
+            },
         );
-        userData.updatePoints(id, awarded, available);
+    };
+    const courseData = userData.getCourse(courseId);
+    const updateResult = Result.all(
+        ...(await Promise.all([
+            tmc.getCourseDetails(courseId),
+            tmc.getCourseExercises(courseId),
+            tmc.getCourseSettings(courseId),
+        ])),
+    );
+    if (updateResult.err) {
+        if (updateResult.val instanceof AuthorizationError) {
+            if (!courseData.disabled) {
+                Logger.warn(
+                    `Failed to access information for course ${courseData.name}. Marking as disabled.`,
+                );
+                const course = userData.getCourse(courseId);
+                await userData.updateCourse({ ...course, disabled: true });
+                postMessage(course.id, true, []);
+            } else {
+                Logger.warn(`Course is still disabled ${courseData.name}`);
+                postMessage(courseData.id, true, []);
+            }
+            return Ok(false);
+        } else if (updateResult.val instanceof ConnectionError) {
+            Logger.warn("Failed to fetch data from TMC servers, data not updated.");
+            return Ok(false);
+        } else {
+            return updateResult;
+        }
+    }
 
-        exercises.forEach((ex) => {
-            workspaceManager.updateExerciseData(ex.id, ex.soft_deadline, ex.deadline);
-        });
+    const [details, exercises, settings] = updateResult.val;
+    const [availablePoints, awardedPoints] = exercises.reduce(
+        (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
+        [0, 0],
+    );
+
+    await userData.updateCourse({
+        ...courseData,
+        availablePoints,
+        awardedPoints,
+        description: details.course.description || "",
+        disabled: settings.disabled_status !== "enabled",
+        material_url: settings.material_url,
+        perhapsExamMode: settings.hide_submission_results,
     });
+
+    const updateExercisesResult = await userData.updateExercises(
+        courseId,
+        details.course.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),
+    );
+    if (updateExercisesResult.err) {
+        return updateExercisesResult;
+    }
+
+    exercises.forEach((ex) => {
+        workspaceManager.updateExerciseData(ex.id, ex.soft_deadline, ex.deadline);
+    });
+
+    const course = userData.getCourse(courseId);
+    postMessage(course.id, course.disabled, course.newExercises);
+
+    return Ok(true);
 }
