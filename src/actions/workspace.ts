@@ -311,7 +311,7 @@ export async function resetExercise(
     id: number,
     options?: ResetOptions,
 ): Promise<Result<boolean, Error>> {
-    const { settings, tmc, workspaceManager } = actionContext;
+    const { tmc, workspaceManager } = actionContext;
 
     const exerciseData = workspaceManager.getExerciseDataById(id);
     if (exerciseData.err) {
@@ -324,7 +324,7 @@ export async function resetExercise(
         return exercisePath;
     }
 
-    Logger.log(`Reseting exercise ${exercise.name}`);
+    Logger.log(`Resetting exercise ${exercise.name}`);
 
     const submitFirst =
         options?.submitFirst !== undefined
@@ -342,50 +342,9 @@ export async function resetExercise(
         return Ok(false);
     }
 
-    if (settings.isInsider()) {
-        Logger.warn("Using insider feature");
-        const resetResult = await tmc.resetExercise(id, submitFirst);
-        if (resetResult.err) {
-            return resetResult;
-        }
-    } else {
-        if (submitFirst) {
-            const submitResult = await tmc.submitExercise(id);
-            if (submitResult.err) {
-                return submitResult;
-            }
-        } else {
-            Logger.debug("Didn't submit exercise before resetting.");
-        }
-
-        // Try to remove files here because new workspace
-        const edit = new vscode.WorkspaceEdit();
-        edit.deleteFile(vscode.Uri.file(exercisePath.val), { recursive: true });
-        const removeResult = await vscode.workspace.applyEdit(edit);
-        if (!removeResult) {
-            return Err(new Error("Failed to remove previous files before reseting."));
-        }
-
-        Logger.debug("Closing exercise before resetting.");
-        if (exercise.status === ExerciseStatus.OPEN) {
-            const closeResult = await closeExercises(actionContext, [id], exercise.course);
-            if (closeResult.err) {
-                return closeResult;
-            }
-        }
-
-        await workspaceManager.deleteExercise(id);
-        const dlResult = await tmc.downloadExercise(id, exercisePath.val);
-        if (dlResult.err) {
-            return dlResult;
-        }
-
-        if (options?.openAfterwards === true) {
-            const openResult = await openExercises(actionContext, [id], exercise.course);
-            if (openResult.err) {
-                return openResult;
-            }
-        }
+    const resetResult = await tmc.resetExercise(id, submitFirst);
+    if (resetResult.err) {
+        return resetResult;
     }
 
     return Ok(true);

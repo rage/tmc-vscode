@@ -602,50 +602,68 @@ export default class TMC {
      * @param exerciseId Id of the exercise.
      * @returns Response for sending the exercise.
      */
-    public async submitExercise(
-        exerciseId: number,
-        params?: Map<string, string>,
-    ): Promise<Result<SubmissionResponse, Error>> {
+    public async submitExercise(exerciseId: number): Promise<Result<SubmissionResponse, Error>> {
         if (!this._workspaceManager) {
             throw displayProgrammerError("WorkspaceManager not assinged");
         }
-        const exerciseFolderPath = this._workspaceManager.getExercisePathById(exerciseId);
 
+        const exerciseFolderPath = this._workspaceManager.getExercisePathById(exerciseId);
         if (exerciseFolderPath.err) {
             return exerciseFolderPath;
         }
 
-        const isPaste = params?.has("paste");
         const submitUrl = `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`;
-        const args = isPaste
-            ? [
-                  "paste",
-                  "--locale",
-                  "eng",
-                  "--submission-path",
-                  exerciseFolderPath.val,
-                  "--submission-url",
-                  submitUrl,
-              ]
-            : [
-                  "submit",
-                  "--dont-block",
-                  "--submission-path",
-                  exerciseFolderPath.val,
-                  "--submission-url",
-                  submitUrl,
-              ];
 
-        const processResult = await this._executeLangsCommand(
-            { args, core: true },
+        return this._executeLangsCommand(
+            {
+                args: [
+                    "submit",
+                    "--dont-block",
+                    "--submission-path",
+                    exerciseFolderPath.val,
+                    "--submission-url",
+                    submitUrl,
+                ],
+                core: true,
+            },
             createIs<SubmissionResponse>(),
-        );
+        ).then((res) => res.map((r) => r.data));
+    }
 
-        if (processResult.err) {
-            return processResult;
+    /**
+     * Submits given exercise to TMC Paste and provides a link to it. Uses TMC-langs `paste` core
+     * command internally.
+     *
+     * @param exerciseId Id of the exercise.
+     * @returns TMC paste link.
+     */
+    public async submitExerciseToPaste(exerciseId: number): Promise<Result<string, Error>> {
+        if (!this._workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
         }
 
-        return new Ok(processResult.val.data);
+        const exerciseFolderPath = this._workspaceManager.getExercisePathById(exerciseId);
+        if (exerciseFolderPath.err) {
+            return exerciseFolderPath;
+        }
+
+        const submitUrl = `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`;
+
+        return this._executeLangsCommand(
+            {
+                args: [
+                    "paste",
+                    "--locale",
+                    "eng",
+                    "--submission-path",
+                    exerciseFolderPath.val,
+                    "--submission-url",
+                    submitUrl,
+                ],
+                core: true,
+            },
+            createIs<SubmissionResponse>(),
+        ).then((res) => res.map((r) => r.data.paste_url));
     }
 
     /**

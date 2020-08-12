@@ -341,23 +341,23 @@ export async function pasteExercise(
     id: number,
 ): Promise<string | undefined> {
     const { tmc } = actionContext;
-    const params = new Map<string, string>();
-    params.set("paste", "1");
-    const submitResult = await tmc.submitExercise(id, params);
 
-    const errorMessage = "Failed to send exercise to TMC pastebin.";
-    if (submitResult.err) {
-        Logger.error(errorMessage, submitResult.val);
-        showError(errorMessage);
-        return undefined;
-    } else if (!submitResult.val.paste_url) {
-        const notProvided = "Paste link was not provided by the server.";
-        Logger.warn(errorMessage, notProvided, submitResult.val);
-        showError(errorMessage + " " + notProvided);
+    const pasteResult = await tmc.submitExerciseToPaste(id);
+    if (pasteResult.err) {
+        Logger.error("Failed to paste exercise: ", pasteResult.val);
+        showError(`Failed to send exercise to TMC Paste: ${pasteResult.val.message}`);
         return undefined;
     }
 
-    return submitResult.val.paste_url;
+    const pasteLink = pasteResult.val;
+    if (pasteLink === "") {
+        const message = "Didn't receive paste link from server.";
+        Logger.error(`Failed to paste exercise: ${message}`);
+        showError(`Failed to send exercise to TMC Paste: ${message}`);
+        return undefined;
+    }
+
+    return pasteLink;
 }
 
 /**
