@@ -33,9 +33,8 @@
         "onView:tmcView",
         "onCommand:tmc.cleanExercise",
         "onCommand:tmc.closeExercise",
-        "onCommand:tmc.courseDetails",
         "onCommand:tmc.login",
-        "onCommand:tmc.myCourses",
+        "onCommand:tmc.logout",
         "onCommand:tmc.openSettings",
         "onCommand:tmc.runTests",
         "onCommand:tmc.selectAction",
@@ -173,6 +172,12 @@
                     "when": "test-my-code:LoggedIn"
                 },
                 {
+                    "command": "tmc.courseDetails",
+                    "title": "Go to Course Details...",
+                    "category": "TestMyCode",
+                    "when": "test-my-code:LoggedIn"
+                },
+                {
                     "command": "tmc.downloadNewExercises",
                     "title": "Download New Exercises for Course...",
                     "category": "TestMyCode",
@@ -193,6 +198,12 @@
                 {
                     "command": "tmc.logout",
                     "title": "Log Out",
+                    "category": "TestMyCode",
+                    "when": "test-my-code:LoggedIn"
+                },
+                {
+                    "command": "tmc.myCourses",
+                    "title": "Display My Courses",
                     "category": "TestMyCode",
                     "when": "test-my-code:LoggedIn"
                 },

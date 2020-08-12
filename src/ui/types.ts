@@ -129,6 +129,12 @@ export interface ExerciseStatusChange {
     status: ExerciseStatus;
 }
 
+export interface SetCourseDisabledStatus {
+    command: "setCourseDisabledStatus";
+    courseId: number;
+    disabled: boolean;
+}
+
 export interface SetInsiderStatus {
     command: "setInsiderStatus";
     enabled: boolean;
@@ -153,6 +159,7 @@ export interface SetUpdateables {
 
 export type WebviewMessage =
     | ExerciseStatusChange
+    | SetCourseDisabledStatus
     | SetInsiderStatus
     | SetNextCourseDeadline
     | SetNewExercises

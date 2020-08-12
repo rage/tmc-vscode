@@ -109,12 +109,15 @@ function component(data) {
                                 </span>
                             </div>
                         ) : null}
-                        {courseDisabled ? (
-                            <div role="alert" class="alert alert-info">
-                                This course has been disabled and exercises can't be downloaded or
-                                submitted to the server.
-                            </div>
-                        ) : null}
+                        <div
+                            role="alert"
+                            style="display: none;"
+                            class="alert alert-info"
+                            id="course-disabled-notification"
+                        >
+                            This course has been disabled and exercises can't be downloaded or
+                            submitted to the server.
+                        </div>
                     </div>
                 </div>
             </div>
@@ -369,6 +372,15 @@ function script() {
         element.innerHTML = html;
         if (handler) {
             element.firstElementChild.addEventListener("click", handler, { once: true });
+        }
+    }
+
+    function setCourseDisabledStatus(courseId, disabled) {
+        const notification = document.getElementById("course-disabled-notification");
+        if (disabled) {
+            notification.style.display = "block";
+        } else {
+            notification.style.display = "none";
         }
     }
 
@@ -662,6 +674,10 @@ function script() {
                         button.dataset.exercises = message.exerciseIds;
                         notification.style.display = "block";
                     }
+                    break;
+                }
+                case "setCourseDisabledStatus": {
+                    setCourseDisabledStatus(message.courseId, message.disabled);
                     break;
                 }
                 default:

@@ -57,12 +57,14 @@ const component = (props) => {
                             </button>
                         </div>
                     </div>
-                    {course.disabled ? (
-                        <div role="alert" class="alert alert-info">
-                            This course has been disabled and exercises can't be downloaded or
-                            submitted to the server.
-                        </div>
-                    ) : null}
+                    <div
+                        role="alert"
+                        class="alert alert-info course-disabled-notification my-1"
+                        style="display: none;"
+                    >
+                        This course has been disabled and exercises can't be downloaded or submitted
+                        to the server.
+                    </div>
                     <div>
                         Programming exercise progress:
                         <div class="progress">
@@ -152,6 +154,19 @@ const script = () => {
         }
     }
 
+    function setCourseDisabledStatus(courseId, disabled) {
+        const course = document.getElementById(`course-${courseId}`);
+        if (!course) {
+            return;
+        }
+        const notification = course.querySelector("div.course-disabled-notification");
+        if (disabled) {
+            notification.style.display = "block";
+        } else {
+            notification.style.display = "none";
+        }
+    }
+
     const courses = document.querySelectorAll("div.course-card");
     for (let i = 0; i < courses.length; i++) {
         const course = courses[i];
@@ -204,6 +219,10 @@ const script = () => {
                 }
                 case "setNewExercises": {
                     setNewExercises(message.courseId, message.exerciseIds);
+                    break;
+                }
+                case "setCourseDisabledStatus": {
+                    setCourseDisabledStatus(message.courseId, message.disabled);
                     break;
                 }
             }
