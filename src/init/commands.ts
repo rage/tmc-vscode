@@ -43,7 +43,7 @@ export function registerCommands(
             vscode.commands.executeCommand(
                 "workbench.action.quickOpen",
                 ">TestMyCode: ",
-                "tmcWorkspaceActive",
+                "test-my-code:WorkspaceActive",
             );
         }),
     );
