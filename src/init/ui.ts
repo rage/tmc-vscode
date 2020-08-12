@@ -179,11 +179,14 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (msg.useCache) {
                 displayLocalCourseDetails(actionContext, courseId);
             } else {
-                updateCourse(actionContext, courseId).then(() =>
-                    uiState === ui.webview.getStateId()
-                        ? displayLocalCourseDetails(actionContext, courseId)
-                        : {},
-                );
+                const updateResult = await updateCourse(actionContext, courseId);
+                if (updateResult.err) {
+                    Logger.error("Failed to update course", updateResult.val);
+                    showError(`Failed to update course: ${updateResult.val.message}`);
+                }
+                if (uiState === ui.webview.getStateId()) {
+                    displayLocalCourseDetails(actionContext, courseId);
+                }
             }
         },
     );
