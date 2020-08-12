@@ -471,115 +471,32 @@ export default class TMC {
     /**
      * Downloads exercise with given id and extracts it to the exercise folder.
      * @param id Id of the exercise to download
-     * @param organizationSlug Slug for the organization this exercise belongs to.
+     * @param exercisePath Path where to download exercise
      */
     public async downloadExercise(
         id: number,
-        organizationSlug: string,
+        exercisePath: string,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         progressCallback?: (downloadedPct: number, increment: number) => void,
     ): Promise<Result<void, Error>> {
-        if (!this._workspaceManager) {
-            throw displayProgrammerError("WorkspaceManager not assigned");
-        }
-        const archivePath = path.join(`${this._resources.getDataPath()}`, `${id}.zip`);
-
-        const detailsResult = await this.getExerciseDetails(id, true);
-        if (detailsResult.err) {
-            return detailsResult;
-        }
-
-        const courseResult = await this.getCourseDetails(detailsResult.val.course_id);
-        if (courseResult.err) {
-            return courseResult;
-        }
-
-        const exercise = courseResult.val.course.exercises.find((x) => x.id === id);
-        if (!exercise) {
-            return new Err(new Error("Exercise somehow missing from course"));
-        }
-
-        if (this._isInsider()) {
-            // TODO post-insider: Pass this location directly to this function
-            const exercisePath = await this._workspaceManager.createExerciseDownloadPath(
-                exercise.soft_deadline,
-                organizationSlug,
-                exercise.checksum,
-                detailsResult.val,
-            );
-
-            if (exercisePath.err) {
-                return exercisePath;
-            }
-
-            const downloadResult = await this._executeLangsCommand(
-                {
-                    args: [
-                        "download-or-update-exercises",
-                        "--exercise",
-                        id.toString(),
-                        exercisePath.val,
-                    ],
-                    core: true,
-                },
-                createIs<unknown>(),
-                false,
-            );
-
-            if (downloadResult.err) {
-                Logger.error("Downloading failed", downloadResult.val);
-                await this._workspaceManager.deleteExercise(id);
-            }
-
-            return Ok.EMPTY;
-        } else {
-            const result = await downloadFile(
-                `${this._tmcApiUrl}core/exercises/${id}/download`,
-                archivePath,
-                this._tmcDefaultHeaders,
-                this._token,
-                progressCallback,
-            );
-            if (result.err) {
-                return result;
-            }
-
-            const exercisePath = await this._workspaceManager.createExerciseDownloadPath(
-                exercise.soft_deadline,
-                organizationSlug,
-                exercise.checksum,
-                detailsResult.val,
-            );
-
-            if (exercisePath.err) {
-                return exercisePath;
-            }
-
-            const extractResult = await this._checkApiResponse(
-                this._executeLangsAction({
-                    action: "extract-project",
-                    archivePath,
-                    exerciseFolderPath: exercisePath.val,
-                })[0],
-                createIs<TmcLangsPath>(),
-            );
-
-            if (extractResult.err) {
-                Logger.error("Extracting failed", extractResult.val);
-                await this._workspaceManager.deleteExercise(id);
-            }
-
-            delSync(archivePath, { force: true });
-
-            return Ok.EMPTY;
-        }
+        const downloadResult = await this._executeLangsCommand(
+            {
+                args: ["download-or-update-exercises", "--exercise", id.toString(), exercisePath],
+                core: true,
+            },
+            createIs<unknown>(),
+            false,
+        );
+        return downloadResult.ok ? Ok.EMPTY : downloadResult;
     }
 
     /**
      * Downloads an old submission for the given exercise.
      *
      * @param exerciseId ID of the exercise.
+     * @param exercisePath Path where to download exercise.
      * @param submissionId ID of the exercise submission.
-     * @param saveOldState Whether to download
+     * @param saveOldState Whether to submit the current state before download
      */
     public async downloadOldSubmission(
         exerciseId: number,
@@ -612,11 +529,8 @@ export default class TMC {
             createIs<unknown>(),
             false,
         );
-        if (downloadResult.err) {
-            return downloadResult;
-        }
 
-        return Ok.EMPTY;
+        return downloadResult.ok ? Ok.EMPTY : downloadResult;
     }
 
     public async downloadOldExercise(

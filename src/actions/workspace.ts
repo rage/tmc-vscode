@@ -33,7 +33,7 @@ export async function downloadExercises(
     actionContext: ActionContext,
     courseExerciseDownloads: CourseExerciseDownloads[],
 ): Promise<number[]> {
-    const { tmc, ui } = actionContext;
+    const { tmc, ui, workspaceManager } = actionContext;
 
     interface StatusChange {
         exerciseId: number;
@@ -64,41 +64,51 @@ export async function downloadExercises(
     const successful: DownloadState[] = [];
     const failed: DownloadState[] = [];
 
+    const resolveTask = async (
+        result: Result<void, Error>,
+        state: DownloadState,
+    ): Promise<void> => {
+        postChange({
+            exerciseId: state.id,
+            status: result.ok ? "closed" : "downloadFailed",
+        });
+        if (result.ok || result.val instanceof ExerciseExistsError) {
+            successful.push(state);
+        } else {
+            failed.push(state);
+            await workspaceManager.deleteExercise(state.id);
+            Logger.error(`Failed to download ${state.organizationSlug}/${state.name}`, result.val);
+        }
+    };
+
     const task = async (
         process: vscode.Progress<{ downloadedPct: number; increment: number }>,
         state: DownloadState,
     ): Promise<void> => {
         const oldSubmissions = await tmc.getOldSubmissions(state.id);
+        const exercisePath = await createExerciseDownloadPath(
+            actionContext,
+            state.id,
+            state.organizationSlug,
+        );
         if (oldSubmissions.err || oldSubmissions.val.length === 0) {
             await new Promise<void>((resolve) => {
-                tmc.downloadExercise(state.id, state.organizationSlug, (downloadedPct, increment) =>
+                if (exercisePath.err) {
+                    failed.push(state);
+                    return resolve();
+                }
+                tmc.downloadExercise(state.id, exercisePath.val, (downloadedPct, increment) =>
                     process.report({ downloadedPct, increment }),
                 ).then((res: Result<void, Error>) => {
-                    postChange({
-                        exerciseId: state.id,
-                        status: res.ok ? "closed" : "downloadFailed",
-                    });
-                    if (res.ok || res.val instanceof ExerciseExistsError) {
-                        successful.push(state);
-                    } else {
-                        failed.push(state);
-                        Logger.error(
-                            `Failed to download ${state.organizationSlug}/${state.name}`,
-                            res.val,
-                        );
-                    }
+                    resolveTask(res, state);
                     resolve();
                 });
             });
         } else {
-            const exercisePath = await createExerciseDownloadPath(
-                actionContext,
-                state.id,
-                state.organizationSlug,
-            );
-            await new Promise<void>((resolve, reject) => {
+            await new Promise<void>((resolve) => {
                 if (exercisePath.err) {
-                    return reject(exercisePath.val);
+                    failed.push(state);
+                    return resolve();
                 }
                 tmc.downloadOldSubmission(
                     state.id,
@@ -112,20 +122,8 @@ export async function downloadExercises(
                     false,
                     (downloadedPct, increment) => process.report({ downloadedPct, increment }),
                 ).then((res: Result<void, Error>) => {
-                    postChange({
-                        exerciseId: state.id,
-                        status: res.ok ? "closed" : "downloadFailed",
-                    });
-                    if (res.ok || res.val instanceof ExerciseExistsError) {
-                        oldSubmissionDownloaded = true;
-                        successful.push(state);
-                    } else {
-                        failed.push(state);
-                        Logger.error(
-                            `Failed to download ${state.organizationSlug}/${state.name}`,
-                            res.val,
-                        );
-                    }
+                    oldSubmissionDownloaded = true;
+                    resolveTask(res, state);
                     resolve();
                 });
             });
@@ -319,13 +317,13 @@ export async function resetExercise(
     if (exerciseData.err) {
         return exerciseData;
     }
+    const exercise = exerciseData.val;
 
-    const exercisePath = workspaceManager.getExercisePathById(id);
+    const exercisePath = await createExerciseDownloadPath(actionContext, id, exercise.organization);
     if (exercisePath.err) {
         return exercisePath;
     }
 
-    const exercise = exerciseData.val;
     Logger.log(`Reseting exercise ${exercise.name}`);
 
     const submitFirst =
@@ -377,7 +375,7 @@ export async function resetExercise(
         }
 
         await workspaceManager.deleteExercise(id);
-        const dlResult = await tmc.downloadExercise(id, exercise.organization);
+        const dlResult = await tmc.downloadExercise(id, exercisePath.val);
         if (dlResult.err) {
             return dlResult;
         }
@@ -469,18 +467,22 @@ export async function downloadOldSubmission(
     exerciseId: number,
     options?: DownloadOldSubmissionOptions,
 ): Promise<Result<boolean, Error>> {
-    const { settings, tmc, workspaceManager } = actionContext;
-
-    const exercisePath = workspaceManager.getExercisePathById(exerciseId);
-    if (exercisePath.err) {
-        return exercisePath;
-    }
+    const { tmc, workspaceManager } = actionContext;
 
     const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
     if (exerciseData.err) {
         return exerciseData;
     }
     const exercise = exerciseData.val;
+
+    const exercisePath = await createExerciseDownloadPath(
+        actionContext,
+        exerciseId,
+        exercise.organization,
+    );
+    if (exercisePath.err) {
+        return exercisePath;
+    }
 
     Logger.debug("Fetching old submissions");
     const submissionsResult = await tmc.getOldSubmissions(exerciseId);
@@ -509,57 +511,39 @@ export async function downloadOldSubmission(
         return Ok(false);
     }
 
-    if (settings.isInsider()) {
-        console.warn("Using insider feature");
-        const submitFirst =
-            options?.submitFirst !== undefined
-                ? options.submitFirst
-                : await askForItem(
-                      "Do you want to save the current state of the exercise by submitting it to TMC Server?",
-                      false,
-                      ["Yes", true],
-                      ["No", false],
-                      ["Cancel", undefined],
-                  );
+    const submitFirst =
+        options?.submitFirst !== undefined
+            ? options.submitFirst
+            : await askForItem(
+                  "Do you want to save the current state of the exercise by submitting it to TMC Server?",
+                  false,
+                  ["Yes", true],
+                  ["No", false],
+                  ["Cancel", undefined],
+              );
 
-        if (submitFirst === undefined) {
-            Logger.debug("Answer for submitting first not provided, returning early.");
-            return Ok(false);
-        }
+    if (submitFirst === undefined) {
+        Logger.debug("Answer for submitting first not provided, returning early.");
+        return Ok(false);
+    }
 
-        const downloadResult = await tmc.downloadOldSubmission(
-            exerciseId,
-            exercisePath.val,
-            submission.id,
-            submitFirst,
-        );
-        if (downloadResult.err) {
-            return downloadResult;
-        }
-    } else {
-        const resetResult = await resetExercise(actionContext, exerciseId);
-        if (resetResult.err) {
-            return resetResult;
-        }
-
-        const oldSub = await tmc.downloadOldExercise(exerciseData.val.id, submission.id);
-        if (oldSub.err) {
-            return oldSub;
-        }
-
-        const openResult = await openExercises(
-            actionContext,
-            [exerciseData.val.id],
-            exerciseData.val.course,
-        );
-        if (openResult.err) {
-            return openResult;
-        }
+    const downloadResult = await tmc.downloadOldSubmission(
+        exerciseId,
+        exercisePath.val,
+        submission.id,
+        submitFirst,
+    );
+    if (downloadResult.err) {
+        return downloadResult;
     }
     return Ok(true);
 }
 
 /**
+ * Checks if workspaceManager knows exercise by id and returns the exercise path.
+ * Makes sure the path exists on disk and marks exercise as closed.
+ *
+ * Else, fetches all the necessary data and adds it to storage and returns path.
  *
  * @param actionContext
  * @param exerciseId
@@ -572,7 +556,6 @@ async function createExerciseDownloadPath(
 ): Promise<Result<string, Error>> {
     const { tmc, workspaceManager } = actionContext;
 
-    // Return exercise path if data found in workspaceManager.
     const exercisePathResult = workspaceManager.getExercisePathById(exerciseId);
     if (exercisePathResult.ok) {
         if (!fs.existsSync(exercisePathResult.val)) {
