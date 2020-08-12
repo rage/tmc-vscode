@@ -7,6 +7,7 @@
 import { sync as delSync } from "del";
 import du = require("du");
 import * as fs from "fs-extra";
+import * as _ from "lodash";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
@@ -21,7 +22,6 @@ import {
     isCorrectWorkspaceOpen,
     Logger,
     parseFeedbackQuestion,
-    sleep,
 } from "../utils/";
 import {
     askForConfirmation,
@@ -186,11 +186,12 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
  * @param tempView Existing TemporaryWebview to use if any
  */
 export async function submitExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, temporaryWebviewProvider, tmc, userData, workspaceManager } = actionContext;
+    const { temporaryWebviewProvider, tmc, userData, workspaceManager } = actionContext;
+
     Logger.log(
         `Submitting exercise ${workspaceManager.getExerciseDataById(id).val.name} to server`,
     );
-    const submitResult = await tmc.submitExercise(id);
+
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         const message = "Getting exercise details failed when submitting exercise.";
@@ -198,27 +199,41 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         showError(message);
         return;
     }
-    const courseData = userData.getCourseByName(exerciseDetails.val.course);
 
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
-    if (submitResult.err) {
-        temp.setContent({
-            title: "TMC Server Submission",
-            template: { templateName: "error", error: submitResult.val },
-            messageHandler: async (msg: { type?: string }): Promise<void> => {
-                if (msg.type === "closeWindow") {
-                    temp.dispose();
-                }
-            },
-        });
-        const message = "Exercise submission failed.";
-        Logger.error(message, submitResult.val);
-        showError(message);
-        return;
-    }
+    const messageHandler = async (msg: {
+        data?: { [key: string]: unknown };
+        type?: string;
+    }): Promise<void> => {
+        if (msg.type === "feedback" && msg.data) {
+            await tmc.submitSubmissionFeedback(
+                msg.data.url as string,
+                msg.data.feedback as SubmissionFeedback,
+            );
+        } else if (msg.type === "showInBrowser") {
+            // vscode.env.openExternal(vscode.Uri.parse(submissionResult.val.show_submission_url));
+        } else if (msg.type === "showSolutionInBrowser" && msg.data) {
+            vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
+        } else if (msg.type === "closeWindow") {
+            temp.dispose();
+        } else if (msg.type === "sendToPaste" && msg.data) {
+            Logger.debug(msg.data);
+            const pasteLink = await pasteExercise(actionContext, Number(msg.data.exerciseId));
+            pasteLink && temp.postMessage({ command: "showPasteLink", pasteLink });
+        }
+    };
 
+    const courseData = userData.getCourseByName(exerciseDetails.val.course);
     if (courseData.perhapsExamMode) {
+        const submitResult = await tmc.submitExercise(id);
+        if (submitResult.err) {
+            const message = "Getting exercise details failed when submitting exercise.";
+            // Logger.error(message, exerciseDetails.val);
+            showError(message);
+            return;
+        }
+
         const examData = EXAM_SUBMISSION_RESULT;
         const submitUrl = submitResult.val.show_submission_url;
         const feedbackQuestions: FeedbackQuestion[] = [];
@@ -241,94 +256,65 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         return;
     }
 
-    const messageHandler = async (msg: {
-        data?: { [key: string]: unknown };
-        type?: string;
-    }): Promise<void> => {
-        if (msg.type === "feedback" && msg.data) {
-            await tmc.submitSubmissionFeedback(
-                msg.data.url as string,
-                msg.data.feedback as SubmissionFeedback,
-            );
-        } else if (msg.type === "showInBrowser") {
-            vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
-        } else if (msg.type === "showSolutionInBrowser" && msg.data) {
-            vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
-        } else if (msg.type === "closeWindow") {
-            temp.dispose();
-        } else if (msg.type === "sendToPaste" && msg.data) {
-            Logger.debug(msg.data);
-            const pasteLink = await pasteExercise(actionContext, Number(msg.data.exerciseId));
-            pasteLink && temp.postMessage({ command: "showPasteLink", pasteLink });
-        }
-    };
-
-    let notified = false;
-    let timeWaited = 0;
-    let getStatus = true;
-    while (getStatus) {
-        const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
-        if (statusResult.err) {
-            const message = "Failed getting submission status.";
-            Logger.error(message, statusResult.val);
-            showError(message);
-            break;
-        }
-        const statusData = statusResult.val;
-        if (statusResult.val.status !== "processing") {
-            ui.setStatusBar("Tests finished, see result", 5000);
-            let feedbackQuestions: FeedbackQuestion[] = [];
-            let courseId = undefined;
-            if (statusData.status === "ok" && statusData.all_tests_passed) {
-                if (statusData.feedback_questions) {
-                    feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
-                }
-                courseId = userData.getCourseByName(statusData.course).id;
+    const messages: string[] = [];
+    const submissionResult = await tmc.submitExerciseAndWaitForResults(
+        id,
+        (progressPct, message) => {
+            if (message && message !== _.last(messages)) {
+                messages.push(message);
             }
-            temp.setContent({
-                title: "TMC Server Submission",
-                template: { templateName: "submission-result", statusData, feedbackQuestions },
-                messageHandler,
-            });
-            temporaryWebviewProvider.addToRecycables(temp);
-            // Check for new exercises if exercise passed.
-            if (courseId) {
-                checkForNewExercises(actionContext, courseId);
-            }
-            checkForExerciseUpdates(actionContext);
-            break;
-        }
-
-        if (!temp.disposed) {
-            temp.setContent({
-                title: "TMC Server Submission",
-                template: { templateName: "submission-status", statusData },
-                messageHandler,
-            });
-        }
-
-        await sleep(2500);
-        timeWaited = timeWaited + 2500;
-
-        if (timeWaited >= 120000 && !notified) {
-            notified = true;
-            showNotification(
-                `This seems to be taking a long time — consider continuing to the next exercise while this is running. \
-                Your submission will still be graded. Check the results later at ${submitResult.val.show_submission_url}`,
-                [
-                    "Open URL and move on...",
-                    (): void => {
-                        vscode.env.openExternal(
-                            vscode.Uri.parse(submitResult.val.show_submission_url),
-                        );
-                        getStatus = false;
-                        temp.dispose();
+            if (!temp.disposed) {
+                temp.setContent({
+                    title: "TMC Server Submission",
+                    template: {
+                        templateName: "submission-status",
+                        messages,
+                        progressPct,
                     },
-                ],
-                ["No, I'll wait", (): void => {}],
-            );
-        }
+                    messageHandler,
+                });
+            }
+        },
+    );
+
+    if (submissionResult.err) {
+        temp.setContent({
+            title: "TMC Server Submission",
+            template: { templateName: "error", error: submissionResult.val },
+            messageHandler: async (msg: { type?: string }): Promise<void> => {
+                if (msg.type === "closeWindow") {
+                    temp.dispose();
+                }
+            },
+        });
+        temporaryWebviewProvider.addToRecycables(temp);
+        const message = "Exercise submission failed.";
+        Logger.error(message, submissionResult.val);
+        showError(message);
+        return;
     }
+
+    const statusData = submissionResult.val;
+    let feedbackQuestions: FeedbackQuestion[] = [];
+    let courseId = undefined;
+    if (statusData.status === "ok" && statusData.all_tests_passed) {
+        if (statusData.feedback_questions) {
+            feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
+        }
+        courseId = userData.getCourseByName(statusData.course).id;
+    }
+    Logger.debug("data", statusData);
+    temp.setContent({
+        title: "TMC Server Submission",
+        template: { templateName: "submission-result", statusData, feedbackQuestions },
+        messageHandler,
+    });
+    temporaryWebviewProvider.addToRecycables(temp);
+    // Check for new exercises if exercise passed.
+    if (courseId) {
+        checkForNewExercises(actionContext, courseId);
+    }
+    checkForExerciseUpdates(actionContext);
 }
 
 /**

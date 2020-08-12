@@ -176,7 +176,6 @@ export type SubmissionResultReport = {
     exercise_name: string;
     status: "fail" | "ok" | "error";
     points: string[];
-    validations: unknown;
     valgrind: string | null;
     submission_url: string;
     solution_url: string | null;
@@ -193,10 +192,11 @@ export type SubmissionResultReport = {
         message: string | null;
         exception: string[] | null;
         detailed_message: string | null;
-    }>;
-    feedback_questions?: SubmissionFeedbackQuestion[];
-    feedback_answer_url?: string;
-    error?: string;
+    }> | null;
+    feedback_questions?: SubmissionFeedbackQuestion[] | null;
+    feedback_answer_url?: string | null;
+    error?: string | null;
+    validations: unknown;
 };
 
 export type SubmissionFeedbackQuestion = {

@@ -99,7 +99,8 @@ export type SubmissionResultData = {
 };
 
 export type SubmissionStatusData = {
-    statusData: SubmissionStatusReport;
+    messages: string[];
+    progressPct: number;
 };
 
 export type TestResultData = {

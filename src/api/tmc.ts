@@ -1,12 +1,9 @@
 import * as cp from "child_process";
 import * as ClientOauth2 from "client-oauth2";
-import * as FormData from "form-data";
 import * as _ from "lodash";
-import * as fetch from "node-fetch";
 import * as kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
-import * as url from "url";
 
 import {
     ACCESS_TOKEN_URI,
@@ -243,27 +240,6 @@ export default class TMC {
         this._token = undefined;
         this._storage.updateAuthenticationToken(undefined);
         return Ok.EMPTY;
-    }
-
-    // ---------------------------------------------------------------------------------------------
-    // Deprecated & to be removed
-    // ---------------------------------------------------------------------------------------------
-
-    /**
-     * @deprecated
-     * Get submission status by url
-     * @param submissionUrl Submission url
-     */
-    public async getSubmissionStatus(
-        submissionUrl: string,
-    ): Promise<Result<SubmissionStatusReport, Error>> {
-        if (!this._token) {
-            throw new Error("User not logged in!");
-        }
-        return this._checkApiResponse(
-            this._tmcApiRequest(submissionUrl),
-            createIs<SubmissionStatusReport>(),
-        );
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -631,6 +607,45 @@ export default class TMC {
     }
 
     /**
+     * Submits an exercise to server and waits for test results. Uses TMC-langs `submit` core
+     * command internally.
+     *
+     * @param exerciseId Id of the exercise.
+     * @param progressCallback Optional callback function that can be used to get status reports.
+     */
+    public async submitExerciseAndWaitForResults(
+        exerciseId: number,
+        progressCallback?: (progressPct: number, message?: string) => void,
+    ): Promise<Result<SubmissionStatusReport, Error>> {
+        if (!this._workspaceManager) {
+            throw displayProgrammerError("WorkspaceManager not assinged");
+        }
+
+        const exerciseFolderPath = this._workspaceManager.getExercisePathById(exerciseId);
+        if (exerciseFolderPath.err) {
+            return exerciseFolderPath;
+        }
+
+        const submitUrl = `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`;
+
+        return this._executeLangsCommand(
+            {
+                args: [
+                    "submit",
+                    "--submission-path",
+                    exerciseFolderPath.val,
+                    "--submission-url",
+                    submitUrl,
+                ],
+                core: true,
+                onStdout: (res) =>
+                    progressCallback?.(50 * res["percent-done"], res.message || undefined),
+            },
+            createIs<SubmissionStatusReport>(),
+        ).then((res) => res.map((r) => r.data));
+    }
+
+    /**
      * Submits given exercise to TMC Paste and provides a link to it. Uses TMC-langs `paste` core
      * command internally.
      *
@@ -765,6 +780,7 @@ export default class TMC {
             return new Err(new ApiError(message));
         }
         if (!checker(data)) {
+            Logger.debug("Unexpected response data type: ", data);
             return new Err(new ApiError("Unexpected response data type."));
         }
         return new Ok({ ...langsResponse, data, result, status });
@@ -889,104 +905,5 @@ export default class TMC {
         };
 
         return { interrupt, result };
-    }
-
-    // ---------------------------------------------------------------------------------------------
-    // Deprecated & to be removed
-    // ---------------------------------------------------------------------------------------------
-
-    /**
-     * Unwraps the response, checks the type, and rewraps it with the type error possibly included
-     *
-     * Note that the current type checking method requires the type checker to be passed as a
-     * parameter to allow the correct type predicates to be generated during compilation
-     *
-     * @param response The response to be typechecked
-     * @param typechecker The type checker to be used
-     *
-     * @returns A type checked response
-     */
-    private async _checkApiResponse<T, U>(
-        response: Promise<Result<U, Error>>,
-        checker: (object: unknown) => object is T,
-    ): Promise<Result<T, Error>> {
-        const result = await response;
-        if (result.ok) {
-            return checker(result.val)
-                ? new Ok(result.val)
-                : new Err(new ApiError("Incorrect response type"));
-        }
-        return new Err(result.val);
-    }
-
-    /**
-     * Performs a HTTP request to hardcoded TMC server.
-     *
-     * @param endpoint Target API endpoint, can also be a complete URL.
-     * @param cache Whether this operation should attempt to return cached data first.
-     * @param method HTTP method, defaults to GET.
-     * @param body Optional data body for the request.
-     * @param headers Headers for the request.
-     */
-    private async _tmcApiRequest(
-        endpoint: string,
-        cache = false,
-        method: "get" | "post" = "get",
-        body?: string | FormData | url.URLSearchParams,
-        headers: { [key: string]: string } = {},
-    ): Promise<Result<TMCApiResponse, Error>> {
-        if (cache) {
-            const cacheResult = this._cache.get(method + endpoint);
-            if (cacheResult) {
-                return new Ok(cacheResult);
-            }
-        }
-
-        let request = {
-            body,
-            headers,
-            method,
-            url: endpoint.startsWith("https://") ? endpoint : this._tmcApiUrl + endpoint,
-        };
-
-        Object.assign(request.headers, this._tmcDefaultHeaders);
-
-        if (this._token) {
-            request = this._token.sign(request);
-        }
-
-        try {
-            const response = await fetch.default(request.url, request);
-            if (response.ok) {
-                try {
-                    const responseObject = await response.json();
-                    if (is<TMCApiResponse>(responseObject)) {
-                        if (cache) {
-                            this._cache.set(method + endpoint, responseObject);
-                        }
-                        return new Ok(responseObject);
-                    }
-                    Logger.error(
-                        `Unexpected TMC response type from ${request.url}`,
-                        responseObject,
-                    );
-                    Logger.show();
-                    return new Err(new ApiError("Unexpected response type"));
-                } catch (error) {
-                    return new Err(new ApiError("Response not in JSON format: " + error.name));
-                }
-            }
-            if (response.status === 403) {
-                return new Err(new AuthorizationError("403 - Forbidden"));
-            }
-            const errorText = (await response.json())?.error || (await response.text());
-            Logger.error(`${response.status} - ${response.statusText} - ${errorText}`);
-            return new Err(
-                new ApiError(`${response.status} - ${response.statusText} - ${errorText}`),
-            );
-        } catch (error) {
-            Logger.error("TMC Api request failed with error", error);
-            return new Err(new ConnectionError("Connection error: " + error.name));
-        }
     }
 }

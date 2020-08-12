@@ -137,32 +137,27 @@ export default class TemplateEngine {
         /**
          * Returns the progress of submission status from TMC server
          */
-        handlebars.registerHelper("check_submission_status", (status: string) => {
-            let percentDone = 0;
-            const miniSpinner = `<div class="spinner-border spinner-border-sm" role="status">
+        handlebars.registerHelper(
+            "check_submission_status",
+            (messages: string[], progressPct: number) => {
+                const miniSpinner = `<div class="spinner-border spinner-border-sm" role="status">
                                     <span class="sr-only">Loading...</span>
                                 </div>`;
-            if (status === "created") {
-                percentDone = 30;
-                return `${getProgressBar(percentDone)}
-                        <div>&#10004; Submission received.</div>
-                        <div>${miniSpinner} Waiting for it to be processed.</div>`;
-            } else if (status === "sending_to_sandbox") {
-                percentDone = 45;
-                return `${getProgressBar(percentDone)}
-                        <div>&#10004; Submission received.</div>
-                        <div>${miniSpinner} Submission queued for processing.</div>`;
-            } else if (status === "processing_on_sandbox") {
-                percentDone = 75;
-                return `${getProgressBar(percentDone)}
-                        <div>&#10004; Submission received.</div>
-                        <div>&#10004; Submission in queue for processing.</div>
-                        <div>${miniSpinner} Testing submission.</div>`;
-            } else {
-                return `${getProgressBar(percentDone)}
-                        <div>${miniSpinner} Submission sent to server.</div>`;
-            }
-        });
+
+                let statusBuilder = getProgressBar(progressPct);
+
+                if (messages.length === 0) {
+                    return statusBuilder;
+                }
+
+                for (let i = 0; i < messages.length - 1; i++) {
+                    statusBuilder += `<div>&#10004; ${messages[i]}</div>`;
+                }
+
+                statusBuilder += `<div>${miniSpinner} ${messages[messages.length - 1]}</div>`;
+                return statusBuilder;
+            },
+        );
 
         handlebars.registerHelper(
             "show_test_results",
