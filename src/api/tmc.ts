@@ -11,7 +11,7 @@ import {
     CLIENT_ID,
     CLIENT_NAME,
     CLIENT_SECRET,
-    TMC_API_URL,
+    TMC_LANGS_ROOT_URL,
     TMC_LANGS_TIMEOUT,
 } from "../config/constants";
 import Resources from "../config/resources";
@@ -38,7 +38,6 @@ import {
     SubmissionFeedbackResponse,
     SubmissionResponse,
     SubmissionStatusReport,
-    TMCApiResponse,
     TmcLangsTestResultsRust,
 } from "./types";
 import WorkspaceManager from "./workspaceManager";
@@ -108,10 +107,7 @@ export default class TMC {
     private readonly _oauth2: ClientOauth2;
     private readonly _storage: Storage;
     private readonly _resources: Resources;
-    private readonly _tmcApiUrl: string;
-    private readonly _tmcDefaultHeaders: { client: string; client_version: string };
     private readonly _isInsider: () => boolean;
-    private readonly _cache: Map<string, TMCApiResponse>;
     private readonly _rustCache: Map<string, LangsResponse<unknown>>;
     private _token: ClientOauth2.Token | undefined;
 
@@ -136,13 +132,7 @@ export default class TMC {
             this._token = new ClientOauth2.Token(this._oauth2, authToken);
         }
         this._resources = resources;
-        this._tmcApiUrl = TMC_API_URL;
-        this._cache = new Map();
         this._rustCache = new Map();
-        this._tmcDefaultHeaders = {
-            client: CLIENT_NAME,
-            client_version: resources.extensionVersion,
-        };
         this._isInsider = isInsider;
     }
 
@@ -387,7 +377,7 @@ export default class TMC {
         if (saveOldState) {
             args.push(
                 "--submission-url",
-                `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`,
+                `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`,
             );
         }
 
@@ -570,7 +560,7 @@ export default class TMC {
         if (saveOldState) {
             args.push(
                 "--submission-url",
-                `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`,
+                `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`,
             );
         }
 
@@ -599,7 +589,7 @@ export default class TMC {
             return exerciseFolderPath;
         }
 
-        const submitUrl = `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`;
+        const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
 
         return this._executeLangsCommand(
             {
@@ -637,7 +627,7 @@ export default class TMC {
             return exerciseFolderPath;
         }
 
-        const submitUrl = `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`;
+        const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
 
         return this._executeLangsCommand(
             {
@@ -673,7 +663,7 @@ export default class TMC {
             return exerciseFolderPath;
         }
 
-        const submitUrl = `${this._tmcApiUrl}core/exercises/${exerciseId}/submissions`;
+        const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
 
         return this._executeLangsCommand(
             {
@@ -821,7 +811,7 @@ export default class TMC {
         let interrupted = false;
         Logger.log([executable, ...executableArgs].map((x) => JSON.stringify(x)).join(" "));
         const cprocess = cp.spawn(executable, executableArgs, {
-            env: { ...process.env, ...env, RUST_LOG: "debug" },
+            env: { ...process.env, ...env, RUST_LOG: "debug", TMC_LANGS_ROOT_URL },
         });
         stdin && cprocess.stdin.write(stdin + "\n");
 
