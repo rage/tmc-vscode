@@ -98,11 +98,11 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         return;
     }
 
-    const disabled = userData.getCourse(id).disabled;
-    let data: TestResultData = { ...EXAM_TEST_RESULT, id, disabled };
+    const course = userData.getCourseByName(exerciseDetails.val.course);
+    let data: TestResultData = { ...EXAM_TEST_RESULT, id, disabled: course.disabled };
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
-    if (disabled) {
+    if (!course.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext);
         const [testRunner, interrupt] = tmc.runTests(id, executablePath);
         let aborted = false;
@@ -155,7 +155,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             id,
             exerciseName,
             tmcLogs: {},
-            disabled,
+            disabled: course.disabled,
         };
     }
 
