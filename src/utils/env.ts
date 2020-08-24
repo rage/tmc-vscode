@@ -1,21 +1,6 @@
-import * as cp from "child_process";
 import { is } from "typescript-is";
 
 import { TMC_LANGS_RUST_VERSION } from "../config/constants";
-/**
- * Check if calling java programs is possible.
- */
-export async function isJavaPresent(): Promise<boolean> {
-    let result = false;
-    await new Promise((resolve) =>
-        cp.exec("java -version", (error) => {
-            result = error === null;
-            resolve();
-        }),
-    );
-
-    return result;
-}
 
 export function getPlatform():
     | "linux32"

@@ -4,8 +4,6 @@ import path from "path";
 
 import * as config from "../config";
 
-const LANGS_NAME = config.productionApi.__TMC_JAR_NAME__.replace(/"/g, "");
-const LANGS_URL = config.productionApi.__TMC_JAR_URL__.replace(/"/g, "");
 const LANGS_RUST_URL = config.productionApi.__TMC_LANGS_RUST_DL_URL__.replace(/"/g, "");
 const LANGS_RUST_VERSION = config.productionApi.__TMC_LANGS_RUST_VERSION__.replace(/"/g, "");
 
@@ -57,7 +55,6 @@ const download = async (url: string, fileName: string): Promise<void> => {
 (async (): Promise<void> => {
     try {
         console.log("Starting server setup...");
-        await download(LANGS_URL, LANGS_NAME);
         await download(LANGS_RUST_URL + langsVersion, langsVersion);
         console.log("Setup complete!");
     } catch (err) {

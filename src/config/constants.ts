@@ -5,8 +5,6 @@
 // compiling.
 declare const __ACCESS_TOKEN_URI__: string;
 declare const __DEBUG_MODE__: boolean;
-declare const __TMC_JAR_NAME__: string;
-declare const __TMC_JAR_URL__: string;
 declare const __TMC_LANGS_ROOT_URL__: string;
 declare const __TMC_LANGS_RUST_DL_URL__: string;
 declare const __TMC_LANGS_RUST_VERSION__: string;
@@ -16,25 +14,12 @@ import { SubmissionResultReport } from "../api/types";
 
 export const ACCESS_TOKEN_URI = __ACCESS_TOKEN_URI__;
 export const DEBUG_MODE = __DEBUG_MODE__;
-export const TMC_JAR_NAME = __TMC_JAR_NAME__;
-export const TMC_JAR_URL = __TMC_JAR_URL__;
 export const TMC_LANGS_ROOT_URL = __TMC_LANGS_ROOT_URL__;
 export const TMC_LANGS_RUST_DL_URL = __TMC_LANGS_RUST_DL_URL__;
 export const TMC_LANGS_RUST_VERSION = __TMC_LANGS_RUST_VERSION__;
 
 export const EXTENSION_ID = "moocfi.test-my-code";
 export const OUTPUT_CHANNEL_NAME = "TestMyCode";
-export const JAVA_ZIP_URLS: {
-    linux32?: string;
-    linux64?: string;
-    windows32?: string;
-    windows64?: string;
-} = {
-    linux64: "https://download.mooc.fi/tmc-vscode/OpenJDK8U-jre_x64_linux_hotspot_8u252b09.zip",
-    windows32:
-        "https://download.mooc.fi/tmc-vscode/OpenJDK8U-jre_x86-32_windows_hotspot_8u252b09.zip",
-    windows64: "https://download.mooc.fi/tmc-vscode/OpenJDK8U-jre_x64_windows_hotspot_8u252b09.zip",
-};
 
 export const CLIENT_NAME = "vscode_plugin";
 export const CLIENT_ID = "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0";

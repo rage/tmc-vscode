@@ -91,31 +91,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     };
 
     // Migration plan to move all exercises from closed-exercises
+    // Remove in 2.0.0 from here
     const allExerciseData = workspaceManager.getAllExercises();
     const oldTMCWorkspace = path.join(
         resources.getWorkspaceFolderPath(),
         "TMC Exercises.code-workspace",
     );
+    const closedPath = path.join(resources.getDataPath(), "closed-exercises");
     if (fs.existsSync(oldTMCWorkspace)) {
         fs.removeSync(oldTMCWorkspace);
     }
-    allExerciseData?.forEach(async (ex) => {
-        const closedPath = path.join(resources.getClosedExercisesFolderPath(), ex.id.toString());
-        const openPath = path.join(
-            resources.getExercisesFolderPath(),
-            ex.organization,
-            ex.course,
-            ex.name,
-        );
-        if (fs.existsSync(closedPath)) {
-            const ok = await workspaceManager.moveFolder(closedPath, openPath);
-            if (ok.err) {
-                const message = "Error while moving folders.";
-                Logger.error(message, ok.val);
-                showError(message);
+    if (fs.existsSync(closedPath) && fs.readdirSync(closedPath).length !== 0) {
+        allExerciseData?.forEach(async (ex) => {
+            const closedPath = path.join(
+                resources.getDataPath(),
+                "closed-exercises",
+                ex.id.toString(),
+            );
+            const openPath = path.join(
+                resources.getExercisesFolderPath(),
+                ex.organization,
+                ex.course,
+                ex.name,
+            );
+            if (fs.existsSync(closedPath)) {
+                const ok = await workspaceManager.moveFolder(closedPath, openPath);
+                if (ok.err) {
+                    const message = "Error while moving folders.";
+                    Logger.error(message, ok.val);
+                    showError(message);
+                }
             }
-        }
-    });
+        });
+    } else {
+        fs.removeSync(closedPath);
+    }
+    // Remove in 2.0.0 to here
 
     // Start watcher after migration.
     workspaceManager.startWatcher();
