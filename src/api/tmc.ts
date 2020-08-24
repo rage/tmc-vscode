@@ -38,6 +38,8 @@ interface RustProcessArgs {
     args: string[];
     core: boolean;
     env?: { [key: string]: string };
+    /** Which args should be obfuscated in logs. */
+    obfuscate?: number[];
     onStderr?: (data: string) => void;
     onStdout?: (data: UncheckedLangsResponse) => void;
     stdin?: string;
@@ -141,6 +143,7 @@ export default class TMC {
             {
                 args: ["login", "--email", username, "--base64"],
                 core: true,
+                obfuscate: [2],
                 stdin: Buffer.from(password).toString("base64"),
             },
             createIs<unknown>(),
@@ -163,7 +166,11 @@ export default class TMC {
      */
     public async setAuthenticationToken(token: ClientOauth2.Data): Promise<Result<void, Error>> {
         const setTokenResult = await this._executeLangsCommand(
-            { args: ["login", "--set-access-token", token.access_token], core: true },
+            {
+                args: ["login", "--set-access-token", token.access_token],
+                core: true,
+                obfuscate: [2],
+            },
             createIs<unknown>(),
         );
 
@@ -766,7 +773,7 @@ export default class TMC {
      * @returns Rust process runner.
      */
     private _spawnLangsProcess(commandArgs: RustProcessArgs): RustProcessRunner {
-        const { args, core, env, onStderr, onStdout, stdin } = commandArgs;
+        const { args, core, env, obfuscate, onStderr, onStdout, stdin } = commandArgs;
         const CORE_ARGS = [
             "core",
             "--client-name",
@@ -782,9 +789,12 @@ export default class TMC {
         const executable = this._resources.getCliPath();
         const executableArgs = core ? CORE_ARGS.concat(args) : args;
 
+        const obfuscatedArgs = args.map((x, i) => (obfuscate?.includes(i) ? "***" : x));
+        const logableArgs = core ? CORE_ARGS.concat(obfuscatedArgs) : obfuscatedArgs;
+        Logger.log([executable, ...logableArgs].map((x) => JSON.stringify(x)).join(" "));
+
         let active = true;
         let interrupted = false;
-        Logger.log([executable, ...executableArgs].map((x) => JSON.stringify(x)).join(" "));
         const cprocess = cp.spawn(executable, executableArgs, {
             env: { ...process.env, ...env, RUST_LOG: "debug", TMC_LANGS_ROOT_URL },
         });
