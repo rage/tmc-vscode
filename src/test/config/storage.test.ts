@@ -1,4 +1,3 @@
-import * as oauth2 from "client-oauth2";
 import * as TypeMoq from "typemoq";
 import * as vscode from "vscode";
 
@@ -57,15 +56,6 @@ suite("Storage tests", () => {
         mockMemento.verify((x) => x.get(TypeMoq.It.isValue(hardcodedKey)), TypeMoq.Times.once());
     }
 
-    test("Authentication token updater uses ExtensionContext correctly", () => {
-        const tokenData: oauth2.Data = { type: "bearer", scope: "public" };
-        assertUpdater(
-            () => storage.updateAuthenticationToken(tokenData),
-            AUTHENTICATION_TOKEN_KEY,
-            tokenData,
-        );
-    });
-
     test("Authentication token getter uses ExtensionContext correctly", () => {
         assertGetter(() => storage.getAuthenticationToken(), AUTHENTICATION_TOKEN_KEY);
     });
@@ -101,6 +91,7 @@ suite("Storage tests", () => {
             oldDataPath: undefined,
             logLevel: LogLevel.None,
             hideMetaFiles: true,
+            downloadOldSubmission: true,
         };
         assertUpdater(
             () => storage.updateExtensionSettings(extensionSettings),

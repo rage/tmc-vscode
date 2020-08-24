@@ -4,6 +4,7 @@
  * -------------------------------------------------------------------------------------------------
  */
 
+import * as fs from "fs-extra";
 import * as _ from "lodash";
 import * as pLimit from "p-limit";
 import { Err, Ok, Result } from "ts-results";
@@ -14,8 +15,8 @@ import { NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus } from "../config/types";
 import { ExerciseExistsError } from "../errors";
 import * as UITypes from "../ui/types";
-import { Logger } from "../utils";
-import { dateToString, parseDate } from "../utils/dateDeadline";
+import { Logger, sleep } from "../utils";
+import { compareDates, dateToString, parseDate } from "../utils/dateDeadline";
 import { askForItem, showError, showNotification, showProgressNotification } from "../window";
 
 import { ActionContext, CourseExerciseDownloads } from "./types";
@@ -32,7 +33,7 @@ export async function downloadExercises(
     actionContext: ActionContext,
     courseExerciseDownloads: CourseExerciseDownloads[],
 ): Promise<number[]> {
-    const { tmc, ui } = actionContext;
+    const { tmc, ui, workspaceManager, settings } = actionContext;
 
     interface StatusChange {
         exerciseId: number;
@@ -59,30 +60,79 @@ export async function downloadExercises(
         organizationSlug: string;
     };
 
+    let oldSubmissionDownloaded = false;
     const successful: DownloadState[] = [];
     const failed: DownloadState[] = [];
 
-    const task = (
+    const resolveTask = async (
+        result: Result<void, Error>,
+        state: DownloadState,
+    ): Promise<void> => {
+        postChange({
+            exerciseId: state.id,
+            status: result.ok ? "closed" : "downloadFailed",
+        });
+        if (result.ok || result.val instanceof ExerciseExistsError) {
+            successful.push(state);
+        } else {
+            failed.push(state);
+            await workspaceManager.deleteExercise(state.id);
+            Logger.error(`Failed to download ${state.organizationSlug}/${state.name}`, result.val);
+        }
+    };
+
+    const task = async (
         process: vscode.Progress<{ downloadedPct: number; increment: number }>,
         state: DownloadState,
-    ): Promise<void> =>
-        new Promise<void>((resolve) => {
-            tmc.downloadExercise(state.id, state.organizationSlug, (downloadedPct, increment) =>
-                process.report({ downloadedPct, increment }),
-            ).then((res: Result<void, Error>) => {
-                postChange({ exerciseId: state.id, status: res.ok ? "closed" : "downloadFailed" });
-                if (res.ok || res.val instanceof ExerciseExistsError) {
-                    successful.push(state);
-                } else {
+    ): Promise<void> => {
+        const oldSubmissions = await tmc.getOldSubmissions(state.id);
+        const exercisePath = await createExerciseDownloadPath(
+            actionContext,
+            state.id,
+            state.organizationSlug,
+        );
+        if (
+            !settings.getDownloadOldSubmission() ||
+            oldSubmissions.err ||
+            oldSubmissions.val.length === 0
+        ) {
+            await new Promise<void>((resolve) => {
+                if (exercisePath.err) {
                     failed.push(state);
-                    Logger.error(
-                        `Failed to download ${state.organizationSlug}/${state.name}`,
-                        res.val,
-                    );
+                    return resolve();
                 }
-                resolve();
+                tmc.downloadExercise(state.id, exercisePath.val, (downloadedPct, increment) =>
+                    process.report({ downloadedPct, increment }),
+                ).then((res: Result<void, Error>) => {
+                    resolveTask(res, state);
+                    resolve();
+                });
             });
-        });
+        } else {
+            await new Promise<void>((resolve) => {
+                if (exercisePath.err) {
+                    failed.push(state);
+                    return resolve();
+                }
+                tmc.downloadOldSubmission(
+                    state.id,
+                    exercisePath.val,
+                    oldSubmissions.val.sort((a, b) =>
+                        compareDates(
+                            parseDate(b.processing_attempts_started_at),
+                            parseDate(a.processing_attempts_started_at),
+                        ),
+                    )[0].id,
+                    false,
+                    (downloadedPct, increment) => process.report({ downloadedPct, increment }),
+                ).then((res: Result<void, Error>) => {
+                    oldSubmissionDownloaded = true;
+                    resolveTask(res, state);
+                    resolve();
+                });
+            });
+        }
+    };
 
     postChange(
         ...courseExerciseDownloads
@@ -115,9 +165,13 @@ export async function downloadExercises(
     await showProgressNotification(
         `Downloading ${exerciseStatuses.length} exercises...`,
         ...exerciseStatuses.map(
-            (state) => (
+            (state) => async (
                 p: vscode.Progress<{ downloadedPct: number; increment: number }>,
-            ): Promise<void> => limit(() => task(p, state)),
+            ): Promise<void> => {
+                // Need to wait here, so the notification pops up.
+                await sleep(10);
+                return limit(() => task(p, state));
+            },
         ),
     );
 
@@ -125,6 +179,13 @@ export async function downloadExercises(
         const message = "Some exercises failed to download, please try again later.";
         Logger.warn(message);
         showError(message);
+    }
+    if (oldSubmissionDownloaded) {
+        showNotification(
+            "Some downloaded exercises were restored to the state of your latest submission. " +
+                "If you wish to reset them to their original state, you can do so by using the TMC Menu (CTRL + SHIFT + A).",
+            ["OK", (): void => {}],
+        );
     }
 
     return successful.map((x) => x.id);
@@ -254,20 +315,20 @@ export async function resetExercise(
     id: number,
     options?: ResetOptions,
 ): Promise<Result<boolean, Error>> {
-    const { settings, tmc, workspaceManager } = actionContext;
+    const { tmc, workspaceManager } = actionContext;
 
     const exerciseData = workspaceManager.getExerciseDataById(id);
     if (exerciseData.err) {
         return exerciseData;
     }
+    const exercise = exerciseData.val;
 
-    const exercisePath = workspaceManager.getExercisePathById(id);
+    const exercisePath = await createExerciseDownloadPath(actionContext, id, exercise.organization);
     if (exercisePath.err) {
         return exercisePath;
     }
 
-    const exercise = exerciseData.val;
-    Logger.log(`Reseting exercise ${exercise.name}`);
+    Logger.log(`Resetting exercise ${exercise.name}`);
 
     const submitFirst =
         options?.submitFirst !== undefined
@@ -285,50 +346,9 @@ export async function resetExercise(
         return Ok(false);
     }
 
-    if (settings.isInsider()) {
-        Logger.warn("Using insider feature");
-        const resetResult = await tmc.resetExercise(id, submitFirst);
-        if (resetResult.err) {
-            return resetResult;
-        }
-    } else {
-        if (submitFirst) {
-            const submitResult = await tmc.submitExercise(id);
-            if (submitResult.err) {
-                return submitResult;
-            }
-        } else {
-            Logger.debug("Didn't submit exercise before resetting.");
-        }
-
-        // Try to remove files here because new workspace
-        const edit = new vscode.WorkspaceEdit();
-        edit.deleteFile(vscode.Uri.file(exercisePath.val), { recursive: true });
-        const removeResult = await vscode.workspace.applyEdit(edit);
-        if (!removeResult) {
-            return Err(new Error("Failed to remove previous files before reseting."));
-        }
-
-        Logger.debug("Closing exercise before resetting.");
-        if (exercise.status === ExerciseStatus.OPEN) {
-            const closeResult = await closeExercises(actionContext, [id], exercise.course);
-            if (closeResult.err) {
-                return closeResult;
-            }
-        }
-
-        await workspaceManager.deleteExercise(id);
-        const dlResult = await tmc.downloadExercise(id, exercise.organization);
-        if (dlResult.err) {
-            return dlResult;
-        }
-
-        if (options?.openAfterwards === true) {
-            const openResult = await openExercises(actionContext, [id], exercise.course);
-            if (openResult.err) {
-                return openResult;
-            }
-        }
+    const resetResult = await tmc.resetExercise(id, submitFirst);
+    if (resetResult.err) {
+        return resetResult;
     }
 
     return Ok(true);
@@ -410,13 +430,22 @@ export async function downloadOldSubmission(
     exerciseId: number,
     options?: DownloadOldSubmissionOptions,
 ): Promise<Result<boolean, Error>> {
-    const { settings, tmc, workspaceManager } = actionContext;
+    const { tmc, workspaceManager } = actionContext;
 
     const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
     if (exerciseData.err) {
         return exerciseData;
     }
     const exercise = exerciseData.val;
+
+    const exercisePath = await createExerciseDownloadPath(
+        actionContext,
+        exerciseId,
+        exercise.organization,
+    );
+    if (exercisePath.err) {
+        return exercisePath;
+    }
 
     Logger.debug("Fetching old submissions");
     const submissionsResult = await tmc.getOldSubmissions(exerciseId);
@@ -445,51 +474,85 @@ export async function downloadOldSubmission(
         return Ok(false);
     }
 
-    if (settings.isInsider()) {
-        console.warn("Using insider feature");
-        const submitFirst =
-            options?.submitFirst !== undefined
-                ? options.submitFirst
-                : await askForItem(
-                      "Do you want to save the current state of the exercise by submitting it to TMC Server?",
-                      false,
-                      ["Yes", true],
-                      ["No", false],
-                      ["Cancel", undefined],
-                  );
+    const submitFirst =
+        options?.submitFirst !== undefined
+            ? options.submitFirst
+            : await askForItem(
+                  "Do you want to save the current state of the exercise by submitting it to TMC Server?",
+                  false,
+                  ["Yes", true],
+                  ["No", false],
+                  ["Cancel", undefined],
+              );
 
-        if (submitFirst === undefined) {
-            Logger.debug("Answer for submitting first not provided, returning early.");
-            return Ok(false);
-        }
+    if (submitFirst === undefined) {
+        Logger.debug("Answer for submitting first not provided, returning early.");
+        return Ok(false);
+    }
 
-        const downloadResult = await tmc.downloadOldSubmission(
-            exerciseId,
-            submission.id,
-            submitFirst,
-        );
-        if (downloadResult.err) {
-            return downloadResult;
-        }
-    } else {
-        const resetResult = await resetExercise(actionContext, exerciseId);
-        if (resetResult.err) {
-            return resetResult;
-        }
-
-        const oldSub = await tmc.downloadOldExercise(exerciseData.val.id, submission.id);
-        if (oldSub.err) {
-            return oldSub;
-        }
-
-        const openResult = await openExercises(
-            actionContext,
-            [exerciseData.val.id],
-            exerciseData.val.course,
-        );
-        if (openResult.err) {
-            return openResult;
-        }
+    const downloadResult = await tmc.downloadOldSubmission(
+        exerciseId,
+        exercisePath.val,
+        submission.id,
+        submitFirst,
+    );
+    if (downloadResult.err) {
+        return downloadResult;
     }
     return Ok(true);
+}
+
+/**
+ * Checks if workspaceManager knows exercise by id and returns the exercise path.
+ * Makes sure the path exists on disk and marks exercise as closed.
+ *
+ * Else, fetches all the necessary data and adds it to storage and returns path.
+ *
+ * @param actionContext
+ * @param exerciseId
+ * @param organizationSlug
+ */
+async function createExerciseDownloadPath(
+    actionContext: ActionContext,
+    exerciseId: number,
+    organizationSlug: string,
+): Promise<Result<string, Error>> {
+    const { tmc, workspaceManager } = actionContext;
+
+    const exercisePathResult = workspaceManager.getExercisePathById(exerciseId);
+    if (exercisePathResult.ok) {
+        if (!fs.existsSync(exercisePathResult.val)) {
+            fs.mkdirSync(exercisePathResult.val, { recursive: true });
+            await workspaceManager.setClosed(exerciseId);
+        }
+        return exercisePathResult;
+    }
+
+    const detailsResult = await tmc.getExerciseDetails(exerciseId, true);
+    if (detailsResult.err) {
+        return detailsResult;
+    }
+
+    const courseResult = await tmc.getCourseDetails(detailsResult.val.course_id);
+    if (courseResult.err) {
+        return courseResult;
+    }
+
+    const exercise = courseResult.val.course.exercises.find((x) => x.id === exerciseId);
+    if (!exercise) {
+        return new Err(new Error("Exercise missing from the course"));
+    }
+
+    const exercisePath = await workspaceManager.createExerciseDownloadPath(
+        exercise.soft_deadline,
+        organizationSlug,
+        exercise.checksum,
+        detailsResult.val,
+    );
+
+    if (exercisePath.err) {
+        return exercisePath;
+    }
+
+    return exercisePath;
 }

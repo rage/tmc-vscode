@@ -176,7 +176,6 @@ export type SubmissionResultReport = {
     exercise_name: string;
     status: "fail" | "ok" | "error";
     points: string[];
-    validations: unknown;
     valgrind: string | null;
     submission_url: string;
     solution_url: string | null;
@@ -193,10 +192,11 @@ export type SubmissionResultReport = {
         message: string | null;
         exception: string[] | null;
         detailed_message: string | null;
-    }>;
-    feedback_questions?: SubmissionFeedbackQuestion[];
-    feedback_answer_url?: string;
-    error?: string;
+    }> | null;
+    feedback_questions?: SubmissionFeedbackQuestion[] | null;
+    feedback_answer_url?: string | null;
+    error?: string | null;
+    validations: unknown;
 };
 
 export type SubmissionFeedbackQuestion = {
@@ -244,26 +244,6 @@ export type OldSubmission = {
     paste_key: string | null;
 };
 
-interface LangsArchiveProject {
-    action: "extract-project" | "compress-project";
-    archivePath: string;
-    exerciseFolderPath: string;
-}
-
-interface LangsGetExercisePackagingConfiguration {
-    action: "get-exercise-packaging-configuration";
-    exerciseFolderPath: string;
-}
-
-export type TmcLangsAction = LangsArchiveProject | LangsGetExercisePackagingConfiguration;
-
-export type TmcLangsLogs = {
-    logs: {
-        stdout: string;
-        stderr: string;
-    };
-};
-
 export type TmcLangsTestResultRust = {
     name: string;
     successful: boolean;
@@ -277,16 +257,3 @@ export type TmcLangsTestResultsRust = {
     testResults: TmcLangsTestResultRust[];
     logs: unknown;
 };
-
-export type TmcLangsPath = {
-    response: string;
-} & TmcLangsLogs;
-
-export type TmcLangsFilePath = {
-    response: {
-        studentFilePaths: string[];
-        exerciseFilePaths: string[];
-    };
-} & TmcLangsLogs;
-
-export type TmcLangsResponse = TmcLangsPath | TmcLangsFilePath;

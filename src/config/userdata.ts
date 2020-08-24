@@ -37,8 +37,8 @@ export class UserData {
         return course as LocalCourseData;
     }
 
-    public getCourseByName(name: string): Readonly<LocalCourseData> | undefined {
-        return this.getCourses().find((x) => x.name === name);
+    public getCourseByName(name: string): Readonly<LocalCourseData> {
+        return this.getCourses().filter((x) => x.name === name)[0];
     }
 
     public addCourse(data: LocalCourseData): void {

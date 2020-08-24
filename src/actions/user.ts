@@ -7,6 +7,7 @@
 import { sync as delSync } from "del";
 import du = require("du");
 import * as fs from "fs-extra";
+import * as _ from "lodash";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
@@ -21,7 +22,6 @@ import {
     isCorrectWorkspaceOpen,
     Logger,
     parseFeedbackQuestion,
-    sleep,
 } from "../utils/";
 import {
     askForConfirmation,
@@ -98,11 +98,11 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
         return;
     }
 
-    const disabled = userData.getCourse(id).disabled;
-    let data: TestResultData = { ...EXAM_TEST_RESULT, id, disabled };
+    const course = userData.getCourseByName(exerciseDetails.val.course);
+    let data: TestResultData = { ...EXAM_TEST_RESULT, id, disabled: course.disabled };
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
-    if (disabled) {
+    if (!course.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext);
         const [testRunner, interrupt] = tmc.runTests(id, executablePath);
         let aborted = false;
@@ -155,7 +155,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             id,
             exerciseName,
             tmcLogs: {},
-            disabled,
+            disabled: course.disabled,
         };
     }
 
@@ -182,11 +182,12 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
  * @param tempView Existing TemporaryWebview to use if any
  */
 export async function submitExercise(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, temporaryWebviewProvider, tmc, userData, workspaceManager } = actionContext;
+    const { temporaryWebviewProvider, tmc, userData, workspaceManager } = actionContext;
+
     Logger.log(
         `Submitting exercise ${workspaceManager.getExerciseDataById(id).val.name} to server`,
     );
-    const submitResult = await tmc.submitExercise(id);
+
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
         const message = "Getting exercise details failed when submitting exercise.";
@@ -194,26 +195,43 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         showError(message);
         return;
     }
-    const courseData = userData.getCourse(id);
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
-    if (submitResult.err) {
-        temp.setContent({
-            title: "TMC Server Submission",
-            template: { templateName: "error", error: submitResult.val },
-            messageHandler: async (msg: { type?: string }): Promise<void> => {
-                if (msg.type === "closeWindow") {
-                    temp.dispose();
-                }
-            },
-        });
-        const message = "Exercise submission failed.";
-        Logger.error(message, submitResult.val);
-        showError(message);
-        return;
-    }
+    const messageHandler = async (msg: {
+        data?: { [key: string]: unknown };
+        type?: string;
+    }): Promise<void> => {
+        if (msg.type === "feedback" && msg.data) {
+            await tmc.submitSubmissionFeedback(
+                msg.data.url as string,
+                msg.data.feedback as SubmissionFeedback,
+            );
+        } else if (msg.type === "showInBrowser") {
+            // vscode.env.openExternal(vscode.Uri.parse(submissionResult.val.show_submission_url));
+        } else if (msg.type === "showSolutionInBrowser" && msg.data) {
+            vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
+        } else if (msg.type === "closeWindow") {
+            temp.dispose();
+        } else if (msg.type === "sendToPaste" && msg.data) {
+            Logger.debug(msg.data);
+            const pasteLink = await pasteExercise(actionContext, Number(msg.data.exerciseId));
+            pasteLink && temp.postMessage({ command: "showPasteLink", pasteLink });
+        }
+    };
 
+    // TODO: Check type properly
+    const courseData = userData.getCourseByName(exerciseDetails.val.course) as Readonly<
+        LocalCourseData
+    >;
     if (courseData.perhapsExamMode) {
+        const submitResult = await tmc.submitExercise(id);
+        if (submitResult.err) {
+            const message = "Getting exercise details failed when submitting exercise.";
+            // Logger.error(message, exerciseDetails.val);
+            showError(message);
+            return;
+        }
+
         const examData = EXAM_SUBMISSION_RESULT;
         const submitUrl = submitResult.val.show_submission_url;
         const feedbackQuestions: FeedbackQuestion[] = [];
@@ -236,97 +254,65 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         return;
     }
 
-    const messageHandler = async (msg: {
-        data?: { [key: string]: unknown };
-        type?: string;
-    }): Promise<void> => {
-        if (msg.type === "feedback" && msg.data) {
-            await tmc.submitSubmissionFeedback(
-                msg.data.url as string,
-                msg.data.feedback as SubmissionFeedback,
-            );
-        } else if (msg.type === "showInBrowser") {
-            vscode.env.openExternal(vscode.Uri.parse(submitResult.val.show_submission_url));
-        } else if (msg.type === "showSolutionInBrowser" && msg.data) {
-            vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
-        } else if (msg.type === "closeWindow") {
-            temp.dispose();
-        } else if (msg.type === "sendToPaste" && msg.data) {
-            Logger.debug(msg.data);
-            const pasteLink = await pasteExercise(actionContext, Number(msg.data.exerciseId));
-            pasteLink && temp.postMessage({ command: "showPasteLink", pasteLink });
-        }
-    };
-
-    let notified = false;
-    let timeWaited = 0;
-    let getStatus = true;
-    while (getStatus) {
-        const statusResult = await tmc.getSubmissionStatus(submitResult.val.submission_url);
-        if (statusResult.err) {
-            const message = "Failed getting submission status.";
-            Logger.error(message, statusResult.val);
-            showError(message);
-            break;
-        }
-        const statusData = statusResult.val;
-        if (statusResult.val.status !== "processing") {
-            ui.setStatusBar("Tests finished, see result", 5000);
-            let feedbackQuestions: FeedbackQuestion[] = [];
-            let courseId = undefined;
-            if (statusData.status === "ok" && statusData.all_tests_passed) {
-                if (statusData.feedback_questions) {
-                    feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
-                }
-                // TODO: Check type properly
-                courseId = (userData.getCourseByName(statusData.course) as Readonly<
-                    LocalCourseData
-                >).id;
+    const messages: string[] = [];
+    const submissionResult = await tmc.submitExerciseAndWaitForResults(
+        id,
+        (progressPct, message) => {
+            if (message && message !== _.last(messages)) {
+                messages.push(message);
             }
-            temp.setContent({
-                title: "TMC Server Submission",
-                template: { templateName: "submission-result", statusData, feedbackQuestions },
-                messageHandler,
-            });
-            temporaryWebviewProvider.addToRecycables(temp);
-            // Check for new exercises if exercise passed.
-            if (courseId) {
-                checkForCourseUpdates(actionContext, courseId);
-            }
-            checkForExerciseUpdates(actionContext);
-            break;
-        }
-
-        if (!temp.disposed) {
-            temp.setContent({
-                title: "TMC Server Submission",
-                template: { templateName: "submission-status", statusData },
-                messageHandler,
-            });
-        }
-
-        await sleep(2500);
-        timeWaited = timeWaited + 2500;
-
-        if (timeWaited >= 120000 && !notified) {
-            notified = true;
-            showNotification(
-                `This seems to be taking a long time — consider continuing to the next exercise while this is running. \
-                Your submission will still be graded. Check the results later at ${submitResult.val.show_submission_url}`,
-                [
-                    "Open URL and move on...",
-                    (): void => {
-                        vscode.env.openExternal(
-                            vscode.Uri.parse(submitResult.val.show_submission_url),
-                        );
-                        getStatus = false;
-                        temp.dispose();
+            if (!temp.disposed) {
+                temp.setContent({
+                    title: "TMC Server Submission",
+                    template: {
+                        templateName: "submission-status",
+                        messages,
+                        progressPct,
                     },
-                ],
-                ["No, I'll wait", (): void => {}],
-            );
-        }
+                    messageHandler,
+                });
+            }
+        },
+    );
+
+    if (submissionResult.err) {
+        temp.setContent({
+            title: "TMC Server Submission",
+            template: { templateName: "error", error: submissionResult.val },
+            messageHandler: async (msg: { type?: string }): Promise<void> => {
+                if (msg.type === "closeWindow") {
+                    temp.dispose();
+                }
+            },
+        });
+        temporaryWebviewProvider.addToRecycables(temp);
+        const message = "Exercise submission failed.";
+        Logger.error(message, submissionResult.val);
+        showError(message);
+        return;
     }
+
+    const statusData = submissionResult.val;
+    let feedbackQuestions: FeedbackQuestion[] = [];
+    let courseId = undefined;
+    if (statusData.status === "ok" && statusData.all_tests_passed) {
+        if (statusData.feedback_questions) {
+            feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
+        }
+        courseId = courseData.id;
+    }
+    Logger.debug("data", statusData);
+    temp.setContent({
+        title: "TMC Server Submission",
+        template: { templateName: "submission-result", statusData, feedbackQuestions },
+        messageHandler,
+    });
+    temporaryWebviewProvider.addToRecycables(temp);
+    // Check for new exercises if exercise passed.
+    if (courseId) {
+        checkForCourseUpdates(actionContext, courseId);
+    }
+    checkForExerciseUpdates(actionContext);
 }
 
 /**
@@ -339,23 +325,23 @@ export async function pasteExercise(
     id: number,
 ): Promise<string | undefined> {
     const { tmc } = actionContext;
-    const params = new Map<string, string>();
-    params.set("paste", "1");
-    const submitResult = await tmc.submitExercise(id, params);
 
-    const errorMessage = "Failed to send exercise to TMC pastebin.";
-    if (submitResult.err) {
-        Logger.error(errorMessage, submitResult.val);
-        showError(errorMessage);
-        return undefined;
-    } else if (!submitResult.val.paste_url) {
-        const notProvided = "Paste link was not provided by the server.";
-        Logger.warn(errorMessage, notProvided, submitResult.val);
-        showError(errorMessage + " " + notProvided);
+    const pasteResult = await tmc.submitExerciseToPaste(id);
+    if (pasteResult.err) {
+        Logger.error("Failed to paste exercise: ", pasteResult.val);
+        showError(`Failed to send exercise to TMC Paste: ${pasteResult.val.message}`);
         return undefined;
     }
 
-    return submitResult.val.paste_url;
+    const pasteLink = pasteResult.val;
+    if (pasteLink === "") {
+        const message = "Didn't receive paste link from server.";
+        Logger.error(`Failed to paste exercise: ${message}`);
+        showError(`Failed to send exercise to TMC Paste: ${message}`);
+        return undefined;
+    }
+
+    return pasteLink;
 }
 
 /**

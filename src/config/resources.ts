@@ -5,12 +5,9 @@ export default class Resources {
     public readonly htmlFolder: string;
     public readonly mediaFolder: string;
     public readonly extensionVersion: string;
-    private readonly _tmcLangsPathRelative: string;
     private readonly _tmcWorkspaceFolderPathRelative: string;
     private readonly _tmcExercisesFolderPathRelative: string;
-    private readonly _tmcClosedExercisesFolderPathRelative: string;
     private _tmcDataFolder: string;
-    private _javaPath: string;
     private _cliPath: string;
 
     constructor(
@@ -19,11 +16,8 @@ export default class Resources {
         htmlFolder: string,
         mediaFolder: string,
         tmcDataFolder: string,
-        tmcLangsPathRelative: string,
         tmcWorkspaceFolderPathRelative: string,
         tmcExercisesFolderPathRelative: string,
-        tmcClosedExercisesFolderPathRelative: string,
-        javaPath: string,
         cliPath: string,
     ) {
         this.cssFolder = cssFolder;
@@ -31,11 +25,8 @@ export default class Resources {
         this.htmlFolder = htmlFolder;
         this.mediaFolder = mediaFolder;
         this._tmcDataFolder = tmcDataFolder;
-        this._tmcLangsPathRelative = tmcLangsPathRelative;
         this._tmcWorkspaceFolderPathRelative = tmcWorkspaceFolderPathRelative;
         this._tmcExercisesFolderPathRelative = tmcExercisesFolderPathRelative;
-        this._tmcClosedExercisesFolderPathRelative = tmcClosedExercisesFolderPathRelative;
-        this._javaPath = javaPath;
         this._cliPath = cliPath;
     }
 
@@ -49,10 +40,6 @@ export default class Resources {
 
     public setCliPath(cliPath: string): void {
         this._cliPath = cliPath;
-    }
-
-    public getTmcLangsPath(): string {
-        return path.join(this._tmcDataFolder, this._tmcLangsPathRelative);
     }
 
     public getWorkspaceFolderPath(): string {
@@ -71,19 +58,7 @@ export default class Resources {
         return path.join(this._tmcDataFolder, this._tmcExercisesFolderPathRelative);
     }
 
-    public getClosedExercisesFolderPath(): string {
-        return path.join(this._tmcDataFolder, this._tmcClosedExercisesFolderPathRelative);
-    }
-
     public getDataPath(): string {
         return this._tmcDataFolder;
-    }
-
-    public getJavaPath(): string {
-        return this._javaPath;
-    }
-
-    public setJavaPath(javaPath: string): void {
-        this._javaPath = javaPath;
     }
 }

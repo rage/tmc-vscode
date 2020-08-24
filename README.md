@@ -25,10 +25,6 @@ Instructions on how to install and use the extension in Visual Studio Code can b
 
 A list of available commands can be found under the `TMC Menu` button located at the top right for an active editor.
 
-### JRE source
-
-The plugin may download an OpenJDK Java Runtime Environment if no JRE is found on the system. The source code for this JRE distribution can be found [here](https://github.com/AdoptOpenJDK/openjdk-jdk8u/tree/eb3c58ad18052eca4d3e969f95154ab065d025bb).
-
 ## Contributing
 
 Please refer to [this document](CONTRIBUTING.md).

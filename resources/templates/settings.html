@@ -114,6 +114,26 @@
                     </div>
                     <div class="card-transparent border-color my-1">
                         <div class="card-body">
+                            <h5 class="card-title">Download old submission</h5>
+                            <p class="card-text">
+                                Setting to download old submission by default, if found on TMC
+                                Server.
+                            </p>
+                            <div class="custom-control custom-switch">
+                                <input
+                                    type="checkbox"
+                                    onclick="downloadOldSubSetting()"
+                                    class="custom-control-input"
+                                    id="download-old-submission"
+                                />
+                                <label class="custom-control-label" for="download-old-submission"
+                                    >Toggle to enable</label
+                                >
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-transparent border-color my-1">
+                        <div class="card-body">
                             <h5 class="card-title">Editor: Open Side By Side Direction</h5>
                             <p class="card-text">
                                 Controls the default direction of editors that are opened side by
@@ -133,6 +153,8 @@
             const vscode = acquireVsCodeApi();
             const metaFile = {{extensionSettings.hideMetaFiles}};
             const insider = {{extensionSettings.insiderVersion}}
+            const downloadOldSubmissionSetting = {{extensionSettings.downloadOldSubmission}}
+
             function changeTmcDataPath() {
                 vscode.postMessage({ type: "changeTmcDataPath" });
             }
@@ -166,6 +188,9 @@
             if (insider) {
                 document.getElementById("insider-version").checked = true;
             }
+            if (downloadOldSubmissionSetting) {
+                document.getElementById("download-old-submission").checked = true;
+            }
             function hideMetaFiles() {
                 const checkbox = document.getElementById("check-meta-files");
                 vscode.postMessage({ type: "hideMetaFiles", data: checkbox.checked });
@@ -173,6 +198,10 @@
             function toggleInsider() {
                 const checkbox = document.getElementById("insider-version");
                 vscode.postMessage({ type: "insiderVersionLegacy", data: checkbox.checked });
+            }
+            function downloadOldSubSetting() {
+                const checkbox = document.getElementById("download-old-submission");
+                vscode.postMessage({ type: "downloadOldSubmissionSetting", data: checkbox.checked });
             }
             function gotoSettings() {
                 vscode.postMessage({ type: "openEditorDirection" });

@@ -45,6 +45,7 @@ export type ExtensionSettings = {
     logLevel: LogLevel;
     hideMetaFiles: boolean;
     oldDataPath: { path: string; timestamp: number } | undefined;
+    downloadOldSubmission: boolean;
 };
 
 export type ExtensionSettingsData =
@@ -52,4 +53,5 @@ export type ExtensionSettingsData =
     | { setting: "dataPath"; value: string }
     | { setting: "oldDataPath"; value: string }
     | { setting: "logLevel"; value: LogLevel }
-    | { setting: "hideMetaFiles"; value: boolean };
+    | { setting: "hideMetaFiles"; value: boolean }
+    | { setting: "downloadOldSubmission"; value: boolean };

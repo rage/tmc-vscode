@@ -41,6 +41,9 @@ export async function settingsInitialization(
         ? settings.logLevel
         : LogLevel.Errors;
     const hideMetaFiles = settings?.hideMetaFiles !== undefined ? settings.hideMetaFiles : true;
+    const downloadOldSubmission = settings?.downloadOldSubmission
+        ? settings.downloadOldSubmission
+        : true;
 
     const fixedSettings: ExtensionSettings = {
         insiderVersion: insiderVersion,
@@ -48,6 +51,7 @@ export async function settingsInitialization(
         oldDataPath: undefined,
         logLevel,
         hideMetaFiles,
+        downloadOldSubmission,
     };
     await storage.updateExtensionSettings(fixedSettings);
     Logger.log("Settings initialized", fixedSettings);

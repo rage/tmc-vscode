@@ -367,4 +367,15 @@ export function registerUiActions(actionContext: ActionContext): void {
         // https://github.com/microsoft/vscode/issues/90086
         vscode.commands.executeCommand("workbench.action.openSettings", search);
     });
+
+    ui.webview.registerHandler(
+        "downloadOldSubmissionSetting",
+        async (msg: { type?: "downloadOldSubmissionSetting"; data?: boolean }) => {
+            if (!(msg.type && msg.data !== undefined)) {
+                return;
+            }
+            await settings.updateSetting({ setting: "downloadOldSubmission", value: msg.data });
+            await openSettings(actionContext);
+        },
+    );
 }

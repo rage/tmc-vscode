@@ -1,16 +1,11 @@
 import { sync as delSync } from "del";
 import * as fs from "fs-extra";
-import * as glob from "glob";
 import * as path from "path";
-import { Err, Ok, Result } from "ts-results";
-import * as unzipper from "unzipper";
+import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import {
     EXTENSION_ID,
-    JAVA_ZIP_URLS,
-    TMC_JAR_NAME,
-    TMC_JAR_URL,
     TMC_LANGS_RUST_DL_URL,
     WORKSPACE_ROOT_FILE,
     WORKSPACE_ROOT_FILE_TEXT,
@@ -18,7 +13,7 @@ import {
 } from "../config/constants";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
-import { downloadFile, getPlatform, getRustExecutable, isJavaPresent } from "../utils/";
+import { downloadFile, getPlatform, getRustExecutable } from "../utils/";
 import { Logger } from "../utils/logger";
 import { showProgressNotification } from "../window";
 
@@ -40,75 +35,18 @@ export async function resourceInitialization(
         storage.getExtensionSettings()?.dataPath ||
         path.join(extensionContext.globalStoragePath, "tmcdata");
 
-    let javaPath: string;
+    // Remove in 2.0.0 from here
     const javaDownloadPath = path.join(tmcDataPath, "java");
     const javaDownloadPathTemp = path.join(tmcDataPath, "javaTemp");
     delSync(path.join(javaDownloadPathTemp), { force: true });
 
-    if (await isJavaPresent()) {
-        javaPath = "java";
+    if (fs.existsSync(javaDownloadPath)) {
         delSync(javaDownloadPath.split(path.sep).join("/"), { force: true });
-    } else {
-        fs.mkdirSync(javaDownloadPathTemp, { recursive: true });
-        // Glob patterns should use / as separator on all platforms
-        const javaBinaryGlob =
-            javaDownloadPath.split(path.sep).join("/") +
-            (getPlatform().startsWith("windows") ? "/**/java.exe" : "/**/java");
-        let paths = glob.sync(javaBinaryGlob);
-
-        if (paths.length === 0) {
-            const archivePath = path.join(tmcDataPath, "java.zip");
-            if (!fs.existsSync(archivePath)) {
-                const javaUrl = Object.entries(JAVA_ZIP_URLS)
-                    .filter((x) => x[0] === getPlatform())
-                    .map((x) => x[1])
-                    .pop();
-                if (javaUrl === undefined) {
-                    return new Err(new Error("Java not found or improperly configured."));
-                }
-                Logger.log(`Downloading java from ${javaUrl} to ${archivePath}`);
-                await showProgressNotification(
-                    "Java not found. Downloading standalone bundle...",
-                    async (p) =>
-                        downloadFile(
-                            javaUrl,
-                            archivePath,
-                            undefined,
-                            undefined,
-                            (_progress: number, increment: number) =>
-                                p.report({
-                                    increment,
-                                }),
-                        ),
-                );
-            }
-            await showProgressNotification("Extracting Java...", async (p) => {
-                const totalSize = fs.statSync(archivePath).size;
-                return fs
-                    .createReadStream(archivePath)
-                    .addListener("data", (c) =>
-                        p.report({ increment: (100 * c.length) / totalSize }),
-                    )
-                    .pipe(unzipper.Extract({ path: javaDownloadPathTemp }))
-                    .promise();
-            });
-            delSync(javaDownloadPath, { force: true });
-            fs.renameSync(javaDownloadPathTemp, javaDownloadPath);
-            delSync(archivePath, { force: true });
-
-            paths = glob.sync(javaBinaryGlob);
-            if (paths.length === 0) {
-                return new Err(new Error("Couldn't find Java binary after extraction"));
-            }
-        }
-        javaPath = paths[0];
-        fs.chmodSync(javaPath, "755");
     }
+    // Remove in 2.0.0 to here
 
     const tmcWorkspacePathRelative = "TMC workspace";
     const tmcExercisesFolderPathRelative = path.join("TMC workspace", "Exercises");
-    const tmcClosedExercisesFolderPathRelative = "closed-exercises";
-    const tmcLangsPathRelative = TMC_JAR_NAME;
 
     if (!fs.existsSync(tmcDataPath)) {
         fs.mkdirSync(tmcDataPath, { recursive: true });
@@ -135,35 +73,8 @@ export async function resourceInitialization(
         Logger.log(`Wrote tmc root file at ${tmcExercisesFolderPath}`);
     }
 
-    const tmcClosedExercisesFolderPath = path.join(
-        tmcDataPath,
-        tmcClosedExercisesFolderPathRelative,
-    );
-    if (!fs.existsSync(tmcClosedExercisesFolderPath)) {
-        fs.mkdirSync(tmcClosedExercisesFolderPath);
-        Logger.log(`Created tmc closed exercise directory at ${tmcClosedExercisesFolderPath}`);
-    }
-
-    const tmcLangsPath = path.join(tmcDataPath, tmcLangsPathRelative);
-    if (!fs.existsSync(tmcLangsPath)) {
-        delSync(path.join(tmcDataPath, "*.jar"), { force: true });
-        const [tmcLangsResult] = await showProgressNotification(
-            "Downloading required files...",
-            async (p) =>
-                downloadFile(
-                    TMC_JAR_URL,
-                    tmcLangsPath,
-                    undefined,
-                    undefined,
-                    (_progress: number, increment: number) => p.report({ increment }),
-                ),
-        );
-
-        if (tmcLangsResult.err) {
-            return tmcLangsResult;
-        }
-        Logger.log(`${TMC_JAR_URL} downloaded`);
-    }
+    // Remove in 2.0.0
+    delSync(path.join(tmcDataPath, "*.jar"), { force: true });
 
     // Verify that all course .code-workspaces are in-place on startup.
     const userData = storage.getUserData();
@@ -222,11 +133,8 @@ export async function resourceInitialization(
         htmlPath,
         mediaPath,
         tmcDataPath,
-        tmcLangsPathRelative,
         tmcWorkspacePathRelative,
         tmcExercisesFolderPathRelative,
-        tmcClosedExercisesFolderPathRelative,
-        javaPath,
         cliPath,
     );
 

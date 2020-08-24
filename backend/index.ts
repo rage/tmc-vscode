@@ -2,6 +2,7 @@ import bodyParser from "body-parser";
 import express from "express";
 
 import {
+    applicationRouter,
     coreCoursesRouter,
     coursesRouter,
     langsRounter,
@@ -21,16 +22,16 @@ app.use((req, res, next) => {
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
-app.use("/oauth", oauthRouter);
-
 app.use("/langs", langsRounter);
 
-app.use("/core/courses", coreCoursesRouter);
-app.use("/courses", coursesRouter);
+app.use("/oauth", oauthRouter);
 
-app.use("/org", orgsRouter);
-app.use("/org.json", orgsRouter);
-app.use("/core/org", orgsRouter);
+app.use("/api/v8/application", applicationRouter);
+app.use("/api/v8/courses", coursesRouter);
+app.use("/api/v8/org", orgsRouter);
+app.use("/api/v8/org.json", orgsRouter);
+app.use("/api/v8/core/courses", coreCoursesRouter);
+app.use("/api/v8/core/org", orgsRouter);
 
 app.use((req, res) => {
     console.log("Unknown endpoint");
