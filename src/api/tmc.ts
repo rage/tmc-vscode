@@ -20,6 +20,7 @@ import { Logger } from "../utils/logger";
 
 import {
     Course,
+    CourseData,
     CourseDetails,
     CourseExercise,
     CourseSettings,
@@ -346,6 +347,24 @@ export default class TMC {
         return this._executeLangsCommand(
             { args: ["get-courses", "--organization", organization], core: true },
             createIs<Course[]>(),
+            cache,
+        ).then((res) => res.map((r) => r.data));
+    }
+
+    /**
+     * Gets user-specific data of the given course. Uses TMC-langs `get-course-data` core
+     * command internally.
+     *
+     * @param courseId Id to the course.
+     * @returns A combination of getCourseDetails, getCourseExercises, getCourseSettings.
+     */
+    public async getCourseData(
+        courseId: number,
+        cache = false,
+    ): Promise<Result<CourseData, Error>> {
+        return this._executeLangsCommand(
+            { args: ["get-course-data", "--course-id", courseId.toString()], core: true },
+            createIs<CourseData>(),
             cache,
         ).then((res) => res.map((r) => r.data));
     }

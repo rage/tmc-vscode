@@ -128,6 +128,12 @@ export type CourseSettings = {
     organization_slug?: string | null;
 };
 
+export type CourseData = {
+    details: CourseDetails;
+    exercises: CourseExercise[];
+    settings: CourseSettings;
+};
+
 /**
  * GET /api/v8/core/exercises/{exercise_id}
  */

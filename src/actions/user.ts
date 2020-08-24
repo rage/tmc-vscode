@@ -643,13 +643,7 @@ export async function updateCourse(
         );
     };
     const courseData = userData.getCourse(courseId);
-    const updateResult = Result.all(
-        ...(await Promise.all([
-            tmc.getCourseDetails(courseId),
-            tmc.getCourseExercises(courseId),
-            tmc.getCourseSettings(courseId),
-        ])),
-    );
+    const updateResult = await tmc.getCourseData(courseId);
     if (updateResult.err) {
         if (updateResult.val instanceof AuthorizationError) {
             if (!courseData.disabled) {
@@ -672,7 +666,7 @@ export async function updateCourse(
         }
     }
 
-    const [details, exercises, settings] = updateResult.val;
+    const { details, exercises, settings } = updateResult.val;
     const [availablePoints, awardedPoints] = exercises.reduce(
         (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
         [0, 0],
