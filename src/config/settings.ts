@@ -72,6 +72,9 @@ export default class Settings {
                 this._settings.hideMetaFiles = data.value;
                 this._setFilesExcludeInWorkspace(data.value);
                 break;
+            case "downloadOldSubmission":
+                this._settings.downloadOldSubmission = data.value;
+                break;
         }
         Logger.log("Updated settings data", data);
         await this.updateExtensionSettingsToStorage(this._settings);
@@ -79,6 +82,10 @@ export default class Settings {
 
     public getLogLevel(): LogLevel {
         return this._settings.logLevel;
+    }
+
+    public getDownloadOldSubmission(): boolean {
+        return this._settings.downloadOldSubmission;
     }
 
     /**

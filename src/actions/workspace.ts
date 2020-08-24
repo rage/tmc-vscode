@@ -33,7 +33,7 @@ export async function downloadExercises(
     actionContext: ActionContext,
     courseExerciseDownloads: CourseExerciseDownloads[],
 ): Promise<number[]> {
-    const { tmc, ui, workspaceManager } = actionContext;
+    const { tmc, ui, workspaceManager, settings } = actionContext;
 
     interface StatusChange {
         exerciseId: number;
@@ -91,7 +91,11 @@ export async function downloadExercises(
             state.id,
             state.organizationSlug,
         );
-        if (oldSubmissions.err || oldSubmissions.val.length === 0) {
+        if (
+            !settings.getDownloadOldSubmission() ||
+            oldSubmissions.err ||
+            oldSubmissions.val.length === 0
+        ) {
             await new Promise<void>((resolve) => {
                 if (exercisePath.err) {
                     failed.push(state);

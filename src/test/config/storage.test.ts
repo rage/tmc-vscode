@@ -101,6 +101,7 @@ suite("Storage tests", () => {
             oldDataPath: undefined,
             logLevel: LogLevel.None,
             hideMetaFiles: true,
+            downloadOldSubmission: true,
         };
         assertUpdater(
             () => storage.updateExtensionSettings(extensionSettings),
