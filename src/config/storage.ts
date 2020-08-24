@@ -19,6 +19,9 @@ export default class Storage {
 
     /**
      * Gets currently stored authentication token.
+     *
+     * @deprecated Since version 1.0.0. Authentication token is now completely handled by TMC-langs.
+     *
      * @returns currently stored authentication token or undefined if not set
      */
     public getAuthenticationToken(): oauth2.Data | undefined {
@@ -43,11 +46,12 @@ export default class Storage {
 
     /**
      * Updates the given authentication token in storage.
+     *
+     * @deprecated Since version 1.0.0. Can only be used to clear old data.
+     *
      * @param authenticationToken authentication token to update
      */
-    public async updateAuthenticationToken(
-        authenticationToken: oauth2.Data | undefined,
-    ): Promise<void> {
+    public async updateAuthenticationToken(authenticationToken: undefined): Promise<void> {
         await this._context.globalState.update("token", authenticationToken);
     }
 

@@ -6,16 +6,8 @@ import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import * as vscode from "vscode";
 
-import {
-    ACCESS_TOKEN_URI,
-    CLIENT_ID,
-    CLIENT_NAME,
-    CLIENT_SECRET,
-    TMC_LANGS_ROOT_URL,
-    TMC_LANGS_TIMEOUT,
-} from "../config/constants";
+import { CLIENT_NAME, TMC_LANGS_ROOT_URL, TMC_LANGS_TIMEOUT } from "../config/constants";
 import Resources from "../config/resources";
-import Storage from "../config/storage";
 import {
     ApiError,
     AuthenticationError,
@@ -104,8 +96,6 @@ interface LangsError {
  * A Class that provides an interface to all TMC services.
  */
 export default class TMC {
-    private readonly _oauth2: ClientOauth2;
-    private readonly _storage: Storage;
     private readonly _resources: Resources;
     private readonly _isInsider: () => boolean;
     private readonly _rustCache: Map<string, LangsResponse<unknown>>;
@@ -120,17 +110,7 @@ export default class TMC {
      * @param resources Used to locate TMC-langs executable.
      * @param isInsider Callable insider status check function.
      */
-    constructor(storage: Storage, resources: Resources, isInsider: () => boolean) {
-        this._oauth2 = new ClientOauth2({
-            accessTokenUri: ACCESS_TOKEN_URI,
-            clientId: CLIENT_ID,
-            clientSecret: CLIENT_SECRET,
-        });
-        this._storage = storage;
-        const authToken = storage.getAuthenticationToken();
-        if (authToken) {
-            this._token = new ClientOauth2.Token(this._oauth2, authToken);
-        }
+    constructor(resources: Resources, isInsider: () => boolean) {
         this._resources = resources;
         this._rustCache = new Map();
         this._isInsider = isInsider;
@@ -157,9 +137,6 @@ export default class TMC {
      * @param password Password.
      */
     public async authenticate(username: string, password: string): Promise<Result<void, Error>> {
-        if (this._token) {
-            throw new Error("Authentication token already exists.");
-        }
         const loginResult = await this._executeLangsCommand(
             {
                 args: ["login", "--email", username, "--base64"],
@@ -169,14 +146,29 @@ export default class TMC {
             createIs<unknown>(),
         );
         if (loginResult.err) {
-            return new Err(new AuthenticationError(loginResult.val.message));
+            return Err(new AuthenticationError(loginResult.val.message));
         }
 
-        // Non-Insider compatibility: Get token from langs and store it. This relies on a side
-        // effect but can be removed once token is no longer used.
-        const getTokenResult = await this.isAuthenticated();
-        if (getTokenResult.err) {
-            return getTokenResult;
+        await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", true);
+        return Ok.EMPTY;
+    }
+
+    /**
+     * Passes an access token to TMC-langs. Uses TMC-langs `core login` command internally.
+     *
+     * @deprecated Since version 1.0.0. Should only be used for passing the token to TMC-langs from
+     * older versions.
+     *
+     * @param token Authorization token.
+     */
+    public async setAuthenticationToken(token: ClientOauth2.Data): Promise<Result<void, Error>> {
+        const setTokenResult = await this._executeLangsCommand(
+            { args: ["login", "--set-access-token", token.access_token], core: true },
+            createIs<unknown>(),
+        );
+
+        if (setTokenResult.err) {
+            return setTokenResult;
         }
 
         await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", true);
@@ -197,33 +189,17 @@ export default class TMC {
         if (loggedInResult.err) {
             return loggedInResult;
         }
-        const response = loggedInResult.val;
-        if (response.result === "not-logged-in") {
-            if (!this._token) {
+
+        switch (loggedInResult.val.result) {
+            case "logged-in":
+                await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", true);
+                return new Ok(true);
+            case "not-logged-in":
                 await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
                 return new Ok(false);
-            }
-
-            // Insider compatibility: If token exists but Langs didn't have it, pass it on.
-            const setTokenResult = await this._executeLangsCommand(
-                {
-                    args: ["login", "--set-access-token", this._token.data.access_token],
-                    core: true,
-                },
-                createIs<unknown>(),
-            );
-            if (setTokenResult.err) {
-                return setTokenResult;
-            }
-        } else if (response.result === "logged-in" && response.data) {
-            // Non-insider compatibility: keep stored token up to date
-            this._token = new ClientOauth2.Token(this._oauth2, response.data);
-            this._storage.updateAuthenticationToken(this._token.data);
+            default:
+                return Err(new Error(`Unexpected langs result: ${loggedInResult.val.result}`));
         }
-
-        const authenticated = this._token !== undefined;
-        await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated);
-        return new Ok(authenticated);
     }
 
     /**
@@ -237,8 +213,7 @@ export default class TMC {
         if (logoutResult.err) {
             return logoutResult;
         }
-        this._token = undefined;
-        this._storage.updateAuthenticationToken(undefined);
+
         await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
         return Ok.EMPTY;
     }
