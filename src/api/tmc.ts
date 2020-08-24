@@ -15,7 +15,7 @@ import {
     ConnectionError,
     RuntimeError,
 } from "../errors";
-import { displayProgrammerError, sleep } from "../utils/";
+import { sleep } from "../utils/";
 import { Logger } from "../utils/logger";
 
 import {
@@ -32,7 +32,6 @@ import {
     SubmissionStatusReport,
     TmcLangsTestResultsRust,
 } from "./types";
-import WorkspaceManager from "./workspaceManager";
 
 interface RustProcessArgs {
     args: string[];
@@ -99,9 +98,6 @@ export default class TMC {
     private readonly _resources: Resources;
     private readonly _isInsider: () => boolean;
     private readonly _rustCache: Map<string, LangsResponse<unknown>>;
-    private _token: ClientOauth2.Token | undefined;
-
-    private _workspaceManager?: WorkspaceManager;
 
     /**
      * Creates a new instance of TMC interface class.
@@ -114,13 +110,6 @@ export default class TMC {
         this._resources = resources;
         this._rustCache = new Map();
         this._isInsider = isInsider;
-    }
-
-    public setWorkspaceManager(workspaceManager: WorkspaceManager): void {
-        if (this._workspaceManager) {
-            throw displayProgrammerError("WorkspaceManager already assigned");
-        }
-        this._workspaceManager = workspaceManager;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -228,18 +217,9 @@ export default class TMC {
      *
      * @param id ID of the exercise to clean.
      */
-    public async clean(id: number): Promise<Result<void, Error>> {
-        if (!this._workspaceManager) {
-            throw displayProgrammerError("WorkspaceManager not assinged");
-        }
-
-        const exerciseFolderPath = this._workspaceManager.getExercisePathById(id);
-        if (exerciseFolderPath.err) {
-            return exerciseFolderPath;
-        }
-
+    public async clean(exercisePath: string): Promise<Result<void, Error>> {
         return this._executeLangsCommand(
-            { args: ["clean", "--exercise-path", exerciseFolderPath.val], core: false },
+            { args: ["clean", "--exercise-path", exercisePath], core: false },
             createIs<unknown>(),
             false,
         ).then((res) => (res.err ? res : Ok.EMPTY));
@@ -253,23 +233,15 @@ export default class TMC {
      * detected in PATH.
      */
     public runTests(
-        id: number,
+        exercisePath: string,
         pythonExecutablePath?: string,
     ): [Promise<Result<TmcLangsTestResultsRust, Error>>, () => void] {
-        if (!this._workspaceManager) {
-            throw displayProgrammerError("WorkspaceManager not assinged");
-        }
-        const exerciseFolderPath = this._workspaceManager.getExercisePathById(id);
-        if (exerciseFolderPath.err) {
-            return [Promise.resolve(exerciseFolderPath), (): void => {}];
-        }
-
         const env: { [key: string]: string } = {};
         if (this._isInsider() && pythonExecutablePath) {
             env.TMC_LANGS_PYTHON_EXEC = pythonExecutablePath;
         }
         const { interrupt, result } = this._spawnLangsProcess({
-            args: ["run-tests", "--exercise-path", exerciseFolderPath.val],
+            args: ["run-tests", "--exercise-path", exercisePath],
             core: false,
             env,
             onStderr: (data) => Logger.log("Rust Langs", data),
@@ -513,16 +485,9 @@ export default class TMC {
      */
     public async resetExercise(
         exerciseId: number,
+        exercisePath: string,
         saveOldState: boolean,
     ): Promise<Result<void, Error>> {
-        if (!this._workspaceManager) {
-            throw displayProgrammerError("WorkspaceManager not assinged");
-        }
-        const exerciseFolderPath = this._workspaceManager.getExercisePathById(exerciseId);
-        if (exerciseFolderPath.err) {
-            return exerciseFolderPath;
-        }
-
         const flags = saveOldState ? ["--save-old-state"] : [];
         const args = [
             "reset-exercise",
@@ -530,7 +495,7 @@ export default class TMC {
             "--exercise-id",
             exerciseId.toString(),
             "--exercise-path",
-            exerciseFolderPath.val,
+            exercisePath,
         ];
         if (saveOldState) {
             args.push(
@@ -554,16 +519,10 @@ export default class TMC {
      * @param exerciseId Id of the exercise.
      * @returns Response for sending the exercise.
      */
-    public async submitExercise(exerciseId: number): Promise<Result<SubmissionResponse, Error>> {
-        if (!this._workspaceManager) {
-            throw displayProgrammerError("WorkspaceManager not assinged");
-        }
-
-        const exerciseFolderPath = this._workspaceManager.getExercisePathById(exerciseId);
-        if (exerciseFolderPath.err) {
-            return exerciseFolderPath;
-        }
-
+    public async submitExercise(
+        exerciseId: number,
+        exercisePath: string,
+    ): Promise<Result<SubmissionResponse, Error>> {
         const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
 
         return this._executeLangsCommand(
@@ -572,7 +531,7 @@ export default class TMC {
                     "submit",
                     "--dont-block",
                     "--submission-path",
-                    exerciseFolderPath.val,
+                    exercisePath,
                     "--submission-url",
                     submitUrl,
                 ],
@@ -591,28 +550,14 @@ export default class TMC {
      */
     public async submitExerciseAndWaitForResults(
         exerciseId: number,
+        exercisePath: string,
         progressCallback?: (progressPct: number, message?: string) => void,
     ): Promise<Result<SubmissionStatusReport, Error>> {
-        if (!this._workspaceManager) {
-            throw displayProgrammerError("WorkspaceManager not assinged");
-        }
-
-        const exerciseFolderPath = this._workspaceManager.getExercisePathById(exerciseId);
-        if (exerciseFolderPath.err) {
-            return exerciseFolderPath;
-        }
-
         const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
 
         return this._executeLangsCommand(
             {
-                args: [
-                    "submit",
-                    "--submission-path",
-                    exerciseFolderPath.val,
-                    "--submission-url",
-                    submitUrl,
-                ],
+                args: ["submit", "--submission-path", exercisePath, "--submission-url", submitUrl],
                 core: true,
                 onStdout: (res) =>
                     progressCallback?.(50 * res["percent-done"], res.message || undefined),
@@ -628,27 +573,15 @@ export default class TMC {
      * @param exerciseId Id of the exercise.
      * @returns TMC paste link.
      */
-    public async submitExerciseToPaste(exerciseId: number): Promise<Result<string, Error>> {
-        if (!this._workspaceManager) {
-            throw displayProgrammerError("WorkspaceManager not assinged");
-        }
-
-        const exerciseFolderPath = this._workspaceManager.getExercisePathById(exerciseId);
-        if (exerciseFolderPath.err) {
-            return exerciseFolderPath;
-        }
-
+    public async submitExerciseToPaste(
+        exerciseId: number,
+        exercisePath: string,
+    ): Promise<Result<string, Error>> {
         const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
 
         return this._executeLangsCommand(
             {
-                args: [
-                    "paste",
-                    "--submission-path",
-                    exerciseFolderPath.val,
-                    "--submission-url",
-                    submitUrl,
-                ],
+                args: ["paste", "--submission-path", exercisePath, "--submission-url", submitUrl],
                 core: true,
             },
             createIs<SubmissionResponse>(),

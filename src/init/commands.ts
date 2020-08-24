@@ -56,7 +56,12 @@ export function registerCommands(
                 showError(errorMessage);
                 return;
             }
-            submitExercise(actionContext, exerciseId);
+            const result = await submitExercise(actionContext, exerciseId);
+            if (result.err) {
+                Logger.error("Exercise submission failed.", result.val);
+                showError("Exercise submission failed.");
+                return;
+            }
         }),
     );
 
@@ -65,11 +70,15 @@ export function registerCommands(
             const exerciseId = workspaceManager.getCurrentExerciseId();
             if (exerciseId) {
                 const link = await pasteExercise(actionContext, exerciseId);
-                link &&
-                    showNotification(`Paste link: ${link}`, [
-                        "Open URL",
-                        (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link)),
-                    ]);
+                if (link.err) {
+                    Logger.error("TMC Paste command failed.", link.val);
+                    showError(`TMC Paste command failed. ${link.val.message}`);
+                    return;
+                }
+                showNotification(`Paste link: ${link.val}`, [
+                    "Open URL",
+                    (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link.val)),
+                ]);
             } else {
                 Logger.error(errorMessage);
                 showError(errorMessage);
@@ -85,7 +94,12 @@ export function registerCommands(
                 showError(errorMessage);
                 return;
             }
-            testExercise(actionContext, exerciseId);
+            const result = await testExercise(actionContext, exerciseId);
+            if (result.err) {
+                Logger.error("Exercise test run failed.", result.val);
+                showError("Exercise test run failed.");
+                return;
+            }
         }),
     );
 
