@@ -678,7 +678,7 @@ export async function updateCourse(
         ...courseData,
         availablePoints,
         awardedPoints,
-        description: details.course.description || "",
+        description: details.description || "",
         disabled: settings.disabled_status !== "enabled",
         material_url: settings.material_url,
         perhapsExamMode: settings.hide_submission_results,
@@ -686,7 +686,7 @@ export async function updateCourse(
 
     const updateExercisesResult = await userData.updateExercises(
         courseId,
-        details.course.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),
+        details.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),
     );
     if (updateExercisesResult.err) {
         return updateExercisesResult;
