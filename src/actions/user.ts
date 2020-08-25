@@ -176,9 +176,10 @@ export async function testExercise(
                         command: "showPasteLink",
                         pasteLink: `${pasteLink.val.message}`,
                     });
+                } else {
+                    const value = pasteLink.val || "Link not provided by server.";
+                    temp.postMessage({ command: "showPasteLink", pasteLink: value });
                 }
-                pasteLink &&
-                    temp.postMessage({ command: "showPasteLink", pasteLink: pasteLink.val });
             } else if (msg.type === "closeWindow") {
                 temp.dispose();
             }
@@ -233,9 +234,10 @@ export async function submitExercise(
                     command: "showPasteLink",
                     pasteLink: `${pasteLink.val.message}`,
                 });
+            } else {
+                const value = pasteLink.val || "Link not provided by server.";
+                temp.postMessage({ command: "showPasteLink", pasteLink: value });
             }
-            pasteLink.val &&
-                temp.postMessage({ command: "showPasteLink", pasteLink: pasteLink.val });
         }
     };
 
