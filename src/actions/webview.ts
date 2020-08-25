@@ -245,7 +245,9 @@ export async function displayLocalCourseDetails(
                 notify: false,
                 useCache: true,
             })
-        ).find((u) => u.courseId === courseId)?.exerciseIds || [];
+        )
+            .find((u) => u.ok && u.val.courseId === courseId)
+            ?.unwrap().exerciseIds || [];
     ui.webview.postMessage({
         key: "course-updates",
         message: {

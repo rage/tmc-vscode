@@ -11,8 +11,6 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { OldSubmission } from "../api/types";
-import { NOTIFICATION_DELAY } from "../config/constants";
-import { ExerciseStatus } from "../config/types";
 import { ExerciseExistsError } from "../errors";
 import * as UITypes from "../ui/types";
 import { Logger, sleep } from "../utils";
@@ -23,6 +21,10 @@ import { ActionContext, CourseExerciseDownloads } from "./types";
 
 const limit = pLimit(3);
 
+interface DownloadExercisesOptions {
+    skipOldSubmissionCheck?: boolean;
+}
+
 /**
  * Downloads given exercises and opens them in TMC workspace.
  *
@@ -32,6 +34,7 @@ const limit = pLimit(3);
 export async function downloadExercises(
     actionContext: ActionContext,
     courseExerciseDownloads: CourseExerciseDownloads[],
+    options?: DownloadExercisesOptions,
 ): Promise<number[]> {
     const { tmc, ui, workspaceManager, settings } = actionContext;
 
@@ -92,9 +95,10 @@ export async function downloadExercises(
             state.organizationSlug,
         );
         if (
-            !settings.getDownloadOldSubmission() ||
-            oldSubmissions.err ||
-            oldSubmissions.val.length === 0
+            options?.skipOldSubmissionCheck ??
+            (!settings.getDownloadOldSubmission() ||
+                oldSubmissions.err ||
+                oldSubmissions.val.length === 0)
         ) {
             await new Promise<void>((resolve) => {
                 if (exercisePath.err) {
@@ -204,80 +208,67 @@ export async function checkForExerciseUpdates(
     actionContext: ActionContext,
     courseId?: number,
     updateCheckOptions?: UpdateCheckOptions,
-): Promise<CourseExerciseDownloads[]> {
-    const { tmc, userData, workspaceManager, ui } = actionContext;
+): Promise<Array<Result<CourseExerciseDownloads, Error>>> {
+    const { tmc, userData, workspaceManager } = actionContext;
 
-    const coursesToUpdate: Map<number, CourseExerciseDownloads> = new Map();
-    let count = 0;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
-    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now() && !c.disabled);
-    Logger.log(`Checking for exercise updates for courses ${filteredCourses.map((c) => c.name)}`);
-    for (const course of filteredCourses) {
-        const organizationSlug = course.organization;
+    Logger.log(`Checking for exercise updates for courses ${courses.map((c) => c.name)}`);
+    return await Promise.all(
+        courses.map(async (course) => {
+            const organizationSlug = course.organization;
 
-        const result = await tmc.getCourseDetails(course.id, updateCheckOptions?.useCache || false);
-        if (result.err) {
-            continue;
-        }
-
-        const exerciseIds: number[] = [];
-        result.val.course.exercises.forEach((exercise) => {
-            const localExercise = workspaceManager.getExerciseDataById(exercise.id);
-            if (localExercise.ok && localExercise.val.checksum !== exercise.checksum) {
-                exerciseIds.push(exercise.id);
+            const detailsResult = await tmc.getCourseDetails(
+                course.id,
+                updateCheckOptions?.useCache ?? false,
+            );
+            if (detailsResult.err) {
+                return detailsResult;
             }
-        });
 
-        if (exerciseIds.length > 0) {
-            coursesToUpdate.set(course.id, {
+            const exerciseIds = detailsResult.val.course.exercises.reduce<number[]>(
+                (ids, exercise) => {
+                    const exerciseResult = workspaceManager.getExerciseDataById(exercise.id);
+                    return exerciseResult.ok && exerciseResult.val.checksum !== exercise.checksum
+                        ? ids.concat(exercise.id)
+                        : ids;
+                },
+                [],
+            );
+
+            return Ok({
                 courseId: course.id,
+                courseName: course.name,
                 exerciseIds,
                 organizationSlug,
-                courseName: course.name,
             });
-            count += exerciseIds.length;
-        }
-    }
+        }),
+    );
+}
 
-    if (count > 0 && updateCheckOptions?.notify !== false) {
-        showNotification(
-            `Found updates for ${count} exercises. Do you wish to download them?`,
-            [
-                "Download",
-                async (): Promise<void> => {
-                    const successful = await downloadExercises(
-                        actionContext,
-                        Array.from(coursesToUpdate.values()),
-                    );
-                    ui.webview.postMessage({
-                        key: "course-updates",
-                        message: { command: "setUpdateables", exerciseIds: [] },
-                    });
-                    coursesToUpdate.forEach(async (courseDL) => {
-                        const openResult = await openExercises(
-                            actionContext,
-                            _.intersection(successful, courseDL.exerciseIds),
-                            courseDL.courseName,
-                        );
-                        if (openResult.err) {
-                            const message = "Failed to open updated exercises.";
-                            Logger.error(message, openResult.val);
-                            showError(message);
-                        }
-                    });
-                },
-            ],
-            [
-                "Remind me later",
-                (): void => {
-                    coursesToUpdate.forEach((course) =>
-                        userData.setNotifyDate(course.courseId, Date.now() + NOTIFICATION_DELAY),
-                    );
-                },
-            ],
-        );
-    }
-    return Array.from(coursesToUpdate.values());
+export async function downloadExerciseUpdates(
+    actionContext: ActionContext,
+    coursesToUpdate: CourseExerciseDownloads[],
+): Promise<Result<void, Error>> {
+    const { ui } = actionContext;
+
+    ui.webview.postMessage({
+        key: "course-updates",
+        message: { command: "setUpdateables", exerciseIds: [] },
+    });
+
+    const successful = await downloadExercises(actionContext, coursesToUpdate, {
+        skipOldSubmissionCheck: true,
+    });
+
+    const toUpdate = _.flatten(coursesToUpdate.map((x) => x.exerciseIds));
+
+    ui.webview.postMessage({
+        key: "course-updates",
+        message: { command: "setUpdateables", exerciseIds: _.intersection(toUpdate, successful) },
+    });
+
+    // TODO: Get informative data from downloadExercises
+    return Ok.EMPTY;
 }
 
 /**

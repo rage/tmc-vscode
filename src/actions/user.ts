@@ -32,12 +32,7 @@ import {
 
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
-import {
-    checkForExerciseUpdates,
-    closeExercises,
-    downloadExercises,
-    openExercises,
-} from "./workspace";
+import { closeExercises, downloadExercises, openExercises } from "./workspace";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -337,7 +332,7 @@ export async function submitExercise(
     if (courseId) {
         checkForCourseUpdates(actionContext, courseId);
     }
-    checkForExerciseUpdates(actionContext);
+    vscode.commands.executeCommand("tmc.updateExercises");
     return Ok.EMPTY;
 }
 
