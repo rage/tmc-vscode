@@ -88,14 +88,14 @@ export async function logout(
 /**
  * Tests an exercise while keeping the user informed
  */
-export async function testExercise(actionContext: ActionContext, id: number): Promise<void> {
+export async function testExercise(
+    actionContext: ActionContext,
+    id: number,
+): Promise<Result<void, Error>> {
     const { ui, tmc, userData, workspaceManager, temporaryWebviewProvider } = actionContext;
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
-        const message = "Getting exercise details failed when testing exercise.";
-        Logger.error(message, exerciseDetails.val);
-        showError(message);
-        return;
+        return exerciseDetails;
     }
 
     const course = userData.getCourseByName(exerciseDetails.val.course);
@@ -104,7 +104,11 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
 
     if (!course.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext);
-        const [testRunner, interrupt] = tmc.runTests(id, executablePath);
+        const exercisePath = workspaceManager.getExercisePathById(id);
+        if (exercisePath.err) {
+            return exercisePath;
+        }
+        const [testRunner, interrupt] = tmc.runTests(exercisePath.val, executablePath);
         let aborted = false;
         const exerciseName = exerciseDetails.val.name;
 
@@ -131,7 +135,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
             );
             if (aborted) {
                 temp.dispose();
-                return;
+                return Ok.EMPTY;
             }
             temp.setContent({
                 title: "TMC",
@@ -143,10 +147,7 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
                 },
             });
             temporaryWebviewProvider.addToRecycables(temp);
-            const message = "Exercise test run failed.";
-            Logger.error(message, testResult.val);
-            showError(message);
-            return;
+            return testResult;
         }
         ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
         Logger.log(`Tests finished for ${exerciseName}`);
@@ -168,20 +169,34 @@ export async function testExercise(actionContext: ActionContext, id: number): Pr
                 submitExercise(actionContext, msg.data.exerciseId as number);
             } else if (msg.type === "sendToPaste" && msg.data) {
                 const pasteLink = await pasteExercise(actionContext, msg.data.exerciseId as number);
-                pasteLink && temp.postMessage({ command: "showPasteLink", pasteLink });
+                if (pasteLink.err) {
+                    Logger.error(`${pasteLink.val.message}`, pasteLink.val);
+                    showError(`Failed to send to TMC Paste: ${pasteLink.val.message}`);
+                    temp.postMessage({
+                        command: "showPasteLink",
+                        pasteLink: `${pasteLink.val.message}`,
+                    });
+                } else {
+                    const value = pasteLink.val || "Link not provided by server.";
+                    temp.postMessage({ command: "showPasteLink", pasteLink: value });
+                }
             } else if (msg.type === "closeWindow") {
                 temp.dispose();
             }
         },
     });
     temporaryWebviewProvider.addToRecycables(temp);
+    return Ok.EMPTY;
 }
 
 /**
  * Submits an exercise while keeping the user informed
  * @param tempView Existing TemporaryWebview to use if any
  */
-export async function submitExercise(actionContext: ActionContext, id: number): Promise<void> {
+export async function submitExercise(
+    actionContext: ActionContext,
+    id: number,
+): Promise<Result<void, Error>> {
     const { temporaryWebviewProvider, tmc, userData, workspaceManager } = actionContext;
 
     Logger.log(
@@ -190,10 +205,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
 
     const exerciseDetails = workspaceManager.getExerciseDataById(id);
     if (exerciseDetails.err) {
-        const message = "Getting exercise details failed when submitting exercise.";
-        Logger.error(message, exerciseDetails.val);
-        showError(message);
-        return;
+        return exerciseDetails;
     }
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
@@ -215,7 +227,17 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         } else if (msg.type === "sendToPaste" && msg.data) {
             Logger.debug(msg.data);
             const pasteLink = await pasteExercise(actionContext, Number(msg.data.exerciseId));
-            pasteLink && temp.postMessage({ command: "showPasteLink", pasteLink });
+            if (pasteLink.err) {
+                Logger.error(`${pasteLink.val.message}`, pasteLink.val);
+                showError(`Failed to send to TMC Paste: ${pasteLink.val.message}`);
+                temp.postMessage({
+                    command: "showPasteLink",
+                    pasteLink: `${pasteLink.val.message}`,
+                });
+            } else {
+                const value = pasteLink.val || "Link not provided by server.";
+                temp.postMessage({ command: "showPasteLink", pasteLink: value });
+            }
         }
     };
 
@@ -224,12 +246,13 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         LocalCourseData
     >;
     if (courseData.perhapsExamMode) {
-        const submitResult = await tmc.submitExercise(id);
+        const exerciseFolderPath = workspaceManager.getExercisePathById(id);
+        if (exerciseFolderPath.err) {
+            return exerciseFolderPath;
+        }
+        const submitResult = await tmc.submitExercise(id, exerciseFolderPath.val);
         if (submitResult.err) {
-            const message = "Getting exercise details failed when submitting exercise.";
-            // Logger.error(message, exerciseDetails.val);
-            showError(message);
-            return;
+            return submitResult;
         }
 
         const examData = EXAM_SUBMISSION_RESULT;
@@ -251,12 +274,17 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
             },
         });
         temporaryWebviewProvider.addToRecycables(temp);
-        return;
+        return Promise.resolve(Ok.EMPTY);
     }
 
     const messages: string[] = [];
+    const exerciseFolderPath = workspaceManager.getExercisePathById(id);
+    if (exerciseFolderPath.err) {
+        return exerciseFolderPath;
+    }
     const submissionResult = await tmc.submitExerciseAndWaitForResults(
         id,
+        exerciseFolderPath.val,
         (progressPct, message) => {
             if (message && message !== _.last(messages)) {
                 messages.push(message);
@@ -286,10 +314,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
             },
         });
         temporaryWebviewProvider.addToRecycables(temp);
-        const message = "Exercise submission failed.";
-        Logger.error(message, submissionResult.val);
-        showError(message);
-        return;
+        return submissionResult;
     }
 
     const statusData = submissionResult.val;
@@ -313,6 +338,7 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
         checkForCourseUpdates(actionContext, courseId);
     }
     checkForExerciseUpdates(actionContext);
+    return Ok.EMPTY;
 }
 
 /**
@@ -323,25 +349,25 @@ export async function submitExercise(actionContext: ActionContext, id: number): 
 export async function pasteExercise(
     actionContext: ActionContext,
     id: number,
-): Promise<string | undefined> {
-    const { tmc } = actionContext;
+): Promise<Result<string, Error>> {
+    const { tmc, workspaceManager } = actionContext;
+    const exerciseFolderPath = workspaceManager.getExercisePathById(id);
+    if (exerciseFolderPath.err) {
+        return exerciseFolderPath;
+    }
 
-    const pasteResult = await tmc.submitExerciseToPaste(id);
+    const pasteResult = await tmc.submitExerciseToPaste(id, exerciseFolderPath.val);
     if (pasteResult.err) {
-        Logger.error("Failed to paste exercise: ", pasteResult.val);
-        showError(`Failed to send exercise to TMC Paste: ${pasteResult.val.message}`);
-        return undefined;
+        return pasteResult;
     }
 
     const pasteLink = pasteResult.val;
     if (pasteLink === "") {
         const message = "Didn't receive paste link from server.";
-        Logger.error(`Failed to paste exercise: ${message}`);
-        showError(`Failed to send exercise to TMC Paste: ${message}`);
-        return undefined;
+        return new Err(new Error(`Failed to send exercise to TMC Paste: ${message}`));
     }
 
-    return pasteLink;
+    return new Ok(pasteLink);
 }
 
 /**
@@ -619,13 +645,7 @@ export async function updateCourse(
         );
     };
     const courseData = userData.getCourse(courseId);
-    const updateResult = Result.all(
-        ...(await Promise.all([
-            tmc.getCourseDetails(courseId),
-            tmc.getCourseExercises(courseId),
-            tmc.getCourseSettings(courseId),
-        ])),
-    );
+    const updateResult = await tmc.getCourseData(courseId);
     if (updateResult.err) {
         if (updateResult.val instanceof AuthorizationError) {
             if (!courseData.disabled) {
@@ -648,7 +668,7 @@ export async function updateCourse(
         }
     }
 
-    const [details, exercises, settings] = updateResult.val;
+    const { details, exercises, settings } = updateResult.val;
     const [availablePoints, awardedPoints] = exercises.reduce(
         (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
         [0, 0],

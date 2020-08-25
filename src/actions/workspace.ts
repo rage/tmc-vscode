@@ -288,9 +288,12 @@ export async function cleanExercise(
     actionContext: ActionContext,
     id: number,
 ): Promise<Result<void, Error>> {
-    const { tmc } = actionContext;
-
-    const cleanResult = await tmc.clean(id);
+    const { tmc, workspaceManager } = actionContext;
+    const exerciseFolderPath = workspaceManager.getExercisePathById(id);
+    if (exerciseFolderPath.err) {
+        return exerciseFolderPath;
+    }
+    const cleanResult = await tmc.clean(exerciseFolderPath.val);
     if (cleanResult.err) {
         return cleanResult;
     }
@@ -346,7 +349,12 @@ export async function resetExercise(
         return Ok(false);
     }
 
-    const resetResult = await tmc.resetExercise(id, submitFirst);
+    const exerciseFolderPath = workspaceManager.getExercisePathById(id);
+    if (exerciseFolderPath.err) {
+        return exerciseFolderPath;
+    }
+
+    const resetResult = await tmc.resetExercise(id, exerciseFolderPath.val, submitFirst);
     if (resetResult.err) {
         return resetResult;
     }

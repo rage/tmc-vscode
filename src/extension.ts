@@ -76,7 +76,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const workspaceManager = new WorkspaceManager(storage, resources);
     await workspaceManager.initialize();
-    tmc.setWorkspaceManager(workspaceManager);
+
     const userData = new UserData(storage);
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
     const actionContext = {

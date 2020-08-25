@@ -9,9 +9,7 @@ import { FeedbackQuestion } from "../actions/types";
 import { SubmissionFeedbackQuestion } from "../api/types";
 import Resources from "../config/resources";
 import { ConnectionError } from "../errors";
-import { showNotification } from "../window";
 
-import { superfluousPropertiesEnabled } from "./env";
 import { Logger } from "./logger";
 
 /**
@@ -123,12 +121,6 @@ export function getProgressBar(percentDone: number): string {
             style="width: ${percentDone}%"
         ></div>
     </div>`;
-}
-
-export function displayProgrammerError(description: string): void {
-    showNotification(
-        (superfluousPropertiesEnabled() ? "" : "Programmer ") + "Error: " + description,
-    );
 }
 
 export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): FeedbackQuestion[] {
