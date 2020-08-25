@@ -532,51 +532,40 @@ export async function addNewCourse(
         course = orgAndCourse.val.course;
     }
 
-    const courseDetailsResult = await tmc.getCourseDetails(course);
-    const courseExercisesResult = await tmc.getCourseExercises(course);
-    const courseSettingsResult = await tmc.getCourseSettings(course);
-    if (courseDetailsResult.err) {
-        return courseDetailsResult;
+    const courseDataResult = await tmc.getCourseData(course);
+    if (courseDataResult.err) {
+        return courseDataResult;
     }
-    if (courseExercisesResult.err) {
-        return courseExercisesResult;
-    }
-    if (courseSettingsResult.err) {
-        return courseSettingsResult;
-    }
-
-    const courseDetails = courseDetailsResult.val.course;
-    const courseExercises = courseExercisesResult.val;
-    const courseSettings = courseSettingsResult.val;
+    const courseData = courseDataResult.val;
 
     let availablePoints = 0;
     let awardedPoints = 0;
-    courseExercises.forEach((x) => {
+    courseData.exercises.forEach((x) => {
         availablePoints += x.available_points.length;
         awardedPoints += x.awarded_points.length;
     });
 
     const localData: LocalCourseData = {
-        description: courseDetails.description || "",
-        exercises: courseDetails.exercises.map((e) => ({
+        description: courseData.details.description || "",
+        exercises: courseData.details.exercises.map((e) => ({
             id: e.id,
             name: e.name,
             passed: e.completed,
         })),
-        id: courseDetails.id,
-        name: courseDetails.name,
-        title: courseDetails.title,
+        id: courseData.details.id,
+        name: courseData.details.name,
+        title: courseData.details.title,
         organization: organization,
         availablePoints: availablePoints,
         awardedPoints: awardedPoints,
-        perhapsExamMode: courseSettings.hide_submission_results,
+        perhapsExamMode: courseData.settings.hide_submission_results,
         newExercises: [],
         notifyAfter: 0,
-        disabled: courseSettings.disabled_status === "enabled" ? false : true,
-        material_url: courseSettings.material_url,
+        disabled: courseData.settings.disabled_status === "enabled" ? false : true,
+        material_url: courseData.settings.material_url,
     };
     userData.addCourse(localData);
-    workspaceManager.createWorkspaceFile(courseDetails.name);
+    workspaceManager.createWorkspaceFile(courseData.details.name);
     await displayUserCourses(actionContext);
     return Ok.EMPTY;
 }
