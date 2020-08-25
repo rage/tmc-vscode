@@ -129,7 +129,7 @@ export type CourseSettings = {
 };
 
 export type CourseData = {
-    details: CourseDetails;
+    details: CourseDetails["course"];
     exercises: CourseExercise[];
     settings: CourseSettings;
 };

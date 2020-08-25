@@ -6,7 +6,12 @@ import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 import * as vscode from "vscode";
 
-import { CLIENT_NAME, TMC_LANGS_ROOT_URL, TMC_LANGS_TIMEOUT } from "../config/constants";
+import {
+    CLIENT_NAME,
+    TMC_LANGS_CONFIG_DIR,
+    TMC_LANGS_ROOT_URL,
+    TMC_LANGS_TIMEOUT,
+} from "../config/constants";
 import Resources from "../config/resources";
 import {
     ApiError,
@@ -748,7 +753,13 @@ export default class TMC {
         let active = true;
         let interrupted = false;
         const cprocess = cp.spawn(executable, executableArgs, {
-            env: { ...process.env, ...env, RUST_LOG: "debug", TMC_LANGS_ROOT_URL },
+            env: {
+                ...process.env,
+                ...env,
+                RUST_LOG: "debug",
+                TMC_LANGS_ROOT_URL,
+                TMC_LANGS_CONFIG_DIR,
+            },
         });
         stdin && cprocess.stdin.write(stdin + "\n");
 
