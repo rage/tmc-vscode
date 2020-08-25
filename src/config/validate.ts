@@ -2,7 +2,7 @@ import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
 
 import TMC from "../api/tmc";
-import { CourseDetails, CourseExercise, CourseSettings } from "../api/types";
+import { CourseData, CourseDetails } from "../api/types";
 import { ApiError, AuthorizationError, ConnectionError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
@@ -125,95 +125,55 @@ export async function validateAndFix(
                     continue;
                 }
 
-                // Try to fetch from API with ID, if fails, try to find the course from all API data
-                const courseDetails = await (course.id !== undefined
-                    ? tmc.getCourseDetails(course.id, true)
-                    : getCourseDetails(tmc, course.organization, course.name as string));
-                if (courseDetails.err) {
-                    if (courseDetails.val instanceof ApiError) {
-                        Logger.warn("Skipping bad userdata due to courseDetails", course);
+                /**
+                 * Tries to fetch from TMC-VSCode cache, if data not found, fetches from TMC-langs.
+                 * If `course.id` would be undefined and `course.name` not,
+                 * try to find `course.id` from user visible courses using the name field.
+                 */
+                const courseDataResult = await (course.id !== undefined
+                    ? tmc.getCourseData(course.id, true)
+                    : getCourseData(tmc, course.organization, course.name as string));
+                if (courseDataResult.err) {
+                    if (courseDataResult.val instanceof ApiError) {
+                        Logger.warn("Skipping bad userdata due to courseData", course);
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
-                    } else if (courseDetails.val instanceof AuthorizationError) {
+                    } else if (courseDataResult.val instanceof AuthorizationError) {
                         course.disabled = true;
                         Logger.warn(
-                            `No access to courseDetails, disabling course - ${courseDetails.val.message}`,
+                            `No access to courseData, disabling course - ${courseDataResult.val.message}`,
                             course,
                         );
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
                     }
-                    return new Err(courseDetails.val);
+                    return new Err(courseDataResult.val);
                 }
-                // Try to fetch from API with ID, if fails, try to find the course from all API data
-                const courseExercises = await (course.id !== undefined
-                    ? tmc.getCourseExercises(course.id, true)
-                    : getCourseExercises(tmc, course.organization, course.name as string));
+                const courseData = courseDataResult.val;
 
-                if (courseExercises.err) {
-                    if (courseDetails.val instanceof ApiError) {
-                        Logger.warn("Skipping bad userdata due to courseExercises", course);
-                        userDataFixed.courses.push(course as LocalCourseData);
-                        continue;
-                    } else if (courseExercises.val instanceof AuthorizationError) {
-                        course.disabled = true;
-                        Logger.warn(
-                            `No access to courseExercises, disabling course  - ${courseExercises.val.message}`,
-                            course,
-                        );
-                        userDataFixed.courses.push(course as LocalCourseData);
-                        continue;
-                    }
-                    return new Err(courseExercises.val);
-                }
-                // Try to fetch from API with ID, if fails, try to find the course from all API data
-                const courseSettings = await (course.id !== undefined
-                    ? tmc.getCourseSettings(course.id, true)
-                    : getCourseSettings(tmc, course.organization, course.name as string));
-
-                if (courseSettings.err) {
-                    if (courseSettings.val instanceof ApiError) {
-                        Logger.warn("Skipping bad userdata due to courseSettings", course);
-                        userDataFixed.courses.push(course as LocalCourseData);
-                        continue;
-                    } else if (courseSettings.val instanceof AuthorizationError) {
-                        course.disabled = true;
-                        Logger.warn(
-                            `No access to courseSettings, disabling course - ${courseSettings.val.message}`,
-                            course,
-                        );
-                        userDataFixed.courses.push(course as LocalCourseData);
-                        continue;
-                    }
-                    return new Err(courseSettings.val);
-                }
-
-                const courseData = courseDetails.val.course;
-                const courseInfo = courseSettings.val;
-                const exerciseData = courseExercises.val;
-                const [availablePoints, awardedPoints] = exerciseData.reduce(
+                const [availablePoints, awardedPoints] = courseData.exercises.reduce(
                     (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
                     [0, 0],
                 );
 
                 userDataFixed.courses.push({
-                    description: courseData.description || "",
-                    exercises: courseData.exercises.map((x) => ({
+                    description: courseData.details.description || "",
+                    exercises: courseData.details.exercises.map((x) => ({
                         id: x.id,
                         name: x.name,
                         passed: x.completed,
                     })),
-                    id: courseData.id,
-                    name: courseData.name,
-                    title: courseData.title,
+                    id: courseData.details.id,
+                    name: courseData.details.name,
+                    title: courseData.details.title,
                     organization: course.organization,
                     awardedPoints: awardedPoints,
                     availablePoints: availablePoints,
-                    perhapsExamMode: courseInfo.hide_submission_results,
+                    perhapsExamMode: courseData.settings.hide_submission_results,
                     notifyAfter: is<number>(course.notifyAfter) ? course.notifyAfter : 0,
                     newExercises: is<number[]>(course.newExercises) ? course.newExercises : [],
-                    disabled: courseInfo.disabled_status === "enabled" ? false : true,
-                    material_url: courseInfo.material_url,
+                    disabled: courseData.settings.disabled_status === "enabled" ? false : true,
+                    material_url: courseData.settings.material_url,
                 });
             }
         }
@@ -244,6 +204,18 @@ async function findCourseInfo(
     return new Ok(courseId);
 }
 
+async function getCourseData(
+    tmc: TMC,
+    org: string,
+    course: string,
+): Promise<Result<CourseData, Error>> {
+    const courseId = await findCourseInfo(tmc, org, course);
+    if (courseId.err) {
+        return courseId;
+    }
+    return tmc.getCourseData(courseId.val, true);
+}
+
 async function getCourseDetails(
     tmc: TMC,
     org: string,
@@ -254,30 +226,6 @@ async function getCourseDetails(
         return courseId;
     }
     return tmc.getCourseDetails(courseId.val, true);
-}
-
-async function getCourseExercises(
-    tmc: TMC,
-    org: string,
-    course: string,
-): Promise<Result<CourseExercise[], Error>> {
-    const courseId = await findCourseInfo(tmc, org, course);
-    if (courseId.err) {
-        return courseId;
-    }
-    return tmc.getCourseExercises(courseId.val, true);
-}
-
-async function getCourseSettings(
-    tmc: TMC,
-    org: string,
-    course: string,
-): Promise<Result<CourseSettings, Error>> {
-    const courseId = await findCourseInfo(tmc, org, course);
-    if (courseId.err) {
-        return courseId;
-    }
-    return tmc.getCourseSettings(courseId.val, true);
 }
 
 async function ensureLogin(
