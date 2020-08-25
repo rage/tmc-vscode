@@ -116,14 +116,15 @@ export async function displayLocalCourseDetails(
     };
 
     const mapStatus = (
-        exercise: ConfigTypes.LocalExerciseData,
+        exerciseId: number,
+        status: ConfigTypes.ExerciseStatus,
         expired: boolean,
     ): UITypes.ExerciseStatus => {
-        switch (exercise.status) {
+        switch (status) {
             case ConfigTypes.ExerciseStatus.CLOSED:
-                return checkFolderExistence(exercise.id) ? "closed" : "missing";
+                return checkFolderExistence(exerciseId) ? "closed" : "missing";
             case ConfigTypes.ExerciseStatus.OPEN:
-                return checkFolderExistence(exercise.id) ? "opened" : "missing";
+                return checkFolderExistence(exerciseId) ? "opened" : "missing";
             default:
                 return expired ? "expired" : "new";
         }
@@ -149,36 +150,20 @@ export async function displayLocalCourseDetails(
         const groupName = nameMatch?.[1] || "";
         const group = exerciseData.get(groupName);
         const name = nameMatch?.[2] || "";
-        let exData = workspaceExercises.find((d) => d.id === ex.id);
-        const apiExercise = apiCourse?.exercises.find((e) => e.id === ex.id);
-        if (
-            (!exData || exData.status === ConfigTypes.ExerciseStatus.MISSING) &&
-            apiCourse &&
-            apiExercise
-        ) {
-            exData = {
-                id: ex.id,
-                name: ex.name,
-                checksum: "",
-                course: apiCourse.name,
-                deadline: apiExercise.deadline,
-                organization: course.organization,
-                softDeadline: apiExercise.soft_deadline,
-                status: ConfigTypes.ExerciseStatus.MISSING,
-            };
-        }
-        if (!exData) {
-            return;
-        }
-        const softDeadline = exData.softDeadline ? parseDate(exData.softDeadline) : null;
-        const hardDeadline = exData.deadline ? parseDate(exData.deadline) : null;
+        const exData = workspaceExercises.find((d) => d.id === ex.id);
+        const softDeadline = ex.softDeadline ? parseDate(ex.softDeadline) : null;
+        const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
         initialState.push(
             {
-                key: `exercise-${exData.id}-status`,
+                key: `exercise-${ex.id}-status`,
                 message: {
                     command: "exerciseStatusChange",
-                    exerciseId: exData.id,
-                    status: mapStatus(exData, hardDeadline !== null && currentDate >= hardDeadline),
+                    exerciseId: ex.id,
+                    status: mapStatus(
+                        ex.id,
+                        exData?.status ?? ConfigTypes.ExerciseStatus.MISSING,
+                        hardDeadline !== null && currentDate >= hardDeadline,
+                    ),
                 },
             },
             {

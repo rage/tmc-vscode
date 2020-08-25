@@ -545,7 +545,9 @@ export async function addNewCourse(
         exercises: courseData.details.exercises.map((e) => ({
             id: e.id,
             name: e.name,
+            deadline: e.deadline,
             passed: e.completed,
+            softDeadline: e.soft_deadline,
         })),
         id: courseData.details.id,
         name: courseData.details.name,
@@ -606,7 +608,7 @@ export async function updateCourse(
     actionContext: ActionContext,
     courseId: number,
 ): Promise<Result<boolean, Error>> {
-    const { tmc, ui, userData, workspaceManager } = actionContext;
+    const { tmc, ui, userData } = actionContext;
     const postMessage = (courseId: number, disabled: boolean, exerciseIds: number[]): void => {
         Logger.debug("Post message updatecourse", courseId, disabled, ...exerciseIds);
         ui.webview.postMessage(
@@ -670,15 +672,17 @@ export async function updateCourse(
 
     const updateExercisesResult = await userData.updateExercises(
         courseId,
-        details.exercises.map((x) => ({ id: x.id, name: x.name, passed: x.completed })),
+        details.exercises.map((x) => ({
+            id: x.id,
+            name: x.name,
+            deadline: x.deadline,
+            passed: x.completed,
+            softDeadline: x.soft_deadline,
+        })),
     );
     if (updateExercisesResult.err) {
         return updateExercisesResult;
     }
-
-    exercises.forEach((ex) => {
-        workspaceManager.updateExerciseData(ex.id, ex.soft_deadline, ex.deadline);
-    });
 
     const course = userData.getCourse(courseId);
     postMessage(course.id, course.disabled, course.newExercises);
