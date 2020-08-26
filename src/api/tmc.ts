@@ -104,7 +104,6 @@ interface LangsError {
  */
 export default class TMC {
     private readonly _resources: Resources;
-    private readonly _isInsider: () => boolean;
     private readonly _rustCache: Map<string, LangsResponse<unknown>>;
 
     /**
@@ -112,12 +111,10 @@ export default class TMC {
      *
      * @param storage Used to store authentication token.
      * @param resources Used to locate TMC-langs executable.
-     * @param isInsider Callable insider status check function.
      */
-    constructor(resources: Resources, isInsider: () => boolean) {
+    constructor(resources: Resources) {
         this._resources = resources;
         this._rustCache = new Map();
-        this._isInsider = isInsider;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -250,7 +247,7 @@ export default class TMC {
         pythonExecutablePath?: string,
     ): [Promise<Result<TmcLangsTestResultsRust, Error>>, () => void] {
         const env: { [key: string]: string } = {};
-        if (this._isInsider() && pythonExecutablePath) {
+        if (pythonExecutablePath) {
             env.TMC_LANGS_PYTHON_EXEC = pythonExecutablePath;
         }
         const { interrupt, result } = this._spawnLangsProcess({
