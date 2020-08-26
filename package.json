@@ -127,6 +127,11 @@
                 "category": "TestMyCode"
             },
             {
+                "command": "tmc.updateExercises",
+                "title": "Update Exercises",
+                "category": "TestMyCode"
+            },
+            {
                 "command": "tmc.uploadArchive",
                 "title": "Submit Solution",
                 "category": "TestMyCode"
@@ -216,6 +221,12 @@
                 {
                     "command": "tmc.resetExercise",
                     "title": "Reset Exercise",
+                    "category": "TestMyCode",
+                    "when": "test-my-code:LoggedIn"
+                },
+                {
+                    "command": "tmc.updateExercises",
+                    "title": "Update Exercises",
                     "category": "TestMyCode",
                     "when": "test-my-code:LoggedIn"
                 },
