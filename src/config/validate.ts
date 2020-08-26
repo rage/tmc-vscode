@@ -233,7 +233,6 @@ async function ensureLogin(
     ui: UI,
     resources: Resources,
 ): Promise<Result<void, ConnectionError>> {
-    // Non-insider version never errors
     while (!(await tmc.isAuthenticated()).unwrap()) {
         const loginMsg: {
             type?: "login";

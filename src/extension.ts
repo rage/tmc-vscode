@@ -51,7 +51,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
-    const tmc = new TMC(resources, () => settings.isInsider());
+    const tmc = new TMC(resources);
 
     const validationResult = await validateAndFix(storage, tmc, ui, resources);
     if (validationResult.err) {

@@ -90,9 +90,6 @@ export async function resourceInitialization(
         }
     });
 
-    /**
-     * Insider version toggle.
-     */
     const platform = getPlatform();
     Logger.log("Detected platform " + platform);
     Logger.log("Platform " + process.platform + " Arch " + process.arch);
