@@ -7,6 +7,7 @@ import {
     displayLocalCourseDetails,
     displayUserCourses,
     downloadExercises,
+    downloadExerciseUpdates,
     login,
     logout,
     openExercises,
@@ -78,7 +79,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.webview.registerHandler("myCourses", () => {
         displayUserCourses(actionContext);
     });
-    // TODO: Split download and update in more sensible way
+
     ui.webview.registerHandler(
         "downloadExercises",
         async (msg: {
@@ -108,19 +109,17 @@ export function registerUiActions(actionContext: ActionContext): void {
                 courseName: msg.courseName,
             };
             if (msg.mode === "update") {
-                ui.webview.postMessage({
-                    key: "course-updates",
-                    message: { command: "setUpdateables", exerciseIds: [] },
-                });
+                // downloadExerciseUpdates should return list of success and fails in future.
+                await downloadExerciseUpdates(actionContext, [downloads]);
+                return;
             }
             const successful = await downloadExercises(actionContext, [downloads]);
-            if (successful.length !== 0) {
-                if (msg.mode === "download") {
-                    await actionContext.userData.clearNewExercises(msg.courseId, successful);
-                }
+            const successfulIds = successful.map((ex) => ex.id);
+            if (successfulIds.length !== 0) {
+                await actionContext.userData.clearNewExercises(msg.courseId, successfulIds);
                 const openResult = await openExercises(
                     actionContext,
-                    successful,
+                    successfulIds,
                     downloads.courseName,
                 );
                 if (openResult.err) {

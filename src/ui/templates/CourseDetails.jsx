@@ -84,15 +84,12 @@ function component(data) {
                 <div class="row py-1">
                     <div class="col-md">
                         <div
-                            class="alert alert-warning"
-                            id="update-notification"
+                            class="alert alert-warning update-notification"
                             role="alert"
                             style="display: none"
                         >
                             <span class="mr-2">Updates found for exercises</span>
-                            <button class="btn btn-danger" id="update-button">
-                                Update exercises
-                            </button>
+                            <button class="btn btn-danger update-button">Update exercises</button>
                         </div>
                         {offlineMode ? (
                             <div class="alert alert-warning" role="alert">
@@ -384,6 +381,36 @@ function script() {
         }
     }
 
+    /**
+     * @param {string} courseId
+     * @param {number[]} exerciseIds
+     */
+    function setUpdateableExercises(courseId, exerciseIds) {
+        if (course.courseId !== courseId) {
+            return;
+        }
+
+        const notification = document.querySelector("div.update-notification");
+        const button = notification.querySelector("button.update-button");
+
+        if (notification && button) {
+            button.addEventListener("click", function () {
+                button.disabled = true;
+                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
+                downloadSelectedExercises(updateableIds, "update");
+            });
+        }
+
+        if (exerciseIds.length === 0) {
+            button.disabled = true;
+            notification.style.display = "none";
+        } else {
+            button.disabled = false;
+            button.dataset.exercises = exerciseIds;
+            notification.style.display = "block";
+        }
+    }
+
     function downloadSelectedExercises(ids, mode) {
         if (ids.length > 0) {
             vscode.postMessage({
@@ -531,17 +558,6 @@ function script() {
             });
         }
 
-        // Course details
-        const updateNotification = document.getElementById("update-notification");
-        const updateButton = document.getElementById("update-button");
-        if (updateNotification && updateButton) {
-            updateButton.addEventListener("click", function () {
-                updateButton.disabled = true;
-                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
-                downloadSelectedExercises(updateableIds, "update");
-            });
-        }
-
         // Course part cards
         const exerciseCards = document.querySelectorAll("div.exercise-card");
         for (let i = 0; i < exerciseCards.length; i++) {
@@ -664,16 +680,7 @@ function script() {
                     break;
                 }
                 case "setUpdateables": {
-                    const notification = document.getElementById("update-notification");
-                    const button = notification.querySelector("button#update-button");
-                    if (message.exerciseIds.length === 0) {
-                        button.disabled = true;
-                        notification.style.display = "none";
-                    } else {
-                        button.disabled = false;
-                        button.dataset.exercises = message.exerciseIds;
-                        notification.style.display = "block";
-                    }
+                    setUpdateableExercises(message.courseId.toString(), message.exerciseIds);
                     break;
                 }
                 case "setCourseDisabledStatus": {

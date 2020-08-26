@@ -234,10 +234,11 @@ export async function displayLocalCourseDetails(
             .find((u) => u.ok && u.val.courseId === courseId)
             ?.unwrap().exerciseIds || [];
     ui.webview.postMessage({
-        key: "course-updates",
+        key: `course-${courseId}-updates`,
         message: {
             command: "setUpdateables",
             exerciseIds: updateables,
+            courseId,
         },
     });
 }

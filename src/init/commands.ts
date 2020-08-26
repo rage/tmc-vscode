@@ -153,10 +153,11 @@ export function registerCommands(
                     courseName: course.name,
                 };
                 const successful = await downloadExercises(actionContext, [downloads]);
-                await userData.clearNewExercises(courseId, successful);
+                const successfulIds = successful.map((ex) => ex.id);
+                await userData.clearNewExercises(courseId, successfulIds);
                 const openResult = await openExercises(
                     actionContext,
-                    successful,
+                    successfulIds,
                     downloads.courseName,
                 );
                 if (openResult.err) {

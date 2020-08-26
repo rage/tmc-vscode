@@ -31,7 +31,7 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
                     exercise.val.status === ExerciseStatus.OPEN &&
                     currentWorkspace === exercise.val.course
                 ) {
-                    workspaceManager.updateExercisesStatus(exercise.val.id, ExerciseStatus.CLOSED);
+                    workspaceManager.setExerciseStatus(exercise.val.id, ExerciseStatus.CLOSED);
                     ui.webview.postMessage({
                         key: `exercise-${exercise.val.id}-status`,
                         message: {
@@ -51,7 +51,7 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
                     exercise.val.status === ExerciseStatus.CLOSED &&
                     currentWorkspace === exercise.val.course
                 ) {
-                    workspaceManager.updateExercisesStatus(exercise.val.id, ExerciseStatus.OPEN);
+                    workspaceManager.setExerciseStatus(exercise.val.id, ExerciseStatus.OPEN);
                     ui.webview.postMessage({
                         key: `exercise-${exercise.val.id}-status`,
                         message: {

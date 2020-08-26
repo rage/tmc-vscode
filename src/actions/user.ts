@@ -376,7 +376,7 @@ export async function checkForCourseUpdates(
     const { ui, userData } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
-    Logger.log(`Checking for new exercises for courses ${filteredCourses.map((c) => c.name)}`);
+    Logger.log(`Checking for course updates for courses ${filteredCourses.map((c) => c.name)}`);
     const updatedCourses: LocalCourseData[] = [];
     for (const course of filteredCourses) {
         await updateCourse(actionContext, course.id);
@@ -401,7 +401,8 @@ export async function checkForCourseUpdates(
                 courseName: course.name,
             },
         ]);
-        await userData.clearNewExercises(course.id, successful);
+        const successfulIds = successful.map((ex) => ex.id);
+        await userData.clearNewExercises(course.id, successfulIds);
         ui.webview.postMessage({
             key: `course-${course.id}-new-exercises`,
             message: {
@@ -410,7 +411,7 @@ export async function checkForCourseUpdates(
                 exerciseIds: course.newExercises,
             },
         });
-        const openResult = await openExercises(actionContext, successful, course.name);
+        const openResult = await openExercises(actionContext, successfulIds, course.name);
         if (openResult.err) {
             const message = "Failed to open new exercises.";
             Logger.error(message, openResult.val);
@@ -642,7 +643,9 @@ export async function updateCourse(
                 await userData.updateCourse({ ...course, disabled: true });
                 postMessage(course.id, true, []);
             } else {
-                Logger.warn(`Course is still disabled ${courseData.name}`);
+                Logger.warn(
+                    `AuthorizationError above probably caused by course still being disabled ${courseData.name}`,
+                );
                 postMessage(courseData.id, true, []);
             }
             return Ok(false);
