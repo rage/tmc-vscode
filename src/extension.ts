@@ -135,7 +135,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     init.registerCommands(context, actionContext);
 
     if (authenticated.val) {
-        vscode.commands.executeCommand("tmc.updateExercises");
+        vscode.commands.executeCommand("tmc.updateExercises", "silent");
         checkForCourseUpdates(actionContext);
     }
 
@@ -148,7 +148,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (authenticated.err) {
             Logger.error("Failed to check if authenticated", authenticated.val.message);
         } else if (authenticated.val) {
-            vscode.commands.executeCommand("tmc.updateExercises");
+            vscode.commands.executeCommand("tmc.updateExercises", "silent");
             checkForCourseUpdates(actionContext);
         }
     }, EXERCISE_CHECK_INTERVAL);

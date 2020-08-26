@@ -392,7 +392,7 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("tmc.updateExercises", async () => {
+        vscode.commands.registerCommand("tmc.updateExercises", async (silent: string) => {
             Logger.log("Checking for exercise updates");
             const updateResults = await checkForExerciseUpdates(actionContext, undefined);
 
@@ -410,6 +410,7 @@ export function registerCommands(
             if (failed.length > 0) {
                 Logger.warn("Failed to check updates for some courses.");
                 failed.forEach((x) => Logger.debug("Update failed: ", x));
+                silent !== "silent" && showError("Failed to check updates for some courses.");
             }
 
             const now = Date.now();
@@ -420,7 +421,7 @@ export function registerCommands(
 
             const updates = _.sumBy(filtered, (x) => x.exerciseIds.length);
             if (updates === 0) {
-                showNotification("All exercises are up to date.");
+                silent !== "silent" && showNotification("All exercises are up to date.");
                 return;
             }
 

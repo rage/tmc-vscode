@@ -332,7 +332,7 @@ export async function submitExercise(
     if (courseId) {
         checkForCourseUpdates(actionContext, courseId);
     }
-    vscode.commands.executeCommand("tmc.updateExercises");
+    vscode.commands.executeCommand("tmc.updateExercises", "silent");
     return Ok.EMPTY;
 }
 

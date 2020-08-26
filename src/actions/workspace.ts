@@ -85,7 +85,11 @@ export async function downloadExercises(
         state: LocalExerciseData,
     ): Promise<void> => {
         const dataResult = workspaceManager.getExerciseDataById(state.id);
-        if (dataResult.ok && dataResult.val.checksum === state.checksum) {
+        if (
+            dataResult.ok &&
+            dataResult.val.checksum === state.checksum &&
+            dataResult.val.status !== ExerciseStatus.MISSING
+        ) {
             resolveTask(
                 Err(new ExerciseExistsError("Skipping download of already existing exercise.")),
                 state,
