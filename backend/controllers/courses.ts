@@ -9,6 +9,10 @@ const coursesRouter = Router();
 
 coursesRouter.get("/:id", (req, res: Response<CourseSettings>, next) => {
     const course = courses.find((c) => c.id.toString() === req.params.id);
+    if (!course) {
+        next();
+    }
+
     const organization = organizations.find((o) => o.id === course.id);
     return course && organization
         ? res.json({

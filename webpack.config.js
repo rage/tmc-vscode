@@ -43,6 +43,9 @@ const config = () => {
                 handlebars: "handlebars/dist/handlebars.min.js",
             },
         },
+        node: {
+            __dirname: false,
+        },
         module: {
             rules: [
                 {
