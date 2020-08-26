@@ -19,8 +19,6 @@ import * as UITypes from "../ui/types";
 import { isCorrectWorkspaceOpen, Logger, sleep } from "../utils";
 import { showNotification } from "../window";
 
-import { ExerciseDetails } from "./types";
-
 /**
  * Class for managing, opening and closing of exercises on disk.
  */
@@ -68,20 +66,6 @@ export default class WorkspaceManager {
         });
     }
 
-    public updateExerciseData(
-        id: number,
-        softDeadline: string | null,
-        hardDeadline: string | null,
-    ): void {
-        const data = this._idToData.get(id);
-        if (data) {
-            data.deadline = hardDeadline;
-            data.softDeadline = softDeadline;
-            this._idToData.set(id, data);
-            this._updatePersistentData();
-        }
-    }
-
     public updateExercisesStatus(id: number, status: ExerciseStatus): void {
         const data = this._idToData.get(id);
         if (data) {
@@ -91,61 +75,36 @@ export default class WorkspaceManager {
         }
     }
 
-    /**
-     * Creates a unique human-readable directory path for an exercise and persistently manages its
-     * relation to exercise's actual id.
-     *
-     * @param organizationSlug Organization slug used in the creation of exercise path
-     * @param exerciseDetails Exercise details used in the creation of exercise path
-     */
-    public async createExerciseDownloadPath(
-        softDeadline: string | null,
-        organizationSlug: string,
-        checksum: string,
-        exerciseDetails: ExerciseDetails,
-    ): Promise<Result<string, Error>> {
-        if (this._idToData.has(exerciseDetails.exercise_id)) {
-            const data = this._idToData.get(exerciseDetails.exercise_id);
-            if (!data) {
-                return new Err(new Error("Data integrity error"));
-            }
-            if (data.status === ExerciseStatus.MISSING) {
-                await this.deleteExercise(exerciseDetails.exercise_id);
-            } else if (data.checksum !== checksum) {
-                if (data.status === ExerciseStatus.OPEN) {
-                    // This could cause race condition...
-                    await this.closeExercise(
-                        exerciseDetails.course_name,
-                        exerciseDetails.exercise_id,
-                    );
-                }
-            } else {
-                const path = this._getExercisePath(data);
-                if (fs.existsSync(path) && fs.readdirSync(path).length !== 0) {
-                    return new Err(new ExerciseExistsError("Exercise already downloaded"));
-                }
-            }
+    public setExerciseChecksum(exerciseId: number, checksum: string): void {
+        const data = this._idToData.get(exerciseId);
+        if (data) {
+            this._idToData.set(exerciseId, { ...data, checksum });
+            this._updatePersistentData();
         }
+    }
+
+    /**
+     * Adds new exercise to be managed on disk.
+     *
+     * @param exercise Exercise to add.
+     * @returns Unique file path for the exercise.
+     */
+    public async addExercise(exercise: LocalExerciseData): Promise<Result<string, Error>> {
+        if (this._idToData.has(exercise.id)) {
+            return new Err(new ExerciseExistsError("Data for this exercise already exists."));
+        }
+
         const exerciseFolderPath = this._resources.getExercisesFolderPath();
         const exercisePath = path.join(
             exerciseFolderPath,
-            organizationSlug,
-            exerciseDetails.course_name,
-            exerciseDetails.exercise_name,
+            exercise.organization,
+            exercise.course,
+            exercise.name,
         );
-        this._pathToId.set(exercisePath, exerciseDetails.exercise_id);
-        this._idToData.set(exerciseDetails.exercise_id, {
-            checksum,
-            course: exerciseDetails.course_name,
-            deadline: exerciseDetails.deadline,
-            id: exerciseDetails.exercise_id,
-            status: ExerciseStatus.CLOSED,
-            name: exerciseDetails.exercise_name,
-            organization: organizationSlug,
-            softDeadline: softDeadline,
-        });
-        await this._updatePersistentData();
-        return new Ok(exercisePath);
+
+        this._pathToId.set(exercisePath, exercise.id);
+        this._idToData.set(exercise.id, exercise);
+        return Ok(exercisePath);
     }
 
     /**

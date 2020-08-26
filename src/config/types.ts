@@ -19,7 +19,9 @@ export type LocalCourseData = {
 export type LocalCourseExercise = {
     id: number;
     name: string;
+    deadline: string | null;
     passed: boolean;
+    softDeadline: string | null;
 };
 
 export type LocalExerciseData = {
@@ -29,8 +31,6 @@ export type LocalExerciseData = {
     organization: string;
     checksum: string;
     status: ExerciseStatus;
-    deadline: string | null;
-    softDeadline: string | null;
 };
 
 export enum ExerciseStatus {

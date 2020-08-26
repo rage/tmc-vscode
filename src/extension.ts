@@ -2,7 +2,7 @@ import * as fs from "fs-extra";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { checkForCourseUpdates, checkForExerciseUpdates } from "./actions";
+import { checkForCourseUpdates } from "./actions";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import { DEBUG_MODE, EXERCISE_CHECK_INTERVAL } from "./config/constants";
@@ -135,7 +135,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     init.registerCommands(context, actionContext);
 
     if (authenticated.val) {
-        checkForExerciseUpdates(actionContext);
+        vscode.commands.executeCommand("tmc.updateExercises", "silent");
         checkForCourseUpdates(actionContext);
     }
 
@@ -148,7 +148,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (authenticated.err) {
             Logger.error("Failed to check if authenticated", authenticated.val.message);
         } else if (authenticated.val) {
-            checkForExerciseUpdates(actionContext);
+            vscode.commands.executeCommand("tmc.updateExercises", "silent");
             checkForCourseUpdates(actionContext);
         }
     }, EXERCISE_CHECK_INTERVAL);
