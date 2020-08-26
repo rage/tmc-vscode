@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.0.0] - 2020-08-31
+
+#### Added
+- VSCode command for checking for exercise updates.
+- Open logs folder button to Settings page.
+- *Need Help?* option on TMC Submission Result view.
+- When downloading an exercise, download last submission by default.
+    * Default behavior can be changed in Settings.
+
+#### Changed
+- Show some TMC-VSCode commands only when logged in.
+- TMC-langs Rust version 0.1.20-alpha.
+- VSCode Python Interpreter path passed to TMC-langs Rust.
+- All API Requests handled externally by TMC-langs Rust.
+- Handle login and logout externally by TMC-langs Rust.
+- Exercise related actions use TMC-langs Rust.
+- TMC-langs commands to obfuscate sensitive details from TMC logs.
+
+#### Removed
+- Temporarily removed *Show submission in browser* button in Submission Queue view.
+- Download of AdoptOpenJDK if Java not present in system.
+- Download of TMC-langs Java CLI .jar file.
+- From tmcdata the "closed-exercise" folder, if empty.
+
 ## [0.10.0] - 2020-08-10
 
 #### Added

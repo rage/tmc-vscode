@@ -5,6 +5,8 @@ interface WelcomeProps {
     version: string;
     newWorkspace: Uri;
     openNewWorkspace: Uri;
+    TMCMenuIcon: Uri;
+    newTMCMenu: Uri;
     tmcLogoFile: Uri;
 }
 

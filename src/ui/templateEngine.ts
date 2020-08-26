@@ -282,11 +282,13 @@ export default class TemplateEngine {
                         ...templateData,
                         newWorkspace: webview.asWebviewUri(templateData.newWorkspace),
                         openNewWorkspace: webview.asWebviewUri(templateData.openNewWorkspace),
+                        TMCMenuIcon: webview.asWebviewUri(templateData.TMCMenuIcon),
+                        newTMCMenu: webview.asWebviewUri(templateData.newTMCMenu),
                         tmcLogoFile: webview.asWebviewUri(templateData.tmcLogoFile),
                     }),
                     cspSource: webview.cspSource,
                     cssBlob,
-                    script: Welcome.script,
+                    // script: Welcome.script,
                 });
         }
 
