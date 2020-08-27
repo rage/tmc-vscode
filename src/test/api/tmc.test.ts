@@ -10,7 +10,7 @@ import Resources from "../../config/resources";
 import { AuthenticationError, RuntimeError } from "../../errors";
 import { getPlatform, getRustExecutable } from "../../utils/env";
 
-suite.skip("TMC", () => {
+suite("TMC", function () {
     // Use CLI from backend folder to run tests. The location is relative to the dist-folder
     // where webpack builds the test bundle.
     const CLI_PATH = path.join(__dirname, "..", "backend", "resources");
