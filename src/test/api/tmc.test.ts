@@ -7,7 +7,7 @@ import * as TypeMoq from "typemoq";
 import TMC from "../../api/tmc";
 import { CLIENT_NAME } from "../../config/constants";
 import Resources from "../../config/resources";
-import { AuthenticationError, RuntimeError } from "../../errors";
+import { AuthenticationError, AuthorizationError, RuntimeError } from "../../errors";
 import { getPlatform, getRustExecutable } from "../../utils/env";
 
 suite("TMC", function () {
@@ -94,7 +94,13 @@ suite("TMC", function () {
     });
 
     suite("#getCourseDetails()", function () {
+        test("Causes AuthorizationError if not authenticated", async function () {
+            const result = await tmc.getCourseDetails(0);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
+        });
+
         test("Returns course details of given course", async function () {
+            writeCliConfig();
             const course = (await tmc.getCourseDetails(0)).unwrap().course;
             expect(course.id).to.be.equal(0);
             expect(course.name).to.be.equal("mock-course");
@@ -116,9 +122,9 @@ suite("TMC", function () {
     });
 
     suite("#getCourses()", function () {
-        test("Causes RuntimeError if not authenticated", async function () {
+        test("Causes AuthorizationError if not authenticated", async function () {
             const result = await tmc.getCourses("mock");
-            expect(result.val).to.be.instanceOf(RuntimeError);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
         test("Returns courses when authenticated", async function () {
@@ -129,15 +135,16 @@ suite("TMC", function () {
         });
 
         test("Causes RuntimeError for nonexistent organization", async function () {
+            writeCliConfig();
             const result = await tmc.getCourses("null");
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
     suite("#getCourseSettings()", function () {
-        test("Causes RuntimeError if not authenticated", async function () {
-            const result = await tmc.getCourseSettings(404);
-            expect(result.val).to.be.instanceOf(RuntimeError);
+        test("Causes AuthorizationError if not authenticated", async function () {
+            const result = await tmc.getCourseSettings(0);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
         test("Returns course settings when authenticated", async function () {
@@ -147,6 +154,7 @@ suite("TMC", function () {
         });
 
         test("Causes RuntimeError for nonexistent course", async function () {
+            writeCliConfig();
             const result = await tmc.getCourseSettings(404);
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
