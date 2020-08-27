@@ -15,6 +15,7 @@ suite("TMC", function () {
     // where webpack builds the test bundle.
     const CLI_PATH = path.join(__dirname, "..", "backend", "cli");
     const CLI_FILE = path.join(CLI_PATH, getRustExecutable(getPlatform()));
+    const COURSE_PATH = path.join(__dirname, "..", "backend", "resources", "test-python-course");
 
     function removeCliConfig(): void {
         const config = path.join(CLI_PATH, `tmc-${CLIENT_NAME}`);
@@ -90,6 +91,36 @@ suite("TMC", function () {
         test("Deauthenticates", async function () {
             const result = await tmc.deauthenticate();
             expect(result.ok).to.be.true;
+        });
+    });
+
+    suite("#clean()", function () {
+        test("Clears exercise", async function () {
+            const exercise = path.join(COURSE_PATH, "part01-01_passing_exercise");
+            const result = (await tmc.clean(exercise)).unwrap();
+            expect(result).to.be.undefined;
+        });
+
+        test("Causes RuntimeError for nonexistent exercise", async function () {
+            const exercise = path.join(COURSE_PATH, "part01-404_missing_exercise");
+            const result = await tmc.clean(exercise);
+            expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+    });
+
+    suite("#runTests()", function () {
+        test("Returns test results", async function () {
+            const exercise = path.join(COURSE_PATH, "part01-01_passing_exercise");
+            const result = (await tmc.runTests(exercise)[0]).unwrap();
+            expect(result.status).to.be.equal("PASSED");
+        });
+
+        test("Can be interrupted");
+
+        test("Causes RuntimeError for nonexistent exercise", async function () {
+            const exercise = path.join(COURSE_PATH, "part01-404_missing_exercise");
+            const result = await tmc.runTests(exercise)[0];
+            expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
