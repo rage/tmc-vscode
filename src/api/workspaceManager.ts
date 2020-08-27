@@ -66,7 +66,7 @@ export default class WorkspaceManager {
         });
     }
 
-    public updateExercisesStatus(id: number, status: ExerciseStatus): void {
+    public setExerciseStatus(id: number, status: ExerciseStatus): void {
         const data = this._idToData.get(id);
         if (data) {
             data.status = status;

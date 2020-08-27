@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 
 import { EMPTY_HTML_DOCUMENT } from "../config/constants";
 import Resources from "../config/resources";
+import { Logger } from "../utils";
 
 import TemplateEngine from "./templateEngine";
 import { TemplateData, WebviewMessage } from "./types";
@@ -137,7 +138,7 @@ export default class TmcWebview {
                     if (handler) {
                         handler(msg);
                     } else {
-                        console.error("Unhandled message type: " + msg.type);
+                        Logger.error("Unhandled message type: " + msg.type);
                     }
                 },
                 this,

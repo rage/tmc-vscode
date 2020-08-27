@@ -142,7 +142,7 @@ export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): 
                 question: x.question,
             });
         } else {
-            console.log("Unexpected feedback question type:", x.kind);
+            Logger.log("Unexpected feedback question type:", x.kind);
         }
     });
     return feedbackQuestions;

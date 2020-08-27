@@ -35,7 +35,7 @@ export async function downloadExercises(
     actionContext: ActionContext,
     courseExerciseDownloads: CourseExerciseDownloads[],
     options?: DownloadExercisesOptions,
-): Promise<number[]> {
+): Promise<LocalExerciseData[]> {
     const { tmc, ui, workspaceManager, settings } = actionContext;
 
     interface StatusChange {
@@ -67,12 +67,16 @@ export async function downloadExercises(
     ): Promise<void> => {
         postChange({
             exerciseId: state.id,
-            status: result.ok ? "closed" : "downloadFailed",
+            status: result.ok
+                ? state.status === ExerciseStatus.CLOSED
+                    ? "closed"
+                    : "opened"
+                : "downloadFailed",
         });
         if (result.ok || result.val instanceof ExerciseExistsError) {
             successful.push(state);
             workspaceManager.setExerciseChecksum(state.id, state.checksum);
-            workspaceManager.updateExercisesStatus(state.id, ExerciseStatus.CLOSED);
+            workspaceManager.setExerciseStatus(state.id, state.status);
         } else {
             failed.push(state);
             await workspaceManager.deleteExercise(state.id);
@@ -85,10 +89,11 @@ export async function downloadExercises(
         state: LocalExerciseData,
     ): Promise<void> => {
         const dataResult = workspaceManager.getExerciseDataById(state.id);
+        state.status = dataResult.ok ? dataResult.val.status : ExerciseStatus.MISSING;
         if (
             dataResult.ok &&
             dataResult.val.checksum === state.checksum &&
-            dataResult.val.status !== ExerciseStatus.MISSING
+            state.status !== ExerciseStatus.MISSING
         ) {
             resolveTask(
                 Err(new ExerciseExistsError("Skipping download of already existing exercise.")),
@@ -117,6 +122,9 @@ export async function downloadExercises(
                 tmc.downloadExercise(state.id, pathResult.val, (downloadedPct, increment) =>
                     process.report({ downloadedPct, increment }),
                 ).then((res: Result<void, Error>) => {
+                    if (state.status === ExerciseStatus.MISSING) {
+                        state.status = ExerciseStatus.CLOSED;
+                    }
                     resolveTask(res, state);
                     resolve();
                 });
@@ -136,6 +144,9 @@ export async function downloadExercises(
                     (downloadedPct, increment) => process.report({ downloadedPct, increment }),
                 ).then((res: Result<void, Error>) => {
                     oldSubmissionDownloaded = true;
+                    if (state.status === ExerciseStatus.MISSING) {
+                        state.status = ExerciseStatus.CLOSED;
+                    }
                     resolveTask(res, state);
                     resolve();
                 });
@@ -197,16 +208,15 @@ export async function downloadExercises(
     if (oldSubmissionDownloaded) {
         showNotification(
             "Some downloaded exercises were restored to the state of your latest submission. " +
-                "If you wish to reset them to their original state, you can do so by using the TMC Menu (CTRL + SHIFT + A).",
+                "If you wish to reset them to their original state, you can do so by using TMC Commands Menu (CTRL + SHIFT + A).",
             ["OK", (): void => {}],
         );
     }
 
-    return successful.map((x) => x.id);
+    return successful;
 }
 
 interface UpdateCheckOptions {
-    notify?: boolean;
     useCache?: boolean;
 }
 
@@ -222,9 +232,10 @@ export async function checkForExerciseUpdates(
     const { tmc, userData, workspaceManager } = actionContext;
 
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
-    Logger.log(`Checking for exercise updates for courses ${courses.map((c) => c.name)}`);
+    const filteredCourses = courses.filter((c) => !c.disabled);
+    Logger.log(`Checking for exercise updates for courses ${filteredCourses.map((c) => c.name)}`);
     return await Promise.all(
-        courses.map(async (course) => {
+        filteredCourses.map(async (course) => {
             const organizationSlug = course.organization;
 
             const detailsResult = await tmc.getCourseDetails(
@@ -261,23 +272,29 @@ export async function downloadExerciseUpdates(
 ): Promise<Result<void, Error>> {
     const { ui } = actionContext;
 
-    ui.webview.postMessage({
-        key: "course-updates",
-        message: { command: "setUpdateables", exerciseIds: [] },
-    });
+    ui.webview.postMessage(
+        ...coursesToUpdate.map<{ key: string; message: UITypes.WebviewMessage }>((ced) => ({
+            key: `course-${ced.courseId}-updates`,
+            message: { command: "setUpdateables", exerciseIds: [], courseId: ced.courseId },
+        })),
+    );
 
+    // DownloadExercises should return list of success and fails in future.
     const successful = await downloadExercises(actionContext, coursesToUpdate, {
         skipOldSubmissionCheck: true,
     });
+    const successfulIds = successful.map((ex) => ex.id);
 
-    const toUpdate = _.flatten(coursesToUpdate.map((x) => x.exerciseIds));
-
-    ui.webview.postMessage({
-        key: "course-updates",
-        message: { command: "setUpdateables", exerciseIds: _.intersection(toUpdate, successful) },
-    });
-
-    // TODO: Get informative data from downloadExercises
+    ui.webview.postMessage(
+        ...coursesToUpdate.map<{ key: string; message: UITypes.WebviewMessage }>((ced) => ({
+            key: `course-${ced.courseId}-updates`,
+            message: {
+                command: "setUpdateables",
+                exerciseIds: _.difference(ced.exerciseIds, successfulIds),
+                courseId: ced.courseId,
+            },
+        })),
+    );
     return Ok.EMPTY;
 }
 

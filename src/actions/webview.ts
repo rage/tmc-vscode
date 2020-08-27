@@ -69,7 +69,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
             return;
         }
 
-        const exercises: Exercise[] = (await tmc.getCourseDetails(courseId, true))
+        const exercises: Exercise[] = (await tmc.getCourseDetails(courseId))
             .map((x) => x.course.exercises)
             .unwrapOr([]);
 
@@ -225,19 +225,15 @@ export async function displayLocalCourseDetails(
     );
 
     const updateables =
-        (
-            await checkForExerciseUpdates(actionContext, courseId, {
-                notify: false,
-                useCache: true,
-            })
-        )
+        (await checkForExerciseUpdates(actionContext, courseId))
             .find((u) => u.ok && u.val.courseId === courseId)
             ?.unwrap().exerciseIds || [];
     ui.webview.postMessage({
-        key: "course-updates",
+        key: `course-${courseId}-updates`,
         message: {
             command: "setUpdateables",
             exerciseIds: updateables,
+            courseId,
         },
     });
 }

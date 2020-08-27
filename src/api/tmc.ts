@@ -77,9 +77,8 @@ interface UncheckedLangsResponse {
         | "sent-data"
         | "retrieved-data"
         | "executed-command"
-        | "downloading"
-        | "compressing"
-        | "extracting"
+        | "downloading-exercise"
+        | "downloaded-exercise"
         | "processing"
         | "sending"
         | "waiting-for-results"
@@ -588,7 +587,7 @@ export default class TMC {
                 args: ["submit", "--submission-path", exercisePath, "--submission-url", submitUrl],
                 core: true,
                 onStdout: (res) =>
-                    progressCallback?.(50 * res["percent-done"], res.message || undefined),
+                    progressCallback?.(100 * res["percent-done"], res.message || undefined),
             },
             createIs<SubmissionStatusReport>(),
         ).then((res) => res.map((r) => r.data));

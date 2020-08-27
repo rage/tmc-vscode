@@ -156,6 +156,7 @@ export interface SetNewExercises {
 export interface SetUpdateables {
     command: "setUpdateables";
     exerciseIds: number[];
+    courseId: number;
 }
 
 export type WebviewMessage =

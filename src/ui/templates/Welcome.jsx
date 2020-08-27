@@ -5,13 +5,14 @@ const createElement = require("./templateUtils").createElement;
 /*eslint-env browser*/
 
 // Provided by VSCode vebview at runtime
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 /*global acquireVsCodeApi*/
 
 /**
  * @param {import("./Welcome").WelcomeProps} props
  */
 function component(props) {
-    const { newWorkspace, version, openNewWorkspace } = props;
+    const { newWorkspace, version, openNewWorkspace, newTMCMenu, TMCMenuIcon } = props;
 
     return (
         <div class="container welcome-container">
@@ -57,6 +58,49 @@ function component(props) {
                             CHANGELOG
                         </a>
                         .
+                    </p>
+                </div>
+                <h3>
+                    TMC Commands Menu <img src={TMCMenuIcon} />
+                </h3>
+                <div class="content_section">
+                    <p>
+                        All TMC related commands can now be found in the TMC Commands Menu{" "}
+                        <img src={TMCMenuIcon} /> (hotkey: CTRL + SHIFT + A) when logged in. This
+                        means that you can, for example, switch course workspace or download updates
+                        and new exercise for courses easily.
+                    </p>
+                    <img
+                        style="margin-bottom: 2.5em;"
+                        class="rounded mx-auto d-block"
+                        src={newTMCMenu}
+                    />
+                </div>
+
+                <h3>Removed Java Dependency</h3>
+                <div class="content_section">
+                    <p>
+                        The extension uses a middleware called TMC-langs to handle many of its
+                        features. As the old version of TMC-langs was written in Java, it caused an
+                        external dependency for this extension. A Rust replacement for TMC-langs was
+                        featured for Insider users since version 0.9.0 to handle some of the TMC
+                        related actions. Since version 1.0.0 TMC-langs Rust handles all TMC related
+                        commands and API requests, so Java dependency under the hood is removed. If
+                        the extension has downloaded Java, it will be removed from the tmcdata
+                        folder, aswell all the old TMC-langs jar files.
+                    </p>
+                </div>
+
+                <h3>Python Interpreter</h3>
+                <div class="content_section">
+                    <h5>Passing VSCode Python Interpreter to TMC-langs</h5>
+                    <p>
+                        For a while there has been an issue where the Python Interpreter used when
+                        testing exercises may have been different from the one used with normal
+                        execution. This happened because the VSCode Python extension allows changing
+                        between several detected Python versions on system, but the same information
+                        wasn't available to TMC-langs. In version 1.0.0 the Python Executable path
+                        is passed to TMC-langs.
                     </p>
                 </div>
 
@@ -115,56 +159,6 @@ function component(props) {
                             <img src={newWorkspace} />
                         </div>
                     </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-10">
-                        <h3>Insider features</h3>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="custom-control custom-switch">
-                            <input
-                                type="checkbox"
-                                class="custom-control-input"
-                                id="insider-status"
-                                disabled
-                            />
-                            <label class="custom-control-label" for="insider-status">
-                                Enabled
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                <div class="content_section">
-                    <p>
-                        These features are in preview and can be enabled by turning the insider mode
-                        on. Please be aware that they may cause issues or instability. You can
-                        always opt in or out from these features at the extension's settings page.
-                    </p>
-                    <h4>Java replacement</h4>
-                    <p>
-                        The extension uses a middleware called TMC-langs to handle many of its
-                        features. As TMC-langs was written in Java, it caused an external dependency
-                        for this extension. A Rust replacement was already featured silently in
-                        version 0.9.0 for the purpose of running tests for some users. This feature
-                        is now enabled for all users, while the new insider version no longer uses
-                        Java at all.
-                    </p>
-                    <h4>External TMC API requests</h4>
-                    <p>
-                        In addition to replacing the Java implementation, new TMC-langs provides a
-                        standard by which to communicate with TMC API. Almost all requests to TMC
-                        server are now handled by the new TMC-langs for insiders.
-                    </p>
-                    <h4>Passing Python executable to TMC-langs</h4>
-                    <p>
-                        For a while there has been an issue where the Python version used when
-                        testing exercises may have been different from the one used with normal
-                        execution. This happened because the Python extension allows changing
-                        between several detected Python versions on system, but the same information
-                        wasn't available to TMC-langs. The insider version is now able to pass this
-                        information to the new Langs as a possible fix.
-                    </p>
                 </div>
             </div>
 
@@ -258,7 +252,7 @@ function render(props) {
     return component(props).toString();
 }
 
-function script() {
+/* function script() {
     const vscode = acquireVsCodeApi();
     const insiderToggle = document.getElementById("insider-status");
     const insiderToggleLabel = document.getElementsByClassName("custom-control-label");
@@ -266,7 +260,7 @@ function script() {
     window.addEventListener("message", (event) => {
         for (let i = 0; i < event.data.length; i++) {
             /**@type {import("../types").WebviewMessage} */
-            const message = event.data[i];
+/* const message = event.data[i];
             switch (message.command) {
                 case "setInsiderStatus":
                     insiderToggleLabel[0].innerHTML = "Enabled";
@@ -290,6 +284,6 @@ function script() {
             }
         }
     });
-}
+} */
 
-export { component, render, script };
+export { component, render };
