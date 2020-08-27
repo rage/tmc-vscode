@@ -314,12 +314,11 @@ export async function submitExercise(
 
     const statusData = submissionResult.val;
     let feedbackQuestions: FeedbackQuestion[] = [];
-    let courseId = undefined;
+
     if (statusData.status === "ok" && statusData.all_tests_passed) {
         if (statusData.feedback_questions) {
             feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
         }
-        courseId = courseData.id;
     }
     Logger.debug("data", statusData);
     temp.setContent({
@@ -328,11 +327,10 @@ export async function submitExercise(
         messageHandler,
     });
     temporaryWebviewProvider.addToRecycables(temp);
-    // Check for new exercises if exercise passed.
-    if (courseId) {
-        checkForCourseUpdates(actionContext, courseId);
-    }
+
+    checkForCourseUpdates(actionContext, courseData.id);
     vscode.commands.executeCommand("tmc.updateExercises", "silent");
+
     return Ok.EMPTY;
 }
 

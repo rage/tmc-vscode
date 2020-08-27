@@ -69,7 +69,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
             return;
         }
 
-        const exercises: Exercise[] = (await tmc.getCourseDetails(courseId, true))
+        const exercises: Exercise[] = (await tmc.getCourseDetails(courseId))
             .map((x) => x.course.exercises)
             .unwrapOr([]);
 

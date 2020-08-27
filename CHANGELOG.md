@@ -11,11 +11,12 @@
 
 #### Changed
 - Show some TMC-VSCode commands only when logged in.
-- TMC-langs Rust version 0.1.20-alpha.
+- Bumped TMC-langs Rust version to 0.1.0.
 - VSCode Python Interpreter path passed to TMC-langs Rust.
 - All API Requests handled externally by TMC-langs Rust.
 - Exercise related actions use TMC-langs Rust.
 - TMC-langs commands to obfuscate sensitive details from TMC logs.
+- Technical improvements to My Courses page.
 
 #### Removed
 - Temporarily removed *Show submission in browser* button in Submission Queue view.
