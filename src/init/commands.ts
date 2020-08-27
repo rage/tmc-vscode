@@ -153,10 +153,11 @@ export function registerCommands(
                     courseName: course.name,
                 };
                 const successful = await downloadExercises(actionContext, [downloads]);
-                await userData.clearNewExercises(courseId, successful);
+                const successfulIds = successful.map((ex) => ex.id);
+                await userData.clearNewExercises(courseId, successfulIds);
                 const openResult = await openExercises(
                     actionContext,
-                    successful,
+                    successfulIds,
                     downloads.courseName,
                 );
                 if (openResult.err) {
@@ -461,6 +462,12 @@ export function registerCommands(
                     ),
                     openNewWorkspace: vscode.Uri.file(
                         path.join(resources.mediaFolder, "welcome_open_new_workspace.png"),
+                    ),
+                    TMCMenuIcon: vscode.Uri.file(
+                        path.join(resources.mediaFolder, "welcome_tmc_menu_icon.png"),
+                    ),
+                    newTMCMenu: vscode.Uri.file(
+                        path.join(resources.mediaFolder, "welcome_new_tmc_menu.png"),
                     ),
                     tmcLogoFile: vscode.Uri.file(path.join(resources.mediaFolder, "TMC.png")),
                 },
