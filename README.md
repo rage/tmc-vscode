@@ -13,7 +13,6 @@ Students of its various organizations can download, complete and return course e
 
 * Visual Studio Code version 1.40.xx or above
 * [TestMyCode](https://tmc.mooc.fi/) account
-* [Java](https://www.java.com/) runtime (for packing/unpacking and testing exercises)
 * Course-specific system environment   
   * For _Java courses_, use same version of JDK and JRE
 
@@ -23,7 +22,7 @@ Instructions on how to install and use the extension in Visual Studio Code can b
 
 ### Commands
 
-A list of available commands can be found under the `TMC Menu` button located at the top right for an active editor.
+A list of all available commands can be found under the `TMC Commands Menu` button located at the top right for an active editor.
 
 ## Contributing
 

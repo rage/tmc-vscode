@@ -122,7 +122,9 @@ export async function downloadExercises(
                 tmc.downloadExercise(state.id, pathResult.val, (downloadedPct, increment) =>
                     process.report({ downloadedPct, increment }),
                 ).then((res: Result<void, Error>) => {
-                    state.status = ExerciseStatus.CLOSED;
+                    if (state.status === ExerciseStatus.MISSING) {
+                        state.status = ExerciseStatus.CLOSED;
+                    }
                     resolveTask(res, state);
                     resolve();
                 });
@@ -142,7 +144,9 @@ export async function downloadExercises(
                     (downloadedPct, increment) => process.report({ downloadedPct, increment }),
                 ).then((res: Result<void, Error>) => {
                     oldSubmissionDownloaded = true;
-                    state.status = ExerciseStatus.CLOSED;
+                    if (state.status === ExerciseStatus.MISSING) {
+                        state.status = ExerciseStatus.CLOSED;
+                    }
                     resolveTask(res, state);
                     resolve();
                 });
@@ -204,7 +208,7 @@ export async function downloadExercises(
     if (oldSubmissionDownloaded) {
         showNotification(
             "Some downloaded exercises were restored to the state of your latest submission. " +
-                "If you wish to reset them to their original state, you can do so by using the TMC Menu (CTRL + SHIFT + A).",
+                "If you wish to reset them to their original state, you can do so by using TMC Commands Menu (CTRL + SHIFT + A).",
             ["OK", (): void => {}],
         );
     }
@@ -213,7 +217,6 @@ export async function downloadExercises(
 }
 
 interface UpdateCheckOptions {
-    notify?: boolean;
     useCache?: boolean;
 }
 

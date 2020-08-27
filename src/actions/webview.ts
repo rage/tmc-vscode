@@ -225,12 +225,7 @@ export async function displayLocalCourseDetails(
     );
 
     const updateables =
-        (
-            await checkForExerciseUpdates(actionContext, courseId, {
-                notify: false,
-                useCache: true,
-            })
-        )
+        (await checkForExerciseUpdates(actionContext, courseId))
             .find((u) => u.ok && u.val.courseId === courseId)
             ?.unwrap().exerciseIds || [];
     ui.webview.postMessage({

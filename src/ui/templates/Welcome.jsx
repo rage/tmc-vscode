@@ -61,11 +61,11 @@ function component(props) {
                     </p>
                 </div>
                 <h3>
-                    TMC Menu <img src={TMCMenuIcon} />
+                    TMC Commands Menu <img src={TMCMenuIcon} />
                 </h3>
                 <div class="content_section">
                     <p>
-                        All TMC related commands can now be found in the TMC Menu{" "}
+                        All TMC related commands can now be found in the TMC Commands Menu{" "}
                         <img src={TMCMenuIcon} /> (hotkey: CTRL + SHIFT + A) when logged in. This
                         means that you can, for example, switch course workspace or download updates
                         and new exercise for courses easily.
