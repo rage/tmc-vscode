@@ -33,7 +33,7 @@ const langsVersion = ((): string => {
 })();
 
 const download = async (url: string, fileName: string): Promise<void> => {
-    const langsPath = path.resolve(__dirname, "resources");
+    const langsPath = path.resolve(__dirname, "cli");
     if (!fs.existsSync(langsPath)) {
         fs.mkdirSync(langsPath, { recursive: true });
     }

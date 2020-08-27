@@ -13,7 +13,7 @@ import { getPlatform, getRustExecutable } from "../../utils/env";
 suite("TMC", function () {
     // Use CLI from backend folder to run tests. The location is relative to the dist-folder
     // where webpack builds the test bundle.
-    const CLI_PATH = path.join(__dirname, "..", "backend", "resources");
+    const CLI_PATH = path.join(__dirname, "..", "backend", "cli");
     const CLI_FILE = path.join(CLI_PATH, getRustExecutable(getPlatform()));
 
     function removeCliConfig(): void {

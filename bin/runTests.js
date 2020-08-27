@@ -6,8 +6,11 @@ const kill = require("tree-kill");
 const runTests = require("vscode-test").runTests;
 
 async function main() {
+    let exitCode = 0;
+    /**@type {import("child_process").ChildProcess} */
+    let backend;
     try {
-        const backend = cp.exec("npm start", { cwd: path.join(__dirname, "..", "backend") });
+        backend = cp.exec("npm start", { cwd: path.join(__dirname, "..", "backend") });
         const platform =
             process.platform === "win32" && process.arch === "x64"
                 ? "win32-x64-archive"
@@ -23,10 +26,12 @@ async function main() {
 
         // Download VS Code, unzip it and run the integration test
         await runTests({ extensionDevelopmentPath, extensionTestsPath, platform });
-        kill(backend.pid);
     } catch (err) {
         console.error("Failed to run tests");
-        process.exit(1);
+        exitCode = 1;
+    } finally {
+        kill(backend.pid);
+        process.exit(exitCode);
     }
 }
 
