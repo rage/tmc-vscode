@@ -1,4 +1,5 @@
 import fs from "fs";
+import { ncp } from "ncp";
 import fetch from "node-fetch";
 import path from "path";
 
@@ -32,6 +33,20 @@ const langsVersion = ((): string => {
     return "other";
 })();
 
+const copyTMCPythonModules = (): void => {
+    const module = path.join(__dirname, "..", "submodules", "tmc-python-tester", "tmc");
+    const courseDirectory = path.join(path.join(__dirname, "resources", "test-python-course"));
+    const pythonExercises = fs
+        .readdirSync(courseDirectory, { withFileTypes: true })
+        .filter((x) => x.isDirectory())
+        .map((x) => path.join(courseDirectory, x.name, "tmc"));
+    pythonExercises.forEach((exercise) => {
+        console.log(`Copying tmc module to ${exercise}`);
+        ncp(module, exercise, () => {});
+    });
+    console.log("Modules copied!");
+};
+
 const download = async (url: string, fileName: string): Promise<void> => {
     const langsPath = path.resolve(__dirname, "cli");
     if (!fs.existsSync(langsPath)) {
@@ -54,6 +69,8 @@ const download = async (url: string, fileName: string): Promise<void> => {
 
 (async (): Promise<void> => {
     try {
+        console.log("Copying tmc modules to python courses...");
+        copyTMCPythonModules();
         console.log("Starting server setup...");
         await download(LANGS_RUST_URL + langsVersion, langsVersion);
         console.log("Setup complete!");

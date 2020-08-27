@@ -4,5 +4,6 @@ dist
 **/node_modules
 out
 test-resources/
+submodules/
 .vscode-test/
 vscode.proposed.d.ts
