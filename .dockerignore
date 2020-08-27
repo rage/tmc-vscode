@@ -1,7 +1,7 @@
 .git/
 .github/
 backend/node_modules/
-backend/resources/
+backend/cli/
 dist/
 node_modules/
 out/
