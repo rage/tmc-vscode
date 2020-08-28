@@ -68,11 +68,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         Logger.show();
         return;
     }
-
+    await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated.val);
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated.val);
     const visibilityGroups = {
         LOGGED_IN,
     };
+
+    tmc.on("login", async () => {
+        await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", true);
+        ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
+    });
+    tmc.on("logout", async () => {
+        await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
+        ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN.not]);
+    });
 
     const workspaceManager = new WorkspaceManager(storage, resources);
     await workspaceManager.initialize();
@@ -151,6 +160,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             vscode.commands.executeCommand("tmc.updateExercises", "silent");
             checkForCourseUpdates(actionContext);
         }
+        await vscode.commands.executeCommand(
+            "setContext",
+            "test-my-code:LoggedIn",
+            authenticated.val,
+        );
     }, EXERCISE_CHECK_INTERVAL);
 
     init.watchForWorkspaceChanges(actionContext);

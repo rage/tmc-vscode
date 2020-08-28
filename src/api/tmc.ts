@@ -4,7 +4,6 @@ import * as _ from "lodash";
 import * as kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
-import * as vscode from "vscode";
 
 import {
     CLIENT_NAME,
@@ -106,6 +105,8 @@ interface LangsError {
 export default class TMC {
     private readonly _resources: Resources;
     private readonly _rustCache: Map<string, LangsResponse<unknown>>;
+    private _onLogin?: () => void;
+    private _onLogout?: () => void;
 
     /**
      * Creates a new instance of TMC interface class.
@@ -118,12 +119,29 @@ export default class TMC {
         this._rustCache = new Map();
     }
 
+    /**
+     * Sets the callback to an event. Will overwrite previous callback for the specified event.
+     *
+     * @param event Event to subscribe to.
+     * @param callback Eventhandler to invoke on event.
+     */
+    public on(event: "login" | "logout", callback: () => void): void {
+        switch (event) {
+            case "login":
+                this._onLogin = callback;
+                break;
+            case "logout":
+                this._onLogout = callback;
+                break;
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Authentication commands
     // ---------------------------------------------------------------------------------------------
 
     /**
-     * Authenticates user to TMC services. Uses TMC-langs `core login` command internally.
+     * Authenticates user to TMC services. Uses TMC-langs `login` core command internally.
      *
      * This operation will fails if wrong credentials are provided or if the user is already signed
      * in.
@@ -145,12 +163,12 @@ export default class TMC {
             return Err(new AuthenticationError(loginResult.val.message));
         }
 
-        await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", true);
+        this._onLogin?.();
         return Ok.EMPTY;
     }
 
     /**
-     * Passes an access token to TMC-langs. Uses TMC-langs `core login` command internally.
+     * Passes an access token to TMC-langs. Uses TMC-langs `login` core command internally.
      *
      * @deprecated Since version 1.0.0. Should only be used for passing the token to TMC-langs from
      * older versions.
@@ -171,12 +189,12 @@ export default class TMC {
             return setTokenResult;
         }
 
-        await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", true);
+        this._onLogin?.();
         return Ok.EMPTY;
     }
 
     /**
-     * Returns user's current authentication status. Uses TMC-langs `core logged-in` command
+     * Returns user's current authentication status. Uses TMC-langs `logged-in` core command
      * internally.
      *
      * @returns Boolean indicating if the user is authenticated.
@@ -192,10 +210,8 @@ export default class TMC {
 
         switch (loggedInResult.val.result) {
             case "logged-in":
-                await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", true);
                 return new Ok(true);
             case "not-logged-in":
-                await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
                 return new Ok(false);
             default:
                 return Err(new Error(`Unexpected langs result: ${loggedInResult.val.result}`));
@@ -203,7 +219,7 @@ export default class TMC {
     }
 
     /**
-     * Deauthenticates current user. Uses TMC-langs `core logout` command internally.
+     * Deauthenticates current user. Uses TMC-langs `logout` core command internally.
      */
     public async deauthenticate(): Promise<Result<void, Error>> {
         const logoutResult = await this._executeLangsCommand(
@@ -214,7 +230,7 @@ export default class TMC {
             return logoutResult;
         }
 
-        await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
+        this._onLogout?.();
         return Ok.EMPTY;
     }
 

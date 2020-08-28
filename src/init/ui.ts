@@ -39,7 +39,7 @@ export function registerUiActions(actionContext: ActionContext): void {
 
     // Register UI actions
     ui.treeDP.registerAction("Log out", [visibilityGroups.LOGGED_IN], () => {
-        logout(actionContext, visibilityGroups);
+        logout(actionContext);
     });
     ui.treeDP.registerAction("Log in", [visibilityGroups.LOGGED_IN.not], () => {
         ui.webview.setContentFromTemplate({ templateName: "login" });
@@ -65,7 +65,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 );
                 return;
             }
-            const result = await login(actionContext, msg.username, msg.password, visibilityGroups);
+            const result = await login(actionContext, msg.username, msg.password);
             if (result.err) {
                 ui.webview.setContentFromTemplate(
                     { templateName: "login", error: result.val.message },
@@ -302,29 +302,14 @@ export function registerUiActions(actionContext: ActionContext): void {
         },
     );
 
-    // Temp duplication reducer until all insider toggle commands come from jsx webviews.
-    const toggleInsider = async (enabled: boolean): Promise<boolean> => {
-        await settings.updateSetting({ setting: "insiderVersion", value: enabled });
-        const authenticated = await actionContext.tmc.isAuthenticated();
-        if (authenticated.err) {
-            showError("Failed to check insider authentication");
-            Logger.error("Failed to check insider authentication", authenticated.val);
-        }
-        ui.treeDP.updateVisibility([
-            authenticated.val === true
-                ? visibilityGroups.LOGGED_IN
-                : visibilityGroups.LOGGED_IN.not,
-        ]);
-        return enabled;
-    };
-
+    // Will be removed once Settings is recreated using new webview or native vscode settings view
     ui.webview.registerHandler(
         "insiderVersionLegacy",
         async (msg: { type?: "insiderVersionLegacy"; data?: boolean }) => {
             if (!(msg.type && msg.data !== undefined)) {
                 return;
             }
-            await toggleInsider(msg.data);
+            await settings.updateSetting({ setting: "insiderVersion", value: msg.data });
             await openSettings(actionContext);
         },
     );
@@ -335,10 +320,10 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (!(msg.type && msg.data !== undefined)) {
                 return;
             }
-            const enabled = await toggleInsider(msg.data);
+            await settings.updateSetting({ setting: "insiderVersion", value: msg.data });
             ui.webview.postMessage({
                 key: "insiderStatus",
-                message: { command: "setInsiderStatus", enabled },
+                message: { command: "setInsiderStatus", enabled: msg.data },
             });
         },
     );

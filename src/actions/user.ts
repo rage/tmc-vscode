@@ -16,7 +16,7 @@ import { SubmissionFeedback } from "../api/types";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
 import { ConnectionError, ForbiddenError } from "../errors";
-import { TestResultData, VisibilityGroups } from "../ui/types";
+import { TestResultData } from "../ui/types";
 import {
     formatSizeInBytes,
     isCorrectWorkspaceOpen,
@@ -41,9 +41,8 @@ export async function login(
     actionContext: ActionContext,
     username: string,
     password: string,
-    visibilityGroups: VisibilityGroups,
 ): Promise<Result<void, Error>> {
-    const { tmc, ui } = actionContext;
+    const { tmc } = actionContext;
 
     if (!username || !password) {
         return new Err(new Error("Username and password may not be empty."));
@@ -54,17 +53,13 @@ export async function login(
         return result;
     }
 
-    ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
     return Ok.EMPTY;
 }
 
 /**
  * Logs the user out, updating UI state
  */
-export async function logout(
-    actionContext: ActionContext,
-    visibility: VisibilityGroups,
-): Promise<void> {
+export async function logout(actionContext: ActionContext): Promise<void> {
     if (await askForConfirmation("Are you sure you want to log out?")) {
         const { tmc, ui } = actionContext;
         const result = await tmc.deauthenticate();
@@ -75,7 +70,6 @@ export async function logout(
             return;
         }
         ui.webview.dispose();
-        ui.treeDP.updateVisibility([visibility.LOGGED_IN.not]);
         showNotification("Logged out from TestMyCode.");
     }
 }
