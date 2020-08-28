@@ -80,13 +80,16 @@ export default class TemplateEngine {
          * Submission result show correct heading or compilation error
          */
         handlebars.registerHelper("submission_status", (results: SubmissionResultReport) => {
-            if (results.status === "ok" && results.all_tests_passed) {
+            if (
+                (results.status === "ok" || results.status === "hidden") &&
+                results.all_tests_passed
+            ) {
                 if (results.solution_url) {
                     return "<h1 class='passed-header'>All tests passed on the server</h1><input type='button' class='btn btn-primary' value='View model solution' onclick='viewModelSolution()' />";
                 }
                 return `<h1 class='passed-header'>All tests passed on the server</h1>
                 <div class="alert alert-info">Your submission has been saved, but you can't see test results because this course is an exam.</div>
-                <input type='button' class='btn btn-primary' value='View submission in browser' onclick='showInBrowser()' />`;
+                <input type='button' class='btn btn-primary show-in-browser' value='View submission in browser' onclick='showInBrowser()' disabled />`;
             } else if (results.status === "fail") {
                 // TODO: Get rid of this need help implementation asap.
                 const exerciseId = results.solution_url?.split("/");

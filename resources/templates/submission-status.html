@@ -19,12 +19,13 @@
                         class="btn btn-primary"
                         value="Run in background"
                     />
-                    <!--<input
+                    <input
                         type="button"
                         onclick="showInBrowser()"
-                        class="btn btn-primary"
+                        class="btn btn-primary show-in-browser"
                         value="Show submission in browser"
-                    />-->
+                        disabled
+                    />
                 </div>
                 <div>
                     {{#check_submission_status messages progressPct}}
@@ -36,13 +37,27 @@
 
         <script>
             const vscode = acquireVsCodeApi();
+            let submission_url = "";
 
             function runInBackground() {
                 vscode.postMessage({ type: "closeWindow" });
             }
             function showInBrowser() {
-                vscode.postMessage({ type: "showInBrowser" });
+                vscode.postMessage({
+                    type: "showSubmissionInBrowser",
+                    data: { submissionUrl: submission_url },
+                });
             }
+
+            window.addEventListener("message", function (event) {
+                const message = event.data;
+                switch (message.command) {
+                    case "showSubmissionUrl":
+                        document.querySelector("input.show-in-browser").disabled = false;
+                        submission_url = message.url;
+                        break;
+                }
+            });
         </script>
     </body>
 </html>

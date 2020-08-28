@@ -83,6 +83,7 @@
         const vscode = acquireVsCodeApi();
         const feedback_url = "{{statusData.feedback_answer_url}}";
         const solution_url = "{{statusData.solution_url}}";
+        let submission_url = "";
 
         const feedbackNotification = document.getElementById("feedbacknotification");
         const feedbackFormContainer = document.getElementById("feedback");
@@ -164,6 +165,10 @@
                     document.getElementById("copyPasteLink").value = message.pasteLink;
                     refreshCollapsibleHeight();
                     break;
+                case "showSubmissionUrl":
+                    document.querySelector("input.show-in-browser").disabled = false;
+                    submission_url = message.url;
+                    break;
             }
         });
 
@@ -179,7 +184,10 @@
             });
         }
         function showInBrowser() {
-            vscode.postMessage({ type: "showInBrowser" });
+            vscode.postMessage({
+                type: "showSubmissionInBrowser",
+                data: { submissionUrl: submission_url },
+            });
         }
 
         function closeWindow() {

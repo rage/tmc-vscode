@@ -18,6 +18,7 @@ import {
     AuthenticationError,
     AuthorizationError,
     ConnectionError,
+    ForbiddenError,
     RuntimeError,
 } from "../errors";
 import { sleep } from "../utils/";
@@ -80,6 +81,7 @@ interface UncheckedLangsResponse {
         | "downloading-exercise"
         | "downloaded-exercise"
         | "processing"
+        | "posted-submission"
         | "sending"
         | "waiting-for-results"
         | "finished"
@@ -579,15 +581,24 @@ export default class TMC {
         exerciseId: number,
         exercisePath: string,
         progressCallback?: (progressPct: number, message?: string) => void,
+        onSubmissionUrl?: (url: string) => void,
     ): Promise<Result<SubmissionStatusReport, Error>> {
         const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
 
+        const onStdout = (res: UncheckedLangsResponse): void => {
+            progressCallback?.(100 * res["percent-done"], res.message || undefined);
+            if (res.result === "posted-submission") {
+                const response = this._checkLangsResponse(res, createIs<SubmissionResponse>());
+                if (response.ok && onSubmissionUrl) {
+                    onSubmissionUrl(response.val.data.show_submission_url);
+                }
+            }
+        };
         return this._executeLangsCommand(
             {
                 args: ["submit", "--submission-path", exercisePath, "--submission-url", submitUrl],
                 core: true,
-                onStdout: (res) =>
-                    progressCallback?.(100 * res["percent-done"], res.message || undefined),
+                onStdout,
             },
             createIs<SubmissionStatusReport>(),
         ).then((res) => res.map((r) => r.data));
@@ -702,12 +713,15 @@ export default class TMC {
                 const { kind, trace } = data;
                 const traceString = trace.join("\n");
                 Logger.error("TMC Langs errored.", kind, traceString);
-                if (kind === "generic") {
-                    return new Err(new RuntimeError(message, traceString));
-                } else if (kind === "authorization-error") {
-                    return new Err(new AuthorizationError(message, traceString));
-                } else if (kind === "connection-error") {
-                    return new Err(new ConnectionError(message, traceString));
+                switch (kind) {
+                    case "not-logged-in":
+                        return new Err(new AuthorizationError(message, traceString));
+                    case "connection-error":
+                        return new Err(new ConnectionError(message, traceString));
+                    case "forbidden":
+                        return new Err(new ForbiddenError(message, traceString));
+                    default:
+                        return new Err(new RuntimeError(message, traceString));
                 }
             }
             Logger.error("Unexpected langs error type.");

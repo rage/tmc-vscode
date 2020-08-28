@@ -34,3 +34,7 @@ export class RuntimeError extends BaseError {
 export class TimeoutError extends BaseError {
     public readonly name = "TimeoutError";
 }
+
+export class ForbiddenError extends BaseError {
+    public readonly name = "ForbiddenError";
+}

@@ -13,9 +13,9 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { SubmissionFeedback } from "../api/types";
-import { EXAM_SUBMISSION_RESULT, EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
+import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ExerciseStatus, LocalCourseData } from "../config/types";
-import { AuthorizationError, ConnectionError } from "../errors";
+import { ConnectionError, ForbiddenError } from "../errors";
 import { TestResultData, VisibilityGroups } from "../ui/types";
 import {
     formatSizeInBytes,
@@ -213,8 +213,8 @@ export async function submitExercise(
                 msg.data.url as string,
                 msg.data.feedback as SubmissionFeedback,
             );
-        } else if (msg.type === "showInBrowser") {
-            // vscode.env.openExternal(vscode.Uri.parse(submissionResult.val.show_submission_url));
+        } else if (msg.type === "showSubmissionInBrowser" && msg.data) {
+            vscode.env.openExternal(vscode.Uri.parse(msg.data.submissionUrl as string));
         } else if (msg.type === "showSolutionInBrowser" && msg.data) {
             vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
         } else if (msg.type === "closeWindow") {
@@ -235,42 +235,6 @@ export async function submitExercise(
             }
         }
     };
-
-    // TODO: Check type properly
-    const courseData = userData.getCourseByName(exerciseDetails.val.course) as Readonly<
-        LocalCourseData
-    >;
-    if (courseData.perhapsExamMode) {
-        const exerciseFolderPath = workspaceManager.getExercisePathById(id);
-        if (exerciseFolderPath.err) {
-            return exerciseFolderPath;
-        }
-        const submitResult = await tmc.submitExercise(id, exerciseFolderPath.val);
-        if (submitResult.err) {
-            return submitResult;
-        }
-
-        const examData = EXAM_SUBMISSION_RESULT;
-        const submitUrl = submitResult.val.show_submission_url;
-        const feedbackQuestions: FeedbackQuestion[] = [];
-        temp.setContent({
-            title: "TMC Server Submission",
-            template: {
-                templateName: "submission-result",
-                statusData: examData,
-                feedbackQuestions,
-            },
-            messageHandler: async (msg: { type?: string }) => {
-                if (msg.type === "closeWindow") {
-                    temp.dispose();
-                } else if (msg.type === "showInBrowser") {
-                    vscode.env.openExternal(vscode.Uri.parse(submitUrl));
-                }
-            },
-        });
-        temporaryWebviewProvider.addToRecycables(temp);
-        return Promise.resolve(Ok.EMPTY);
-    }
 
     const messages: string[] = [];
     const exerciseFolderPath = workspaceManager.getExercisePathById(id);
@@ -294,6 +258,11 @@ export async function submitExercise(
                     },
                     messageHandler,
                 });
+            }
+        },
+        (url) => {
+            if (!temp.disposed) {
+                temp.postMessage({ command: "showSubmissionUrl", url });
             }
         },
     );
@@ -327,6 +296,10 @@ export async function submitExercise(
         messageHandler,
     });
     temporaryWebviewProvider.addToRecycables(temp);
+
+    const courseData = userData.getCourseByName(exerciseDetails.val.course) as Readonly<
+        LocalCourseData
+    >;
 
     checkForCourseUpdates(actionContext, courseData.id);
     vscode.commands.executeCommand("tmc.updateExercises", "silent");
@@ -632,7 +605,7 @@ export async function updateCourse(
     const courseData = userData.getCourse(courseId);
     const updateResult = await tmc.getCourseData(courseId);
     if (updateResult.err) {
-        if (updateResult.val instanceof AuthorizationError) {
+        if (updateResult.val instanceof ForbiddenError) {
             if (!courseData.disabled) {
                 Logger.warn(
                     `Failed to access information for course ${courseData.name}. Marking as disabled.`,
@@ -642,7 +615,7 @@ export async function updateCourse(
                 postMessage(course.id, true, []);
             } else {
                 Logger.warn(
-                    `AuthorizationError above probably caused by course still being disabled ${courseData.name}`,
+                    `ForbiddenError above probably caused by course still being disabled ${courseData.name}`,
                 );
                 postMessage(courseData.id, true, []);
             }
