@@ -281,7 +281,7 @@
         "prettier-check": "prettier --check --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
         "prettier": "prettier --write --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
         "release": "./bin/publishRelease.sh",
-        "setup-ultimate": "git clean -X -d -f && npm run ci:all && cd backend && npm run setup",
+        "setup-ultimate": "git clean -X -d -f && git submodule update --init && npm run ci:all && cd backend && npm run setup",
         "ui-test": "npm run ui-test:setup && npm run ui-test:compile && npm run ui-test:run",
         "ui-test:compile": "tsc ./src/ui-test/*.ts --rootDir src --outDir out",
         "ui-test:compile-and-run": "npm run ui-test:compile && npm run ui-test:run",

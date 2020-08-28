@@ -1,9 +1,17 @@
-out
-backend/resources/
-node_modules
-test-resources/
+# Project files
 .vscode-test/
-dist/
-*.vsix
+node_modules/
+test-resources/
 .eslintcache
 vscode.proposed.d.ts
+
+# Generated or external backend files
+__pycache__
+backend/resources/**/tmc/
+backend/cli/
+.tmc_test_results.json
+
+# Build files
+dist/
+out/
+*.vsix
