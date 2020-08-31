@@ -31,6 +31,10 @@ interface ExerciseDownload {
     organization: string;
 }
 
+interface SuccessfulDownload extends ExerciseDownload {
+    type: "default" | "oldSubmission" | "update";
+}
+
 interface FailedDownload extends ExerciseDownload {
     error: Error;
 }
@@ -45,7 +49,7 @@ export async function downloadExercises(
     actionContext: ActionContext,
     exercisesToDownload: ExerciseDownload[],
     options?: DownloadExercisesOptions,
-): Promise<[ExerciseDownload[], FailedDownload[]]> {
+): Promise<[SuccessfulDownload[], FailedDownload[]]> {
     const { tmc, ui, workspaceManager, settings } = actionContext;
     const downloadOldSubmission =
         options?.skipOldSubmissionCheck ?? settings.getDownloadOldSubmission();
@@ -81,7 +85,7 @@ export async function downloadExercises(
     const task = async (
         exerciseDownload: ExerciseDownload,
         process: vscode.Progress<{ downloadedPct: number; increment: number }>,
-    ): Promise<Result<ExerciseDownload, FailedDownload>> => {
+    ): Promise<Result<SuccessfulDownload, FailedDownload>> => {
         const { courseId, exerciseId, organization } = exerciseDownload;
 
         const postStatus = (status: UITypes.ExerciseStatus): void =>
@@ -131,6 +135,7 @@ export async function downloadExercises(
         }
 
         const path = pathResult.val;
+        let isOld = true;
         const downloadResult = await (async (): Promise<Result<void, Error>> => {
             if (downloadOldSubmission) {
                 const oldSubmissionsResult = await tmc.getOldSubmissions(exerciseId);
@@ -153,6 +158,7 @@ export async function downloadExercises(
                     }
                 }
             }
+            isOld = false;
             return tmc.downloadExercise(exerciseId, path, (downloadedPct, increment) =>
                 process.report({ downloadedPct, increment }),
             );
@@ -164,7 +170,10 @@ export async function downloadExercises(
 
         postStatus("closed");
         workspaceManager.setExerciseStatus(exerciseId, ExerciseStatus.CLOSED);
-        return Ok(exerciseDownload);
+        return Ok<SuccessfulDownload>({
+            ...exerciseDownload,
+            type: isOld ? "oldSubmission" : "default",
+        });
     };
 
     const downloadResults = await showProgressNotification(
@@ -172,14 +181,26 @@ export async function downloadExercises(
         ...exercises.map(
             (x) => async (
                 p: vscode.Progress<{ downloadedPct: number; increment: number }>,
-            ): Promise<Result<ExerciseDownload, FailedDownload>> => limit(() => task(x, p)),
+            ): Promise<Result<SuccessfulDownload, FailedDownload>> => limit(() => task(x, p)),
         ),
     );
 
-    return downloadResults.reduce<[ExerciseDownload[], FailedDownload[]]>(
+    const [successful, failed] = downloadResults.reduce<[SuccessfulDownload[], FailedDownload[]]>(
         ([s, f], next) => (next.ok ? [s.concat(next.val), f] : [s, f.concat(next.val)]),
         [[], []],
     );
+
+    // TODO: Refactor action calls so that this message can be moved outside.
+    if (successful.some((x) => x.type === "oldSubmission")) {
+        showNotification(
+            "Some downloaded exercises were restored to the state of your latest submission. " +
+                "If you wish to reset them to their original state," +
+                "you can do so by using TMC Commands Menu (CTRL + SHIFT + A).",
+            ["OK", (): void => {}],
+        );
+    }
+
+    return [successful, failed];
 }
 
 interface UpdateCheckOptions {
@@ -235,7 +256,7 @@ export async function checkForExerciseUpdates(
 export async function downloadExerciseUpdates(
     actionContext: ActionContext,
     exercisesToDownload: ExerciseDownload[],
-): Promise<[ExerciseDownload[], FailedDownload[]]> {
+): Promise<[SuccessfulDownload[], FailedDownload[]]> {
     const { tmc, ui, workspaceManager } = actionContext;
 
     const exercises = _.uniq(exercisesToDownload);
@@ -264,7 +285,7 @@ export async function downloadExerciseUpdates(
     const task = async (
         exerciseDownload: ExerciseDownload,
         process: vscode.Progress<{ downloadedPct: number; increment: number }>,
-    ): Promise<Result<ExerciseDownload, FailedDownload>> => {
+    ): Promise<Result<SuccessfulDownload, FailedDownload>> => {
         const { courseId, exerciseId, organization } = exerciseDownload;
 
         const postStatus = (status: UITypes.ExerciseStatus): void =>
@@ -321,7 +342,7 @@ export async function downloadExerciseUpdates(
 
         postStatus(status);
         workspaceManager.setExerciseChecksum(exerciseId, newChecksum);
-        return Ok(exerciseDownload);
+        return Ok<SuccessfulDownload>({ ...exerciseDownload, type: "update" });
     };
 
     const updateResults = await showProgressNotification(
@@ -329,11 +350,11 @@ export async function downloadExerciseUpdates(
         ...exercises.map(
             (x) => async (
                 p: vscode.Progress<{ downloadedPct: number; increment: number }>,
-            ): Promise<Result<ExerciseDownload, FailedDownload>> => limit(() => task(x, p)),
+            ): Promise<Result<SuccessfulDownload, FailedDownload>> => limit(() => task(x, p)),
         ),
     );
 
-    return updateResults.reduce<[ExerciseDownload[], FailedDownload[]]>(
+    return updateResults.reduce<[SuccessfulDownload[], FailedDownload[]]>(
         ([s, f], next) => (next.ok ? [s.concat(next.val), f] : [s, f.concat(next.val)]),
         [[], []],
     );
