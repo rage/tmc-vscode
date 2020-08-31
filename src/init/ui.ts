@@ -1,3 +1,4 @@
+import * as _ from "lodash";
 import * as path from "path";
 import * as vscode from "vscode";
 
@@ -16,7 +17,7 @@ import {
     removeCourse,
     updateCourse,
 } from "../actions";
-import { ActionContext, CourseExerciseDownloads } from "../actions/types";
+import { ActionContext } from "../actions/types";
 import {
     getPlatform,
     getRustExecutable,
@@ -102,25 +103,39 @@ export function registerUiActions(actionContext: ActionContext): void {
             ) {
                 return;
             }
-            const downloads: CourseExerciseDownloads = {
-                courseId: msg.courseId,
-                exerciseIds: msg.ids,
-                organizationSlug: msg.organizationSlug,
-                courseName: msg.courseName,
-            };
+            const downloads = msg.ids.map((x) => ({
+                courseId: msg.courseId as number,
+                exerciseId: x,
+                organization: msg.organizationSlug as string,
+            }));
             if (msg.mode === "update") {
-                // downloadExerciseUpdates should return list of success and fails in future.
-                await downloadExerciseUpdates(actionContext, [downloads]);
+                ui.webview.postMessage({
+                    key: `course-${msg.courseId}-updates`,
+                    message: { command: "setUpdateables", exerciseIds: [], courseId: msg.courseId },
+                });
+                const [successful] = await downloadExerciseUpdates(actionContext, downloads);
+                const remaining = _.difference(
+                    msg.ids,
+                    successful.map((x) => x.exerciseId),
+                );
+                ui.webview.postMessage({
+                    key: `course-${msg.courseId}-updates`,
+                    message: {
+                        command: "setUpdateables",
+                        exerciseIds: remaining,
+                        courseId: msg.courseId,
+                    },
+                });
                 return;
             }
-            const successful = await downloadExercises(actionContext, [downloads]);
-            const successfulIds = successful.map((ex) => ex.id);
+            const [successful] = await downloadExercises(actionContext, downloads);
+            const successfulIds = successful.map((ex) => ex.exerciseId);
             if (successfulIds.length !== 0) {
                 await actionContext.userData.clearNewExercises(msg.courseId, successfulIds);
                 const openResult = await openExercises(
                     actionContext,
                     successfulIds,
-                    downloads.courseName,
+                    msg.courseName,
                 );
                 if (openResult.err) {
                     const message = "Failed to open exercises after download.";

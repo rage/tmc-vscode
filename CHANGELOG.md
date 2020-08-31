@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1] - 2020-09-01
+
+#### Fixed
+- Prevent losing exercise data if update fails at a bad time.
+
+
 ## [1.0.0] - 2020-08-27
 
 #### Added
@@ -17,12 +23,13 @@
 - Exercise related actions use TMC-langs Rust.
 - TMC-langs commands to obfuscate sensitive details from TMC logs.
 - Technical improvements to My Courses page.
+- Remove obsolete "closed-exercise" folder from tmcdata if empty.
 
 #### Removed
 - Temporarily removed *Show submission in browser* button in Submission Queue view.
 - Download of AdoptOpenJDK if Java not present in system.
 - Download of TMC-langs Java CLI .jar file.
-- From tmcdata the "closed-exercise" folder, if empty.
+
 
 ## [0.10.0] - 2020-08-10
 
