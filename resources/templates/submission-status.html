@@ -19,13 +19,19 @@
                         class="btn btn-primary"
                         value="Run in background"
                     />
-                    <input
+                    {{#if submissionUrl}}
+                    <button
                         type="button"
-                        onclick="showInBrowser()"
                         class="btn btn-primary show-in-browser"
-                        value="Show submission in browser"
-                        disabled
-                    />
+                        onclick="showInBrowser('{{submissionUrl}}')"
+                    >
+                        Show submission in browser
+                    </button>
+                    {{else}}
+                    <button type="button" class="btn btn-primary show-in-browser" disabled>
+                        Show submission in browser
+                    </button>
+                    {{/if}}
                 </div>
                 <div>
                     {{#check_submission_status messages progressPct}}
@@ -37,27 +43,18 @@
 
         <script>
             const vscode = acquireVsCodeApi();
-            let submission_url = "";
+            const submission_url = "{{submissionUrl}}";
 
             function runInBackground() {
                 vscode.postMessage({ type: "closeWindow" });
             }
-            function showInBrowser() {
+
+            function showInBrowser(url) {
                 vscode.postMessage({
-                    type: "showSubmissionInBrowser",
-                    data: { submissionUrl: submission_url },
+                    type: "showSubmissionInBrowserStatus",
+                    data: { submissionUrl: url },
                 });
             }
-
-            window.addEventListener("message", function (event) {
-                const message = event.data;
-                switch (message.command) {
-                    case "showSubmissionUrl":
-                        document.querySelector("input.show-in-browser").disabled = false;
-                        submission_url = message.url;
-                        break;
-                }
-            });
         </script>
     </body>
 </html>

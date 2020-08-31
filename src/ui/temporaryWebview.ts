@@ -26,13 +26,14 @@ export default class TemporaryWebview {
     private _ui: UI;
     private _iconPath: vscode.Uri;
     private _cssPath: string;
-    private _handlerDisposer?: vscode.Disposable;
+    private _handlerDisposers: vscode.Disposable[];
 
     constructor(resources: Resources, ui: UI) {
         this._ui = ui;
         this._cssPath = resources.cssFolder;
         this._iconPath = vscode.Uri.file(`${resources.mediaFolder}/TMC.svg`);
         this._panel = this._createPanel();
+        this._handlerDisposers = [];
         this.disposed = false;
     }
 
@@ -41,7 +42,8 @@ export default class TemporaryWebview {
      * @param templateData Data to be displayed in template
      */
     public async setContent(content: TemporaryWebviewContent): Promise<void> {
-        this._handlerDisposer?.dispose();
+        this._handlerDisposers?.forEach((h) => h.dispose());
+        this._handlerDisposers = [];
         if (this.disposed) {
             this._panel = this._createPanel();
             this.disposed = false;
@@ -51,7 +53,9 @@ export default class TemporaryWebview {
             this._panel.webview,
             content.template,
         );
-        this._handlerDisposer = this._panel.webview.onDidReceiveMessage(content.messageHandler);
+        this._handlerDisposers = this._handlerDisposers.concat(
+            this._panel.webview.onDidReceiveMessage(content.messageHandler),
+        );
         this._panel.reveal(undefined, true);
     }
 
@@ -76,8 +80,8 @@ export default class TemporaryWebview {
             localResourceRoots: [vscode.Uri.file(this._cssPath)],
         });
         panel.onDidDispose(() => {
-            this._handlerDisposer?.dispose();
-            this._handlerDisposer = undefined;
+            this._handlerDisposers?.forEach((h) => h.dispose());
+            this._handlerDisposers = [];
             this.disposed = true;
         });
         panel.iconPath = this._iconPath;

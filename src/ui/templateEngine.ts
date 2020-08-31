@@ -89,7 +89,7 @@ export default class TemplateEngine {
                 }
                 return `<h1 class='passed-header'>All tests passed on the server</h1>
                 <div class="alert alert-info">Your submission has been saved, but you can't see test results because this course is an exam.</div>
-                <input type='button' class='btn btn-primary show-in-browser' value='View submission in browser' onclick='showInBrowser()' disabled />`;
+                <button type='button' class='btn btn-primary' onclick="showInBrowser()">View submission in browser</button>`;
             } else if (results.status === "fail") {
                 // TODO: Get rid of this need help implementation asap.
                 const exerciseId = results.solution_url?.split("/");

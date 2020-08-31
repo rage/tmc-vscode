@@ -202,12 +202,17 @@ export async function submitExercise(
         data?: { [key: string]: unknown };
         type?: string;
     }): Promise<void> => {
+        Logger.debug("Messagehandler data", msg.data);
+        Logger.debug("Messagehandler type", msg.type);
+
         if (msg.type === "feedback" && msg.data) {
             await tmc.submitSubmissionFeedback(
                 msg.data.url as string,
                 msg.data.feedback as SubmissionFeedback,
             );
-        } else if (msg.type === "showSubmissionInBrowser" && msg.data) {
+        } else if (msg.type === "showSubmissionInBrowserStatus" && msg.data) {
+            vscode.env.openExternal(vscode.Uri.parse(msg.data.submissionUrl as string));
+        } else if (msg.type === "showSubmissionInBrowserResult" && msg.data) {
             vscode.env.openExternal(vscode.Uri.parse(msg.data.submissionUrl as string));
         } else if (msg.type === "showSolutionInBrowser" && msg.data) {
             vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
@@ -235,6 +240,7 @@ export async function submitExercise(
     if (exerciseFolderPath.err) {
         return exerciseFolderPath;
     }
+    let submissionUrl = "";
     const submissionResult = await tmc.submitExerciseAndWaitForResults(
         id,
         exerciseFolderPath.val,
@@ -249,15 +255,14 @@ export async function submitExercise(
                         templateName: "submission-status",
                         messages,
                         progressPct,
+                        submissionUrl,
                     },
                     messageHandler,
                 });
             }
         },
         (url) => {
-            if (!temp.disposed) {
-                temp.postMessage({ command: "showSubmissionUrl", url });
-            }
+            submissionUrl = url;
         },
     );
 
@@ -286,7 +291,12 @@ export async function submitExercise(
     Logger.debug("data", statusData);
     temp.setContent({
         title: "TMC Server Submission",
-        template: { templateName: "submission-result", statusData, feedbackQuestions },
+        template: {
+            templateName: "submission-result",
+            statusData,
+            feedbackQuestions,
+            submissionUrl,
+        },
         messageHandler,
     });
     temporaryWebviewProvider.addToRecycables(temp);
