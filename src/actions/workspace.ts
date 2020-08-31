@@ -9,13 +9,13 @@ import * as pLimit from "p-limit";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { OldSubmission } from "../api/types";
-import { ExerciseStatus, LocalExerciseData } from "../config/types";
+import { CourseDetails, OldSubmission } from "../api/types";
+import { ExerciseStatus } from "../config/types";
 import { ExerciseExistsError } from "../errors";
 import * as UITypes from "../ui/types";
-import { Logger, sleep } from "../utils";
+import { Logger } from "../utils";
 import { compareDates, dateToString, parseDate } from "../utils/dateDeadline";
-import { askForItem, showError, showNotification, showProgressNotification } from "../window";
+import { askForItem, showNotification, showProgressNotification } from "../window";
 
 import { ActionContext, CourseExerciseDownloads } from "./types";
 
@@ -25,195 +25,177 @@ interface DownloadExercisesOptions {
     skipOldSubmissionCheck?: boolean;
 }
 
+interface ExerciseDownload {
+    courseId: number;
+    exerciseId: number;
+    organization: string;
+}
+
+interface SuccessfulDownload extends ExerciseDownload {
+    type: "default" | "oldSubmission" | "update";
+}
+
+interface FailedDownload extends ExerciseDownload {
+    error: Error;
+}
+
 /**
  * Downloads given exercises and opens them in TMC workspace.
  *
  * @param courseExerciseDownloads An array of course-related data that is required for downloading.
- * @returns An array of successful downloads.
+ * @returns Tuple of successful downloads and errors.
  */
 export async function downloadExercises(
     actionContext: ActionContext,
-    courseExerciseDownloads: CourseExerciseDownloads[],
+    exercisesToDownload: ExerciseDownload[],
     options?: DownloadExercisesOptions,
-): Promise<LocalExerciseData[]> {
+): Promise<[SuccessfulDownload[], FailedDownload[]]> {
     const { tmc, ui, workspaceManager, settings } = actionContext;
+    const downloadOldSubmission =
+        options?.skipOldSubmissionCheck ?? settings.getDownloadOldSubmission();
 
-    interface StatusChange {
-        exerciseId: number;
-        status: UITypes.ExerciseStatus;
-    }
+    const exercises = _.uniq(exercisesToDownload);
+    const courses = new Map(
+        _(exercises)
+            .map((x) => x.courseId)
+            .uniq()
+            .value()
+            .map<[number, Promise<Result<CourseDetails, Error>>]>((x) => [
+                x,
+                tmc.getCourseDetails(x),
+            ]),
+    );
 
-    const postChange = (...changes: StatusChange[]): void =>
-        ui.webview.postMessage(
-            ...changes.map<{ key: string; message: UITypes.WebviewMessage }>(
-                ({ exerciseId, status }) => ({
-                    key: `exercise-${exerciseId}-status`,
-                    message: {
-                        command: "exerciseStatusChange",
-                        exerciseId,
-                        status,
-                    },
-                }),
-            ),
-        );
-
-    let oldSubmissionDownloaded = false;
-    const successful: LocalExerciseData[] = [];
-    const failed: LocalExerciseData[] = [];
-
-    const resolveTask = async (
-        result: Result<void, Error>,
-        state: LocalExerciseData,
-    ): Promise<void> => {
-        postChange({
-            exerciseId: state.id,
-            status: result.ok
-                ? state.status === ExerciseStatus.CLOSED
-                    ? "closed"
-                    : "opened"
-                : "downloadFailed",
-        });
-        if (result.ok || result.val instanceof ExerciseExistsError) {
-            successful.push(state);
-            workspaceManager.setExerciseChecksum(state.id, state.checksum);
-            workspaceManager.setExerciseStatus(state.id, state.status);
-        } else {
-            failed.push(state);
-            await workspaceManager.deleteExercise(state.id);
-            Logger.error(`Failed to download ${state.organization}/${state.name}`, result.val);
-        }
-    };
+    ui.webview.postMessage(
+        ...exercises.map<{ key: string; message: UITypes.WebviewMessage }>((x) => ({
+            key: `exercise-${x.exerciseId}-status`,
+            message: {
+                command: "exerciseStatusChange",
+                exerciseId: x.exerciseId,
+                status: "downloading",
+            },
+        })),
+    );
 
     const task = async (
+        exerciseDownload: ExerciseDownload,
         process: vscode.Progress<{ downloadedPct: number; increment: number }>,
-        state: LocalExerciseData,
-    ): Promise<void> => {
-        const dataResult = workspaceManager.getExerciseDataById(state.id);
-        state.status = dataResult.ok ? dataResult.val.status : ExerciseStatus.MISSING;
-        if (
-            dataResult.ok &&
-            dataResult.val.checksum === state.checksum &&
-            state.status !== ExerciseStatus.MISSING
-        ) {
-            resolveTask(
-                Err(new ExerciseExistsError("Skipping download of already existing exercise.")),
-                state,
-            );
-            return;
-        }
+    ): Promise<Result<SuccessfulDownload, FailedDownload>> => {
+        const { courseId, exerciseId, organization } = exerciseDownload;
 
-        const pathResult = dataResult.ok
-            ? workspaceManager.getExercisePathById(state.id)
-            : await workspaceManager.addExercise(state);
-        if (pathResult.err) {
-            resolveTask(pathResult, state);
-            return;
-        }
-
-        const oldSubmissions = await tmc.getOldSubmissions(state.id);
-
-        if (
-            options?.skipOldSubmissionCheck ??
-            (!settings.getDownloadOldSubmission() ||
-                oldSubmissions.err ||
-                oldSubmissions.val.length === 0)
-        ) {
-            await new Promise<void>((resolve) => {
-                tmc.downloadExercise(state.id, pathResult.val, (downloadedPct, increment) =>
-                    process.report({ downloadedPct, increment }),
-                ).then((res: Result<void, Error>) => {
-                    if (state.status === ExerciseStatus.MISSING) {
-                        state.status = ExerciseStatus.CLOSED;
-                    }
-                    resolveTask(res, state);
-                    resolve();
-                });
+        const postStatus = (status: UITypes.ExerciseStatus): void =>
+            ui.webview.postMessage({
+                key: `exercise-${exerciseId}-status`,
+                message: { command: "exerciseStatusChange", exerciseId, status },
             });
-        } else {
-            await new Promise<void>((resolve) => {
-                tmc.downloadOldSubmission(
-                    state.id,
-                    pathResult.val,
-                    oldSubmissions.val.sort((a, b) =>
+
+        const wrapError = (error: Error, status: UITypes.ExerciseStatus): Err<FailedDownload> => {
+            postStatus(status);
+            return Err({ courseId, exerciseId, organization, error });
+        };
+
+        const dataResult = workspaceManager.getExerciseDataById(exerciseId);
+        if (dataResult.ok && dataResult.val.status !== ExerciseStatus.MISSING) {
+            return wrapError(
+                new ExerciseExistsError(`Exercise ${dataResult.val.name} already exists.`),
+                dataResult.val.status === ExerciseStatus.OPEN ? "opened" : "closed",
+            );
+        }
+
+        const courseResult = (await courses.get(courseId)) as Result<CourseDetails, Error>;
+        if (courseResult.err) {
+            return wrapError(courseResult.val, "downloadFailed");
+        }
+
+        const course = courseResult.val.course;
+        const exercise = course.exercises.find((x) => x.id === exerciseId);
+        if (!exercise) {
+            return wrapError(new Error("Exercise data missing from server."), "downloadFailed");
+        }
+
+        let pathResult = workspaceManager.getExercisePathById(exerciseId);
+        if (pathResult.err) {
+            pathResult = await workspaceManager.addExercise({
+                id: exercise.id,
+                name: exercise.name,
+                checksum: exercise.checksum,
+                course: course.name,
+                organization: exerciseDownload.organization,
+                status: ExerciseStatus.MISSING,
+            });
+        }
+        if (pathResult.err) {
+            await workspaceManager.deleteExercise(exerciseId);
+            return wrapError(pathResult.val, "downloadFailed");
+        }
+
+        const path = pathResult.val;
+        let isOld = true;
+        const downloadResult = await (async (): Promise<Result<void, Error>> => {
+            if (downloadOldSubmission) {
+                const oldSubmissionsResult = await tmc.getOldSubmissions(exerciseId);
+                if (oldSubmissionsResult.ok && oldSubmissionsResult.val.length > 0) {
+                    const submissionId = oldSubmissionsResult.val.sort((a, b) =>
                         compareDates(
                             parseDate(b.processing_attempts_started_at),
                             parseDate(a.processing_attempts_started_at),
                         ),
-                    )[0].id,
-                    false,
-                    (downloadedPct, increment) => process.report({ downloadedPct, increment }),
-                ).then((res: Result<void, Error>) => {
-                    oldSubmissionDownloaded = true;
-                    if (state.status === ExerciseStatus.MISSING) {
-                        state.status = ExerciseStatus.CLOSED;
+                    )[0].id;
+                    const oldResult = await tmc.downloadOldSubmission(
+                        exerciseId,
+                        path,
+                        submissionId,
+                        false,
+                        (downloadedPct, increment) => process.report({ downloadedPct, increment }),
+                    );
+                    if (oldResult.ok) {
+                        return oldResult;
                     }
-                    resolveTask(res, state);
-                    resolve();
-                });
-            });
+                }
+            }
+            isOld = false;
+            return tmc.downloadExercise(exerciseId, path, (downloadedPct, increment) =>
+                process.report({ downloadedPct, increment }),
+            );
+        })();
+        if (downloadResult.err) {
+            await workspaceManager.deleteExercise(exerciseId);
+            return wrapError(downloadResult.val, "downloadFailed");
         }
+
+        postStatus("closed");
+        workspaceManager.setExerciseStatus(exerciseId, ExerciseStatus.CLOSED);
+        return Ok<SuccessfulDownload>({
+            ...exerciseDownload,
+            type: isOld ? "oldSubmission" : "default",
+        });
     };
 
-    postChange(
-        ...courseExerciseDownloads
-            .reduce<number[]>((collected, next) => collected.concat(next.exerciseIds), [])
-            .map<StatusChange>((exerciseId) => ({ exerciseId, status: "downloading" })),
-    );
-
-    // TODO: Base this process on above reduction
-    const exerciseStatuses = await Promise.all(
-        courseExerciseDownloads.map(async (ced) => {
-            const courseResult = await tmc.getCourseDetails(ced.courseId);
-            if (courseResult.err) {
-                Logger.warn(
-                    "Could not download exercises, course details not found: " +
-                        `${courseResult.val.name} - ${courseResult.val.message}`,
-                );
-                return [];
-            }
-
-            const course = courseResult.val.course;
-            return course.exercises
-                .filter((x) => ced.exerciseIds.includes(x.id))
-                .map<LocalExerciseData>((x) => ({
-                    id: x.id,
-                    name: x.name,
-                    checksum: x.checksum,
-                    course: course.name,
-                    organization: ced.organizationSlug,
-                    status: ExerciseStatus.MISSING,
-                }));
-        }),
-    ).then((res) => res.reduce((collected, next) => collected.concat(next), []));
-
-    Logger.log(`Starting to download ${exerciseStatuses.length} exercises`);
-    await showProgressNotification(
-        `Downloading ${exerciseStatuses.length} exercises...`,
-        ...exerciseStatuses.map(
-            (state) => async (
+    const downloadResults = await showProgressNotification(
+        `Downloading ${exercises.length} exercises...`,
+        ...exercises.map(
+            (x) => async (
                 p: vscode.Progress<{ downloadedPct: number; increment: number }>,
-            ): Promise<void> => {
-                // Need to wait here, so the notification pops up.
-                await sleep(10);
-                return limit(() => task(p, state));
-            },
+            ): Promise<Result<SuccessfulDownload, FailedDownload>> => limit(() => task(x, p)),
         ),
     );
 
-    if (failed.length > 0) {
-        const message = "Some exercises failed to download, please try again later.";
-        Logger.warn(message);
-        showError(message);
-    }
-    if (oldSubmissionDownloaded) {
+    const [successful, failed] = downloadResults.reduce<[SuccessfulDownload[], FailedDownload[]]>(
+        ([s, f], next) => (next.ok ? [s.concat(next.val), f] : [s, f.concat(next.val)]),
+        [[], []],
+    );
+
+    // TODO: Refactor action calls so that this message can be moved outside.
+    if (successful.some((x) => x.type === "oldSubmission")) {
         showNotification(
             "Some downloaded exercises were restored to the state of your latest submission. " +
-                "If you wish to reset them to their original state, you can do so by using TMC Commands Menu (CTRL + SHIFT + A).",
+                "If you wish to reset them to their original state," +
+                "you can do so by using TMC Commands Menu (CTRL + SHIFT + A).",
             ["OK", (): void => {}],
         );
     }
 
-    return successful;
+    return [successful, failed];
 }
 
 interface UpdateCheckOptions {
@@ -268,34 +250,109 @@ export async function checkForExerciseUpdates(
 
 export async function downloadExerciseUpdates(
     actionContext: ActionContext,
-    coursesToUpdate: CourseExerciseDownloads[],
-): Promise<Result<void, Error>> {
-    const { ui } = actionContext;
+    exercisesToDownload: ExerciseDownload[],
+): Promise<[SuccessfulDownload[], FailedDownload[]]> {
+    const { tmc, ui, workspaceManager } = actionContext;
 
-    ui.webview.postMessage(
-        ...coursesToUpdate.map<{ key: string; message: UITypes.WebviewMessage }>((ced) => ({
-            key: `course-${ced.courseId}-updates`,
-            message: { command: "setUpdateables", exerciseIds: [], courseId: ced.courseId },
-        })),
+    const exercises = _.uniq(exercisesToDownload);
+    const courses = new Map(
+        _(exercises)
+            .map((x) => x.courseId)
+            .uniq()
+            .value()
+            .map<[number, Promise<Result<CourseDetails, Error>>]>((x) => [
+                x,
+                tmc.getCourseDetails(x),
+            ]),
     );
 
-    // DownloadExercises should return list of success and fails in future.
-    const successful = await downloadExercises(actionContext, coursesToUpdate, {
-        skipOldSubmissionCheck: true,
-    });
-    const successfulIds = successful.map((ex) => ex.id);
-
     ui.webview.postMessage(
-        ...coursesToUpdate.map<{ key: string; message: UITypes.WebviewMessage }>((ced) => ({
-            key: `course-${ced.courseId}-updates`,
+        ...exercises.map<{ key: string; message: UITypes.WebviewMessage }>((x) => ({
+            key: `exercise-${x.exerciseId}-status`,
             message: {
-                command: "setUpdateables",
-                exerciseIds: _.difference(ced.exerciseIds, successfulIds),
-                courseId: ced.courseId,
+                command: "exerciseStatusChange",
+                exerciseId: x.exerciseId,
+                status: "downloading",
             },
         })),
     );
-    return Ok.EMPTY;
+
+    const task = async (
+        exerciseDownload: ExerciseDownload,
+        process: vscode.Progress<{ downloadedPct: number; increment: number }>,
+    ): Promise<Result<SuccessfulDownload, FailedDownload>> => {
+        const { courseId, exerciseId, organization } = exerciseDownload;
+
+        const postStatus = (status: UITypes.ExerciseStatus): void =>
+            ui.webview.postMessage({
+                key: `exercise-${exerciseId}-status`,
+                message: { command: "exerciseStatusChange", exerciseId, status },
+            });
+
+        const wrapError = (error: Error, status: UITypes.ExerciseStatus): Err<FailedDownload> => {
+            postStatus(status);
+            return Err({ courseId, exerciseId, organization, error });
+        };
+
+        const dataResult = Result.all(
+            workspaceManager.getExerciseDataById(exerciseId),
+            workspaceManager.getExercisePathById(exerciseId),
+        );
+        if (dataResult.err) {
+            return wrapError(dataResult.val, "missing");
+        }
+
+        const [data, path] = dataResult.val;
+        if (data.status === ExerciseStatus.MISSING) {
+            return wrapError(new Error("Exercise is missing."), "missing");
+        }
+
+        const status = data.status === ExerciseStatus.OPEN ? "opened" : "closed";
+
+        const courseResult = (await courses.get(courseId)) as Result<CourseDetails, Error>;
+        if (courseResult.err) {
+            return wrapError(courseResult.val, status);
+        }
+
+        // Delegate checking and obtaining new checksum to langs?
+        const newChecksum = courseResult.val.course.exercises.find((x) => x.id === exerciseId)
+            ?.checksum;
+        if (!newChecksum) {
+            return wrapError(new Error("Exercise data missing from server."), status);
+        }
+
+        if (newChecksum === data.checksum) {
+            return wrapError(new Error("Exercise is already up to date."), status);
+        }
+        // Until here
+
+        const updateResult = await tmc.downloadExercise(
+            exerciseId,
+            path,
+            (downloadedPct, increment) => process.report({ downloadedPct, increment }),
+        );
+        if (updateResult.err) {
+            return wrapError(updateResult.val, status);
+        }
+
+        postStatus(status);
+        workspaceManager.setExerciseChecksum(exerciseId, newChecksum);
+        return Ok<SuccessfulDownload>({ ...exerciseDownload, type: "update" });
+    };
+
+    const updateResults = await showProgressNotification(
+        `Updating ${exercises.length} exercises...`,
+        ...exercises.map(
+            (x) => async (
+                p: vscode.Progress<{ downloadedPct: number; increment: number }>,
+            ): Promise<Result<SuccessfulDownload, FailedDownload>> => limit(() => task(x, p)),
+        ),
+    );
+
+    return updateResults.reduce<[SuccessfulDownload[], FailedDownload[]]>(
+        ([s, f], next) => (next.ok ? [s.concat(next.val), f] : [s, f.concat(next.val)]),
+        [[], []],
+    );
 }
 
 /**

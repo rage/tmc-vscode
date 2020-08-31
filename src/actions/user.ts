@@ -391,15 +391,15 @@ export async function checkForCourseUpdates(
                 exerciseIds: [],
             },
         });
-        const successful = await downloadExercises(actionContext, [
-            {
+        const [successful] = await downloadExercises(
+            actionContext,
+            newIds.map((x) => ({
                 courseId: course.id,
-                exerciseIds: newIds,
-                organizationSlug: course.organization,
-                courseName: course.name,
-            },
-        ]);
-        const successfulIds = successful.map((ex) => ex.id);
+                exerciseId: x,
+                organization: course.organization,
+            })),
+        );
+        const successfulIds = successful.map((ex) => ex.exerciseId);
         await userData.clearNewExercises(course.id, successfulIds);
         ui.webview.postMessage({
             key: `course-${course.id}-new-exercises`,

@@ -152,8 +152,15 @@ export function registerCommands(
                     organizationSlug: course.organization,
                     courseName: course.name,
                 };
-                const successful = await downloadExercises(actionContext, [downloads]);
-                const successfulIds = successful.map((ex) => ex.id);
+                const [successful] = await downloadExercises(
+                    actionContext,
+                    course.newExercises.map((x) => ({
+                        courseId: course.id,
+                        exerciseId: x,
+                        organization: course.organization,
+                    })),
+                );
+                const successfulIds = successful.map((ex) => ex.exerciseId);
                 await userData.clearNewExercises(courseId, successfulIds);
                 const openResult = await openExercises(
                     actionContext,
@@ -426,14 +433,24 @@ export function registerCommands(
                 return;
             }
 
+            const exercises = _.flatten(
+                filtered.map((x) =>
+                    x.exerciseIds.map((e) => ({
+                        courseId: x.courseId,
+                        exerciseId: e,
+                        organization: x.organizationSlug,
+                    })),
+                ),
+            );
+
             showNotification(
                 `Found updates for ${updates} exercises. Do you wish to download them?`,
                 [
                     "Download",
                     async (): Promise<void> => {
-                        const updateResult = await downloadExerciseUpdates(actionContext, filtered);
-                        if (updateResult.err) {
-                            Logger.error("Failed to update exercises", updateResult.val);
+                        const [, failed] = await downloadExerciseUpdates(actionContext, exercises);
+                        if (failed.length > 0) {
+                            Logger.error("Failed to update exercises", failed[0]);
                             showError("Failed to update exercises.");
                         }
                     },
