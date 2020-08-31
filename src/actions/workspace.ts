@@ -66,12 +66,7 @@ export async function downloadExercises(
             ]),
     );
 
-    const courseIds = Array.from(courses.keys());
     ui.webview.postMessage(
-        ...courseIds.map<{ key: string; message: UITypes.WebviewMessage }>((id) => ({
-            key: `course-${id}-updates`,
-            message: { command: "setUpdateables", exerciseIds: [], courseId: id },
-        })),
         ...exercises.map<{ key: string; message: UITypes.WebviewMessage }>((x) => ({
             key: `exercise-${x.exerciseId}-status`,
             message: {
