@@ -3,7 +3,7 @@ import { is } from "typescript-is";
 
 import TMC from "../api/tmc";
 import { CourseData, CourseDetails } from "../api/types";
-import { ApiError, AuthorizationError, ConnectionError } from "../errors";
+import { ApiError, ConnectionError, ForbiddenError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
 import { Logger } from "../utils/logger";
@@ -74,8 +74,8 @@ export async function validateAndFix(
                     Logger.warn(`Skipping bad workspacemanager data - ${details.val.message}`, ex);
                     exerciseDataFixed.push(ex as LocalExerciseData);
                     continue;
-                } else if (details.val instanceof AuthorizationError) {
-                    Logger.warn(`No access to exercise - ${details.val.message}`, ex);
+                } else if (details.val instanceof ForbiddenError) {
+                    Logger.warn(`Forbidden: No access to exercise - ${details.val.message}`, ex);
                     exerciseDataFixed.push(ex as LocalExerciseData);
                     continue;
                 }
@@ -136,7 +136,7 @@ export async function validateAndFix(
                         Logger.warn("Skipping bad userdata due to courseData", course);
                         userDataFixed.courses.push(course as LocalCourseData);
                         continue;
-                    } else if (courseDataResult.val instanceof AuthorizationError) {
+                    } else if (courseDataResult.val instanceof ForbiddenError) {
                         course.disabled = true;
                         Logger.warn(
                             `No access to courseData, disabling course - ${courseDataResult.val.message}`,

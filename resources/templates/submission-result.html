@@ -83,6 +83,7 @@
         const vscode = acquireVsCodeApi();
         const feedback_url = "{{statusData.feedback_answer_url}}";
         const solution_url = "{{statusData.solution_url}}";
+        const submission_url = "{{submissionUrl}}";
 
         const feedbackNotification = document.getElementById("feedbacknotification");
         const feedbackFormContainer = document.getElementById("feedback");
@@ -179,7 +180,10 @@
             });
         }
         function showInBrowser() {
-            vscode.postMessage({ type: "showInBrowser" });
+            vscode.postMessage({
+                type: "showSubmissionInBrowserResult",
+                data: { submissionUrl: submission_url },
+            });
         }
 
         function closeWindow() {

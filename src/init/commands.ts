@@ -337,7 +337,6 @@ export function registerCommands(
                     showError(`Failed to login. ${authed.val.message}.`);
                     return;
                 }
-                ui.treeDP.updateVisibility([actionContext.visibilityGroups.LOGGED_IN]);
             }
         }),
     );
@@ -349,7 +348,6 @@ export function registerCommands(
                 showError(`Failed to logout. ${deauth.val.message}`);
                 return;
             }
-            ui.treeDP.updateVisibility([actionContext.visibilityGroups.LOGGED_IN.not]);
         }),
     );
 

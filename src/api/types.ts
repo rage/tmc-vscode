@@ -180,13 +180,13 @@ export type SubmissionResultReport = {
     login: string;
     course: string;
     exercise_name: string;
-    status: "fail" | "ok" | "error";
+    status: "fail" | "ok" | "error" | "hidden";
     points: string[];
     valgrind: string | null;
     submission_url: string;
     solution_url: string | null;
     submitted_at: string;
-    processing_time: number;
+    processing_time: number | null;
     reviewed: boolean;
     requests_review: boolean;
     paste_url: string | null;

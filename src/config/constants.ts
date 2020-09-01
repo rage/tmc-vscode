@@ -11,7 +11,6 @@ declare const __TMC_LANGS_RUST_DL_URL__: string;
 declare const __TMC_LANGS_RUST_VERSION__: string;
 
 import FAQ from "../../docs/FAQ.md";
-import { SubmissionResultReport } from "../api/types";
 
 export const ACCESS_TOKEN_URI = __ACCESS_TOKEN_URI__;
 export const DEBUG_MODE = __DEBUG_MODE__;
@@ -104,35 +103,4 @@ export const EXAM_TEST_RESULT = {
         stdout: "",
         stderr: "",
     },
-};
-
-export const EXAM_SUBMISSION_RESULT: SubmissionResultReport = {
-    api_version: 8,
-    all_tests_passed: true,
-    user_id: 0,
-    login: "0",
-    course: "0",
-    exercise_name: "string",
-    status: "ok",
-    points: [],
-    validations: "unknown",
-    valgrind: null,
-    submission_url: "",
-    solution_url: null,
-    submitted_at: "string",
-    processing_time: 3,
-    reviewed: false,
-    requests_review: false,
-    paste_url: null,
-    message_for_paste: null,
-    missing_review_points: [],
-    test_cases: [
-        {
-            name: "Hidden Exam Test: hidden_test",
-            successful: true,
-            message: "Exam exercise sent to server successfully, you can now continue.",
-            exception: null,
-            detailed_message: null,
-        },
-    ],
 };

@@ -96,11 +96,13 @@ export type SettingsData = {
 export type SubmissionResultData = {
     statusData: SubmissionStatusReport;
     feedbackQuestions: FeedbackQuestion[];
+    submissionUrl: string | undefined;
 };
 
 export type SubmissionStatusData = {
     messages: string[];
     progressPct: number;
+    submissionUrl: string | undefined;
 };
 
 export type TestResultData = {
