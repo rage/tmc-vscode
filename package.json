@@ -110,7 +110,7 @@
                 "category": "TestMyCode"
             },
             {
-                "command": "tmc.runTests",
+                "command": "tmc.testExercise",
                 "title": "Run Tests",
                 "icon": "media/test.svg",
                 "category": "TestMyCode"
@@ -132,7 +132,7 @@
                 "category": "TestMyCode"
             },
             {
-                "command": "tmc.uploadArchive",
+                "command": "tmc.submitExercise",
                 "title": "Submit Solution",
                 "category": "TestMyCode"
             },
@@ -154,7 +154,7 @@
                 "when": "test-my-code:WorkspaceActive"
             },
             {
-                "command": "tmc.runTests",
+                "command": "tmc.testExercise",
                 "key": "ctrl+shift+t",
                 "when": "test-my-code:WorkspaceActive"
             },
@@ -231,7 +231,7 @@
                     "when": "test-my-code:LoggedIn"
                 },
                 {
-                    "command": "tmc.uploadArchive",
+                    "command": "tmc.submitExercise",
                     "title": "Submit Solution",
                     "category": "TestMyCode",
                     "when": "test-my-code:LoggedIn"
@@ -239,7 +239,7 @@
             ],
             "editor/title": [
                 {
-                    "command": "tmc.runTests",
+                    "command": "tmc.testExercise",
                     "group": "navigation@0",
                     "when": "resourceScheme == file && test-my-code:WorkspaceActive"
                 },
@@ -276,12 +276,12 @@
                     "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
                 },
                 {
-                    "command": "tmc.runTests",
+                    "command": "tmc.testExercise",
                     "group": "TestMyCode@0",
                     "when": "resourceScheme == file && test-my-code:WorkspaceActive"
                 },
                 {
-                    "command": "tmc.uploadArchive",
+                    "command": "tmc.submitExercise",
                     "group": "TestMyCode@1",
                     "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
                 }
