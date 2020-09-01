@@ -53,86 +53,111 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("tmc.uploadArchive", async () => {
-            const exerciseId = workspaceManager.getCurrentExerciseId();
-            if (!exerciseId) {
-                Logger.error(errorMessage);
-                showError(errorMessage);
-                return;
-            }
-            const result = await submitExercise(actionContext, exerciseId);
-            if (result.err) {
-                Logger.error("Exercise submission failed.", result.val);
-                showError("Exercise submission failed.");
-                return;
-            }
-        }),
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand("tmc.pasteExercise", async () => {
-            const exerciseId = workspaceManager.getCurrentExerciseId();
-            if (exerciseId) {
-                const link = await pasteExercise(actionContext, exerciseId);
-                if (link.err) {
-                    Logger.error("TMC Paste command failed.", link.val);
-                    showError(`TMC Paste command failed. ${link.val.message}`);
+        vscode.commands.registerCommand(
+            "tmc.uploadArchive",
+            async (resource: vscode.Uri | undefined) => {
+                const exerciseId =
+                    workspaceManager.checkIfPathIsExercise(resource?.fsPath) ??
+                    workspaceManager.getCurrentExerciseId();
+                if (!exerciseId) {
+                    Logger.error(errorMessage);
+                    showError(errorMessage);
                     return;
                 }
-                showNotification(`Paste link: ${link.val}`, [
-                    "Open URL",
-                    (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link.val)),
-                ]);
-            } else {
-                Logger.error(errorMessage);
-                showError(errorMessage);
-            }
-        }),
+                const result = await submitExercise(actionContext, exerciseId);
+                if (result.err) {
+                    Logger.error("Exercise submission failed.", result.val);
+                    showError("Exercise submission failed.");
+                    return;
+                }
+            },
+        ),
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("tmc.runTests", async () => {
-            const exerciseId = workspaceManager.getCurrentExerciseId();
-            if (!exerciseId) {
-                Logger.error(errorMessage);
-                showError(errorMessage);
-                return;
-            }
-            const result = await testExercise(actionContext, exerciseId);
-            if (result.err) {
-                Logger.error("Exercise test run failed.", result.val);
-                showError("Exercise test run failed.");
-                return;
-            }
-        }),
+        vscode.commands.registerCommand(
+            "tmc.pasteExercise",
+            async (resource: vscode.Uri | undefined) => {
+                const exerciseId =
+                    workspaceManager.checkIfPathIsExercise(resource?.fsPath) ??
+                    workspaceManager.getCurrentExerciseId();
+                if (exerciseId) {
+                    const link = await pasteExercise(actionContext, exerciseId);
+                    if (link.err) {
+                        Logger.error("TMC Paste command failed.", link.val);
+                        showError(`TMC Paste command failed. ${link.val.message}`);
+                        return;
+                    }
+                    showNotification(`Paste link: ${link.val}`, [
+                        "Open URL",
+                        (): Thenable<boolean> =>
+                            vscode.env.openExternal(vscode.Uri.parse(link.val)),
+                    ]);
+                } else {
+                    Logger.error(errorMessage);
+                    showError(errorMessage);
+                }
+            },
+        ),
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("tmc.resetExercise", async () => {
-            const exerciseId = workspaceManager.getCurrentExerciseId();
-            if (!exerciseId) {
-                Logger.error(errorMessage);
-                showError(errorMessage);
-                return;
-            }
+        vscode.commands.registerCommand(
+            "tmc.runTests",
+            async (resource: vscode.Uri | undefined) => {
+                const exerciseId =
+                    workspaceManager.checkIfPathIsExercise(resource?.fsPath) ??
+                    workspaceManager.getCurrentExerciseId();
+                if (!exerciseId) {
+                    Logger.error(errorMessage);
+                    showError(errorMessage);
+                    return;
+                }
+                const result = await testExercise(actionContext, exerciseId);
+                if (result.err) {
+                    Logger.error("Exercise test run failed.", result.val);
+                    showError("Exercise test run failed.");
+                    return;
+                }
+            },
+        ),
+    );
 
-            const editor = vscode.window.activeTextEditor;
-            const resource = editor?.document.uri;
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            "tmc.resetExercise",
+            async (resource: vscode.Uri | undefined) => {
+                const exerciseId =
+                    workspaceManager.checkIfPathIsExercise(resource?.fsPath) ??
+                    workspaceManager.getCurrentExerciseId();
+                if (!exerciseId) {
+                    Logger.error(errorMessage);
+                    showError(errorMessage);
+                    return;
+                }
 
-            const resetResult = await resetExercise(actionContext, exerciseId, {
-                openAfterwards: true,
-            });
-            if (resetResult.err) {
-                Logger.error("Failed to reset exercise", resetResult.val);
-                showError(`Failed to reset exercise: ${resetResult.val.message}`);
-                return;
-            } else if (!resetResult.val) {
-                Logger.log("Didn't reset exercise.");
-            } else if (editor && resource) {
-                Logger.debug(`Reopening original file "${resource.fsPath}"`);
-                await vscode.commands.executeCommand("vscode.open", resource, editor.viewColumn);
-            }
-        }),
+                const editor = vscode.window.activeTextEditor;
+                const document = editor?.document.uri;
+
+                const resetResult = await resetExercise(actionContext, exerciseId, {
+                    openAfterwards: true,
+                });
+                if (resetResult.err) {
+                    Logger.error("Failed to reset exercise", resetResult.val);
+                    showError(`Failed to reset exercise: ${resetResult.val.message}`);
+                    return;
+                } else if (!resetResult.val) {
+                    Logger.log("Didn't reset exercise.");
+                } else if (editor && document) {
+                    Logger.debug(`Reopening original file "${document.fsPath}"`);
+                    await vscode.commands.executeCommand(
+                        "vscode.open",
+                        document,
+                        editor.viewColumn,
+                    );
+                }
+            },
+        ),
     );
 
     context.subscriptions.push(
@@ -188,69 +213,81 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("tmc.downloadOldSubmission", async () => {
-            const exerciseId = workspaceManager.getCurrentExerciseId();
-            if (!exerciseId) {
-                Logger.error(errorMessage);
-                showError(errorMessage);
-                return;
-            }
+        vscode.commands.registerCommand(
+            "tmc.downloadOldSubmission",
+            async (resource: vscode.Uri | undefined) => {
+                const exerciseId =
+                    workspaceManager.checkIfPathIsExercise(resource?.fsPath) ??
+                    workspaceManager.getCurrentExerciseId();
+                if (!exerciseId) {
+                    Logger.error(errorMessage);
+                    showError(errorMessage);
+                    return;
+                }
 
-            const editor = vscode.window.activeTextEditor;
-            const resource = editor?.document.uri;
+                const editor = vscode.window.activeTextEditor;
+                const document = editor?.document.uri;
 
-            const oldDownloadResult = await downloadOldSubmission(actionContext, exerciseId);
-            if (oldDownloadResult.err) {
-                Logger.error("Failed to download old submission", oldDownloadResult.val);
-                showError(`Failed to download old submission: ${oldDownloadResult.val.message}`);
-            } else if (!oldDownloadResult.val) {
-                Logger.log("Didn't download old exercise.");
-            } else if (editor && resource) {
-                vscode.commands.executeCommand<undefined>(
-                    "vscode.open",
-                    resource,
-                    editor.viewColumn,
-                );
-            }
-        }),
+                const oldDownloadResult = await downloadOldSubmission(actionContext, exerciseId);
+                if (oldDownloadResult.err) {
+                    Logger.error("Failed to download old submission", oldDownloadResult.val);
+                    showError(
+                        `Failed to download old submission: ${oldDownloadResult.val.message}`,
+                    );
+                } else if (!oldDownloadResult.val) {
+                    Logger.log("Didn't download old exercise.");
+                } else if (editor && document) {
+                    vscode.commands.executeCommand<undefined>(
+                        "vscode.open",
+                        document,
+                        editor.viewColumn,
+                    );
+                }
+            },
+        ),
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("tmc.closeExercise", async () => {
-            const exerciseId = workspaceManager.getCurrentExerciseId();
-            if (!exerciseId) {
-                Logger.error(errorMessage);
-                showError(errorMessage);
-                return;
-            }
+        vscode.commands.registerCommand(
+            "tmc.closeExercise",
+            async (resource: vscode.Uri | undefined) => {
+                const exerciseId =
+                    workspaceManager.checkIfPathIsExercise(resource?.fsPath) ??
+                    workspaceManager.getCurrentExerciseId();
+                if (!exerciseId) {
+                    Logger.error(errorMessage);
+                    showError(errorMessage);
+                    return;
+                }
 
-            const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
-            if (exerciseData.err) {
-                const message = "The data for this exercise seems to be missing.";
-                Logger.error(message, exerciseData.val);
-                showError(message);
-                return;
-            }
-            if (
-                userData.getPassed(exerciseId) ||
-                (await askForConfirmation(
-                    `Are you sure you want to close uncompleted exercise ${exerciseData.val.name}?`,
-                ))
-            ) {
-                const result = await closeExercises(
-                    actionContext,
-                    [exerciseId],
-                    exerciseData.val.course,
-                );
-                if (result.err) {
-                    const message = "Error when closing exercise.";
-                    Logger.error(message, result.val);
+                const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
+                if (exerciseData.err) {
+                    const message = "The data for this exercise seems to be missing.";
+                    Logger.error(message, exerciseData.val);
                     showError(message);
                     return;
                 }
-                vscode.commands.executeCommand("workbench.action.closeActiveEditor");
-            }
-        }),
+                if (
+                    userData.getPassed(exerciseId) ||
+                    (await askForConfirmation(
+                        `Are you sure you want to close uncompleted exercise ${exerciseData.val.name}?`,
+                    ))
+                ) {
+                    const result = await closeExercises(
+                        actionContext,
+                        [exerciseId],
+                        exerciseData.val.course,
+                    );
+                    if (result.err) {
+                        const message = "Error when closing exercise.";
+                        Logger.error(message, result.val);
+                        showError(message);
+                        return;
+                    }
+                    vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+                }
+            },
+        ),
     );
 
     context.subscriptions.push(
@@ -272,20 +309,25 @@ export function registerCommands(
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand("tmc.cleanExercise", async () => {
-            const exerciseId = workspaceManager.getCurrentExerciseId();
-            if (!exerciseId) {
-                Logger.error(errorMessage);
-                showError(errorMessage);
-                return;
-            }
-            const result = await cleanExercise(actionContext, exerciseId);
-            if (result.err) {
-                const message = "Failed to clean exercise.";
-                Logger.error(message, result.val);
-                showError(message);
-            }
-        }),
+        vscode.commands.registerCommand(
+            "tmc.cleanExercise",
+            async (resource: vscode.Uri | undefined) => {
+                const exerciseId =
+                    workspaceManager.checkIfPathIsExercise(resource?.fsPath) ??
+                    workspaceManager.getCurrentExerciseId();
+                if (!exerciseId) {
+                    Logger.error(errorMessage);
+                    showError(errorMessage);
+                    return;
+                }
+                const result = await cleanExercise(actionContext, exerciseId);
+                if (result.err) {
+                    const message = "Failed to clean exercise.";
+                    Logger.error(message, result.val);
+                    showError(message);
+                }
+            },
+        ),
     );
 
     context.subscriptions.push(

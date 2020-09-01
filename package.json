@@ -248,6 +248,43 @@
                     "group": "navigation@1",
                     "when": "resourceScheme == file && test-my-code:WorkspaceActive"
                 }
+            ],
+            "explorer/context": [
+                {
+                    "command": "tmc.cleanExercise",
+                    "group": "TestMyCode@6",
+                    "when": "resourceScheme == file && test-my-code:WorkspaceActive"
+                },
+                {
+                    "command": "tmc.closeExercise",
+                    "group": "TestMyCode@3",
+                    "when": "resourceScheme == file && test-my-code:WorkspaceActive"
+                },
+                {
+                    "command": "tmc.downloadOldSubmission",
+                    "group": "TestMyCode@5",
+                    "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+                },
+                {
+                    "command": "tmc.pasteExercise",
+                    "group": "TestMyCode@2",
+                    "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+                },
+                {
+                    "command": "tmc.resetExercise",
+                    "group": "TestMyCode@4",
+                    "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+                },
+                {
+                    "command": "tmc.runTests",
+                    "group": "TestMyCode@0",
+                    "when": "resourceScheme == file && test-my-code:WorkspaceActive"
+                },
+                {
+                    "command": "tmc.uploadArchive",
+                    "group": "TestMyCode@1",
+                    "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+                }
             ]
         },
         "viewsContainers": {

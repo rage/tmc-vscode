@@ -157,28 +157,17 @@ export default class WorkspaceManager {
      */
     public getCurrentExerciseId(): number | undefined {
         const editorPath = vscode.window.activeTextEditor?.document.fileName;
-        if (!editorPath) {
-            return undefined;
-        }
         return this.checkIfPathIsExercise(editorPath);
-    }
-
-    /**
-     * Get the Exercise data for the currently open text editor
-     */
-    public getCurrentExerciseData(): Result<LocalExerciseData, Error> {
-        const id = this.getCurrentExerciseId();
-        if (!id) {
-            return new Err(new Error("Currently open editor is not part of a TMC exercise"));
-        }
-        return this.getExerciseDataById(id);
     }
 
     /**
      * Checks if a given file is a part of a TMC exercise and returns its id if it is
      * @param filePath
      */
-    public checkIfPathIsExercise(filePath: string): number | undefined {
+    public checkIfPathIsExercise(filePath: string | undefined): number | undefined {
+        if (!filePath) {
+            return undefined;
+        }
         const exerciseFolderPath = this._resources.getExercisesFolderPath();
         const relation = path.relative(exerciseFolderPath, filePath);
 
