@@ -163,6 +163,7 @@ export default class WorkspaceManager {
     /**
      * Checks if a given file is a part of a TMC exercise and returns its id if it is
      * @param filePath
+     * @returns Exercise ID if successful
      */
     public checkIfPathIsExercise(filePath: string | undefined): number | undefined {
         if (!filePath) {

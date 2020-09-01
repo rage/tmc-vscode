@@ -81,22 +81,22 @@ export function registerCommands(
                 const exerciseId =
                     workspaceManager.checkIfPathIsExercise(resource?.fsPath) ??
                     workspaceManager.getCurrentExerciseId();
-                if (exerciseId) {
-                    const link = await pasteExercise(actionContext, exerciseId);
-                    if (link.err) {
-                        Logger.error("TMC Paste command failed.", link.val);
-                        showError(`TMC Paste command failed. ${link.val.message}`);
-                        return;
-                    }
-                    showNotification(`Paste link: ${link.val}`, [
-                        "Open URL",
-                        (): Thenable<boolean> =>
-                            vscode.env.openExternal(vscode.Uri.parse(link.val)),
-                    ]);
-                } else {
+                if (!exerciseId) {
                     Logger.error(errorMessage);
                     showError(errorMessage);
+                    return;
                 }
+
+                const link = await pasteExercise(actionContext, exerciseId);
+                if (link.err) {
+                    Logger.error("TMC Paste command failed.", link.val);
+                    showError(`TMC Paste command failed. ${link.val.message}`);
+                    return;
+                }
+                showNotification(`Paste link: ${link.val}`, [
+                    "Open URL",
+                    (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link.val)),
+                ]);
             },
         ),
     );
