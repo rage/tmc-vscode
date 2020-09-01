@@ -59,19 +59,15 @@ export async function login(
 /**
  * Logs the user out, updating UI state
  */
-export async function logout(actionContext: ActionContext): Promise<void> {
-    if (await askForConfirmation("Are you sure you want to log out?")) {
-        const { tmc, ui } = actionContext;
-        const result = await tmc.deauthenticate();
-        if (result.err) {
-            const message = "Failed to log out.";
-            showError(message);
-            Logger.error(message, result.val);
-            return;
-        }
-        ui.webview.dispose();
-        showNotification("Logged out from TestMyCode.");
+export async function logout(actionContext: ActionContext): Promise<Result<void, Error>> {
+    const { tmc } = actionContext;
+
+    const result = await tmc.deauthenticate();
+    if (result.err) {
+        return result;
     }
+
+    return Ok.EMPTY;
 }
 
 /**

@@ -10,7 +10,6 @@ import {
     downloadExercises,
     downloadExerciseUpdates,
     login,
-    logout,
     openExercises,
     openSettings,
     openWorkspace,
@@ -40,7 +39,7 @@ export function registerUiActions(actionContext: ActionContext): void {
 
     // Register UI actions
     ui.treeDP.registerAction("Log out", [visibilityGroups.LOGGED_IN], () => {
-        logout(actionContext);
+        vscode.commands.executeCommand("tmc.logout");
     });
     ui.treeDP.registerAction("Log in", [visibilityGroups.LOGGED_IN.not], () => {
         ui.webview.setContentFromTemplate({ templateName: "login" });

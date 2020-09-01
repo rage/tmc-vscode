@@ -171,7 +171,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor");
     if (versionDiff === undefined || versionDiff > 0) {
-        await vscode.commands.executeCommand("tmc.welcome");
+        await vscode.commands.executeCommand("tmc.showWelcome");
     }
 }
 

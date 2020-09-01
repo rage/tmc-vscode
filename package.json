@@ -137,7 +137,7 @@
                 "category": "TestMyCode"
             },
             {
-                "command": "tmc.welcome",
+                "command": "tmc.showWelcome",
                 "title": "Welcome",
                 "category": "TestMyCode"
             },
