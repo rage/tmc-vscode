@@ -4,6 +4,7 @@
 
 #### Fixed
 - Prevent losing exercise data if update fails at a bad time.
+- Broken image in Welcome view on some file systems.
 
 
 ## [1.0.0] - 2020-08-27
