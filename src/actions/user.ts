@@ -557,7 +557,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
         Logger.error(message, closeResult.val);
         showError(message);
     }
-    const exercises = workspaceManager.getExercisesByCourseName(course.name);
+    const exercises = workspaceManager.getAllExerciseDataByCourseName(course.name);
     const missingIds = exercises
         .filter((e) => e.status === ExerciseStatus.MISSING)
         .map((e) => e.id);

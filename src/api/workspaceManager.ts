@@ -55,12 +55,12 @@ export default class WorkspaceManager {
 
     public async initialize(): Promise<void> {
         Logger.log("Initializing workspace");
-        await this._workspaceIntegrityCheck();
+        await this._verifyCorrectExercisesOpenInCourseWorkspace();
     }
 
     public startWatcher(): void {
         Logger.log("Starting workspace watcher.");
-        this._verifyWorkspaceRootFile();
+        this._verifyCourseWorkspaceRootFolderAndFileExists();
         this._watcher.onDidDelete((x) => {
             this._fileDeleteAction(x.fsPath);
         });
@@ -131,7 +131,11 @@ export default class WorkspaceManager {
         return new Ok(data);
     }
 
-    public getExercisesByCourseName(courseName: string): LocalExerciseData[] {
+    /**
+     * Returns all exercise data for given course name.
+     * @param courseName
+     */
+    public getAllExerciseDataByCourseName(courseName: string): LocalExerciseData[] {
         const exercises: LocalExerciseData[] = [];
         for (const data of this._idToData.values()) {
             if (data.course === courseName) {
@@ -225,8 +229,13 @@ export default class WorkspaceManager {
     }
 
     /**
-     * Opens exercises to the workspace file.
-     * @param id Exercise ID to open
+     * Opens exercise in .code-workspace file
+     * if given courseName and currently open workspace path match.
+     *
+     * Sets their status as OPEN in persistent storage.
+     *
+     * @param ids Exercise IDs to open or/and mark as open
+     * @returns Array of { id: number; status: UITypes.ExerciseStatus } to post to webview.
      */
     public async openExercise(
         courseName: string,
@@ -234,22 +243,30 @@ export default class WorkspaceManager {
     ): Promise<Result<{ id: number; status: UITypes.ExerciseStatus }[], Error>> {
         let results: { id: number; status: UITypes.ExerciseStatus }[] = [];
 
-        const courseExercises = this.getExercisesByCourseName(courseName);
-
+        const courseExercises = this.getAllExerciseDataByCourseName(courseName);
         if (isCorrectWorkspaceOpen(this._resources, courseName)) {
-            const result = await this._handleWorkspaceChanges(true, courseExercises, ...ids);
+            const result = await this._handleCourseWorkspaceExercisesChanges(
+                true,
+                courseExercises,
+                ...ids,
+            );
             if (result.err) {
                 return result;
             }
         }
-        results = await this._setStatus(ExerciseStatus.CLOSED, ExerciseStatus.OPEN, ...ids);
-        await this._updatePersistentData();
+        results = await this._setExerciseStatus(ExerciseStatus.CLOSED, ExerciseStatus.OPEN, ...ids);
+
         return new Ok(results);
     }
 
     /**
-     * Closes exercise in the workspace file.
-     * @param id Exercise ID to close
+     * Closes exercise in .code-workspace file
+     * if given courseName and currently open workspace match.
+     *
+     * Sets their status as CLOSED in persistent storage.
+     *
+     * @param ids Exercise IDs to close or/and mark as closed
+     * @returns Array of { id: number; status: UITypes.ExerciseStatus } to post to webview.
      */
     public async closeExercise(
         courseName: string,
@@ -257,16 +274,19 @@ export default class WorkspaceManager {
     ): Promise<Result<{ id: number; status: UITypes.ExerciseStatus }[], Error>> {
         let results: { id: number; status: UITypes.ExerciseStatus }[] = [];
 
-        const courseExercises = this.getExercisesByCourseName(courseName);
+        const courseExercises = this.getAllExerciseDataByCourseName(courseName);
         if (isCorrectWorkspaceOpen(this._resources, courseName)) {
-            const result = await this._handleWorkspaceChanges(false, courseExercises, ...ids);
+            const result = await this._handleCourseWorkspaceExercisesChanges(
+                false,
+                courseExercises,
+                ...ids,
+            );
             if (result.err) {
                 return result;
             }
         }
-        results = await this._setStatus(ExerciseStatus.OPEN, ExerciseStatus.CLOSED, ...ids);
+        results = await this._setExerciseStatus(ExerciseStatus.OPEN, ExerciseStatus.CLOSED, ...ids);
 
-        await this._updatePersistentData();
         return new Ok(results);
     }
 
@@ -301,7 +321,7 @@ export default class WorkspaceManager {
         return Array.from(this._idToData.values());
     }
 
-    public async setMissing(id: number): Promise<void> {
+    public async setExerciseStatusAsMissing(id: number): Promise<void> {
         const data = this._idToData.get(id);
         if (data) {
             data.status = ExerciseStatus.MISSING;
@@ -310,7 +330,7 @@ export default class WorkspaceManager {
         }
     }
 
-    public async setClosed(id: number): Promise<void> {
+    public async setExerciseStatusAsClosed(id: number): Promise<void> {
         const data = this._idToData.get(id);
         if (data) {
             data.status = ExerciseStatus.CLOSED;
@@ -365,7 +385,14 @@ export default class WorkspaceManager {
         }
     }
 
-    private async _handleWorkspaceChanges(
+    /**
+     * Where the magic happens when opening/closing exercises in a course workspace.
+     *
+     * @param handleAsOpen Handle as opened, i.e. called by this.openExercise or this.closeExercise
+     * @param exercises All exercises for given course found in storage
+     * @param ids Ids to be closed or opened
+     */
+    private async _handleCourseWorkspaceExercisesChanges(
         handleAsOpen: boolean,
         exercises: LocalExerciseData[],
         ...ids: number[]
@@ -388,9 +415,9 @@ export default class WorkspaceManager {
         ids.forEach((id) => {
             const data = this._idToData.get(id);
             if (data && data.status === statusToCheck) {
-                const openPath = this._getExercisePath(data);
-                const openAsUri = vscode.Uri.file(openPath);
-                if (!fs.existsSync(openPath)) {
+                const exercisePath = this._getExercisePath(data);
+                const openAsUri = vscode.Uri.file(exercisePath);
+                if (!fs.existsSync(exercisePath)) {
                     toOpen.push(openAsUri);
                     toClose.push(openAsUri);
                     return;
@@ -408,7 +435,7 @@ export default class WorkspaceManager {
 
         if (currentlyOpenFolders.length === 0 || currentlyOpenFolders[0].name !== ".tmc") {
             Logger.warn("The .tmc folder is not set as root folder.");
-            this._verifyWorkspaceRootFile();
+            this._verifyCourseWorkspaceRootFolderAndFileExists();
             allOpen.push(
                 vscode.Uri.file(path.join(this._resources.getWorkspaceFolderPath(), ".tmc")),
             );
@@ -450,10 +477,19 @@ export default class WorkspaceManager {
             remove,
             foldersToAdd,
         );
-        return new Err(new Error("Failed to handle workspace changes."));
+        return new Err(new Error("Failed to handle opening or closing exercises for workspace."));
     }
 
-    private async _setStatus(
+    /**
+     * Updates status to storage from oldStatus to newStatus for given exercise ids.
+     *
+     * Makes sure that the folder exists, otherwise marks exercise as MISSING.
+     *
+     * @param oldStatus
+     * @param newStatus
+     * @param ids
+     */
+    private async _setExerciseStatus(
         oldStatus: ExerciseStatus,
         newStatus: ExerciseStatus,
         ...ids: number[]
@@ -464,7 +500,7 @@ export default class WorkspaceManager {
             const data = this._idToData.get(id);
             if (data && data.status === oldStatus) {
                 if (!fs.existsSync(this._getExercisePath(data))) {
-                    await this.setMissing(id);
+                    await this.setExerciseStatusAsMissing(id);
                     results.push({ id: data.id, status: "new" });
                     return;
                 }
@@ -473,6 +509,7 @@ export default class WorkspaceManager {
                 results.push({ id: data.id, status: uistatus });
             }
         });
+        await this._updatePersistentData();
         return results;
     }
 
@@ -490,20 +527,23 @@ export default class WorkspaceManager {
     }
 
     /**
-     * Checks to make sure all the folders are in place,
-     * should be run at startup before the watcher is initialized
+     * Called only when extension activates.
+     * Checks if the currently open .code-workspace file in VSCode is named as a course name.
+     *
+     * Makes sure all exercises with status OPEN is opened in course workspace.
      */
-    private async _workspaceIntegrityCheck(): Promise<void> {
+    private async _verifyCorrectExercisesOpenInCourseWorkspace(): Promise<void> {
         const workspaceAndCourseName = vscode.workspace.name?.split(" ")[0];
         Logger.log(`Workspace integrity check for ${workspaceAndCourseName}`);
         if (
             workspaceAndCourseName &&
             isCorrectWorkspaceOpen(this._resources, workspaceAndCourseName)
         ) {
-            const exercises = this.getExercisesByCourseName(workspaceAndCourseName);
+            const exercises = this.getAllExerciseDataByCourseName(workspaceAndCourseName);
             const openIds: number[] = exercises
                 .filter((ex) => ex.status === ExerciseStatus.OPEN)
                 .map((ex) => ex.id);
+            // TODO: Error handling for openExercise
             await this.openExercise(workspaceAndCourseName, ...openIds);
         }
     }
@@ -527,9 +567,11 @@ export default class WorkspaceManager {
     }
 
     /**
-     * Verifies that .tmc/ file exists and its contents is correct.
+     * Verifies that .tmc/ folder exists and that TMC-Readme.md file and its contents is correct.
+     * This folder needs to be as rootFolder in every Course Workspace, so that the
+     * extension host doesn't restart when opening/closing exercises for course workspace.
      */
-    private _verifyWorkspaceRootFile(): void {
+    private _verifyCourseWorkspaceRootFolderAndFileExists(): void {
         const rootFileFolder = path.join(this._resources.getWorkspaceFolderPath(), ".tmc");
         const pathToRootFile = path.join(rootFileFolder, WORKSPACE_ROOT_FILE);
         if (!fs.existsSync(pathToRootFile)) {
