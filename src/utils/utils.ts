@@ -71,6 +71,12 @@ export async function downloadFile(
     return Ok.EMPTY;
 }
 
+/**
+ * Checks if currently open vscode workspace file path and given courseName path matches.
+ *
+ * @param resources
+ * @param courseName
+ */
 export function isCorrectWorkspaceOpen(resources: Resources, courseName: string): boolean {
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
     const tmcWorkspaceFile = vscode.Uri.file(resources.getWorkspaceFilePath(courseName));

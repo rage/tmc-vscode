@@ -109,7 +109,7 @@ export async function displayLocalCourseDetails(
             return false;
         }
         if (!fs.existsSync(exercisePath.val) || fs.readdirSync(exercisePath.val).length === 0) {
-            workspaceManager.setMissing(exerciseId);
+            workspaceManager.setExerciseStatusAsMissing(exerciseId);
             return false;
         }
         return true;
@@ -133,7 +133,7 @@ export async function displayLocalCourseDetails(
     const course = userData.getCourse(courseId);
     Logger.log(`Display course view for ${course.name}`);
 
-    const workspaceExercises = workspaceManager.getExercisesByCourseName(course.name);
+    const workspaceExercises = workspaceManager.getAllExerciseDataByCourseName(course.name);
     const exerciseData = new Map<string, UITypes.CourseDetailsExerciseGroup>();
     const initialState: Array<{ key: string; message: UITypes.WebviewMessage }> = [];
     const apiCourse = (await tmc.getCourseDetails(courseId, true)).mapErr(() => undefined).val

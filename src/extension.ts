@@ -1,5 +1,3 @@
-import * as fs from "fs-extra";
-import * as path from "path";
 import * as vscode from "vscode";
 
 import { checkForCourseUpdates } from "./actions";
@@ -11,6 +9,7 @@ import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import * as init from "./init";
+import { newVSCodeWorkspaceMigration } from "./migrate";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
 import { Logger, LogLevel, semVerCompare } from "./utils";
@@ -99,43 +98,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         visibilityGroups,
     };
 
-    // Migration plan to move all exercises from closed-exercises
-    // Remove in 2.0.0 from here
-    const allExerciseData = workspaceManager.getAllExercises();
-    const oldTMCWorkspace = path.join(
-        resources.getWorkspaceFolderPath(),
-        "TMC Exercises.code-workspace",
-    );
-    const closedPath = path.join(resources.getDataPath(), "closed-exercises");
-    if (fs.existsSync(oldTMCWorkspace)) {
-        fs.removeSync(oldTMCWorkspace);
-    }
-    if (fs.existsSync(closedPath) && fs.readdirSync(closedPath).length !== 0) {
-        allExerciseData?.forEach(async (ex) => {
-            const closedPath = path.join(
-                resources.getDataPath(),
-                "closed-exercises",
-                ex.id.toString(),
-            );
-            const openPath = path.join(
-                resources.getExercisesFolderPath(),
-                ex.organization,
-                ex.course,
-                ex.name,
-            );
-            if (fs.existsSync(closedPath)) {
-                const ok = await workspaceManager.moveFolder(closedPath, openPath);
-                if (ok.err) {
-                    const message = "Error while moving folders.";
-                    Logger.error(message, ok.val);
-                    showError(message);
-                }
-            }
-        });
-    } else {
-        fs.removeSync(closedPath);
-    }
-    // Remove in 2.0.0 to here
+    // Remove newVSCodeWorkspaceMigration plan when release of 2.0.0
+    newVSCodeWorkspaceMigration(actionContext);
 
     // Start watcher after migration.
     workspaceManager.startWatcher();
