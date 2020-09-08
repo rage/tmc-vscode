@@ -49,11 +49,13 @@ describe("Login tests", function () {
                     "Error notification should not be displayed.",
                 );
                 await (await fillLoginForm(webview, "TestMyCode", "hunter2")).click();
-                const [error2] = await waitForElements(() =>
-                    webview.findWebElements(By.css("[data-se='error-notification']")),
+                const errors = await waitForElements(
+                    () => webview.findWebElements(By.css("[data-se='error-notification']")),
+                    async (e) => (await e.getCssValue("display")) === "block",
+                    4000,
                 );
-                expect(await error2.getCssValue("display")).to.be.equal(
-                    "block",
+                expect(errors.length).to.be.equal(
+                    1,
                     "Error notification expected when using wrong credentials.",
                 );
             });
@@ -72,15 +74,15 @@ describe("Login tests", function () {
 
             loginButton.click();
             await operateTMCWebview(editorView, "TestMyCode", 0, async (webview) => {
-                const errors = await webview.findWebElements(
-                    By.css("[data-se='error-notification']"),
-                );
-                expect(errors.length).to.be.equal(
-                    0,
-                    "There shouldn't be any error notifications when entering login page.",
-                );
                 await (await fillLoginForm(webview, "TestMyExtension", "hunter2")).click();
             });
+
+            const loggedInButtons = await openTMCSideBar(activityBar);
+            const myCourses = loggedInButtons.get("My Courses") as WebElement;
+            expect(myCourses).to.be.instanceOf(
+                WebElement,
+                "Expected to find WebElement `My Courses`",
+            );
 
             await operateTMCWebview(editorView, "TestMyCode", 0, async (webview) => {
                 const headers = await waitForElements(

@@ -3,7 +3,7 @@ import { ActivityBar, EditorView, WebElement, WebView } from "vscode-extension-t
 import { waitForElements } from "./utils";
 
 /**
- * Navigates to TMC Sidebar and returns a map of avaiable ViewItems.
+ * Navigates to TMC Sidebar and returns a map of available ViewItems.
  */
 const openTMCSideBar = async (
     activityBar: ActivityBar,
