@@ -12,9 +12,7 @@
                 <span aria-hidden="true">&times;</span>
             </button>
             <div class="row py-2">
-                <div class="py-2">
-                    {{{submission_status statusData}}}
-                </div>
+                <div class="py-2">{{{submission_status statusData}}}</div>
             </div>
             {{#with statusData}} {{#if test_cases}}
             <div class="row my-1">
@@ -24,9 +22,7 @@
                 <h3>Points gained: -</h3>
                 {{/if}}
             </div>
-            <div class="row my-1">
-                {{{progress_bar test_cases}}}
-            </div>
+            <div class="row my-1">{{{progress_bar test_cases}}}</div>
             {{/if}} {{/with}} {{#if feedbackQuestions}}
             <div id="feedbacknotification"></div>
             <div id="feedback" class="my-5">
@@ -35,9 +31,7 @@
                     {{#each feedbackQuestions}}
                     <div>
                         <span>{{this.question}}</span>
-                        <div class="row">
-                            {{{feedback_question this}}}
-                        </div>
+                        <div class="row">{{{feedback_question this}}}</div>
                     </div>
                     {{/each}}
                     <div>
@@ -54,13 +48,9 @@
                     <div class="col">
                         <div class="row">
                             {{#if this.successful}}
-                            <div class="col-md-1 passed-header">
-                                PASS:
-                            </div>
+                            <div class="col-md-1 passed-header">PASS:</div>
                             {{else}}
-                            <div class="col-md-1 failed-header">
-                                FAIL:
-                            </div>
+                            <div class="col-md-1 failed-header">FAIL:</div>
                             {{/if}}
                             <div class="col-md">
                                 <span>{{this.name}}</span>

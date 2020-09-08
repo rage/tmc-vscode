@@ -26,20 +26,16 @@
                     {{{ check_test_status testResult.status testResult.logs undefined }}}
                 </div>
             </div>
-            <div class="row m-0" style="line-height: 0;">
-                <div class="col-md-10 py-2">
-                    {{{ progress_bar testResult.testResults}}}
-                </div>
+            <div class="row m-0" style="line-height: 0">
+                <div class="col-md-10 py-2">{{{ progress_bar testResult.testResults}}}</div>
                 <div class="col-md-2 py-2">
-                    <input type="checkbox" id="showAll" name="showAll" style="margin-top: 1px;" />
+                    <input type="checkbox" id="showAll" name="showAll" style="margin-top: 1px" />
                     <label for="showAll">Show all</label>
                 </div>
             </div>
 
             <div class="row m-0">
-                <div class="col-md-10" id="testResultPlaceholder">
-                    Test results can't be shown.
-                </div>
+                <div class="col-md-10" id="testResultPlaceholder">Test results can't be shown.</div>
             </div>
 
             {{else}} {{{ check_test_status testResult.status testResult.logs tmcLogs }}} {{/if}}
