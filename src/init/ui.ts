@@ -59,18 +59,18 @@ export function registerUiActions(actionContext: ActionContext): void {
                 return;
             }
             if (msg.username === "" || msg.password === "") {
-                ui.webview.setContentFromTemplate(
-                    { templateName: "login", error: "Username or password empty." },
-                    true,
-                );
+                ui.webview.postMessage({
+                    key: "login-error",
+                    message: { command: "loginError", error: "Username or password empty." },
+                });
                 return;
             }
             const result = await login(actionContext, msg.username, msg.password);
             if (result.err) {
-                ui.webview.setContentFromTemplate(
-                    { templateName: "login", error: result.val.message },
-                    true,
-                );
+                ui.webview.postMessage({
+                    key: "login-error",
+                    message: { command: "loginError", error: result.val.message },
+                });
                 return;
             }
             displayUserCourses(actionContext);
