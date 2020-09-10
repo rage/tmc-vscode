@@ -731,6 +731,7 @@ export default class TMC {
                 Logger.error("TMC Langs errored.", kind, traceString);
                 switch (kind) {
                     case "not-logged-in":
+                        this._onLogout?.();
                         return new Err(new AuthorizationError(message, traceString));
                     case "connection-error":
                         return new Err(new ConnectionError(message, traceString));

@@ -80,6 +80,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tmc.on("logout", async () => {
         await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
         ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN.not]);
+        ui.webview.setContentFromTemplate({ templateName: "login" });
     });
 
     const workspaceManager = new WorkspaceManager(storage, resources);

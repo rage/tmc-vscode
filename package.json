@@ -307,7 +307,7 @@
     },
     "scripts": {
         "vscode:prepublish": "cross-env NODE_ENV=production npm run webpack",
-        "clean-local-rust-config": "cd backend && cd resources && rm -rf tmc-vscode_plugin",
+        "clean-local-rust-config": "cd backend && cd cli && rm -rf tmc-vscode_plugin",
         "ci:all": "npm ci && cd backend && npm ci",
         "pretest": "cross-env NODE_ENV=development BACKEND=local npm run webpack",
         "test": "node ./bin/runTests.js",

@@ -32,7 +32,7 @@ export type TemplateData =
     | ({ templateName: "course-details" } & CourseDetailsData)
     | ({ templateName: "course" } & CourseData)
     | ({ templateName: "error" } & ErrorData)
-    | ({ templateName: "login" } & LoginData)
+    | { templateName: "login" }
     | ({ templateName: "my-courses" } & MyCoursesProps)
     | ({ templateName: "organization" } & OrganizationData)
     | ({ templateName: "running-tests" } & RunningTestsData)
@@ -161,8 +161,14 @@ export interface SetUpdateables {
     courseId: number;
 }
 
+export interface LoginError {
+    command: "loginError";
+    error: string;
+}
+
 export type WebviewMessage =
     | ExerciseStatusChange
+    | LoginError
     | SetCourseDisabledStatus
     | SetInsiderStatus
     | SetNextCourseDeadline

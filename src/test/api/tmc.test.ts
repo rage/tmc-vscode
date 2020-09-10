@@ -113,7 +113,7 @@ suite("TMC", function () {
             const exercise = path.join(COURSE_PATH, "part01-01_passing_exercise");
             const result = (await tmc.runTests(exercise)[0]).unwrap();
             expect(result.status).to.be.equal("PASSED");
-        }).timeout(10000);
+        }).timeout(20000);
 
         test("Can be interrupted");
 
