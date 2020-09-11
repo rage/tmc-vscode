@@ -81,6 +81,16 @@ export function registerUiActions(actionContext: ActionContext): void {
     });
 
     ui.webview.registerHandler(
+        "clearNewExercises",
+        (msg: { type?: "clearNewExercises"; courseId?: number }) => {
+            if (!(msg.type && msg.courseId)) {
+                return;
+            }
+            actionContext.userData.clearFromNewExercises(msg.courseId);
+        },
+    );
+
+    ui.webview.registerHandler(
         "downloadExercises",
         async (msg: {
             type?: "downloadExercises";
@@ -130,7 +140,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             const [successful] = await downloadExercises(actionContext, downloads);
             const successfulIds = successful.map((ex) => ex.exerciseId);
             if (successfulIds.length !== 0) {
-                await actionContext.userData.clearNewExercises(msg.courseId, successfulIds);
+                await actionContext.userData.clearFromNewExercises(msg.courseId, successfulIds);
                 const openResult = await openExercises(
                     actionContext,
                     successfulIds,

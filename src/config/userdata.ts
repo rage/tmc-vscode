@@ -116,19 +116,32 @@ export class UserData {
 
     /**
      * Clears the list of new exercises for a given course.
+     *
+     * If given a list of exercise ids clears these from the course.newExercises array
+     *
+     * @param courseId
+     * @param exercisesToClear Number list of exercises to clear.
      */
-    public async clearNewExercises(
+    public async clearFromNewExercises(
         courseId: number,
-        successful: number[],
+        exercisesToClear?: number[],
     ): Promise<Result<void, Error>> {
         const courseData = this._courses.get(courseId);
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
         Logger.log(`Clearing new exercises for ${courseData.name}`);
-        const unSuccessfullyDownloaded = _.difference(courseData.newExercises, successful);
-        courseData.newExercises = unSuccessfullyDownloaded;
-        if (unSuccessfullyDownloaded.length === 0) {
+        if (exercisesToClear !== undefined) {
+            const unSuccessfullyDownloaded = _.difference(
+                courseData.newExercises,
+                exercisesToClear,
+            );
+            courseData.newExercises = unSuccessfullyDownloaded;
+            if (unSuccessfullyDownloaded.length === 0) {
+                courseData.notifyAfter = 0;
+            }
+        } else {
+            courseData.newExercises = [];
             courseData.notifyAfter = 0;
         }
         await this._updatePersistentData();

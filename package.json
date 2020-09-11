@@ -2,7 +2,7 @@
     "name": "test-my-code",
     "displayName": "TestMyCode",
     "description": "TestMyCode extension for Visual Studio Code",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "license": "MIT",
     "publisher": "moocfi",
     "repository": {
@@ -26,6 +26,9 @@
     "keywords": [
         "tmc",
         "TestMyCode",
+        "test",
+        "my",
+        "code",
         "multi-root ready"
     ],
     "activationEvents": [

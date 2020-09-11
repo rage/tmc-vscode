@@ -29,7 +29,7 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
             })),
         );
         const successfulIds = successful.map((ex) => ex.exerciseId);
-        await userData.clearNewExercises(courseId, successfulIds);
+        await userData.clearFromNewExercises(courseId, successfulIds);
         const openResult = await actions.openExercises(
             actionContext,
             successfulIds,

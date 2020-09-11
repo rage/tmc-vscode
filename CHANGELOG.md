@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.1.0] - 2020-09-xx
+
+#### Added
+- Handle logout when token is invalid.
+- Possibility to run TMC Actions for exercises when right clicking them in the tree view.
+    * This way .ipynb notebooks can be tested and submitted more easily.
+- Clear new exercises possibility from notification or course card.
+
+#### Changed
+- Technical improvements to Login page.
+- Bumped TMC-langs Rust version to 0.3.0.
+- Exam mode in submissions handled by TMC-langs Rust.
+- Distinguish between disabled courses and access denied for TMC-langs Rust commands.
+
+#### Security
+- Updated dependencies.
+
+
 ## [1.0.1] - 2020-09-01
 
 #### Fixed

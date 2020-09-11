@@ -373,7 +373,7 @@ export async function checkForCourseUpdates(
             })),
         );
         const successfulIds = successful.map((ex) => ex.exerciseId);
-        await userData.clearNewExercises(course.id, successfulIds);
+        await userData.clearFromNewExercises(course.id, successfulIds);
         ui.webview.postMessage({
             key: `course-${course.id}-new-exercises`,
             message: {
@@ -399,6 +399,12 @@ export async function checkForCourseUpdates(
                     "Remind me later",
                     (): void => {
                         userData.setNotifyDate(course.id, Date.now() + NOTIFICATION_DELAY);
+                    },
+                ],
+                [
+                    "Don't remind about these exercises",
+                    (): void => {
+                        userData.clearFromNewExercises(course.id);
                     },
                 ],
             );
