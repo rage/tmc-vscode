@@ -4,7 +4,7 @@
 
 #### Added
 - Handle logout when token is invalid.
-- Possibility to run TMC Actions for exercises when right clicking them in the tree view.
+- Possibility to run TMC Actions for exercises when right clicking exercise folders or files in the tree view.
     * This way .ipynb notebooks can be tested and submitted more easily.
 - Clear new exercises possibility from notification or course card.
 
