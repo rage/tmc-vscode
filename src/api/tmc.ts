@@ -18,6 +18,7 @@ import {
     AuthorizationError,
     ConnectionError,
     ForbiddenError,
+    ObsoleteClientError,
     RuntimeError,
 } from "../errors";
 import { sleep } from "../utils/";
@@ -730,13 +731,22 @@ export default class TMC {
                 const traceString = trace.join("\n");
                 Logger.error("TMC Langs errored.", kind, traceString);
                 switch (kind) {
-                    case "not-logged-in":
-                        this._onLogout?.();
-                        return new Err(new AuthorizationError(message, traceString));
                     case "connection-error":
                         return new Err(new ConnectionError(message, traceString));
                     case "forbidden":
                         return new Err(new ForbiddenError(message, traceString));
+                    case "not-logged-in":
+                        this._onLogout?.();
+                        return new Err(new AuthorizationError(message, traceString));
+                    case "obsolete-client":
+                        return new Err(
+                            new ObsoleteClientError(
+                                message +
+                                    "\nYoure TMC Extension is out of date, please update it." +
+                                    "\nhttps://code.visualstudio.com/docs/editor/extension-gallery",
+                                traceString,
+                            ),
+                        );
                     default:
                         return new Err(new RuntimeError(message, traceString));
                 }
