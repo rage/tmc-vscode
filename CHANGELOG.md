@@ -8,12 +8,14 @@
     * This way .ipynb notebooks can be tested and submitted more easily.
 - Buttons to clear new exercises buffer from notification or course card.
 - Inform user if TMC Extension is obsolete.
+- Access to course details page from the TMC Tree Menu.
 
 #### Changed
 - Technical improvements to Login page.
 - Bumped TMC-langs Rust version to 0.3.0.
 - Exam mode in submissions handled by TMC-langs Rust.
 - Distinguish between disabled courses and access denied for TMC-langs Rust commands.
+- Use course title instead of course name.
 
 #### Security
 - Updated dependencies.

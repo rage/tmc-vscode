@@ -38,17 +38,35 @@ export function registerUiActions(actionContext: ActionContext): void {
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
-    ui.treeDP.registerAction("Log out", [visibilityGroups.LOGGED_IN], () => {
-        vscode.commands.executeCommand("tmc.logout");
-    });
-    ui.treeDP.registerAction("Log in", [visibilityGroups.LOGGED_IN.not], () => {
+    ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.LOGGED_IN.not], () => {
         ui.webview.setContentFromTemplate({ templateName: "login" });
     });
-    ui.treeDP.registerAction("My Courses", [visibilityGroups.LOGGED_IN], () => {
-        displayUserCourses(actionContext);
-    });
-    ui.treeDP.registerAction("Settings", [], () => {
+
+    const userCourses = actionContext.userData.getCourses();
+    ui.treeDP.registerAction(
+        "My Courses",
+        "myCourses",
+        [visibilityGroups.LOGGED_IN],
+        () => {
+            displayUserCourses(actionContext);
+        },
+        userCourses.length !== 0
+            ? vscode.TreeItemCollapsibleState.Expanded
+            : vscode.TreeItemCollapsibleState.Collapsed,
+        userCourses.map<{ label: string; id: string; onClick: () => void }>((course) => ({
+            label: course.title,
+            id: course.id.toString(),
+            onClick: (): void => {
+                displayLocalCourseDetails(actionContext, course.id);
+            },
+        })),
+    );
+
+    ui.treeDP.registerAction("Settings", "settings", [], () => {
         openSettings(actionContext);
+    });
+    ui.treeDP.registerAction("Log out", "logOut", [visibilityGroups.LOGGED_IN], () => {
+        vscode.commands.executeCommand("tmc.logout");
     });
 
     // Register webview handlers

@@ -40,7 +40,7 @@ export function registerCommands(
             const courseId = await askForItem<number>(
                 "Which course page do you want to open?",
                 false,
-                ...courses.map<[string, number]>((c) => [c.name, c.id]),
+                ...courses.map<[string, number]>((c) => [c.title, c.id]),
             );
             if (courseId) {
                 actions.displayLocalCourseDetails(actionContext, courseId);

@@ -31,7 +31,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
     const chosenCourse = await askForItem<number>(
         "Which course?",
         false,
-        ...courses.val.map<[string, number]>((course) => [course.name, course.id]),
+        ...courses.val.map<[string, number]>((course) => [course.title, course.id]),
     );
     if (chosenCourse === undefined) {
         return;
