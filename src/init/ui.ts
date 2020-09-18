@@ -38,8 +38,10 @@ export function registerUiActions(actionContext: ActionContext): void {
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
-    ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.LOGGED_IN.not], () => {
-        ui.webview.setContentFromTemplate({ templateName: "login" });
+    ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.LOGGED_IN.not], {
+        command: "tmcView.setContentFromTemplate",
+        title: "",
+        arguments: [{ templateName: "login" }],
     });
 
     const userCourses = actionContext.userData.getCourses();
@@ -47,26 +49,31 @@ export function registerUiActions(actionContext: ActionContext): void {
         "My Courses",
         "myCourses",
         [visibilityGroups.LOGGED_IN],
-        () => {
-            displayUserCourses(actionContext);
+        {
+            command: "tmc.myCourses",
+            title: "Go to My Courses",
         },
         userCourses.length !== 0
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed,
-        userCourses.map<{ label: string; id: string; onClick: () => void }>((course) => ({
+        userCourses.map<{ label: string; id: string; command: vscode.Command }>((course) => ({
             label: course.title,
             id: course.id.toString(),
-            onClick: (): void => {
-                displayLocalCourseDetails(actionContext, course.id);
+            command: {
+                command: "tmc.courseDetails",
+                title: "Go to course details",
+                arguments: [course.id],
             },
         })),
     );
 
-    ui.treeDP.registerAction("Settings", "settings", [], () => {
-        openSettings(actionContext);
+    ui.treeDP.registerAction("Settings", "settings", [], {
+        command: "tmc.openSettings",
+        title: "Go to TMC Settings",
     });
-    ui.treeDP.registerAction("Log out", "logOut", [visibilityGroups.LOGGED_IN], () => {
-        vscode.commands.executeCommand("tmc.logout");
+    ui.treeDP.registerAction("Log out", "logOut", [visibilityGroups.LOGGED_IN], {
+        command: "tmc.logout",
+        title: "Log out",
     });
 
     // Register webview handlers

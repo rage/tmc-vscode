@@ -52,6 +52,11 @@
                 "category": "TestMyCode"
             },
             {
+                "command": "tmcView.setContentFromTemplate",
+                "title": "Set Content From Template",
+                "category": "TestMyCode"
+            },
+            {
                 "command": "tmc.addNewCourse",
                 "title": "Add New Course...",
                 "category": "TestMyCode"
@@ -170,6 +175,10 @@
             "commandPalette": [
                 {
                     "command": "tmcView.activateEntry",
+                    "when": "false"
+                },
+                {
+                    "command": "tmcView.setContentFromTemplate",
                     "when": "false"
                 },
                 {

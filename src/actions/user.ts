@@ -491,7 +491,7 @@ export async function addNewCourse(
     actionContext: ActionContext,
     options?: NewCourseOptions,
 ): Promise<Result<void, Error>> {
-    const { tmc, userData, workspaceManager } = actionContext;
+    const { tmc, ui, userData, workspaceManager } = actionContext;
     Logger.log("Adding new course");
     let organization = options?.organization;
     let course = options?.course;
@@ -540,6 +540,7 @@ export async function addNewCourse(
         material_url: courseData.settings.material_url,
     };
     userData.addCourse(localData);
+    ui.treeDP.addChildWithId("myCourses", localData.id, localData.title);
     workspaceManager.createWorkspaceFile(courseData.details.name);
     await displayUserCourses(actionContext);
     return Ok.EMPTY;
@@ -550,7 +551,7 @@ export async function addNewCourse(
  * @param id ID of the course to remove
  */
 export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
-    const { userData, workspaceManager, resources } = actionContext;
+    const { ui, userData, workspaceManager, resources } = actionContext;
     const course = userData.getCourse(id);
     Logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
     const closeResult = await closeExercises(
@@ -573,6 +574,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
         force: true,
     });
     userData.deleteCourse(id);
+    ui.treeDP.removeChildWithId("myCourses", id.toString());
 }
 
 /**

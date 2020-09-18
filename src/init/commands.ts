@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
 import * as commands from "../commands";
+import { TemplateData } from "../ui/types";
 import { Logger } from "../utils/";
 import { askForConfirmation, askForItem, showError, showNotification } from "../window";
 
@@ -13,9 +14,19 @@ export function registerCommands(
     const { ui, userData } = actionContext;
     Logger.log("Registering TMC VSCode commands");
 
+    // Commands not shown to user
     context.subscriptions.push(
         vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
+        vscode.commands.registerCommand(
+            "tmcView.setContentFromTemplate",
+            (template: TemplateData) => {
+                ui.webview.setContentFromTemplate(template);
+            },
+        ),
+    );
 
+    // Commands shown to user
+    context.subscriptions.push(
         vscode.commands.registerCommand("tmc.addNewCourse", async () =>
             commands.addNewCourse(actionContext),
         ),
@@ -32,16 +43,18 @@ export function registerCommands(
                 commands.closeExercise(actionContext, resource),
         ),
 
-        vscode.commands.registerCommand("tmc.courseDetails", async () => {
+        vscode.commands.registerCommand("tmc.courseDetails", async (courseId?: number) => {
             const courses = userData.getCourses();
             if (courses.length === 0) {
                 return;
             }
-            const courseId = await askForItem<number>(
-                "Which course page do you want to open?",
-                false,
-                ...courses.map<[string, number]>((c) => [c.title, c.id]),
-            );
+            courseId =
+                courseId ??
+                (await askForItem<number>(
+                    "Which course page do you want to open?",
+                    false,
+                    ...courses.map<[string, number]>((c) => [c.title, c.id]),
+                ));
             if (courseId) {
                 actions.displayLocalCourseDetails(actionContext, courseId);
             }
