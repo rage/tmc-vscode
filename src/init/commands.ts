@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
 
 import * as actions from "../actions";
+import { checkForCourseUpdates, displayUserCourses, removeCourse } from "../actions";
 import { ActionContext } from "../actions/types";
 import * as commands from "../commands";
+import { TmcTreeNode } from "../ui/treeview/treenode";
 import { TemplateData } from "../ui/types";
 import { Logger } from "../utils/";
 import { askForConfirmation, askForItem, showError, showNotification } from "../window";
@@ -14,18 +16,35 @@ export function registerCommands(
     const { ui, userData } = actionContext;
     Logger.log("Registering TMC VSCode commands");
 
-    // Commands not shown to user
+    // Commands not shown to user in Command Palette / TMC Action menu
     context.subscriptions.push(
         vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
         vscode.commands.registerCommand(
-            "tmcView.setContentFromTemplate",
+            "tmcTreeView.setContentFromTemplate",
             (template: TemplateData) => {
                 ui.webview.setContentFromTemplate(template);
             },
         ),
+        vscode.commands.registerCommand(
+            "tmcTreeView.removeCourse",
+            async (treeNode: TmcTreeNode) => {
+                const confirmed = await askForConfirmation(
+                    `Do you want to remove ${treeNode.label} from your courses?`,
+                    false,
+                );
+                if (confirmed) {
+                    await removeCourse(actionContext, Number(treeNode.id));
+                    await displayUserCourses(actionContext);
+                }
+            },
+        ),
+        vscode.commands.registerCommand("tmcTreeView.refreshCourses", async () => {
+            await checkForCourseUpdates(actionContext);
+            await commands.updateExercises(actionContext, "loud");
+        }),
     );
 
-    // Commands shown to user
+    // Commands shown to user in Command Palette / TMC Action menu
     context.subscriptions.push(
         vscode.commands.registerCommand("tmc.addNewCourse", async () =>
             commands.addNewCourse(actionContext),

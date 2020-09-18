@@ -49,12 +49,26 @@
             {
                 "command": "tmcView.activateEntry",
                 "title": "Activate",
-                "category": "TestMyCode"
+                "category": "TMC"
             },
             {
-                "command": "tmcView.setContentFromTemplate",
+                "command": "tmcTreeView.setContentFromTemplate",
                 "title": "Set Content From Template",
-                "category": "TestMyCode"
+                "category": "TMC"
+            },
+            {
+                "command": "tmcTreeView.removeCourse",
+                "title": "Remove Course",
+                "category": "TMC"
+            },
+            {
+                "command": "tmcTreeView.refreshCourses",
+                "title": "Fetch Course Updates",
+                "category": "TMC",
+                "icon": {
+                    "light": "resources/light/refresh.svg",
+                    "dark": "resources/dark/refresh.svg"
+                }
             },
             {
                 "command": "tmc.addNewCourse",
@@ -178,7 +192,15 @@
                     "when": "false"
                 },
                 {
-                    "command": "tmcView.setContentFromTemplate",
+                    "command": "tmcTreeView.setContentFromTemplate",
+                    "when": "false"
+                },
+                {
+                    "command": "tmcTreeView.removeCourse",
+                    "when": "false"
+                },
+                {
+                    "command": "tmcTreeView.refreshCourses",
                     "when": "false"
                 },
                 {
@@ -295,6 +317,23 @@
                     "command": "tmc.submitExercise",
                     "group": "TestMyCode@1",
                     "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+                }
+            ],
+            "view/title": [
+                {
+                    "command": "tmcTreeView.refreshCourses",
+                    "when": "view == tmcView && test-my-code:LoggedIn",
+                    "group": "navigation"
+                },
+                {
+                    "command": "tmc.addNewCourse",
+                    "when": "view == tmcView && test-my-code:LoggedIn"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "tmcTreeView.removeCourse",
+                    "when": "view == tmcView && viewItem == child"
                 }
             ]
         },

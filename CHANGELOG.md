@@ -4,14 +4,16 @@
 
 #### Added
 - Handle logout when token is invalid.
-- Possibility to run TMC Actions for exercises when right clicking exercise folders or files in the tree view.
+- Run TMC Actions for exercises when right clicking exercise folders or files in the explorer view.
     * This way .ipynb notebooks can be tested and submitted more easily.
 - Buttons to clear new exercises buffer from notification or course card.
 - Inform user if TMC Extension is obsolete.
 - Access to course details page from the TMC Tree Menu.
+- Refresh button to fetch course and exericse updates in TMC Tree View.
 
 #### Changed
 - Technical improvements to Login page.
+- Technical improvements to TMC TreeView menu.
 - Bumped TMC-langs Rust version to 0.3.0.
 - Exam mode in submissions handled by TMC-langs Rust.
 - Distinguish between disabled courses and access denied for TMC-langs Rust commands.
