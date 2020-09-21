@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.1.0] - 2020-09-xx
+## [1.1.0] - 2020-09-21
 
 #### Added
 - Handle logout when token is invalid.
@@ -10,11 +10,12 @@
 - Inform user if TMC Extension is obsolete.
 - Access to course details page from the TMC Tree Menu.
 - Refresh button to fetch course and exericse updates in TMC Tree View.
+- Log out if token is invalid.
 
 #### Changed
 - Technical improvements to Login page.
 - Technical improvements to TMC TreeView menu.
-- Bumped TMC-langs Rust version to 0.3.0.
+- Bumped TMC-langs Rust version to 0.4.0.
 - Exam mode in submissions handled by TMC-langs Rust.
 - Distinguish between disabled courses and access denied for TMC-langs Rust commands.
 - Use course title instead of course name.

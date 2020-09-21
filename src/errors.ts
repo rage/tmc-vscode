@@ -29,6 +29,10 @@ export class ForbiddenError extends BaseError {
     public readonly name = "Forbidden Error";
 }
 
+export class InvalidTokenError extends BaseError {
+    public readonly name = "Invalid Token Error";
+}
+
 export class ObsoleteClientError extends BaseError {
     public readonly name = "Obsolete Client Error";
 }

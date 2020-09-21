@@ -54,34 +54,31 @@ export default class TmcMenuTree {
 
     /**
      * Removes child from TreeView item.
-     * @param fromId Parent node
-     * @param removeId Id to remove from parent nodes children.
+     * @param parentId Parent node ID
+     * @param removeId Child node ID
      */
-    public removeChildWithId(fromId: string, removeId: string): void {
-        this._treeDP.removeChildWithId(fromId, removeId);
+    public removeChildWithId(parentId: string, removeId: string): void {
+        this._treeDP.removeChildWithId(parentId, removeId);
     }
 
     /**
      * Adds a child to the TreeView item.
-     * @param toId Parent id in treeview
-     * @param courseId Child id in treeview
-     * @param title Human readable text, e.g. course title or name
+     * @param parentId Parent ID in treeview
+     * @param childId Child ID in treeview
+     * @param title Human readable text for child item, e.g. course title or name
+     * @param command The vscode command to be called when pressing the child node.
      */
-    public addChildWithId(toId: string, courseId: number, title: string): void {
-        const courseIdString = courseId.toString();
+    public addChildWithId(
+        parentId: string,
+        childId: number,
+        title: string,
+        command: vscode.Command,
+    ): void {
+        const childIdString = childId.toString();
         this._treeDP.addChildWithId(
-            toId,
-            courseIdString,
-            new TmcTreeNode(
-                title,
-                courseIdString,
-                {
-                    command: "tmc.courseDetails",
-                    title: "Go To Course Details",
-                    arguments: [courseId],
-                },
-                "child",
-            ),
+            parentId,
+            childIdString,
+            new TmcTreeNode(title, childIdString, command, "child"),
         );
     }
 
@@ -174,13 +171,13 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
         }
     }
 
-    public removeChildWithId(fromId: string, removeId: string): void {
-        this._actions.get(fromId)?.action.children.delete(removeId);
+    public removeChildWithId(parentId: string, childId: string): void {
+        this._actions.get(parentId)?.action.children.delete(childId);
         this.refresh();
     }
 
-    public addChildWithId(toId: string, addId: string, subAction: TmcTreeNode): void {
-        this._actions.get(toId)?.action.children.set(addId, subAction);
+    public addChildWithId(parentId: string, childId: string, node: TmcTreeNode): void {
+        this._actions.get(parentId)?.action.children.set(childId, node);
         this.refresh();
     }
 

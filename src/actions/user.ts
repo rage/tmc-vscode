@@ -198,9 +198,6 @@ export async function submitExercise(
         data?: { [key: string]: unknown };
         type?: string;
     }): Promise<void> => {
-        Logger.debug("Messagehandler data", msg.data);
-        Logger.debug("Messagehandler type", msg.type);
-
         if (msg.type === "feedback" && msg.data) {
             await tmc.submitSubmissionFeedback(
                 msg.data.url as string,
@@ -215,7 +212,6 @@ export async function submitExercise(
         } else if (msg.type === "closeWindow") {
             temp.dispose();
         } else if (msg.type === "sendToPaste" && msg.data) {
-            Logger.debug(msg.data);
             const pasteLink = await pasteExercise(actionContext, Number(msg.data.exerciseId));
             if (pasteLink.err) {
                 Logger.error(`${pasteLink.val.message}`, pasteLink.val);
@@ -284,7 +280,6 @@ export async function submitExercise(
             feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
         }
     }
-    Logger.debug("data", statusData);
     temp.setContent({
         title: "TMC Server Submission",
         template: {
@@ -540,7 +535,11 @@ export async function addNewCourse(
         material_url: courseData.settings.material_url,
     };
     userData.addCourse(localData);
-    ui.treeDP.addChildWithId("myCourses", localData.id, localData.title);
+    ui.treeDP.addChildWithId("myCourses", localData.id, localData.title, {
+        command: "tmc.courseDetails",
+        title: "Go To Course Details",
+        arguments: [localData.id],
+    });
     workspaceManager.createWorkspaceFile(courseData.details.name);
     await displayUserCourses(actionContext);
     return Ok.EMPTY;
@@ -590,7 +589,6 @@ export async function updateCourse(
 ): Promise<Result<boolean, Error>> {
     const { tmc, ui, userData } = actionContext;
     const postMessage = (courseId: number, disabled: boolean, exerciseIds: number[]): void => {
-        Logger.debug("Post message updatecourse", courseId, disabled, ...exerciseIds);
         ui.webview.postMessage(
             {
                 key: `course-${courseId}-new-exercises`,

@@ -18,11 +18,13 @@ import {
     AuthorizationError,
     ConnectionError,
     ForbiddenError,
+    InvalidTokenError,
     ObsoleteClientError,
     RuntimeError,
 } from "../errors";
 import { sleep } from "../utils/";
 import { Logger } from "../utils/logger";
+import { showError } from "../window";
 
 import {
     Course,
@@ -555,7 +557,6 @@ export default class TMC {
             return result;
         }
 
-        Logger.debug("reset-exercise", result.val);
         return Ok.EMPTY;
     }
 
@@ -735,6 +736,10 @@ export default class TMC {
                         return new Err(new ConnectionError(message, traceString));
                     case "forbidden":
                         return new Err(new ForbiddenError(message, traceString));
+                    case "invalid-token":
+                        this._onLogout?.();
+                        showError("Your TMC session has expired, please log in.");
+                        return new Err(new InvalidTokenError(message));
                     case "not-logged-in":
                         this._onLogout?.();
                         return new Err(new AuthorizationError(message, traceString));
