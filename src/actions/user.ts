@@ -198,9 +198,6 @@ export async function submitExercise(
         data?: { [key: string]: unknown };
         type?: string;
     }): Promise<void> => {
-        Logger.debug("Messagehandler data", msg.data);
-        Logger.debug("Messagehandler type", msg.type);
-
         if (msg.type === "feedback" && msg.data) {
             await tmc.submitSubmissionFeedback(
                 msg.data.url as string,
@@ -215,7 +212,6 @@ export async function submitExercise(
         } else if (msg.type === "closeWindow") {
             temp.dispose();
         } else if (msg.type === "sendToPaste" && msg.data) {
-            Logger.debug(msg.data);
             const pasteLink = await pasteExercise(actionContext, Number(msg.data.exerciseId));
             if (pasteLink.err) {
                 Logger.error(`${pasteLink.val.message}`, pasteLink.val);
@@ -284,7 +280,6 @@ export async function submitExercise(
             feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
         }
     }
-    Logger.debug("data", statusData);
     temp.setContent({
         title: "TMC Server Submission",
         template: {
@@ -373,7 +368,7 @@ export async function checkForCourseUpdates(
             })),
         );
         const successfulIds = successful.map((ex) => ex.exerciseId);
-        await userData.clearNewExercises(course.id, successfulIds);
+        await userData.clearFromNewExercises(course.id, successfulIds);
         ui.webview.postMessage({
             key: `course-${course.id}-new-exercises`,
             message: {
@@ -399,6 +394,12 @@ export async function checkForCourseUpdates(
                     "Remind me later",
                     (): void => {
                         userData.setNotifyDate(course.id, Date.now() + NOTIFICATION_DELAY);
+                    },
+                ],
+                [
+                    "Don't remind about these exercises",
+                    (): void => {
+                        userData.clearFromNewExercises(course.id);
                     },
                 ],
             );
@@ -485,7 +486,7 @@ export async function addNewCourse(
     actionContext: ActionContext,
     options?: NewCourseOptions,
 ): Promise<Result<void, Error>> {
-    const { tmc, userData, workspaceManager } = actionContext;
+    const { tmc, ui, userData, workspaceManager } = actionContext;
     Logger.log("Adding new course");
     let organization = options?.organization;
     let course = options?.course;
@@ -534,6 +535,11 @@ export async function addNewCourse(
         material_url: courseData.settings.material_url,
     };
     userData.addCourse(localData);
+    ui.treeDP.addChildWithId("myCourses", localData.id, localData.title, {
+        command: "tmc.courseDetails",
+        title: "Go To Course Details",
+        arguments: [localData.id],
+    });
     workspaceManager.createWorkspaceFile(courseData.details.name);
     await displayUserCourses(actionContext);
     return Ok.EMPTY;
@@ -544,7 +550,7 @@ export async function addNewCourse(
  * @param id ID of the course to remove
  */
 export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
-    const { userData, workspaceManager, resources } = actionContext;
+    const { ui, userData, workspaceManager, resources } = actionContext;
     const course = userData.getCourse(id);
     Logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
     const closeResult = await closeExercises(
@@ -567,6 +573,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
         force: true,
     });
     userData.deleteCourse(id);
+    ui.treeDP.removeChildWithId("myCourses", id.toString());
 }
 
 /**
@@ -582,7 +589,6 @@ export async function updateCourse(
 ): Promise<Result<boolean, Error>> {
     const { tmc, ui, userData } = actionContext;
     const postMessage = (courseId: number, disabled: boolean, exerciseIds: number[]): void => {
-        Logger.debug("Post message updatecourse", courseId, disabled, ...exerciseIds);
         ui.webview.postMessage(
             {
                 key: `course-${courseId}-new-exercises`,

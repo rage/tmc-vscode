@@ -8,7 +8,7 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
     const downloadNewExercises = async (courseId: number): Promise<void> => {
         const course = userData.getCourse(courseId);
         if (course.newExercises.length === 0) {
-            showNotification(`There are no new exercises for the course ${course.name}.`, [
+            showNotification(`There are no new exercises for the course ${course.title}.`, [
                 "OK",
                 (): void => {},
             ]);
@@ -29,7 +29,7 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
             })),
         );
         const successfulIds = successful.map((ex) => ex.exerciseId);
-        await userData.clearNewExercises(courseId, successfulIds);
+        await userData.clearFromNewExercises(courseId, successfulIds);
         const openResult = await actions.openExercises(
             actionContext,
             successfulIds,
@@ -46,7 +46,7 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
     const courseId = await askForItem<number>(
         "Download new exercises for course?",
         false,
-        ...courses.map<[string, number]>((course) => [course.name, course.id]),
+        ...courses.map<[string, number]>((course) => [course.title, course.id]),
     );
 
     if (courseId) {

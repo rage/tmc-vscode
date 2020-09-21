@@ -9,17 +9,17 @@ export async function showWelcome(actionContext: ActionContext): Promise<void> {
         {
             templateName: "welcome",
             version: resources.extensionVersion,
-            newWorkspace: vscode.Uri.file(
-                path.join(resources.mediaFolder, "welcome_new_workspace.png"),
-            ),
-            openNewWorkspace: vscode.Uri.file(
-                path.join(resources.mediaFolder, "welcome_open_new_workspace.png"),
-            ),
             TMCMenuIcon: vscode.Uri.file(
                 path.join(resources.mediaFolder, "welcome_tmc_menu_icon.png"),
             ),
             newTMCMenu: vscode.Uri.file(
                 path.join(resources.mediaFolder, "welcome_new_tmc_menu.png"),
+            ),
+            newTreeView: vscode.Uri.file(
+                path.join(resources.mediaFolder, "welcome_new_treeview.png"),
+            ),
+            actionsExplorer: vscode.Uri.file(
+                path.join(resources.mediaFolder, "welcome_actions_jupyter.png"),
             ),
             tmcLogoFile: vscode.Uri.file(path.join(resources.mediaFolder, "TMC.png")),
         },

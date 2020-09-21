@@ -12,7 +12,7 @@ const createElement = require("./templateUtils").createElement;
  * @param {import("./Welcome").WelcomeProps} props
  */
 function component(props) {
-    const { newWorkspace, version, openNewWorkspace, newTMCMenu, TMCMenuIcon } = props;
+    const { version, newTMCMenu, TMCMenuIcon, newTreeView, actionsExplorer } = props;
 
     return (
         <div class="container welcome-container">
@@ -49,7 +49,7 @@ function component(props) {
             </div>
 
             <div class="content_area">
-                <h2>What's new?</h2>
+                <h2>What's new in {version}?</h2>
                 <div class="content_section">
                     <p>
                         Here is a little overview of latest features. To see all the changes for
@@ -60,6 +60,36 @@ function component(props) {
                         .
                     </p>
                 </div>
+                <div class="content_section">
+                    <h3>Alternative way to run tests for Jupyter Notebooks</h3>
+                    <p>
+                        In VSCode Explorer view, we've added the possibility to run exercise related
+                        actions by right clicking on exercise files or folders. This allows to run
+                        tests for exercises that don't have the TMC icons displayed at the top
+                        right.
+                    </p>
+                    <img
+                        style="margin-bottom: 1em;"
+                        class="rounded mx-auto d-block"
+                        src={actionsExplorer}
+                    />
+                </div>
+                <div class="content_section">
+                    <h3>New TMC Tree view</h3>
+                    <p>
+                        You can now see your courses listed in the TMC Tree view under My Courses.
+                        We've added actions in this view so you are able to Add, Remove and Refresh
+                        courses. You can add and refresh courses from buttons marked in the red
+                        rectangle. When you refresh courses it will check for new updates and
+                        exercises for all courses.
+                    </p>
+                    <img
+                        style="margin-bottom: 1em;"
+                        class="rounded mx-auto d-block"
+                        src={newTreeView}
+                    />
+                </div>
+                <h2 style="py-2">Earlier releases</h2>
                 <h3>
                     TMC Commands Menu <img src={TMCMenuIcon} />
                 </h3>
@@ -71,7 +101,7 @@ function component(props) {
                         and new exercise for courses easily.
                     </p>
                     <img
-                        style="margin-bottom: 2.5em;"
+                        style="margin-bottom: 1em;"
                         class="rounded mx-auto d-block"
                         src={newTMCMenu}
                     />
@@ -102,63 +132,6 @@ function component(props) {
                         wasn't available to TMC-langs. In version 1.0.0 the Python Executable path
                         is passed to TMC-langs.
                     </p>
-                </div>
-
-                <h3>New exercise workspaces</h3>
-                <div class="content_section">
-                    <div class="row">
-                        <div class="col-md">
-                            <p>
-                                Exercise workspace has been completely reworked to take a full
-                                advantage of VSCode's{" "}
-                                <a href="https://code.visualstudio.com/docs/editor/multi-root-workspaces">
-                                    Multi-root Workspaces
-                                </a>
-                                .
-                            </p>
-                            <p>
-                                Our workspace refactor introduces course specific workspaces which
-                                fixes various issues that we have encountered since launch.
-                                Implementation of Multi-root Workspace for courses enables the
-                                following:
-                                <ul>
-                                    <li>
-                                        Debugging individual exercises (i.e. adding
-                                        .vscode/launch.json to exercise folder)
-                                    </li>
-                                    <li>
-                                        Course specific settings and extension recommendations in
-                                        VSCode
-                                    </li>
-                                    <li>
-                                        Fixes issue with file handling when communicating using
-                                        TMC-langs and other VSCode extensions
-                                    </li>
-                                </ul>
-                            </p>
-                            <p>You can open a course workspace via "My Courses" view.</p>
-                            <img style="margin-bottom: 2.5em;" src={openNewWorkspace} />
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md">
-                            <strong>There are some caveats in VSCode:</strong>
-                            <ul>
-                                <li>
-                                    Changing the top folder in Multi-root Workspace will cause
-                                    VSCode to restart. <code>.tmc</code> folder is forced on top as
-                                    a workaround.
-                                </li>
-                                <li>
-                                    The file <code>TMC-Readme.md</code> exists to allow this
-                                    extension to start when opening an exercise workspace.
-                                </li>
-                            </ul>
-                        </div>
-                        <div class="col-md-3">
-                            <img src={newWorkspace} />
-                        </div>
-                    </div>
                 </div>
             </div>
 

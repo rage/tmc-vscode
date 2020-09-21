@@ -370,7 +370,7 @@ export default class WorkspaceManager {
             if (recommendations.includes(extension)) {
                 return;
             }
-            Logger.debug("Current recommendations", recommendations);
+            Logger.debug("Current workspace recommendations", recommendations);
             const newRecommendations = recommendations.concat(extension);
             const newWorkspaceData = { ...workspaceData, extensions: { ...newRecommendations } };
             Logger.debug("Workspace data", newWorkspaceData);
@@ -380,7 +380,7 @@ export default class WorkspaceManager {
                 ...workspaceData,
                 extensions: { recommendations: [extension] },
             };
-            Logger.debug("New recommendations", workspaceDataRecommend);
+            Logger.debug("New workspace recommendations", workspaceDataRecommend);
             fs.writeFileSync(pathToWorkspace, JSON.stringify(workspaceDataRecommend));
         }
     }

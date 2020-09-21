@@ -81,7 +81,7 @@ const component = (props) => {
                         </div>
                     </div>
                     <div
-                        class="alert alert-info mt-2 new-exercises-notification"
+                        class="alert alert-info alert-dismissible mt-2 new-exercises-notification"
                         role="alert"
                         style="display: block;"
                     >
@@ -93,6 +93,13 @@ const component = (props) => {
                             data-new-exercises={course.newExercises}
                         >
                             Download them!
+                        </button>
+                        <button
+                            type="button"
+                            class="close clear-new-exercises-btn"
+                            aria-label="Close"
+                        >
+                            <span aria-hidden="true">&times;</span>
                         </button>
                     </div>
                 </div>
@@ -199,6 +206,15 @@ const script = () => {
                 organizationSlug,
                 courseId,
                 mode: "download",
+            });
+        });
+        const clearNewExercisesButton = course.querySelector("button.clear-new-exercises-btn");
+        clearNewExercisesButton.addEventListener("click", (event) => {
+            event.stopPropagation();
+            setNewExercises(courseId, []);
+            vscode.postMessage({
+                type: "clearNewExercises",
+                courseId,
             });
         });
     }

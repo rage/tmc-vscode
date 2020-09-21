@@ -27,7 +27,8 @@ You can also download new exercises by pressing `CTRL + SHIFT + A` and select ac
 
 Visual Studio Code will occasionally prompt you to download updates for exercises. 
 You can also download updates by pressing the TMC icon on the left in Visual Studio Code, select `My Courses` and click the course card.  
-If updates are available, you should see a red button labeled `Update exercises`.
+If updates are available, you should see a red button labeled `Update exercises`.  
+You can also download updates by pressing `CTRL + SHIFT + A` and select action `Update Exercises...`.
 
 ## How do I wipe all data related to the TMC Extension?
 

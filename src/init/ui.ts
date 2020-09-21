@@ -38,17 +38,42 @@ export function registerUiActions(actionContext: ActionContext): void {
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
-    ui.treeDP.registerAction("Log out", [visibilityGroups.LOGGED_IN], () => {
-        vscode.commands.executeCommand("tmc.logout");
+    ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.LOGGED_IN.not], {
+        command: "tmcTreeView.setContentFromTemplate",
+        title: "",
+        arguments: [{ templateName: "login" }],
     });
-    ui.treeDP.registerAction("Log in", [visibilityGroups.LOGGED_IN.not], () => {
-        ui.webview.setContentFromTemplate({ templateName: "login" });
+
+    const userCourses = actionContext.userData.getCourses();
+    ui.treeDP.registerAction(
+        "My Courses",
+        "myCourses",
+        [visibilityGroups.LOGGED_IN],
+        {
+            command: "tmc.myCourses",
+            title: "Go to My Courses",
+        },
+        userCourses.length !== 0
+            ? vscode.TreeItemCollapsibleState.Expanded
+            : vscode.TreeItemCollapsibleState.Collapsed,
+        userCourses.map<{ label: string; id: string; command: vscode.Command }>((course) => ({
+            label: course.title,
+            id: course.id.toString(),
+            command: {
+                command: "tmc.courseDetails",
+                title: "Go to course details",
+                arguments: [course.id],
+            },
+        })),
+    );
+
+    ui.treeDP.registerAction("Settings", "settings", [], {
+        command: "tmc.openSettings",
+        title: "Go to TMC Settings",
     });
-    ui.treeDP.registerAction("My Courses", [visibilityGroups.LOGGED_IN], () => {
-        displayUserCourses(actionContext);
-    });
-    ui.treeDP.registerAction("Settings", [], () => {
-        openSettings(actionContext);
+    ui.treeDP.registerAction("Log out", "logOut", [visibilityGroups.LOGGED_IN], {
+        command: "tmc.logout",
+        title: "Log out",
     });
 
     // Register webview handlers
@@ -79,6 +104,16 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.webview.registerHandler("myCourses", () => {
         displayUserCourses(actionContext);
     });
+
+    ui.webview.registerHandler(
+        "clearNewExercises",
+        (msg: { type?: "clearNewExercises"; courseId?: number }) => {
+            if (!(msg.type && msg.courseId)) {
+                return;
+            }
+            actionContext.userData.clearFromNewExercises(msg.courseId);
+        },
+    );
 
     ui.webview.registerHandler(
         "downloadExercises",
@@ -130,7 +165,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             const [successful] = await downloadExercises(actionContext, downloads);
             const successfulIds = successful.map((ex) => ex.exerciseId);
             if (successfulIds.length !== 0) {
-                await actionContext.userData.clearNewExercises(msg.courseId, successfulIds);
+                await actionContext.userData.clearFromNewExercises(msg.courseId, successfulIds);
                 const openResult = await openExercises(
                     actionContext,
                     successfulIds,
