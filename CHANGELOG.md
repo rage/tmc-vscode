@@ -3,14 +3,14 @@
 ## [1.1.0] - 2020-09-21
 
 #### Added
-- Handle logout when token is invalid.
+- Handle logout when token has expired.
+- Log out user if token is invalid.
 - Run TMC Actions for exercises when right clicking exercise folders or files in the explorer view.
     * This way .ipynb notebooks can be tested and submitted more easily.
 - Buttons to clear new exercises buffer from notification or course card.
-- Inform user if TMC Extension is obsolete.
+- Inform user if TMC Extension is too old.
 - Access to course details page from the TMC Tree Menu.
 - Refresh button to fetch course and exericse updates in TMC Tree View.
-- Log out if token is invalid.
 
 #### Changed
 - Technical improvements to Login page.

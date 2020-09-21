@@ -290,10 +290,10 @@ export default class TemplateEngine {
                 return Webview.render({
                     children: Welcome.component({
                         ...templateData,
-                        newWorkspace: webview.asWebviewUri(templateData.newWorkspace),
-                        openNewWorkspace: webview.asWebviewUri(templateData.openNewWorkspace),
                         TMCMenuIcon: webview.asWebviewUri(templateData.TMCMenuIcon),
                         newTMCMenu: webview.asWebviewUri(templateData.newTMCMenu),
+                        newTreeView: webview.asWebviewUri(templateData.newTreeView),
+                        actionsExplorer: webview.asWebviewUri(templateData.actionsExplorer),
                         tmcLogoFile: webview.asWebviewUri(templateData.tmcLogoFile),
                     }),
                     cspSource: webview.cspSource,
