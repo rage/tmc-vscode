@@ -88,7 +88,7 @@ export default class TemplateEngine {
                     return "<h1 class='passed-header'>All tests passed on the server</h1><input type='button' class='btn btn-primary' value='View model solution' onclick='viewModelSolution()' />";
                 }
                 return `<h1 class='passed-header'>All tests passed on the server</h1>
-                <div class="alert alert-info">Your submission has been saved, but you can't see test results because this course is an exam.</div>
+                <div class="alert alert-info">Your submission has been saved, but you cannot see test results because this course is an exam.</div>
                 <button type='button' class='btn btn-primary' onclick="showInBrowser()">View submission in browser</button>`;
             } else if (results.status === "fail") {
                 // TODO: Get rid of this need help implementation asap.

@@ -62,8 +62,7 @@ const component = (props) => {
                         class="alert alert-info course-disabled-notification my-1"
                         style="display: none;"
                     >
-                        This course has been disabled and exercises can't be downloaded or submitted
-                        to the server.
+                        This course has been disabled. Exercises cannot be downloaded or submitted.
                     </div>
                     <div>
                         Programming exercise progress:

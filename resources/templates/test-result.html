@@ -35,7 +35,9 @@
             </div>
 
             <div class="row m-0">
-                <div class="col-md-10" id="testResultPlaceholder">Test results can't be shown.</div>
+                <div class="col-md-10" id="testResultPlaceholder">
+                    Test results cannot be shown.
+                </div>
             </div>
 
             {{else}} {{{ check_test_status testResult.status testResult.logs tmcLogs }}} {{/if}}
