@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.1] - 2020-09-29
+
+### Changed
+- Bumped TMC-langs Rust version to [0.4.1](https://github.com/rage/tmc-langs-rust/releases/tag/0.4.1).
+
+
 ## [1.1.0] - 2020-09-21
 
 #### Added
