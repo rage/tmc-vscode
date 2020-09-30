@@ -2,6 +2,7 @@ import * as TypeMoq from "typemoq";
 import * as vscode from "vscode";
 
 import Storage from "../../config/storage";
+import { ExtensionSettings } from "../../config/types";
 import { LogLevel } from "../../utils/";
 
 suite("Storage tests", () => {
@@ -85,13 +86,14 @@ suite("Storage tests", () => {
     });
 
     test("Extension settings updater uses ExtensionContext correctly", () => {
-        const extensionSettings = {
+        const extensionSettings: ExtensionSettings = {
             insiderVersion: false,
             dataPath: "/tmp/tmcdata",
             oldDataPath: undefined,
             logLevel: LogLevel.None,
             hideMetaFiles: true,
             downloadOldSubmission: true,
+            updateExercisesAutomatically: true,
         };
         assertUpdater(
             () => storage.updateExtensionSettings(extensionSettings),
