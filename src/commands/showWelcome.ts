@@ -14,12 +14,6 @@ export async function showWelcome(actionContext: ActionContext): Promise<void> {
         {
             templateName: "welcome",
             version: resources.extensionVersion,
-            TMCMenuIcon: vscode.Uri.file(
-                path.join(resources.mediaFolder, "welcome_tmc_menu_icon.png"),
-            ),
-            newTMCMenu: vscode.Uri.file(
-                path.join(resources.mediaFolder, "welcome_new_tmc_menu.png"),
-            ),
             newTreeView: vscode.Uri.file(
                 path.join(resources.mediaFolder, "welcome_new_treeview.png"),
             ),
