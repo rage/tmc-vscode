@@ -12,7 +12,7 @@ const createElement = require("./templateUtils").createElement;
  * @param {import("./Welcome").WelcomeProps} props
  */
 function component(props) {
-    const { version, newTMCMenu, TMCMenuIcon, newTreeView, actionsExplorer } = props;
+    const { version, newTreeView, actionsExplorer } = props;
 
     return (
         <div class="container welcome-container">
@@ -36,12 +36,12 @@ function component(props) {
                     instructions.
                 </p>
                 <p>
-                    If you are new to the TestMyCode extension in VSCode. Please read the
-                    instructions on how you can complete your first programming exercise by clicking
-                    the button below.
+                    Are you new to the TestMyCode extension in VS Code? Please read the instructions
+                    on how you can complete your first programming exercise by clicking the button
+                    below.
                 </p>
                 <a
-                    href="https://www.mooc.fi/en/installation/vscode#ohjelmoinnin-aloittaminen"
+                    href="https://www.mooc.fi/en/installation/vscode#start-programming"
                     class="btn btn-primary"
                 >
                     Read instructions
@@ -49,7 +49,7 @@ function component(props) {
             </div>
 
             <div class="content_area">
-                <h2>What's new in {version}?</h2>
+                <h2>What's new in 1.2?</h2>
                 <div class="content_section">
                     <p>
                         Here is a little overview of latest features. To see all the changes for
@@ -60,6 +60,16 @@ function component(props) {
                         .
                     </p>
                 </div>
+                <div class="content_section">
+                    <h3>Automatic exercise updates</h3>
+                    <p>
+                        When there are updates available to exercises, the extension will now
+                        download them automatically for you. This allows fixes and improvements for
+                        exercises to to reach users more consistently. The old behavior can be
+                        toggled back from the settings.
+                    </p>
+                </div>
+                <h2 style="py-2">Previous releases</h2>
                 <div class="content_section">
                     <h3>Alternative way to run tests for Jupyter Notebooks</h3>
                     <p>
@@ -89,50 +99,6 @@ function component(props) {
                         src={newTreeView}
                     />
                 </div>
-                <h2 style="py-2">Earlier releases</h2>
-                <h3>
-                    TMC Commands Menu <img src={TMCMenuIcon} />
-                </h3>
-                <div class="content_section">
-                    <p>
-                        All TMC related commands can now be found in the TMC Commands Menu{" "}
-                        <img src={TMCMenuIcon} /> (hotkey: CTRL + SHIFT + A) when logged in. This
-                        means that you can, for example, switch course workspace or download updates
-                        and new exercise for courses easily.
-                    </p>
-                    <img
-                        style="margin-bottom: 1em;"
-                        class="rounded mx-auto d-block"
-                        src={newTMCMenu}
-                    />
-                </div>
-
-                <h3>Removed Java Dependency</h3>
-                <div class="content_section">
-                    <p>
-                        The extension uses a middleware called TMC-langs to handle many of its
-                        features. As the old version of TMC-langs was written in Java, it caused an
-                        external dependency for this extension. A Rust replacement for TMC-langs was
-                        featured for Insider users since version 0.9.0 to handle some of the TMC
-                        related actions. Since version 1.0.0 TMC-langs Rust handles all TMC related
-                        commands and API requests, so Java dependency under the hood is removed. If
-                        the extension has downloaded Java, it will be removed from the tmcdata
-                        folder, aswell all the old TMC-langs jar files.
-                    </p>
-                </div>
-
-                <h3>Python Interpreter</h3>
-                <div class="content_section">
-                    <h5>Passing VSCode Python Interpreter to TMC-langs</h5>
-                    <p>
-                        For a while there has been an issue where the Python Interpreter used when
-                        testing exercises may have been different from the one used with normal
-                        execution. This happened because the VSCode Python extension allows changing
-                        between several detected Python versions on system, but the same information
-                        wasn't available to TMC-langs. In version 1.0.0 the Python Executable path
-                        is passed to TMC-langs.
-                    </p>
-                </div>
             </div>
 
             <div class="sidebar">
@@ -145,7 +111,7 @@ function component(props) {
                             </a>
                         </li>
                         <li>
-                            <a href="https://www.mooc.fi/en/installation/vscode#ohjelmoinnin-aloittaminen">
+                            <a href="https://www.mooc.fi/en/installation/vscode#start-programming">
                                 Start programming
                             </a>
                         </li>

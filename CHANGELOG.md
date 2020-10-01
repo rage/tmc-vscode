@@ -1,8 +1,17 @@
 # Changelog
 
+## [1.2.0] - 2020-10-01
+
+#### Added
+- Option in settings to toggle automatic exercise updates.
+
+#### Changed
+- Exercise updates are now done automatically by default.
+
+
 ## [1.1.1] - 2020-09-29
 
-### Changed
+#### Changed
 - Bumped TMC-langs Rust version to [0.4.1](https://github.com/rage/tmc-langs-rust/releases/tag/0.4.1).
 
 

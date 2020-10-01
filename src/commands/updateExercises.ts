@@ -8,7 +8,7 @@ import { showError, showNotification } from "../window";
 
 export async function updateExercises(actionContext: ActionContext, silent: string): Promise<void> {
     Logger.log("Checking for exercise updates");
-    const { userData } = actionContext;
+    const { settings, userData } = actionContext;
     const updateResults = await actions.checkForExerciseUpdates(actionContext, undefined);
 
     const [successful, failed] = updateResults.reduce<[CourseExerciseDownloads[], Error[]]>(
@@ -50,18 +50,21 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
         ),
     );
 
+    const downloadHandler = async (): Promise<void> => {
+        const [, failed] = await actions.downloadExerciseUpdates(actionContext, exercises);
+        if (failed.length > 0) {
+            Logger.error("Failed to update exercises", failed[0]);
+            showError("Failed to update exercises.");
+        }
+    };
+
+    if (settings.getAutomaticallyUpdateExercises()) {
+        return downloadHandler();
+    }
+
     showNotification(
         `Found updates for ${updates} exercises. Do you wish to download them?`,
-        [
-            "Download",
-            async (): Promise<void> => {
-                const [, failed] = await actions.downloadExerciseUpdates(actionContext, exercises);
-                if (failed.length > 0) {
-                    Logger.error("Failed to update exercises", failed[0]);
-                    showError("Failed to update exercises.");
-                }
-            },
-        ],
+        ["Download", downloadHandler],
         [
             "Remind me later",
             async (): Promise<void> => {

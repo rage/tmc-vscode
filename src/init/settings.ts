@@ -18,11 +18,11 @@ export async function settingsInitialization(
     storage: Storage,
     resources: Resources,
 ): Promise<ExtensionSettings> {
-    const settings = storage.getExtensionSettings();
+    const settings: Partial<ExtensionSettings> | undefined = storage.getExtensionSettings();
     Logger.log("Initializing settings", settings);
 
     // Try removing once old data, if the data move happened within 10 minutes.
-    if (settings && settings.oldDataPath !== undefined) {
+    if (settings?.oldDataPath !== undefined) {
         const result = await removeOldData(settings.oldDataPath);
         if (result.err) {
             showNotification(
@@ -33,26 +33,24 @@ export async function settingsInitialization(
         }
         Logger.log("Tried to remove old data", result);
     }
-    const insiderVersion = settings?.insiderVersion !== undefined ? settings.insiderVersion : false;
-    const tmcDataPath = settings?.dataPath || resources.getDataPath();
+
+    const insiderVersion = settings?.insiderVersion ?? false;
     const logLevel = insiderVersion
         ? LogLevel.Verbose
         : is<LogLevel>(settings?.logLevel) && settings?.logLevel
         ? settings.logLevel
         : LogLevel.Errors;
-    const hideMetaFiles = settings?.hideMetaFiles !== undefined ? settings.hideMetaFiles : true;
-    const downloadOldSubmission = settings?.downloadOldSubmission
-        ? settings.downloadOldSubmission
-        : true;
 
     const fixedSettings: ExtensionSettings = {
-        insiderVersion: insiderVersion,
-        dataPath: tmcDataPath,
-        oldDataPath: undefined,
+        dataPath: settings?.dataPath ?? resources.getDataPath(),
+        downloadOldSubmission: settings?.downloadOldSubmission ?? true,
+        hideMetaFiles: settings?.hideMetaFiles ?? true,
+        insiderVersion,
         logLevel,
-        hideMetaFiles,
-        downloadOldSubmission,
+        oldDataPath: undefined,
+        updateExercisesAutomatically: settings?.updateExercisesAutomatically ?? true,
     };
+
     await storage.updateExtensionSettings(fixedSettings);
     Logger.log("Settings initialized", fixedSettings);
 

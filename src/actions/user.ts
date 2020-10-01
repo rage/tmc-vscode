@@ -352,12 +352,9 @@ export async function checkForCourseUpdates(
     const handleDownload = async (course: LocalCourseData): Promise<void> => {
         const newIds = Array.from(course.newExercises);
         ui.webview.postMessage({
-            key: `course-${course.id}-new-exercises`,
-            message: {
-                command: "setNewExercises",
-                courseId: course.id,
-                exerciseIds: [],
-            },
+            command: "setNewExercises",
+            courseId: course.id,
+            exerciseIds: [],
         });
         const [successful] = await downloadExercises(
             actionContext,
@@ -370,12 +367,9 @@ export async function checkForCourseUpdates(
         const successfulIds = successful.map((ex) => ex.exerciseId);
         await userData.clearFromNewExercises(course.id, successfulIds);
         ui.webview.postMessage({
-            key: `course-${course.id}-new-exercises`,
-            message: {
-                command: "setNewExercises",
-                courseId: course.id,
-                exerciseIds: course.newExercises,
-            },
+            command: "setNewExercises",
+            courseId: course.id,
+            exerciseIds: course.newExercises,
         });
         const openResult = await openExercises(actionContext, successfulIds, course.name);
         if (openResult.err) {
@@ -591,20 +585,14 @@ export async function updateCourse(
     const postMessage = (courseId: number, disabled: boolean, exerciseIds: number[]): void => {
         ui.webview.postMessage(
             {
-                key: `course-${courseId}-new-exercises`,
-                message: {
-                    command: "setNewExercises",
-                    courseId,
-                    exerciseIds,
-                },
+                command: "setNewExercises",
+                courseId,
+                exerciseIds,
             },
             {
-                key: `course-${courseId}-disabled-notification`,
-                message: {
-                    command: "setCourseDisabledStatus",
-                    courseId,
-                    disabled,
-                },
+                command: "setCourseDisabledStatus",
+                courseId,
+                disabled,
             },
         );
     };

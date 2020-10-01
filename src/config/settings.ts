@@ -56,24 +56,27 @@ export default class Settings {
      */
     public async updateSetting(data: ExtensionSettingsData): Promise<void> {
         switch (data.setting) {
-            case "insiderVersion":
-                this._settings.insiderVersion = data.value;
-                break;
             case "dataPath":
                 this._settings.dataPath = data.value;
                 break;
-            case "oldDataPath":
-                this._settings.oldDataPath = { path: data.value, timestamp: Date.now() };
-                break;
-            case "logLevel":
-                this._settings.logLevel = data.value;
+            case "downloadOldSubmission":
+                this._settings.downloadOldSubmission = data.value;
                 break;
             case "hideMetaFiles":
                 this._settings.hideMetaFiles = data.value;
                 this._setFilesExcludeInWorkspace(data.value);
                 break;
-            case "downloadOldSubmission":
-                this._settings.downloadOldSubmission = data.value;
+            case "insiderVersion":
+                this._settings.insiderVersion = data.value;
+                break;
+            case "logLevel":
+                this._settings.logLevel = data.value;
+                break;
+            case "oldDataPath":
+                this._settings.oldDataPath = { path: data.value, timestamp: Date.now() };
+                break;
+            case "updateExercisesAutomatically":
+                this._settings.updateExercisesAutomatically = data.value;
                 break;
         }
         Logger.log("Updated settings data", data);
@@ -86,6 +89,10 @@ export default class Settings {
 
     public getDownloadOldSubmission(): boolean {
         return this._settings.downloadOldSubmission;
+    }
+
+    public getAutomaticallyUpdateExercises(): boolean {
+        return this._settings.updateExercisesAutomatically;
     }
 
     /**
