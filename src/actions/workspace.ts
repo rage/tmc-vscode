@@ -67,13 +67,10 @@ export async function downloadExercises(
     );
 
     ui.webview.postMessage(
-        ...exercises.map<{ key: string; message: UITypes.WebviewMessage }>((x) => ({
-            key: `exercise-${x.exerciseId}-status`,
-            message: {
-                command: "exerciseStatusChange",
-                exerciseId: x.exerciseId,
-                status: "downloading",
-            },
+        ...exercises.map<UITypes.WebviewMessage>((x) => ({
+            command: "exerciseStatusChange",
+            exerciseId: x.exerciseId,
+            status: "downloading",
         })),
     );
 
@@ -83,14 +80,8 @@ export async function downloadExercises(
     ): Promise<Result<SuccessfulDownload, FailedDownload>> => {
         const { courseId, exerciseId, organization } = exerciseDownload;
 
-        const postStatus = (status: UITypes.ExerciseStatus): void =>
-            ui.webview.postMessage({
-                key: `exercise-${exerciseId}-status`,
-                message: { command: "exerciseStatusChange", exerciseId, status },
-            });
-
         const wrapError = (error: Error, status: UITypes.ExerciseStatus): Err<FailedDownload> => {
-            postStatus(status);
+            ui.webview.postMessage({ command: "exerciseStatusChange", exerciseId, status });
             return Err({ courseId, exerciseId, organization, error });
         };
 
@@ -163,7 +154,7 @@ export async function downloadExercises(
             return wrapError(downloadResult.val, "downloadFailed");
         }
 
-        postStatus("closed");
+        ui.webview.postMessage({ command: "exerciseStatusChange", exerciseId, status: "closed" });
         workspaceManager.setExerciseStatus(exerciseId, ExerciseStatus.CLOSED);
         return Ok<SuccessfulDownload>({
             ...exerciseDownload,
@@ -267,13 +258,10 @@ export async function downloadExerciseUpdates(
     );
 
     ui.webview.postMessage(
-        ...exercises.map<{ key: string; message: UITypes.WebviewMessage }>((x) => ({
-            key: `exercise-${x.exerciseId}-status`,
-            message: {
-                command: "exerciseStatusChange",
-                exerciseId: x.exerciseId,
-                status: "downloading",
-            },
+        ...exercises.map<UITypes.WebviewMessage>((x) => ({
+            command: "exerciseStatusChange",
+            exerciseId: x.exerciseId,
+            status: "downloading",
         })),
     );
 
@@ -283,14 +271,8 @@ export async function downloadExerciseUpdates(
     ): Promise<Result<SuccessfulDownload, FailedDownload>> => {
         const { courseId, exerciseId, organization } = exerciseDownload;
 
-        const postStatus = (status: UITypes.ExerciseStatus): void =>
-            ui.webview.postMessage({
-                key: `exercise-${exerciseId}-status`,
-                message: { command: "exerciseStatusChange", exerciseId, status },
-            });
-
         const wrapError = (error: Error, status: UITypes.ExerciseStatus): Err<FailedDownload> => {
-            postStatus(status);
+            ui.webview.postMessage({ command: "exerciseStatusChange", exerciseId, status });
             return Err({ courseId, exerciseId, organization, error });
         };
 
@@ -335,7 +317,7 @@ export async function downloadExerciseUpdates(
             return wrapError(updateResult.val, status);
         }
 
-        postStatus(status);
+        ui.webview.postMessage({ command: "exerciseStatusChange", exerciseId, status });
         workspaceManager.setExerciseChecksum(exerciseId, newChecksum);
         return Ok<SuccessfulDownload>({ ...exerciseDownload, type: "update" });
     };
@@ -450,13 +432,10 @@ export async function openExercises(
     }
 
     ui.webview.postMessage(
-        ...result.val.map<{ key: string; message: UITypes.WebviewMessage }>((ex) => ({
-            key: `exercise-${ex.id}-status`,
-            message: {
-                command: "exerciseStatusChange",
-                exerciseId: ex.id,
-                status: ex.status,
-            },
+        ...result.val.map<UITypes.WebviewMessage>((ex) => ({
+            command: "exerciseStatusChange",
+            exerciseId: ex.id,
+            status: ex.status,
         })),
     );
     return new Ok(ids);
@@ -480,13 +459,10 @@ export async function closeExercises(
     }
 
     ui.webview.postMessage(
-        ...result.val.map<{ key: string; message: UITypes.WebviewMessage }>((ex) => ({
-            key: `exercise-${ex.id}-status`,
-            message: {
-                command: "exerciseStatusChange",
-                exerciseId: ex.id,
-                status: ex.status,
-            },
+        ...result.val.map<UITypes.WebviewMessage>((ex) => ({
+            command: "exerciseStatusChange",
+            exerciseId: ex.id,
+            status: ex.status,
         })),
     );
     return new Ok(ids);

@@ -33,12 +33,9 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
                 ) {
                     workspaceManager.setExerciseStatus(exercise.val.id, ExerciseStatus.CLOSED);
                     ui.webview.postMessage({
-                        key: `exercise-${exercise.val.id}-status`,
-                        message: {
-                            command: "exerciseStatusChange",
-                            exerciseId: exercise.val.id,
-                            status: "closed",
-                        },
+                        command: "exerciseStatusChange",
+                        exerciseId: exercise.val.id,
+                        status: "closed",
                     });
                 }
             });
@@ -53,12 +50,9 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
                 ) {
                     workspaceManager.setExerciseStatus(exercise.val.id, ExerciseStatus.OPEN);
                     ui.webview.postMessage({
-                        key: `exercise-${exercise.val.id}-status`,
-                        message: {
-                            command: "exerciseStatusChange",
-                            exerciseId: exercise.val.id,
-                            status: "opened",
-                        },
+                        command: "exerciseStatusChange",
+                        exerciseId: exercise.val.id,
+                        status: "opened",
                     });
                 } else if (exercise.ok && currentWorkspace !== exercise.val.course) {
                     foldersToRemove.push(vscode.Uri.file(item.uri.fsPath));

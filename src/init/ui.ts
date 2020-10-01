@@ -85,17 +85,14 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             if (msg.username === "" || msg.password === "") {
                 ui.webview.postMessage({
-                    key: "login-error",
-                    message: { command: "loginError", error: "Username or password empty." },
+                    command: "loginError",
+                    error: "Username or password empty.",
                 });
                 return;
             }
             const result = await login(actionContext, msg.username, msg.password);
             if (result.err) {
-                ui.webview.postMessage({
-                    key: "login-error",
-                    message: { command: "loginError", error: result.val.message },
-                });
+                ui.webview.postMessage({ command: "loginError", error: result.val.message });
                 return;
             }
             displayUserCourses(actionContext);
@@ -144,8 +141,9 @@ export function registerUiActions(actionContext: ActionContext): void {
             }));
             if (msg.mode === "update") {
                 ui.webview.postMessage({
-                    key: `course-${msg.courseId}-updates`,
-                    message: { command: "setUpdateables", exerciseIds: [], courseId: msg.courseId },
+                    command: "setUpdateables",
+                    exerciseIds: [],
+                    courseId: msg.courseId,
                 });
                 const [successful] = await downloadExerciseUpdates(actionContext, downloads);
                 const remaining = _.difference(
@@ -153,12 +151,9 @@ export function registerUiActions(actionContext: ActionContext): void {
                     successful.map((x) => x.exerciseId),
                 );
                 ui.webview.postMessage({
-                    key: `course-${msg.courseId}-updates`,
-                    message: {
-                        command: "setUpdateables",
-                        exerciseIds: remaining,
-                        courseId: msg.courseId,
-                    },
+                    command: "setUpdateables",
+                    exerciseIds: remaining,
+                    courseId: msg.courseId,
                 });
                 return;
             }
@@ -370,10 +365,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 return;
             }
             await settings.updateSetting({ setting: "insiderVersion", value: msg.data });
-            ui.webview.postMessage({
-                key: "insiderStatus",
-                message: { command: "setInsiderStatus", enabled: msg.data },
-            });
+            ui.webview.postMessage({ command: "setInsiderStatus", enabled: msg.data });
         },
     );
 
