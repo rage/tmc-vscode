@@ -41,7 +41,7 @@ function component(props) {
                     below.
                 </p>
                 <a
-                    href="https://www.mooc.fi/en/installation/vscode#ohjelmoinnin-aloittaminen"
+                    href="https://www.mooc.fi/en/installation/vscode#start-programming"
                     class="btn btn-primary"
                 >
                     Read instructions
@@ -111,7 +111,7 @@ function component(props) {
                             </a>
                         </li>
                         <li>
-                            <a href="https://www.mooc.fi/en/installation/vscode#ohjelmoinnin-aloittaminen">
+                            <a href="https://www.mooc.fi/en/installation/vscode#start-programming">
                                 Start programming
                             </a>
                         </li>
