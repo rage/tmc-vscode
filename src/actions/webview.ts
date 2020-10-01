@@ -26,26 +26,16 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
     Logger.log("Displaying My Courses view");
 
     const courses = userData.getCourses();
-    const newExercisesCourses: Array<{ key: string; message: WebviewMessage }> = courses.map(
-        (c) => ({
-            key: `course-${c.id}-new-exercises`,
-            message: {
-                command: "setNewExercises",
-                courseId: c.id,
-                exerciseIds: c.disabled ? [] : c.newExercises,
-            },
-        }),
-    );
-    const disabledStatusCourses: Array<{ key: string; message: WebviewMessage }> = courses.map(
-        (c) => ({
-            key: `course-${c.id}-disabled-notification`,
-            message: {
-                command: "setCourseDisabledStatus",
-                courseId: c.id,
-                disabled: c.disabled,
-            },
-        }),
-    );
+    const newExercisesCourses: WebviewMessage[] = courses.map((c) => ({
+        command: "setNewExercises",
+        courseId: c.id,
+        exerciseIds: c.disabled ? [] : c.newExercises,
+    }));
+    const disabledStatusCourses: WebviewMessage[] = courses.map((c) => ({
+        command: "setCourseDisabledStatus",
+        courseId: c.id,
+        disabled: c.disabled,
+    }));
 
     ui.webview.setContentFromTemplate({ templateName: "my-courses", courses }, false, [
         ...newExercisesCourses,
@@ -59,12 +49,9 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
         if (updateResult.err) {
             Logger.error(`Failed to update course ${courseId}`, updateResult.val);
             ui.webview.postMessage({
-                key: `course-${course.id}-next-deadline`,
-                message: {
-                    command: "setNextCourseDeadline",
-                    courseId,
-                    deadline: "Deadline unavailable",
-                },
+                command: "setNextCourseDeadline",
+                courseId,
+                deadline: "Deadline unavailable",
             });
             return;
         }
@@ -87,10 +74,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
             }) || [],
         );
 
-        ui.webview.postMessage({
-            key: `course-${course.id}-next-deadline`,
-            message: { command: "setNextCourseDeadline", courseId, deadline },
-        });
+        ui.webview.postMessage({ command: "setNextCourseDeadline", courseId, deadline });
     });
 }
 
@@ -135,7 +119,7 @@ export async function displayLocalCourseDetails(
 
     const workspaceExercises = workspaceManager.getAllExerciseDataByCourseName(course.name);
     const exerciseData = new Map<string, UITypes.CourseDetailsExerciseGroup>();
-    const initialState: Array<{ key: string; message: UITypes.WebviewMessage }> = [];
+    const initialState: UITypes.WebviewMessage[] = [];
     const apiCourse = (await tmc.getCourseDetails(courseId, true)).mapErr(() => undefined).val
         ?.course;
     const currentDate = new Date();
@@ -155,24 +139,18 @@ export async function displayLocalCourseDetails(
         const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
         initialState.push(
             {
-                key: `exercise-${ex.id}-status`,
-                message: {
-                    command: "exerciseStatusChange",
-                    exerciseId: ex.id,
-                    status: mapStatus(
-                        ex.id,
-                        exData?.status ?? ConfigTypes.ExerciseStatus.MISSING,
-                        hardDeadline !== null && currentDate >= hardDeadline,
-                    ),
-                },
+                command: "exerciseStatusChange",
+                exerciseId: ex.id,
+                status: mapStatus(
+                    ex.id,
+                    exData?.status ?? ConfigTypes.ExerciseStatus.MISSING,
+                    hardDeadline !== null && currentDate >= hardDeadline,
+                ),
             },
             {
-                key: "course-disabled-notification",
-                message: {
-                    command: "setCourseDisabledStatus",
-                    courseId: course.id,
-                    disabled: course.disabled,
-                },
+                command: "setCourseDisabledStatus",
+                courseId: course.id,
+                disabled: course.disabled,
             },
         );
         const entry: UITypes.CourseDetailsExercise = {
@@ -229,12 +207,9 @@ export async function displayLocalCourseDetails(
             .find((u) => u.ok && u.val.courseId === courseId)
             ?.unwrap().exerciseIds || [];
     ui.webview.postMessage({
-        key: `course-${courseId}-updates`,
-        message: {
-            command: "setUpdateables",
-            exerciseIds: updateables,
-            courseId,
-        },
+        command: "setUpdateables",
+        exerciseIds: updateables,
+        courseId,
     });
 }
 

@@ -48,7 +48,7 @@ export default class TmcWebview {
     public async setContentFromTemplate(
         templateData: TemplateData,
         forceUpdate = false,
-        initialState?: Array<{ key: string; message: WebviewMessage }>,
+        initialState?: WebviewMessage[],
     ): Promise<void> {
         this._stateId++;
         const panel = this._getPanel();
@@ -74,11 +74,9 @@ export default class TmcWebview {
      *
      * @param messages Pairs of keys and messages to send to webview.
      */
-    public postMessage(...messages: Array<{ key: string; message: WebviewMessage }>): void {
-        for (const { key, message } of messages) {
-            this._webviewState.set(key, message);
-        }
-        this._panel?.webview.postMessage(messages.map((m) => m.message));
+    public postMessage(...messages: WebviewMessage[]): void {
+        messages.forEach((message) => this._storeMessageInCache(message));
+        this._panel?.webview.postMessage(messages);
     }
 
     /**
@@ -105,6 +103,30 @@ export default class TmcWebview {
 
     public getStateId(): number {
         return this._stateId;
+    }
+
+    private _storeMessageInCache(message: WebviewMessage): void {
+        const key = ((): string => {
+            switch (message.command) {
+                case "exerciseStatusChange":
+                    return `exercise-${message.exerciseId}-status`;
+                case "loginError":
+                    return "login-error";
+                case "setCourseDisabledStatus":
+                    return `course-${message.courseId}-disabled-notification`;
+                case "setInsiderStatus":
+                    return "insiderStatus";
+                case "setNewExercises":
+                    return `course-${message.courseId}-new-exercises`;
+                case "setNextCourseDeadline":
+                    return `course-${message.courseId}-next-deadline`;
+                case "setUpdateables":
+                    return `course-${message.courseId}-updates`;
+                // Default: "return" typescript error if some case is not handled.
+            }
+        })();
+
+        this._webviewState.set(key, message);
     }
 
     /**
