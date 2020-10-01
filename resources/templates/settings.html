@@ -134,6 +134,28 @@
                     </div>
                     <div class="card-transparent border-color my-1">
                         <div class="card-body">
+                            <h5 class="card-title">Update exercises automatically</h5>
+                            <p class="card-text">
+                                Downloads any available updates to exercises automatically. If
+                                turned off, shows a notification instead.
+                            </p>
+                            <div class="custom-control custom-switch">
+                                <input
+                                    type="checkbox"
+                                    onclick="updateExercisesAutomaticallySetting()"
+                                    class="custom-control-input"
+                                    id="update-exercises-automatically"
+                                />
+                                <label
+                                    class="custom-control-label"
+                                    for="update-exercises-automatically"
+                                    >Toggle to enable</label
+                                >
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-transparent border-color my-1">
+                        <div class="card-body">
                             <h5 class="card-title">Editor: Open Side By Side Direction</h5>
                             <p class="card-text">
                                 Controls the default direction of editors that are opened side by
@@ -152,8 +174,9 @@
         <script>
             const vscode = acquireVsCodeApi();
             const metaFile = {{extensionSettings.hideMetaFiles}};
-            const insider = {{extensionSettings.insiderVersion}}
-            const downloadOldSubmissionSetting = {{extensionSettings.downloadOldSubmission}}
+            const insider = {{extensionSettings.insiderVersion}};
+            const downloadOldSubmissionSetting = {{extensionSettings.downloadOldSubmission}};
+            const updateExercisesAutomatically = {{extensionSettings.updateExercisesAutomatically}};
 
             function changeTmcDataPath() {
                 vscode.postMessage({ type: "changeTmcDataPath" });
@@ -191,6 +214,10 @@
             if (downloadOldSubmissionSetting) {
                 document.getElementById("download-old-submission").checked = true;
             }
+            if (updateExercisesAutomatically) {
+                document.getElementById("update-exercises-automatically").checked = true;
+            }
+
             function hideMetaFiles() {
                 const checkbox = document.getElementById("check-meta-files");
                 vscode.postMessage({ type: "hideMetaFiles", data: checkbox.checked });
@@ -202,6 +229,10 @@
             function downloadOldSubSetting() {
                 const checkbox = document.getElementById("download-old-submission");
                 vscode.postMessage({ type: "downloadOldSubmissionSetting", data: checkbox.checked });
+            }
+            function updateExercisesAutomaticallySetting() {
+                const checkbox = document.getElementById("update-exercises-automatically");
+                vscode.postMessage({ type: "updateExercisesAutomaticallySetting", data: checkbox.checked });
             }
             function gotoSettings() {
                 vscode.postMessage({ type: "openEditorDirection" });

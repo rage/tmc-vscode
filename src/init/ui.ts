@@ -411,4 +411,18 @@ export function registerUiActions(actionContext: ActionContext): void {
             await openSettings(actionContext);
         },
     );
+
+    ui.webview.registerHandler(
+        "updateExercisesAutomaticallySetting",
+        async (msg: { type?: "updateExercisesAutomaticallySetting"; data?: boolean }) => {
+            if (!(msg.type && msg.data !== undefined)) {
+                return;
+            }
+            await settings.updateSetting({
+                setting: "updateExercisesAutomatically",
+                value: msg.data,
+            });
+            await openSettings(actionContext);
+        },
+    );
 }
