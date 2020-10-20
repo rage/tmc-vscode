@@ -125,7 +125,8 @@ const config = () => {
         mode: "production",
         optimization: {
             minimizer: [
-                // False error since webpack 5.1.3
+                // eslint-disable-next-line max-len
+                // Incorrect type error: https://github.com/DefinitelyTyped/DefinitelyTyped/issues/48806#issuecomment-712654998
                 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
                 // @ts-ignore
                 new TerserPlugin({
