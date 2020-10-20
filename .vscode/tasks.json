@@ -18,8 +18,8 @@
                 "base": "$tsc-watch",
                 "background": {
                     "activeOnStart": true,
-                    "beginsPattern": "^Compilation  starting…",
-                    "endsPattern": "^Compilation  finished"
+                    "beginsPattern": "^\\[webpack-cli\\] Compilation starting\\.\\.\\.",
+                    "endsPattern": "^\\[webpack-cli\\] watching files for updates\\.\\.\\."
                 }
             },
             "isBackground": true,

@@ -376,7 +376,7 @@
         "ui-test:setup": "cross-env NODE_ENV=development BACKEND=local extest setup-tests",
         "update-submodules": "git submodule foreach git pull origin master",
         "webpack": "webpack",
-        "webpack:watch": "webpack --watch --info-verbosity verbose"
+        "webpack:watch": "webpack --watch"
     },
     "prettier": {
         "printWidth": 100,
@@ -426,7 +426,7 @@
         "vscode-extension-tester": "^3.2.1",
         "vscode-test": "^1.4.0",
         "webpack": "^4.44.1",
-        "webpack-cli": "^3.3.12",
+        "webpack-cli": "^4.1.0",
         "webpack-merge": "^5.2.0"
     },
     "dependencies": {
