@@ -17,6 +17,7 @@ import {
     AuthenticationError,
     AuthorizationError,
     ConnectionError,
+    EmptyLangsResponseError,
     ForbiddenError,
     InvalidTokenError,
     ObsoleteClientError,
@@ -699,7 +700,11 @@ export default class TMC {
         }
         const last = _.last(result.val.stdout);
         if (last === undefined) {
-            return new Err(new Error("No langs response received"));
+            return Err(
+                new EmptyLangsResponseError(
+                    "Expected a response from TMC langs but didn't receive any.",
+                ),
+            );
         }
         const checked = this._checkLangsResponse(last, checker);
         if (checked.err) {

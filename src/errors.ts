@@ -21,6 +21,10 @@ export class ConnectionError extends BaseError {
     public readonly name = "Connection Error";
 }
 
+export class EmptyLangsResponseError extends BaseError {
+    public readonly name = "Empy Langs Response Error";
+}
+
 export class ExerciseExistsError extends BaseError {
     public readonly name = "Exercise Exists Error";
 }
