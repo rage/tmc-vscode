@@ -7,6 +7,7 @@ containers/**
 node_modules/**
 out/**
 src/**
+submodules/**
 test-resources/**
 types/**
 
@@ -14,6 +15,7 @@ types/**
 **/.eslintcache
 **/.gitattributes
 **/.gitignore
+**/.gitmodules
 **/.eslintignore
 **/.eslintrc.json
 **/dist/testBundle*
