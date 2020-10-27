@@ -63,6 +63,8 @@ export const WORKSPACE_SETTINGS = {
     },
 };
 
+export const TMC_API_CACHE_LIFETIME = 5 * 60 * 1000;
+
 /** Delay for when TMC-Langs process should be killed. */
 export const TMC_LANGS_TIMEOUT = 2 * 60 * 1000;
 
