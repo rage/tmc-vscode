@@ -109,6 +109,10 @@ interface ResponseCacheEntry {
     timestamp: number;
 }
 
+interface CacheOptions {
+    forceRefresh?: boolean;
+}
+
 interface CacheTransformer<T1, T2> {
     (response: LangsResponse<T1>): Array<[string, LangsResponse<T2>]>;
 }
@@ -379,11 +383,14 @@ export default class TMC {
      * @param organization Slug of the organization.
      * @returns Array of the organization's courses.
      */
-    public getCourses(organization: string, cache = false): Promise<Result<Course[], Error>> {
+    public getCourses(
+        organization: string,
+        options?: CacheOptions,
+    ): Promise<Result<Course[], Error>> {
         return this._executeLangsCommand(
             { args: ["get-courses", "--organization", organization], core: true },
             createIs<Course[]>(),
-            cache,
+            options?.forceRefresh,
             `organization-${organization}-courses`,
         ).then((res) => res.map((r) => r.data));
     }
@@ -397,7 +404,7 @@ export default class TMC {
      */
     public async getCourseData(
         courseId: number,
-        cache = false,
+        options?: CacheOptions,
     ): Promise<Result<CourseData, Error>> {
         const cacheTransformer: CacheTransformer<CourseData, unknown> = (response) => {
             const { details, exercises, settings } = response.data;
@@ -411,7 +418,7 @@ export default class TMC {
         return this._executeLangsCommand<CourseData>(
             { args: ["get-course-data", "--course-id", courseId.toString()], core: true },
             createIs<CourseData>(),
-            cache,
+            options?.forceRefresh,
             `course-${courseId}-data`,
             cacheTransformer,
         ).then((res) => res.map((r) => r.data));
@@ -426,12 +433,12 @@ export default class TMC {
      */
     public async getCourseDetails(
         courseId: number,
-        cache = false,
+        options?: CacheOptions,
     ): Promise<Result<CourseDetails, Error>> {
         return this._executeLangsCommand(
             { args: ["get-course-details", "--course-id", courseId.toString()], core: true },
             createIs<CourseDetails["course"]>(),
-            cache,
+            options?.forceRefresh,
             `course-${courseId}-details`,
         ).then((res) => res.map((r) => ({ course: r.data })));
     }
@@ -445,12 +452,12 @@ export default class TMC {
      */
     public async getCourseExercises(
         courseId: number,
-        cache = false,
+        options?: CacheOptions,
     ): Promise<Result<CourseExercise[], Error>> {
         return this._executeLangsCommand(
             { args: ["get-course-exercises", "--course-id", courseId.toString()], core: true },
             createIs<CourseExercise[]>(),
-            cache,
+            options?.forceRefresh,
             `course-${courseId}-exercises`,
         ).then((res) => res.map((r) => r.data));
     }
@@ -464,7 +471,7 @@ export default class TMC {
      */
     public getCourseSettings(
         courseId: number,
-        cache = false,
+        options?: CacheOptions,
     ): Promise<Result<CourseSettings, Error>> {
         return this._executeLangsCommand(
             {
@@ -472,7 +479,7 @@ export default class TMC {
                 core: true,
             },
             createIs<CourseSettings>(),
-            cache,
+            options?.forceRefresh,
             `course-${courseId}-settings`,
         ).then((res) => res.map((r) => r.data));
     }
@@ -486,7 +493,7 @@ export default class TMC {
      */
     public async getExerciseDetails(
         exerciseId: number,
-        cache = false,
+        options?: CacheOptions,
     ): Promise<Result<ExerciseDetails, Error>> {
         return this._executeLangsCommand(
             {
@@ -494,7 +501,7 @@ export default class TMC {
                 core: true,
             },
             createIs<ExerciseDetails>(),
-            cache,
+            options?.forceRefresh,
             `exercise-${exerciseId}-details`,
         ).then((res) => res.map((r) => r.data));
     }
@@ -525,12 +532,12 @@ export default class TMC {
      */
     public async getOrganization(
         organizationSlug: string,
-        cache = false,
+        options?: CacheOptions,
     ): Promise<Result<Organization, Error>> {
         return this._executeLangsCommand(
             { args: ["get-organization", "--organization", organizationSlug], core: true },
             createIs<Organization>(),
-            cache,
+            options?.forceRefresh,
             `organization-${organizationSlug}`,
         ).then((res) => res.map((r) => r.data));
     }
@@ -540,11 +547,11 @@ export default class TMC {
      *
      * @returns A list of organizations.
      */
-    public async getOrganizations(cache = false): Promise<Result<Organization[], Error>> {
+    public async getOrganizations(options?: CacheOptions): Promise<Result<Organization[], Error>> {
         return this._executeLangsCommand(
             { args: ["get-organizations"], core: true },
             createIs<Organization[]>(),
-            cache,
+            options?.forceRefresh,
             "organizations",
             (res) => res.data.map((x) => [`organization-${x.slug}`, { ...res, data: x }]),
         ).then((res) => res.map((r) => r.data));
@@ -709,19 +716,22 @@ export default class TMC {
     private async _executeLangsCommand<T>(
         langsArgs: RustProcessArgs,
         checker: (object: unknown) => object is T,
-        useCache?: boolean,
+        forceRefresh?: boolean,
         cacheKey?: string,
         cacheTransformer?: CacheTransformer<T, unknown>,
     ): Promise<Result<LangsResponse<T>, Error>> {
         const currentTime = Date.now();
-        if (useCache && cacheKey) {
+        if (!forceRefresh && cacheKey) {
             const cachedEntry = this._responseCache.get(cacheKey);
             if (cachedEntry) {
                 const { response, timestamp } = cachedEntry;
-                const cachedDataAlive = timestamp + TMC_API_CACHE_LIFETIME > currentTime;
+                const cachedDataLifeLeft = timestamp + TMC_API_CACHE_LIFETIME - currentTime;
                 if (checker(response.data)) {
-                    if (cachedDataAlive) {
-                        Logger.debug(`Using cached data for key: ${cacheKey}`);
+                    if (cachedDataLifeLeft > 0) {
+                        const prettySecondsLeft = Math.ceil(cachedDataLifeLeft / 1000);
+                        Logger.debug(
+                            `Using cached data for key: ${cacheKey}. Still valid for ${prettySecondsLeft}s`,
+                        );
                         return Ok({ ...response, data: response.data });
                     }
                     Logger.debug(`Discarding invalidated cache data for key: ${cacheKey}`);
