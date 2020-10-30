@@ -729,7 +729,7 @@ export default class TMC {
                 if (checker(response.data)) {
                     if (cachedDataLifeLeft > 0) {
                         const prettySecondsLeft = Math.ceil(cachedDataLifeLeft / 1000);
-                        Logger.debug(
+                        Logger.log(
                             `Using cached data for key: ${cacheKey}. Still valid for ${prettySecondsLeft}s`,
                         );
                         return Ok({ ...response, data: response.data });
