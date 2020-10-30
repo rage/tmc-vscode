@@ -3,7 +3,7 @@
 
 const path = require("path");
 
-const TMC_LANGS_RUST_VERSION = "0.4.1";
+const TMC_LANGS_RUST_VERSION = "0.6.0";
 
 const localApi = {
     __ACCESS_TOKEN_URI__: JSON.stringify("http://localhost:4001/oauth/token"),
@@ -13,7 +13,6 @@ const localApi = {
     __TMC_LANGS_RUST_VERSION__: JSON.stringify(TMC_LANGS_RUST_VERSION),
 };
 
-/**@type {import("webpack").DefinePlugin.CodeValueObject}*/
 const productionApi = {
     __ACCESS_TOKEN_URI__: JSON.stringify("https://tmc.mooc.fi/oauth/token"),
     __TMC_LANGS_CONFIG_DIR__: JSON.stringify(null),
