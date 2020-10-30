@@ -250,7 +250,7 @@ export type OldSubmission = {
     paste_key: string | null;
 };
 
-export type TmcLangsTestResultRust = {
+export type TestResult = {
     name: string;
     successful: boolean;
     message: string;
@@ -258,8 +258,8 @@ export type TmcLangsTestResultRust = {
     exception?: string[];
 };
 
-export type TmcLangsTestResultsRust = {
+export type TestResults = {
     status: "PASSED" | "TESTS_FAILED" | "COMPILE_FAILED" | "TESTRUN_INTERRUPTED" | "GENERIC_ERROR";
-    testResults: TmcLangsTestResultRust[];
+    testResults: TestResult[];
     logs: unknown;
 };

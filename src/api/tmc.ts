@@ -40,7 +40,7 @@ import {
     SubmissionFeedbackResponse,
     SubmissionResponse,
     SubmissionStatusReport,
-    TmcLangsTestResultsRust,
+    TestResults,
 } from "./types";
 
 // ---------------------------------------------------------------------------------------------- //
@@ -280,7 +280,7 @@ export default class TMC {
     public runTests(
         exercisePath: string,
         pythonExecutablePath?: string,
-    ): [Promise<Result<TmcLangsTestResultsRust, Error>>, () => void] {
+    ): [Promise<Result<TestResults, Error>>, () => void] {
         const env: { [key: string]: string } = {};
         if (pythonExecutablePath) {
             env.TMC_LANGS_PYTHON_EXEC = pythonExecutablePath;
@@ -293,7 +293,7 @@ export default class TMC {
         });
         const postResult = result.then((res) =>
             res
-                .andThen((x) => this._checkLangsResponse(x, createIs<TmcLangsTestResultsRust>()))
+                .andThen((x) => this._checkLangsResponse(x, createIs<TestResults>()))
                 .map((x) => x.data),
         );
 
