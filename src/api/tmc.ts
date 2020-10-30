@@ -111,8 +111,11 @@ interface CacheOptions {
     forceRefresh?: boolean;
 }
 
-interface CacheTransformer<T1, T2> {
-    (response: LangsOutputData<T1>): Array<[string, LangsOutputData<T2>]>;
+interface CacheConfig<T1, T2> {
+    forceRefresh?: boolean;
+    key: string;
+    /** Optional remapper for assigning parts of the result to different keys. */
+    remapper?: (response: LangsOutputData<T1>) => Array<[string, LangsOutputData<T2>]>;
 }
 
 /**
@@ -378,8 +381,7 @@ export default class TMC {
         return this._executeLangsCommand(
             { args: ["get-courses", "--organization", organization], core: true },
             createIs<Course[]>(),
-            options?.forceRefresh,
-            `organization-${organization}-courses`,
+            { forceRefresh: options?.forceRefresh, key: `organization-${organization}-courses` },
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -394,7 +396,7 @@ export default class TMC {
         courseId: number,
         options?: CacheOptions,
     ): Promise<Result<CourseData, Error>> {
-        const cacheTransformer: CacheTransformer<CourseData, unknown> = (response) => {
+        const remapper: CacheConfig<CourseData, unknown>["remapper"] = (response) => {
             const { details, exercises, settings } = response.data;
             return [
                 [`course-${courseId}-details`, { ...response, data: details }],
@@ -406,9 +408,7 @@ export default class TMC {
         return this._executeLangsCommand<CourseData>(
             { args: ["get-course-data", "--course-id", courseId.toString()], core: true },
             createIs<CourseData>(),
-            options?.forceRefresh,
-            `course-${courseId}-data`,
-            cacheTransformer,
+            { forceRefresh: options?.forceRefresh, key: `course-${courseId}-data`, remapper },
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -426,8 +426,7 @@ export default class TMC {
         return this._executeLangsCommand(
             { args: ["get-course-details", "--course-id", courseId.toString()], core: true },
             createIs<CourseDetails["course"]>(),
-            options?.forceRefresh,
-            `course-${courseId}-details`,
+            { forceRefresh: options?.forceRefresh, key: `course-${courseId}-details` },
         ).then((res) => res.map((r) => ({ course: r.data })));
     }
 
@@ -445,8 +444,7 @@ export default class TMC {
         return this._executeLangsCommand(
             { args: ["get-course-exercises", "--course-id", courseId.toString()], core: true },
             createIs<CourseExercise[]>(),
-            options?.forceRefresh,
-            `course-${courseId}-exercises`,
+            { forceRefresh: options?.forceRefresh, key: `course-${courseId}-exercises` },
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -464,8 +462,7 @@ export default class TMC {
         return this._executeLangsCommand(
             { args: ["get-course-settings", "--course-id", courseId.toString()], core: true },
             createIs<CourseSettings>(),
-            options?.forceRefresh,
-            `course-${courseId}-settings`,
+            { forceRefresh: options?.forceRefresh, key: `course-${courseId}-settings` },
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -486,8 +483,7 @@ export default class TMC {
                 core: true,
             },
             createIs<ExerciseDetails>(),
-            options?.forceRefresh,
-            `exercise-${exerciseId}-details`,
+            { forceRefresh: options?.forceRefresh, key: `exercise-${exerciseId}-details` },
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -522,8 +518,7 @@ export default class TMC {
         return this._executeLangsCommand(
             { args: ["get-organization", "--organization", organizationSlug], core: true },
             createIs<Organization>(),
-            options?.forceRefresh,
-            `organization-${organizationSlug}`,
+            { forceRefresh: options?.forceRefresh, key: `organization-${organizationSlug}` },
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -533,12 +528,13 @@ export default class TMC {
      * @returns A list of organizations.
      */
     public async getOrganizations(options?: CacheOptions): Promise<Result<Organization[], Error>> {
+        const remapper: CacheConfig<Organization[], unknown>["remapper"] = (res) =>
+            res.data.map((x) => [`organization-${x.slug}`, { ...res, data: x }]);
+
         return this._executeLangsCommand(
             { args: ["get-organizations"], core: true },
             createIs<Organization[]>(),
-            options?.forceRefresh,
-            "organizations",
-            (res) => res.data.map((x) => [`organization-${x.slug}`, { ...res, data: x }]),
+            { forceRefresh: options?.forceRefresh, key: "organizations", remapper },
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -698,12 +694,11 @@ export default class TMC {
     private async _executeLangsCommand<T>(
         langsArgs: LangsProcessArgs,
         checker: (object: unknown) => object is T,
-        forceRefresh?: boolean,
-        cacheKey?: string,
-        cacheTransformer?: CacheTransformer<T, unknown>,
+        cacheConfig?: CacheConfig<T, unknown>,
     ): Promise<Result<LangsOutputData<T>, Error>> {
+        const cacheKey = cacheConfig?.key;
         const currentTime = Date.now();
-        if (!forceRefresh && cacheKey) {
+        if (!cacheConfig?.forceRefresh && cacheKey) {
             const cachedEntry = this._responseCache.get(cacheKey);
             if (cachedEntry) {
                 const { response, timestamp } = cachedEntry;
@@ -734,7 +729,7 @@ export default class TMC {
         const response = result.val;
         if (cacheKey) {
             this._responseCache.set(cacheKey, { response, timestamp: currentTime });
-            cacheTransformer?.(result.val).forEach(([key, response]) => {
+            cacheConfig?.remapper?.(result.val).forEach(([key, response]) => {
                 this._responseCache.set(key, { response, timestamp: currentTime });
             });
         }
