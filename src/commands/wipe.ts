@@ -11,7 +11,7 @@ export async function wipe(
     actionContext: ActionContext,
     context: vscode.ExtensionContext,
 ): Promise<void> {
-    const { resources, userData } = actionContext;
+    const { resources, tmc, userData } = actionContext;
     const workspace = vscode.workspace.name?.split(" ")[0];
     if (workspace && isCorrectWorkspaceOpen(resources, workspace)) {
         showNotification(
@@ -32,6 +32,8 @@ export async function wipe(
         true,
     );
     if (reallyWipe) {
+        // Remove logout event handler to not show login page.
+        tmc.on("logout", () => {});
         await vscode.commands.executeCommand("tmc.logout");
         fs.removeSync(path.join(resources.getDataPath()));
         await userData.wipeDataFromStorage();

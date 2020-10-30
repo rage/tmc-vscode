@@ -150,6 +150,7 @@ export default class TMC {
                 this._onLogin = callback;
                 break;
             case "logout":
+                this._responseCache.clear();
                 this._onLogout = callback;
                 break;
         }
