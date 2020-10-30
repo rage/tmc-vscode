@@ -10,7 +10,9 @@ import { showError, showNotification } from "../window";
 export async function updateExercises(actionContext: ActionContext, silent: string): Promise<void> {
     Logger.log("Checking for exercise updates");
     const { settings, ui, userData } = actionContext;
-    const updateResults = await actions.checkForExerciseUpdates(actionContext, undefined);
+    const updateResults = await actions.checkForExerciseUpdates(actionContext, undefined, {
+        useCache: false,
+    });
 
     const [successful, failed] = updateResults.reduce<[CourseExerciseDownloads[], Error[]]>(
         (sorted, next) => {
@@ -52,6 +54,13 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
     );
 
     const downloadHandler = async (): Promise<void> => {
+        ui.webview.postMessage(
+            ...userData.getCourses().map<WebviewMessage>((x) => ({
+                command: "setUpdateables",
+                courseId: x.id,
+                exerciseIds: [],
+            })),
+        );
         const [, failed] = await actions.downloadExerciseUpdates(actionContext, exercises);
         if (failed.length > 0) {
             Logger.error("Failed to update exercises", failed[0]);

@@ -15,7 +15,6 @@ import { WebviewMessage } from "../ui/types";
 import { dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utils/";
 
 import { ActionContext } from "./types";
-import { updateCourse } from "./user";
 import { checkForExerciseUpdates } from "./workspace";
 
 /**
@@ -45,17 +44,6 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
     const now = new Date();
     courses.forEach(async (course) => {
         const courseId = course.id;
-        const updateResult = await updateCourse(actionContext, courseId);
-        if (updateResult.err) {
-            Logger.error(`Failed to update course ${courseId}`, updateResult.val);
-            ui.webview.postMessage({
-                command: "setNextCourseDeadline",
-                courseId,
-                deadline: "Deadline unavailable",
-            });
-            return;
-        }
-
         const exercises: Exercise[] = (await tmc.getCourseDetails(courseId))
             .map((x) => x.course.exercises)
             .unwrapOr([]);
@@ -120,15 +108,9 @@ export async function displayLocalCourseDetails(
     const workspaceExercises = workspaceManager.getAllExerciseDataByCourseName(course.name);
     const exerciseData = new Map<string, UITypes.CourseDetailsExerciseGroup>();
     const initialState: UITypes.WebviewMessage[] = [];
-    const apiCourse = (await tmc.getCourseDetails(courseId, true)).mapErr(() => undefined).val
-        ?.course;
+    const apiCourse = (await tmc.getCourseDetails(courseId)).mapErr(() => undefined).val?.course;
     const currentDate = new Date();
 
-    /* Emergency solution.
-    Match cached api data (obtained by entering My Courses, which updates cache) to existing
-    userdata for the webview, because we no longer show only downloaded exercises.
-    (except offline mode) 
-    */
     course.exercises.forEach((ex) => {
         const nameMatch = ex.name.match(/(\w+)-(.+)/);
         const groupName = nameMatch?.[1] || "";

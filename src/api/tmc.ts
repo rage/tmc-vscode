@@ -7,6 +7,7 @@ import { createIs, is } from "typescript-is";
 
 import {
     CLIENT_NAME,
+    TMC_API_CACHE_LIFETIME,
     TMC_LANGS_CONFIG_DIR,
     TMC_LANGS_ROOT_URL,
     TMC_LANGS_TIMEOUT,
@@ -103,12 +104,25 @@ interface LangsError {
     trace: string[];
 }
 
+interface ResponseCacheEntry {
+    response: LangsResponse<unknown>;
+    timestamp: number;
+}
+
+interface CacheOptions {
+    forceRefresh?: boolean;
+}
+
+interface CacheTransformer<T1, T2> {
+    (response: LangsResponse<T1>): Array<[string, LangsResponse<T2>]>;
+}
+
 /**
  * A Class that provides an interface to all TMC services.
  */
 export default class TMC {
     private readonly _resources: Resources;
-    private readonly _rustCache: Map<string, LangsResponse<unknown>>;
+    private readonly _responseCache: Map<string, ResponseCacheEntry>;
     private _onLogin?: () => void;
     private _onLogout?: () => void;
 
@@ -120,7 +134,7 @@ export default class TMC {
      */
     constructor(resources: Resources) {
         this._resources = resources;
-        this._rustCache = new Map();
+        this._responseCache = new Map();
     }
 
     /**
@@ -252,7 +266,6 @@ export default class TMC {
         return this._executeLangsCommand(
             { args: ["clean", "--exercise-path", exercisePath], core: false },
             createIs<unknown>(),
-            false,
         ).then((res) => (res.err ? res : Ok.EMPTY));
     }
 
@@ -319,7 +332,6 @@ export default class TMC {
                 core: true,
             },
             createIs<unknown>(),
-            false,
         ).then((res) => (res.err ? res : Ok.EMPTY));
     }
 
@@ -359,11 +371,9 @@ export default class TMC {
             );
         }
 
-        return this._executeLangsCommand(
-            { args, core: true },
-            createIs<unknown>(),
-            false,
-        ).then((res) => (res.err ? res : Ok.EMPTY));
+        return this._executeLangsCommand({ args, core: true }, createIs<unknown>()).then((res) =>
+            res.err ? res : Ok.EMPTY,
+        );
     }
 
     /**
@@ -373,11 +383,15 @@ export default class TMC {
      * @param organization Slug of the organization.
      * @returns Array of the organization's courses.
      */
-    public getCourses(organization: string, cache = false): Promise<Result<Course[], Error>> {
+    public getCourses(
+        organization: string,
+        options?: CacheOptions,
+    ): Promise<Result<Course[], Error>> {
         return this._executeLangsCommand(
             { args: ["get-courses", "--organization", organization], core: true },
             createIs<Course[]>(),
-            cache,
+            options?.forceRefresh,
+            `organization-${organization}-courses`,
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -390,12 +404,23 @@ export default class TMC {
      */
     public async getCourseData(
         courseId: number,
-        cache = false,
+        options?: CacheOptions,
     ): Promise<Result<CourseData, Error>> {
-        return this._executeLangsCommand(
+        const cacheTransformer: CacheTransformer<CourseData, unknown> = (response) => {
+            const { details, exercises, settings } = response.data;
+            return [
+                [`course-${courseId}-details`, { ...response, data: details }],
+                [`course-${courseId}-exercises`, { ...response, data: exercises }],
+                [`course-${courseId}-settings`, { ...response, data: settings }],
+            ];
+        };
+
+        return this._executeLangsCommand<CourseData>(
             { args: ["get-course-data", "--course-id", courseId.toString()], core: true },
             createIs<CourseData>(),
-            cache,
+            options?.forceRefresh,
+            `course-${courseId}-data`,
+            cacheTransformer,
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -408,12 +433,13 @@ export default class TMC {
      */
     public async getCourseDetails(
         courseId: number,
-        cache = false,
+        options?: CacheOptions,
     ): Promise<Result<CourseDetails, Error>> {
         return this._executeLangsCommand(
             { args: ["get-course-details", "--course-id", courseId.toString()], core: true },
             createIs<CourseDetails["course"]>(),
-            cache,
+            options?.forceRefresh,
+            `course-${courseId}-details`,
         ).then((res) => res.map((r) => ({ course: r.data })));
     }
 
@@ -426,12 +452,13 @@ export default class TMC {
      */
     public async getCourseExercises(
         courseId: number,
-        cache = false,
+        options?: CacheOptions,
     ): Promise<Result<CourseExercise[], Error>> {
         return this._executeLangsCommand(
             { args: ["get-course-exercises", "--course-id", courseId.toString()], core: true },
             createIs<CourseExercise[]>(),
-            cache,
+            options?.forceRefresh,
+            `course-${courseId}-exercises`,
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -444,7 +471,7 @@ export default class TMC {
      */
     public getCourseSettings(
         courseId: number,
-        cache = false,
+        options?: CacheOptions,
     ): Promise<Result<CourseSettings, Error>> {
         return this._executeLangsCommand(
             {
@@ -452,7 +479,8 @@ export default class TMC {
                 core: true,
             },
             createIs<CourseSettings>(),
-            cache,
+            options?.forceRefresh,
+            `course-${courseId}-settings`,
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -465,7 +493,7 @@ export default class TMC {
      */
     public async getExerciseDetails(
         exerciseId: number,
-        cache = false,
+        options?: CacheOptions,
     ): Promise<Result<ExerciseDetails, Error>> {
         return this._executeLangsCommand(
             {
@@ -473,7 +501,8 @@ export default class TMC {
                 core: true,
             },
             createIs<ExerciseDetails>(),
-            cache,
+            options?.forceRefresh,
+            `exercise-${exerciseId}-details`,
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -503,12 +532,13 @@ export default class TMC {
      */
     public async getOrganization(
         organizationSlug: string,
-        cache = false,
+        options?: CacheOptions,
     ): Promise<Result<Organization, Error>> {
         return this._executeLangsCommand(
             { args: ["get-organization", "--organization", organizationSlug], core: true },
             createIs<Organization>(),
-            cache,
+            options?.forceRefresh,
+            `organization-${organizationSlug}`,
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -517,11 +547,13 @@ export default class TMC {
      *
      * @returns A list of organizations.
      */
-    public async getOrganizations(cache = false): Promise<Result<Organization[], Error>> {
+    public async getOrganizations(options?: CacheOptions): Promise<Result<Organization[], Error>> {
         return this._executeLangsCommand(
             { args: ["get-organizations"], core: true },
             createIs<Organization[]>(),
-            cache,
+            options?.forceRefresh,
+            "organizations",
+            (res) => res.data.map((x) => [`organization-${x.slug}`, { ...res, data: x }]),
         ).then((res) => res.map((r) => r.data));
     }
 
@@ -676,24 +708,40 @@ export default class TMC {
      * @param langsArgs Command arguments passed on to spawnLangsProcess.
      * @param checker Checker function used to validate the type of data-property.
      * @param useCache Whether to try fetching the data from cache instead of running the process.
+     * @param cacheKey Key used for storing and accessing cached data. Required with useCache.
+     * @param cacheTransformer Optional transformer function that can be used to split summary
+     * responses.
      * @returns Result that resolves to a checked LansResponse.
      */
     private async _executeLangsCommand<T>(
         langsArgs: RustProcessArgs,
         checker: (object: unknown) => object is T,
-        useCache = false,
+        forceRefresh?: boolean,
+        cacheKey?: string,
+        cacheTransformer?: CacheTransformer<T, unknown>,
     ): Promise<Result<LangsResponse<T>, Error>> {
-        const cacheKey = langsArgs.args.join("-");
-        let cached: LangsResponse<unknown> | undefined;
-        if (useCache && (cached = this._rustCache.get(cacheKey))) {
-            if (checker(cached.data)) {
-                return new Ok({ ...cached, data: cached.data });
-            } else {
-                // This should NEVER have to happen
-                Logger.error("Cached data for key didn't match the expected type, re-fetching...");
-                Logger.debug(cacheKey, cached.data);
+        const currentTime = Date.now();
+        if (!forceRefresh && cacheKey) {
+            const cachedEntry = this._responseCache.get(cacheKey);
+            if (cachedEntry) {
+                const { response, timestamp } = cachedEntry;
+                const cachedDataLifeLeft = timestamp + TMC_API_CACHE_LIFETIME - currentTime;
+                if (checker(response.data)) {
+                    if (cachedDataLifeLeft > 0) {
+                        const prettySecondsLeft = Math.ceil(cachedDataLifeLeft / 1000);
+                        Logger.log(
+                            `Using cached data for key: ${cacheKey}. Still valid for ${prettySecondsLeft}s`,
+                        );
+                        return Ok({ ...response, data: response.data });
+                    }
+                    Logger.debug(`Discarding invalidated cache data for key: ${cacheKey}`);
+                    this._responseCache.delete(cacheKey);
+                } else {
+                    Logger.debug(`Incorrect cache data type for key: ${cacheKey}`);
+                }
             }
         }
+
         const result = await this._spawnLangsProcess(langsArgs).result;
         if (result.err) {
             return result;
@@ -710,7 +758,14 @@ export default class TMC {
         if (checked.err) {
             return checked;
         }
-        this._rustCache.set(cacheKey, checked.val);
+
+        if (cacheKey) {
+            this._responseCache.set(cacheKey, { response: checked.val, timestamp: currentTime });
+            cacheTransformer?.(checked.val).forEach(([key, response]) => {
+                this._responseCache.set(key, { response, timestamp: currentTime });
+            });
+        }
+
         return new Ok(checked.val);
     }
 

@@ -129,7 +129,7 @@ export async function validateAndFix(
                  * try to find `course.id` from user visible courses using the name field.
                  */
                 const courseDataResult = await (course.id !== undefined
-                    ? tmc.getCourseData(course.id, true)
+                    ? tmc.getCourseData(course.id)
                     : getCourseData(tmc, course.organization, course.name as string));
                 if (courseDataResult.err) {
                     if (courseDataResult.val instanceof ApiError) {
@@ -192,7 +192,7 @@ async function findCourseInfo(
     org: string,
     course: string,
 ): Promise<Result<number, Error>> {
-    const coursesResult = await tmc.getCourses(org, true);
+    const coursesResult = await tmc.getCourses(org);
     if (coursesResult.err) {
         return coursesResult;
     }
@@ -213,7 +213,7 @@ async function getCourseData(
     if (courseId.err) {
         return courseId;
     }
-    return tmc.getCourseData(courseId.val, true);
+    return tmc.getCourseData(courseId.val);
 }
 
 async function getCourseDetails(
@@ -225,7 +225,7 @@ async function getCourseDetails(
     if (courseId.err) {
         return courseId;
     }
-    return tmc.getCourseDetails(courseId.val, true);
+    return tmc.getCourseDetails(courseId.val);
 }
 
 async function ensureLogin(

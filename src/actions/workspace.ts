@@ -211,10 +211,9 @@ export async function checkForExerciseUpdates(
         filteredCourses.map(async (course) => {
             const organizationSlug = course.organization;
 
-            const detailsResult = await tmc.getCourseDetails(
-                course.id,
-                updateCheckOptions?.useCache ?? false,
-            );
+            const detailsResult = await tmc.getCourseDetails(course.id, {
+                forceRefresh: updateCheckOptions?.useCache,
+            });
             if (detailsResult.err) {
                 return detailsResult;
             }

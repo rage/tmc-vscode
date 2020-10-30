@@ -597,7 +597,7 @@ export async function updateCourse(
         );
     };
     const courseData = userData.getCourse(courseId);
-    const updateResult = await tmc.getCourseData(courseId);
+    const updateResult = await tmc.getCourseData(courseId, { forceRefresh: true });
     if (updateResult.err) {
         if (updateResult.val instanceof ForbiddenError) {
             if (!courseData.disabled) {
