@@ -634,8 +634,14 @@ export default class TMC {
         const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
         const onStdout = (res: LangsOutputData<unknown>): void => {
             progressCallback?.(100 * res["percent-done"], res.message ?? undefined);
-            if (is<{ PostedSubmission: SubmissionResponse }>(res.data)) {
-                onSubmissionUrl?.(res.data.PostedSubmission.show_submission_url);
+            // if (is<{ PostedSubmission: SubmissionResponse }>(res.data)) {
+            //     onSubmissionUrl?.(res.data.PostedSubmission.show_submission_url);
+            // }
+            if (res.result === "posted-submission") {
+                const response = this._checkLangsResponse(res, createIs<SubmissionResponse>());
+                if (response.ok && onSubmissionUrl) {
+                    onSubmissionUrl(response.val.data.show_submission_url);
+                }
             }
         };
 
