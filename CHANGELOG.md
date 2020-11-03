@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.1] - 2020-11-03
+
+#### Changed
+- Rolled TMC-langs back to version 0.4.1.
+
+
 ## [1.3.0] - 2020-11-03
 
 #### Added
