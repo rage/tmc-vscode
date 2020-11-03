@@ -121,6 +121,11 @@
                 "category": "TestMyCode"
             },
             {
+                "command": "tmc.openTMCExercisesFolder",
+                "title": "Open TMC Data Folder",
+                "category": "TestMyCode"
+            },
+            {
                 "command": "tmc.pasteExercise",
                 "title": "Send Exercise to TMC Paste",
                 "category": "TestMyCode"

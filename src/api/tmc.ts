@@ -25,7 +25,7 @@ import {
 } from "../errors";
 import { sleep } from "../utils/";
 import { Logger } from "../utils/logger";
-import { showError } from "../window";
+import { showError, showWarning } from "../window";
 
 import {
     Course,
@@ -71,6 +71,11 @@ interface LangsOutputData<T> extends LangsOutputBase<T> {
         | "retrieved-data"
         | "executed-command";
     status: "finished" | "crashed";
+}
+
+interface LangsWarning {
+    "output-kind": "warnings";
+    warnings: string[];
 }
 
 interface LangsError {
@@ -874,6 +879,10 @@ export default class TMC {
                             onStdout?.(json);
                         } else if (is<LangsOutputData<unknown>>(json)) {
                             theResult = json;
+                        } else if (is<LangsWarning>(json)) {
+                            if (json.warnings.length !== 0) {
+                                showWarning(json.warnings.join("\n"));
+                            }
                         } else {
                             Logger.error("TMC-langs response didn't match expected type");
                             Logger.debug(part);
