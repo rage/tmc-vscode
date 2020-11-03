@@ -128,6 +128,13 @@ export function registerCommands(
             actions.openSettings(actionContext);
         }),
 
+        vscode.commands.registerCommand("tmc.openTMCExercisesFolder", async () => {
+            vscode.commands.executeCommand(
+                "revealFileInOS",
+                vscode.Uri.file(actionContext.resources.getDataPath()),
+            );
+        }),
+
         vscode.commands.registerCommand(
             "tmc.pasteExercise",
             async (resource: vscode.Uri | undefined) =>

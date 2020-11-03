@@ -25,7 +25,7 @@ import {
 } from "../errors";
 import { sleep } from "../utils/";
 import { Logger } from "../utils/logger";
-import { showError } from "../window";
+import { showError, showWarning } from "../window";
 
 import {
     Course,
@@ -73,6 +73,11 @@ interface LangsOutputData<T> extends LangsOutputBase<T> {
     status: "finished" | "crashed";
 }
 
+interface LangsWarning {
+    "output-kind": "warnings";
+    warnings: string[];
+}
+
 interface LangsError {
     kind:
         | "generic"
@@ -94,6 +99,7 @@ interface LangsProcessArgs {
     obfuscate?: number[];
     onStderr?: (data: string) => void;
     onStdout?: (data: LangsStatusUpdate<unknown>) => void;
+    onWarning?: (data: string[]) => void;
     stdin?: string;
 }
 
@@ -291,6 +297,7 @@ export default class TMC {
             core: false,
             env,
             onStderr: (data) => Logger.log("Rust Langs", data),
+            onWarning: (data) => showWarning(data.join("\n")),
         });
         const postResult = result.then((res) =>
             res
@@ -801,7 +808,7 @@ export default class TMC {
      * @returns Rust process runner.
      */
     private _spawnLangsProcess(commandArgs: LangsProcessArgs): LangsProcessRunner<unknown> {
-        const { args, core, env, obfuscate, onStderr, onStdout, stdin } = commandArgs;
+        const { args, core, env, obfuscate, onStderr, onStdout, onWarning, stdin } = commandArgs;
         const CORE_ARGS = [
             "core",
             "--client-name",
@@ -874,6 +881,10 @@ export default class TMC {
                             onStdout?.(json);
                         } else if (is<LangsOutputData<unknown>>(json)) {
                             theResult = json;
+                        } else if (is<LangsWarning>(json)) {
+                            if (json.warnings.length !== 0) {
+                                onWarning?.(json.warnings);
+                            }
                         } else {
                             Logger.error("TMC-langs response didn't match expected type");
                             Logger.debug(part);

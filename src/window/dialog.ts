@@ -75,6 +75,22 @@ export async function showNotification(
 }
 
 /**
+ * Wrapper for vscode.window.showWarningMessage that resolves optional items to associated
+ * callbacks.
+ */
+export async function showWarning(
+    message: string,
+    ...items: Array<[string, () => void]>
+): Promise<void> {
+    const items2 = items.length > 0 ? items : items.concat([["Ok", (): void => {}]]);
+    return vscode.window
+        .showWarningMessage(`TestMyCode: ${message}`, ...items2.map((item) => item[0]))
+        .then((selection) => {
+            items2.find((item) => item[0] === selection)?.[1]();
+        });
+}
+
+/**
  * Wrapper for vscode.window.withProgress that can display the progress as a sum of several
  * simultaneous tasks. Like when using withProgress, tasks are expected to report of their progress
  * with positive increments that will sum up to 100. In addition, completed promises are handled
