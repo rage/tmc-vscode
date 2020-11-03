@@ -49,7 +49,7 @@ function component(props) {
             </div>
 
             <div class="content_area">
-                <h2>What's new in 1.2?</h2>
+                <h2>What's new in 1.3?</h2>
                 <div class="content_section">
                     <p>
                         Here is a little overview of latest features. To see all the changes for
@@ -61,6 +61,23 @@ function component(props) {
                     </p>
                 </div>
                 <div class="content_section">
+                    <h3>Improved caching for API data</h3>
+                    <p>
+                        The caching system for TMC API data has been reworked. Previous version
+                        didn't invalidate data over time, so it had limited use potential. Most
+                        responses will now be re-used for up to five minutes, after which they will
+                        be re-fetched.
+                    </p>
+                </div>
+                <div class="content_section">
+                    <h3>Arm64 build of TMC-langs for Mac OS</h3>
+                    <p>
+                        New native build of TMC-langs is now provided for MAC OS 11 users with ARM
+                        architecture.
+                    </p>
+                </div>
+                <h2 style="py-2">Previous releases</h2>
+                <div class="content_section">
                     <h3>Automatic exercise updates</h3>
                     <p>
                         When there are updates available to exercises, the extension will now
@@ -69,7 +86,6 @@ function component(props) {
                         toggled back from the settings.
                     </p>
                 </div>
-                <h2 style="py-2">Previous releases</h2>
                 <div class="content_section">
                     <h3>Alternative way to run tests for Jupyter Notebooks</h3>
                     <p>

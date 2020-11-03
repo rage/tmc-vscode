@@ -1,3 +1,4 @@
+import * as path from "path";
 import * as vscode from "vscode";
 
 import { checkForCourseUpdates } from "./actions";
@@ -8,6 +9,7 @@ import Settings from "./config/settings";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
+import { EmptyLangsResponseError } from "./errors";
 import * as init from "./init";
 import { newVSCodeWorkspaceMigration } from "./migrate";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
@@ -52,6 +54,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
     const tmc = new TMC(resources);
 
+    const authenticated = await tmc.isAuthenticated();
+    if (authenticated.err) {
+        showError("TestMyCode initialization failed. Please see logs for details.");
+        Logger.error("Failed to check if authenticated:", authenticated.val.message);
+        if (authenticated.val instanceof EmptyLangsResponseError) {
+            Logger.error(
+                "The above error may have been caused by an interfering antivirus program. " +
+                    "Please add an exception for the following folder:",
+                path.resolve(resources.getCliPath(), ".."),
+            );
+        }
+        Logger.show();
+        return;
+    }
+
     const validationResult = await validateAndFix(storage, tmc, ui, resources);
     if (validationResult.err) {
         const message = "Data reconstruction failed.";
@@ -60,13 +77,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
     }
 
-    const authenticated = await tmc.isAuthenticated();
-    if (authenticated.err) {
-        showError("Failed to check if authenticated");
-        Logger.error("Failed to check if authenticated", authenticated.val.message);
-        Logger.show();
-        return;
-    }
     await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated.val);
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated.val);
     const visibilityGroups = {

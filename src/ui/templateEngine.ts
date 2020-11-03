@@ -7,7 +7,7 @@ import * as handlebars from "handlebars";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { SubmissionResultReport, TmcLangsTestResultRust } from "../api/types";
+import { SubmissionResultReport, TestResult } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, parseTestResultsText } from "../utils/";
 
@@ -117,7 +117,7 @@ export default class TemplateEngine {
         /**
          * Progress bar for running tests and submission.
          */
-        handlebars.registerHelper("progress_bar", (exercises: TmcLangsTestResultRust[]) => {
+        handlebars.registerHelper("progress_bar", (exercises: TestResult[]) => {
             const length = exercises.length;
             let passedAmount = 0;
             for (const exer of exercises) {
@@ -164,7 +164,7 @@ export default class TemplateEngine {
 
         handlebars.registerHelper(
             "show_test_results",
-            (testResults: TmcLangsTestResultRust[], showAll: boolean) => {
+            (testResults: TestResult[], showAll: boolean) => {
                 if (!testResults) {
                     return;
                 }

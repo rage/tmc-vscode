@@ -71,6 +71,10 @@ export function registerUiActions(actionContext: ActionContext): void {
         command: "tmc.openSettings",
         title: "Go to TMC Settings",
     });
+    ui.treeDP.registerAction("Open TMC Exercises Folder", "tmcDataFolder", [], {
+        command: "tmc.openTMCExercisesFolder",
+        title: "Open TMC Exercises Folder",
+    });
     ui.treeDP.registerAction("Log out", "logOut", [visibilityGroups.LOGGED_IN], {
         command: "tmc.logout",
         title: "Log out",

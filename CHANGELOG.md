@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.3.0] - 2020-11-03
+
+#### Added
+- *Open TMC Exercises Folder* button to TMC TreeView.
+- Show warning message if running tests using too old Python version.
+- Hint about possible Antivirus conflict if the extension fails to start.
+- Arm64 build of TMC-langs for Mac OS.
+- [Pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance) to recommended Python extensions.
+
+#### Changed
+- Reworked caching for TMC API data.
+- Bumped TMC-langs version to 0.6.1.
+    * Fixes path issues with some Python libraries when running tests on Windows.
+
+#### Fixed
+- Updateable exercises notification didn't disappear from Course Details page in some circumstances.
+
+#### Security
+- Updated dependencies.
+
+
 ## [1.2.0] - 2020-10-01
 
 #### Added
@@ -12,7 +33,7 @@
 ## [1.1.1] - 2020-09-29
 
 #### Changed
-- Bumped TMC-langs Rust version to [0.4.1](https://github.com/rage/tmc-langs-rust/releases/tag/0.4.1).
+- Bumped TMC-langs version to [0.4.1](https://github.com/rage/tmc-langs-rust/releases/tag/0.4.1).
 
 
 ## [1.1.0] - 2020-09-21
@@ -30,9 +51,9 @@
 #### Changed
 - Technical improvements to Login page.
 - Technical improvements to TMC TreeView menu.
-- Bumped TMC-langs Rust version to 0.4.0.
-- Exam mode in submissions handled by TMC-langs Rust.
-- Distinguish between disabled courses and access denied for TMC-langs Rust commands.
+- Bumped TMC-langs version to 0.4.0.
+- Exam mode in submissions handled by TMC-langs.
+- Distinguish between disabled courses and access denied for TMC-langs commands.
 - Use course title instead of course name.
 
 #### Security
