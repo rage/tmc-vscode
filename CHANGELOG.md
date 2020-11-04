@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.2] - 2020-11-04
+
+#### Changed
+- Bumped TMC-langs to version 0.6.2.
+
+
 ## [1.3.1] - 2020-11-03
 
 #### Changed
@@ -17,7 +23,7 @@
 
 #### Changed
 - Reworked caching for TMC API data.
-- Bumped TMC-langs version to 0.6.1.
+- Bumped TMC-langs to version 0.6.1.
     * Fixes path issues with some Python libraries when running tests on Windows.
 
 #### Fixed
@@ -39,7 +45,7 @@
 ## [1.1.1] - 2020-09-29
 
 #### Changed
-- Bumped TMC-langs version to [0.4.1](https://github.com/rage/tmc-langs-rust/releases/tag/0.4.1).
+- Bumped TMC-langs to version [0.4.1](https://github.com/rage/tmc-langs-rust/releases/tag/0.4.1).
 
 
 ## [1.1.0] - 2020-09-21
@@ -57,7 +63,7 @@
 #### Changed
 - Technical improvements to Login page.
 - Technical improvements to TMC TreeView menu.
-- Bumped TMC-langs version to 0.4.0.
+- Bumped TMC-langs to version 0.4.0.
 - Exam mode in submissions handled by TMC-langs.
 - Distinguish between disabled courses and access denied for TMC-langs commands.
 - Use course title instead of course name.
@@ -84,7 +90,7 @@
 
 #### Changed
 - Show some TMC-VSCode commands only when logged in.
-- Bumped TMC-langs Rust version to 0.1.0.
+- Bumped TMC-langs Rust to version 0.1.0.
 - VSCode Python Interpreter path passed to TMC-langs Rust.
 - All API Requests handled externally by TMC-langs Rust.
 - Exercise related actions use TMC-langs Rust.
@@ -108,7 +114,7 @@
 - Possibility to download individual exercises in Course Page.
 
 #### Changed
-- TMC-langs Rust version 0.1.17-alpha.
+- Bumped TMC-langs Rust to version 0.1.17-alpha.
 - Local exercise tests runs with TMC-langs Rust.
 - Course specific workspaces using VSCode Multi-root workspaces.
 - Need to close TMC Workspace if moving TMC Data from Settings.
