@@ -45,7 +45,7 @@ import {
 
 // ---------------------------------------------------------------------------------------------- //
 
-// Output schema for TMC Langs 0.4.1
+// Output schema for TMC Langs 0.6.2
 // https://github.com/rage/tmc-langs-rust/blob/master/tmc-langs-cli/src/output.rs
 
 interface LangsOutputBase<T> {
@@ -54,14 +54,14 @@ interface LangsOutputBase<T> {
     "percent-done": number;
 }
 
-// interface LangsStatusUpdate<T> extends LangsOutputBase<T> {
-//     "output-kind": "status-update";
-//     finished: boolean;
-//     time: number | null;
-// }
+interface LangsStatusUpdate<T> extends LangsOutputBase<T> {
+    "output-kind": "status-update";
+    finished: boolean;
+    time: number | null;
+}
 
 interface LangsOutputData<T> extends LangsOutputBase<T> {
-    // "output-kind": "output-data";
+    "output-kind": "output-data";
     result:
         | "logged-in"
         | "logged-out"
@@ -69,16 +69,8 @@ interface LangsOutputData<T> extends LangsOutputBase<T> {
         | "error"
         | "sent-data"
         | "retrieved-data"
-        | "executed-command"
-        | "downloading-exercise"
-        | "downloaded-exercise"
-        | "processing"
-        | "posted-submission"
-        | "sending"
-        | "waiting-for-results"
-        | "finished"
-        | "intermediate-step-finished";
-    status: "finished" | "crashed" | "in-progress";
+        | "executed-command";
+    status: "crashed" | "finished";
 }
 
 interface LangsWarning {
@@ -106,7 +98,7 @@ interface LangsProcessArgs {
     /** Which args should be obfuscated in logs. */
     obfuscate?: number[];
     onStderr?: (data: string) => void;
-    onStdout?: (data: LangsOutputData<unknown>) => void;
+    onStdout?: (data: LangsStatusUpdate<unknown>) => void;
     onWarning?: (data: string[]) => void;
     stdin?: string;
 }
@@ -632,16 +624,10 @@ export default class TMC {
         onSubmissionUrl?: (url: string) => void,
     ): Promise<Result<SubmissionStatusReport, Error>> {
         const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
-        const onStdout = (res: LangsOutputData<unknown>): void => {
+        const onStdout = (res: LangsStatusUpdate<unknown>): void => {
             progressCallback?.(100 * res["percent-done"], res.message ?? undefined);
-            // if (is<{ PostedSubmission: SubmissionResponse }>(res.data)) {
-            //     onSubmissionUrl?.(res.data.PostedSubmission.show_submission_url);
-            // }
-            if (res.result === "posted-submission") {
-                const response = this._checkLangsResponse(res, createIs<SubmissionResponse>());
-                if (response.ok && onSubmissionUrl) {
-                    onSubmissionUrl(response.val.data.show_submission_url);
-                }
+            if (is<{ PostedSubmission: SubmissionResponse }>(res.data)) {
+                onSubmissionUrl?.(res.data.PostedSubmission.show_submission_url);
             }
         };
 
@@ -891,8 +877,9 @@ export default class TMC {
                 for (const part of parts) {
                     try {
                         const json = JSON.parse(part.trim());
-                        if (is<LangsOutputData<unknown>>(json)) {
+                        if (is<LangsStatusUpdate<unknown>>(json)) {
                             onStdout?.(json);
+                        } else if (is<LangsOutputData<unknown>>(json)) {
                             theResult = json;
                         } else if (is<LangsWarning>(json)) {
                             if (json.warnings.length !== 0) {
