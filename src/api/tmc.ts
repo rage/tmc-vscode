@@ -99,7 +99,6 @@ interface LangsProcessArgs {
     obfuscate?: number[];
     onStderr?: (data: string) => void;
     onStdout?: (data: LangsStatusUpdate<unknown>) => void;
-    onWarning?: (data: string[]) => void;
     stdin?: string;
 }
 
@@ -297,7 +296,6 @@ export default class TMC {
             core: false,
             env,
             onStderr: (data) => Logger.log("Rust Langs", data),
-            onWarning: (data) => showWarning(data.join("\n")),
         });
         const postResult = result.then((res) =>
             res
@@ -808,7 +806,7 @@ export default class TMC {
      * @returns Rust process runner.
      */
     private _spawnLangsProcess(commandArgs: LangsProcessArgs): LangsProcessRunner<unknown> {
-        const { args, core, env, obfuscate, onStderr, onStdout, onWarning, stdin } = commandArgs;
+        const { args, core, env, obfuscate, onStderr, onStdout, stdin } = commandArgs;
         const CORE_ARGS = [
             "core",
             "--client-name",
@@ -883,7 +881,7 @@ export default class TMC {
                             theResult = json;
                         } else if (is<LangsWarning>(json)) {
                             if (json.warnings.length !== 0) {
-                                onWarning?.(json.warnings);
+                                showWarning(json.warnings.join("\n"));
                             }
                         } else {
                             Logger.error("TMC-langs response didn't match expected type");
