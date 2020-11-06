@@ -3,7 +3,7 @@
 
 const path = require("path");
 
-const TMC_LANGS_RUST_VERSION = "0.6.1";
+const TMC_LANGS_RUST_VERSION = "0.6.2";
 
 const localApi = {
     __ACCESS_TOKEN_URI__: JSON.stringify("http://localhost:4001/oauth/token"),

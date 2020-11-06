@@ -45,7 +45,7 @@ import {
 
 // ---------------------------------------------------------------------------------------------- //
 
-// Output schema for TMC Langs 0.5.0
+// Output schema for TMC Langs 0.6.2
 // https://github.com/rage/tmc-langs-rust/blob/master/tmc-langs-cli/src/output.rs
 
 interface LangsOutputBase<T> {
@@ -70,7 +70,7 @@ interface LangsOutputData<T> extends LangsOutputBase<T> {
         | "sent-data"
         | "retrieved-data"
         | "executed-command";
-    status: "finished" | "crashed";
+    status: "crashed" | "finished";
 }
 
 interface LangsWarning {
