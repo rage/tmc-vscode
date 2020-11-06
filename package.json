@@ -364,7 +364,7 @@
         "vscode:prepublish": "cross-env NODE_ENV=production npm run webpack",
         "clean-local-rust-config": "cd backend && cd cli && rm -rf tmc-vscode_plugin",
         "ci:all": "npm ci && cd backend && npm ci",
-        "pretest": "cross-env NODE_ENV=development BACKEND=local npm run webpack",
+        "pretest": "cross-env NODE_ENV=development BACKEND=mockBackend npm run webpack",
         "test": "node ./bin/runTests.js",
         "eslint-check": "eslint . --ext .js,.ts",
         "eslint": "eslint --fix . --ext .js,.ts",
@@ -378,7 +378,7 @@
         "ui-test:compile": "tsc ./src/ui-test/*.ts --rootDir src --outDir out",
         "ui-test:compile-and-run": "npm run ui-test:compile && npm run ui-test:run",
         "ui-test:run": "npm run clean-local-rust-config && extest run-tests out/ui-test/*.test.js",
-        "ui-test:setup": "cross-env NODE_ENV=development BACKEND=local extest setup-tests",
+        "ui-test:setup": "cross-env NODE_ENV=development BACKEND=mockBackend extest setup-tests",
         "update-submodules": "git submodule foreach git pull origin master",
         "webpack": "webpack",
         "webpack:watch": "webpack --watch"

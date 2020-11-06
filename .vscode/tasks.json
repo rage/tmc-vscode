@@ -44,7 +44,7 @@
             "type": "pickString",
             "id": "zBackend",
             "description": "Select backend mode",
-            "options": ["local", "production"],
+            "options": ["mockBackend", "localTMCServer", "production"],
             "default": "production"
         }
     ]
