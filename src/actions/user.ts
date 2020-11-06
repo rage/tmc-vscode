@@ -461,37 +461,30 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
     }
 
     const extensionSettings = extensionSettingsResult.val;
-    ui.webview.setContentFromTemplate(
+    ui.webview.setContentFromTemplate({ templateName: "settings" }, true, [
         {
-            templateName: "settings",
-            logLevel: extensionSettingsResult.val.logLevel,
+            command: "setBooleanSetting",
+            setting: "downloadOldSubmission",
+            enabled: extensionSettings.hideMetaFiles,
         },
-        true,
-        [
-            {
-                command: "setBooleanSetting",
-                setting: "downloadOldSubmission",
-                enabled: extensionSettings.hideMetaFiles,
-            },
-            {
-                command: "setBooleanSetting",
-                setting: "hideMetaFiles",
-                enabled: extensionSettings.hideMetaFiles,
-            },
-            { command: "setBooleanSetting", setting: "insider", enabled: settings.isInsider() },
-            {
-                command: "setBooleanSetting",
-                setting: "updateExercisesAutomatically",
-                enabled: settings.getAutomaticallyUpdateExercises(),
-            },
-            { command: "setLogLevel", level: settings.getLogLevel() },
-            {
-                command: "setTmcDataFolder",
-                diskSize: formatSizeInBytes(await du(resources.getDataPath())),
-                path: extensionSettingsResult.val.dataPath,
-            },
-        ],
-    );
+        {
+            command: "setBooleanSetting",
+            setting: "hideMetaFiles",
+            enabled: extensionSettings.hideMetaFiles,
+        },
+        { command: "setBooleanSetting", setting: "insider", enabled: settings.isInsider() },
+        {
+            command: "setBooleanSetting",
+            setting: "updateExercisesAutomatically",
+            enabled: settings.getAutomaticallyUpdateExercises(),
+        },
+        { command: "setLogLevel", level: settings.getLogLevel() },
+        {
+            command: "setTmcDataFolder",
+            diskSize: formatSizeInBytes(await du(resources.getDataPath())),
+            path: extensionSettingsResult.val.dataPath,
+        },
+    ]);
 }
 
 interface NewCourseOptions {
