@@ -1,3 +1,4 @@
+import du = require("du");
 import * as _ from "lodash";
 import * as path from "path";
 import * as vscode from "vscode";
@@ -11,13 +12,13 @@ import {
     downloadExerciseUpdates,
     login,
     openExercises,
-    openSettings,
     openWorkspace,
     removeCourse,
     updateCourse,
 } from "../actions";
 import { ActionContext } from "../actions/types";
 import {
+    formatSizeInBytes,
     getPlatform,
     getRustExecutable,
     isCorrectWorkspaceOpen,
@@ -323,7 +324,11 @@ export function registerUiActions(actionContext: ActionContext): void {
                 Logger.error(res.val);
                 showError(res.val.message);
             }
-            openSettings(actionContext);
+            ui.webview.postMessage({
+                command: "setTmcDataFolder",
+                diskSize: formatSizeInBytes(await du(resources.getDataPath())),
+                path: newPath,
+            });
         }
     });
 
@@ -335,7 +340,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             await settings.updateSetting({ setting: "logLevel", value: msg.data });
             Logger.configure(msg.data);
-            openSettings(actionContext);
+            ui.webview.postMessage({ command: "setLogLevel", level: msg.data });
         },
     );
 
@@ -346,19 +351,11 @@ export function registerUiActions(actionContext: ActionContext): void {
                 return;
             }
             await settings.updateSetting({ setting: "hideMetaFiles", value: msg.data });
-            openSettings(actionContext);
-        },
-    );
-
-    // Will be removed once Settings is recreated using new webview or native vscode settings view
-    ui.webview.registerHandler(
-        "insiderVersionLegacy",
-        async (msg: { type?: "insiderVersionLegacy"; data?: boolean }) => {
-            if (!(msg.type && msg.data !== undefined)) {
-                return;
-            }
-            await settings.updateSetting({ setting: "insiderVersion", value: msg.data });
-            await openSettings(actionContext);
+            ui.webview.postMessage({
+                command: "setBooleanSetting",
+                setting: "hideMetaFiles",
+                enabled: msg.data,
+            });
         },
     );
 
@@ -369,7 +366,11 @@ export function registerUiActions(actionContext: ActionContext): void {
                 return;
             }
             await settings.updateSetting({ setting: "insiderVersion", value: msg.data });
-            ui.webview.postMessage({ command: "setInsiderStatus", enabled: msg.data });
+            ui.webview.postMessage({
+                command: "setBooleanSetting",
+                setting: "insider",
+                enabled: msg.data,
+            });
         },
     );
 
@@ -404,7 +405,11 @@ export function registerUiActions(actionContext: ActionContext): void {
                 return;
             }
             await settings.updateSetting({ setting: "downloadOldSubmission", value: msg.data });
-            await openSettings(actionContext);
+            ui.webview.postMessage({
+                command: "setBooleanSetting",
+                setting: "downloadOldSubmission",
+                enabled: msg.data,
+            });
         },
     );
 
@@ -418,7 +423,11 @@ export function registerUiActions(actionContext: ActionContext): void {
                 setting: "updateExercisesAutomatically",
                 value: msg.data,
             });
-            await openSettings(actionContext);
+            ui.webview.postMessage({
+                command: "setBooleanSetting",
+                setting: "updateExercisesAutomatically",
+                enabled: msg.data,
+            });
         },
     );
 }

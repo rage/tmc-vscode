@@ -11,7 +11,7 @@ import { SubmissionResultReport, TestResult } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, parseTestResultsText } from "../utils/";
 
-import { CourseDetails, Login, MyCourses, Webview, Welcome } from "./templates";
+import { CourseDetails, Login, MyCourses, Settings, Webview, Welcome } from "./templates";
 import { TemplateData } from "./types";
 
 export default class TemplateEngine {
@@ -285,6 +285,13 @@ export default class TemplateEngine {
                     cssBlob,
                     cspSource: webview.cspSource,
                     script: MyCourses.script,
+                });
+            case "settings":
+                return Webview.render({
+                    children: Settings.component(),
+                    cssBlob,
+                    cspSource: webview.cspSource,
+                    script: Settings.script,
                 });
             case "welcome":
                 return Webview.render({
