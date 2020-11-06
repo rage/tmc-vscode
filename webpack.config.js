@@ -8,14 +8,22 @@ const TerserPlugin = require("terser-webpack-plugin");
 const webpack = require("webpack");
 const merge = require("webpack-merge").merge;
 
-const { localApi, productionApi } = require("./config");
+const { mockBackend, localTMCServer, productionApi } = require("./config");
 
 /**@type {() => import("webpack").Configuration} */
 const config = () => {
     const isDevelopmentMode = process.env.NODE_ENV && process.env.NODE_ENV === "development";
 
-    const apiConfig =
-        process.env.BACKEND && process.env.BACKEND === "local" ? localApi : productionApi;
+    const apiConfig = (() => {
+        switch (process.env.BACKEND) {
+            case "mockBackend":
+                return mockBackend;
+            case "localTMCServer":
+                return localTMCServer;
+            default:
+                return productionApi;
+        }
+    })();
 
     // Workaround to an arbitrary type error for the time being.
     // Complains that string[] doesn't apply to type [string, ...string[]]
