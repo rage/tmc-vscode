@@ -452,21 +452,39 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
 export async function openSettings(actionContext: ActionContext): Promise<void> {
     const { ui, resources, settings } = actionContext;
     Logger.log("Display extension settings");
-    const extensionSettings = await settings.getExtensionSettings();
-    if (extensionSettings.err) {
+    const extensionSettingsResult = await settings.getExtensionSettings();
+    if (extensionSettingsResult.err) {
         const message = "Failed to fetch Settings.";
-        Logger.error(message, extensionSettings.val);
+        Logger.error(message, extensionSettingsResult.val);
         showError(message);
         return;
     }
-    ui.webview.setContentFromTemplate(
+
+    const extensionSettings = extensionSettingsResult.val;
+    ui.webview.setContentFromTemplate({ templateName: "settings" }, true, [
         {
-            templateName: "settings",
-            extensionSettings: extensionSettings.val,
-            tmcDataSize: formatSizeInBytes(await du(resources.getDataPath())),
+            command: "setBooleanSetting",
+            setting: "downloadOldSubmission",
+            enabled: extensionSettings.hideMetaFiles,
         },
-        true,
-    );
+        {
+            command: "setBooleanSetting",
+            setting: "hideMetaFiles",
+            enabled: extensionSettings.hideMetaFiles,
+        },
+        { command: "setBooleanSetting", setting: "insider", enabled: settings.isInsider() },
+        {
+            command: "setBooleanSetting",
+            setting: "updateExercisesAutomatically",
+            enabled: settings.getAutomaticallyUpdateExercises(),
+        },
+        { command: "setLogLevel", level: settings.getLogLevel() },
+        {
+            command: "setTmcDataFolder",
+            diskSize: formatSizeInBytes(await du(resources.getDataPath())),
+            path: extensionSettingsResult.val.dataPath,
+        },
+    ]);
 }
 
 interface NewCourseOptions {

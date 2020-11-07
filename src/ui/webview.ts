@@ -112,14 +112,18 @@ export default class TmcWebview {
                     return `exercise-${message.exerciseId}-status`;
                 case "loginError":
                     return "login-error";
+                case "setBooleanSetting":
+                    return `setting-${message.setting}`;
                 case "setCourseDisabledStatus":
                     return `course-${message.courseId}-disabled-notification`;
-                case "setInsiderStatus":
-                    return "insiderStatus";
+                case "setLogLevel":
+                    return "log-level";
                 case "setNewExercises":
                     return `course-${message.courseId}-new-exercises`;
                 case "setNextCourseDeadline":
                     return `course-${message.courseId}-next-deadline`;
+                case "setTmcDataFolder":
+                    return "tmc-data-folder";
                 case "setUpdateables":
                     return `course-${message.courseId}-updates`;
                 // Default: "return" typescript error if some case is not handled.
