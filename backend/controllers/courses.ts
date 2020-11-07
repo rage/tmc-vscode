@@ -10,7 +10,7 @@ const coursesRouter = Router();
 coursesRouter.get("/:id", (req, res: Response<CourseSettings>, next) => {
     const course = courses.find((c) => c.id.toString() === req.params.id);
     if (!course) {
-        next();
+        return next();
     }
 
     const organization = organizations.find((o) => o.id === course.id);
@@ -22,7 +22,11 @@ coursesRouter.get("/:id", (req, res: Response<CourseSettings>, next) => {
         : next();
 });
 
-coursesRouter.get("/:id/exercises", (req, res) => {
+coursesRouter.get("/:id/exercises", (req, res: Response<CourseExercise[]>, next) => {
+    if (!courses.some((x) => x.id.toString() === req.params.id)) {
+        return next();
+    }
+
     const data = exercises
         .filter((e) => e.course_id.toString() === req.params.id)
         .map<CourseExercise>((e) => ({

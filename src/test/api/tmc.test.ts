@@ -124,6 +124,27 @@ suite("TMC", function () {
         });
     });
 
+    suite("#getCourseData()", function () {
+        test("Causes AuthorizationError if not authenticated", async function () {
+            const result = await tmc.getCourseData(0);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
+        });
+
+        test("Returns course data when authenticated", async function () {
+            writeCliConfig();
+            const data = (await tmc.getCourseData(0)).unwrap();
+            expect(data.details.name).to.be.equal("mock-course");
+            expect(data.exercises.length).to.be.equal(1);
+            expect(data.settings.name).to.be.equal("mock-course");
+        });
+
+        test("Causes RuntimeError for nonexistent course", async function () {
+            writeCliConfig();
+            const result = await tmc.getCourseData(404);
+            expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+    });
+
     suite("#getCourseDetails()", function () {
         test("Causes AuthorizationError if not authenticated", async function () {
             const result = await tmc.getCourseDetails(0);
@@ -145,10 +166,22 @@ suite("TMC", function () {
     });
 
     // No backend implementation yet
-    suite.skip("#getCourseExercises()", function () {
+    suite("#getCourseExercises()", function () {
+        test("Causes AuthorizationError if not authenticated", async function () {
+            const result = await tmc.getCourseExercises(0);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
+        });
+
         test("Returns course exercises of the given course", async function () {
+            writeCliConfig();
             const exercises = (await tmc.getCourseExercises(0)).unwrap();
             expect(exercises.length).to.be.equal(1);
+        });
+
+        test("Causes RuntimeError for nonexistent course", async function () {
+            writeCliConfig();
+            const result = await tmc.getCourseExercises(404);
+            expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
