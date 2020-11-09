@@ -133,9 +133,9 @@ suite("TMC", function () {
         test("Returns course data when authenticated", async function () {
             writeCliConfig();
             const data = (await tmc.getCourseData(0)).unwrap();
-            expect(data.details.name).to.be.equal("mock-course");
-            expect(data.exercises.length).to.be.equal(1);
-            expect(data.settings.name).to.be.equal("mock-course");
+            expect(data.details.name).to.be.equal("python-course");
+            expect(data.exercises.length).to.be.equal(2);
+            expect(data.settings.name).to.be.equal("python-course");
         });
 
         test("Causes RuntimeError for nonexistent course", async function () {
@@ -155,7 +155,7 @@ suite("TMC", function () {
             writeCliConfig();
             const course = (await tmc.getCourseDetails(0)).unwrap().course;
             expect(course.id).to.be.equal(0);
-            expect(course.name).to.be.equal("mock-course");
+            expect(course.name).to.be.equal("python-course");
         });
 
         test("Causes RuntimeError for nonexistent course", async function () {
@@ -165,7 +165,6 @@ suite("TMC", function () {
         });
     });
 
-    // No backend implementation yet
     suite("#getCourseExercises()", function () {
         test("Causes AuthorizationError if not authenticated", async function () {
             const result = await tmc.getCourseExercises(0);
@@ -175,7 +174,7 @@ suite("TMC", function () {
         test("Returns course exercises of the given course", async function () {
             writeCliConfig();
             const exercises = (await tmc.getCourseExercises(0)).unwrap();
-            expect(exercises.length).to.be.equal(1);
+            expect(exercises.length).to.be.equal(2);
         });
 
         test("Causes RuntimeError for nonexistent course", async function () {
@@ -187,20 +186,20 @@ suite("TMC", function () {
 
     suite("#getCourses()", function () {
         test("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.getCourses("mock");
+            const result = await tmc.getCourses("test");
             expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
         test("Returns courses when authenticated", async function () {
             writeCliConfig();
-            const course = (await tmc.getCourses("mock")).unwrap();
+            const course = (await tmc.getCourses("test")).unwrap();
             expect(course.length).to.be.equal(1);
-            expect(course.some((x) => x.name === "mock-course")).to.be.true;
+            expect(course.some((x) => x.name === "python-course")).to.be.true;
         });
 
         test("Causes RuntimeError for nonexistent organization", async function () {
             writeCliConfig();
-            const result = await tmc.getCourses("null");
+            const result = await tmc.getCourses("404");
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
@@ -214,7 +213,7 @@ suite("TMC", function () {
         test("Returns course settings when authenticated", async function () {
             writeCliConfig();
             const course = (await tmc.getCourseSettings(0)).unwrap();
-            expect(course.name).to.be.equal("mock-course");
+            expect(course.name).to.be.equal("python-course");
         });
 
         test("Causes RuntimeError for nonexistent course", async function () {
@@ -224,10 +223,29 @@ suite("TMC", function () {
         });
     });
 
+    suite("#getExerciseDetails()", function () {
+        test("Causes AuthorizationError if not authenticated", async function () {
+            const result = await tmc.getExerciseDetails(1);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
+        });
+
+        test("Returns exercise details when authenticated", async function () {
+            writeCliConfig();
+            const exercise = (await tmc.getExerciseDetails(1)).unwrap();
+            expect(exercise.exercise_name).to.be.equal("part01-01_passing_exercise");
+        });
+
+        test("Causes RuntimeError for nonexistent exercise", async function () {
+            writeCliConfig();
+            const result = await tmc.getExerciseDetails(404);
+            expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+    });
+
     suite("#getOrganizations()", function () {
         test("Returns organizations", async function () {
             const result = await tmc.getOrganizations();
-            expect(result.unwrap().length).to.be.equal(2, "Expected to get two organizations.");
+            expect(result.unwrap().length).to.be.equal(1, "Expected to get one organization.");
         });
     });
 
@@ -235,11 +253,11 @@ suite("TMC", function () {
         test("Returns given organization", async function () {
             const organization = (await tmc.getOrganization("test")).unwrap();
             expect(organization.slug).to.be.equal("test");
-            expect(organization.name).to.be.equal("Test organization");
+            expect(organization.name).to.be.equal("Test Organization");
         });
 
         test("Returns RuntimeError for nonexistent organization", async function () {
-            const result = await tmc.getOrganization("null");
+            const result = await tmc.getOrganization("404");
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
