@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.4] - 2020-11-10
+
+#### Changed
+- Bumped TMC-langs to version 0.6.5.
+- Updated all dependencies.
+
+
 ## [1.3.3] - 2020-11-06
 
 #### Changed
