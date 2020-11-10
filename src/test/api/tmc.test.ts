@@ -5,6 +5,7 @@ import * as path from "path";
 import * as TypeMoq from "typemoq";
 
 import TMC from "../../api/tmc";
+import { SubmissionFeedback } from "../../api/types";
 import { CLIENT_NAME } from "../../config/constants";
 import Resources from "../../config/resources";
 import { AuthenticationError, AuthorizationError, RuntimeError } from "../../errors";
@@ -16,6 +17,9 @@ suite("TMC", function () {
     const CLI_PATH = path.join(__dirname, "..", "backend", "cli");
     const CLI_FILE = path.join(CLI_PATH, getRustExecutable(getPlatform()));
     const COURSE_PATH = path.join(__dirname, "..", "backend", "resources", "test-python-course");
+    const PASSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-01_passing_exercise");
+    const MISSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-404_missing_exercise");
+    const FEEDBACK_URL = "http://localhost:4001/feedback";
 
     function removeCliConfig(): void {
         const config = path.join(CLI_PATH, `tmc-${CLIENT_NAME}`);
@@ -96,30 +100,26 @@ suite("TMC", function () {
 
     suite("#clean()", function () {
         test("Clears exercise", async function () {
-            const exercise = path.join(COURSE_PATH, "part01-01_passing_exercise");
-            const result = (await tmc.clean(exercise)).unwrap();
+            const result = (await tmc.clean(PASSING_EXERCISE_PATH)).unwrap();
             expect(result).to.be.undefined;
         });
 
         test("Causes RuntimeError for nonexistent exercise", async function () {
-            const exercise = path.join(COURSE_PATH, "part01-404_missing_exercise");
-            const result = await tmc.clean(exercise);
+            const result = await tmc.clean(MISSING_EXERCISE_PATH);
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
     suite("#runTests()", function () {
         test("Returns test results", async function () {
-            const exercise = path.join(COURSE_PATH, "part01-01_passing_exercise");
-            const result = (await tmc.runTests(exercise)[0]).unwrap();
+            const result = (await tmc.runTests(PASSING_EXERCISE_PATH)[0]).unwrap();
             expect(result.status).to.be.equal("PASSED");
         }).timeout(20000);
 
         test("Can be interrupted");
 
         test("Causes RuntimeError for nonexistent exercise", async function () {
-            const exercise = path.join(COURSE_PATH, "part01-404_missing_exercise");
-            const result = await tmc.runTests(exercise)[0];
+            const result = await tmc.runTests(MISSING_EXERCISE_PATH)[0];
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
@@ -242,6 +242,25 @@ suite("TMC", function () {
         });
     });
 
+    suite("#getOldSubmissions()", function () {
+        test("Causes AuthorizationError if not authenticated", async function () {
+            const result = await tmc.getOldSubmissions(1);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
+        });
+
+        test("Returns old submissions when authenticated", async function () {
+            writeCliConfig();
+            const submissions = (await tmc.getOldSubmissions(1)).unwrap();
+            expect(submissions.length).to.be.equal(1);
+        });
+
+        test("Causes RuntimeError for nonexistent exercise", async function () {
+            writeCliConfig();
+            const result = await tmc.getOldSubmissions(404);
+            expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+    });
+
     suite("#getOrganizations()", function () {
         test("Returns organizations", async function () {
             const result = await tmc.getOrganizations();
@@ -259,6 +278,79 @@ suite("TMC", function () {
         test("Returns RuntimeError for nonexistent organization", async function () {
             const result = await tmc.getOrganization("404");
             expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+    });
+
+    suite("#submitExercise()", function () {
+        // Current Langs doesn't actually check this
+        test.skip("Causes AuthorizationError if not authenticated", async function () {
+            const result = await tmc.submitExercise(1, PASSING_EXERCISE_PATH);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
+        });
+
+        test("Makes submission when authenticated", async function () {
+            writeCliConfig();
+            const submission = (await tmc.submitExercise(1, PASSING_EXERCISE_PATH)).unwrap();
+            expect(submission.show_submission_url).to.include("localhost");
+        });
+
+        test("Causes RuntimeError for nonexistent exercise", async function () {
+            writeCliConfig();
+            const result = await tmc.submitExercise(404, MISSING_EXERCISE_PATH);
+            expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+    });
+
+    suite("#submitExerciseAndWaitForResults()", function () {
+        test("Causes AuthorizationError if not authenticated", async function () {
+            const result = await tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
+        });
+
+        test("Makes a submission and returns results when authenticated", async function () {
+            this.timeout(5000);
+            writeCliConfig();
+            const results = (
+                await tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH)
+            ).unwrap();
+            expect(results.status).to.be.equal("ok");
+        });
+
+        test("Causes RuntimeError for nonexistent exercise", async function () {
+            writeCliConfig();
+            const result = await tmc.submitExerciseAndWaitForResults(1, MISSING_EXERCISE_PATH);
+            expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+    });
+
+    suite("#submitExerciseToPaste()", function () {
+        // Current Langs doesn't actually check this
+        test.skip("Causes AuthorizationError if not authenticated", async function () {
+            const result = await tmc.submitExerciseToPaste(1, PASSING_EXERCISE_PATH);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
+        });
+
+        test("Makes a paste submission when authenticated", async function () {
+            writeCliConfig();
+            const pasteUrl = (await tmc.submitExerciseToPaste(1, PASSING_EXERCISE_PATH)).unwrap();
+            expect(pasteUrl).to.include("localhost");
+        });
+
+        test("Causes RuntimeError for nonexistent exercise", async function () {
+            writeCliConfig();
+            const result = await tmc.submitExerciseToPaste(404, MISSING_EXERCISE_PATH);
+            expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+    });
+
+    suite("$submitSubmissionFeedback()", function () {
+        const feedback: SubmissionFeedback = {
+            status: [{ question_id: 0, answer: "42" }],
+        };
+
+        test("Submits feedback when authenticated", async function () {
+            const result = await tmc.submitSubmissionFeedback(FEEDBACK_URL, feedback);
+            expect(result.ok).to.be.true;
         });
     });
 

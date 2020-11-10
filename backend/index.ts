@@ -7,11 +7,21 @@ import {
     CourseExercise,
     CourseSettings,
     ExerciseDetails,
+    OldSubmission,
     Organization,
+    SubmissionFeedbackResponse,
+    SubmissionResponse,
+    SubmissionStatusReport,
 } from "../src/api/types";
 
 import { applicationRouter, langsRounter, oauthRouter } from "./controllers";
-import { createCourse, createExercise, createOrganization } from "./utils";
+import {
+    createCourse,
+    createExercise,
+    createFinishedSubmission,
+    createOldSubmission,
+    createOrganization,
+} from "./utils";
 
 const PORT = 4001;
 
@@ -34,12 +44,23 @@ const passingExercise = createExercise({
     name: "part01-01_passing_exercise",
     points: [{ id: 0, name: "1.passing_exercise" }],
 });
+
+const passingExerciseSubmission = createOldSubmission({
+    courseId: pythonCourse.id,
+    exerciseName: passingExercise.name,
+    id: 0,
+    passed: true,
+    userId: 0,
+});
+
 const failingExercise = createExercise({
     checksum: "bcd234",
     id: 2,
     name: "part01-02_failing_exercise",
     points: [{ id: 1, name: "2.failing_exercise" }],
 });
+
+const submissionTimestamps = new Map<string, number>();
 
 const app = express();
 app.use((req, res, next) => {
@@ -80,11 +101,77 @@ app.get(`/api/v8/core/courses/${pythonCourse.id}`, (req, res: Response<CourseDet
 );
 
 // getExerciseDetails(1)
-app.get(`/api/v8/core/exercises/${passingExercise.id}`, (req, res: Response<ExerciseDetails>) => {
-    const r = { ...passingExercise, course_id: pythonCourse.id, course_name: pythonCourse.name };
-    console.log(r);
-    return res.json(r);
-});
+app.get(`/api/v8/core/exercises/${passingExercise.id}`, (req, res: Response<ExerciseDetails>) =>
+    res.json({ ...passingExercise, course_id: pythonCourse.id, course_name: pythonCourse.name }),
+);
+
+// submitExercise(1)
+// submitExerciseToPaste(1, ...)
+app.post(
+    `/api/v8/core/exercises/${passingExercise.id}/submissions`,
+    (req, res: Response<SubmissionResponse>) => {
+        const nextId = submissionTimestamps.size + 1000;
+        submissionTimestamps.set(nextId.toString(), Date.now());
+
+        return res.json({
+            paste_url: `http://localhost:${PORT}/paste/${nextId}`,
+            show_submission_url: `http://localhost:${PORT}/submissions/${nextId}`,
+            submission_url: `http://localhost:${PORT}/api/v8/core/exercises/${passingExercise.id}/submissions/${nextId}`,
+        });
+    },
+);
+
+app.get(
+    `/api/v8/core/exercises/${passingExercise.id}/submissions/:id`,
+    (req, res: Response<SubmissionStatusReport>, next) => {
+        const id = req.params.id;
+        const submissionCreated = submissionTimestamps.get(id);
+        if (!submissionCreated) {
+            return next();
+        }
+
+        const timePassed = Date.now() - submissionCreated;
+        if (timePassed < 300) {
+            console.log(`Submission ${id} created at ${timePassed}s`);
+            return res.json({
+                status: "processing",
+                sandbox_status: "created",
+            });
+        } else if (timePassed < 600) {
+            console.log(`Submission ${id} sent to sandbox at ${timePassed}s`);
+            return res.json({
+                status: "processing",
+                sandbox_status: "sending_to_sandbox",
+            });
+        } else if (timePassed < 1000) {
+            console.log(`Submission ${id} is processing at ${timePassed}s`);
+            return res.json({
+                status: "processing",
+                sandbox_status: "processing_on_sandbox",
+            });
+        }
+
+        const submission = createFinishedSubmission({
+            courseName: pythonCourse.name,
+            exerciseName: passingExercise.name,
+            id: parseInt(id),
+            testCases: [
+                {
+                    name: "test.test_parsing_exercise.PassingExercise.test_passing",
+                    successful: true,
+                },
+            ],
+        });
+
+        return res.json(submission);
+    },
+);
+
+// getOldSubmissions(1)
+app.get(
+    `/api/v8/exercises/${passingExercise.id}/users/current/submissions`,
+    (req, res: Response<OldSubmission[]>) => res.json([passingExerciseSubmission]),
+);
 
 // getExerciseDetails(2)
 app.get(`/api/v8/core/exercises/${failingExercise.id}`, (req, res: Response<ExerciseDetails>) =>
@@ -94,6 +181,11 @@ app.get(`/api/v8/core/exercises/${failingExercise.id}`, (req, res: Response<Exer
 // getCourses("test")
 app.get(`/api/v8/core/org/${testOrganization.slug}/courses`, (req, res: Response<Course[]>) =>
     res.json([pythonCourse]),
+);
+
+// submitSubmissionFeedback(...)
+app.post("/feedback", (req, res: Response<SubmissionFeedbackResponse>) =>
+    res.json({ api_version: 8, status: "ok" }),
 );
 
 app.use((req, res) => {
