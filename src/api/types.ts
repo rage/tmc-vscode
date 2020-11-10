@@ -1,20 +1,4 @@
 /**
- * TMC Api Response types
- */
-export type TMCApiResponse =
-    | Course[]
-    | CourseDetails
-    | CourseExercise[]
-    | CourseSettings
-    | Organization[]
-    | Organization
-    | ExerciseDetails
-    | SubmissionResponse
-    | SubmissionFeedbackResponse
-    | SubmissionStatusReport
-    | OldSubmission[];
-
-/**
  * GET /api/v8/core/org/{organization_slug}/courses
  */
 export type Course = {
