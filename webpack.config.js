@@ -17,17 +17,12 @@ const config = () => {
     const apiConfig =
         process.env.BACKEND && process.env.BACKEND === "local" ? localApi : productionApi;
 
-    // Workaround to an arbitrary type error for the time being.
-    // Complains that string[] doesn't apply to type [string, ...string[]]
-    // Since typescript 4.0.3 and webpack 5.1.3
-    const [testHead, ...testTail] = glob.sync("./src/test/**/*.test.ts");
-
     /**@type {import('webpack').Configuration}*/
     const commonConfig = {
         target: "node",
         entry: {
             extension: "./src/extension.ts",
-            "testBundle.test": [testHead, ...testTail],
+            "testBundle.test": glob.sync("./src/test/**/*.test.ts"),
         },
         output: {
             path: path.resolve(__dirname, "dist"),
@@ -125,10 +120,6 @@ const config = () => {
         mode: "production",
         optimization: {
             minimizer: [
-                // eslint-disable-next-line max-len
-                // Incorrect type error: https://github.com/DefinitelyTyped/DefinitelyTyped/issues/48806#issuecomment-712654998
-                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-ignore
                 new TerserPlugin({
                     terserOptions: {
                         keep_fnames: /createElement/,
