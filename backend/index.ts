@@ -1,5 +1,6 @@
 import bodyParser from "body-parser";
 import express, { Response } from "express";
+import path from "path";
 
 import {
     Course,
@@ -21,6 +22,7 @@ import {
     createFinishedSubmission,
     createOldSubmission,
     createOrganization,
+    respondWithFile,
 } from "./utils";
 
 const PORT = 4001;
@@ -45,13 +47,15 @@ const passingExercise = createExercise({
     points: [{ id: 0, name: "1.passing_exercise" }],
 });
 
-const passingExerciseSubmission = createOldSubmission({
-    courseId: pythonCourse.id,
-    exerciseName: passingExercise.name,
-    id: 0,
-    passed: true,
-    userId: 0,
-});
+const submissions = [
+    createOldSubmission({
+        courseId: pythonCourse.id,
+        exerciseName: passingExercise.name,
+        id: 0,
+        passed: true,
+        userId: 0,
+    }),
+];
 
 const failingExercise = createExercise({
     checksum: "bcd234",
@@ -60,7 +64,14 @@ const failingExercise = createExercise({
     points: [{ id: 1, name: "2.failing_exercise" }],
 });
 
-const submissionTimestamps = new Map<string, number>();
+const onlyActualArchiveOnServer = path.resolve(
+    __dirname,
+    "resources",
+    "test-python-course",
+    "part01-01_passing_exercise.zip",
+);
+
+const submissionTimestamps = new Map<string, number>(submissions.map((x) => [x.id.toString(), 0]));
 
 const app = express();
 app.use((req, res, next) => {
@@ -105,6 +116,11 @@ app.get(`/api/v8/core/exercises/${passingExercise.id}`, (req, res: Response<Exer
     res.json({ ...passingExercise, course_id: pythonCourse.id, course_name: pythonCourse.name }),
 );
 
+// downloadExercise(1)
+app.get(`/api/v8/core/exercises/${passingExercise.id}/download`, (req, res) => {
+    return respondWithFile(res, onlyActualArchiveOnServer);
+});
+
 // submitExercise(1)
 // submitExerciseToPaste(1, ...)
 app.post(
@@ -112,6 +128,15 @@ app.post(
     (req, res: Response<SubmissionResponse>) => {
         const nextId = submissionTimestamps.size + 1000;
         submissionTimestamps.set(nextId.toString(), Date.now());
+        submissions.push(
+            createOldSubmission({
+                courseId: pythonCourse.id,
+                exerciseName: passingExercise.name,
+                id: passingExercise.id,
+                passed: true,
+                userId: 0,
+            }),
+        );
 
         return res.json({
             paste_url: `http://localhost:${PORT}/paste/${nextId}`,
@@ -170,7 +195,7 @@ app.get(
 // getOldSubmissions(1)
 app.get(
     `/api/v8/exercises/${passingExercise.id}/users/current/submissions`,
-    (req, res: Response<OldSubmission[]>) => res.json([passingExerciseSubmission]),
+    (req, res: Response<OldSubmission[]>) => res.json(submissions),
 );
 
 // getExerciseDetails(2)
@@ -182,6 +207,15 @@ app.get(`/api/v8/core/exercises/${failingExercise.id}`, (req, res: Response<Exer
 app.get(`/api/v8/core/org/${testOrganization.slug}/courses`, (req, res: Response<Course[]>) =>
     res.json([pythonCourse]),
 );
+
+// If submission exists, return arbitrary archive
+app.get("/api/v8/core/submissions/:id/download", (req, res, next) => {
+    if (submissionTimestamps.has(req.params.id)) {
+        return respondWithFile(res, onlyActualArchiveOnServer);
+    }
+
+    return next();
+});
 
 // submitSubmissionFeedback(...)
 app.post("/feedback", (req, res: Response<SubmissionFeedbackResponse>) =>

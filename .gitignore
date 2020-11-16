@@ -7,6 +7,7 @@ vscode.proposed.d.ts
 
 # Generated or external backend files
 __pycache__
+backend/**/*.zip
 backend/resources/**/tmc/
 backend/cli/
 .tmc_test_results.json

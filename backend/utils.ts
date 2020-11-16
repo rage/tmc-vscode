@@ -1,3 +1,5 @@
+import { Response } from "express";
+
 import {
     Course,
     CourseDetails,
@@ -183,10 +185,20 @@ const createOldSubmission = (params: CreateOldSubmissionParams): OldSubmission =
     user_id: 0,
 });
 
+const respondWithFile = (res: Response, file: string): void =>
+    res.sendFile(file, (error) => {
+        if (!error) {
+            console.log("Sent", file);
+        } else {
+            console.error("Failed to send requested file:", JSON.stringify(error));
+        }
+    });
+
 export {
     createCourse,
     createExercise,
     createFinishedSubmission,
     createOldSubmission,
     createOrganization,
+    respondWithFile,
 };
