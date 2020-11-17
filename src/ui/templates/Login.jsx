@@ -13,7 +13,7 @@ const component = () => {
         <div class="container fluid">
             <div class="row">
                 <div class="col-md-6">
-                    <h1>Login</h1>
+                    <h1>Login to TMC</h1>
                     <div
                         class="error-notification"
                         data-se="error-notification"
