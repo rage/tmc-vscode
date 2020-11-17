@@ -781,7 +781,7 @@ export default class TMC {
                         return new Err(
                             new ObsoleteClientError(
                                 message +
-                                    "\nYoure TMC Extension is out of date, please update it." +
+                                    "\nYour TMC Extension is out of date, please update it." +
                                     "\nhttps://code.visualstudio.com/docs/editor/extension-gallery",
                                 traceString,
                             ),
