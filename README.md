@@ -14,7 +14,6 @@ Students of its various organizations can download, complete and return course e
 * Visual Studio Code version 1.40.xx or above
 * [TestMyCode](https://tmc.mooc.fi/) account
 * Course-specific system environment   
-  * For _Java courses_, use same version of JDK and JRE
 
 ## Getting started
 

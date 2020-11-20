@@ -16,7 +16,7 @@ import Storage from "../config/storage";
 import { ExerciseStatus, LocalExerciseData } from "../config/types";
 import { ExerciseExistsError } from "../errors";
 import * as UITypes from "../ui/types";
-import { isCorrectWorkspaceOpen, Logger, sleep } from "../utils";
+import { isCorrectWorkspaceOpen, Logger } from "../utils";
 import { showNotification } from "../window";
 
 /**
@@ -301,15 +301,6 @@ export default class WorkspaceManager {
                 const openPath = this._getExercisePath(data);
                 const deleted = delSync(openPath, { force: true });
                 Logger.debug("Delete exercise deleted", ...deleted);
-                // Remove for loop when rid of Java
-                for (let i = 0; i <= 15; i++) {
-                    await sleep(100);
-                    if (!fs.existsSync(openPath)) {
-                        break;
-                    }
-                    Logger.debug("Remove this DelSync for loop when rid of Java  " + i);
-                    delSync(openPath, { force: true });
-                }
                 this._pathToId.delete(openPath);
                 this._idToData.delete(id);
             }

@@ -15,7 +15,6 @@ git clone https://github.com/rage/tmc-vscode.git
 - [Git](https://git-scm.com/)
 - [NodeJS / npm](https://nodejs.org/)
 - [VSCode](https://code.visualstudio.com/)
-- [Java](https://www.java.com/)
 - [vsce](https://www.npmjs.com/package/vsce)
 
 ### Dependencies
