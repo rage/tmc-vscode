@@ -18,7 +18,7 @@ import { Logger } from "../utils/logger";
 import { showProgressNotification } from "../window";
 
 /**
- * Checks if Java is present and performs resource initialization on extension activation
+ * Performs resource initialization on extension activation
  * @param extensionContext Extension context
  */
 export async function resourceInitialization(
@@ -34,16 +34,6 @@ export async function resourceInitialization(
     const tmcDataPath =
         storage.getExtensionSettings()?.dataPath ||
         path.join(extensionContext.globalStoragePath, "tmcdata");
-
-    // Remove in 2.0.0 from here
-    const javaDownloadPath = path.join(tmcDataPath, "java");
-    const javaDownloadPathTemp = path.join(tmcDataPath, "javaTemp");
-    delSync(path.join(javaDownloadPathTemp), { force: true });
-
-    if (fs.existsSync(javaDownloadPath)) {
-        delSync(javaDownloadPath.split(path.sep).join("/"), { force: true });
-    }
-    // Remove in 2.0.0 to here
 
     const tmcWorkspacePathRelative = "TMC workspace";
     const tmcExercisesFolderPathRelative = path.join("TMC workspace", "Exercises");
@@ -73,9 +63,6 @@ export async function resourceInitialization(
         Logger.log(`Wrote tmc root file at ${tmcExercisesFolderPath}`);
     }
 
-    // Remove in 2.0.0
-    delSync(path.join(tmcDataPath, "*.jar"), { force: true });
-
     // Verify that all course .code-workspaces are in-place on startup.
     const userData = storage.getUserData();
     userData?.courses.forEach((course) => {
@@ -95,7 +82,7 @@ export async function resourceInitialization(
     Logger.log("Platform " + process.platform + " Arch " + process.arch);
     const executable = getRustExecutable(platform);
     Logger.log("Executable " + executable);
-    const cliPath = path.join(tmcDataPath, "cli", executable);
+    const cliPath = path.join(extensionContext.globalStoragePath, "cli", executable);
     const cliUrl = TMC_LANGS_RUST_DL_URL + executable;
     if (!fs.existsSync(cliPath)) {
         delSync(path.join(tmcDataPath, "cli"), { force: true });

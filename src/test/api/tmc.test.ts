@@ -14,12 +14,19 @@ import { getPlatform, getRustExecutable } from "../../utils/env";
 suite("TMC", function () {
     // Use CLI from backend folder to run tests. The location is relative to the dist-folder
     // where webpack builds the test bundle.
-    const CLI_PATH = path.join(__dirname, "..", "backend", "cli");
+    const BACKEND_FOLDER = path.join(__dirname, "..", "backend");
+    const CLI_PATH = path.join(BACKEND_FOLDER, "cli");
     const CLI_FILE = path.join(CLI_PATH, getRustExecutable(getPlatform()));
-    const COURSE_PATH = path.join(__dirname, "..", "backend", "resources", "test-python-course");
+    const ARTIFACT_PATH = path.join(BACKEND_FOLDER, "testArtifacts");
+
+    const FEEDBACK_URL = "http://localhost:4001/feedback";
+    const COURSE_PATH = path.join(BACKEND_FOLDER, "resources", "test-python-course");
     const PASSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-01_passing_exercise");
     const MISSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-404_missing_exercise");
-    const FEEDBACK_URL = "http://localhost:4001/feedback";
+
+    function removeArtifacts(): void {
+        delSync(ARTIFACT_PATH, { force: true });
+    }
 
     function removeCliConfig(): void {
         const config = path.join(CLI_PATH, `tmc-${CLIENT_NAME}`);
@@ -121,6 +128,72 @@ suite("TMC", function () {
         test("Causes RuntimeError for nonexistent exercise", async function () {
             const result = await tmc.runTests(MISSING_EXERCISE_PATH)[0];
             expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+    });
+
+    suite("#downloadExercise()", function () {
+        this.timeout(5000);
+        const downloadPath = path.join(ARTIFACT_PATH, "downloadsExercise");
+
+        test("Downloads exercise", async function () {
+            const result = await tmc.downloadExercise(1, downloadPath);
+            expect(result.ok).to.be.true;
+        });
+
+        teardown(function () {
+            removeArtifacts();
+        });
+    });
+
+    suite("#downloadOldSubmission()", function () {
+        this.timeout(5000);
+        const downloadPath = path.join(ARTIFACT_PATH, "downloadsOldSubmission");
+
+        setup(async function () {
+            await tmc.downloadExercise(1, downloadPath);
+        });
+
+        test("Causes AuthorizationError if not authenticated", async function () {
+            const result = await tmc.downloadOldSubmission(1, downloadPath, 404, false);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
+        });
+
+        test("Downloads old submission", async function () {
+            writeCliConfig();
+            const submissionId = (await tmc.getOldSubmissions(1)).unwrap()[0].id;
+            const result = await tmc.downloadOldSubmission(1, downloadPath, submissionId, false);
+            expect(result.ok).to.be.true;
+        });
+
+        test("Doesn't save old state if not expected", async function () {
+            writeCliConfig();
+            const submissions = (await tmc.getOldSubmissions(1)).unwrap();
+            await tmc.downloadOldSubmission(1, downloadPath, submissions[0].id, false);
+            const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
+            expect(newSubmissions.length).to.be.equal(submissions.length);
+        });
+
+        test("Saves old state if expected", async function () {
+            writeCliConfig();
+            const submissions = (await tmc.getOldSubmissions(1)).unwrap();
+            await tmc.downloadOldSubmission(1, downloadPath, submissions[0].id, true);
+            const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
+            expect(newSubmissions.length).to.be.equal(submissions.length + 1);
+        });
+
+        test("Causes RuntimeError for nonexistent exercise", async function () {
+            writeCliConfig();
+            const result = await tmc.downloadOldSubmission(
+                1,
+                path.resolve(downloadPath, "..", "404"),
+                1,
+                false,
+            );
+            expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+
+        teardown(function () {
+            removeArtifacts();
         });
     });
 
@@ -251,7 +324,7 @@ suite("TMC", function () {
         test("Returns old submissions when authenticated", async function () {
             writeCliConfig();
             const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-            expect(submissions.length).to.be.equal(1);
+            expect(submissions.length).to.be.greaterThan(0);
         });
 
         test("Causes RuntimeError for nonexistent exercise", async function () {
@@ -278,6 +351,42 @@ suite("TMC", function () {
         test("Returns RuntimeError for nonexistent organization", async function () {
             const result = await tmc.getOrganization("404");
             expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+    });
+
+    suite("#resetExercise()", function () {
+        this.timeout(5000);
+        const downloadPath = path.join(ARTIFACT_PATH, "downloadsOldSubmission");
+
+        setup(async function () {
+            await tmc.downloadExercise(1, downloadPath);
+        });
+
+        test("Downloads old submission", async function () {
+            writeCliConfig();
+            const submissionId = (await tmc.getOldSubmissions(1)).unwrap()[0].id;
+            const result = await tmc.downloadOldSubmission(1, downloadPath, submissionId, false);
+            expect(result.ok).to.be.true;
+        });
+
+        test("Doesn't save old state if not expected", async function () {
+            writeCliConfig();
+            const submissions = (await tmc.getOldSubmissions(1)).unwrap();
+            await tmc.downloadOldSubmission(1, downloadPath, submissions[0].id, false);
+            const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
+            expect(newSubmissions.length).to.be.equal(submissions.length);
+        });
+
+        test("Saves old state if expected", async function () {
+            writeCliConfig();
+            const submissions = (await tmc.getOldSubmissions(1)).unwrap();
+            await tmc.downloadOldSubmission(1, downloadPath, submissions[0].id, true);
+            const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
+            expect(newSubmissions.length).to.be.equal(submissions.length + 1);
+        });
+
+        teardown(function () {
+            removeArtifacts();
         });
     });
 
@@ -315,6 +424,8 @@ suite("TMC", function () {
             ).unwrap();
             expect(results.status).to.be.equal("ok");
         });
+
+        test("Returns submission link during the submission process");
 
         test("Causes RuntimeError for nonexistent exercise", async function () {
             writeCliConfig();

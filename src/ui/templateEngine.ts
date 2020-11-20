@@ -46,10 +46,6 @@ export default class TemplateEngine {
                 logs: { stdout: number[]; stderr: number[] },
                 tmcLogs?: { stdout: string; stderr: string },
             ) => {
-                // Java langs 'run tests' returns: PASSED, TESTS_FAILED; COMPILE_FAILED and own logs
-                // Python langs 'run tests' returns: PASSED, TESTS_FAILED, but not COMPILE_FAILED
-                // 'tmcLogs' are the tmc-langs.jar generated stdout/stderr
-                // 'logs' are the logs returned within TmcLangsTestResults type (if any)
                 if (tmcLogs?.stdout && status !== "COMPILE_FAILED") {
                     return `<h1>0 TESTS RUN, SEE LOGS FOR INFO</h1><h2>stdout:</h2><pre>${tmcLogs.stdout}</pre><h2>stderr:</h2><pre>${tmcLogs.stderr}</pre>`;
                 }
