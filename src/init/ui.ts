@@ -280,7 +280,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             return;
         }
 
-        const old = resources.getDataPath();
+        const old = resources.dataPath;
         const options: vscode.OpenDialogOptions = {
             canSelectFiles: false,
             canSelectFolders: true,
@@ -314,11 +314,11 @@ export function registerUiActions(actionContext: ActionContext): void {
                     "OK",
                     (): void => {},
                 ]);
-                resources.setDataPath(newPath);
+                resources.dataPath = newPath;
                 const platform = getPlatform();
                 const executable = getRustExecutable(platform);
                 const cliPath = path.join(newPath, "cli", executable);
-                resources.setCliPath(cliPath);
+                resources.cliPath = cliPath;
                 await settings.updateSetting({ setting: "dataPath", value: newPath });
             } else {
                 Logger.error(res.val);
@@ -326,7 +326,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             ui.webview.postMessage({
                 command: "setTmcDataFolder",
-                diskSize: formatSizeInBytes(await du(resources.getDataPath())),
+                diskSize: formatSizeInBytes(await du(resources.dataPath)),
                 path: newPath,
             });
         }

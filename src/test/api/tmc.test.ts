@@ -50,7 +50,7 @@ suite("TMC", function () {
     setup(function () {
         removeCliConfig();
         const resources = TypeMoq.Mock.ofType<Resources>();
-        resources.setup((x) => x.getCliPath()).returns(() => CLI_FILE);
+        resources.setup((x) => x.cliPath).returns(() => CLI_FILE);
         resources.setup((x) => x.extensionVersion).returns(() => "test");
         tmc = new TMC(resources.object);
     });

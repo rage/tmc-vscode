@@ -131,7 +131,7 @@ export function registerCommands(
         vscode.commands.registerCommand("tmc.openTMCExercisesFolder", async () => {
             vscode.commands.executeCommand(
                 "revealFileInOS",
-                vscode.Uri.file(actionContext.resources.getDataPath()),
+                vscode.Uri.file(actionContext.resources.dataPath),
             );
         }),
 

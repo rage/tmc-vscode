@@ -818,7 +818,7 @@ export default class TMC {
         let theResult: LangsOutputData<unknown> | undefined;
         let stdoutBuffer = "";
 
-        const executable = this._resources.getCliPath();
+        const executable = this._resources.cliPath;
         const executableArgs = core ? CORE_ARGS.concat(args) : args;
 
         const obfuscatedArgs = args.map((x, i) => (obfuscate?.includes(i) ? "***" : x));

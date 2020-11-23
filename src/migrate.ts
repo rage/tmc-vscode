@@ -16,22 +16,18 @@ export async function newVSCodeWorkspaceMigration(actionContext: ActionContext):
     const { workspaceManager, resources } = actionContext;
     const allExerciseData = workspaceManager.getAllExercises();
     const oldTMCWorkspace = path.join(
-        resources.getWorkspaceFolderPath(),
+        resources.workspaceFolderPath,
         "TMC Exercises.code-workspace",
     );
-    const closedPath = path.join(resources.getDataPath(), "closed-exercises");
+    const closedPath = path.join(resources.dataPath, "closed-exercises");
     if (fs.existsSync(oldTMCWorkspace)) {
         fs.removeSync(oldTMCWorkspace);
     }
     if (fs.existsSync(closedPath) && fs.readdirSync(closedPath).length !== 0) {
         allExerciseData?.forEach(async (ex) => {
-            const closedPath = path.join(
-                resources.getDataPath(),
-                "closed-exercises",
-                ex.id.toString(),
-            );
+            const closedPath = path.join(resources.dataPath, "closed-exercises", ex.id.toString());
             const openPath = path.join(
-                resources.getExercisesFolderPath(),
+                resources.exercisesFolderPath,
                 ex.organization,
                 ex.course,
                 ex.name,

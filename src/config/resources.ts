@@ -1,49 +1,49 @@
 import * as path from "path";
 
 export default class Resources {
-    public readonly cssFolder: string;
-    public readonly htmlFolder: string;
-    public readonly mediaFolder: string;
-    public readonly extensionVersion: string;
     private readonly _tmcWorkspaceFolderPathRelative: string;
     private readonly _tmcExercisesFolderPathRelative: string;
     private _tmcDataFolder: string;
     private _cliPath: string;
 
     constructor(
-        cssFolder: string,
-        extensionVersion: string,
-        htmlFolder: string,
-        mediaFolder: string,
+        readonly cssFolder: string,
+        readonly extensionVersion: string,
+        readonly htmlFolder: string,
+        readonly mediaFolder: string,
         tmcDataFolder: string,
         tmcWorkspaceFolderPathRelative: string,
         tmcExercisesFolderPathRelative: string,
         cliPath: string,
     ) {
-        this.cssFolder = cssFolder;
-        this.extensionVersion = extensionVersion;
-        this.htmlFolder = htmlFolder;
-        this.mediaFolder = mediaFolder;
         this._tmcDataFolder = tmcDataFolder;
         this._tmcWorkspaceFolderPathRelative = tmcWorkspaceFolderPathRelative;
         this._tmcExercisesFolderPathRelative = tmcExercisesFolderPathRelative;
         this._cliPath = cliPath;
     }
 
-    public setDataPath(dataPath: string): void {
-        this._tmcDataFolder = dataPath;
+    get dataPath(): string {
+        return this._tmcDataFolder;
     }
 
-    public getCliPath(): string {
+    set dataPath(newPath: string) {
+        this._tmcDataFolder = newPath;
+    }
+
+    get cliPath(): string {
         return this._cliPath;
     }
 
-    public setCliPath(cliPath: string): void {
-        this._cliPath = cliPath;
+    set cliPath(newPath: string) {
+        this._cliPath = newPath;
     }
 
-    public getWorkspaceFolderPath(): string {
+    get workspaceFolderPath(): string {
         return path.join(this._tmcDataFolder, this._tmcWorkspaceFolderPathRelative);
+    }
+
+    get exercisesFolderPath(): string {
+        return path.join(this._tmcDataFolder, this._tmcExercisesFolderPathRelative);
     }
 
     public getWorkspaceFilePath(courseName: string): string {
@@ -52,13 +52,5 @@ export default class Resources {
             this._tmcWorkspaceFolderPathRelative,
             courseName + ".code-workspace",
         );
-    }
-
-    public getExercisesFolderPath(): string {
-        return path.join(this._tmcDataFolder, this._tmcExercisesFolderPathRelative);
-    }
-
-    public getDataPath(): string {
-        return this._tmcDataFolder;
     }
 }

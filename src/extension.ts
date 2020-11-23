@@ -62,7 +62,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             Logger.error(
                 "The above error may have been caused by an interfering antivirus program. " +
                     "Please add an exception for the following folder:",
-                path.resolve(resources.getCliPath(), ".."),
+                path.resolve(resources.cliPath, ".."),
             );
         }
         Logger.show();
