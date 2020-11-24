@@ -35,7 +35,7 @@ export async function wipe(
         // Remove logout event handler to not show login page.
         tmc.on("logout", () => {});
         await vscode.commands.executeCommand("tmc.logout");
-        fs.removeSync(path.join(resources.getDataPath()));
+        fs.removeSync(path.join(resources.dataPath));
         await userData.wipeDataFromStorage();
         deactivate();
         for (const sub of context.subscriptions) {

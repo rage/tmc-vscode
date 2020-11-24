@@ -23,10 +23,10 @@ import {
     ObsoleteClientError,
     RuntimeError,
 } from "../errors";
-import { sleep } from "../utils/";
 import { Logger } from "../utils/logger";
 import { showError, showWarning } from "../window";
 
+import { LangsError, LangsOutputData, LangsStatusUpdate, LangsWarning } from "./langsSchema";
 import {
     Course,
     CourseData,
@@ -42,54 +42,6 @@ import {
     SubmissionStatusReport,
     TestResults,
 } from "./types";
-
-// ---------------------------------------------------------------------------------------------- //
-
-// Output schema for TMC Langs 0.6.2
-// https://github.com/rage/tmc-langs-rust/blob/master/tmc-langs-cli/src/output.rs
-
-interface LangsOutputBase<T> {
-    data: T;
-    message: string | null;
-    "percent-done": number;
-}
-
-interface LangsStatusUpdate<T> extends LangsOutputBase<T> {
-    "output-kind": "status-update";
-    finished: boolean;
-    time: number | null;
-}
-
-interface LangsOutputData<T> extends LangsOutputBase<T> {
-    "output-kind": "output-data";
-    result:
-        | "logged-in"
-        | "logged-out"
-        | "not-logged-in"
-        | "error"
-        | "sent-data"
-        | "retrieved-data"
-        | "executed-command";
-    status: "crashed" | "finished";
-}
-
-interface LangsWarning {
-    "output-kind": "warnings";
-    warnings: string[];
-}
-
-interface LangsError {
-    kind:
-        | "generic"
-        | "forbidden"
-        | "not-logged-in"
-        | "connection-error"
-        | "obsolete-client"
-        | "invalid-token";
-    trace: string[];
-}
-
-// ---------------------------------------------------------------------------------------------- //
 
 interface LangsProcessArgs {
     args: string[];
@@ -818,7 +770,7 @@ export default class TMC {
         let theResult: LangsOutputData<unknown> | undefined;
         let stdoutBuffer = "";
 
-        const executable = this._resources.getCliPath();
+        const executable = this._resources.cliPath;
         const executableArgs = core ? CORE_ARGS.concat(args) : args;
 
         const obfuscatedArgs = args.map((x, i) => (obfuscate?.includes(i) ? "***" : x));
@@ -839,10 +791,9 @@ export default class TMC {
         stdin && cprocess.stdin.write(stdin + "\n");
 
         const processResult = new Promise<number | null>((resolve, reject) => {
-            // let resultCode: number | null = null;
-            // let stdoutEnded = false;
+            let resultCode: number | undefined;
+            let stdoutEnded = false;
 
-            // TODO: move to rust
             const timeout = setTimeout(() => {
                 kill(cprocess.pid);
                 reject("Process didn't seem to finish or was taking a really long time.");
@@ -855,19 +806,19 @@ export default class TMC {
             cprocess.stderr.on("data", (chunk) => {
                 onStderr?.(chunk.toString());
             });
-            // cprocess.stdout.on("end", () => {
-            //     stdoutEnded = true;
-            //     if (resultCode) {
-            //         clearTimeout(timeout);
-            //         resolve(resultCode);
-            //     }
-            // });
+            cprocess.stdout.on("end", () => {
+                stdoutEnded = true;
+                if (resultCode !== undefined) {
+                    clearTimeout(timeout);
+                    resolve(resultCode);
+                }
+            });
             cprocess.on("exit", (code) => {
-                // resultCode = code;
-                // if (stdoutEnded) {
-                clearTimeout(timeout);
-                resolve(code);
-                // }
+                resultCode = code ?? 0;
+                if (stdoutEnded) {
+                    clearTimeout(timeout);
+                    resolve(code);
+                }
             });
             cprocess.stdout.on("data", (chunk) => {
                 const parts = (stdoutBuffer + chunk.toString()).split("\n");
@@ -898,16 +849,12 @@ export default class TMC {
         const result = (async (): LangsProcessRunner<unknown>["result"] => {
             try {
                 await processResult;
-                while (!cprocess.stdout.destroyed) {
-                    Logger.debug("stdout still active, waiting...");
-                    await sleep(50);
-                }
             } catch (error) {
-                return new Err(new RuntimeError(error));
+                return Err(new RuntimeError(error));
             }
 
             if (interrupted) {
-                return new Err(new RuntimeError("TMC Langs process was killed."));
+                return Err(new RuntimeError("TMC Langs process was killed."));
             }
 
             if (stdoutBuffer !== "") {

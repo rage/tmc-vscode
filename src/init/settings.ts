@@ -42,7 +42,7 @@ export async function settingsInitialization(
         : LogLevel.Errors;
 
     const fixedSettings: ExtensionSettings = {
-        dataPath: settings?.dataPath ?? resources.getDataPath(),
+        dataPath: settings?.dataPath ?? resources.dataPath,
         downloadOldSubmission: settings?.downloadOldSubmission ?? true,
         hideMetaFiles: settings?.hideMetaFiles ?? true,
         insiderVersion,

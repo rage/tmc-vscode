@@ -481,7 +481,7 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
         { command: "setLogLevel", level: settings.getLogLevel() },
         {
             command: "setTmcDataFolder",
-            diskSize: formatSizeInBytes(await du(resources.getDataPath())),
+            diskSize: formatSizeInBytes(await du(resources.dataPath)),
             path: extensionSettingsResult.val.dataPath,
         },
     ]);
@@ -581,7 +581,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
         .map((e) => e.id);
     Logger.log(`Removing ${missingIds.length} exercise data with Missing status`);
     workspaceManager.deleteExercise(...missingIds);
-    delSync(path.join(resources.getWorkspaceFolderPath(), course.name, ".code-workspace"), {
+    delSync(path.join(resources.workspaceFolderPath, course.name, ".code-workspace"), {
         force: true,
     });
     userData.deleteCourse(id);
