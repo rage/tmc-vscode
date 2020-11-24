@@ -23,7 +23,6 @@ import {
     ObsoleteClientError,
     RuntimeError,
 } from "../errors";
-import { sleep } from "../utils/";
 import { Logger } from "../utils/logger";
 import { showError, showWarning } from "../window";
 
@@ -792,10 +791,9 @@ export default class TMC {
         stdin && cprocess.stdin.write(stdin + "\n");
 
         const processResult = new Promise<number | null>((resolve, reject) => {
-            // let resultCode: number | null = null;
-            // let stdoutEnded = false;
+            let resultCode: number | undefined;
+            let stdoutEnded = false;
 
-            // TODO: move to rust
             const timeout = setTimeout(() => {
                 kill(cprocess.pid);
                 reject("Process didn't seem to finish or was taking a really long time.");
@@ -808,19 +806,19 @@ export default class TMC {
             cprocess.stderr.on("data", (chunk) => {
                 onStderr?.(chunk.toString());
             });
-            // cprocess.stdout.on("end", () => {
-            //     stdoutEnded = true;
-            //     if (resultCode) {
-            //         clearTimeout(timeout);
-            //         resolve(resultCode);
-            //     }
-            // });
+            cprocess.stdout.on("end", () => {
+                stdoutEnded = true;
+                if (resultCode !== undefined) {
+                    clearTimeout(timeout);
+                    resolve(resultCode);
+                }
+            });
             cprocess.on("exit", (code) => {
-                // resultCode = code;
-                // if (stdoutEnded) {
-                clearTimeout(timeout);
-                resolve(code);
-                // }
+                resultCode = code ?? 0;
+                if (stdoutEnded) {
+                    clearTimeout(timeout);
+                    resolve(code);
+                }
             });
             cprocess.stdout.on("data", (chunk) => {
                 const parts = (stdoutBuffer + chunk.toString()).split("\n");
@@ -851,16 +849,12 @@ export default class TMC {
         const result = (async (): LangsProcessRunner<unknown>["result"] => {
             try {
                 await processResult;
-                while (!cprocess.stdout.destroyed) {
-                    Logger.debug("stdout still active, waiting...");
-                    await sleep(50);
-                }
             } catch (error) {
-                return new Err(new RuntimeError(error));
+                return Err(new RuntimeError(error));
             }
 
             if (interrupted) {
-                return new Err(new RuntimeError("TMC Langs process was killed."));
+                return Err(new RuntimeError("TMC Langs process was killed."));
             }
 
             if (stdoutBuffer !== "") {
