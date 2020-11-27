@@ -17,15 +17,7 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext } from "../actions/types";
-import {
-    formatSizeInBytes,
-    getPlatform,
-    getRustExecutable,
-    isCorrectWorkspaceOpen,
-    Logger,
-    LogLevel,
-    sleep,
-} from "../utils/";
+import { formatSizeInBytes, isCorrectWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
 import { askForConfirmation, showError, showNotification } from "../window";
 
 /**
@@ -315,10 +307,6 @@ export function registerUiActions(actionContext: ActionContext): void {
                     (): void => {},
                 ]);
                 resources.dataPath = newPath;
-                const platform = getPlatform();
-                const executable = getRustExecutable(platform);
-                const cliPath = path.join(newPath, "cli", executable);
-                resources.cliPath = cliPath;
                 await settings.updateSetting({ setting: "dataPath", value: newPath });
             } else {
                 Logger.error(res.val);

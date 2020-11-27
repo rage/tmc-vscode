@@ -2,12 +2,10 @@ import { expect } from "chai";
 import { sync as delSync } from "del";
 import * as fs from "fs-extra";
 import * as path from "path";
-import * as TypeMoq from "typemoq";
 
 import TMC from "../../api/tmc";
 import { SubmissionFeedback } from "../../api/types";
-import { CLIENT_NAME } from "../../config/constants";
-import Resources from "../../config/resources";
+import { CLIENT_NAME, TMC_LANGS_CONFIG_DIR, TMC_LANGS_ROOT_URL } from "../../config/constants";
 import { AuthenticationError, AuthorizationError, RuntimeError } from "../../errors";
 import { getPlatform, getRustExecutable } from "../../utils/env";
 
@@ -49,10 +47,9 @@ suite("TMC", function () {
 
     setup(function () {
         removeCliConfig();
-        const resources = TypeMoq.Mock.ofType<Resources>();
-        resources.setup((x) => x.cliPath).returns(() => CLI_FILE);
-        resources.setup((x) => x.extensionVersion).returns(() => "test");
-        tmc = new TMC(resources.object);
+        tmc = new TMC(CLI_FILE, CLIENT_NAME, "test", TMC_LANGS_ROOT_URL, {
+            cliConfigDir: TMC_LANGS_CONFIG_DIR,
+        });
     });
 
     suite("#authenticate()", function () {

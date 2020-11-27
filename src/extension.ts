@@ -4,7 +4,14 @@ import * as vscode from "vscode";
 import { checkForCourseUpdates } from "./actions";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
-import { DEBUG_MODE, EXERCISE_CHECK_INTERVAL } from "./config/constants";
+import {
+    CLIENT_NAME,
+    DEBUG_MODE,
+    EXERCISE_CHECK_INTERVAL,
+    EXTENSION_ID,
+    TMC_LANGS_CONFIG_DIR,
+    TMC_LANGS_ROOT_URL,
+} from "./config/constants";
 import Settings from "./config/settings";
 import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
@@ -20,11 +27,40 @@ import { showError } from "./window";
 let maintenanceInterval: NodeJS.Timeout | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
+
     Logger.configure(LogLevel.Verbose);
-    Logger.log(`Starting extension in "${DEBUG_MODE ? "development" : "production"}" mode.`);
+    Logger.log(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`);
+    Logger.log(`VS Code version: ${vscode.version}`);
+    Logger.log(`${EXTENSION_ID} version: ${extensionVersion}`);
+    Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
 
+    const cliFolder = path.join(context.globalStoragePath);
+    const cliPathResult = await init.downloadCorrectLangsVersion(cliFolder);
+    if (cliPathResult.err) {
+        throw cliPathResult.val;
+    }
+
+    const tmc = new TMC(cliPathResult.val, CLIENT_NAME, extensionVersion, TMC_LANGS_ROOT_URL, {
+        cliConfigDir: TMC_LANGS_CONFIG_DIR,
+    });
+    const authenticatedResult = await tmc.isAuthenticated();
+    if (authenticatedResult.err) {
+        showError("TestMyCode initialization failed. Please see logs for details.");
+        Logger.error("Failed to check if authenticated:", authenticatedResult.val.message);
+        if (authenticatedResult.val instanceof EmptyLangsResponseError) {
+            Logger.error(
+                "The above error may have been caused by an interfering antivirus program. " +
+                    "Please add an exception for the following folder:",
+                cliFolder,
+            );
+        }
+        Logger.show();
+        return;
+    }
+
+    const authenticated = authenticatedResult.val;
     const storage = new Storage(context);
-
     const resourcesResult = await init.resourceInitialization(context, storage);
     if (resourcesResult.err) {
         const message = "TestMyCode Initialization failed.";
@@ -32,57 +68,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         showError(message);
         return;
     }
-    const resources = resourcesResult.val;
 
+    const resources = resourcesResult.val;
     const settingsResult = await init.settingsInitialization(storage, resources);
     const settings = new Settings(storage, settingsResult, resources);
     await settings.verifyWorkspaceSettingsIntegrity();
     Logger.configure(settings.getLogLevel());
 
-    await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
-
-    const currentVersion = resources.extensionVersion;
-    const previousVersion = storage.getExtensionVersion();
-    if (currentVersion !== previousVersion) {
-        storage.updateExtensionVersion(currentVersion);
-    }
-
-    Logger.log(`VSCode version: ${vscode.version}`);
-    Logger.log(`TMC extension version: ${resources.extensionVersion}`);
-    Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
-
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
-    const tmc = new TMC(resources);
-
-    const authenticated = await tmc.isAuthenticated();
-    if (authenticated.err) {
-        showError("TestMyCode initialization failed. Please see logs for details.");
-        Logger.error("Failed to check if authenticated:", authenticated.val.message);
-        if (authenticated.val instanceof EmptyLangsResponseError) {
-            Logger.error(
-                "The above error may have been caused by an interfering antivirus program. " +
-                    "Please add an exception for the following folder:",
-                path.resolve(resources.cliPath, ".."),
-            );
-        }
-        Logger.show();
-        return;
-    }
-
-    const validationResult = await validateAndFix(storage, tmc, ui, resources);
-    if (validationResult.err) {
-        const message = "Data reconstruction failed.";
-        Logger.error(message, validationResult.val);
-        showError(message);
-        return;
-    }
-
-    await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated.val);
-    const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated.val);
+    await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated);
+    const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated);
     const visibilityGroups = {
         LOGGED_IN,
     };
-
     tmc.on("login", async () => {
         await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", true);
         ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
@@ -92,6 +90,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN.not]);
         ui.webview.setContentFromTemplate({ templateName: "login" });
     });
+
+    await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
+
+    const currentVersion = resources.extensionVersion;
+    const previousVersion = storage.getExtensionVersion();
+    if (currentVersion !== previousVersion) {
+        storage.updateExtensionVersion(currentVersion);
+    }
+
+    const validationResult = await validateAndFix(storage, tmc, ui, resources);
+    if (validationResult.err) {
+        const message = "Data reconstruction failed.";
+        Logger.error(message, validationResult.val);
+        showError(message);
+        return;
+    }
 
     const workspaceManager = new WorkspaceManager(storage, resources);
     await workspaceManager.initialize();
@@ -118,7 +132,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
 
-    if (authenticated.val) {
+    if (authenticated) {
         vscode.commands.executeCommand("tmc.updateExercises", "silent");
         checkForCourseUpdates(actionContext);
     }

@@ -19,12 +19,9 @@ export const TMC_LANGS_ROOT_URL = __TMC_LANGS_ROOT_URL__;
 export const TMC_LANGS_RUST_DL_URL = __TMC_LANGS_RUST_DL_URL__;
 export const TMC_LANGS_RUST_VERSION = __TMC_LANGS_RUST_VERSION__;
 
+export const CLIENT_NAME = "vscode_plugin";
 export const EXTENSION_ID = "moocfi.test-my-code";
 export const OUTPUT_CHANNEL_NAME = "TestMyCode";
-
-export const CLIENT_NAME = "vscode_plugin";
-export const CLIENT_ID = "72065a25dc4d3e9decdf8f49174a3e393756478d198833c64f6e5584946394f0";
-export const CLIENT_SECRET = "3e6c4df1992e4031d316ea1933e350e9658326a67efb2e65a5b15207bdc09ee8";
 
 export const HIDE_META_FILES = {
     "**/__pycache__": true,
@@ -62,11 +59,6 @@ export const WORKSPACE_SETTINGS = {
         "files.watcherExclude": { ...WATCHER_EXCLUDE },
     },
 };
-
-export const TMC_API_CACHE_LIFETIME = 5 * 60 * 1000;
-
-/** Delay for when TMC-Langs process should be killed. */
-export const TMC_LANGS_TIMEOUT = 2 * 60 * 1000;
 
 /**
  * Delay for notifications that offer a "remind me later" option.

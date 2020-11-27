@@ -1,4 +1,3 @@
-import { sync as delSync } from "del";
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Ok, Result } from "ts-results";
@@ -6,16 +5,13 @@ import * as vscode from "vscode";
 
 import {
     EXTENSION_ID,
-    TMC_LANGS_RUST_DL_URL,
     WORKSPACE_ROOT_FILE,
     WORKSPACE_ROOT_FILE_TEXT,
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
-import { downloadFile, getPlatform, getRustExecutable } from "../utils/";
 import { Logger } from "../utils/logger";
-import { showProgressNotification } from "../window";
 
 /**
  * Performs resource initialization on extension activation
@@ -77,41 +73,7 @@ export async function resourceInitialization(
         }
     });
 
-    const platform = getPlatform();
-    Logger.log("Detected platform " + platform);
-    Logger.log("Platform " + process.platform + " Arch " + process.arch);
-    const executable = getRustExecutable(platform);
-    Logger.log("Executable " + executable);
-    const cliPath = path.join(extensionContext.globalStoragePath, "cli", executable);
-    const cliUrl = TMC_LANGS_RUST_DL_URL + executable;
-    if (!fs.existsSync(cliPath)) {
-        delSync(path.join(tmcDataPath, "cli"), { force: true });
-        Logger.log("Downloading CLI from", cliUrl, "to", cliPath);
-        const [tmcLangsRustCLI] = await showProgressNotification(
-            "Downloading required files...",
-            async (p) =>
-                await downloadFile(
-                    cliUrl,
-                    cliPath,
-                    undefined,
-                    undefined,
-                    (_progress: number, increment: number) => p.report({ increment }),
-                ),
-        );
-        if (tmcLangsRustCLI.err) {
-            Logger.warn("Occured some error while downloading TMC Langs rust", tmcLangsRustCLI);
-        }
-        try {
-            const fd = await fs.open(cliPath, "r+");
-            await fs.fchmod(fd, 0o111);
-            await fs.close(fd);
-        } catch (e) {
-            Logger.error("Error changing permissions for CLI", e);
-        }
-        Logger.log("CLI at", cliPath);
-    }
-
-    const resources: Resources = new Resources(
+    const resources = new Resources(
         cssPath,
         extensionVersion,
         htmlPath,
@@ -119,7 +81,6 @@ export async function resourceInitialization(
         tmcDataPath,
         tmcWorkspacePathRelative,
         tmcExercisesFolderPathRelative,
-        cliPath,
     );
 
     return new Ok(resources);

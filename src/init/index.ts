@@ -9,6 +9,7 @@ export * from "./commands";
 export * from "./resources";
 export * from "./ui";
 export * from "./settings";
+export * from "./downloadCorrectLangsVersion";
 
 /**
  * VSCode function that watches TMC workspace changes and syncs states accordingly.

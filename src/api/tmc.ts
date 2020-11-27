@@ -5,14 +5,6 @@ import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 
 import {
-    CLIENT_NAME,
-    TMC_API_CACHE_LIFETIME,
-    TMC_LANGS_CONFIG_DIR,
-    TMC_LANGS_ROOT_URL,
-    TMC_LANGS_TIMEOUT,
-} from "../config/constants";
-import Resources from "../config/resources";
-import {
     ApiError,
     AuthenticationError,
     AuthorizationError,
@@ -42,6 +34,15 @@ import {
     SubmissionStatusReport,
     TestResults,
 } from "./types";
+
+const API_CACHE_LIFETIME = 5 * 60 * 1000;
+const CLI_PROCESS_TIMEOUT = 2 * 60 * 1000;
+
+interface Options {
+    apiCacheLifetime?: string;
+    cliConfigDir?: string;
+    cliExecutionTimeout?: number;
+}
 
 interface LangsProcessArgs {
     args: string[];
@@ -79,7 +80,7 @@ interface CacheConfig<T1, T2> {
  * A Class that provides an interface to all TMC services.
  */
 export default class TMC {
-    private readonly _resources: Resources;
+    private readonly _options: Options;
     private readonly _responseCache: Map<string, ResponseCacheEntry>;
     private _onLogin?: () => void;
     private _onLogout?: () => void;
@@ -87,11 +88,16 @@ export default class TMC {
     /**
      * Creates a new instance of TMC interface class.
      *
-     * @param storage Used to store authentication token.
-     * @param resources Used to locate TMC-langs executable.
+     * @param configuration
      */
-    constructor(resources: Resources) {
-        this._resources = resources;
+    constructor(
+        private readonly cliPath: string,
+        private readonly clientName: string,
+        private readonly clientVersion: string,
+        private readonly apiRootUrl: string,
+        options?: Options,
+    ) {
+        this._options = { ...options };
         this._responseCache = new Map();
     }
 
@@ -258,6 +264,26 @@ export default class TMC {
         return [postResult, interrupt];
     }
 
+    public async getSetting(key: string): Promise<Result<string, Error>> {
+        return this._executeLangsCommand(
+            {
+                args: ["settings", "--client-name", this.clientName, "get", key],
+                core: false,
+            },
+            createIs<string>(),
+        ).then((x) => x.map((x) => x.data));
+    }
+
+    public async setSetting(key: string, value: string): Promise<Result<void, Error>> {
+        return this._executeLangsCommand(
+            {
+                args: ["settings", "--client-name", this.clientName, "set", key, value],
+                core: false,
+            },
+            createIs<unknown>(),
+        ).then((x) => x.andThen(() => Ok.EMPTY));
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Core commands
     // ---------------------------------------------------------------------------------------------
@@ -316,7 +342,7 @@ export default class TMC {
         if (saveOldState) {
             args.push(
                 "--submission-url",
-                `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`,
+                `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`,
             );
         }
 
@@ -520,7 +546,7 @@ export default class TMC {
         if (saveOldState) {
             args.push(
                 "--submission-url",
-                `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`,
+                `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`,
             );
         }
 
@@ -542,7 +568,7 @@ export default class TMC {
         exerciseId: number,
         exercisePath: string,
     ): Promise<Result<SubmissionResponse, Error>> {
-        const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
+        const submitUrl = `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`;
 
         return this._executeLangsCommand(
             {
@@ -573,7 +599,7 @@ export default class TMC {
         progressCallback?: (progressPct: number, message?: string) => void,
         onSubmissionUrl?: (url: string) => void,
     ): Promise<Result<SubmissionStatusReport, Error>> {
-        const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
+        const submitUrl = `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`;
         const onStdout = (res: LangsStatusUpdate<unknown>): void => {
             progressCallback?.(100 * res["percent-done"], res.message ?? undefined);
             if (is<{ PostedSubmission: SubmissionResponse }>(res.data)) {
@@ -602,7 +628,7 @@ export default class TMC {
         exerciseId: number,
         exercisePath: string,
     ): Promise<Result<string, Error>> {
-        const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
+        const submitUrl = `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`;
 
         return this._executeLangsCommand(
             {
@@ -660,7 +686,7 @@ export default class TMC {
             const cachedEntry = this._responseCache.get(cacheKey);
             if (cachedEntry) {
                 const { response, timestamp } = cachedEntry;
-                const cachedDataLifeLeft = timestamp + TMC_API_CACHE_LIFETIME - currentTime;
+                const cachedDataLifeLeft = timestamp + API_CACHE_LIFETIME - currentTime;
                 if (checker(response.data)) {
                     if (cachedDataLifeLeft > 0) {
                         const prettySecondsLeft = Math.ceil(cachedDataLifeLeft / 1000);
@@ -762,30 +788,28 @@ export default class TMC {
         const CORE_ARGS = [
             "core",
             "--client-name",
-            CLIENT_NAME,
+            this.clientName,
             "--client-version",
-            this._resources.extensionVersion,
+            this.clientVersion,
         ];
 
         let theResult: LangsOutputData<unknown> | undefined;
         let stdoutBuffer = "";
 
-        const executable = this._resources.cliPath;
         const executableArgs = core ? CORE_ARGS.concat(args) : args;
-
         const obfuscatedArgs = args.map((x, i) => (obfuscate?.includes(i) ? "***" : x));
         const logableArgs = core ? CORE_ARGS.concat(obfuscatedArgs) : obfuscatedArgs;
-        Logger.log([executable, ...logableArgs].map((x) => JSON.stringify(x)).join(" "));
+        Logger.log([this.cliPath, ...logableArgs].map((x) => JSON.stringify(x)).join(" "));
 
         let active = true;
         let interrupted = false;
-        const cprocess = cp.spawn(executable, executableArgs, {
+        const cprocess = cp.spawn(this.cliPath, executableArgs, {
             env: {
                 ...process.env,
                 ...env,
                 RUST_LOG: "debug",
-                TMC_LANGS_ROOT_URL,
-                TMC_LANGS_CONFIG_DIR,
+                TMC_LANGS_ROOT_URL: this.apiRootUrl,
+                TMC_LANGS_CONFIG_DIR: this._options.cliConfigDir,
             },
         });
         stdin && cprocess.stdin.write(stdin + "\n");
@@ -797,7 +821,7 @@ export default class TMC {
             const timeout = setTimeout(() => {
                 kill(cprocess.pid);
                 reject("Process didn't seem to finish or was taking a really long time.");
-            }, TMC_LANGS_TIMEOUT);
+            }, CLI_PROCESS_TIMEOUT);
 
             cprocess.on("error", (error) => {
                 clearTimeout(timeout);
