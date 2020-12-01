@@ -31,7 +31,7 @@ async function downloadCorrectLangsVersion(cliFolder: string): Promise<Result<st
     const cliUrl = TMC_LANGS_RUST_DL_URL + executable;
     Logger.log("Downloading CLI from", cliUrl, "to", cliPath);
     const [langsDownloadResult] = await showProgressNotification(
-        "Downloading required files...",
+        "Downloading TMC-langs...",
         async (p) =>
             await downloadFile(
                 cliUrl,

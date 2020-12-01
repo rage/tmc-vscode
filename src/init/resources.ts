@@ -20,16 +20,13 @@ import { Logger } from "../utils/logger";
 export async function resourceInitialization(
     extensionContext: vscode.ExtensionContext,
     storage: Storage,
+    tmcDataPath: string,
 ): Promise<Result<Resources, Error>> {
     const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
 
     const cssPath = extensionContext.asAbsolutePath("resources/styles");
     const htmlPath = extensionContext.asAbsolutePath("resources/templates");
     const mediaPath = extensionContext.asAbsolutePath("media");
-
-    const tmcDataPath =
-        storage.getExtensionSettings()?.dataPath ||
-        path.join(extensionContext.globalStoragePath, "tmcdata");
 
     const tmcWorkspacePathRelative = "TMC workspace";
     const tmcExercisesFolderPathRelative = path.join("TMC workspace", "Exercises");

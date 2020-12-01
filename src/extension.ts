@@ -26,6 +26,20 @@ import { showError } from "./window";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 
+function throwFatalError(error: Error, cliFolder: string): never {
+    if (error instanceof EmptyLangsResponseError) {
+        Logger.error(
+            "The above error may have been caused by an interfering antivirus program. " +
+                "Please add an exception for the following folder:",
+            cliFolder,
+        );
+    }
+
+    showError("TestMyCode initialization failed. Please see logs for details.");
+    Logger.show();
+    throw error;
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
 
@@ -35,7 +49,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     Logger.log(`${EXTENSION_ID} version: ${extensionVersion}`);
     Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
 
-    const cliFolder = path.join(context.globalStoragePath);
+    const cliFolder = path.join(context.globalStoragePath, "cli");
     const cliPathResult = await init.downloadCorrectLangsVersion(cliFolder);
     if (cliPathResult.err) {
         throw cliPathResult.val;
@@ -44,24 +58,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const tmc = new TMC(cliPathResult.val, CLIENT_NAME, extensionVersion, TMC_LANGS_ROOT_URL, {
         cliConfigDir: TMC_LANGS_CONFIG_DIR,
     });
+
     const authenticatedResult = await tmc.isAuthenticated();
     if (authenticatedResult.err) {
-        showError("TestMyCode initialization failed. Please see logs for details.");
         Logger.error("Failed to check if authenticated:", authenticatedResult.val.message);
-        if (authenticatedResult.val instanceof EmptyLangsResponseError) {
-            Logger.error(
-                "The above error may have been caused by an interfering antivirus program. " +
-                    "Please add an exception for the following folder:",
-                cliFolder,
-            );
-        }
-        Logger.show();
-        return;
+        throwFatalError(authenticatedResult.val, cliFolder);
     }
 
     const authenticated = authenticatedResult.val;
+    await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated);
+
     const storage = new Storage(context);
-    const resourcesResult = await init.resourceInitialization(context, storage);
+    let tmcDataPath = storage.getExtensionSettings()?.dataPath;
+    if (!tmcDataPath) {
+        const dataPathResult = await tmc.getSetting("projects-dir");
+        if (dataPathResult.err) {
+            Logger.error("Failed to define datapath:", dataPathResult.val);
+            throwFatalError(dataPathResult.val, cliFolder);
+        }
+
+        tmcDataPath = dataPathResult.val;
+    }
+
+    const resourcesResult = await init.resourceInitialization(context, storage, tmcDataPath);
     if (resourcesResult.err) {
         const message = "TestMyCode Initialization failed.";
         Logger.error(message, resourcesResult.val);
@@ -76,7 +95,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     Logger.configure(settings.getLogLevel());
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
-    await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated);
     const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated);
     const visibilityGroups = {
         LOGGED_IN,
