@@ -799,7 +799,9 @@ export default class TMC {
         const executableArgs = core ? CORE_ARGS.concat(args) : args;
         const obfuscatedArgs = args.map((x, i) => (obfuscate?.includes(i) ? "***" : x));
         const logableArgs = core ? CORE_ARGS.concat(obfuscatedArgs) : obfuscatedArgs;
-        Logger.log([this.cliPath, ...logableArgs].map((x) => JSON.stringify(x)).join(" "));
+        Logger.log(
+            "Run: " + [this.cliPath, ...logableArgs].map((x) => JSON.stringify(x)).join(" "),
+        );
 
         let active = true;
         let interrupted = false;

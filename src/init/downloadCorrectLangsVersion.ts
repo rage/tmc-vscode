@@ -29,7 +29,7 @@ async function downloadCorrectLangsVersion(cliFolder: string): Promise<Result<st
     delSync(cliFolder, { force: true });
 
     const cliUrl = TMC_LANGS_RUST_DL_URL + executable;
-    Logger.log("Downloading CLI from", cliUrl, "to", cliPath);
+    Logger.log(`Downloading TMC-langs from ${cliUrl} to ${cliPath}`);
     const [langsDownloadResult] = await showProgressNotification(
         "Downloading TMC-langs...",
         async (p) =>
@@ -55,7 +55,6 @@ async function downloadCorrectLangsVersion(cliFolder: string): Promise<Result<st
         return Err(e);
     }
 
-    Logger.log("CLI at", cliPath);
     return Ok(cliPath);
 }
 
