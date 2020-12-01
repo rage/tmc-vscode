@@ -1,45 +1,33 @@
 import * as path from "path";
+import * as vscode from "vscode";
 
 export default class Resources {
-    private readonly _tmcWorkspaceFolderPathRelative: string;
-    private readonly _tmcExercisesFolderPathRelative: string;
-    private _tmcDataFolder: string;
+    private _projectsDirectory: string;
 
     constructor(
         readonly cssFolder: string,
         readonly extensionVersion: string,
         readonly htmlFolder: string,
         readonly mediaFolder: string,
-        tmcDataFolder: string,
-        tmcWorkspaceFolderPathRelative: string,
-        tmcExercisesFolderPathRelative: string,
+        readonly workspaceFileFolder: string,
+        projectsDirectory: string,
     ) {
-        this._tmcDataFolder = tmcDataFolder;
-        this._tmcWorkspaceFolderPathRelative = tmcWorkspaceFolderPathRelative;
-        this._tmcExercisesFolderPathRelative = tmcExercisesFolderPathRelative;
+        this._projectsDirectory = projectsDirectory;
     }
 
-    get dataPath(): string {
-        return this._tmcDataFolder;
+    get projectsDirectory(): string {
+        return this._projectsDirectory;
     }
 
-    set dataPath(newPath: string) {
-        this._tmcDataFolder = newPath;
+    set projectsDirectory(directory: string) {
+        this._projectsDirectory = directory;
     }
 
-    get workspaceFolderPath(): string {
-        return path.join(this._tmcDataFolder, this._tmcWorkspaceFolderPathRelative);
-    }
-
-    get exercisesFolderPath(): string {
-        return path.join(this._tmcDataFolder, this._tmcExercisesFolderPathRelative);
+    get workspaceRootFolder(): vscode.Uri {
+        return vscode.Uri.file(path.join(this.workspaceFileFolder, ".tmc"));
     }
 
     public getWorkspaceFilePath(courseName: string): string {
-        return path.join(
-            this._tmcDataFolder,
-            this._tmcWorkspaceFolderPathRelative,
-            courseName + ".code-workspace",
-        );
+        return path.join(this.workspaceFileFolder, courseName + ".code-workspace");
     }
 }

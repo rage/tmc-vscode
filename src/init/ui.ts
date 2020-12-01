@@ -272,7 +272,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             return;
         }
 
-        const old = resources.dataPath;
+        const old = resources.projectsDirectory;
         const options: vscode.OpenDialogOptions = {
             canSelectFiles: false,
             canSelectFolders: true,
@@ -306,7 +306,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                     "OK",
                     (): void => {},
                 ]);
-                resources.dataPath = newPath;
+                resources.projectsDirectory = newPath;
                 await settings.updateSetting({ setting: "dataPath", value: newPath });
             } else {
                 Logger.error(res.val);
@@ -314,7 +314,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             ui.webview.postMessage({
                 command: "setTmcDataFolder",
-                diskSize: formatSizeInBytes(await du(resources.dataPath)),
+                diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
                 path: newPath,
             });
         }

@@ -46,7 +46,7 @@ export default class WorkspaceManager {
             this._pathToId = new Map();
         }
         this._watcher = vscode.workspace.createFileSystemWatcher(
-            this._resources.workspaceFolderPath + "/**",
+            this._resources.projectsDirectory + "/**",
             true,
             true,
             false,
@@ -94,7 +94,7 @@ export default class WorkspaceManager {
             return new Err(new ExerciseExistsError("Data for this exercise already exists."));
         }
 
-        const exerciseFolderPath = this._resources.exercisesFolderPath;
+        const exerciseFolderPath = this._resources.projectsDirectory;
         const exercisePath = path.join(
             exerciseFolderPath,
             exercise.organization,
@@ -173,7 +173,7 @@ export default class WorkspaceManager {
         if (!filePath) {
             return undefined;
         }
-        const exerciseFolderPath = this._resources.exercisesFolderPath;
+        const exerciseFolderPath = this._resources.projectsDirectory;
         const relation = path.relative(exerciseFolderPath, filePath);
 
         if (relation.startsWith("..")) {
@@ -343,10 +343,7 @@ export default class WorkspaceManager {
     }
 
     public createWorkspaceFile(courseName: string): void {
-        const tmcWorkspaceFilePath = path.join(
-            this._resources.workspaceFolderPath,
-            courseName + ".code-workspace",
-        );
+        const tmcWorkspaceFilePath = this._resources.getWorkspaceFilePath(courseName);
         if (!fs.existsSync(tmcWorkspaceFilePath)) {
             fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
             Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
@@ -420,7 +417,7 @@ export default class WorkspaceManager {
         if (currentlyOpenFolders.length === 0 || currentlyOpenFolders[0].name !== ".tmc") {
             Logger.warn("The .tmc folder is not set as root folder.");
             this._verifyCourseWorkspaceRootFolderAndFileExists();
-            allOpen.push(vscode.Uri.file(path.join(this._resources.workspaceFolderPath, ".tmc")));
+            allOpen.push(this._resources.workspaceRootFolder);
             tmcFolderAsRoot = false;
         }
 
@@ -497,7 +494,7 @@ export default class WorkspaceManager {
 
     private _getExercisePath(exerciseData: LocalExerciseData): string {
         return path.join(
-            this._resources.exercisesFolderPath,
+            this._resources.projectsDirectory,
             exerciseData.organization,
             exerciseData.course,
             exerciseData.name,
@@ -535,8 +532,8 @@ export default class WorkspaceManager {
      * @param targetPath Path to deleted item
      */
     private _fileDeleteAction(targetPath: string): void {
-        const basedir = this._resources.workspaceFolderPath;
-        const rootFilePath = path.join(basedir, ".tmc", WORKSPACE_ROOT_FILE);
+        const basedir = this._resources.projectsDirectory;
+        const rootFilePath = this._resources.workspaceRootFolder.fsPath;
         Logger.debug("Target path deleted", targetPath);
         if (path.relative(rootFilePath, targetPath) === "") {
             Logger.log(`Root file deleted ${targetPath}, fixing issue.`);
@@ -554,7 +551,7 @@ export default class WorkspaceManager {
      * extension host doesn't restart when opening/closing exercises for course workspace.
      */
     private _verifyCourseWorkspaceRootFolderAndFileExists(): void {
-        const rootFileFolder = path.join(this._resources.workspaceFolderPath, ".tmc");
+        const rootFileFolder = this._resources.workspaceRootFolder.fsPath;
         const pathToRootFile = path.join(rootFileFolder, WORKSPACE_ROOT_FILE);
         if (!fs.existsSync(pathToRootFile)) {
             Logger.log(`Creating ${pathToRootFile}`);

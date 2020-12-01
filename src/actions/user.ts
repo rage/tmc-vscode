@@ -8,7 +8,6 @@ import { sync as delSync } from "del";
 import du = require("du");
 import * as fs from "fs-extra";
 import * as _ from "lodash";
-import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
@@ -481,7 +480,7 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
         { command: "setLogLevel", level: settings.getLogLevel() },
         {
             command: "setTmcDataFolder",
-            diskSize: formatSizeInBytes(await du(resources.dataPath)),
+            diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
             path: extensionSettingsResult.val.dataPath,
         },
     ]);
@@ -581,7 +580,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
         .map((e) => e.id);
     Logger.log(`Removing ${missingIds.length} exercise data with Missing status`);
     workspaceManager.deleteExercise(...missingIds);
-    delSync(path.join(resources.workspaceFolderPath, course.name, ".code-workspace"), {
+    delSync(resources.getWorkspaceFilePath(course.name), {
         force: true,
     });
     userData.deleteCourse(id);

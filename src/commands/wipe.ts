@@ -1,5 +1,4 @@
 import * as fs from "fs-extra";
-import * as path from "path";
 import * as vscode from "vscode";
 
 import { ActionContext } from "../actions/types";
@@ -35,7 +34,7 @@ export async function wipe(
         // Remove logout event handler to not show login page.
         tmc.on("logout", () => {});
         await vscode.commands.executeCommand("tmc.logout");
-        fs.removeSync(path.join(resources.dataPath));
+        fs.removeSync(resources.projectsDirectory);
         await userData.wipeDataFromStorage();
         deactivate();
         for (const sub of context.subscriptions) {

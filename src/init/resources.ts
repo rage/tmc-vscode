@@ -21,6 +21,7 @@ export async function resourceInitialization(
     extensionContext: vscode.ExtensionContext,
     storage: Storage,
     tmcDataPath: string,
+    workspaceFileFolder: string,
 ): Promise<Result<Resources, Error>> {
     const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
 
@@ -59,11 +60,7 @@ export async function resourceInitialization(
     // Verify that all course .code-workspaces are in-place on startup.
     const userData = storage.getUserData();
     userData?.courses.forEach((course) => {
-        const tmcWorkspaceFilePath = path.join(
-            tmcDataPath,
-            tmcWorkspacePathRelative,
-            course.name + ".code-workspace",
-        );
+        const tmcWorkspaceFilePath = path.join(tmcDataPath, course.name + ".code-workspace");
         if (!fs.existsSync(tmcWorkspaceFilePath)) {
             fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
             Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
@@ -75,9 +72,8 @@ export async function resourceInitialization(
         extensionVersion,
         htmlPath,
         mediaPath,
+        workspaceFileFolder,
         tmcDataPath,
-        tmcWorkspacePathRelative,
-        tmcExercisesFolderPathRelative,
     );
 
     return new Ok(resources);

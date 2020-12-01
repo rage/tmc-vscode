@@ -18,7 +18,6 @@ import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import { EmptyLangsResponseError } from "./errors";
 import * as init from "./init";
-import { newVSCodeWorkspaceMigration } from "./migrate";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
 import { Logger, LogLevel, semVerCompare } from "./utils";
@@ -80,12 +79,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         tmcDataPath = dataPathResult.val;
     }
 
-    const resourcesResult = await init.resourceInitialization(context, storage, tmcDataPath);
+    const workspaceFileFolder = path.join(context.globalStoragePath, "workspaces");
+    const resourcesResult = await init.resourceInitialization(
+        context,
+        storage,
+        tmcDataPath,
+        workspaceFileFolder,
+    );
     if (resourcesResult.err) {
-        const message = "TestMyCode Initialization failed.";
-        Logger.error(message, resourcesResult.val);
-        showError(message);
-        return;
+        Logger.error("Resource initialization failed: ", resourcesResult.val);
+        throwFatalError(resourcesResult.val, cliFolder);
     }
 
     const resources = resourcesResult.val;
@@ -140,9 +143,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         workspaceManager,
         visibilityGroups,
     };
-
-    // Remove newVSCodeWorkspaceMigration plan when release of 2.0.0
-    newVSCodeWorkspaceMigration(actionContext);
 
     // Start watcher after migration.
     workspaceManager.startWatcher();
