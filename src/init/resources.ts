@@ -3,12 +3,7 @@ import * as path from "path";
 import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import {
-    EXTENSION_ID,
-    WORKSPACE_ROOT_FILE,
-    WORKSPACE_ROOT_FILE_TEXT,
-    WORKSPACE_SETTINGS,
-} from "../config/constants";
+import { EXTENSION_ID, WORKSPACE_SETTINGS } from "../config/constants";
 import Resources from "../config/resources";
 import Storage from "../config/storage";
 import { Logger } from "../utils/logger";
@@ -29,32 +24,9 @@ export async function resourceInitialization(
     const htmlPath = extensionContext.asAbsolutePath("resources/templates");
     const mediaPath = extensionContext.asAbsolutePath("media");
 
-    const tmcWorkspacePathRelative = "TMC workspace";
-    const tmcExercisesFolderPathRelative = path.join("TMC workspace", "Exercises");
-
     if (!fs.existsSync(tmcDataPath)) {
         fs.mkdirSync(tmcDataPath, { recursive: true });
         Logger.log(`Created tmc data directory at ${tmcDataPath}`);
-    }
-
-    const tmcWorkspacePath = path.join(tmcDataPath, tmcWorkspacePathRelative);
-    if (!fs.existsSync(tmcWorkspacePath)) {
-        fs.mkdirSync(tmcWorkspacePath);
-        Logger.log(`Created tmc workspace directory at ${tmcWorkspacePath}`);
-    }
-
-    const tmcExercisesFolderPath = path.join(tmcDataPath, tmcExercisesFolderPathRelative);
-    if (!fs.existsSync(tmcExercisesFolderPath)) {
-        fs.mkdirSync(tmcExercisesFolderPath);
-        Logger.log(`Created tmc exercise directory at ${tmcExercisesFolderPath}`);
-    }
-
-    if (!fs.existsSync(path.join(tmcExercisesFolderPath, WORKSPACE_ROOT_FILE))) {
-        fs.writeFileSync(
-            path.join(tmcExercisesFolderPath, WORKSPACE_ROOT_FILE),
-            WORKSPACE_ROOT_FILE_TEXT,
-        );
-        Logger.log(`Wrote tmc root file at ${tmcExercisesFolderPath}`);
     }
 
     // Verify that all course .code-workspaces are in-place on startup.
