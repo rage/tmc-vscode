@@ -289,6 +289,7 @@ export default class TMC {
     // ---------------------------------------------------------------------------------------------
 
     /**
+     * @deprecated - Migrate to `downloadExercises`
      * Downloads an exercise to the provided filepath. Uses TMC-langs `download-or-update-exercise`
      * core command internally.
      *
@@ -305,6 +306,36 @@ export default class TMC {
             {
                 args: ["download-or-update-exercises", "--exercise", id.toString(), exercisePath],
                 core: true,
+            },
+            createIs<unknown>(),
+        ).then((res) => (res.err ? res : Ok.EMPTY));
+    }
+
+    /**
+     * Downloads multiple exercises to TMC-langs' configured project directory. Uses TMC-langs
+     * `download-or-update-course-exercises` core command internally.
+     *
+     * @param ids Ids of the exercises to download.
+     */
+    public async downloadExercises(
+        ids: number[],
+        onDownloaded?: (download: { id: number; path: string }) => void,
+    ): Promise<Result<void, Error>> {
+        const onStdout = (res: LangsStatusUpdate<unknown>): void => {
+            if (is<{ ExerciseDownload: { id: number; path: string } }>(res.data)) {
+                onDownloaded?.(res.data.ExerciseDownload);
+            }
+        };
+
+        return this._executeLangsCommand(
+            {
+                args: [
+                    "download-or-update-course-exercises",
+                    "--exercise-id",
+                    ...ids.map((id) => id.toString()),
+                ],
+                core: true,
+                onStdout,
             },
             createIs<unknown>(),
         ).then((res) => (res.err ? res : Ok.EMPTY));
