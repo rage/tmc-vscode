@@ -355,22 +355,20 @@ export async function checkForCourseUpdates(
             courseId: course.id,
             exerciseIds: [],
         });
-        const [successful] = await downloadExercises(
+        const { downloaded } = await downloadExercises(
             actionContext,
             newIds.map((x) => ({
-                courseId: course.id,
-                exerciseId: x,
-                organization: course.organization,
+                courseName: course.name,
+                id: x,
             })),
         );
-        const successfulIds = successful.map((ex) => ex.exerciseId);
-        await userData.clearFromNewExercises(course.id, successfulIds);
+        await userData.clearFromNewExercises(course.id, downloaded);
         ui.webview.postMessage({
             command: "setNewExercises",
             courseId: course.id,
             exerciseIds: course.newExercises,
         });
-        const openResult = await openExercises(actionContext, successfulIds, course.name);
+        const openResult = await openExercises(actionContext, downloaded, course.name);
         if (openResult.err) {
             const message = "Failed to open new exercises.";
             Logger.error(message, openResult.val);

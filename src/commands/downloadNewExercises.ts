@@ -20,19 +20,17 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
             organizationSlug: course.organization,
             courseName: course.name,
         };
-        const [successful] = await actions.downloadExercises(
+        const { downloaded } = await actions.downloadExercises(
             actionContext,
             course.newExercises.map((x) => ({
-                courseId: course.id,
-                exerciseId: x,
-                organization: course.organization,
+                id: x,
+                courseName: course.name,
             })),
         );
-        const successfulIds = successful.map((ex) => ex.exerciseId);
-        await userData.clearFromNewExercises(courseId, successfulIds);
+        await userData.clearFromNewExercises(courseId, downloaded);
         const openResult = await actions.openExercises(
             actionContext,
-            successfulIds,
+            downloaded,
             downloads.courseName,
         );
         if (openResult.err) {

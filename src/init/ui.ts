@@ -131,7 +131,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             ) {
                 return;
             }
-            const downloads = msg.ids.map((x) => ({
+            const exerciseDownloads = msg.ids.map((x) => ({
                 courseId: msg.courseId as number,
                 exerciseId: x,
                 organization: msg.organizationSlug as string,
@@ -142,7 +142,10 @@ export function registerUiActions(actionContext: ActionContext): void {
                     exerciseIds: [],
                     courseId: msg.courseId,
                 });
-                const [successful] = await downloadExerciseUpdates(actionContext, downloads);
+                const [successful] = await downloadExerciseUpdates(
+                    actionContext,
+                    exerciseDownloads,
+                );
                 const remaining = _.difference(
                     msg.ids,
                     successful.map((x) => x.exerciseId),
@@ -154,15 +157,13 @@ export function registerUiActions(actionContext: ActionContext): void {
                 });
                 return;
             }
-            const [successful] = await downloadExercises(actionContext, downloads);
-            const successfulIds = successful.map((ex) => ex.exerciseId);
-            if (successfulIds.length !== 0) {
-                await actionContext.userData.clearFromNewExercises(msg.courseId, successfulIds);
-                const openResult = await openExercises(
-                    actionContext,
-                    successfulIds,
-                    msg.courseName,
-                );
+            const { downloaded } = await downloadExercises(
+                actionContext,
+                msg.ids.map((x) => ({ id: x, courseName: msg.courseName as string })),
+            );
+            if (downloaded.length !== 0) {
+                await actionContext.userData.clearFromNewExercises(msg.courseId, downloaded);
+                const openResult = await openExercises(actionContext, downloaded, msg.courseName);
                 if (openResult.err) {
                     const message = "Failed to open exercises after download.";
                     Logger.error(message, openResult.val);

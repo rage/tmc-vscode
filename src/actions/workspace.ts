@@ -5,26 +5,18 @@
  */
 
 import * as _ from "lodash";
-import * as pLimit from "p-limit";
 import * as path from "path";
-import { Err, Ok, Result } from "ts-results";
+import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { CourseDetails, OldSubmission } from "../api/types";
+import { OldSubmission } from "../api/types";
 import { ExerciseStatus } from "../config/types";
-import { ExerciseExistsError } from "../errors";
 import * as UITypes from "../ui/types";
 import { Logger } from "../utils";
-import { compareDates, dateToString, parseDate } from "../utils/dateDeadline";
-import { askForItem, showNotification, showProgressNotification } from "../window";
+import { dateToString, parseDate } from "../utils/dateDeadline";
+import { askForItem, showNotification } from "../window";
 
 import { ActionContext, CourseExerciseDownloads } from "./types";
-
-const limit = pLimit(3);
-
-interface DownloadExercisesOptions {
-    skipOldSubmissionCheck?: boolean;
-}
 
 interface ExerciseDownload {
     courseId: number;
@@ -43,153 +35,42 @@ interface FailedDownload extends ExerciseDownload {
 /**
  * Downloads given exercises and opens them in TMC workspace.
  *
- * @param courseExerciseDownloads An array of course-related data that is required for downloading.
- * @returns Tuple of successful downloads and errors.
+ * @param exercises Exercises to download.
  */
 export async function downloadExercises(
     actionContext: ActionContext,
-    exercisesToDownload: ExerciseDownload[],
-    options?: DownloadExercisesOptions,
-): Promise<[SuccessfulDownload[], FailedDownload[]]> {
-    const { tmc, ui, workspaceManager, resources, settings } = actionContext;
-    const downloadOldSubmission =
-        options?.skipOldSubmissionCheck ?? settings.getDownloadOldSubmission();
+    exercises: Array<{ id: number; courseName: string }>,
+): Promise<{ downloaded: number[]; failed: number[]; error?: Error }> {
+    const { tmc, workspaceManager } = actionContext;
 
-    const exercises = _.uniq(exercisesToDownload);
-    const courses = new Map(
-        _(exercises)
-            .map((x) => x.courseId)
-            .uniq()
-            .value()
-            .map<[number, Promise<Result<CourseDetails, Error>>]>((x) => [
-                x,
-                tmc.getCourseDetails(x),
-            ]),
-    );
-
-    ui.webview.postMessage(
-        ...exercises.map<UITypes.WebviewMessage>((x) => ({
-            command: "exerciseStatusChange",
-            exerciseId: x.exerciseId,
-            status: "downloading",
-        })),
-    );
-
-    const task = async (
-        exerciseDownload: ExerciseDownload,
-        process: vscode.Progress<{ downloadedPct: number; increment: number }>,
-    ): Promise<Result<SuccessfulDownload, FailedDownload>> => {
-        const { courseId, exerciseId, organization } = exerciseDownload;
-
-        const wrapError = (error: Error, status: UITypes.ExerciseStatus): Err<FailedDownload> => {
-            ui.webview.postMessage({ command: "exerciseStatusChange", exerciseId, status });
-            return Err({ courseId, exerciseId, organization, error });
-        };
-
-        const dataResult = workspaceManager.getExerciseDataById(exerciseId);
-        if (dataResult.ok && dataResult.val.status !== ExerciseStatus.MISSING) {
-            return wrapError(
-                new ExerciseExistsError(`Exercise ${dataResult.val.name} already exists.`),
-                dataResult.val.status === ExerciseStatus.OPEN ? "opened" : "closed",
-            );
-        }
-
-        const courseResult = (await courses.get(courseId)) as Result<CourseDetails, Error>;
-        if (courseResult.err) {
-            return wrapError(courseResult.val, "downloadFailed");
-        }
-
-        const course = courseResult.val.course;
-        const exercise = course.exercises.find((x) => x.id === exerciseId);
-        if (!exercise) {
-            return wrapError(new Error("Exercise data missing from server."), "downloadFailed");
-        }
-
-        const exercisePath = path.join(resources.projectsDirectory, course.name, exercise.name);
-        let pathResult = workspaceManager.getExercisePathById(exerciseId);
-        if (pathResult.err) {
-            pathResult = workspaceManager
-                .addExercise({
-                    id: exercise.id,
-                    name: exercise.name,
-                    course: course.name,
-                    path: vscode.Uri.file(exercisePath),
-                    status: ExerciseStatus.MISSING,
-                })
-                .map(() => "");
-        }
-
-        if (pathResult.err) {
-            await workspaceManager.deleteExercise(exerciseId);
-            return wrapError(pathResult.val, "downloadFailed");
-        }
-
-        let isOld = true;
-        const downloadResult = await (async (): Promise<Result<void, Error>> => {
-            if (downloadOldSubmission) {
-                const oldSubmissionsResult = await tmc.getOldSubmissions(exerciseId);
-                if (oldSubmissionsResult.ok && oldSubmissionsResult.val.length > 0) {
-                    const submissionId = oldSubmissionsResult.val.sort((a, b) =>
-                        compareDates(
-                            parseDate(b.processing_attempts_started_at),
-                            parseDate(a.processing_attempts_started_at),
-                        ),
-                    )[0].id;
-                    const oldResult = await tmc.downloadOldSubmission(
-                        exerciseId,
-                        exercisePath,
-                        submissionId,
-                        false,
-                        (downloadedPct, increment) => process.report({ downloadedPct, increment }),
-                    );
-                    if (oldResult.ok) {
-                        return oldResult;
-                    }
-                }
+    // TODO: How to download latest submission in new version?
+    const idToData = new Map(exercises.map((x) => [x.id, x]));
+    const downloaded: number[] = [];
+    const result = await tmc.downloadExercises(
+        exercises.map((x) => x.id),
+        (download) => {
+            const exerciseName = _.last(download.path.split(path.sep));
+            const data = idToData.get(download.id);
+            if (!data || !exerciseName) {
+                return;
             }
-            isOld = false;
-            return tmc.downloadExercise(exerciseId, exercisePath, (downloadedPct, increment) =>
-                process.report({ downloadedPct, increment }),
-            );
-        })();
-        if (downloadResult.err) {
-            await workspaceManager.deleteExercise(exerciseId);
-            return wrapError(downloadResult.val, "downloadFailed");
-        }
 
-        ui.webview.postMessage({ command: "exerciseStatusChange", exerciseId, status: "closed" });
-        workspaceManager.setExerciseStatus(exerciseId, ExerciseStatus.CLOSED);
-        return Ok<SuccessfulDownload>({
-            ...exerciseDownload,
-            type: isOld ? "oldSubmission" : "default",
-        });
-    };
-
-    const downloadResults = await showProgressNotification(
-        `Downloading ${exercises.length} exercises...`,
-        ...exercises.map(
-            (x) => async (
-                p: vscode.Progress<{ downloadedPct: number; increment: number }>,
-            ): Promise<Result<SuccessfulDownload, FailedDownload>> => limit(() => task(x, p)),
-        ),
+            workspaceManager.addExercise({
+                course: data.courseName,
+                id: download.id,
+                name: exerciseName,
+                path: vscode.Uri.file(download.path),
+                status: ExerciseStatus.CLOSED,
+            });
+            downloaded.push(download.id);
+        },
+    );
+    const failed = _.difference(
+        exercises.map((x) => x.id),
+        downloaded,
     );
 
-    const [successful, failed] = downloadResults.reduce<[SuccessfulDownload[], FailedDownload[]]>(
-        ([s, f], next) => (next.ok ? [s.concat(next.val), f] : [s, f.concat(next.val)]),
-        [[], []],
-    );
-
-    // TODO: Refactor action calls so that this message can be moved outside.
-    if (successful.some((x) => x.type === "oldSubmission")) {
-        showNotification(
-            "Some downloaded exercises were restored to the state of your latest submission. " +
-                "If you wish to reset them to their original state," +
-                "you can do so by using TMC Commands Menu (CTRL + SHIFT + A).",
-            ["OK", (): void => {}],
-        );
-    }
-
-    return [successful, failed];
+    return { downloaded, failed, error: result.err ? result.val : undefined };
 }
 
 interface UpdateCheckOptions {
