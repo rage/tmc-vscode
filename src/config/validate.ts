@@ -2,7 +2,7 @@ import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
 
 import TMC from "../api/tmc";
-import { CourseData, CourseDetails } from "../api/types";
+import { CourseData } from "../api/types";
 import { ApiError, ConnectionError, ForbiddenError } from "../errors";
 import TemporaryWebview from "../ui/temporaryWebview";
 import UI from "../ui/ui";
@@ -10,7 +10,7 @@ import { Logger } from "../utils/logger";
 
 import Resources from "./resources";
 import Storage from "./storage";
-import { ExerciseStatus, LocalCourseData, LocalExerciseData } from "./types";
+import { LocalCourseData } from "./types";
 
 /**
  * Check that workspace and userdata is up-to-date.
@@ -31,6 +31,8 @@ export async function validateAndFix(
         await storage.updateAuthenticationToken(undefined);
     }
 
+    // TODO: Move this logic to where non-versioned data is migrated
+    /*
     const exerciseData = storage.getExerciseData() as unknown[];
     if (!is<LocalExerciseData[]>(exerciseData) && is<unknown[]>(exerciseData)) {
         const login = await ensureLogin(tmc, ui, resources);
@@ -97,6 +99,8 @@ export async function validateAndFix(
         storage.updateExerciseData(exerciseDataFixed);
         Logger.log("Workspacemanager data fixed");
     }
+    */
+
     const userData = storage.getUserData() as { courses: unknown[] };
     if (!is<{ courses: LocalCourseData[] }>(userData) && is<{ courses: unknown[] }>(userData)) {
         const login = await ensureLogin(tmc, ui, resources);
@@ -216,6 +220,7 @@ async function getCourseData(
     return tmc.getCourseData(courseId.val);
 }
 
+/*
 async function getCourseDetails(
     tmc: TMC,
     org: string,
@@ -227,6 +232,7 @@ async function getCourseDetails(
     }
     return tmc.getCourseDetails(courseId.val);
 }
+*/
 
 async function ensureLogin(
     tmc: TMC,

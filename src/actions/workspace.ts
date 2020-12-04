@@ -6,6 +6,7 @@
 
 import * as _ from "lodash";
 import * as pLimit from "p-limit";
+import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
@@ -50,7 +51,7 @@ export async function downloadExercises(
     exercisesToDownload: ExerciseDownload[],
     options?: DownloadExercisesOptions,
 ): Promise<[SuccessfulDownload[], FailedDownload[]]> {
-    const { tmc, ui, workspaceManager, settings } = actionContext;
+    const { tmc, ui, workspaceManager, resources, settings } = actionContext;
     const downloadOldSubmission =
         options?.skipOldSubmissionCheck ?? settings.getDownloadOldSubmission();
 
@@ -104,23 +105,25 @@ export async function downloadExercises(
             return wrapError(new Error("Exercise data missing from server."), "downloadFailed");
         }
 
+        const exercisePath = path.join(resources.projectsDirectory, course.name, exercise.name);
         let pathResult = workspaceManager.getExercisePathById(exerciseId);
         if (pathResult.err) {
-            pathResult = await workspaceManager.addExercise({
-                id: exercise.id,
-                name: exercise.name,
-                checksum: exercise.checksum,
-                course: course.name,
-                organization: exerciseDownload.organization,
-                status: ExerciseStatus.MISSING,
-            });
+            pathResult = workspaceManager
+                .addExercise({
+                    id: exercise.id,
+                    name: exercise.name,
+                    course: course.name,
+                    path: vscode.Uri.file(exercisePath),
+                    status: ExerciseStatus.MISSING,
+                })
+                .map(() => "");
         }
+
         if (pathResult.err) {
             await workspaceManager.deleteExercise(exerciseId);
             return wrapError(pathResult.val, "downloadFailed");
         }
 
-        const path = pathResult.val;
         let isOld = true;
         const downloadResult = await (async (): Promise<Result<void, Error>> => {
             if (downloadOldSubmission) {
@@ -134,7 +137,7 @@ export async function downloadExercises(
                     )[0].id;
                     const oldResult = await tmc.downloadOldSubmission(
                         exerciseId,
-                        path,
+                        exercisePath,
                         submissionId,
                         false,
                         (downloadedPct, increment) => process.report({ downloadedPct, increment }),
@@ -145,7 +148,7 @@ export async function downloadExercises(
                 }
             }
             isOld = false;
-            return tmc.downloadExercise(exerciseId, path, (downloadedPct, increment) =>
+            return tmc.downloadExercise(exerciseId, exercisePath, (downloadedPct, increment) =>
                 process.report({ downloadedPct, increment }),
             );
         })();
@@ -198,10 +201,17 @@ interface UpdateCheckOptions {
  * @param courseId If given, check only updates for that course.
  */
 export async function checkForExerciseUpdates(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     actionContext: ActionContext,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     courseId?: number,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     updateCheckOptions?: UpdateCheckOptions,
 ): Promise<Array<Result<CourseExerciseDownloads, Error>>> {
+    // TODO: Reimplement without needing checksums
+    return [];
+
+    /*
     const { tmc, userData, workspaceManager } = actionContext;
 
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
@@ -236,12 +246,17 @@ export async function checkForExerciseUpdates(
             });
         }),
     );
+    */
 }
 
 export async function downloadExerciseUpdates(
     actionContext: ActionContext,
     exercisesToDownload: ExerciseDownload[],
 ): Promise<[SuccessfulDownload[], FailedDownload[]]> {
+    // TODO: Reimplement without needing checksums
+    return [[], exercisesToDownload.map((x) => ({ ...x, error: new Error("No op") }))];
+
+    /*
     const { tmc, ui, workspaceManager } = actionContext;
 
     const exercises = _.uniq(exercisesToDownload);
@@ -334,6 +349,7 @@ export async function downloadExerciseUpdates(
         ([s, f], next) => (next.ok ? [s.concat(next.val), f] : [s, f.concat(next.val)]),
         [[], []],
     );
+    */
 }
 
 /**

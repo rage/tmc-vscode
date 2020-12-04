@@ -1,3 +1,5 @@
+import * as vscode from "vscode";
+
 import { LogLevel } from "../utils/";
 
 export type LocalCourseData = {
@@ -24,14 +26,24 @@ export type LocalCourseExercise = {
     softDeadline: string | null;
 };
 
-export type LocalExerciseData = {
+export interface LocalExerciseDataV1 {
     id: number;
     name: string;
     course: string;
     organization: string;
     checksum: string;
     status: ExerciseStatus;
-};
+}
+
+export interface LocalExerciseDataV2 {
+    id: number;
+    name: string;
+    course: string;
+    path: vscode.Uri;
+    status: ExerciseStatus;
+}
+
+export type LocalExerciseData = LocalExerciseDataV2;
 
 export enum ExerciseStatus {
     OPEN,

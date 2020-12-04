@@ -1,12 +1,24 @@
 import * as oauth2 from "client-oauth2";
 import * as vscode from "vscode";
 
-import { ExtensionSettings, LocalCourseData, LocalExerciseData } from "./types";
+import {
+    ExtensionSettings,
+    LocalCourseData,
+    LocalExerciseData,
+    LocalExerciseDataV1,
+    LocalExerciseDataV2,
+} from "./types";
+
+interface Options<T> {
+    version: T;
+}
 
 /**
  * Interface class for accessing stored TMC configuration and data.
  */
 export default class Storage {
+    private readonly _exerciseDataVersion = 2;
+
     private _context: vscode.ExtensionContext;
 
     /**
@@ -28,8 +40,21 @@ export default class Storage {
         return this._context.globalState.get("token");
     }
 
-    public getExerciseData(): LocalExerciseData[] | undefined {
-        return this._context.globalState.get("exerciseData");
+    getExerciseData(options?: Options<number>): LocalExerciseData[] | undefined;
+    getExerciseData(options: Options<1>): LocalExerciseDataV1[] | undefined;
+    getExerciseData(options: Options<2>): LocalExerciseDataV2[] | undefined;
+
+    public getExerciseData(options?: Options<number>): unknown {
+        const version = options?.version ?? this._exerciseDataVersion;
+        const key = this._exerciseDataVersionToKey(version);
+        switch (version) {
+            case 1:
+                return this._context.globalState.get<LocalExerciseDataV1[]>(key);
+            case 2:
+                return this._context.globalState.get<LocalExerciseDataV2[]>(key);
+            default:
+                throw `Unsupported data version ${version}`;
+        }
     }
 
     public getUserData(): { courses: LocalCourseData[] } | undefined {
@@ -56,7 +81,8 @@ export default class Storage {
     }
 
     public async updateExerciseData(exerciseData: LocalExerciseData[] | undefined): Promise<void> {
-        await this._context.globalState.update("exerciseData", exerciseData);
+        const key = this._exerciseDataVersionToKey(this._exerciseDataVersion);
+        await this._context.globalState.update(key, exerciseData);
     }
 
     public async updateUserData(userData: { courses: LocalCourseData[] }): Promise<void> {
@@ -77,5 +103,9 @@ export default class Storage {
         await this._context.globalState.update("userData", undefined);
         await this._context.globalState.update("extensionSettings", undefined);
         await this._context.globalState.update("extensionVersion", undefined);
+    }
+
+    private _exerciseDataVersionToKey(version: number): string {
+        return version === 1 ? "exerciseData" : `exercise-data-v${version}`;
     }
 }
