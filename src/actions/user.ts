@@ -291,9 +291,9 @@ export async function submitExercise(
     });
     temporaryWebviewProvider.addToRecycables(temp);
 
-    const courseData = userData.getCourseByName(exerciseDetails.val.course) as Readonly<
-        LocalCourseData
-    >;
+    const courseData = userData.getCourseByName(
+        exerciseDetails.val.course,
+    ) as Readonly<LocalCourseData>;
 
     checkForCourseUpdates(actionContext, courseData.id);
     vscode.commands.executeCommand("tmc.updateExercises", "silent");

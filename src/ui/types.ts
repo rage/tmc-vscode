@@ -17,16 +17,16 @@ export type HandlerContext = {
 };
 
 export type VisibilityGroups = {
-    LOGGED_IN: VisibilityGroup;
+    loggedIn: VisibilityGroup;
 };
 
 export type VisibilityGroup = {
-    _id: string;
+    id: string;
     not: VisibilityGroupNegated;
 };
 
 export type VisibilityGroupNegated = {
-    _id: string;
+    id: string;
 };
 
 export type TemplateData =

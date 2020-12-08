@@ -15,6 +15,7 @@ export type LocalCourseData = {
     newExercises: number[];
     notifyAfter: number;
     disabled: boolean;
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     material_url: string | null;
 };
 

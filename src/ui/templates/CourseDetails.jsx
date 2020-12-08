@@ -634,12 +634,13 @@ function script() {
                         "td.exercise-selector",
                     );
                     if (singleCheckboxColumn) {
-                        singleCheckboxColumn.firstElementChild.addEventListener("click", function (
-                            event,
-                        ) {
-                            selectedCount += event.target.checked ? 1 : -1;
-                            refreshFooter();
-                        });
+                        singleCheckboxColumn.firstElementChild.addEventListener(
+                            "click",
+                            function (event) {
+                                selectedCount += event.target.checked ? 1 : -1;
+                                refreshFooter();
+                            },
+                        );
                     }
                 }
             }

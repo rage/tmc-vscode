@@ -98,17 +98,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     Logger.configure(settings.getLogLevel());
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
-    const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated);
+    const loggedIn = ui.treeDP.createVisibilityGroup(authenticated);
     const visibilityGroups = {
-        LOGGED_IN,
+        loggedIn,
     };
     tmc.on("login", async () => {
         await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", true);
-        ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
+        ui.treeDP.updateVisibility([visibilityGroups.loggedIn]);
     });
     tmc.on("logout", async () => {
         await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
-        ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN.not]);
+        ui.treeDP.updateVisibility([visibilityGroups.loggedIn.not]);
         ui.webview.setContentFromTemplate({ templateName: "login" });
     });
 

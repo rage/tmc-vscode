@@ -322,6 +322,7 @@ export default class TMC {
         onDownloaded?: (download: { id: number; path: string }) => void,
     ): Promise<Result<void, Error>> {
         const onStdout = (res: LangsStatusUpdate<unknown>): void => {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
             if (is<{ ExerciseDownload: { id: number; path: string } }>(res.data)) {
                 onDownloaded?.(res.data.ExerciseDownload);
             }
@@ -633,6 +634,7 @@ export default class TMC {
         const submitUrl = `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`;
         const onStdout = (res: LangsStatusUpdate<unknown>): void => {
             progressCallback?.(100 * res["percent-done"], res.message ?? undefined);
+            // eslint-disable-next-line @typescript-eslint/naming-convention
             if (is<{ PostedSubmission: SubmissionResponse }>(res.data)) {
                 onSubmissionUrl?.(res.data.PostedSubmission.show_submission_url);
             }

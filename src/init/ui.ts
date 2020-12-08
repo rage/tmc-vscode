@@ -31,7 +31,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
-    ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.LOGGED_IN.not], {
+    ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.loggedIn.not], {
         command: "tmcTreeView.setContentFromTemplate",
         title: "",
         arguments: [{ templateName: "login" }],
@@ -41,7 +41,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.treeDP.registerAction(
         "My Courses",
         "myCourses",
-        [visibilityGroups.LOGGED_IN],
+        [visibilityGroups.loggedIn],
         {
             command: "tmc.myCourses",
             title: "Go to My Courses",
@@ -68,7 +68,7 @@ export function registerUiActions(actionContext: ActionContext): void {
         command: "tmc.openTMCExercisesFolder",
         title: "Open TMC Exercises Folder",
     });
-    ui.treeDP.registerAction("Log out", "logOut", [visibilityGroups.LOGGED_IN], {
+    ui.treeDP.registerAction("Log out", "logOut", [visibilityGroups.loggedIn], {
         command: "tmc.logout",
         title: "Log out",
     });

@@ -58,7 +58,7 @@ export async function downloadFile(
     }
 
     try {
-        await new Promise((resolve, reject) =>
+        await new Promise<void>((resolve, reject) =>
             response.buffer().then((buffer) => {
                 fs.writeFile(filePath, buffer, (err) => (err ? reject(err) : resolve()));
             }),

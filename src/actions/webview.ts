@@ -215,7 +215,7 @@ export async function selectCourse(
     let changeOrg = false;
     let course: number | undefined;
 
-    await new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
         const temp = webview || new TemporaryWebview(resources, ui);
         temp.setContent({
             title: "Select course",
@@ -256,7 +256,7 @@ export async function selectOrganization(
     const data = { organizations, pinned };
     let slug: string | undefined;
 
-    await new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
         const temp = webview || new TemporaryWebview(resources, ui);
         temp.setContent({
             title: "Select organization",
