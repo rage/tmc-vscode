@@ -85,8 +85,10 @@ export default class WorkspaceManager {
             return Err(new ExerciseExistsError("Data for this exercise already exists."));
         }
 
-        this._pathToId.set(exercise.path, exercise.id);
-        this._idToData.set(exercise.id, exercise);
+        const normalizedPath = vscode.Uri.file(exercise.path).fsPath;
+        const normalizedExercise = { ...exercise, path: normalizedPath };
+        this._pathToId.set(normalizedExercise.path, normalizedExercise.id);
+        this._idToData.set(normalizedExercise.id, normalizedExercise);
         return Ok.EMPTY;
     }
 
