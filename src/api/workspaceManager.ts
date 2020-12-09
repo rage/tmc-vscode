@@ -339,47 +339,44 @@ export default class WorkspaceManager {
      * the top and then lists all that course's open exercises in alphanumeric order.
      */
     private async _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
-        Logger.log("Refreshing exercises in current workspace");
-
         // The name is of form "workspaceName (workspace)"
         const workspaceName = vscode.workspace.name?.split(" ")[0];
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceName || !workspaceFolders) {
+            Logger.warn("Attempted refresh for a non-course workspace.");
             return Ok.EMPTY;
         }
 
+        const rootFolder = this._resources.workspaceRootFolder;
         const openExercises = this.getAllExerciseDataByCourseName(workspaceName)
             .filter((x) => x.status === ExerciseStatus.OPEN)
             .sort((a, b) => a.name.localeCompare(b.name))
             .map((x) => ({ uri: vscode.Uri.file(x.path) }));
+        const correctStructure = [{ uri: rootFolder }, ...openExercises];
+        if (
+            _.zip(correctStructure, workspaceFolders).every(
+                ([a, b]) => a?.uri.fsPath === b?.uri.fsPath,
+            )
+        ) {
+            Logger.debug("Workspace refresh was a no-op.");
+            return Ok.EMPTY;
+        }
 
-        const rootFolder = this._resources.workspaceRootFolder;
-        const tmcFolderIsRoot =
-            workspaceFolders.length === 0 || workspaceFolders[0].uri !== rootFolder;
-        if (!tmcFolderIsRoot) {
+        Logger.log("Refreshing workspace structure in the current workspace");
+        if (workspaceFolders[0]?.name !== ".tmc") {
             Logger.warn("Fixing incorrect root folder. This may restart the extension.");
         }
 
-        const startIndex = tmcFolderIsRoot ? 1 : 0;
-        const deleteCount = workspaceFolders.length - startIndex || null;
-        const foldersToAdd = tmcFolderIsRoot
-            ? openExercises
-            : [{ uri: rootFolder }, ...openExercises];
-
-        Logger.debug(`Replacing ${deleteCount} workspace folders with ${foldersToAdd.length}`);
-        const success = ((): boolean => {
-            if (foldersToAdd.length === 0) {
-                return vscode.workspace.updateWorkspaceFolders(startIndex, deleteCount);
-            }
-            return vscode.workspace.updateWorkspaceFolders(
-                startIndex,
-                deleteCount,
-                ...foldersToAdd,
-            );
-        })();
+        const deleteCount = workspaceFolders.length;
+        Logger.debug(`Replacing ${deleteCount} workspace folders with ${correctStructure.length}`);
+        const success = vscode.workspace.updateWorkspaceFolders(
+            0,
+            deleteCount,
+            ...correctStructure,
+        );
         if (!success) {
             Logger.error("Replace operation failed.");
-            Logger.debug("Failed with folders:", ...foldersToAdd);
+            Logger.debug("Failed with folders:", ...correctStructure);
         }
 
         return success ? Ok.EMPTY : Err(new Error("Failed to refresh active workspace."));
