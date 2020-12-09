@@ -39,7 +39,7 @@ export default class WorkspaceManager {
         const storedData = this._storage.getExerciseData();
         if (storedData) {
             this._idToData = new Map(storedData.map((x) => [x.id, x]));
-            this._pathToId = new Map(storedData.map((x) => [x.path.fsPath, x.id]));
+            this._pathToId = new Map(storedData.map((x) => [x.path, x.id]));
         } else {
             this._idToData = new Map();
             this._pathToId = new Map();
@@ -85,7 +85,7 @@ export default class WorkspaceManager {
             return Err(new ExerciseExistsError("Data for this exercise already exists."));
         }
 
-        this._pathToId.set(exercise.path.fsPath, exercise.id);
+        this._pathToId.set(exercise.path, exercise.id);
         this._idToData.set(exercise.id, exercise);
         return Ok.EMPTY;
     }
@@ -263,7 +263,7 @@ export default class WorkspaceManager {
         for (const id of ids) {
             const data = this._idToData.get(id);
             if (data) {
-                const openPath = data.path.fsPath;
+                const openPath = data.path;
                 const deleted = delSync(openPath, { force: true });
                 Logger.debug("Delete exercise deleted", ...deleted);
                 this._pathToId.delete(openPath);
@@ -296,7 +296,7 @@ export default class WorkspaceManager {
     }
 
     public getExercisePathById(id: number): Result<string, Error> {
-        const path = this._idToData.get(id)?.path.fsPath;
+        const path = this._idToData.get(id)?.path;
         if (!path) {
             return Err(new Error("Invalid exercise ID"));
         }
@@ -349,7 +349,7 @@ export default class WorkspaceManager {
         const openExercises = this.getAllExerciseDataByCourseName(workspaceName)
             .filter((x) => x.status === ExerciseStatus.OPEN)
             .sort((a, b) => a.name.localeCompare(b.name))
-            .map((x) => ({ uri: x.path }));
+            .map((x) => ({ uri: vscode.Uri.file(x.path) }));
 
         const rootFolder = this._resources.workspaceRootFolder;
         const tmcFolderIsRoot =
@@ -365,7 +365,16 @@ export default class WorkspaceManager {
             : [{ uri: rootFolder }, ...openExercises];
 
         Logger.debug(`Replacing ${deleteCount} workspace folders with ${foldersToAdd.length}`);
-        const success = vscode.workspace.updateWorkspaceFolders(0, deleteCount, ...foldersToAdd);
+        const success = ((): boolean => {
+            if (foldersToAdd.length === 0) {
+                return vscode.workspace.updateWorkspaceFolders(startIndex, deleteCount);
+            }
+            return vscode.workspace.updateWorkspaceFolders(
+                startIndex,
+                deleteCount,
+                ...foldersToAdd,
+            );
+        })();
         if (!success) {
             Logger.error("Replace operation failed.");
             Logger.debug("Failed with folders:", ...foldersToAdd);
@@ -393,7 +402,7 @@ export default class WorkspaceManager {
         ids.forEach(async (id) => {
             const data = this._idToData.get(id);
             if (data && data.status === oldStatus) {
-                if (!fs.existsSync(data.path.fsPath)) {
+                if (!fs.existsSync(data.path)) {
                     await this.setExerciseStatusAsMissing(id);
                     results.push({ id: data.id, status: "new" });
                     return;

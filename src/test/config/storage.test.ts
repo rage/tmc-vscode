@@ -70,7 +70,7 @@ suite("Storage tests", () => {
                 deadline: "2020-03-21",
                 softDeadline: "2020-03-19",
                 id: 1337,
-                path: vscode.Uri.file("HY-jtkt/hello-world"),
+                path: "HY-jtkt/hello-world",
                 status: 0,
                 name: "hello-world",
                 organization: "HY",

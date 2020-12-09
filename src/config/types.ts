@@ -1,5 +1,3 @@
-import * as vscode from "vscode";
-
 import { LogLevel } from "../utils/";
 
 export type LocalCourseData = {
@@ -40,7 +38,7 @@ export interface LocalExerciseDataV2 {
     id: number;
     name: string;
     course: string;
-    path: vscode.Uri;
+    path: string;
     status: ExerciseStatus;
 }
 
