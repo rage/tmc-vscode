@@ -4,8 +4,8 @@ import {
     ExtensionSettings,
     LocalCourseData,
     LocalExerciseData,
+    LocalExerciseDataV0,
     LocalExerciseDataV1,
-    LocalExerciseDataV2,
 } from "./types";
 
 interface Options<T> {
@@ -16,7 +16,7 @@ interface Options<T> {
  * Interface class for accessing stored TMC configuration and data.
  */
 export default class Storage {
-    private readonly _exerciseDataVersion = 2;
+    private readonly _exerciseDataVersion = 1;
 
     private _context: vscode.ExtensionContext;
 
@@ -29,17 +29,17 @@ export default class Storage {
     }
 
     getExerciseData(options?: Options<number>): LocalExerciseData[] | undefined;
+    getExerciseData(options: Options<0>): LocalExerciseDataV0[] | undefined;
     getExerciseData(options: Options<1>): LocalExerciseDataV1[] | undefined;
-    getExerciseData(options: Options<2>): LocalExerciseDataV2[] | undefined;
 
     public getExerciseData(options?: Options<number>): unknown {
         const version = options?.version ?? this._exerciseDataVersion;
         const key = this._exerciseDataVersionToKey(version);
         switch (version) {
+            case 0:
+                return this._context.globalState.get<LocalExerciseDataV0[]>(key);
             case 1:
                 return this._context.globalState.get<LocalExerciseDataV1[]>(key);
-            case 2:
-                return this._context.globalState.get<LocalExerciseDataV2[]>(key);
             default:
                 throw `Unsupported data version ${version}`;
         }
@@ -76,14 +76,14 @@ export default class Storage {
 
     public async wipeStorage(): Promise<void> {
         await this._context.globalState.update("token", undefined);
-        await this._context.globalState.update("exercise-data-v2", undefined);
         await this._context.globalState.update("exerciseData", undefined);
+        await this._context.globalState.update("exercise-data-v1", undefined);
         await this._context.globalState.update("userData", undefined);
         await this._context.globalState.update("extensionSettings", undefined);
         await this._context.globalState.update("extensionVersion", undefined);
     }
 
     private _exerciseDataVersionToKey(version: number): string {
-        return version === 1 ? "exerciseData" : `exercise-data-v${version}`;
+        return version === 0 ? "exerciseData" : `exercise-data-v${version}`;
     }
 }

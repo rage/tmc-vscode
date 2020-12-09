@@ -25,7 +25,7 @@ export type LocalCourseExercise = {
     softDeadline: string | null;
 };
 
-export interface LocalExerciseDataV1 {
+export interface LocalExerciseDataV0 {
     id: number;
     name: string;
     course: string;
@@ -34,7 +34,7 @@ export interface LocalExerciseDataV1 {
     status: ExerciseStatus;
 }
 
-export interface LocalExerciseDataV2 {
+export interface LocalExerciseDataV1 {
     id: number;
     name: string;
     course: string;
@@ -42,7 +42,7 @@ export interface LocalExerciseDataV2 {
     status: ExerciseStatus;
 }
 
-export type LocalExerciseData = LocalExerciseDataV2;
+export type LocalExerciseData = LocalExerciseDataV1;
 
 export enum ExerciseStatus {
     OPEN,

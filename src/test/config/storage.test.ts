@@ -79,7 +79,7 @@ suite("Storage tests", () => {
     });
 
     test("Exercise data getter uses ExtensionContext correctly", () => {
-        assertGetter(() => storage.getExerciseData({ version: 1 }), EXERCISE_DATA_KEY);
+        assertGetter(() => storage.getExerciseData({ version: 0 }), EXERCISE_DATA_KEY);
     });
 
     test("Extension settings updater uses ExtensionContext correctly", () => {
