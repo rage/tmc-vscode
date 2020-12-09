@@ -435,7 +435,6 @@
         "webpack-merge": "^5.4.0"
     },
     "dependencies": {
-        "client-oauth2": "^4.3.3",
         "del": "^6.0.0",
         "du": "^1.0.0",
         "fs-extra": "^9.0.1",

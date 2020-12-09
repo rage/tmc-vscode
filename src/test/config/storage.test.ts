@@ -19,7 +19,6 @@ suite("Storage tests", () => {
 
     // Same as hardcoded keys in Storage class. We "magically" know them also here to remind you
     // that changing these may break compatibility between releases.
-    const AUTHENTICATION_TOKEN_KEY = "token";
     const EXERCISE_DATA_KEY = "exerciseData";
     const EXTENSION_SETTINGS_KEY = "extensionSettings";
 
@@ -56,10 +55,6 @@ suite("Storage tests", () => {
         mockMemento.verify((x) => x.get(TypeMoq.It.isAny()), TypeMoq.Times.once());
         mockMemento.verify((x) => x.get(TypeMoq.It.isValue(hardcodedKey)), TypeMoq.Times.once());
     }
-
-    test("Authentication token getter uses ExtensionContext correctly", () => {
-        assertGetter(() => storage.getAuthenticationToken(), AUTHENTICATION_TOKEN_KEY);
-    });
 
     // TODO: Update test suite to use new version of storage.
     test.skip("Exercise data updater uses ExtensionContext correctly", () => {

@@ -88,13 +88,6 @@ suite("TMC", function () {
         });
     });
 
-    suite("#setAuthenticationToken()", function () {
-        test("Sets valid authentication token", async function () {
-            const result = await tmc.setAuthenticationToken({ access_token: "1234" });
-            expect(result.ok).to.be.true;
-        });
-    });
-
     suite("#deauthenticate()", function () {
         test("Deauthenticates", async function () {
             const result = await tmc.deauthenticate();

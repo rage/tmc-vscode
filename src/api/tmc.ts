@@ -1,5 +1,4 @@
 import * as cp from "child_process";
-import * as ClientOauth2 from "client-oauth2";
 import * as kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
@@ -151,32 +150,6 @@ export default class TMC {
     }
 
     /**
-     * Passes an access token to TMC-langs. Uses TMC-langs `login` core command internally.
-     *
-     * @deprecated Since version 1.0.0. Should only be used for passing the token to TMC-langs from
-     * older versions.
-     *
-     * @param token Authorization token.
-     */
-    public async setAuthenticationToken(token: ClientOauth2.Data): Promise<Result<void, Error>> {
-        const setTokenResult = await this._executeLangsCommand(
-            {
-                args: ["login", "--set-access-token", token.access_token],
-                core: true,
-                obfuscate: [2],
-            },
-            createIs<unknown>(),
-        );
-
-        if (setTokenResult.err) {
-            return setTokenResult;
-        }
-
-        this._onLogin?.();
-        return Ok.EMPTY;
-    }
-
-    /**
      * Returns user's current authentication status. Uses TMC-langs `logged-in` core command
      * internally.
      *
@@ -185,7 +158,7 @@ export default class TMC {
     public async isAuthenticated(): Promise<Result<boolean, Error>> {
         const loggedInResult = await this._executeLangsCommand(
             { args: ["logged-in"], core: true },
-            createIs<ClientOauth2.Data | null>(),
+            createIs<unknown>(),
         );
         if (loggedInResult.err) {
             return loggedInResult;

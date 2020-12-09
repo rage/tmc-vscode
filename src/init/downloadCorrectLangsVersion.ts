@@ -33,12 +33,8 @@ async function downloadCorrectLangsVersion(cliFolder: string): Promise<Result<st
     const [langsDownloadResult] = await showProgressNotification(
         "Downloading TMC-langs...",
         async (p) =>
-            await downloadFile(
-                cliUrl,
-                cliPath,
-                undefined,
-                undefined,
-                (_progress: number, increment: number) => p.report({ increment }),
+            await downloadFile(cliUrl, cliPath, undefined, (_progress: number, increment: number) =>
+                p.report({ increment }),
             ),
     );
     if (langsDownloadResult.err) {

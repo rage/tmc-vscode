@@ -22,15 +22,6 @@ export async function validateAndFix(
     ui: UI,
     resources: Resources,
 ): Promise<Result<void, Error>> {
-    const token = storage.getAuthenticationToken();
-    if (token !== undefined) {
-        const setTokenResult = await tmc.setAuthenticationToken(token);
-        if (setTokenResult.err) {
-            return setTokenResult;
-        }
-        await storage.updateAuthenticationToken(undefined);
-    }
-
     // TODO: Move this logic to where non-versioned data is migrated
     /*
     const exerciseData = storage.getExerciseData() as unknown[];

@@ -1,4 +1,3 @@
-import * as oauth2 from "client-oauth2";
 import * as vscode from "vscode";
 
 import {
@@ -29,17 +28,6 @@ export default class Storage {
         this._context = context;
     }
 
-    /**
-     * Gets currently stored authentication token.
-     *
-     * @deprecated Since version 1.0.0. Authentication token is now completely handled by TMC-langs.
-     *
-     * @returns currently stored authentication token or undefined if not set
-     */
-    public getAuthenticationToken(): oauth2.Data | undefined {
-        return this._context.globalState.get("token");
-    }
-
     getExerciseData(options?: Options<number>): LocalExerciseData[] | undefined;
     getExerciseData(options: Options<1>): LocalExerciseDataV1[] | undefined;
     getExerciseData(options: Options<2>): LocalExerciseDataV2[] | undefined;
@@ -67,17 +55,6 @@ export default class Storage {
 
     public getExtensionVersion(): string | undefined {
         return this._context.globalState.get("extensionVersion");
-    }
-
-    /**
-     * Updates the given authentication token in storage.
-     *
-     * @deprecated Since version 1.0.0. Can only be used to clear old data.
-     *
-     * @param authenticationToken authentication token to update
-     */
-    public async updateAuthenticationToken(authenticationToken: undefined): Promise<void> {
-        await this._context.globalState.update("token", authenticationToken);
     }
 
     public async updateExerciseData(exerciseData: LocalExerciseData[] | undefined): Promise<void> {
