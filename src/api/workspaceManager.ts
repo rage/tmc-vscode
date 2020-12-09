@@ -17,7 +17,6 @@ import { ExerciseStatus, LocalExerciseData } from "../config/types";
 import { ExerciseExistsError } from "../errors";
 import * as UITypes from "../ui/types";
 import { isCorrectWorkspaceOpen, Logger } from "../utils";
-import { showNotification } from "../window";
 
 /**
  * Class for managing, opening and closing of exercises on disk.
@@ -218,29 +217,20 @@ export default class WorkspaceManager {
      *
      * Sets their status as OPEN in persistent storage.
      *
-     * @param ids Exercise IDs to open or/and mark as open
+     * @param exerciseIds Exercise IDs to open or/and mark as open
      * @returns Array of { id: number; status: UITypes.ExerciseStatus } to post to webview.
      */
     public async openExercise(
         courseName: string,
-        ...ids: number[]
+        ...exerciseIds: number[]
     ): Promise<Result<{ id: number; status: UITypes.ExerciseStatus }[], Error>> {
-        let results: { id: number; status: UITypes.ExerciseStatus }[] = [];
-
-        const courseExercises = this.getAllExerciseDataByCourseName(courseName);
-        if (isCorrectWorkspaceOpen(this._resources, courseName)) {
-            const result = await this._handleCourseWorkspaceExercisesChanges(
-                true,
-                courseExercises,
-                ...ids,
-            );
-            if (result.err) {
-                return result;
-            }
-        }
-        results = await this._setExerciseStatus(ExerciseStatus.CLOSED, ExerciseStatus.OPEN, ...ids);
-
-        return new Ok(results);
+        const newStatuses = await this._setExerciseStatus(
+            ExerciseStatus.CLOSED,
+            ExerciseStatus.OPEN,
+            ...exerciseIds,
+        );
+        const refreshResult = await this._refreshActiveCourseWorkspace();
+        return refreshResult.err ? refreshResult : Ok(newStatuses);
     }
 
     /**
@@ -254,24 +244,15 @@ export default class WorkspaceManager {
      */
     public async closeExercise(
         courseName: string,
-        ...ids: number[]
+        ...exerciseIds: number[]
     ): Promise<Result<{ id: number; status: UITypes.ExerciseStatus }[], Error>> {
-        let results: { id: number; status: UITypes.ExerciseStatus }[] = [];
-
-        const courseExercises = this.getAllExerciseDataByCourseName(courseName);
-        if (isCorrectWorkspaceOpen(this._resources, courseName)) {
-            const result = await this._handleCourseWorkspaceExercisesChanges(
-                false,
-                courseExercises,
-                ...ids,
-            );
-            if (result.err) {
-                return result;
-            }
-        }
-        results = await this._setExerciseStatus(ExerciseStatus.OPEN, ExerciseStatus.CLOSED, ...ids);
-
-        return new Ok(results);
+        const newStatuses = await this._setExerciseStatus(
+            ExerciseStatus.OPEN,
+            ExerciseStatus.CLOSED,
+            ...exerciseIds,
+        );
+        const refreshResult = await this._refreshActiveCourseWorkspace();
+        return refreshResult.err ? refreshResult : Ok(newStatuses);
     }
 
     /**
@@ -352,95 +333,45 @@ export default class WorkspaceManager {
     }
 
     /**
-     * Where the magic happens when opening/closing exercises in a course workspace.
-     *
-     * @param handleAsOpen Handle as opened, i.e. called by this.openExercise or this.closeExercise
-     * @param exercises All exercises for given course found in storage
-     * @param ids Ids to be closed or opened
+     * Refreshes current active course workspace by first making sure that the `.tmc` folder is at
+     * the top and then lists all that course's open exercises in alphanumeric order.
      */
-    private async _handleCourseWorkspaceExercisesChanges(
-        handleAsOpen: boolean,
-        exercises: LocalExerciseData[],
-        ...ids: number[]
-    ): Promise<Result<void, Error>> {
-        const currentlyOpenFolders = vscode.workspace.workspaceFolders;
-        if (currentlyOpenFolders === undefined) {
-            return new Err(new Error("Currently open workspace returned undefined."));
-        }
-        let tmcFolderAsRoot = true;
+    private async _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
+        Logger.log("Refreshing exercises in current workspace");
 
-        // Select all open exercises for course.
-        const allOpen: vscode.Uri[] = exercises
-            .filter((ex) => ex.status === ExerciseStatus.OPEN)
-            .map((ex) => ex.path);
-        allOpen.length > 0 && Logger.debug("Exercises with opened status:", ...allOpen);
-        const toClose: vscode.Uri[] = [];
-        const toOpen: vscode.Uri[] = [];
-
-        const statusToCheck = handleAsOpen ? ExerciseStatus.CLOSED : ExerciseStatus.OPEN;
-        ids.forEach((id) => {
-            const data = this._idToData.get(id);
-            if (data && data.status === statusToCheck) {
-                const exercisePath = data.path;
-                if (!fs.existsSync(exercisePath.fsPath)) {
-                    toOpen.push(exercisePath);
-                    toClose.push(exercisePath);
-                    return;
-                }
-                if (handleAsOpen) {
-                    toOpen.push(exercisePath);
-                } else {
-                    toClose.push(exercisePath);
-                }
-            }
-        });
-
-        toOpen.length > 0 && Logger.debug("Following exercises should be open:", ...toOpen);
-        toClose.length > 0 && Logger.debug("Following exercises should be closed:", ...toClose);
-
-        if (currentlyOpenFolders.length === 0 || currentlyOpenFolders[0].name !== ".tmc") {
-            Logger.warn("The .tmc folder is not set as root folder.");
-            this._verifyCourseWorkspaceRootFolderAndFileExists();
-            allOpen.push(this._resources.workspaceRootFolder);
-            tmcFolderAsRoot = false;
-        }
-
-        let foldersToAdd = [];
-        if (!handleAsOpen) {
-            foldersToAdd = _.differenceBy(allOpen, toClose, "path");
-        } else {
-            foldersToAdd = _.unionBy(allOpen, toOpen, "path");
-        }
-        foldersToAdd = foldersToAdd.sort().map((e) => ({ uri: e }));
-        foldersToAdd.length > 0 &&
-            Logger.debug("Following folders will be opened:", ...foldersToAdd);
-        Logger.debug("Currently open", ...currentlyOpenFolders);
-        const start = tmcFolderAsRoot ? 1 : 0;
-        const toRemove = currentlyOpenFolders.length - start;
-        const remove = toRemove > 0 ? toRemove : null;
-
-        if (!tmcFolderAsRoot) {
-            await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-            showNotification("The workspace first folder is not .tmc, fixing issue.");
-        }
-
-        const success = vscode.workspace.updateWorkspaceFolders(start, remove, ...foldersToAdd);
-
-        if (success || _.differenceBy(currentlyOpenFolders, foldersToAdd, "uri.path").length <= 1) {
+        // The name is of form "workspaceName (workspace)"
+        const workspaceName = vscode.workspace.name?.split(" ")[0];
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceName || !workspaceFolders) {
             return Ok.EMPTY;
         }
-        Logger.log("Handle as open", handleAsOpen);
-        Logger.log("Currently open folders", currentlyOpenFolders);
-        Logger.log("All open status", allOpen);
-        Logger.log("To open", toOpen);
-        Logger.log("To close", toClose);
-        Logger.error(
-            "Failed to execute vscode.workspace.updateWorkspaceFolders with params",
-            start,
-            remove,
-            foldersToAdd,
-        );
-        return new Err(new Error("Failed to handle opening or closing exercises for workspace."));
+
+        const openExercises = this.getAllExerciseDataByCourseName(workspaceName)
+            .filter((x) => x.status === ExerciseStatus.OPEN)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((x) => ({ uri: x.path }));
+
+        const rootFolder = this._resources.workspaceRootFolder;
+        const tmcFolderIsRoot =
+            workspaceFolders.length === 0 || workspaceFolders[0].uri !== rootFolder;
+        if (!tmcFolderIsRoot) {
+            Logger.warn("Fixing incorrect root folder. This may restart the extension.");
+        }
+
+        const startIndex = tmcFolderIsRoot ? 1 : 0;
+        const deleteCount = workspaceFolders.length - startIndex || null;
+        const foldersToAdd = tmcFolderIsRoot
+            ? openExercises
+            : [{ uri: rootFolder }, ...openExercises];
+
+        Logger.debug(`Replacing ${deleteCount} workspace folders with ${foldersToAdd.length}`);
+        const success = vscode.workspace.updateWorkspaceFolders(0, deleteCount, ...foldersToAdd);
+        if (!success) {
+            Logger.error("Replace operation failed.");
+            Logger.debug("Failed with folders:", ...foldersToAdd);
+        }
+
+        return success ? Ok.EMPTY : Err(new Error("Failed to refresh active workspace."));
     }
 
     /**

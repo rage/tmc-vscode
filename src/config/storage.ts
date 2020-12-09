@@ -99,6 +99,7 @@ export default class Storage {
 
     public async wipeStorage(): Promise<void> {
         await this._context.globalState.update("token", undefined);
+        await this._context.globalState.update("exercise-data-v2", undefined);
         await this._context.globalState.update("exerciseData", undefined);
         await this._context.globalState.update("userData", undefined);
         await this._context.globalState.update("extensionSettings", undefined);
