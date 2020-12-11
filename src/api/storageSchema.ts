@@ -1,4 +1,5 @@
-export enum ExerciseStatus {
+// Volatile enum usage
+enum ExerciseStatusV0 {
     OPEN,
     CLOSED,
     MISSING,
@@ -10,7 +11,13 @@ export interface LocalExerciseDataV0 {
     course: string;
     organization: string;
     checksum: string;
-    status: ExerciseStatus;
+    status: ExerciseStatusV0;
+}
+
+export enum ExerciseStatus {
+    OPEN = "open",
+    CLOSED = "closed",
+    MISSING = "missing",
 }
 
 export interface LocalExerciseDataV1 {

@@ -2,6 +2,7 @@ import * as TypeMoq from "typemoq";
 import * as vscode from "vscode";
 
 import Storage from "../../api/storage";
+import { ExerciseStatus, LocalExerciseDataV1 } from "../../api/storageSchema";
 import { ExtensionSettings } from "../../config/types";
 import { LogLevel } from "../../utils";
 
@@ -58,17 +59,17 @@ suite("Storage tests", () => {
 
     // TODO: Update test suite to use new version of storage.
     test.skip("Exercise data updater uses ExtensionContext correctly", () => {
-        const exerciseData = [
+        const exerciseData: LocalExerciseDataV1[] = [
             {
-                checksum: "asd",
+                // checksum: "asd",
                 course: "HY-jtkt",
-                deadline: "2020-03-21",
-                softDeadline: "2020-03-19",
+                // deadline: "2020-03-21",
+                // softDeadline: "2020-03-19",
                 id: 1337,
                 path: "HY-jtkt/hello-world",
-                status: 0,
+                status: ExerciseStatus.CLOSED,
                 name: "hello-world",
-                organization: "HY",
+                // organization: "HY",
             },
         ];
         assertUpdater(
