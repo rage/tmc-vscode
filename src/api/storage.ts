@@ -24,6 +24,7 @@ export default class Storage {
     private static readonly _exerciseDataVersion = 1;
     private static readonly _userDataVersion = 1;
     private static readonly _settingsVersion = 1;
+    private static readonly _extensionVersionVersion = 1;
 
     private _context: vscode.ExtensionContext;
 
@@ -85,8 +86,10 @@ export default class Storage {
         return this._context.globalState.get("extensionSettings");
     }
 
-    public getExtensionVersion(): string | undefined {
-        return this._context.globalState.get("extensionVersion");
+    public getExtensionVersion(options?: Options<number>): string | undefined {
+        const version = options?.version ?? Storage._extensionVersionVersion;
+        const key = this._extensionVersionVersionToKey(version);
+        return this._context.globalState.get<string>(key);
     }
 
     public async updateExerciseData(
@@ -119,17 +122,22 @@ export default class Storage {
         await this._context.globalState.update("extensionSettings", undefined);
         await this._context.globalState.update("extension-settings-v1", undefined);
         await this._context.globalState.update("extensionVersion", undefined);
+        await this._context.globalState.update("extension-version-v1", undefined);
     }
 
     private _exerciseDataVersionToKey(version: number): string {
-        return version === 0 ? "exerciseData" : `exercise-data-v${version}`;
+        return version <= 0 ? "exerciseData" : `exercise-data-v${version}`;
     }
 
     private _userDataVersionToKey(version: number): string {
-        return version === 0 ? "userData" : `user-data-v${version}`;
+        return version <= 0 ? "userData" : `user-data-v${version}`;
     }
 
     private _settingsVersionToKey(version: number): string {
-        return version === 0 ? "extensionSettings" : `extension-settings-v${version}`;
+        return version <= 0 ? "extensionSettings" : `extension-settings-v${version}`;
+    }
+
+    private _extensionVersionVersionToKey(version: number): string {
+        return version <= 0 ? "extensionVersion" : `extension-version-v${version}`;
     }
 }
