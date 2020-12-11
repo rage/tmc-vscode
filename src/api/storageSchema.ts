@@ -27,5 +27,3 @@ export interface LocalExerciseDataV1 {
     path: string;
     status: ExerciseStatus;
 }
-
-export type LocalExerciseData = LocalExerciseDataV1;

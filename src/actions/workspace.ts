@@ -7,6 +7,7 @@
 import * as _ from "lodash";
 import * as path from "path";
 import { Ok, Result } from "ts-results";
+import * as vscode from "vscode";
 
 import { ExerciseStatus } from "../api/storageSchema";
 import { OldSubmission } from "../api/types";
@@ -58,8 +59,8 @@ export async function downloadExercises(
                 course: data.courseName,
                 id: download.id,
                 name: exerciseName,
-                path: download.path,
                 status: ExerciseStatus.CLOSED,
+                uri: vscode.Uri.file(download.path),
             });
             downloaded.push(download.id);
         },

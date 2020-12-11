@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 
 import { ExtensionSettings, LocalCourseData } from "../config/types";
 
-import { LocalExerciseData, LocalExerciseDataV0, LocalExerciseDataV1 } from "./storageSchema";
+import { LocalExerciseDataV0, LocalExerciseDataV1 } from "./storageSchema";
 
 interface Options<T> {
     version: T;
@@ -24,9 +24,9 @@ export default class Storage {
         this._context = context;
     }
 
-    getExerciseData(options?: Options<number>): LocalExerciseData[] | undefined;
     getExerciseData(options: Options<0>): LocalExerciseDataV0[] | undefined;
     getExerciseData(options: Options<1>): LocalExerciseDataV1[] | undefined;
+    getExerciseData(): LocalExerciseDataV1[] | undefined;
 
     public getExerciseData(options?: Options<number>): unknown {
         const version = options?.version ?? this._exerciseDataVersion;
@@ -53,7 +53,9 @@ export default class Storage {
         return this._context.globalState.get("extensionVersion");
     }
 
-    public async updateExerciseData(exerciseData: LocalExerciseData[] | undefined): Promise<void> {
+    public async updateExerciseData(
+        exerciseData: LocalExerciseDataV1[] | undefined,
+    ): Promise<void> {
         const key = this._exerciseDataVersionToKey(this._exerciseDataVersion);
         await this._context.globalState.update(key, exerciseData);
     }

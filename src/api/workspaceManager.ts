@@ -17,14 +17,22 @@ import * as UITypes from "../ui/types";
 import { isCorrectWorkspaceOpen, Logger } from "../utils";
 
 import Storage from "./storage";
-import { ExerciseStatus, LocalExerciseData } from "./storageSchema";
+import { ExerciseStatus } from "./storageSchema";
+
+export interface WorkspaceExercise {
+    id: number;
+    name: string;
+    course: string;
+    status: ExerciseStatus;
+    uri: vscode.Uri;
+}
 
 /**
  * Class for managing, opening and closing of exercises on disk.
  */
 export default class WorkspaceManager {
     private readonly _pathToId: Map<string, number>;
-    private readonly _idToData: Map<number, LocalExerciseData>;
+    private readonly _idToData: Map<number, WorkspaceExercise>;
     private readonly _storage: Storage;
     private readonly _resources: Resources;
     private _watcher: vscode.FileSystemWatcher;
@@ -37,10 +45,12 @@ export default class WorkspaceManager {
     constructor(storage: Storage, resources: Resources) {
         this._storage = storage;
         this._resources = resources;
-        const storedData = this._storage.getExerciseData();
-        if (storedData) {
-            this._idToData = new Map(storedData.map((x) => [x.id, x]));
-            this._pathToId = new Map(storedData.map((x) => [x.path, x.id]));
+        const exercises = this._storage
+            .getExerciseData()
+            ?.map<WorkspaceExercise>((x) => ({ ...x, uri: vscode.Uri.file(x.path) }));
+        if (exercises) {
+            this._idToData = new Map(exercises.map((x) => [x.id, x]));
+            this._pathToId = new Map(exercises.map((x) => [x.uri.fsPath, x.id]));
         } else {
             this._idToData = new Map();
             this._pathToId = new Map();
@@ -81,15 +91,13 @@ export default class WorkspaceManager {
      * @param exercise Exercise to add.
      * @returns Unique file path for the exercise.
      */
-    public addExercise(exercise: LocalExerciseData): Result<void, Error> {
+    public addExercise(exercise: WorkspaceExercise): Result<void, Error> {
         if (this._idToData.has(exercise.id)) {
             return Err(new ExerciseExistsError("Data for this exercise already exists."));
         }
 
-        const normalizedPath = vscode.Uri.file(exercise.path).fsPath;
-        const normalizedExercise = { ...exercise, path: normalizedPath };
-        this._pathToId.set(normalizedExercise.path, normalizedExercise.id);
-        this._idToData.set(normalizedExercise.id, normalizedExercise);
+        this._pathToId.set(exercise.uri.fsPath, exercise.id);
+        this._idToData.set(exercise.id, exercise);
         return Ok.EMPTY;
     }
 
@@ -97,7 +105,7 @@ export default class WorkspaceManager {
      * Gets the matching exercise's data for the given path, if managed by this object.
      * @param exerciseFolder Path to exercise folder used for matching with the data
      */
-    public getExerciseDataByPath(exerciseFolder: string): Result<LocalExerciseData, Error> {
+    public getExerciseDataByPath(exerciseFolder: string): Result<WorkspaceExercise, Error> {
         const id = this._pathToId.get(exerciseFolder);
         if (!id) {
             return new Err(new Error(`Exercise ID not found for ${exerciseFolder}`));
@@ -109,7 +117,7 @@ export default class WorkspaceManager {
      * Gets the matching exercise's data for the given path, if managed by this object.
      * @param exerciseFolder Path to exercise folder used for matching with the data
      */
-    public getExerciseDataById(id: number): Result<LocalExerciseData, Error> {
+    public getExerciseDataById(id: number): Result<WorkspaceExercise, Error> {
         const data = this._idToData.get(id);
         if (!data) {
             return new Err(new Error(`Exercise data missing for ${id}`));
@@ -121,14 +129,8 @@ export default class WorkspaceManager {
      * Returns all exercise data for given course name.
      * @param courseName
      */
-    public getAllExerciseDataByCourseName(courseName: string): LocalExerciseData[] {
-        const exercises: LocalExerciseData[] = [];
-        for (const data of this._idToData.values()) {
-            if (data.course === courseName) {
-                exercises.push(data);
-            }
-        }
-        return exercises;
+    public getAllExerciseDataByCourseName(courseName: string): WorkspaceExercise[] {
+        return Array.from(this._idToData.values()).filter((x) => x.course === courseName);
     }
 
     /**
@@ -266,7 +268,7 @@ export default class WorkspaceManager {
         for (const id of ids) {
             const data = this._idToData.get(id);
             if (data) {
-                const openPath = data.path;
+                const openPath = data.uri.fsPath;
                 const deleted = delSync(openPath, { force: true });
                 Logger.debug("Delete exercise deleted", ...deleted);
                 this._pathToId.delete(openPath);
@@ -276,7 +278,7 @@ export default class WorkspaceManager {
         await this._updatePersistentData();
     }
 
-    public getAllExercises(): LocalExerciseData[] {
+    public getAllExercises(): WorkspaceExercise[] {
         return Array.from(this._idToData.values());
     }
 
@@ -299,7 +301,7 @@ export default class WorkspaceManager {
     }
 
     public getExercisePathById(id: number): Result<string, Error> {
-        const path = this._idToData.get(id)?.path;
+        const path = this._idToData.get(id)?.uri.fsPath;
         if (!path) {
             return Err(new Error("Invalid exercise ID"));
         }
@@ -352,7 +354,7 @@ export default class WorkspaceManager {
         const openExercises = this.getAllExerciseDataByCourseName(workspaceName)
             .filter((x) => x.status === ExerciseStatus.OPEN)
             .sort((a, b) => a.name.localeCompare(b.name))
-            .map((x) => ({ uri: vscode.Uri.file(x.path) }));
+            .map((x) => ({ uri: x.uri }));
         const correctStructure = [{ uri: rootFolder }, ...openExercises];
         if (
             _.zip(correctStructure, workspaceFolders).every(
@@ -402,7 +404,7 @@ export default class WorkspaceManager {
         ids.forEach(async (id) => {
             const data = this._idToData.get(id);
             if (data && data.status === oldStatus) {
-                if (!fs.existsSync(data.path)) {
+                if (!fs.existsSync(data.uri.fsPath)) {
                     await this.setExerciseStatusAsMissing(id);
                     results.push({ id: data.id, status: "new" });
                     return;
@@ -417,7 +419,9 @@ export default class WorkspaceManager {
     }
 
     private async _updatePersistentData(): Promise<void> {
-        return this._storage.updateExerciseData(Array.from(this._idToData.values()));
+        return this._storage.updateExerciseData(
+            Array.from(this._idToData.values()).map((x) => ({ ...x, path: x.uri.fsPath })),
+        );
     }
 
     /**
