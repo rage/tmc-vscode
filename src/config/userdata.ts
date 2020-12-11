@@ -1,9 +1,9 @@
 import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 
+import Storage from "../api/storage";
 import { Logger } from "../utils/logger";
 
-import Storage from "./storage";
 import { LocalCourseData, LocalCourseExercise } from "./types";
 
 export class UserData {

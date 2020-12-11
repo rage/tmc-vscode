@@ -1,9 +1,9 @@
 import * as TypeMoq from "typemoq";
 import * as vscode from "vscode";
 
-import Storage from "../../config/storage";
+import Storage from "../../api/storage";
 import { ExtensionSettings } from "../../config/types";
-import { LogLevel } from "../../utils/";
+import { LogLevel } from "../../utils";
 
 suite("Storage tests", () => {
     let mockContext: TypeMoq.IMock<vscode.ExtensionContext>;

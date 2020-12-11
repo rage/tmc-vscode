@@ -1,6 +1,7 @@
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
 
+import Storage from "../api/storage";
 import TMC from "../api/tmc";
 import { CourseData } from "../api/types";
 import { ApiError, ConnectionError, ForbiddenError } from "../errors";
@@ -9,7 +10,6 @@ import UI from "../ui/ui";
 import { Logger } from "../utils/logger";
 
 import Resources from "./resources";
-import Storage from "./storage";
 import { LocalCourseData } from "./types";
 
 /**

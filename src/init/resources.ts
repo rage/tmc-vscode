@@ -3,9 +3,9 @@ import * as path from "path";
 import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import Storage from "../api/storage";
 import { EXTENSION_ID, WORKSPACE_SETTINGS } from "../config/constants";
 import Resources from "../config/resources";
-import Storage from "../config/storage";
 import { Logger } from "../utils/logger";
 
 /**

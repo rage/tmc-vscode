@@ -7,8 +7,8 @@
 import * as fs from "fs-extra";
 import { Err, Ok, Result } from "ts-results";
 
+import * as StorageTypes from "../api/storageSchema";
 import { Exercise } from "../api/types";
-import * as ConfigTypes from "../config/types";
 import TemporaryWebview from "../ui/temporaryWebview";
 import * as UITypes from "../ui/types";
 import { WebviewMessage } from "../ui/types";
@@ -89,13 +89,13 @@ export async function displayLocalCourseDetails(
 
     const mapStatus = (
         exerciseId: number,
-        status: ConfigTypes.ExerciseStatus,
+        status: StorageTypes.ExerciseStatus,
         expired: boolean,
     ): UITypes.ExerciseStatus => {
         switch (status) {
-            case ConfigTypes.ExerciseStatus.CLOSED:
+            case StorageTypes.ExerciseStatus.CLOSED:
                 return checkFolderExistence(exerciseId) ? "closed" : "missing";
-            case ConfigTypes.ExerciseStatus.OPEN:
+            case StorageTypes.ExerciseStatus.OPEN:
                 return checkFolderExistence(exerciseId) ? "opened" : "missing";
             default:
                 return expired ? "expired" : "new";
@@ -125,7 +125,7 @@ export async function displayLocalCourseDetails(
                 exerciseId: ex.id,
                 status: mapStatus(
                     ex.id,
-                    exData?.status ?? ConfigTypes.ExerciseStatus.MISSING,
+                    exData?.status ?? StorageTypes.ExerciseStatus.MISSING,
                     hardDeadline !== null && currentDate >= hardDeadline,
                 ),
             },

@@ -11,9 +11,10 @@ import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import { ExerciseStatus } from "../api/storageSchema";
 import { SubmissionFeedback } from "../api/types";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
-import { ExerciseStatus, LocalCourseData } from "../config/types";
+import { LocalCourseData } from "../config/types";
 import { ConnectionError, ForbiddenError } from "../errors";
 import { TestResultData } from "../ui/types";
 import {

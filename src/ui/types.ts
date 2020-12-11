@@ -1,7 +1,7 @@
 import { FeedbackQuestion } from "../actions/types";
+import Storage from "../api/storage";
 import TMC from "../api/tmc";
 import { Course, Organization, SubmissionStatusReport } from "../api/types";
-import Storage from "../config/storage";
 import { ExtensionSettings, LocalCourseData } from "../config/types";
 import { LogLevel } from "../utils/logger";
 

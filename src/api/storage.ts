@@ -1,12 +1,8 @@
 import * as vscode from "vscode";
 
-import {
-    ExtensionSettings,
-    LocalCourseData,
-    LocalExerciseData,
-    LocalExerciseDataV0,
-    LocalExerciseDataV1,
-} from "./types";
+import { ExtensionSettings, LocalCourseData } from "../config/types";
+
+import { LocalExerciseData, LocalExerciseDataV0, LocalExerciseDataV1 } from "./storageSchema";
 
 interface Options<T> {
     version: T;

@@ -1,12 +1,12 @@
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import Storage from "../api/storage";
 import { isCorrectWorkspaceOpen } from "../utils";
 import { Logger, LogLevel } from "../utils/logger";
 
 import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
 import Resources from "./resources";
-import Storage from "./storage";
 import { ExtensionSettings, ExtensionSettingsData } from "./types";
 
 /**

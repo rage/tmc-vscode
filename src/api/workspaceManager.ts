@@ -12,11 +12,12 @@ import {
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Resources from "../config/resources";
-import Storage from "../config/storage";
-import { ExerciseStatus, LocalExerciseData } from "../config/types";
 import { ExerciseExistsError } from "../errors";
 import * as UITypes from "../ui/types";
 import { isCorrectWorkspaceOpen, Logger } from "../utils";
+
+import Storage from "./storage";
+import { ExerciseStatus, LocalExerciseData } from "./storageSchema";
 
 /**
  * Class for managing, opening and closing of exercises on disk.

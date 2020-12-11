@@ -8,8 +8,8 @@ import * as _ from "lodash";
 import * as path from "path";
 import { Ok, Result } from "ts-results";
 
+import { ExerciseStatus } from "../api/storageSchema";
 import { OldSubmission } from "../api/types";
-import { ExerciseStatus } from "../config/types";
 import * as UITypes from "../ui/types";
 import { Logger } from "../utils";
 import { dateToString, parseDate } from "../utils/dateDeadline";

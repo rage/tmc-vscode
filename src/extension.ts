@@ -2,6 +2,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { checkForCourseUpdates } from "./actions";
+import Storage from "./api/storage";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import {
@@ -13,7 +14,6 @@ import {
     TMC_LANGS_ROOT_URL,
 } from "./config/constants";
 import Settings from "./config/settings";
-import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import { EmptyLangsResponseError } from "./errors";

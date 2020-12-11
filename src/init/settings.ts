@@ -1,7 +1,7 @@
 import { is } from "typescript-is";
 
+import Storage from "../api/storage";
 import Resources from "../config/resources";
-import Storage from "../config/storage";
 import { ExtensionSettings } from "../config/types";
 import { removeOldData } from "../utils";
 import { Logger, LogLevel } from "../utils/logger";
