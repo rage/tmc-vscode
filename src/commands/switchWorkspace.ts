@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
-import { LocalCourseData } from "../config/types";
+import { LocalCourseData } from "../config/userdata";
 import { askForItem } from "../window";
 
 export async function switchWorkspace(actionContext: ActionContext): Promise<void> {

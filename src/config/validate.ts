@@ -1,3 +1,6 @@
+/* eslint-disable max-len */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
 
@@ -10,7 +13,7 @@ import UI from "../ui/ui";
 import { Logger } from "../utils/logger";
 
 import Resources from "./resources";
-import { LocalCourseData } from "./types";
+import { LocalCourseData } from "./userdata";
 
 /**
  * Check that workspace and userdata is up-to-date.
@@ -90,7 +93,6 @@ export async function validateAndFix(
         storage.updateExerciseData(exerciseDataFixed);
         Logger.log("Workspacemanager data fixed");
     }
-    */
 
     const userData = storage.getUserData() as { courses: unknown[] };
     if (!is<{ courses: LocalCourseData[] }>(userData) && is<{ courses: unknown[] }>(userData)) {
@@ -118,11 +120,10 @@ export async function validateAndFix(
                     continue;
                 }
 
-                /**
-                 * Tries to fetch from TMC-VSCode cache, if data not found, fetches from TMC-langs.
-                 * If `course.id` would be undefined and `course.name` not,
-                 * try to find `course.id` from user visible courses using the name field.
-                 */
+                // Tries to fetch from TMC-VSCode cache, if data not found, fetches from TMC-langs.
+                // If `course.id` would be undefined and `course.name` not,
+                // try to find `course.id` from user visible courses using the name field.
+
                 const courseDataResult = await (course.id !== undefined
                     ? tmc.getCourseData(course.id)
                     : getCourseData(tmc, course.organization, course.name as string));
@@ -175,6 +176,7 @@ export async function validateAndFix(
         storage.updateUserData(userDataFixed);
         Logger.log("Userdata fixed");
     }
+    */
 
     return Ok.EMPTY;
 }

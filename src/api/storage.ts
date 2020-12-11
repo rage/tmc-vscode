@@ -1,18 +1,28 @@
 import * as vscode from "vscode";
 
-import { ExtensionSettings, LocalCourseData } from "../config/types";
+import { ExtensionSettings } from "../config/types";
 
-import { LocalExerciseDataV0, LocalExerciseDataV1 } from "./storageSchema";
+import {
+    LocalCourseDataV0,
+    LocalCourseDataV1,
+    LocalExerciseDataV0,
+    LocalExerciseDataV1,
+} from "./storageSchema";
 
 interface Options<T> {
     version: T;
+}
+
+interface UserData<T> {
+    courses: T;
 }
 
 /**
  * Interface class for accessing stored TMC configuration and data.
  */
 export default class Storage {
-    private readonly _exerciseDataVersion = 1;
+    private static readonly _exerciseDataVersion = 1;
+    private static readonly _userDataVersion = 1;
 
     private _context: vscode.ExtensionContext;
 
@@ -29,7 +39,7 @@ export default class Storage {
     getExerciseData(): LocalExerciseDataV1[] | undefined;
 
     public getExerciseData(options?: Options<number>): unknown {
-        const version = options?.version ?? this._exerciseDataVersion;
+        const version = options?.version ?? Storage._exerciseDataVersion;
         const key = this._exerciseDataVersionToKey(version);
         switch (version) {
             case 0:
@@ -41,8 +51,23 @@ export default class Storage {
         }
     }
 
-    public getUserData(): { courses: LocalCourseData[] } | undefined {
-        return this._context.globalState.get("userData");
+    getUserData(options: Options<0>): UserData<LocalCourseDataV0[]> | undefined;
+    getUserData(options: Options<1>): UserData<LocalCourseDataV1[]> | undefined;
+    getUserData(): UserData<LocalCourseDataV1[]> | undefined;
+
+    public getUserData(options?: Options<number>): unknown {
+        const version = options?.version ?? Storage._userDataVersion;
+        const key = this._userDataVersionToKey(version);
+        switch (version) {
+            case 0:
+                return this._context.globalState.get<{ courses: LocalCourseDataV0 } | undefined>(
+                    key,
+                );
+            case 1:
+                return this._context.globalState.get<LocalCourseDataV1[]>(key);
+            default:
+                throw `Unsupported data version ${version}`;
+        }
     }
 
     public getExtensionSettings(): ExtensionSettings | undefined {
@@ -56,12 +81,13 @@ export default class Storage {
     public async updateExerciseData(
         exerciseData: LocalExerciseDataV1[] | undefined,
     ): Promise<void> {
-        const key = this._exerciseDataVersionToKey(this._exerciseDataVersion);
+        const key = this._exerciseDataVersionToKey(Storage._exerciseDataVersion);
         await this._context.globalState.update(key, exerciseData);
     }
 
-    public async updateUserData(userData: { courses: LocalCourseData[] }): Promise<void> {
-        await this._context.globalState.update("userData", userData);
+    public async updateUserData(userData: UserData<LocalCourseDataV1[]>): Promise<void> {
+        const key = this._userDataVersionToKey(Storage._userDataVersion);
+        await this._context.globalState.update(key, userData);
     }
 
     public async updateExtensionSettings(settings: ExtensionSettings): Promise<void> {
@@ -77,11 +103,16 @@ export default class Storage {
         await this._context.globalState.update("exerciseData", undefined);
         await this._context.globalState.update("exercise-data-v1", undefined);
         await this._context.globalState.update("userData", undefined);
+        await this._context.globalState.update("user-data-v1", undefined);
         await this._context.globalState.update("extensionSettings", undefined);
         await this._context.globalState.update("extensionVersion", undefined);
     }
 
     private _exerciseDataVersionToKey(version: number): string {
         return version === 0 ? "exerciseData" : `exercise-data-v${version}`;
+    }
+
+    private _userDataVersionToKey(version: number): string {
+        return version === 0 ? "userData" : `user-data-v${version}`;
     }
 }

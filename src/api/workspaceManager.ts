@@ -19,6 +19,8 @@ import { isCorrectWorkspaceOpen, Logger } from "../utils";
 import Storage from "./storage";
 import { ExerciseStatus } from "./storageSchema";
 
+export { ExerciseStatus };
+
 export interface WorkspaceExercise {
     id: number;
     name: string;
