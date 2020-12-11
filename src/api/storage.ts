@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 
-import { ExtensionSettings } from "../config/types";
-
 import {
+    ExtensionSettingsV0,
+    ExtensionSettingsV1,
     LocalCourseDataV0,
     LocalCourseDataV1,
     LocalExerciseDataV0,
@@ -23,6 +23,7 @@ interface UserData<T> {
 export default class Storage {
     private static readonly _exerciseDataVersion = 1;
     private static readonly _userDataVersion = 1;
+    private static readonly _settingsVersion = 1;
 
     private _context: vscode.ExtensionContext;
 
@@ -60,17 +61,27 @@ export default class Storage {
         const key = this._userDataVersionToKey(version);
         switch (version) {
             case 0:
-                return this._context.globalState.get<{ courses: LocalCourseDataV0 } | undefined>(
-                    key,
-                );
+                return this._context.globalState.get<UserData<LocalCourseDataV0[]>>(key);
             case 1:
-                return this._context.globalState.get<LocalCourseDataV1[]>(key);
+                return this._context.globalState.get<UserData<LocalCourseDataV1[]>>(key);
             default:
                 throw `Unsupported data version ${version}`;
         }
     }
 
-    public getExtensionSettings(): ExtensionSettings | undefined {
+    getExtensionSettings(options: Options<0>): ExtensionSettingsV0 | undefined;
+    getExtensionSettings(options: Options<1>): ExtensionSettingsV1 | undefined;
+    getExtensionSettings(): ExtensionSettingsV1 | undefined;
+
+    public getExtensionSettings(options?: Options<number>): unknown {
+        const version = options?.version ?? Storage._settingsVersion;
+        const key = this._settingsVersionToKey(version);
+        switch (version) {
+            case 0:
+                return this._context.globalState.get<ExtensionSettingsV0>(key);
+            case 1:
+                return this._context.globalState.get<ExtensionSettingsV1>(key);
+        }
         return this._context.globalState.get("extensionSettings");
     }
 
@@ -90,8 +101,9 @@ export default class Storage {
         await this._context.globalState.update(key, userData);
     }
 
-    public async updateExtensionSettings(settings: ExtensionSettings): Promise<void> {
-        await this._context.globalState.update("extensionSettings", settings);
+    public async updateExtensionSettings(settings: ExtensionSettingsV1): Promise<void> {
+        const key = this._settingsVersionToKey(Storage._settingsVersion);
+        await this._context.globalState.update(key, settings);
     }
 
     public async updateExtensionVersion(version: string): Promise<void> {
@@ -105,6 +117,7 @@ export default class Storage {
         await this._context.globalState.update("userData", undefined);
         await this._context.globalState.update("user-data-v1", undefined);
         await this._context.globalState.update("extensionSettings", undefined);
+        await this._context.globalState.update("extension-settings-v1", undefined);
         await this._context.globalState.update("extensionVersion", undefined);
     }
 
@@ -114,5 +127,9 @@ export default class Storage {
 
     private _userDataVersionToKey(version: number): string {
         return version === 0 ? "userData" : `user-data-v${version}`;
+    }
+
+    private _settingsVersionToKey(version: number): string {
+        return version === 0 ? "extensionSettings" : `extension-settings-v${version}`;
     }
 }

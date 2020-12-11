@@ -1,3 +1,5 @@
+import { LogLevel } from "../utils";
+
 // Volatile enum usage
 enum ExerciseStatusV0 {
     OPEN,
@@ -79,4 +81,24 @@ export interface LocalCourseDataV1 {
     disabled: boolean;
     // eslint-disable-next-line @typescript-eslint/naming-convention
     material_url: string | null;
+}
+
+export interface ExtensionSettingsV0 {
+    dataPath: string;
+    downloadOldSubmission?: boolean;
+    hideMetaFiles?: boolean;
+    insiderVersion?: boolean;
+    logLevel?: LogLevel;
+    oldDataPath?: { path: string; timestamp: number } | undefined;
+    updateExercisesAutomatically?: boolean;
+}
+
+export interface ExtensionSettingsV1 {
+    dataPath: string;
+    downloadOldSubmission: boolean;
+    hideMetaFiles: boolean;
+    insiderVersion: boolean;
+    logLevel: LogLevel;
+    oldDataPath: { path: string; timestamp: number } | undefined;
+    updateExercisesAutomatically: boolean;
 }

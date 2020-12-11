@@ -2,12 +2,15 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import Storage from "../api/storage";
+import { ExtensionSettingsV1 } from "../api/storageSchema";
 import { isCorrectWorkspaceOpen } from "../utils";
 import { Logger, LogLevel } from "../utils/logger";
 
 import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
 import Resources from "./resources";
-import { ExtensionSettings, ExtensionSettingsData } from "./types";
+import { ExtensionSettingsData } from "./types";
+
+export type ExtensionSettings = ExtensionSettingsV1;
 
 /**
  * Settings class communicates changes to persistent storage and manages TMC

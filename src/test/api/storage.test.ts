@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 
 import Storage from "../../api/storage";
 import { ExerciseStatus, LocalExerciseDataV1 } from "../../api/storageSchema";
-import { ExtensionSettings } from "../../config/types";
+import { ExtensionSettings } from "../../config/settings";
 import { LogLevel } from "../../utils";
 
 suite("Storage tests", () => {
