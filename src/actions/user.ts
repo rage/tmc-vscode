@@ -11,10 +11,10 @@ import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import { LocalCourseData } from "../api/storage";
 import { SubmissionFeedback } from "../api/types";
 import { ExerciseStatus } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
-import { LocalCourseData } from "../config/userdata";
 import { ConnectionError, ForbiddenError } from "../errors";
 import { TestResultData } from "../ui/types";
 import {
@@ -542,7 +542,7 @@ export async function addNewCourse(
         newExercises: [],
         notifyAfter: 0,
         disabled: courseData.settings.disabled_status === "enabled" ? false : true,
-        material_url: courseData.settings.material_url,
+        materialUrl: courseData.settings.material_url,
     };
     userData.addCourse(localData);
     ui.treeDP.addChildWithId("myCourses", localData.id, localData.title, {
@@ -650,7 +650,7 @@ export async function updateCourse(
         awardedPoints,
         description: details.description || "",
         disabled: settings.disabled_status !== "enabled",
-        material_url: settings.material_url,
+        materialUrl: settings.material_url,
         perhapsExamMode: settings.hide_submission_results,
     });
 

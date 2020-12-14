@@ -1,14 +1,8 @@
 import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 
-import Storage from "../api/storage";
-import { LocalCourseDataV1, LocalCourseExerciseV1 } from "../api/storageSchema";
+import Storage, { LocalCourseData, LocalCourseExercise } from "../api/storage";
 import { Logger } from "../utils/logger";
-
-type LocalCourseData = LocalCourseDataV1;
-type LocalCourseExercise = LocalCourseExerciseV1;
-
-export { LocalCourseData, LocalCourseExercise };
 
 export class UserData {
     private _courses: Map<number, LocalCourseData>;

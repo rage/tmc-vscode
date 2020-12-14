@@ -31,56 +31,12 @@ export interface LocalExerciseDataV1 {
     status: ExerciseStatus;
 }
 
-// Unstable
-export interface LocalCourseExerciseV0 {
-    id: number;
-    passed: boolean;
-    name?: string;
-    deadline?: string | null;
-    softDeadline?: string | null;
-}
-
 export interface LocalCourseExerciseV1 {
     id: number;
     name: string;
     deadline: string | null;
     passed: boolean;
     softDeadline: string | null;
-}
-
-// Unstable
-export interface LocalCourseDataV0 {
-    id: number;
-    name: string;
-    description: string;
-    organization: string;
-    title?: string;
-    exercises?: LocalCourseExerciseV0[];
-    availablePoints?: number;
-    awardedPoints?: number;
-    perhapsExamMode?: boolean;
-    newExercises?: number[];
-    notifyAfter?: number;
-    disabled?: boolean;
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    material_url?: string | null;
-}
-
-export interface LocalCourseDataV1 {
-    id: number;
-    name: string;
-    title: string;
-    description: string;
-    organization: string;
-    exercises: LocalCourseExerciseV1[];
-    availablePoints: number;
-    awardedPoints: number;
-    perhapsExamMode: boolean;
-    newExercises: number[];
-    notifyAfter: number;
-    disabled: boolean;
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    material_url: string | null;
 }
 
 export interface ExtensionSettingsV0 {

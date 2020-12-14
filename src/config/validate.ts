@@ -13,7 +13,6 @@ import UI from "../ui/ui";
 import { Logger } from "../utils/logger";
 
 import Resources from "./resources";
-import { LocalCourseData } from "./userdata";
 
 /**
  * Check that workspace and userdata is up-to-date.
