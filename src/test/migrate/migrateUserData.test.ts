@@ -1,10 +1,9 @@
 import { expect } from "chai";
 import * as vscode from "vscode";
 
-import {
+import migrateUserData, {
     LocalCourseDataV0,
     LocalCourseDataV1,
-    migrateUserData,
 } from "../../migrate/migrateUserData";
 import { createMockMemento } from "../__mocks__/vscode";
 

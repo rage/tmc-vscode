@@ -2,24 +2,10 @@ import { createIs } from "typescript-is";
 import * as vscode from "vscode";
 
 import { MigratedData } from "./types";
+import validateData from "./validateData";
 
 const EXTENSION_SETTINGS_KEY_V0 = "extensionSettings";
 const EXTENSION_SETTINGS_KEY_V1 = "extension-settings-v1";
-
-function validateData<T>(
-    data: unknown,
-    validator: (object: unknown) => object is T,
-): T | undefined {
-    if (!data) {
-        return undefined;
-    }
-
-    if (!validator(data)) {
-        throw Error("Data type missmatch: " + JSON.stringify(data));
-    }
-
-    return data;
-}
 
 export enum LogLevelV0 {
     None = "none",
@@ -53,7 +39,7 @@ export interface ExtensionSettingsV1 {
     updateExercisesAutomatically: boolean;
 }
 
-const logLevelV0toV1 = (logLevel: LogLevelV0): LogLevelV1 => {
+function logLevelV0toV1(logLevel: LogLevelV0): LogLevelV1 {
     switch (logLevel) {
         case LogLevelV0.Debug:
         case LogLevelV0.Verbose:
@@ -63,18 +49,24 @@ const logLevelV0toV1 = (logLevel: LogLevelV0): LogLevelV1 => {
         case LogLevelV0.None:
             return LogLevelV1.None;
     }
-};
+}
 
-const extensionDataFromV0toV1 = (unstableData: ExtensionSettingsV0): ExtensionSettingsV1 => ({
-    dataPath: unstableData.dataPath,
-    downloadOldSubmission: unstableData.downloadOldSubmission ?? true,
-    hideMetaFiles: unstableData.hideMetaFiles ?? true,
-    insiderVersion: unstableData.insiderVersion ?? false,
-    logLevel: unstableData.logLevel ? logLevelV0toV1(unstableData.logLevel) : LogLevelV1.Errors,
-    updateExercisesAutomatically: unstableData.updateExercisesAutomatically ?? true,
-});
+function extensionDataFromV0toV1(unstableData: ExtensionSettingsV0): ExtensionSettingsV1 {
+    const logLevel = unstableData.logLevel
+        ? logLevelV0toV1(unstableData.logLevel)
+        : LogLevelV1.Errors;
 
-export function migrateExtensionSettings(
+    return {
+        dataPath: unstableData.dataPath,
+        downloadOldSubmission: unstableData.downloadOldSubmission ?? true,
+        hideMetaFiles: unstableData.hideMetaFiles ?? true,
+        insiderVersion: unstableData.insiderVersion ?? false,
+        logLevel,
+        updateExercisesAutomatically: unstableData.updateExercisesAutomatically ?? true,
+    };
+}
+
+export default function migrateExtensionSettings(
     memento: vscode.Memento,
 ): MigratedData<ExtensionSettingsV1> {
     const keys: string[] = [EXTENSION_SETTINGS_KEY_V0];

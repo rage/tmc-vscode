@@ -2,12 +2,11 @@ import { expect } from "chai";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import {
+import migrateExerciseData, {
     ExerciseStatusV0,
     ExerciseStatusV1,
     LocalExerciseDataV0,
     LocalExerciseDataV1,
-    migrateExerciseData,
 } from "../../migrate/migrateExerciseData";
 import { createMockMemento } from "../__mocks__/vscode";
 

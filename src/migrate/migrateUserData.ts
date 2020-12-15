@@ -1,26 +1,12 @@
 import { createIs } from "typescript-is";
 import * as vscode from "vscode";
 
-import { MigratedData, UnstableLocalExerciseData } from "./types";
+import { MigratedData } from "./types";
+import validateData from "./validateData";
 
 const UNSTABLE_EXERCISE_DATA_KEY = "exerciseData";
 const USER_DATA_KEY_V0 = "userData";
 const USER_DATA_KEY_V1 = "user-data-v1";
-
-function validateData<T>(
-    data: unknown,
-    validator: (object: unknown) => object is T,
-): T | undefined {
-    if (!data) {
-        return undefined;
-    }
-
-    if (!validator(data)) {
-        throw Error("Data type missmatch.");
-    }
-
-    return data;
-}
 
 export interface LocalCourseDataV0 {
     id: number;
@@ -67,11 +53,18 @@ export interface LocalCourseDataV1 {
     materialUrl: string | null;
 }
 
-const courseDataFromV0ToV1 = (
+function courseDataFromV0ToV1(
     unstableData: LocalCourseDataV0[],
     memento: vscode.Memento,
-): LocalCourseDataV1[] => {
-    const localExerciseData = memento.get<UnstableLocalExerciseData[]>(UNSTABLE_EXERCISE_DATA_KEY);
+): LocalCourseDataV1[] {
+    interface LocalExerciseDataPartial {
+        id: number;
+        deadline?: string | undefined;
+        name?: string;
+        softDeadline?: string | undefined;
+    }
+
+    const localExerciseData = memento.get<LocalExerciseDataPartial[]>(UNSTABLE_EXERCISE_DATA_KEY);
     const courseExercises = localExerciseData && new Map(localExerciseData.map((x) => [x.id, x]));
 
     return unstableData.map<LocalCourseDataV1>((x) => {
@@ -100,9 +93,9 @@ const courseDataFromV0ToV1 = (
             title: x.title ?? x.name,
         };
     });
-};
+}
 
-export function migrateUserData(
+export default function migrateUserData(
     memento: vscode.Memento,
 ): MigratedData<{ courses: LocalCourseDataV1[] }> {
     const keys: string[] = [USER_DATA_KEY_V0];

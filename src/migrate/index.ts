@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 
 import Storage from "../api/storage";
 
-import { migrateUserData } from "./migrateUserData";
+import migrateUserData from "./migrateUserData";
 
 export async function migrateExtensionDataFromPreviousVersions(
     storage: Storage,

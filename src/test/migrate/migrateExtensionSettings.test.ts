@@ -1,12 +1,11 @@
 import { expect } from "chai";
 import * as vscode from "vscode";
 
-import {
+import migrateExtensionSettings, {
     ExtensionSettingsV0,
     ExtensionSettingsV1,
     LogLevelV0,
     LogLevelV1,
-    migrateExtensionSettings,
 } from "../../migrate/migrateExtensionSettings";
 import { LogLevel } from "../../utils";
 import { createMockMemento } from "../__mocks__/vscode";

@@ -29,7 +29,7 @@ function resolveInitialData(memento: vscode.Memento): SessionStateV1 {
     };
 }
 
-export function migrateSessionState(memento: vscode.Memento): MigratedData<SessionStateV1> {
+export default function migrateSessionState(memento: vscode.Memento): MigratedData<SessionStateV1> {
     const keys: string[] = [SESSION_STATE_KEY_V1];
     const dataV1 = validateData(
         memento.get<SessionStateV1>(SESSION_STATE_KEY_V1) ?? resolveInitialData(memento),

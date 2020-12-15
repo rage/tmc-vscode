@@ -75,7 +75,7 @@ function exerciseDataFromV0toV1(
     }));
 }
 
-export function migrateExerciseData(
+export default function migrateExerciseData(
     memento: vscode.Memento,
     workspaceDirectory: vscode.Uri,
 ): MigratedData<LocalExerciseDataV1[]> {
