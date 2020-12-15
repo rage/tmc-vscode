@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import { Mock } from "typemoq";
 import * as vscode from "vscode";
 
 import {
@@ -10,6 +9,7 @@ import {
     migrateExtensionSettings,
 } from "../../migrate/migrateExtensionSettings";
 import { LogLevel } from "../../utils";
+import { createMockMemento } from "../__mocks__/vscode";
 
 const EXTENSION_SETTINGS_KEY_V0 = "extensionSettings";
 const EXTENSION_SETTINGS_KEY_V1 = "extension-settings-v1";
@@ -17,24 +17,10 @@ const EXTENSION_SETTINGS_KEY_V1 = "extension-settings-v1";
 suite("Extension settings migration", function () {
     const dataPath = "/path/to/exercises";
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let database: Map<string, any>;
     let memento: vscode.Memento;
 
     setup(function () {
-        database = new Map();
-        const mockMemento = Mock.ofType<vscode.Memento>();
-        mockMemento
-            .setup((x) => x.get)
-            .returns(() => <T>(x: string): T | undefined => database.get(x));
-        mockMemento
-            .setup((x) => x.update)
-            .returns(() => async (key, value): Promise<void> => {
-                database.set(key, value);
-            });
-        memento = mockMemento.object;
-        const mockContext = Mock.ofType<vscode.ExtensionContext>();
-        mockContext.setup((x) => x.globalState).returns(() => mockMemento.object);
+        memento = createMockMemento();
     });
 
     suite("between versions", function () {
