@@ -58,8 +58,6 @@ suite("Extension settings migration", function () {
             await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings);
             const migrated = migrateExtensionSettings(memento).data;
             expect(migrated?.insiderVersion).to.be.true;
-            expect(migrated?.oldDataPath?.path).to.be.equal("/old/path/to/exercises");
-            expect(migrated?.oldDataPath?.timestamp).to.be.equal(1234);
         });
 
         test("should succeed with version 1.0.0 data", async function () {
@@ -98,7 +96,6 @@ suite("Extension settings migration", function () {
                 hideMetaFiles: true,
                 insiderVersion: true,
                 logLevel: LogLevelV1.Verbose,
-                oldDataPath: { path: "/old/path/to/exercises", timestamp: 1234 },
                 updateExercisesAutomatically: false,
             };
             await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings);
@@ -121,7 +118,6 @@ suite("Extension settings migration", function () {
             expect(migrated?.hideMetaFiles).to.be.true;
             expect(migrated?.insiderVersion).to.be.false;
             expect(migrated?.logLevel).to.be.equal(LogLevel.Errors);
-            expect(migrated?.oldDataPath).to.be.undefined;
             expect(migrated?.updateExercisesAutomatically).to.be.true;
         });
 

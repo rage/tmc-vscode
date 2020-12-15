@@ -115,9 +115,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
 
     const currentVersion = resources.extensionVersion;
-    const previousVersion = storage.getExtensionVersion();
+    const previousState = storage.getSessionState();
+    const previousVersion = previousState?.extensionVersion;
     if (currentVersion !== previousVersion) {
-        storage.updateExtensionVersion(currentVersion);
+        storage.updateSessionState({ extensionVersion: currentVersion });
     }
 
     const validationResult = await validateAndFix(storage, tmc, ui, resources);

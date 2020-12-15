@@ -2,10 +2,6 @@ import * as vscode from "vscode";
 
 import { LogLevel } from "../utils";
 
-interface Options<T> {
-    version: T;
-}
-
 export interface ExtensionSettings {
     dataPath: string;
     downloadOldSubmission: boolean;
@@ -58,14 +54,19 @@ export interface LocalExerciseData {
     status: ExerciseStatus;
 }
 
+export interface SessionState {
+    extensionVersion?: string | undefined;
+    oldDataPath?: { path: string; timestamp: number } | undefined;
+}
+
 /**
  * Interface class for accessing stored TMC configuration and data.
  */
 export default class Storage {
-    private static readonly _extensionVersionVersion = 1;
     private static readonly _extensionSettingsKey = "extension-settings-v1";
     private static readonly _userDataKey = "user-data-v1";
     private static readonly _exerciseDataKey = "exercise-data-v1";
+    private static readonly _sessionStateKey = "session-state-v1";
 
     private _context: vscode.ExtensionContext;
 
@@ -89,10 +90,8 @@ export default class Storage {
         return this._context.globalState.get<ExtensionSettings>(Storage._extensionSettingsKey);
     }
 
-    public getExtensionVersion(options?: Options<number>): string | undefined {
-        const version = options?.version ?? Storage._extensionVersionVersion;
-        const key = this._extensionVersionVersionToKey(version);
-        return this._context.globalState.get<string>(key);
+    public getSessionState(): SessionState | undefined {
+        return this._context.globalState.get<SessionState>(Storage._sessionStateKey);
     }
 
     public async updateExerciseData(exerciseData: LocalExerciseData[] | undefined): Promise<void> {
@@ -104,11 +103,11 @@ export default class Storage {
     }
 
     public async updateExtensionSettings(settings: ExtensionSettings): Promise<void> {
-        return this._context.globalState.update(Storage._extensionSettingsKey, settings);
+        await this._context.globalState.update(Storage._extensionSettingsKey, settings);
     }
 
-    public async updateExtensionVersion(version: string): Promise<void> {
-        await this._context.globalState.update("extensionVersion", version);
+    public async updateSessionState(sessionState: SessionState | undefined): Promise<void> {
+        await this._context.globalState.update(Storage._sessionStateKey, sessionState);
     }
 
     public async wipeStorage(): Promise<void> {
@@ -121,9 +120,5 @@ export default class Storage {
         await this._context.globalState.update("extension-settings-v1", undefined);
         await this._context.globalState.update("extensionVersion", undefined);
         await this._context.globalState.update("extension-version-v1", undefined);
-    }
-
-    private _extensionVersionVersionToKey(version: number): string {
-        return version <= 0 ? "extensionVersion" : `extension-version-v${version}`;
     }
 }

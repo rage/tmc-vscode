@@ -50,7 +50,6 @@ export interface ExtensionSettingsV1 {
     hideMetaFiles: boolean;
     insiderVersion: boolean;
     logLevel: LogLevelV1;
-    oldDataPath: { path: string; timestamp: number } | undefined;
     updateExercisesAutomatically: boolean;
 }
 
@@ -72,7 +71,6 @@ const extensionDataFromV0toV1 = (unstableData: ExtensionSettingsV0): ExtensionSe
     hideMetaFiles: unstableData.hideMetaFiles ?? true,
     insiderVersion: unstableData.insiderVersion ?? false,
     logLevel: unstableData.logLevel ? logLevelV0toV1(unstableData.logLevel) : LogLevelV1.Errors,
-    oldDataPath: unstableData.oldDataPath,
     updateExercisesAutomatically: unstableData.updateExercisesAutomatically ?? true,
 });
 
