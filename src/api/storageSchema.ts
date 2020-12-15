@@ -1,5 +1,3 @@
-import { LogLevel } from "../utils";
-
 // Volatile enum usage
 enum ExerciseStatusV0 {
     OPEN,
@@ -37,24 +35,4 @@ export interface LocalCourseExerciseV1 {
     deadline: string | null;
     passed: boolean;
     softDeadline: string | null;
-}
-
-export interface ExtensionSettingsV0 {
-    dataPath: string;
-    downloadOldSubmission?: boolean;
-    hideMetaFiles?: boolean;
-    insiderVersion?: boolean;
-    logLevel?: LogLevel;
-    oldDataPath?: { path: string; timestamp: number } | undefined;
-    updateExercisesAutomatically?: boolean;
-}
-
-export interface ExtensionSettingsV1 {
-    dataPath: string;
-    downloadOldSubmission: boolean;
-    hideMetaFiles: boolean;
-    insiderVersion: boolean;
-    logLevel: LogLevel;
-    oldDataPath: { path: string; timestamp: number } | undefined;
-    updateExercisesAutomatically: boolean;
 }

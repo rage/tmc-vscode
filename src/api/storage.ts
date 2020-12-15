@@ -1,14 +1,21 @@
 import * as vscode from "vscode";
 
-import {
-    ExtensionSettingsV0,
-    ExtensionSettingsV1,
-    LocalExerciseDataV0,
-    LocalExerciseDataV1,
-} from "./storageSchema";
+import { LogLevel } from "../utils";
+
+import { LocalExerciseDataV0, LocalExerciseDataV1 } from "./storageSchema";
 
 interface Options<T> {
     version: T;
+}
+
+export interface ExtensionSettings {
+    dataPath: string;
+    downloadOldSubmission: boolean;
+    hideMetaFiles: boolean;
+    insiderVersion: boolean;
+    logLevel: LogLevel;
+    oldDataPath: { path: string; timestamp: number } | undefined;
+    updateExercisesAutomatically: boolean;
 }
 
 export interface LocalCourseData {
@@ -44,8 +51,8 @@ export interface UserData {
  */
 export default class Storage {
     private static readonly _exerciseDataVersion = 1;
-    private static readonly _settingsVersion = 1;
     private static readonly _extensionVersionVersion = 1;
+    private static readonly _extensionSettingsKey = "extension-settings-v1";
     private static readonly _userDataKey = "user-data-v1";
 
     private _context: vscode.ExtensionContext;
@@ -79,20 +86,8 @@ export default class Storage {
         return this._context.globalState.get<UserData>(Storage._userDataKey);
     }
 
-    getExtensionSettings(options: Options<0>): ExtensionSettingsV0 | undefined;
-    getExtensionSettings(options: Options<1>): ExtensionSettingsV1 | undefined;
-    getExtensionSettings(): ExtensionSettingsV1 | undefined;
-
-    public getExtensionSettings(options?: Options<number>): unknown {
-        const version = options?.version ?? Storage._settingsVersion;
-        const key = this._settingsVersionToKey(version);
-        switch (version) {
-            case 0:
-                return this._context.globalState.get<ExtensionSettingsV0>(key);
-            case 1:
-                return this._context.globalState.get<ExtensionSettingsV1>(key);
-        }
-        return this._context.globalState.get("extensionSettings");
+    public getExtensionSettings(): ExtensionSettings | undefined {
+        return this._context.globalState.get<ExtensionSettings>(Storage._extensionSettingsKey);
     }
 
     public getExtensionVersion(options?: Options<number>): string | undefined {
@@ -112,9 +107,8 @@ export default class Storage {
         await this._context.globalState.update(Storage._userDataKey, userData);
     }
 
-    public async updateExtensionSettings(settings: ExtensionSettingsV1): Promise<void> {
-        const key = this._settingsVersionToKey(Storage._settingsVersion);
-        await this._context.globalState.update(key, settings);
+    public async updateExtensionSettings(settings: ExtensionSettings): Promise<void> {
+        return this._context.globalState.update(Storage._extensionSettingsKey, settings);
     }
 
     public async updateExtensionVersion(version: string): Promise<void> {
@@ -135,10 +129,6 @@ export default class Storage {
 
     private _exerciseDataVersionToKey(version: number): string {
         return version <= 0 ? "exerciseData" : `exercise-data-v${version}`;
-    }
-
-    private _settingsVersionToKey(version: number): string {
-        return version <= 0 ? "extensionSettings" : `extension-settings-v${version}`;
     }
 
     private _extensionVersionVersionToKey(version: number): string {

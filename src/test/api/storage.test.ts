@@ -1,9 +1,8 @@
 import * as TypeMoq from "typemoq";
 import * as vscode from "vscode";
 
-import Storage from "../../api/storage";
+import Storage, { ExtensionSettings } from "../../api/storage";
 import { ExerciseStatus, LocalExerciseDataV1 } from "../../api/storageSchema";
-import { ExtensionSettings } from "../../config/settings";
 import { LogLevel } from "../../utils";
 
 // TODO: Redo after migration
