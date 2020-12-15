@@ -18,15 +18,16 @@ export async function settingsInitialization(
     resources: Resources,
 ): Promise<ExtensionSettings> {
     const settings: Partial<ExtensionSettings> | undefined = storage.getExtensionSettings();
+    const oldState = storage.getSessionState();
     Logger.log("Initializing settings", settings);
 
     // Try removing once old data, if the data move happened within 10 minutes.
-    if (settings?.oldDataPath !== undefined) {
-        const result = await removeOldData(settings.oldDataPath);
+    if (oldState?.oldDataPath !== undefined) {
+        const result = await removeOldData(oldState.oldDataPath);
         if (result.err) {
             showNotification(
                 "Some files could not be removed from the previous workspace directory." +
-                    `They will have to be removed manually. ${settings.oldDataPath}`,
+                    `They will have to be removed manually. ${oldState.oldDataPath}`,
                 ["OK", (): void => {}],
             );
         }
@@ -46,7 +47,6 @@ export async function settingsInitialization(
         hideMetaFiles: settings?.hideMetaFiles ?? true,
         insiderVersion,
         logLevel,
-        oldDataPath: undefined,
         updateExercisesAutomatically: settings?.updateExercisesAutomatically ?? true,
     };
 

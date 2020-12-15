@@ -8,7 +8,6 @@ export interface ExtensionSettings {
     hideMetaFiles: boolean;
     insiderVersion: boolean;
     logLevel: LogLevel;
-    oldDataPath: { path: string; timestamp: number } | undefined;
     updateExercisesAutomatically: boolean;
 }
 
@@ -102,7 +101,7 @@ export default class Storage {
         await this._context.globalState.update(Storage._userDataKey, userData);
     }
 
-    public async updateExtensionSettings(settings: ExtensionSettings): Promise<void> {
+    public async updateExtensionSettings(settings: ExtensionSettings | undefined): Promise<void> {
         await this._context.globalState.update(Storage._extensionSettingsKey, settings);
     }
 
@@ -111,14 +110,9 @@ export default class Storage {
     }
 
     public async wipeStorage(): Promise<void> {
-        await this._context.globalState.update("token", undefined);
-        await this._context.globalState.update("exerciseData", undefined);
-        await this._context.globalState.update("exercise-data-v1", undefined);
-        await this._context.globalState.update("userData", undefined);
-        await this._context.globalState.update("user-data-v1", undefined);
-        await this._context.globalState.update("extensionSettings", undefined);
-        await this._context.globalState.update("extension-settings-v1", undefined);
-        await this._context.globalState.update("extensionVersion", undefined);
-        await this._context.globalState.update("extension-version-v1", undefined);
+        await this.updateExerciseData(undefined);
+        await this.updateExtensionSettings(undefined);
+        await this.updateSessionState(undefined);
+        await this.updateUserData(undefined);
     }
 }

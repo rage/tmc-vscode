@@ -1,105 +1,142 @@
-import * as TypeMoq from "typemoq";
-import * as vscode from "vscode";
+import { expect } from "chai";
 
-import Storage, { ExerciseStatus, ExtensionSettings, LocalExerciseData } from "../../api/storage";
+import Storage, {
+    ExerciseStatus,
+    ExtensionSettings,
+    LocalExerciseData,
+    SessionState,
+    UserData,
+} from "../../api/storage";
 import { LogLevel } from "../../utils";
+import { createMockContext } from "../__mocks__/vscode";
 
-// TODO: Redo after migration
-suite.skip("Storage tests", () => {
-    let mockContext: TypeMoq.IMock<vscode.ExtensionContext>;
-    let mockMemento: TypeMoq.IMock<vscode.Memento>;
+suite("Storage class", function () {
+    const exerciseData: LocalExerciseData[] = [
+        {
+            id: 0,
+            course: "test-python-course",
+            name: "hello_world",
+            path: "/path/to/exercise",
+            status: ExerciseStatus.OPEN,
+        },
+    ];
+
+    const extensionSettings: ExtensionSettings = {
+        dataPath: "/path/to/exercises",
+        downloadOldSubmission: true,
+        hideMetaFiles: true,
+        insiderVersion: false,
+        logLevel: LogLevel.Verbose,
+        updateExercisesAutomatically: true,
+    };
+
+    const sessionState: SessionState = {
+        extensionVersion: "2.0.0",
+        oldDataPath: { path: "/path/to/exercises", timestamp: 1234 },
+    };
+
+    const userData: UserData = {
+        courses: [
+            {
+                id: 0,
+                availablePoints: 3,
+                awardedPoints: 0,
+                description: "Python Course",
+                disabled: true,
+                exercises: [
+                    {
+                        id: 1,
+                        deadline: null,
+                        name: "hello_world",
+                        passed: false,
+                        softDeadline: null,
+                    },
+                    {
+                        id: 2,
+                        deadline: "20201214",
+                        name: "other_hello_world",
+                        passed: false,
+                        softDeadline: "20201212",
+                    },
+                ],
+                materialUrl: "mooc.fi",
+                name: "test-python-course",
+                newExercises: [2, 3, 4],
+                notifyAfter: 1234,
+                organization: "test",
+                perhapsExamMode: true,
+                title: "The Python Course",
+            },
+        ],
+    };
+
     let storage: Storage;
 
-    setup(() => {
-        mockMemento = TypeMoq.Mock.ofType<vscode.Memento>();
-        mockContext = TypeMoq.Mock.ofType<vscode.ExtensionContext>();
-        mockContext.setup((x) => x.globalState).returns(() => mockMemento.object);
-        storage = new Storage(mockContext.object);
+    setup(function () {
+        storage = new Storage(createMockContext());
     });
 
-    // Same as hardcoded keys in Storage class. We "magically" know them also here to remind you
-    // that changing these may break compatibility between releases.
-    const EXERCISE_DATA_KEY = "exerciseData";
-    const EXTENSION_SETTINGS_KEY = "extensionSettings";
-
-    /**
-     * Helper function for running similar mock tests to multiple storage's updaters.
-     * @param updater Storage method for updating some data
-     * @param hardcodedKey Hardcoded key used internally within the Storage object
-     * @param checkForValue Value that was stored with updater
-     */
-    function assertUpdater<T>(updater: () => void, hardcodedKey: string, checkForValue: T): void {
-        mockMemento.verify(
-            (x) => x.update(TypeMoq.It.isAny(), TypeMoq.It.isAny()),
-            TypeMoq.Times.never(),
-        );
-        updater();
-        mockMemento.verify(
-            (x) => x.update(TypeMoq.It.isAny(), TypeMoq.It.isAny()),
-            TypeMoq.Times.once(),
-        );
-        mockMemento.verify(
-            (x) => x.update(TypeMoq.It.isValue(hardcodedKey), TypeMoq.It.isValue(checkForValue)),
-            TypeMoq.Times.once(),
-        );
-    }
-
-    /**
-     * Helper function for running similar mock tests to multiple storage's getters.
-     * @param getter Storage method for getting some data
-     * @param hardcodedKey Hardcoded key used internally within the Storage object
-     */
-    function assertGetter<T>(getter: () => T, hardcodedKey: string): void {
-        mockMemento.verify((x) => x.get(TypeMoq.It.isAny()), TypeMoq.Times.never());
-        getter();
-        mockMemento.verify((x) => x.get(TypeMoq.It.isAny()), TypeMoq.Times.once());
-        mockMemento.verify((x) => x.get(TypeMoq.It.isValue(hardcodedKey)), TypeMoq.Times.once());
-    }
-
-    // TODO: Update test suite to use new version of storage.
-    test.skip("Exercise data updater uses ExtensionContext correctly", () => {
-        const exerciseData: LocalExerciseData[] = [
-            {
-                // checksum: "asd",
-                course: "HY-jtkt",
-                // deadline: "2020-03-21",
-                // softDeadline: "2020-03-19",
-                id: 1337,
-                path: "HY-jtkt/hello-world",
-                status: ExerciseStatus.CLOSED,
-                name: "hello-world",
-                // organization: "HY",
-            },
-        ];
-        assertUpdater(
-            () => storage.updateExerciseData(exerciseData),
-            EXERCISE_DATA_KEY,
-            exerciseData,
-        );
+    test("should store and retrieve exercise data", async function () {
+        expect(storage.getExerciseData()).to.be.undefined;
+        await storage.updateExerciseData(exerciseData);
+        expect(storage.getExerciseData()).to.be.deep.equal(exerciseData);
     });
 
-    test("Exercise data getter uses ExtensionContext correctly", () => {
-        assertGetter(() => storage.getExerciseData(), EXERCISE_DATA_KEY);
+    test("should store and retrieve extension settings", async function () {
+        expect(storage.getExtensionSettings()).to.be.undefined;
+        await storage.updateExtensionSettings(extensionSettings);
+        expect(storage.getExtensionSettings()).to.be.deep.equal(extensionSettings);
     });
 
-    test("Extension settings updater uses ExtensionContext correctly", () => {
-        const extensionSettings: ExtensionSettings = {
-            insiderVersion: false,
-            dataPath: "/tmp/tmcdata",
-            oldDataPath: undefined,
-            logLevel: LogLevel.None,
-            hideMetaFiles: true,
-            downloadOldSubmission: true,
-            updateExercisesAutomatically: true,
-        };
-        assertUpdater(
-            () => storage.updateExtensionSettings(extensionSettings),
-            EXTENSION_SETTINGS_KEY,
-            extensionSettings,
-        );
+    test("should store and retrieve session state", async function () {
+        expect(storage.getSessionState()).to.be.undefined;
+        await storage.updateSessionState(sessionState);
+        expect(storage.getSessionState()).to.be.deep.equal(sessionState);
     });
 
-    test("Extension settings getter uses ExtensionContext correctly", () => {
-        assertGetter(() => storage.getExtensionSettings(), EXTENSION_SETTINGS_KEY);
+    test("should store and retrieve user data", async function () {
+        expect(storage.getUserData()).to.be.undefined;
+        await storage.updateUserData(userData);
+        expect(storage.getUserData()).to.be.deep.equal(userData);
+    });
+
+    test("should use unique key for exercise data", async function () {
+        await storage.updateExerciseData(exerciseData);
+        expect(storage.getExtensionSettings()).to.be.undefined;
+        expect(storage.getSessionState()).to.be.undefined;
+        expect(storage.getUserData()).to.be.undefined;
+    });
+
+    test("should use unique key for extension settings", async function () {
+        await storage.updateExtensionSettings(extensionSettings);
+        expect(storage.getExerciseData()).to.be.undefined;
+        expect(storage.getSessionState()).to.be.undefined;
+        expect(storage.getUserData()).to.be.undefined;
+    });
+
+    test("should use unique key for session state", async function () {
+        await storage.updateSessionState(sessionState);
+        expect(storage.getExerciseData()).to.be.undefined;
+        expect(storage.getExtensionSettings()).to.be.undefined;
+        expect(storage.getUserData()).to.be.undefined;
+    });
+
+    test("should use unique key for user data", async function () {
+        await storage.updateUserData(userData);
+        expect(storage.getExerciseData()).to.be.undefined;
+        expect(storage.getExtensionSettings()).to.be.undefined;
+        expect(storage.getSessionState()).to.be.undefined;
+    });
+
+    test("should wipe all data", async function () {
+        await storage.updateExerciseData(exerciseData);
+        await storage.updateExtensionSettings(extensionSettings);
+        await storage.updateSessionState(sessionState);
+        await storage.updateUserData(userData);
+        await storage.wipeStorage();
+        expect(storage.getExerciseData()).to.be.undefined;
+        expect(storage.getExtensionSettings()).to.be.undefined;
+        expect(storage.getSessionState()).to.be.undefined;
+        expect(storage.getUserData()).to.be.undefined;
     });
 });

@@ -2,6 +2,18 @@ import { Mock } from "typemoq";
 import * as vscode from "vscode";
 
 /**
+ * Creates a new `vscode.ExtensionContext` mock object that uses mocked globalState.
+ */
+export function createMockContext(): vscode.ExtensionContext {
+    const mockContext = Mock.ofType<vscode.ExtensionContext>();
+
+    const memento = createMockMemento();
+    mockContext.setup((x) => x.globalState).returns(() => memento);
+
+    return mockContext.object;
+}
+
+/**
  * Creates a new `vscode.Memento` mock object that wraps a map object.
  */
 export function createMockMemento(): vscode.Memento {

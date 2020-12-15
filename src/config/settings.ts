@@ -1,7 +1,7 @@
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import Storage, { ExtensionSettings } from "../api/storage";
+import Storage, { ExtensionSettings, SessionState } from "../api/storage";
 import { isCorrectWorkspaceOpen } from "../utils";
 import { Logger, LogLevel } from "../utils/logger";
 
@@ -24,11 +24,13 @@ export default class Settings {
     private readonly _resources: Resources;
 
     private _settings: ExtensionSettings;
+    private _state: SessionState;
 
     constructor(storage: Storage, settings: ExtensionSettings, resources: Resources) {
         this._storage = storage;
         this._resources = resources;
         this._settings = settings;
+        this._state = storage.getSessionState() ?? {};
     }
 
     public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
@@ -73,8 +75,10 @@ export default class Settings {
                 this._settings.logLevel = data.value;
                 break;
             case "oldDataPath":
-                this._settings.oldDataPath = { path: data.value, timestamp: Date.now() };
-                break;
+                this._state.oldDataPath = { path: data.value, timestamp: Date.now() };
+                Logger.log("Updated settings data", data);
+                await this._storage.updateSessionState(this._state);
+                return;
             case "updateExercisesAutomatically":
                 this._settings.updateExercisesAutomatically = data.value;
                 break;
