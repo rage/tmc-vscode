@@ -1,8 +1,7 @@
 import * as TypeMoq from "typemoq";
 import * as vscode from "vscode";
 
-import Storage, { ExtensionSettings } from "../../api/storage";
-import { ExerciseStatus, LocalExerciseDataV1 } from "../../api/storageSchema";
+import Storage, { ExerciseStatus, ExtensionSettings, LocalExerciseData } from "../../api/storage";
 import { LogLevel } from "../../utils";
 
 // TODO: Redo after migration
@@ -59,7 +58,7 @@ suite.skip("Storage tests", () => {
 
     // TODO: Update test suite to use new version of storage.
     test.skip("Exercise data updater uses ExtensionContext correctly", () => {
-        const exerciseData: LocalExerciseDataV1[] = [
+        const exerciseData: LocalExerciseData[] = [
             {
                 // checksum: "asd",
                 course: "HY-jtkt",
@@ -80,7 +79,7 @@ suite.skip("Storage tests", () => {
     });
 
     test("Exercise data getter uses ExtensionContext correctly", () => {
-        assertGetter(() => storage.getExerciseData({ version: 0 }), EXERCISE_DATA_KEY);
+        assertGetter(() => storage.getExerciseData(), EXERCISE_DATA_KEY);
     });
 
     test("Extension settings updater uses ExtensionContext correctly", () => {

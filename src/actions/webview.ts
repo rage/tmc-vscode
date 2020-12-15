@@ -7,7 +7,7 @@
 import * as fs from "fs-extra";
 import { Err, Ok, Result } from "ts-results";
 
-import * as StorageTypes from "../api/storageSchema";
+import * as StorageTypes from "../api/storage";
 import { Exercise } from "../api/types";
 import TemporaryWebview from "../ui/temporaryWebview";
 import * as UITypes from "../ui/types";

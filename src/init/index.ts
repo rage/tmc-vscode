@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import { ActionContext } from "../actions/types";
-import { ExerciseStatus } from "../api/storageSchema";
+import { ExerciseStatus } from "../api/storage";
 import { isCorrectWorkspaceOpen, Logger } from "../utils";
 import { showNotification } from "../window";
 

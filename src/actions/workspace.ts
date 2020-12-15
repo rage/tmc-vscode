@@ -9,7 +9,7 @@ import * as path from "path";
 import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { ExerciseStatus } from "../api/storageSchema";
+import { ExerciseStatus } from "../api/storage";
 import { OldSubmission } from "../api/types";
 import * as UITypes from "../ui/types";
 import { Logger } from "../utils";

@@ -16,10 +16,7 @@ import { ExerciseExistsError } from "../errors";
 import * as UITypes from "../ui/types";
 import { isCorrectWorkspaceOpen, Logger } from "../utils";
 
-import Storage from "./storage";
-import { ExerciseStatus } from "./storageSchema";
-
-export { ExerciseStatus };
+import Storage, { ExerciseStatus } from "./storage";
 
 export interface WorkspaceExercise {
     id: number;
