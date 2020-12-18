@@ -18,6 +18,7 @@ import { UserData } from "./config/userdata";
 import { validateAndFix } from "./config/validate";
 import { EmptyLangsResponseError } from "./errors";
 import * as init from "./init";
+import { migrateExtensionDataFromPreviousVersions } from "./migrate";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
 import { Logger, LogLevel, semVerCompare } from "./utils";
@@ -68,6 +69,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated);
 
     const storage = new Storage(context);
+    const migrationResult = await migrateExtensionDataFromPreviousVersions(context, storage, tmc);
+    if (migrationResult.err) {
+        throwFatalError(migrationResult.val, cliFolder);
+    }
+
     let tmcDataPath = storage.getExtensionSettings()?.dataPath;
     if (!tmcDataPath) {
         const dataPathResult = await tmc.getSetting("projects-dir");

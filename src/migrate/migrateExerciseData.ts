@@ -1,12 +1,17 @@
+import * as fs from "fs-extra";
 import * as path from "path";
+import { Err, Ok, Result } from "ts-results";
 import { createIs } from "typescript-is";
 import * as vscode from "vscode";
 
-import { MigratedData } from "./types";
+import TMC from "../api/tmc";
+import { Logger } from "../utils";
+
 import validateData from "./validateData";
 
 const EXERCISE_DATA_KEY_V0 = "exerciseData";
 const EXERCISE_DATA_KEY_V1 = "exercise-data-v1";
+const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";
 
 export enum ExerciseStatusV0 {
     OPEN = 0,
@@ -34,16 +39,7 @@ export interface LocalExerciseDataV0 {
     updateAvailable?: boolean;
 }
 
-export interface LocalExerciseDataV1 {
-    id: number;
-    checksum: string;
-    name: string;
-    course: string;
-    path: string;
-    organization: string;
-    status: ExerciseStatusV1;
-}
-
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function resolveExerciseStatusFromV0toV1(
     exerciseStatus?: ExerciseStatusV0,
     isOpen?: boolean,
@@ -60,35 +56,82 @@ function resolveExerciseStatusFromV0toV1(
     return isOpen ? ExerciseStatusV1.OPEN : ExerciseStatusV1.MISSING;
 }
 
-function exerciseDataFromV0toV1(
-    exerciseData: LocalExerciseDataV0[],
-    workspaceDirectory: vscode.Uri,
-): LocalExerciseDataV1[] {
-    return exerciseData.map((x) => ({
-        id: x.id,
-        checksum: x.checksum,
-        course: x.course,
-        name: x.name,
-        organization: x.organization,
-        path: x.path ?? path.join(workspaceDirectory.fsPath, x.organization, x.course, x.name),
-        status: resolveExerciseStatusFromV0toV1(x.status, x.isOpen),
-    }));
+function resolveExercisePathV0(
+    id: number,
+    name: string,
+    course: string,
+    organization: string,
+    exercisePath?: string,
+    dataPath?: string,
+): Result<string, Error> {
+    const workspacePath = dataPath && path.join(dataPath, "TMC workspace", "Exercises");
+    const candidates = [
+        exercisePath,
+        workspacePath && path.join(workspacePath, organization, course, name),
+        dataPath && path.join(dataPath, "TMC workspace", "closed-exercises", id.toString()),
+    ];
+    for (const candidate of candidates) {
+        if (candidate && fs.existsSync(candidate)) {
+            return Ok(candidate);
+        } else {
+            Logger.debug(candidate);
+        }
+    }
+
+    return Err(
+        new Error(
+            `Failed to resolve new exercise path for exercise ${name} with paths ${candidates}`,
+        ),
+    );
 }
 
-export default function migrateExerciseData(
+async function exerciseDataFromV0toV1(
+    exerciseData: LocalExerciseDataV0[],
     memento: vscode.Memento,
-    workspaceDirectory: vscode.Uri,
-): MigratedData<LocalExerciseDataV1[]> {
+    tmc: TMC,
+): Promise<Result<void, Error>> {
+    interface ExtensionSettingsPartial {
+        dataPath: string;
+    }
+
+    const dataPath = memento.get<ExtensionSettingsPartial>(UNSTABLE_EXTENSION_SETTINGS_KEY)
+        ?.dataPath;
+    for (const exercise of exerciseData) {
+        const { id, checksum, course, name, path, organization } = exercise;
+        const pathResult = resolveExercisePathV0(id, name, course, organization, path, dataPath);
+        if (pathResult.err) {
+            return pathResult;
+        }
+
+        const migrationResult = await tmc.migrateExercise(
+            course,
+            checksum,
+            id,
+            pathResult.val,
+            name,
+        );
+        if (migrationResult.err) {
+            return migrationResult;
+        }
+    }
+
+    return Ok.EMPTY;
+}
+
+export default async function migrateExerciseData(
+    memento: vscode.Memento,
+    tmc: TMC,
+): Promise<Result<void, Error>> {
     const keys: string[] = [EXERCISE_DATA_KEY_V0];
     const dataV0 = validateData(
         memento.get(EXERCISE_DATA_KEY_V0),
         createIs<LocalExerciseDataV0[]>(),
     );
 
-    keys.push(EXERCISE_DATA_KEY_V1);
-    const dataV1 = dataV0
-        ? exerciseDataFromV0toV1(dataV0, workspaceDirectory)
-        : validateData(memento.get(EXERCISE_DATA_KEY_V1), createIs<LocalExerciseDataV1[]>());
+    if (!dataV0) {
+        return Ok.EMPTY;
+    }
 
-    return { data: dataV1, keys };
+    keys.push(EXERCISE_DATA_KEY_V1);
+    return exerciseDataFromV0toV1(dataV0, memento, tmc);
 }

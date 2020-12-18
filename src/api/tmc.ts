@@ -237,6 +237,50 @@ export default class TMC {
         return [postResult, interrupt];
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // Settings commands
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Migrates exercise under TMC-langs's management. The new location will be determined by
+     * langs's `projects-dir` setting.
+     */
+    public async migrateExercise(
+        courseSlug: string,
+        exerciseChecksum: string,
+        exerciseId: number,
+        exercisePath: string,
+        exerciseSlug: string,
+    ): Promise<Result<void, Error>> {
+        const onStdout = (res: LangsStatusUpdate<unknown>): void => {
+            Logger.debug(res);
+        };
+
+        return this._executeLangsCommand(
+            {
+                args: [
+                    "settings",
+                    "--client-name",
+                    this.clientName,
+                    "migrate",
+                    "--course-slug",
+                    courseSlug,
+                    "--exercise-checksum",
+                    exerciseChecksum,
+                    "--exercise-id",
+                    `${exerciseId}`,
+                    "--exercise-path",
+                    exercisePath,
+                    "--exercise-slug",
+                    exerciseSlug,
+                ],
+                core: false,
+                onStdout,
+            },
+            createIs<unknown>(),
+        ).then((res) => (res.err ? res : Ok.EMPTY));
+    }
+
     public async getSetting(key: string): Promise<Result<string, Error>> {
         return this._executeLangsCommand(
             {
