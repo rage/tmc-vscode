@@ -14,11 +14,7 @@ export enum LogLevelV0 {
     Debug = "debug",
 }
 
-export enum LogLevelV1 {
-    None = "none",
-    Errors = "errors",
-    Verbose = "verbose",
-}
+export type LogLevelV1 = "none" | "errors" | "verbose";
 
 export interface ExtensionSettingsV0 {
     dataPath: string;
@@ -35,7 +31,7 @@ export interface ExtensionSettingsV1 {
     downloadOldSubmission: boolean;
     hideMetaFiles: boolean;
     insiderVersion: boolean;
-    logLevel: LogLevelV1;
+    logLevel: "none" | "errors" | "verbose";
     updateExercisesAutomatically: boolean;
 }
 
@@ -43,18 +39,16 @@ function logLevelV0toV1(logLevel: LogLevelV0): LogLevelV1 {
     switch (logLevel) {
         case LogLevelV0.Debug:
         case LogLevelV0.Verbose:
-            return LogLevelV1.Verbose;
+            return "verbose";
         case LogLevelV0.Errors:
-            return LogLevelV1.Errors;
+            return "errors";
         case LogLevelV0.None:
-            return LogLevelV1.None;
+            return "none";
     }
 }
 
 function extensionDataFromV0toV1(unstableData: ExtensionSettingsV0): ExtensionSettingsV1 {
-    const logLevel = unstableData.logLevel
-        ? logLevelV0toV1(unstableData.logLevel)
-        : LogLevelV1.Errors;
+    const logLevel = unstableData.logLevel ? logLevelV0toV1(unstableData.logLevel) : "errors";
 
     return {
         dataPath: unstableData.dataPath,

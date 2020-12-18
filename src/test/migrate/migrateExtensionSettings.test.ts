@@ -42,7 +42,7 @@ suite("Extension settings migration", function () {
             };
             await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings);
             const migrated = migrateExtensionSettings(memento).data;
-            expect(migrated?.logLevel).to.be.equal(LogLevelV1.Verbose);
+            expect(migrated?.logLevel).to.be.equal("verbose");
             expect(migrated?.hideMetaFiles).to.be.true;
         });
 
@@ -94,7 +94,7 @@ suite("Extension settings migration", function () {
                 downloadOldSubmission: false,
                 hideMetaFiles: true,
                 insiderVersion: true,
-                logLevel: LogLevelV1.Verbose,
+                logLevel: "verbose",
                 updateExercisesAutomatically: false,
             };
             await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings);
@@ -122,10 +122,10 @@ suite("Extension settings migration", function () {
 
         test("should remap logger values properly", async function () {
             const expectedRemappings: [LogLevelV0, LogLevelV1][] = [
-                [LogLevelV0.Debug, LogLevelV1.Verbose],
-                [LogLevelV0.Errors, LogLevelV1.Errors],
-                [LogLevelV0.None, LogLevelV1.None],
-                [LogLevelV0.Verbose, LogLevelV1.Verbose],
+                [LogLevelV0.Debug, "verbose"],
+                [LogLevelV0.Errors, "errors"],
+                [LogLevelV0.None, "none"],
+                [LogLevelV0.Verbose, "verbose"],
             ];
             for (const [oldLevel, expectedLevel] of expectedRemappings) {
                 const extensionSettings: ExtensionSettingsV0 = { dataPath, logLevel: oldLevel };

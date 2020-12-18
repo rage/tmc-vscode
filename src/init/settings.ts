@@ -1,22 +1,12 @@
-import { is } from "typescript-is";
-
 import Storage, { ExtensionSettings } from "../api/storage";
-import Resources from "../config/resources";
 import { removeOldData } from "../utils";
-import { Logger, LogLevel } from "../utils/logger";
+import { Logger } from "../utils/logger";
 import { showNotification } from "../window";
 
-// TODO: Perhaps not initialize if everything is ok.
 /**
- * Initializes settings.
- * Gets settings from storage and goes through all values, sets as default if not found.
- *
- * @returns ExtensionSettings object with all the necessary fields.
+ * @deprecated Only tries to remove old datapath at the moment. Consider relocating.
  */
-export async function settingsInitialization(
-    storage: Storage,
-    resources: Resources,
-): Promise<ExtensionSettings> {
+export async function settingsInitialization(storage: Storage): Promise<void> {
     const settings: Partial<ExtensionSettings> | undefined = storage.getExtensionSettings();
     const oldState = storage.getSessionState();
     Logger.log("Initializing settings", settings);
@@ -33,25 +23,4 @@ export async function settingsInitialization(
         }
         Logger.log("Tried to remove old data", result);
     }
-
-    const insiderVersion = settings?.insiderVersion ?? false;
-    const logLevel = insiderVersion
-        ? LogLevel.Verbose
-        : is<LogLevel>(settings?.logLevel) && settings?.logLevel
-        ? settings.logLevel
-        : LogLevel.Errors;
-
-    const fixedSettings: ExtensionSettings = {
-        dataPath: settings?.dataPath ?? resources.projectsDirectory,
-        downloadOldSubmission: settings?.downloadOldSubmission ?? true,
-        hideMetaFiles: settings?.hideMetaFiles ?? true,
-        insiderVersion,
-        logLevel,
-        updateExercisesAutomatically: settings?.updateExercisesAutomatically ?? true,
-    };
-
-    await storage.updateExtensionSettings(fixedSettings);
-    Logger.log("Settings initialized", fixedSettings);
-
-    return fixedSettings;
 }

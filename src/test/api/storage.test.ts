@@ -7,7 +7,6 @@ import Storage, {
     SessionState,
     UserData,
 } from "../../api/storage";
-import { LogLevel } from "../../utils";
 import { createMockContext } from "../__mocks__/vscode";
 
 suite("Storage class", function () {
@@ -26,7 +25,7 @@ suite("Storage class", function () {
         downloadOldSubmission: true,
         hideMetaFiles: true,
         insiderVersion: false,
-        logLevel: LogLevel.Verbose,
+        logLevel: "verbose",
         updateExercisesAutomatically: true,
     };
 

@@ -1,13 +1,11 @@
 import * as vscode from "vscode";
 
-import { LogLevel } from "../utils";
-
 export interface ExtensionSettings {
     dataPath: string;
     downloadOldSubmission: boolean;
     hideMetaFiles: boolean;
     insiderVersion: boolean;
-    logLevel: LogLevel;
+    logLevel: "none" | "errors" | "verbose";
     updateExercisesAutomatically: boolean;
 }
 

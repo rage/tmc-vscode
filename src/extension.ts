@@ -92,8 +92,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const resources = resourcesResult.val;
-    const settingsResult = await init.settingsInitialization(storage, resources);
-    const settings = new Settings(storage, settingsResult, resources);
+    await init.settingsInitialization(storage);
+    const settings = new Settings(storage, resources, tmcDataPath);
     await settings.verifyWorkspaceSettingsIntegrity();
     Logger.configure(settings.getLogLevel());
 
