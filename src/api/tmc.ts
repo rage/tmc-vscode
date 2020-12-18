@@ -112,7 +112,6 @@ export default class TMC {
                 this._onLogin = callback;
                 break;
             case "logout":
-                this._responseCache.clear();
                 this._onLogout = callback;
                 break;
         }
@@ -186,6 +185,7 @@ export default class TMC {
             return logoutResult;
         }
 
+        this._responseCache.clear();
         this._onLogout?.();
         return Ok.EMPTY;
     }
@@ -755,10 +755,12 @@ export default class TMC {
                     case "forbidden":
                         return new Err(new ForbiddenError(message, traceString));
                     case "invalid-token":
+                        this._responseCache.clear();
                         this._onLogout?.();
                         showError("Your TMC session has expired, please log in.");
                         return new Err(new InvalidTokenError(message));
                     case "not-logged-in":
+                        this._responseCache.clear();
                         this._onLogout?.();
                         return new Err(new AuthorizationError(message, traceString));
                     case "obsolete-client":
