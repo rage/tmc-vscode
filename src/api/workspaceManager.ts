@@ -75,9 +75,13 @@ export default class WorkspaceManager {
         });
     }
 
-    public get activeExercise(): vscode.Uri | undefined {
+    public get activeExercise(): Readonly<WorkspaceExercise> | undefined {
         const uri = vscode.window.activeTextEditor?.document.uri;
-        return uri && this.uriIsExercise(uri) ? uri : undefined;
+        for (const data of this._idToData.values()) {
+            if (data.uri.fsPath === uri?.fsPath) {
+                return data;
+            }
+        }
     }
 
     /**
@@ -136,6 +140,14 @@ export default class WorkspaceManager {
             return new Err(new Error(`Exercise data missing for ${id}`));
         }
         return new Ok(data);
+    }
+
+    public getExerciseByPath(exercise: vscode.Uri): Readonly<WorkspaceExercise> | undefined {
+        for (const data of this._idToData.values()) {
+            if (data.uri.fsPath === exercise.fsPath) {
+                return data;
+            }
+        }
     }
 
     /**

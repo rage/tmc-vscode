@@ -233,63 +233,6 @@ export async function downloadExerciseUpdates(
     */
 }
 
-interface ResetOptions {
-    /** Whether to open the exercise to workspace after reseting. */
-    openAfterwards?: boolean;
-    /** Whether to submit current state, asks user if not defined. */
-    submitFirst?: boolean;
-}
-
-/**
- * Resets an exercise to its initial state. Optionally submits the exercise beforehand.
- *
- * @param id ID of the exercise to reset.
- * @param options Optional parameters that can be used to control the action behavior.
- */
-export async function resetExercise(
-    actionContext: ActionContext,
-    id: number,
-    options?: ResetOptions,
-): Promise<Result<boolean, Error>> {
-    const { tmc, workspaceManager } = actionContext;
-
-    const exerciseData = workspaceManager.getExerciseDataById(id);
-    if (exerciseData.err) {
-        return exerciseData;
-    }
-    const exercise = exerciseData.val;
-
-    const pathResult = workspaceManager.getExercisePathById(id);
-    if (pathResult.err) {
-        return pathResult;
-    }
-
-    Logger.log(`Resetting exercise ${exercise.name}`);
-
-    const submitFirst =
-        options?.submitFirst !== undefined
-            ? options.submitFirst
-            : await askForItem(
-                  "Do you want to save the current state of the exercise by submitting it to TMC Server?",
-                  false,
-                  ["Yes", true],
-                  ["No", false],
-                  ["Cancel", undefined],
-              );
-
-    if (submitFirst === undefined) {
-        Logger.debug("Answer for submitting first not provided, returning early.");
-        return Ok(false);
-    }
-
-    const resetResult = await tmc.resetExercise(id, pathResult.val, submitFirst);
-    if (resetResult.err) {
-        return resetResult;
-    }
-
-    return Ok(true);
-}
-
 /**
  * Opens given exercises, showing them in TMC workspace.
  * @param ids Array of exercise IDs

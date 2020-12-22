@@ -39,6 +39,15 @@ export class UserData {
         return this.getCourses().filter((x) => x.name === name)[0];
     }
 
+    public getExerciseByName(exerciseName: string): Readonly<LocalCourseExercise> | undefined {
+        for (const course of this._courses.values()) {
+            const exercise = course.exercises.find((x) => x.name === exerciseName);
+            if (exercise) {
+                return exercise;
+            }
+        }
+    }
+
     public addCourse(data: LocalCourseData): void {
         if (this._courses.has(data.id)) {
             throw new Error("Trying to add an already existing course");

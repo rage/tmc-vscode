@@ -4,12 +4,13 @@ import { IMock, It, Mock, Times } from "typemoq";
 import * as vscode from "vscode";
 
 import { ActionContext } from "../../actions/types";
+import { ExerciseStatus } from "../../api/storage";
 import TMC from "../../api/tmc";
 import WorkspaceManager from "../../api/workspaceManager";
 import { cleanExercise } from "../../commands";
 import { createMockActionContext } from "../__mocks__/actionContext";
 
-suite.only("Clean exercise command", function () {
+suite("Clean exercise command", function () {
     const BACKEND_FOLDER = path.join(__dirname, "..", "backend");
     const COURSE_PATH = path.join(BACKEND_FOLDER, "resources", "test-python-course");
     const PASSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-01_passing_exercise");
@@ -35,7 +36,15 @@ suite.only("Clean exercise command", function () {
 
     test("should clean active exercise by default", async function () {
         workspaceManagerMock.setup((x) => x.uriIsExercise(It.isAny())).returns(() => true);
-        workspaceManagerMock.setup((x) => x.activeExercise).returns(() => uri);
+        workspaceManagerMock
+            .setup((x) => x.activeExercise)
+            .returns(() => ({
+                id: 1,
+                course: "test-python-course",
+                name: "part01-01_passing_exercise",
+                status: ExerciseStatus.OPEN,
+                uri,
+            }));
         tmcMock.setup((x) => x.clean(It.isAnyString())).returns(() => Promise.resolve(Ok.EMPTY));
         await cleanExercise(actionContext(), undefined);
         tmcMock.verify((x) => x.clean(It.isValue(uri.fsPath)), Times.once());

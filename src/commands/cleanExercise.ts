@@ -19,7 +19,7 @@ export async function cleanExercise(
         return;
     }
 
-    const exerciseToClean = resource ?? workspaceManager.activeExercise;
+    const exerciseToClean = resource ?? workspaceManager.activeExercise?.uri;
     if (!exerciseToClean) {
         Logger.warn("Attempted to clean an exercise without target.");
         return;
