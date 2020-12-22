@@ -10,11 +10,7 @@ import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { ExerciseStatus } from "../api/storage";
-import { OldSubmission } from "../api/types";
 import * as UITypes from "../ui/types";
-import { Logger } from "../utils";
-import { dateToString, parseDate } from "../utils/dateDeadline";
-import { askForItem, showNotification } from "../window";
 
 import { ActionContext, CourseExerciseDownloads } from "./types";
 
@@ -285,88 +281,4 @@ export async function closeExercises(
         })),
     );
     return new Ok(ids);
-}
-
-interface DownloadOldSubmissionOptions {
-    /** Whether to submit current state, asks user if not defined. */
-    submitFirst?: boolean;
-}
-
-/**
- * Looks for older submissions of the given exercise and lets user choose which one to download.
- * Uses resetExercise action before applying the contents of the actual submission.
- *
- * @param exerciseId exercise which older submission will be downloaded
- */
-export async function downloadOldSubmission(
-    actionContext: ActionContext,
-    exerciseId: number,
-    options?: DownloadOldSubmissionOptions,
-): Promise<Result<boolean, Error>> {
-    const { tmc, workspaceManager } = actionContext;
-
-    const exerciseData = workspaceManager.getExerciseDataById(exerciseId);
-    if (exerciseData.err) {
-        return exerciseData;
-    }
-    const exercise = exerciseData.val;
-
-    const pathResult = workspaceManager.getExercisePathById(exerciseId);
-    if (pathResult.err) {
-        return pathResult;
-    }
-
-    Logger.debug("Fetching old submissions");
-    const submissionsResult = await tmc.getOldSubmissions(exerciseId);
-    if (submissionsResult.err) {
-        return submissionsResult;
-    }
-
-    if (submissionsResult.val.length === 0) {
-        Logger.log(`No previous submissions found for exercise ${exerciseId}`);
-        showNotification(`No previous submissions found for ${exercise.name}.`);
-        return Ok(false);
-    }
-
-    const submission = await askForItem(
-        exerciseData.val.name + ": Select a submission",
-        false,
-        ...submissionsResult.val.map<[string, OldSubmission]>((a) => [
-            dateToString(parseDate(a.processing_attempts_started_at)) +
-                "| " +
-                (a.all_tests_passed ? "Passed" : "Not passed"),
-            a,
-        ]),
-    );
-
-    if (!submission) {
-        return Ok(false);
-    }
-
-    const submitFirst =
-        options?.submitFirst !== undefined
-            ? options.submitFirst
-            : await askForItem(
-                  "Do you want to save the current state of the exercise by submitting it to TMC Server?",
-                  false,
-                  ["Yes", true],
-                  ["No", false],
-                  ["Cancel", undefined],
-              );
-
-    if (submitFirst === undefined) {
-        Logger.debug("Answer for submitting first not provided, returning early.");
-        return Ok(false);
-    }
-
-    const downloadResult = await tmc.downloadOldSubmission(
-        exerciseId,
-        pathResult.val,
-        submission.id,
-        submitFirst,
-    );
-    if (downloadResult.err) {
-        return downloadResult;
-    }
-    return Ok(true);
 }
