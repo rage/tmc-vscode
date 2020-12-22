@@ -75,6 +75,20 @@ export default class WorkspaceManager {
         });
     }
 
+    public get activeExercise(): vscode.Uri | undefined {
+        const uri = vscode.window.activeTextEditor?.document.uri;
+        return uri && this.uriIsExercise(uri) ? uri : undefined;
+    }
+
+    /**
+     * Checks whether or not the given `uri` is an exercise or not.
+     */
+    public uriIsExercise(uri: vscode.Uri): boolean {
+        const exerciseFolderPath = this._resources.projectsDirectory;
+        const relation = path.relative(exerciseFolderPath, uri.fsPath);
+        return !relation.startsWith("..");
+    }
+
     public setExerciseStatus(id: number, status: ExerciseStatus): void {
         const data = this._idToData.get(id);
         if (data) {

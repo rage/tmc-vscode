@@ -233,26 +233,6 @@ export async function downloadExerciseUpdates(
     */
 }
 
-/**
- * Removes language specific meta files from exercise directory.
- * @param id ID of the exercise to reset.
- */
-export async function cleanExercise(
-    actionContext: ActionContext,
-    id: number,
-): Promise<Result<void, Error>> {
-    const { tmc, workspaceManager } = actionContext;
-    const exerciseFolderPath = workspaceManager.getExercisePathById(id);
-    if (exerciseFolderPath.err) {
-        return exerciseFolderPath;
-    }
-    const cleanResult = await tmc.clean(exerciseFolderPath.val);
-    if (cleanResult.err) {
-        return cleanResult;
-    }
-    return Ok.EMPTY;
-}
-
 interface ResetOptions {
     /** Whether to open the exercise to workspace after reseting. */
     openAfterwards?: boolean;
