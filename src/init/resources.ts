@@ -32,7 +32,10 @@ export async function resourceInitialization(
     // Verify that all course .code-workspaces are in-place on startup.
     const userData = storage.getUserData();
     userData?.courses.forEach((course) => {
-        const tmcWorkspaceFilePath = path.join(tmcDataPath, course.name + ".code-workspace");
+        const tmcWorkspaceFilePath = path.join(
+            workspaceFileFolder,
+            course.name + ".code-workspace",
+        );
         if (!fs.existsSync(tmcWorkspaceFilePath)) {
             fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
             Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
