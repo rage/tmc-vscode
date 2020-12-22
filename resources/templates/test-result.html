@@ -47,6 +47,7 @@
         <script>
             const vscode = acquireVsCodeApi();
             const exerciseId = {{id}};
+            const exerciseName = {{exerciseName}};
             const disabled = {{disabled}};
 
             function submitToServer() {
@@ -56,7 +57,7 @@
                 vscode.postMessage({ type: "closeWindow" });
             }
             function sendToPaste() {
-                vscode.postMessage({ type: 'sendToPaste', data: { exerciseId } });
+                vscode.postMessage({ type: 'sendToPaste', data: { exerciseId, exerciseName } });
             }
 
             document.getElementById("submitToServer").disabled = disabled;

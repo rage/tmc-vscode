@@ -152,7 +152,10 @@ export async function testExercise(
             if (msg.type === "submitToServer" && msg.data) {
                 submitExercise(actionContext, msg.data.exerciseId as number);
             } else if (msg.type === "sendToPaste" && msg.data) {
-                const pasteLink = await pasteExercise(actionContext, msg.data.exerciseId as number);
+                const pasteLink = await pasteExercise(
+                    actionContext,
+                    msg.data.exerciseName as string,
+                );
                 if (pasteLink.err) {
                     Logger.error(`${pasteLink.val.message}`, pasteLink.val);
                     showError(`Failed to send to TMC Paste: ${pasteLink.val.message}`);
@@ -211,7 +214,7 @@ export async function submitExercise(
         } else if (msg.type === "closeWindow") {
             temp.dispose();
         } else if (msg.type === "sendToPaste" && msg.data) {
-            const pasteLink = await pasteExercise(actionContext, Number(msg.data.exerciseId));
+            const pasteLink = await pasteExercise(actionContext, msg.data.exerciseName as string);
             if (pasteLink.err) {
                 Logger.error(`${pasteLink.val.message}`, pasteLink.val);
                 showError(`Failed to send to TMC Paste: ${pasteLink.val.message}`);
@@ -308,15 +311,17 @@ export async function submitExercise(
  */
 export async function pasteExercise(
     actionContext: ActionContext,
-    id: number,
+    exerciseName: string,
 ): Promise<Result<string, Error>> {
-    const { tmc, workspaceManager } = actionContext;
-    const exerciseFolderPath = workspaceManager.getExercisePathById(id);
-    if (exerciseFolderPath.err) {
-        return exerciseFolderPath;
+    const { tmc, userData, workspaceManager } = actionContext;
+
+    const exerciseId = userData.getExerciseByName(exerciseName)?.id;
+    const exercisePath = workspaceManager.getExerciseByName(exerciseName)?.uri.fsPath;
+    if (!exerciseId || !exercisePath) {
+        return Err(new Error("Failed to resolve exercise id"));
     }
 
-    const pasteResult = await tmc.submitExerciseToPaste(id, exerciseFolderPath.val);
+    const pasteResult = await tmc.submitExerciseToPaste(exerciseId, exercisePath);
     if (pasteResult.err) {
         return pasteResult;
     }

@@ -142,6 +142,14 @@ export default class WorkspaceManager {
         return new Ok(data);
     }
 
+    public getExerciseByName(exerciseName: string): Readonly<WorkspaceExercise> | undefined {
+        for (const data of this._idToData.values()) {
+            if (data.name === exerciseName) {
+                return data;
+            }
+        }
+    }
+
     public getExerciseByPath(exercise: vscode.Uri): Readonly<WorkspaceExercise> | undefined {
         for (const data of this._idToData.values()) {
             if (data.uri.fsPath === exercise.fsPath) {
