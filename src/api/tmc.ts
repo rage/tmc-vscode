@@ -17,7 +17,13 @@ import {
 import { Logger } from "../utils/logger";
 import { showError, showWarning } from "../window";
 
-import { LangsError, LangsOutputData, LangsStatusUpdate, LangsWarning } from "./langsSchema";
+import {
+    LangsError,
+    LangsOutputData,
+    LangsStatusUpdate,
+    LangsWarning,
+    LocalExercise,
+} from "./langsSchema";
 import {
     Course,
     CourseData,
@@ -205,6 +211,28 @@ export default class TMC {
             { args: ["clean", "--exercise-path", exercisePath], core: false },
             createIs<unknown>(),
         ).then((res) => (res.err ? res : Ok.EMPTY));
+    }
+
+    /**
+     * Lists local exercises for given course. Uses TMC-langs `list-local-course-exercises` command
+     * internally.
+     *
+     * @param courseSlug Course which's exercises should be listed.
+     */
+    public async listCourseExercises(courseSlug: string): Promise<Result<LocalExercise[], Error>> {
+        return this._executeLangsCommand(
+            {
+                args: [
+                    "list-local-course-exercises",
+                    "--client-name",
+                    this.clientName,
+                    "--course-slug",
+                    courseSlug,
+                ],
+                core: false,
+            },
+            createIs<LocalExercise[]>(),
+        ).then((res) => res.map((x) => x.data));
     }
 
     /**
