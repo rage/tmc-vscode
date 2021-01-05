@@ -109,6 +109,7 @@ export type SubmissionStatusData = {
 export type TestResultData = {
     testResult: unknown;
     id: number;
+    courseSlug: string;
     exerciseName: string;
     tmcLogs: {
         stdout?: string;

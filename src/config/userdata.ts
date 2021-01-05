@@ -39,11 +39,13 @@ export class UserData {
         return this.getCourses().filter((x) => x.name === name)[0];
     }
 
-    public getExerciseByName(exerciseName: string): Readonly<LocalCourseExercise> | undefined {
+    public getExerciseByName(
+        courseSlug: string,
+        exerciseName: string,
+    ): Readonly<LocalCourseExercise> | undefined {
         for (const course of this._courses.values()) {
-            const exercise = course.exercises.find((x) => x.name === exerciseName);
-            if (exercise) {
-                return exercise;
+            if (course.name === courseSlug) {
+                return course.exercises.find((x) => x.name === exerciseName);
             }
         }
     }

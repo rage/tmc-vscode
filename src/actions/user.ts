@@ -83,7 +83,12 @@ export async function testExercise(
     }
 
     const course = userData.getCourseByName(exerciseDetails.val.course);
-    let data: TestResultData = { ...EXAM_TEST_RESULT, id, disabled: course.disabled };
+    let data: TestResultData = {
+        ...EXAM_TEST_RESULT,
+        id,
+        disabled: course.disabled,
+        courseSlug: course.name,
+    };
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
     if (!course.perhapsExamMode) {
@@ -138,6 +143,7 @@ export async function testExercise(
         data = {
             testResult: testResult.val,
             id,
+            courseSlug: course.name,
             exerciseName,
             tmcLogs: {},
             disabled: course.disabled,
@@ -154,6 +160,7 @@ export async function testExercise(
             } else if (msg.type === "sendToPaste" && msg.data) {
                 const pasteLink = await pasteExercise(
                     actionContext,
+                    msg.data.courseSlug as string,
                     msg.data.exerciseName as string,
                 );
                 if (pasteLink.err) {
@@ -214,7 +221,11 @@ export async function submitExercise(
         } else if (msg.type === "closeWindow") {
             temp.dispose();
         } else if (msg.type === "sendToPaste" && msg.data) {
-            const pasteLink = await pasteExercise(actionContext, msg.data.exerciseName as string);
+            const pasteLink = await pasteExercise(
+                actionContext,
+                msg.data.courseSlug as string,
+                msg.data.exerciseName as string,
+            );
             if (pasteLink.err) {
                 Logger.error(`${pasteLink.val.message}`, pasteLink.val);
                 showError(`Failed to send to TMC Paste: ${pasteLink.val.message}`);
@@ -311,11 +322,12 @@ export async function submitExercise(
  */
 export async function pasteExercise(
     actionContext: ActionContext,
+    courseSlug: string,
     exerciseName: string,
 ): Promise<Result<string, Error>> {
     const { tmc, userData, workspaceManager } = actionContext;
 
-    const exerciseId = userData.getExerciseByName(exerciseName)?.id;
+    const exerciseId = userData.getExerciseByName(courseSlug, exerciseName)?.id;
     const exercisePath = workspaceManager.getExerciseByName(exerciseName)?.uri.fsPath;
     if (!exerciseId || !exercisePath) {
         return Err(new Error("Failed to resolve exercise id"));

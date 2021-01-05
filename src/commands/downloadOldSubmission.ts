@@ -26,7 +26,7 @@ export async function downloadOldSubmission(
         return;
     }
 
-    const exerciseId = userData.getExerciseByName(exercise.name)?.id;
+    const exerciseId = userData.getExerciseByName(exercise.course, exercise.name)?.id;
     if (!exerciseId) {
         Logger.error("Failed to resolve exercise id.");
         showError("Failed to resolve exercise id.");
