@@ -25,9 +25,9 @@ export async function resetExercise(
         return;
     }
 
-    const exerciseDetails = userData.getExerciseByName(exercise.course, exercise.name);
+    const exerciseDetails = userData.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug);
     if (!exerciseDetails) {
-        Logger.error(`Missing exercise data for ${exercise.name}`);
+        Logger.error(`Missing exercise data for ${exercise.exerciseSlug}`);
         showError("Currently open editor is not part of a TMC exercise");
         return;
     }

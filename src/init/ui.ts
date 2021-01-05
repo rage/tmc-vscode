@@ -1,6 +1,7 @@
 import du = require("du");
 import * as _ from "lodash";
 import * as path from "path";
+import { Ok } from "ts-results";
 import * as vscode from "vscode";
 
 import {
@@ -27,7 +28,7 @@ import { askForConfirmation, showError, showNotification } from "../window";
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { workspaceManager, ui, resources, settings, visibilityGroups } = actionContext;
+    const { ui, resources, settings, visibilityGroups } = actionContext;
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
@@ -295,7 +296,9 @@ export function registerUiActions(actionContext: ActionContext): void {
                     p.report({ message: "Moving TMC Data folder..." });
                     // Have to wait here to allow for the notification to show up.
                     await sleep(50);
-                    return workspaceManager.moveFolder(old, newPath);
+                    // TODO: Reimplement with Langs
+                    // return workspaceManager.moveFolder(old, newPath);
+                    return Ok(old);
                 },
             );
             if (res.ok) {
@@ -311,7 +314,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 await settings.updateSetting({ setting: "dataPath", value: newPath });
             } else {
                 Logger.error(res.val);
-                showError(res.val.message);
+                // showError(res.val.message);
             }
             ui.webview.postMessage({
                 command: "setTmcDataFolder",

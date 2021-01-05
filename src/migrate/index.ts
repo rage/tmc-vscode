@@ -20,12 +20,11 @@ export async function migrateExtensionDataFromPreviousVersions(
     storage: Storage,
     tmc: TMC,
 ): Promise<Result<void, Error>> {
-    const exerciseData = storage.getExerciseData();
     const extensionSettings = storage.getExtensionSettings();
     const sessionState = storage.getSessionState();
     const userData = storage.getUserData();
 
-    const needToMigrate = !exerciseData || !extensionSettings || !sessionState || !userData;
+    const needToMigrate = !extensionSettings || !sessionState || !userData;
     if (!needToMigrate) {
         return Ok.EMPTY;
     }

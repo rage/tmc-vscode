@@ -4,11 +4,10 @@
  * -------------------------------------------------------------------------------------------------
  */
 
-import * as fs from "fs-extra";
 import { Err, Ok, Result } from "ts-results";
 
-import * as StorageTypes from "../api/storage";
 import { Exercise } from "../api/types";
+import { ExerciseStatus } from "../api/workspaceManager";
 import TemporaryWebview from "../ui/temporaryWebview";
 import * as UITypes from "../ui/types";
 import { WebviewMessage } from "../ui/types";
@@ -75,28 +74,16 @@ export async function displayLocalCourseDetails(
 ): Promise<void> {
     const { ui, tmc, userData, workspaceManager } = actionContext;
 
-    const checkFolderExistence = (exerciseId: number): boolean => {
-        const exercisePath = workspaceManager.getExercisePathById(exerciseId);
-        if (exercisePath.err) {
-            return false;
-        }
-        if (!fs.existsSync(exercisePath.val) || fs.readdirSync(exercisePath.val).length === 0) {
-            workspaceManager.setExerciseStatusAsMissing(exerciseId);
-            return false;
-        }
-        return true;
-    };
-
     const mapStatus = (
         exerciseId: number,
-        status: StorageTypes.ExerciseStatus,
+        status: ExerciseStatus,
         expired: boolean,
     ): UITypes.ExerciseStatus => {
         switch (status) {
-            case StorageTypes.ExerciseStatus.CLOSED:
-                return checkFolderExistence(exerciseId) ? "closed" : "missing";
-            case StorageTypes.ExerciseStatus.OPEN:
-                return checkFolderExistence(exerciseId) ? "opened" : "missing";
+            case ExerciseStatus.Closed:
+                return "closed";
+            case ExerciseStatus.Open:
+                return "opened";
             default:
                 return expired ? "expired" : "new";
         }
@@ -105,7 +92,6 @@ export async function displayLocalCourseDetails(
     const course = userData.getCourse(courseId);
     Logger.log(`Display course view for ${course.name}`);
 
-    const workspaceExercises = workspaceManager.getAllExerciseDataByCourseName(course.name);
     const exerciseData = new Map<string, UITypes.CourseDetailsExerciseGroup>();
     const initialState: UITypes.WebviewMessage[] = [];
     const apiCourse = (await tmc.getCourseDetails(courseId)).mapErr(() => undefined).val?.course;
@@ -116,7 +102,7 @@ export async function displayLocalCourseDetails(
         const groupName = nameMatch?.[1] || "";
         const group = exerciseData.get(groupName);
         const name = nameMatch?.[2] || "";
-        const exData = workspaceExercises.find((d) => d.id === ex.id);
+        const exData = workspaceManager.getExerciseBySlug(course.name, ex.name);
         const softDeadline = ex.softDeadline ? parseDate(ex.softDeadline) : null;
         const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
         initialState.push(
@@ -125,7 +111,7 @@ export async function displayLocalCourseDetails(
                 exerciseId: ex.id,
                 status: mapStatus(
                     ex.id,
-                    exData?.status ?? StorageTypes.ExerciseStatus.MISSING,
+                    exData?.status ?? ExerciseStatus.Missing,
                     hardDeadline !== null && currentDate >= hardDeadline,
                 ),
             },

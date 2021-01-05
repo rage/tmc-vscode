@@ -1,25 +1,9 @@
 import { expect } from "chai";
 
-import Storage, {
-    ExerciseStatus,
-    ExtensionSettings,
-    LocalExerciseData,
-    SessionState,
-    UserData,
-} from "../../api/storage";
+import Storage, { ExtensionSettings, SessionState, UserData } from "../../api/storage";
 import { createMockContext } from "../__mocks__/vscode";
 
 suite("Storage class", function () {
-    const exerciseData: LocalExerciseData[] = [
-        {
-            id: 0,
-            course: "test-python-course",
-            name: "hello_world",
-            path: "/path/to/exercise",
-            status: ExerciseStatus.OPEN,
-        },
-    ];
-
     const extensionSettings: ExtensionSettings = {
         dataPath: "/path/to/exercises",
         downloadOldSubmission: true,
@@ -75,12 +59,6 @@ suite("Storage class", function () {
         storage = new Storage(createMockContext());
     });
 
-    test("should store and retrieve exercise data", async function () {
-        expect(storage.getExerciseData()).to.be.undefined;
-        await storage.updateExerciseData(exerciseData);
-        expect(storage.getExerciseData()).to.be.deep.equal(exerciseData);
-    });
-
     test("should store and retrieve extension settings", async function () {
         expect(storage.getExtensionSettings()).to.be.undefined;
         await storage.updateExtensionSettings(extensionSettings);
@@ -100,7 +78,6 @@ suite("Storage class", function () {
     });
 
     test("should use unique key for exercise data", async function () {
-        await storage.updateExerciseData(exerciseData);
         expect(storage.getExtensionSettings()).to.be.undefined;
         expect(storage.getSessionState()).to.be.undefined;
         expect(storage.getUserData()).to.be.undefined;
@@ -108,32 +85,27 @@ suite("Storage class", function () {
 
     test("should use unique key for extension settings", async function () {
         await storage.updateExtensionSettings(extensionSettings);
-        expect(storage.getExerciseData()).to.be.undefined;
         expect(storage.getSessionState()).to.be.undefined;
         expect(storage.getUserData()).to.be.undefined;
     });
 
     test("should use unique key for session state", async function () {
         await storage.updateSessionState(sessionState);
-        expect(storage.getExerciseData()).to.be.undefined;
         expect(storage.getExtensionSettings()).to.be.undefined;
         expect(storage.getUserData()).to.be.undefined;
     });
 
     test("should use unique key for user data", async function () {
         await storage.updateUserData(userData);
-        expect(storage.getExerciseData()).to.be.undefined;
         expect(storage.getExtensionSettings()).to.be.undefined;
         expect(storage.getSessionState()).to.be.undefined;
     });
 
     test("should wipe all data", async function () {
-        await storage.updateExerciseData(exerciseData);
         await storage.updateExtensionSettings(extensionSettings);
         await storage.updateSessionState(sessionState);
         await storage.updateUserData(userData);
         await storage.wipeStorage();
-        expect(storage.getExerciseData()).to.be.undefined;
         expect(storage.getExtensionSettings()).to.be.undefined;
         expect(storage.getSessionState()).to.be.undefined;
         expect(storage.getUserData()).to.be.undefined;

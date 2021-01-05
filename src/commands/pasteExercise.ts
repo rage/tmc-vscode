@@ -20,7 +20,11 @@ export async function pasteExercise(
         return;
     }
 
-    const link = await actions.pasteExercise(actionContext, exercise.course, exercise.name);
+    const link = await actions.pasteExercise(
+        actionContext,
+        exercise.courseSlug,
+        exercise.exerciseSlug,
+    );
     if (link.err) {
         Logger.error("TMC Paste command failed.", link.val);
         showError(`TMC Paste command failed. ${link.val.message}`);

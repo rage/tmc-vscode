@@ -5,11 +5,12 @@
  */
 
 import * as _ from "lodash";
+import { compact } from "lodash";
 import * as path from "path";
 import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { ExerciseStatus } from "../api/storage";
+import { ExerciseStatus } from "../api/workspaceManager";
 import * as UITypes from "../ui/types";
 
 import { ActionContext, CourseExerciseDownloads } from "./types";
@@ -52,10 +53,9 @@ export async function downloadExercises(
             }
 
             workspaceManager.addExercise({
-                course: data.courseName,
-                id: download.id,
-                name: exerciseName,
-                status: ExerciseStatus.CLOSED,
+                courseSlug: data.courseName,
+                exerciseSlug: exerciseName,
+                status: ExerciseStatus.Closed,
                 uri: vscode.Uri.file(download.path),
             });
             downloaded.push(download.id);
@@ -238,18 +238,22 @@ export async function openExercises(
     ids: number[],
     courseName: string,
 ): Promise<Result<number[], Error>> {
-    const { workspaceManager, ui } = actionContext;
+    const { workspaceManager, ui, userData } = actionContext;
 
-    const result = await workspaceManager.openExercise(courseName, ...ids);
+    const course = userData.getCourseByName(courseName);
+    const exercises = new Map(course.exercises.map((x) => [x.id, x]));
+    const exerciseSlugs = compact(ids.map((x) => exercises.get(x)?.name));
 
+    const result = await workspaceManager.openCourseExercises(courseName, exerciseSlugs);
     if (result.err) {
         return result;
     }
 
+    const courseExercises = workspaceManager.getExercisesByCourseSlug(courseName);
     ui.webview.postMessage(
-        ...result.val.map<UITypes.WebviewMessage>((ex) => ({
+        ...courseExercises.map<UITypes.WebviewMessage>((ex) => ({
             command: "exerciseStatusChange",
-            exerciseId: ex.id,
+            exerciseId: course.exercises.find((x) => x.name === ex.exerciseSlug)?.id ?? -1,
             status: ex.status,
         })),
     );
@@ -265,18 +269,22 @@ export async function closeExercises(
     ids: number[],
     courseName: string,
 ): Promise<Result<number[], Error>> {
-    const { workspaceManager, ui } = actionContext;
+    const { workspaceManager, ui, userData } = actionContext;
 
-    const result = await workspaceManager.closeExercise(courseName, ...ids);
+    const course = userData.getCourseByName(courseName);
+    const exercises = new Map(course.exercises.map((x) => [x.id, x]));
+    const exerciseSlugs = compact(ids.map((x) => exercises.get(x)?.name));
 
+    const result = await workspaceManager.closeCourseExercises(courseName, exerciseSlugs);
     if (result.err) {
         return result;
     }
 
+    const courseExercises = workspaceManager.getExercisesByCourseSlug(courseName);
     ui.webview.postMessage(
-        ...result.val.map<UITypes.WebviewMessage>((ex) => ({
+        ...courseExercises.map<UITypes.WebviewMessage>((ex) => ({
             command: "exerciseStatusChange",
-            exerciseId: ex.id,
+            exerciseId: course.exercises.find((x) => x.name === ex.exerciseSlug)?.id ?? -1,
             status: ex.status,
         })),
     );

@@ -4,14 +4,13 @@
  * -------------------------------------------------------------------------------------------------
  */
 
-import { sync as delSync } from "del";
 import du = require("du");
 import * as fs from "fs-extra";
 import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { ExerciseStatus, LocalCourseData } from "../api/storage";
+import { LocalCourseData } from "../api/storage";
 import { SubmissionFeedback } from "../api/types";
 import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
@@ -79,10 +78,14 @@ export async function testExercise(
 ): Promise<Result<void, Error>> {
     const { ui, tmc, userData, temporaryWebviewProvider } = actionContext;
 
-    const course = userData.getCourseByName(exercise.course);
-    const exerciseId = course.exercises.find((x) => x.name === exercise.name)?.id;
+    const course = userData.getCourseByName(exercise.exerciseSlug);
+    const exerciseId = course.exercises.find((x) => x.name === exercise.exerciseSlug)?.id;
     if (!exerciseId) {
-        return Err(new Error(`ID for exercise ${exercise.course}/${exercise.name} was not found.`));
+        return Err(
+            new Error(
+                `ID for exercise ${exercise.courseSlug}/${exercise.exerciseSlug} was not found.`,
+            ),
+        );
     }
 
     let data: TestResultData = {
@@ -97,7 +100,7 @@ export async function testExercise(
         const executablePath = getActiveEditorExecutablePath(actionContext);
         const [testRunner, interrupt] = tmc.runTests(exercise.uri.fsPath, executablePath);
         let aborted = false;
-        const exerciseName = exercise.name;
+        const exerciseName = exercise.exerciseSlug;
 
         temp.setContent({
             title: "TMC Running tests",
@@ -190,12 +193,16 @@ export async function submitExercise(
     exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
     const { temporaryWebviewProvider, tmc, userData } = actionContext;
-    Logger.log(`Submitting exercise ${exercise.name} to server`);
+    Logger.log(`Submitting exercise ${exercise.exerciseSlug} to server`);
 
-    const course = userData.getCourseByName(exercise.course);
-    const exerciseId = course.exercises.find((x) => x.name === exercise.name)?.id;
+    const course = userData.getCourseByName(exercise.courseSlug);
+    const exerciseId = course.exercises.find((x) => x.name === exercise.exerciseSlug)?.id;
     if (!exerciseId) {
-        return Err(new Error(`ID for exercise ${exercise.course}/${exercise.name} was not found.`));
+        return Err(
+            new Error(
+                `ID for exercise ${exercise.exerciseSlug}/${exercise.exerciseSlug} was not found.`,
+            ),
+        );
     }
 
     const temp = temporaryWebviewProvider.getTemporaryWebview();
@@ -298,7 +305,7 @@ export async function submitExercise(
     });
     temporaryWebviewProvider.addToRecycables(temp);
 
-    const courseData = userData.getCourseByName(exercise.course) as Readonly<LocalCourseData>;
+    const courseData = userData.getCourseByName(exercise.exerciseSlug) as Readonly<LocalCourseData>;
 
     checkForCourseUpdates(actionContext, courseData.id);
     vscode.commands.executeCommand("tmc.updateExercises", "silent");
@@ -319,7 +326,7 @@ export async function pasteExercise(
     const { tmc, userData, workspaceManager } = actionContext;
 
     const exerciseId = userData.getExerciseByName(courseSlug, exerciseName)?.id;
-    const exercisePath = workspaceManager.getExerciseByName(courseSlug, exerciseName)?.uri.fsPath;
+    const exercisePath = workspaceManager.getExerciseBySlug(courseSlug, exerciseName)?.uri.fsPath;
     if (!exerciseId || !exercisePath) {
         return Err(new Error("Failed to resolve exercise id"));
     }
@@ -567,7 +574,7 @@ export async function addNewCourse(
  * @param id ID of the course to remove
  */
 export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, userData, workspaceManager, resources } = actionContext;
+    const { ui, userData } = actionContext;
     const course = userData.getCourse(id);
     Logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
     const closeResult = await closeExercises(
@@ -580,15 +587,6 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
         Logger.error(message, closeResult.val);
         showError(message);
     }
-    const exercises = workspaceManager.getAllExerciseDataByCourseName(course.name);
-    const missingIds = exercises
-        .filter((e) => e.status === ExerciseStatus.MISSING)
-        .map((e) => e.id);
-    Logger.log(`Removing ${missingIds.length} exercise data with Missing status`);
-    workspaceManager.deleteExercise(...missingIds);
-    delSync(resources.getWorkspaceFilePath(course.name), {
-        force: true,
-    });
     userData.deleteCourse(id);
     ui.treeDP.removeChildWithId("myCourses", id.toString());
 }

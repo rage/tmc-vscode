@@ -219,7 +219,9 @@ export default class TMC {
      *
      * @param courseSlug Course which's exercises should be listed.
      */
-    public async listCourseExercises(courseSlug: string): Promise<Result<LocalExercise[], Error>> {
+    public async listLocalCourseExercises(
+        courseSlug: string,
+    ): Promise<Result<LocalExercise[], Error>> {
         return this._executeLangsCommand(
             {
                 args: [

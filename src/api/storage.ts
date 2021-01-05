@@ -37,20 +37,6 @@ export interface UserData {
     courses: LocalCourseData[];
 }
 
-export enum ExerciseStatus {
-    OPEN = "open",
-    CLOSED = "closed",
-    MISSING = "missing",
-}
-
-export interface LocalExerciseData {
-    id: number;
-    name: string;
-    course: string;
-    path: string;
-    status: ExerciseStatus;
-}
-
 export interface SessionState {
     extensionVersion?: string | undefined;
     oldDataPath?: { path: string; timestamp: number } | undefined;
@@ -62,7 +48,6 @@ export interface SessionState {
 export default class Storage {
     private static readonly _extensionSettingsKey = "extension-settings-v1";
     private static readonly _userDataKey = "user-data-v1";
-    private static readonly _exerciseDataKey = "exercise-data-v1";
     private static readonly _sessionStateKey = "session-state-v1";
 
     private _context: vscode.ExtensionContext;
@@ -75,10 +60,6 @@ export default class Storage {
         this._context = context;
     }
 
-    public getExerciseData(): LocalExerciseData[] | undefined {
-        return this._context.globalState.get<LocalExerciseData[]>(Storage._exerciseDataKey);
-    }
-
     public getUserData(): UserData | undefined {
         return this._context.globalState.get<UserData>(Storage._userDataKey);
     }
@@ -89,10 +70,6 @@ export default class Storage {
 
     public getSessionState(): SessionState | undefined {
         return this._context.globalState.get<SessionState>(Storage._sessionStateKey);
-    }
-
-    public async updateExerciseData(exerciseData: LocalExerciseData[] | undefined): Promise<void> {
-        await this._context.globalState.update(Storage._exerciseDataKey, exerciseData);
     }
 
     public async updateUserData(userData: UserData | undefined): Promise<void> {
@@ -108,7 +85,6 @@ export default class Storage {
     }
 
     public async wipeStorage(): Promise<void> {
-        await this.updateExerciseData(undefined);
         await this.updateExtensionSettings(undefined);
         await this.updateSessionState(undefined);
         await this.updateUserData(undefined);

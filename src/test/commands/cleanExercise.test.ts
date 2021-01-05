@@ -4,9 +4,8 @@ import { IMock, It, Mock, Times } from "typemoq";
 import * as vscode from "vscode";
 
 import { ActionContext } from "../../actions/types";
-import { ExerciseStatus } from "../../api/storage";
 import TMC from "../../api/tmc";
-import WorkspaceManager from "../../api/workspaceManager";
+import WorkspaceManager, { ExerciseStatus } from "../../api/workspaceManager";
 import { cleanExercise } from "../../commands";
 import { createMockActionContext } from "../__mocks__/actionContext";
 
@@ -39,10 +38,9 @@ suite("Clean exercise command", function () {
         workspaceManagerMock
             .setup((x) => x.activeExercise)
             .returns(() => ({
-                id: 1,
-                course: "test-python-course",
-                name: "part01-01_passing_exercise",
-                status: ExerciseStatus.OPEN,
+                courseSlug: "test-python-course",
+                exerciseSlug: "part01-01_passing_exercise",
+                status: ExerciseStatus.Open,
                 uri,
             }));
         tmcMock.setup((x) => x.clean(It.isAnyString())).returns(() => Promise.resolve(Ok.EMPTY));

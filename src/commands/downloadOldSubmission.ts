@@ -26,7 +26,7 @@ export async function downloadOldSubmission(
         return;
     }
 
-    const exerciseId = userData.getExerciseByName(exercise.course, exercise.name)?.id;
+    const exerciseId = userData.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id;
     if (!exerciseId) {
         Logger.error("Failed to resolve exercise id.");
         showError("Failed to resolve exercise id.");
@@ -43,12 +43,12 @@ export async function downloadOldSubmission(
 
     if (submissionsResult.val.length === 0) {
         Logger.log(`No previous submissions found for exercise ${exerciseId}`);
-        showNotification(`No previous submissions found for ${exercise.name}.`);
+        showNotification(`No previous submissions found for ${exercise.exerciseSlug}.`);
         return;
     }
 
     const submission = await askForItem(
-        exercise.name + ": Select a submission",
+        exercise.exerciseSlug + ": Select a submission",
         false,
         ...submissionsResult.val.map<[string, OldSubmission]>((a) => [
             dateToString(parseDate(a.processing_attempts_started_at)) +

@@ -19,15 +19,19 @@ export async function closeExercise(
         return;
     }
 
-    const exerciseId = userData.getExerciseByName(exercise.course, exercise.name)?.id;
+    const exerciseId = userData.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id;
     if (
         exerciseId &&
         (userData.getPassed(exerciseId) ||
             (await askForConfirmation(
-                `Are you sure you want to close uncompleted exercise ${exercise.name}?`,
+                `Are you sure you want to close uncompleted exercise ${exercise.exerciseSlug}?`,
             )))
     ) {
-        const result = await actions.closeExercises(actionContext, [exerciseId], exercise.course);
+        const result = await actions.closeExercises(
+            actionContext,
+            [exerciseId],
+            exercise.courseSlug,
+        );
         if (result.err) {
             const message = "Error when closing exercise.";
             Logger.error(message, result.val);
