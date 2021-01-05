@@ -142,9 +142,12 @@ export default class WorkspaceManager {
         return new Ok(data);
     }
 
-    public getExerciseByName(exerciseName: string): Readonly<WorkspaceExercise> | undefined {
+    public getExerciseByName(
+        courseSlug: string,
+        exerciseName: string,
+    ): Readonly<WorkspaceExercise> | undefined {
         for (const data of this._idToData.values()) {
-            if (data.name === exerciseName) {
+            if (data.course === courseSlug && data.name === exerciseName) {
                 return data;
             }
         }

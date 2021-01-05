@@ -13,6 +13,7 @@ import * as vscode from "vscode";
 
 import { ExerciseStatus, LocalCourseData } from "../api/storage";
 import { SubmissionFeedback } from "../api/types";
+import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { ConnectionError, ForbiddenError } from "../errors";
 import { TestResultData } from "../ui/types";
@@ -74,18 +75,19 @@ export async function logout(actionContext: ActionContext): Promise<Result<void,
  */
 export async function testExercise(
     actionContext: ActionContext,
-    id: number,
+    exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { ui, tmc, userData, workspaceManager, temporaryWebviewProvider } = actionContext;
-    const exerciseDetails = workspaceManager.getExerciseDataById(id);
-    if (exerciseDetails.err) {
-        return exerciseDetails;
+    const { ui, tmc, userData, temporaryWebviewProvider } = actionContext;
+
+    const course = userData.getCourseByName(exercise.course);
+    const exerciseId = course.exercises.find((x) => x.name === exercise.name)?.id;
+    if (!exerciseId) {
+        return Err(new Error(`ID for exercise ${exercise.course}/${exercise.name} was not found.`));
     }
 
-    const course = userData.getCourseByName(exerciseDetails.val.course);
     let data: TestResultData = {
         ...EXAM_TEST_RESULT,
-        id,
+        id: exerciseId,
         disabled: course.disabled,
         courseSlug: course.name,
     };
@@ -93,13 +95,9 @@ export async function testExercise(
 
     if (!course.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext);
-        const exercisePath = workspaceManager.getExercisePathById(id);
-        if (exercisePath.err) {
-            return exercisePath;
-        }
-        const [testRunner, interrupt] = tmc.runTests(exercisePath.val, executablePath);
+        const [testRunner, interrupt] = tmc.runTests(exercise.uri.fsPath, executablePath);
         let aborted = false;
-        const exerciseName = exerciseDetails.val.name;
+        const exerciseName = exercise.name;
 
         temp.setContent({
             title: "TMC Running tests",
@@ -142,7 +140,7 @@ export async function testExercise(
         Logger.log(`Tests finished for ${exerciseName}`);
         data = {
             testResult: testResult.val,
-            id,
+            id: exerciseId,
             courseSlug: course.name,
             exerciseName,
             tmcLogs: {},
@@ -156,7 +154,7 @@ export async function testExercise(
         template: { templateName: "test-result", ...data, pasteLink: "" },
         messageHandler: async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
             if (msg.type === "submitToServer" && msg.data) {
-                submitExercise(actionContext, msg.data.exerciseId as number);
+                submitExercise(actionContext, exercise);
             } else if (msg.type === "sendToPaste" && msg.data) {
                 const pasteLink = await pasteExercise(
                     actionContext,
@@ -189,18 +187,17 @@ export async function testExercise(
  */
 export async function submitExercise(
     actionContext: ActionContext,
-    id: number,
+    exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { temporaryWebviewProvider, tmc, userData, workspaceManager } = actionContext;
+    const { temporaryWebviewProvider, tmc, userData } = actionContext;
+    Logger.log(`Submitting exercise ${exercise.name} to server`);
 
-    Logger.log(
-        `Submitting exercise ${workspaceManager.getExerciseDataById(id).val.name} to server`,
-    );
-
-    const exerciseDetails = workspaceManager.getExerciseDataById(id);
-    if (exerciseDetails.err) {
-        return exerciseDetails;
+    const course = userData.getCourseByName(exercise.course);
+    const exerciseId = course.exercises.find((x) => x.name === exercise.name)?.id;
+    if (!exerciseId) {
+        return Err(new Error(`ID for exercise ${exercise.course}/${exercise.name} was not found.`));
     }
+
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
     const messageHandler = async (msg: {
@@ -241,14 +238,10 @@ export async function submitExercise(
     };
 
     const messages: string[] = [];
-    const exerciseFolderPath = workspaceManager.getExercisePathById(id);
-    if (exerciseFolderPath.err) {
-        return exerciseFolderPath;
-    }
     let submissionUrl = "";
     const submissionResult = await tmc.submitExerciseAndWaitForResults(
-        id,
-        exerciseFolderPath.val,
+        exerciseId,
+        exercise.uri.fsPath,
         (progressPct, message) => {
             if (message && message !== _.last(messages)) {
                 messages.push(message);
@@ -305,9 +298,7 @@ export async function submitExercise(
     });
     temporaryWebviewProvider.addToRecycables(temp);
 
-    const courseData = userData.getCourseByName(
-        exerciseDetails.val.course,
-    ) as Readonly<LocalCourseData>;
+    const courseData = userData.getCourseByName(exercise.course) as Readonly<LocalCourseData>;
 
     checkForCourseUpdates(actionContext, courseData.id);
     vscode.commands.executeCommand("tmc.updateExercises", "silent");
@@ -328,7 +319,7 @@ export async function pasteExercise(
     const { tmc, userData, workspaceManager } = actionContext;
 
     const exerciseId = userData.getExerciseByName(courseSlug, exerciseName)?.id;
-    const exercisePath = workspaceManager.getExerciseByName(exerciseName)?.uri.fsPath;
+    const exercisePath = workspaceManager.getExerciseByName(courseSlug, exerciseName)?.uri.fsPath;
     if (!exerciseId || !exercisePath) {
         return Err(new Error("Failed to resolve exercise id"));
     }
