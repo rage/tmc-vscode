@@ -15,7 +15,6 @@ import {
 } from "./config/constants";
 import Settings from "./config/settings";
 import { UserData } from "./config/userdata";
-import { validateAndFix } from "./config/validate";
 import { EmptyLangsResponseError } from "./errors";
 import * as init from "./init";
 import { migrateExtensionDataFromPreviousVersions } from "./migrate";
@@ -125,14 +124,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const previousVersion = previousState?.extensionVersion;
     if (currentVersion !== previousVersion) {
         storage.updateSessionState({ extensionVersion: currentVersion });
-    }
-
-    const validationResult = await validateAndFix(storage, tmc, ui, resources);
-    if (validationResult.err) {
-        const message = "Data reconstruction failed.";
-        Logger.error(message, validationResult.val);
-        showError(message);
-        return;
     }
 
     const workspaceManager = new WorkspaceManager(storage, resources);
