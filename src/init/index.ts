@@ -16,7 +16,7 @@ export * from "./downloadCorrectLangsVersion";
  * @param actionContext
  */
 export function watchForWorkspaceChanges(actionContext: ActionContext): void {
-    const { resources, workspaceManager, ui } = actionContext;
+    const { resources, workspaceManager, ui, userData } = actionContext;
     const currentWorkspace = vscode.workspace.name?.split(" ")[0];
     if (currentWorkspace && isCorrectWorkspaceOpen(resources, currentWorkspace)) {
         Logger.log("TMC Workspace identified, listening for folder changes.");
@@ -25,44 +25,58 @@ export function watchForWorkspaceChanges(actionContext: ActionContext): void {
             const foldersToRemove: vscode.Uri[] = [];
 
             listener.removed.forEach((item) => {
-                const exercise = workspaceManager.getExerciseDataByPath(item.uri.fsPath);
+                const exercise = workspaceManager.getExerciseByPath(item.uri);
                 if (
-                    exercise.ok &&
-                    exercise.val.status !== ExerciseStatus.MISSING &&
-                    exercise.val.status === ExerciseStatus.OPEN &&
-                    currentWorkspace === exercise.val.course
+                    exercise &&
+                    exercise.status !== ExerciseStatus.MISSING &&
+                    exercise.status === ExerciseStatus.OPEN &&
+                    currentWorkspace === exercise.course
                 ) {
-                    workspaceManager.setExerciseStatus(exercise.val.id, ExerciseStatus.CLOSED);
+                    const exerciseId = userData
+                        .getCourseByName(exercise.course)
+                        .exercises.find((x) => x.name === exercise.name)?.id;
+                    if (!exerciseId) {
+                        return;
+                    }
+
+                    workspaceManager.setExerciseStatus(exerciseId, ExerciseStatus.CLOSED);
                     ui.webview.postMessage({
                         command: "exerciseStatusChange",
-                        exerciseId: exercise.val.id,
+                        exerciseId,
                         status: "closed",
                     });
                 }
             });
 
             listener.added.forEach((item) => {
-                const exercise = workspaceManager.getExerciseDataByPath(item.uri.fsPath);
+                const exercise = workspaceManager.getExerciseByPath(item.uri);
                 if (
-                    exercise.ok &&
-                    exercise.val.status !== ExerciseStatus.MISSING &&
-                    exercise.val.status === ExerciseStatus.CLOSED &&
-                    currentWorkspace === exercise.val.course
+                    exercise &&
+                    exercise.status !== ExerciseStatus.MISSING &&
+                    exercise.status === ExerciseStatus.CLOSED &&
+                    currentWorkspace === exercise.course
                 ) {
-                    workspaceManager.setExerciseStatus(exercise.val.id, ExerciseStatus.OPEN);
+                    const exerciseId = userData
+                        .getCourseByName(exercise.course)
+                        .exercises.find((x) => x.name === exercise.name)?.id;
+                    if (!exerciseId) {
+                        return;
+                    }
+
+                    workspaceManager.setExerciseStatus(exerciseId, ExerciseStatus.OPEN);
                     ui.webview.postMessage({
                         command: "exerciseStatusChange",
-                        exerciseId: exercise.val.id,
+                        exerciseId: exerciseId,
                         status: "opened",
                     });
-                } else if (exercise.ok && currentWorkspace !== exercise.val.course) {
+                } else if (exercise && currentWorkspace !== exercise.course) {
                     foldersToRemove.push(vscode.Uri.file(item.uri.fsPath));
-                } else if (exercise.err) {
+                } else if (exercise) {
                     if (item.name !== ".tmc") {
                         Logger.warn(
                             "Added folder that isn't part of any course.",
-                            exercise.val.message,
-                            exercise.val.stack,
+                            exercise.course,
+                            exercise.name,
                         );
                         foldersToRemove.push(vscode.Uri.file(item.uri.fsPath));
                     }

@@ -118,30 +118,6 @@ export default class WorkspaceManager {
         return Ok.EMPTY;
     }
 
-    /**
-     * Gets the matching exercise's data for the given path, if managed by this object.
-     * @param exerciseFolder Path to exercise folder used for matching with the data
-     */
-    public getExerciseDataByPath(exerciseFolder: string): Result<WorkspaceExercise, Error> {
-        const id = this._pathToId.get(exerciseFolder);
-        if (!id) {
-            return new Err(new Error(`Exercise ID not found for ${exerciseFolder}`));
-        }
-        return this.getExerciseDataById(id);
-    }
-
-    /**
-     * Gets the matching exercise's data for the given path, if managed by this object.
-     * @param exerciseFolder Path to exercise folder used for matching with the data
-     */
-    public getExerciseDataById(id: number): Result<WorkspaceExercise, Error> {
-        const data = this._idToData.get(id);
-        if (!data) {
-            return new Err(new Error(`Exercise data missing for ${id}`));
-        }
-        return new Ok(data);
-    }
-
     public getExerciseByName(
         courseSlug: string,
         exerciseName: string,
