@@ -1,3 +1,4 @@
+import { concat } from "lodash";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
@@ -20,6 +21,19 @@ export async function migrateExtensionDataFromPreviousVersions(
     storage: Storage,
     tmc: TMC,
 ): Promise<Result<void, Error>> {
+    const memento = context.globalState;
+
+    // Workspace data migration
+    try {
+        const migratedExerciseData = await migrateExerciseData(memento, tmc);
+        for (const key of migratedExerciseData.obsoleteKeys) {
+            await memento.update(key, undefined);
+        }
+    } catch (e) {
+        return Err(e);
+    }
+
+    // Versioned data migration
     const extensionSettings = storage.getExtensionSettings();
     const sessionState = storage.getSessionState();
     const userData = storage.getUserData();
@@ -30,26 +44,22 @@ export async function migrateExtensionDataFromPreviousVersions(
     }
 
     try {
-        const memento = context.globalState;
-        const migratedExerciseData = await migrateExerciseData(memento, tmc);
         const migratedExtensionSettings = await migrateExtensionSettings(memento, tmc);
         const migratedSessionState = migrateSessionState(memento);
         const migratedUserData = migrateUserData(memento);
 
-        if (migratedExerciseData.err) {
-            throw migratedExerciseData.val;
-        }
-
-        // await storage.updateExerciseData(migratedExerciseData.data);
         await storage.updateExtensionSettings(migratedExtensionSettings.data);
         await storage.updateSessionState(migratedSessionState.data);
         await storage.updateUserData(migratedUserData.data);
 
-        // eslint-disable-next-line max-len
-        // const keysToClear = _.concat(migratedExerciseData.data, migratedExtensionSettings.keys, migratedSessionState.keys, migratedSessionState.keys);
-        // for (const key of keysToClear) {
-        //     await memento.update(key, undefined);
-        // }
+        const keysToRemove = concat(
+            migratedExtensionSettings.obsoleteKeys,
+            migratedSessionState.obsoleteKeys,
+            migratedUserData.obsoleteKeys,
+        );
+        for (const key of keysToRemove) {
+            await memento.update(key, undefined);
+        }
     } catch (e) {
         return Err(e);
     }

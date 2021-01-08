@@ -1,8 +1,9 @@
 import { expect } from "chai";
 import * as vscode from "vscode";
 
-import migrateSessionState, { SessionStateV1 } from "../../migrate/migrateSessionState";
+import migrateSessionState from "../../migrate/migrateSessionState";
 import { createMockMemento } from "../__mocks__/vscode";
+import * as sessionState from "../fixtures/sessionState";
 
 const EXTENSION_VERSION_KEY = "extensionVersion";
 const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";
@@ -25,13 +26,9 @@ suite("Session state migration", function () {
         });
 
         test("succeeds with version 2.0.0 data", async function () {
-            const sessionState: SessionStateV1 = {
-                extensionVersion: "2.0.0",
-                oldDataPath: { path: "/path/to/exercises", timestamp: 1234 },
-            };
-            await memento.update(SESSION_STATE_KEY_V1, sessionState);
+            await memento.update(SESSION_STATE_KEY_V1, sessionState.v2_0_0);
             const migrated = migrateSessionState(memento).data;
-            expect(migrated).to.be.deep.equal(sessionState);
+            expect(migrated).to.be.deep.equal(sessionState.v2_0_0);
         });
     });
 

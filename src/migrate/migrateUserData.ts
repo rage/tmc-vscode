@@ -98,16 +98,18 @@ function courseDataFromV0ToV1(
 export default function migrateUserData(
     memento: vscode.Memento,
 ): MigratedData<{ courses: LocalCourseDataV1[] }> {
-    const keys: string[] = [USER_DATA_KEY_V0];
+    const obsoleteKeys: string[] = [];
     const dataV0 = validateData(
         memento.get(USER_DATA_KEY_V0),
         createIs<{ courses: LocalCourseDataV0[] }>(),
     );
+    if (dataV0) {
+        obsoleteKeys.push(USER_DATA_KEY_V0);
+    }
 
-    keys.push(USER_DATA_KEY_V1);
     const dataV1 = dataV0
         ? { courses: courseDataFromV0ToV1(dataV0.courses, memento) }
         : validateData(memento.get(USER_DATA_KEY_V1), createIs<{ courses: LocalCourseDataV1[] }>());
 
-    return { data: dataV1, keys };
+    return { data: dataV1, obsoleteKeys };
 }

@@ -1,4 +1,4 @@
-import { use as chaiUse, expect } from "chai";
+import { expect, use } from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import { Ok, Result } from "ts-results";
 import { Mock } from "typemoq";
@@ -6,21 +6,19 @@ import * as vscode from "vscode";
 
 import TMC from "../../api/tmc";
 import migrateExtensionSettings, {
-    ExtensionSettingsV0,
-    ExtensionSettingsV1,
     LogLevelV0,
     LogLevelV1,
 } from "../../migrate/migrateExtensionSettings";
 import { LogLevel } from "../../utils";
 import { createMockMemento } from "../__mocks__/vscode";
+import * as extensionSettings from "../fixtures/extensionSettings";
 
-chaiUse(chaiAsPromised);
+use(chaiAsPromised);
 
 const EXTENSION_SETTINGS_KEY_V0 = "extensionSettings";
 const EXTENSION_SETTINGS_KEY_V1 = "extension-settings-v1";
 
 suite("Extension settings migration", function () {
-    const dataPath = "/old/path/to/exercises";
     const migratedDataPath = "/migrated/path/to/exercises";
 
     let memento: vscode.Memento;
@@ -44,90 +42,53 @@ suite("Extension settings migration", function () {
         });
 
         test("should succeed with version 0.3.0 data", async function () {
-            const extensionSettings: ExtensionSettingsV0 = { dataPath };
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings);
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_3_0);
             const migrated = (await migrateExtensionSettings(memento, tmc)).data;
             expect(migrated?.dataPath).to.be.equal(migratedDataPath);
         });
 
         test("should succeed with version 0.5.0 data", async function () {
-            const extensionSettings: ExtensionSettingsV0 = {
-                dataPath,
-                logLevel: LogLevelV0.Verbose,
-                hideMetaFiles: true,
-            };
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings);
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_5_0);
             const migrated = (await migrateExtensionSettings(memento, tmc)).data;
             expect(migrated?.logLevel).to.be.equal("verbose");
             expect(migrated?.hideMetaFiles).to.be.true;
         });
 
         test("should succeed with version 0.9.0 data", async function () {
-            const extensionSettings: ExtensionSettingsV0 = {
-                dataPath,
-                hideMetaFiles: true,
-                insiderVersion: true,
-                logLevel: LogLevelV0.Verbose,
-                oldDataPath: { path: "/old/path/to/exercises", timestamp: 1234 },
-            };
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings);
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_9_0);
             const migrated = (await migrateExtensionSettings(memento, tmc)).data;
             expect(migrated?.insiderVersion).to.be.true;
         });
 
         test("should succeed with version 1.0.0 data", async function () {
-            const extensionSettings: ExtensionSettingsV0 = {
-                dataPath,
-                downloadOldSubmission: false,
-                hideMetaFiles: true,
-                insiderVersion: true,
-                logLevel: LogLevelV0.Verbose,
-                oldDataPath: { path: "/old/path/to/exercises", timestamp: 1234 },
-            };
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings);
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v1_0_0);
             const migrated = (await migrateExtensionSettings(memento, tmc)).data;
             expect(migrated?.downloadOldSubmission).to.be.false;
         });
 
         test("should succeed with version 1.2.0 data", async function () {
-            const extensionSettings: ExtensionSettingsV0 = {
-                dataPath,
-                downloadOldSubmission: false,
-                hideMetaFiles: true,
-                insiderVersion: true,
-                logLevel: LogLevelV0.Verbose,
-                oldDataPath: { path: "/old/path/to/exercises", timestamp: 1234 },
-                updateExercisesAutomatically: false,
-            };
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings);
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v1_2_0);
             const migrated = (await migrateExtensionSettings(memento, tmc)).data;
             expect(migrated?.updateExercisesAutomatically).to.be.false;
         });
 
         test("should succeed with version 2.0.0 data", async function () {
-            const extensionSettings: ExtensionSettingsV1 = {
-                dataPath,
-                downloadOldSubmission: false,
-                hideMetaFiles: true,
-                insiderVersion: true,
-                logLevel: "verbose",
-                updateExercisesAutomatically: false,
-            };
-            await memento.update(EXTENSION_SETTINGS_KEY_V1, extensionSettings);
+            await memento.update(EXTENSION_SETTINGS_KEY_V1, extensionSettings.v2_0_0);
             const migrated = (await migrateExtensionSettings(memento, tmc)).data;
-            expect(migrated).to.be.deep.equal(extensionSettings);
+            expect(migrated).to.be.deep.equal(extensionSettings.v2_0_0);
         });
     });
 
     suite("with unstable data", function () {
+        const dataPath = extensionSettings.v0_3_0.dataPath;
+
         test("should fail if data is garbage", async function () {
             await memento.update(EXTENSION_SETTINGS_KEY_V0, { superman: "Clark Kent" });
             expect(migrateExtensionSettings(memento, tmc)).to.be.rejectedWith(/missmatch/);
         });
 
         test("should set valid placeholders with minimal data", async function () {
-            const extensionSettings: ExtensionSettingsV0 = { dataPath };
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings);
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, { dataPath });
             const migrated = (await migrateExtensionSettings(memento, tmc)).data;
             expect(migrated?.downloadOldSubmission).to.be.true;
             expect(migrated?.hideMetaFiles).to.be.true;
@@ -144,8 +105,7 @@ suite("Extension settings migration", function () {
                 [LogLevelV0.Verbose, "verbose"],
             ];
             for (const [oldLevel, expectedLevel] of expectedRemappings) {
-                const extensionSettings: ExtensionSettingsV0 = { dataPath, logLevel: oldLevel };
-                await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings);
+                await memento.update(EXTENSION_SETTINGS_KEY_V0, { dataPath, logLevel: oldLevel });
                 const migrated = (await migrateExtensionSettings(memento, tmc)).data;
                 expect(migrated?.logLevel).to.be.equal(expectedLevel);
             }

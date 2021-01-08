@@ -71,16 +71,18 @@ export default async function migrateExtensionSettings(
     memento: vscode.Memento,
     tmc: TMC,
 ): Promise<MigratedData<ExtensionSettingsV1>> {
-    const keys: string[] = [EXTENSION_SETTINGS_KEY_V0];
+    const obsoleteKeys: string[] = [];
     const dataV0 = validateData(
         memento.get(EXTENSION_SETTINGS_KEY_V0),
         createIs<ExtensionSettingsV0>(),
     );
+    if (dataV0) {
+        obsoleteKeys.push(EXTENSION_SETTINGS_KEY_V0);
+    }
 
-    keys.push(EXTENSION_SETTINGS_KEY_V1);
     const dataV1 = dataV0
         ? await extensionDataFromV0toV1(dataV0, tmc)
         : validateData(memento.get(EXTENSION_SETTINGS_KEY_V1), createIs<ExtensionSettingsV1>());
 
-    return { data: dataV1, keys };
+    return { data: dataV1, obsoleteKeys };
 }

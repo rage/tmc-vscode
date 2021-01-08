@@ -7,10 +7,10 @@ import * as vscode from "vscode";
 import TMC from "../api/tmc";
 import { Logger } from "../utils";
 
+import { MigratedData } from "./types";
 import validateData from "./validateData";
 
 const EXERCISE_DATA_KEY_V0 = "exerciseData";
-const EXERCISE_DATA_KEY_V1 = "exercise-data-v1";
 const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";
 
 export enum ExerciseStatusV0 {
@@ -89,7 +89,7 @@ async function exerciseDataFromV0toV1(
     exerciseData: LocalExerciseDataV0[],
     memento: vscode.Memento,
     tmc: TMC,
-): Promise<Result<void, Error>> {
+): Promise<void> {
     interface ExtensionSettingsPartial {
         dataPath: string;
     }
@@ -100,7 +100,7 @@ async function exerciseDataFromV0toV1(
         const { id, checksum, course, name, path, organization } = exercise;
         const pathResult = resolveExercisePathV0(id, name, course, organization, path, dataPath);
         if (pathResult.err) {
-            return pathResult;
+            throw pathResult.val;
         }
 
         const migrationResult = await tmc.migrateExercise(
@@ -111,27 +111,25 @@ async function exerciseDataFromV0toV1(
             name,
         );
         if (migrationResult.err) {
-            return migrationResult;
+            throw migrationResult.val;
         }
     }
-
-    return Ok.EMPTY;
 }
 
 export default async function migrateExerciseData(
     memento: vscode.Memento,
     tmc: TMC,
-): Promise<Result<void, Error>> {
-    const keys: string[] = [EXERCISE_DATA_KEY_V0];
+): Promise<MigratedData<undefined>> {
+    const obsoleteKeys: string[] = [];
+
     const dataV0 = validateData(
         memento.get(EXERCISE_DATA_KEY_V0),
         createIs<LocalExerciseDataV0[]>(),
     );
-
-    if (!dataV0) {
-        return Ok.EMPTY;
+    if (dataV0) {
+        await exerciseDataFromV0toV1(dataV0, memento, tmc);
+        obsoleteKeys.push(EXERCISE_DATA_KEY_V0);
     }
 
-    keys.push(EXERCISE_DATA_KEY_V1);
-    return exerciseDataFromV0toV1(dataV0, memento, tmc);
+    return { data: undefined, obsoleteKeys };
 }
