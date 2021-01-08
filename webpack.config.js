@@ -99,9 +99,7 @@ const config = () => {
                             loader: "ts-loader",
                             options: {
                                 compiler: "ttypescript",
-                                configFile: isDevelopmentMode
-                                    ? "tsconfig.json"
-                                    : "tsconfig.production.json",
+                                configFile: "tsconfig.json",
                             },
                         },
                     ],
