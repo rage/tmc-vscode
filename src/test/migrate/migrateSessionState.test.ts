@@ -30,6 +30,13 @@ suite("Session state migration", function () {
             const migrated = migrateSessionState(memento).data;
             expect(migrated).to.be.deep.equal(sessionState.v2_0_0);
         });
+
+        test("should succeed with backwards compatible future data", async function () {
+            const data = { ...sessionState.v2_0_0, wonderwoman: "Diana Prince" };
+            await memento.update(SESSION_STATE_KEY_V1, data);
+            const migrated = migrateSessionState(memento).data;
+            expect(migrated).to.be.deep.equal(data);
+        });
     });
 
     suite("with unstable data", function () {

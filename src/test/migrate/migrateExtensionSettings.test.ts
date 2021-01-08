@@ -77,6 +77,13 @@ suite("Extension settings migration", function () {
             const migrated = (await migrateExtensionSettings(memento, tmc)).data;
             expect(migrated).to.be.deep.equal(extensionSettings.v2_0_0);
         });
+
+        test("should succeed with backwards compatible future data", async function () {
+            const data = { ...extensionSettings.v2_0_0, superman: "Clark Kent" };
+            await memento.update(EXTENSION_SETTINGS_KEY_V1, data);
+            const migrated = (await migrateExtensionSettings(memento, tmc)).data;
+            expect(migrated).to.be.deep.equal(data);
+        });
     });
 
     suite("with unstable data", function () {

@@ -9,8 +9,8 @@ const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";
 const UNSTABLE_EXTENSION_VERSION_KEY = "extensionVersion";
 
 export interface SessionStateV1 {
-    extensionVersion?: string | undefined;
-    oldDataPath?: { path: string; timestamp: number } | undefined;
+    extensionVersion: string | undefined;
+    oldDataPath: { path: string; timestamp: number } | undefined;
 }
 
 /**

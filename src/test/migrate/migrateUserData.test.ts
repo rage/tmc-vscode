@@ -88,6 +88,12 @@ suite("User data migration", function () {
             await memento.update(USER_DATA_KEY_V1, userData.v2_0_0);
             expect(migrateUserData(memento).data).to.be.deep.equal(userData.v2_0_0);
         });
+
+        test("should succeed with backwards compatible future data", async function () {
+            const data = { ...userData.v2_0_0, batman: "Bruce Wayne" };
+            await memento.update(USER_DATA_KEY_V1, data);
+            expect(migrateUserData(memento).data).to.be.deep.equal(data);
+        });
     });
 
     suite("with unstable data", function () {
