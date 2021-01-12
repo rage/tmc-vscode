@@ -121,7 +121,9 @@ const config = () => {
         mode: "development",
         devtool: "inline-source-map",
     });
-    /**@returns {import('webpack').Configuration}*/
+    // Type definition broken for the Nth time
+    // /**@returns {import('webpack').Configuration}*/
+    /**@returns {any} */
     const prodConfig = () => ({
         mode: "production",
         optimization: {
