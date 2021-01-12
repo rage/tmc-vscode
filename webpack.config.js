@@ -53,6 +53,9 @@ const config = () => {
         node: {
             __dirname: false,
         },
+        infrastructureLogging: {
+            level: "log",
+        },
         module: {
             rules: [
                 {
