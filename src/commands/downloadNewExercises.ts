@@ -1,7 +1,6 @@
 import * as actions from "../actions";
-import { ActionContext, CourseExerciseDownloads } from "../actions/types";
-import { Logger } from "../utils";
-import { askForItem, showError, showNotification } from "../window";
+import { ActionContext } from "../actions/types";
+import { askForItem, showNotification } from "../window";
 
 export async function downloadNewExercises(actionContext: ActionContext): Promise<void> {
     const { userData } = actionContext;
@@ -14,30 +13,30 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
             ]);
             return;
         }
-        const downloads: CourseExerciseDownloads = {
-            courseId: course.id,
-            exerciseIds: course.newExercises,
-            organizationSlug: course.organization,
-            courseName: course.name,
-        };
-        const { downloaded } = await actions.downloadExercises(
+        // const downloads: CourseExerciseDownloads = {
+        //     courseId: course.id,
+        //     exerciseIds: course.newExercises,
+        //     organizationSlug: course.organization,
+        //     courseName: course.name,
+        // };
+        await actions.downloadExercises(
             actionContext,
             course.newExercises.map((x) => ({
                 id: x,
                 courseName: course.name,
             })),
         );
-        await userData.clearFromNewExercises(courseId, downloaded);
-        const openResult = await actions.openExercises(
-            actionContext,
-            downloaded,
-            downloads.courseName,
-        );
-        if (openResult.err) {
-            const message = "Failed to open exercises after download.";
-            Logger.error(message, openResult.val);
-            showError(message);
-        }
+        // await userData.clearFromNewExercises(courseId, downloaded);
+        // const openResult = await actions.openExercises(
+        //     actionContext,
+        //     downloaded,
+        //     downloads.courseName,
+        // );
+        // if (openResult.err) {
+        //     const message = "Failed to open exercises after download.";
+        //     Logger.error(message, openResult.val);
+        //     showError(message);
+        // }
     };
 
     const courses = userData.getCourses();

@@ -158,19 +158,19 @@ export function registerUiActions(actionContext: ActionContext): void {
                 });
                 return;
             }
-            const { downloaded } = await downloadExercises(
+            await downloadExercises(
                 actionContext,
                 msg.ids.map((x) => ({ id: x, courseName: msg.courseName as string })),
             );
-            if (downloaded.length !== 0) {
-                await actionContext.userData.clearFromNewExercises(msg.courseId, downloaded);
-                const openResult = await openExercises(actionContext, downloaded, msg.courseName);
-                if (openResult.err) {
-                    const message = "Failed to open exercises after download.";
-                    Logger.error(message, openResult.val);
-                    showError(message);
-                }
-            }
+            // if (downloaded.length !== 0) {
+            //     await actionContext.userData.clearFromNewExercises(msg.courseId, downloaded);
+            //    const openResult = await openExercises(actionContext, downloaded, msg.courseName);
+            //     if (openResult.err) {
+            //         const message = "Failed to open exercises after download.";
+            //         Logger.error(message, openResult.val);
+            //         showError(message);
+            //     }
+            // }
         },
     );
     ui.webview.registerHandler("addCourse", async () => {

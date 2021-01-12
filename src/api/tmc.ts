@@ -366,12 +366,15 @@ export default class TMC {
      */
     public async downloadExercises(
         ids: number[],
-        onDownloaded?: (download: { id: number; path: string }) => void,
+        downloaded: (value: { id: number; percent: number; message?: string }) => void,
     ): Promise<Result<void, Error>> {
         const onStdout = (res: LangsStatusUpdate<unknown>): void => {
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            if (is<{ ExerciseDownload: { id: number; path: string } }>(res.data)) {
-                onDownloaded?.(res.data.ExerciseDownload);
+            if (is<{ "exercise-download": { id: number; path: string } }>(res.data)) {
+                downloaded({
+                    id: res.data["exercise-download"].id,
+                    percent: res["percent-done"],
+                    message: res.message ?? undefined,
+                });
             }
         };
 

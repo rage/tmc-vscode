@@ -4,15 +4,14 @@
  * -------------------------------------------------------------------------------------------------
  */
 
-import * as _ from "lodash";
 import { compact } from "lodash";
-import * as path from "path";
 import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { ExerciseStatus } from "../api/workspaceManager";
 import * as UITypes from "../ui/types";
+import { incrementPercentageWrapper } from "../window";
 
+import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext, CourseExerciseDownloads } from "./types";
 
 interface ExerciseDownload {
@@ -37,36 +36,40 @@ interface FailedDownload extends ExerciseDownload {
 export async function downloadExercises(
     actionContext: ActionContext,
     exercises: Array<{ id: number; courseName: string }>,
-): Promise<{ downloaded: number[]; failed: number[]; error?: Error }> {
-    const { tmc, workspaceManager } = actionContext;
+): Promise<Result<void, Error>> {
+    const { tmc, ui } = actionContext;
 
     // TODO: How to download latest submission in new version?
-    const idToData = new Map(exercises.map((x) => [x.id, x]));
-    const downloaded: number[] = [];
-    const result = await tmc.downloadExercises(
-        exercises.map((x) => x.id),
-        (download) => {
-            const exerciseName = _.last(download.path.split(path.sep));
-            const data = idToData.get(download.id);
-            if (!data || !exerciseName) {
-                return;
-            }
-
-            workspaceManager.addExercise({
-                courseSlug: data.courseName,
-                exerciseSlug: exerciseName,
-                status: ExerciseStatus.Closed,
-                uri: vscode.Uri.file(download.path),
-            });
-            downloaded.push(download.id);
+    const downloadResult = await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: "TestMyCode",
+        },
+        (progress) => {
+            const progress2 = incrementPercentageWrapper(progress);
+            return tmc.downloadExercises(
+                exercises.map((x) => x.id),
+                (download) => {
+                    progress2.report(download);
+                    ui.webview.postMessage({
+                        command: "exerciseStatusChange",
+                        exerciseId: download.id,
+                        status: "closed",
+                    });
+                },
+            );
         },
     );
-    const failed = _.difference(
-        exercises.map((x) => x.id),
-        downloaded,
-    );
+    if (downloadResult.err) {
+        return downloadResult;
+    }
 
-    return { downloaded, failed, error: result.err ? result.val : undefined };
+    const refreshResult = await refreshLocalExercises(actionContext);
+    if (refreshResult.err) {
+        return refreshResult;
+    }
+
+    return Ok.EMPTY;
 }
 
 interface UpdateCheckOptions {

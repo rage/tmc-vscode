@@ -31,7 +31,7 @@ import {
 
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
-import { closeExercises, downloadExercises, openExercises } from "./workspace";
+import { closeExercises, downloadExercises } from "./workspace";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -370,25 +370,25 @@ export async function checkForCourseUpdates(
             courseId: course.id,
             exerciseIds: [],
         });
-        const { downloaded } = await downloadExercises(
+        await downloadExercises(
             actionContext,
             newIds.map((x) => ({
                 courseName: course.name,
                 id: x,
             })),
         );
-        await userData.clearFromNewExercises(course.id, downloaded);
+        // await userData.clearFromNewExercises(course.id, downloaded);
         ui.webview.postMessage({
             command: "setNewExercises",
             courseId: course.id,
             exerciseIds: course.newExercises,
         });
-        const openResult = await openExercises(actionContext, downloaded, course.name);
-        if (openResult.err) {
-            const message = "Failed to open new exercises.";
-            Logger.error(message, openResult.val);
-            showError(message);
-        }
+        // const openResult = await openExercises(actionContext, downloaded, course.name);
+        // if (openResult.err) {
+        //     const message = "Failed to open new exercises.";
+        //     Logger.error(message, openResult.val);
+        //     showError(message);
+        // }
     };
 
     for (const course of updatedCourses) {
