@@ -72,32 +72,24 @@ export default class WorkspaceManager implements vscode.Disposable {
      */
     public get activeExercise(): Readonly<WorkspaceExercise> | undefined {
         const uri = vscode.window.activeTextEditor?.document.uri;
-        return uri && this.exercises.find((x) => x.uri.fsPath === uri?.fsPath);
-    }
-
-    public get exercises(): Readonly<WorkspaceExercise[]> {
-        return this._exercises;
-    }
-
-    public set exercises(exercises: Readonly<WorkspaceExercise[]>) {
-        this._exercises = [...exercises];
+        return uri && this._exercises.find((x) => x.uri.fsPath === uri?.fsPath);
     }
 
     public getExerciseByPath(exercise: vscode.Uri): Readonly<WorkspaceExercise> | undefined {
-        return this.exercises.find((x) => x.uri.fsPath === exercise.fsPath);
+        return this._exercises.find((x) => x.uri.fsPath === exercise.fsPath);
     }
 
     public getExerciseBySlug(
         courseSlug: string,
         exerciseSlug: string,
     ): Readonly<WorkspaceExercise> | undefined {
-        return this.exercises.find(
+        return this._exercises.find(
             (x) => x.courseSlug === courseSlug && x.exerciseSlug === exerciseSlug,
         );
     }
 
     public getExercisesByCourseSlug(courseSlug: string): ReadonlyArray<WorkspaceExercise> {
-        return this.exercises.filter((x) => x.courseSlug === courseSlug);
+        return this._exercises.filter((x) => x.courseSlug === courseSlug);
     }
 
     /**
