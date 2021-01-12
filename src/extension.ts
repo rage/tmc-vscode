@@ -1,12 +1,10 @@
-import { nth } from "lodash";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { checkForCourseUpdates } from "./actions";
-import { LocalExercise } from "./api/langsSchema";
+import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
 import Storage from "./api/storage";
 import TMC from "./api/tmc";
-import WorkspaceManager, { ExerciseStatus, WorkspaceExercise } from "./api/workspaceManager";
+import WorkspaceManager from "./api/workspaceManager";
 import {
     CLIENT_NAME,
     DEBUG_MODE,
@@ -129,21 +127,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const userData = new UserData(storage);
-    const langsExercises: LocalExercise[] = [];
-    for (const course of userData.getCourses()) {
-        const exerciseList = await tmc.listLocalCourseExercises(course.name);
-        langsExercises.push(...exerciseList.unwrapOr([]));
-    }
-
-    const workspaceExercises = langsExercises.map<WorkspaceExercise>((x) => ({
-        courseSlug: nth(x["exercise-path"].split(path.sep), -2) ?? "neverThis",
-        exerciseSlug: x["exercise-slug"],
-        status: ExerciseStatus.Open,
-        uri: vscode.Uri.file(x["exercise-path"]),
-    }));
-    const workspaceManager = new WorkspaceManager(workspaceExercises, resources);
+    const workspaceManager = new WorkspaceManager(resources);
     context.subscriptions.push(workspaceManager);
-
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
     const actionContext = {
         resources,
@@ -155,6 +140,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         workspaceManager,
         visibilityGroups,
     };
+
+    const refreshResult = await refreshLocalExercises(actionContext);
+    if (refreshResult.err) {
+        Logger.warn("Failed to set initial exercises.", refreshResult.val);
+    }
 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);

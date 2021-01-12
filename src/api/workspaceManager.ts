@@ -35,8 +35,8 @@ export default class WorkspaceManager implements vscode.Disposable {
      * Creates a new instance of the WorkspaceManager class.
      * @param resources Resources instance for constructing the exercise path
      */
-    constructor(exercises: WorkspaceExercise[], resources: Resources) {
-        this._exercises = exercises;
+    constructor(resources: Resources, exercises?: WorkspaceExercise[]) {
+        this._exercises = exercises ?? [];
         this._resources = resources;
         this._watcher = vscode.workspace.createFileSystemWatcher(
             this._resources.projectsDirectory + "/**",
@@ -73,6 +73,11 @@ export default class WorkspaceManager implements vscode.Disposable {
     public get activeExercise(): Readonly<WorkspaceExercise> | undefined {
         const uri = vscode.window.activeTextEditor?.document.uri;
         return uri && this._exercises.find((x) => x.uri.fsPath === uri?.fsPath);
+    }
+
+    public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
+        this._exercises = exercises;
+        return this._refreshActiveCourseWorkspace();
     }
 
     public getExerciseByPath(exercise: vscode.Uri): Readonly<WorkspaceExercise> | undefined {
