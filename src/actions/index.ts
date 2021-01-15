@@ -1,3 +1,4 @@
+export * from "./checkForExerciseUpdates";
 export * from "./refreshLocalExercises";
 export * from "./user";
 export * from "./webview";

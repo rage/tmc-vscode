@@ -158,10 +158,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 });
                 return;
             }
-            await downloadExercises(
-                actionContext,
-                msg.ids.map((x) => ({ id: x, courseName: msg.courseName as string })),
-            );
+            await downloadExercises(actionContext, msg.ids);
             // if (downloaded.length !== 0) {
             //     await actionContext.userData.clearFromNewExercises(msg.courseId, downloaded);
             //    const openResult = await openExercises(actionContext, downloaded, msg.courseName);

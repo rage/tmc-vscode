@@ -12,7 +12,7 @@ import * as UITypes from "../ui/types";
 import { incrementPercentageWrapper } from "../window";
 
 import { refreshLocalExercises } from "./refreshLocalExercises";
-import { ActionContext, CourseExerciseDownloads } from "./types";
+import { ActionContext } from "./types";
 
 interface ExerciseDownload {
     courseId: number;
@@ -31,11 +31,11 @@ interface FailedDownload extends ExerciseDownload {
 /**
  * Downloads given exercises and opens them in TMC workspace.
  *
- * @param exercises Exercises to download.
+ * @param exerciseIds Exercises to download.
  */
 export async function downloadExercises(
     actionContext: ActionContext,
-    exercises: Array<{ id: number; courseName: string }>,
+    exerciseIds: number[],
 ): Promise<Result<void, Error>> {
     const { tmc, ui } = actionContext;
 
@@ -47,17 +47,14 @@ export async function downloadExercises(
         },
         (progress) => {
             const progress2 = incrementPercentageWrapper(progress);
-            return tmc.downloadExercises(
-                exercises.map((x) => x.id),
-                (download) => {
-                    progress2.report(download);
-                    ui.webview.postMessage({
-                        command: "exerciseStatusChange",
-                        exerciseId: download.id,
-                        status: "closed",
-                    });
-                },
-            );
+            return tmc.downloadExercises(exerciseIds, (download) => {
+                progress2.report(download);
+                ui.webview.postMessage({
+                    command: "exerciseStatusChange",
+                    exerciseId: download.id,
+                    status: "closed",
+                });
+            });
         },
     );
     if (downloadResult.err) {
@@ -70,63 +67,6 @@ export async function downloadExercises(
     }
 
     return Ok.EMPTY;
-}
-
-interface UpdateCheckOptions {
-    useCache?: boolean;
-}
-
-/**
- * Checks all user's courses for exercise updates and download them.
- * @param courseId If given, check only updates for that course.
- */
-export async function checkForExerciseUpdates(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    actionContext: ActionContext,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    courseId?: number,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    updateCheckOptions?: UpdateCheckOptions,
-): Promise<Array<Result<CourseExerciseDownloads, Error>>> {
-    // TODO: Reimplement without needing checksums
-    return [];
-
-    /*
-    const { tmc, userData, workspaceManager } = actionContext;
-
-    const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
-    const filteredCourses = courses.filter((c) => !c.disabled);
-    Logger.log(`Checking for exercise updates for courses ${filteredCourses.map((c) => c.name)}`);
-    return await Promise.all(
-        filteredCourses.map(async (course) => {
-            const organizationSlug = course.organization;
-
-            const detailsResult = await tmc.getCourseDetails(course.id, {
-                forceRefresh: updateCheckOptions?.useCache,
-            });
-            if (detailsResult.err) {
-                return detailsResult;
-            }
-
-            const exerciseIds = detailsResult.val.course.exercises.reduce<number[]>(
-                (ids, exercise) => {
-                    const exerciseResult = workspaceManager.getExerciseDataById(exercise.id);
-                    return exerciseResult.ok && exerciseResult.val.checksum !== exercise.checksum
-                        ? ids.concat(exercise.id)
-                        : ids;
-                },
-                [],
-            );
-
-            return Ok({
-                courseId: course.id,
-                courseName: course.name,
-                exerciseIds,
-                organizationSlug,
-            });
-        }),
-    );
-    */
 }
 
 export async function downloadExerciseUpdates(

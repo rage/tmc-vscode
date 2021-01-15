@@ -1,5 +1,7 @@
 import { LocalExercise } from "../../api/langsSchema";
 
+const checkExerciseUpdatesResult: Array<{ id: number }> = [{ id: 2 }];
+
 const localPythonCourseExercises: LocalExercise[] = [
     {
         "exercise-path": "/tmc/vscode/test-python-course/hello_world",
@@ -11,4 +13,4 @@ const localPythonCourseExercises: LocalExercise[] = [
     },
 ];
 
-export { localPythonCourseExercises };
+export { checkExerciseUpdatesResult, localPythonCourseExercises };

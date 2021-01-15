@@ -370,13 +370,7 @@ export async function checkForCourseUpdates(
             courseId: course.id,
             exerciseIds: [],
         });
-        await downloadExercises(
-            actionContext,
-            newIds.map((x) => ({
-                courseName: course.name,
-                id: x,
-            })),
-        );
+        await downloadExercises(actionContext, newIds);
         // await userData.clearFromNewExercises(course.id, downloaded);
         ui.webview.postMessage({
             command: "setNewExercises",

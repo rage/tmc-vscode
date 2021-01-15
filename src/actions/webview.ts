@@ -13,8 +13,8 @@ import * as UITypes from "../ui/types";
 import { WebviewMessage } from "../ui/types";
 import { dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utils/";
 
+import { checkForExerciseUpdates } from "./checkForExerciseUpdates";
 import { ActionContext } from "./types";
-import { checkForExerciseUpdates } from "./workspace";
 
 /**
  * Displays a summary page of user's courses.
@@ -170,15 +170,16 @@ export async function displayLocalCourseDetails(
         initialState,
     );
 
-    const updateables =
-        (await checkForExerciseUpdates(actionContext, courseId))
-            .find((u) => u.ok && u.val.courseId === courseId)
-            ?.unwrap().exerciseIds || [];
-    ui.webview.postMessage({
-        command: "setUpdateables",
-        exerciseIds: updateables,
-        courseId,
-    });
+    const updateablesResult = await checkForExerciseUpdates(actionContext);
+    if (updateablesResult.ok) {
+        ui.webview.postMessage({
+            command: "setUpdateables",
+            exerciseIds: updateablesResult.val.map((x) => x.exerciseId),
+            courseId,
+        });
+    } else {
+        Logger.warn("Failed to check for exercise updates");
+    }
 }
 
 /**

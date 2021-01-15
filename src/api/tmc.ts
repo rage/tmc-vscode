@@ -85,6 +85,8 @@ interface CacheConfig<T1, T2> {
  * A Class that provides an interface to all TMC services.
  */
 export default class TMC {
+    private static readonly _exerciseUpdatesCacheKey = "exercise-updates";
+
     private readonly _options: Options;
     private readonly _responseCache: Map<string, ResponseCacheEntry>;
     private _onLogin?: () => void;
@@ -336,6 +338,20 @@ export default class TMC {
     // ---------------------------------------------------------------------------------------------
 
     /**
+     * Checks for updates for all exercises in this client's context. Uses TMC-langs
+     * `check-exercise-updates` core command internally.
+     */
+    public async checkExerciseUpdates(
+        options?: CacheOptions,
+    ): Promise<Result<Array<{ id: number }>, Error>> {
+        return this._executeLangsCommand(
+            { args: ["check-exercise-updates"], core: true },
+            createIs<Array<{ id: number }>>(),
+            { forceRefresh: options?.forceRefresh, key: TMC._exerciseUpdatesCacheKey },
+        ).then((res) => (res.err ? res : Ok(res.val.data)));
+    }
+
+    /**
      * @deprecated - Migrate to `downloadExercises`
      * Downloads an exercise to the provided filepath. Uses TMC-langs `download-or-update-exercise`
      * core command internally.
@@ -378,7 +394,7 @@ export default class TMC {
             }
         };
 
-        return this._executeLangsCommand(
+        const result = await this._executeLangsCommand(
             {
                 args: [
                     "download-or-update-course-exercises",
@@ -389,7 +405,14 @@ export default class TMC {
                 onStdout,
             },
             createIs<unknown>(),
-        ).then((res) => (res.err ? res : Ok.EMPTY));
+        );
+        if (result.err) {
+            return result;
+        }
+
+        // Invalidate exercise update cache
+        this._responseCache.delete(TMC._exerciseUpdatesCacheKey);
+        return Ok.EMPTY;
     }
 
     /**
