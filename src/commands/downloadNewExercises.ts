@@ -19,7 +19,7 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
         //     organizationSlug: course.organization,
         //     courseName: course.name,
         // };
-        await actions.downloadExercises(actionContext, course.newExercises);
+        await actions.downloadOrUpdateExercises(actionContext, course.newExercises);
         // await userData.clearFromNewExercises(courseId, downloaded);
         // const openResult = await actions.openExercises(
         //     actionContext,

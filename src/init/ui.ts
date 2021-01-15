@@ -1,5 +1,4 @@
 import du = require("du");
-import * as _ from "lodash";
 import * as path from "path";
 import { Ok } from "ts-results";
 import * as vscode from "vscode";
@@ -9,8 +8,7 @@ import {
     closeExercises,
     displayLocalCourseDetails,
     displayUserCourses,
-    downloadExercises,
-    downloadExerciseUpdates,
+    downloadOrUpdateExercises,
     login,
     openExercises,
     openWorkspace,
@@ -143,14 +141,12 @@ export function registerUiActions(actionContext: ActionContext): void {
                     exerciseIds: [],
                     courseId: msg.courseId,
                 });
-                const [successful] = await downloadExerciseUpdates(
+                await downloadOrUpdateExercises(
                     actionContext,
-                    exerciseDownloads,
+                    exerciseDownloads.map((x) => x.exerciseId),
                 );
-                const remaining = _.difference(
-                    msg.ids,
-                    successful.map((x) => x.exerciseId),
-                );
+                // TODO: Handle failed downloads as remaining
+                const remaining: number[] = [];
                 ui.webview.postMessage({
                     command: "setUpdateables",
                     exerciseIds: remaining,
@@ -158,7 +154,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 });
                 return;
             }
-            await downloadExercises(actionContext, msg.ids);
+            await downloadOrUpdateExercises(actionContext, msg.ids);
             // if (downloaded.length !== 0) {
             //     await actionContext.userData.clearFromNewExercises(msg.courseId, downloaded);
             //    const openResult = await openExercises(actionContext, downloaded, msg.courseName);

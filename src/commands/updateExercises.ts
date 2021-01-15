@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import * as _ from "lodash";
+import { uniq } from "lodash";
 
 import * as actions from "../actions";
-import { ActionContext, CourseExerciseDownloads } from "../actions/types";
+import { ActionContext } from "../actions/types";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import { WebviewMessage } from "../ui/types";
 import { Logger } from "../utils";
@@ -20,19 +19,16 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
     }
 
     const now = Date.now();
-    const filteredExercises = updateablesResult.val.filter((x) => {
+    const exercisesToUpdate = updateablesResult.val.filter((x) => {
         const course = userData.getCourse(x.courseId);
         return course.notifyAfter <= now && !course.disabled;
     });
 
-    if (filteredExercises.length === 0) {
+    if (exercisesToUpdate.length === 0) {
         silent !== "silent" && showNotification("All exercises are up to date.");
         return;
     }
 
-    // TODO: Reimplement downloadExerciseUpdates
-
-    /*
     const downloadHandler = async (): Promise<void> => {
         ui.webview.postMessage(
             ...userData.getCourses().map<WebviewMessage>((x) => ({
@@ -41,20 +37,17 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
                 exerciseIds: [],
             })),
         );
-        const [, failed] = await actions.downloadExerciseUpdates(actionContext, exercises);
-        if (failed.length > 0) {
-            Logger.error("Failed to update exercises", failed[0]);
+        const downloadResult = await actions.downloadOrUpdateExercises(
+            actionContext,
+            exercisesToUpdate.map((x) => x.exerciseId),
+        );
+        if (downloadResult.err) {
+            Logger.error("Failed to update exercises", downloadResult.val);
             showError("Failed to update exercises.");
+            return;
         }
 
-        const failedCoursesToExercises = _.groupBy(failed, (x) => x.courseId);
-        const messages: WebviewMessage[] = Object.keys(failedCoursesToExercises).map((key) => ({
-            command: "setUpdateables",
-            courseId: parseInt(key),
-            exerciseIds: failedCoursesToExercises[key].map((x) => x.exerciseId),
-        }));
-        Logger.debug(messages);
-        ui.webview.postMessage(...messages);
+        // TODO: Show failed downloads as updateable exercises
     };
 
     if (settings.getAutomaticallyUpdateExercises()) {
@@ -62,17 +55,17 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
     }
 
     showNotification(
-        `Found updates for ${updates} exercises. Do you wish to download them?`,
+        `Found updates for ${exercisesToUpdate.length} exercises. Do you wish to download them?`,
         ["Download", downloadHandler],
         [
             "Remind me later",
             async (): Promise<void> => {
                 const now2 = Date.now();
-                filteredExercises.forEach((x) =>
-                    userData.setNotifyDate(x.courseId, now2 + NOTIFICATION_DELAY),
+                const uniqueCourseIds = uniq(exercisesToUpdate.map((x) => x.courseId));
+                uniqueCourseIds.forEach((x) =>
+                    userData.setNotifyDate(x, now2 + NOTIFICATION_DELAY),
                 );
             },
         ],
     );
-    */
 }

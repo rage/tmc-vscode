@@ -31,7 +31,7 @@ import {
 
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
-import { closeExercises, downloadExercises } from "./workspace";
+import { closeExercises, downloadOrUpdateExercises } from "./workspace";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -370,7 +370,7 @@ export async function checkForCourseUpdates(
             courseId: course.id,
             exerciseIds: [],
         });
-        await downloadExercises(actionContext, newIds);
+        await downloadOrUpdateExercises(actionContext, newIds);
         // await userData.clearFromNewExercises(course.id, downloaded);
         ui.webview.postMessage({
             command: "setNewExercises",
