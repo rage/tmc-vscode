@@ -39,21 +39,14 @@ export interface LocalExerciseDataV0 {
     updateAvailable?: boolean;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function resolveExerciseStatusFromV0toV1(
-    exerciseStatus?: ExerciseStatusV0,
-    isOpen?: boolean,
-): ExerciseStatusV1 {
-    switch (exerciseStatus) {
-        case ExerciseStatusV0.CLOSED:
-            return ExerciseStatusV1.CLOSED;
-        case ExerciseStatusV0.MISSING:
-            return ExerciseStatusV1.MISSING;
-        case ExerciseStatusV0.OPEN:
-            return ExerciseStatusV1.OPEN;
+function exerciseIsClosedV0(exerciseStatus?: ExerciseStatusV0, isOpen?: boolean): boolean {
+    if (exerciseStatus === ExerciseStatusV0.CLOSED) {
+        return true;
+    } else if (isOpen === false) {
+        return true;
     }
 
-    return isOpen ? ExerciseStatusV1.OPEN : ExerciseStatusV1.MISSING;
+    return false;
 }
 
 function resolveExercisePathV0(
@@ -96,11 +89,21 @@ async function exerciseDataFromV0toV1(
 
     const dataPath = memento.get<ExtensionSettingsPartial>(UNSTABLE_EXTENSION_SETTINGS_KEY)
         ?.dataPath;
+    const closedExercises: { [key: string]: string[] } = {};
     for (const exercise of exerciseData) {
-        const { id, checksum, course, name, path, organization } = exercise;
+        const { id, checksum, course, isOpen, name, path, organization, status } = exercise;
+        if (exerciseIsClosedV0(status, isOpen)) {
+            if (closedExercises[course]) {
+                closedExercises[course].push(name);
+            } else {
+                closedExercises[course] = [name];
+            }
+        }
+
         const pathResult = resolveExercisePathV0(id, name, course, organization, path, dataPath);
         if (pathResult.err) {
-            throw pathResult.val;
+            Logger.error(`Have to discard exercise ${course}/${name}:`, pathResult.val);
+            continue;
         }
 
         const migrationResult = await tmc.migrateExercise(
@@ -111,8 +114,16 @@ async function exerciseDataFromV0toV1(
             name,
         );
         if (migrationResult.err) {
-            throw migrationResult.val;
+            Logger.error(`Migration failed for exercise ${course}/${name}:`, migrationResult.val);
         }
+    }
+
+    const closeExercisesResult = await tmc.setSetting(
+        "closed-exercises",
+        JSON.stringify(closedExercises),
+    );
+    if (closeExercisesResult.err) {
+        Logger.error("Failed to migrate status of closed exercises.", closeExercisesResult.val);
     }
 }
 
