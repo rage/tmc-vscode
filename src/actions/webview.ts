@@ -93,10 +93,16 @@ export async function displayLocalCourseDetails(
     Logger.log(`Display course view for ${course.name}`);
 
     const exerciseData = new Map<string, UITypes.CourseDetailsExerciseGroup>();
-    const initialState: UITypes.WebviewMessage[] = [];
     const apiCourse = (await tmc.getCourseDetails(courseId)).mapErr(() => undefined).val?.course;
     const currentDate = new Date();
 
+    const initialState: UITypes.WebviewMessage[] = [
+        {
+            command: "setCourseDisabledStatus",
+            courseId: course.id,
+            disabled: course.disabled,
+        },
+    ];
     course.exercises.forEach((ex) => {
         const nameMatch = ex.name.match(/(\w+)-(.+)/);
         const groupName = nameMatch?.[1] || "";
@@ -105,22 +111,15 @@ export async function displayLocalCourseDetails(
         const exData = workspaceManager.getExerciseBySlug(course.name, ex.name);
         const softDeadline = ex.softDeadline ? parseDate(ex.softDeadline) : null;
         const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
-        initialState.push(
-            {
-                command: "exerciseStatusChange",
-                exerciseId: ex.id,
-                status: mapStatus(
-                    ex.id,
-                    exData?.status ?? ExerciseStatus.Missing,
-                    hardDeadline !== null && currentDate >= hardDeadline,
-                ),
-            },
-            {
-                command: "setCourseDisabledStatus",
-                courseId: course.id,
-                disabled: course.disabled,
-            },
-        );
+        initialState.push({
+            command: "exerciseStatusChange",
+            exerciseId: ex.id,
+            status: mapStatus(
+                ex.id,
+                exData?.status ?? ExerciseStatus.Missing,
+                hardDeadline !== null && currentDate >= hardDeadline,
+            ),
+        });
         const entry: UITypes.CourseDetailsExercise = {
             id: ex.id,
             name,

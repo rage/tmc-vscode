@@ -393,14 +393,6 @@ function script() {
         const notification = document.querySelector("div.update-notification");
         const button = notification.querySelector("button.update-button");
 
-        if (notification && button) {
-            button.addEventListener("click", function () {
-                button.disabled = true;
-                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
-                downloadSelectedExercises(updateableIds, "update");
-            });
-        }
-
         if (exerciseIds.length === 0) {
             button.disabled = true;
             notification.style.display = "none";
@@ -555,6 +547,17 @@ function script() {
         if (workspaceButton) {
             workspaceButton.addEventListener("click", function () {
                 vscode.postMessage({ type: "openCourseWorkspace", name: course.courseName });
+            });
+        }
+
+        // Exercise updates
+        const updateNotification = document.querySelector("div.update-notification");
+        const updateButton = updateNotification.querySelector("button.update-button");
+        if (updateButton) {
+            updateButton.addEventListener("click", function () {
+                updateButton.disabled = true;
+                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
+                downloadSelectedExercises(updateableIds, "update");
             });
         }
 
