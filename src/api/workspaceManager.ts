@@ -93,6 +93,10 @@ export default class WorkspaceManager implements vscode.Disposable {
         );
     }
 
+    public getExercises(): ReadonlyArray<WorkspaceExercise> {
+        return this._exercises;
+    }
+
     public getExercisesByCourseSlug(courseSlug: string): ReadonlyArray<WorkspaceExercise> {
         return this._exercises.filter((x) => x.courseSlug === courseSlug);
     }

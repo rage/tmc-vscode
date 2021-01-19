@@ -4,15 +4,16 @@
  * -------------------------------------------------------------------------------------------------
  */
 
-import { compact } from "lodash";
+import { compact, groupBy } from "lodash";
 import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import { ExerciseStatus } from "../api/workspaceManager";
 import * as UITypes from "../ui/types";
 import { incrementPercentageWrapper } from "../window";
 
 import { refreshLocalExercises } from "./refreshLocalExercises";
-import { ActionContext } from "./types";
+import { ActionContext, CourseClosedExercises } from "./types";
 
 /**
  * Downloads given exercises and opens them in TMC workspace.
@@ -64,15 +65,27 @@ export async function openExercises(
     ids: number[],
     courseName: string,
 ): Promise<Result<number[], Error>> {
-    const { workspaceManager, ui, userData } = actionContext;
+    const { workspaceManager, ui, userData, tmc } = actionContext;
 
     const course = userData.getCourseByName(courseName);
     const exercises = new Map(course.exercises.map((x) => [x.id, x]));
     const exerciseSlugs = compact(ids.map((x) => exercises.get(x)?.name));
 
-    const result = await workspaceManager.openCourseExercises(courseName, exerciseSlugs);
-    if (result.err) {
-        return result;
+    const openResult = await workspaceManager.openCourseExercises(courseName, exerciseSlugs);
+    if (openResult.err) {
+        return openResult;
+    }
+
+    const updatedExercises = groupBy(workspaceManager.getExercises(), (x) => x.courseSlug);
+    const mapped = Object.keys(updatedExercises).map<CourseClosedExercises>((x) => ({
+        "course-slug": x,
+        exercises: updatedExercises[x]
+            .filter((x) => x.status === ExerciseStatus.Closed)
+            .map((x) => x.exerciseSlug),
+    }));
+    const settingResult = await tmc.setSetting("closed-exercises", JSON.stringify(mapped));
+    if (settingResult.err) {
+        return settingResult;
     }
 
     const courseExercises = workspaceManager.getExercisesByCourseSlug(courseName);
@@ -95,15 +108,27 @@ export async function closeExercises(
     ids: number[],
     courseName: string,
 ): Promise<Result<number[], Error>> {
-    const { workspaceManager, ui, userData } = actionContext;
+    const { workspaceManager, ui, userData, tmc } = actionContext;
 
     const course = userData.getCourseByName(courseName);
     const exercises = new Map(course.exercises.map((x) => [x.id, x]));
     const exerciseSlugs = compact(ids.map((x) => exercises.get(x)?.name));
 
-    const result = await workspaceManager.closeCourseExercises(courseName, exerciseSlugs);
-    if (result.err) {
-        return result;
+    const closeResult = await workspaceManager.closeCourseExercises(courseName, exerciseSlugs);
+    if (closeResult.err) {
+        return closeResult;
+    }
+
+    const updatedExercises = groupBy(workspaceManager.getExercises(), (x) => x.courseSlug);
+    const mapped = Object.keys(updatedExercises).map<CourseClosedExercises>((x) => ({
+        "course-slug": x,
+        exercises: updatedExercises[x]
+            .filter((x) => x.status === ExerciseStatus.Closed)
+            .map((x) => x.exerciseSlug),
+    }));
+    const settingResult = await tmc.setSetting("closed-exercises", JSON.stringify(mapped));
+    if (settingResult.err) {
+        return settingResult;
     }
 
     const courseExercises = workspaceManager.getExercisesByCourseSlug(courseName);

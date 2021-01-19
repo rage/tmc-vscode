@@ -28,14 +28,15 @@ suite("refreshLocalExercises action", function () {
     setup(function () {
         tmcMock = Mock.ofType<TMC>();
         tmcMock
+            .setup((x) => x.getSettingObject(It.isValue("closed-exercises"), It.isAny()))
+            .returns(async () => Ok([]));
+        tmcMock
             .setup((x) => x.listLocalCourseExercises(It.isAny()))
-            .returns(() => Promise.resolve(Ok(localPythonCourseExercises)));
+            .returns(async () => Ok(localPythonCourseExercises));
         userDataMock = Mock.ofType<UserData>();
         userDataMock.setup((x) => x.getCourses()).returns(() => userData.courses);
         workspaceManagerMock = Mock.ofType<WorkspaceManager>();
-        workspaceManagerMock
-            .setup((x) => x.setExercises(It.isAny()))
-            .returns(() => Promise.resolve(Ok.EMPTY));
+        workspaceManagerMock.setup((x) => x.setExercises(It.isAny())).returns(async () => Ok.EMPTY);
     });
 
     test("should set exercises to WorkspaceManager", async function () {
@@ -54,8 +55,11 @@ suite("refreshLocalExercises action", function () {
     test("should tolerate Langs errors", async function () {
         tmcMock.reset();
         tmcMock
+            .setup((x) => x.getSettingObject(It.isValue("closed-exercises"), It.isAny()))
+            .returns(async () => Err(new Error()));
+        tmcMock
             .setup((x) => x.listLocalCourseExercises(It.isAny()))
-            .returns(() => Promise.resolve(Err(new Error())));
+            .returns(async () => Err(new Error()));
         const result = await refreshLocalExercises(actionContext());
         expect(result).to.be.equal(Ok.EMPTY);
     });
@@ -64,7 +68,7 @@ suite("refreshLocalExercises action", function () {
         workspaceManagerMock.reset();
         workspaceManagerMock
             .setup((x) => x.setExercises(It.isAny()))
-            .returns(() => Promise.resolve(Err(new Error())));
+            .returns(async () => Err(new Error()));
         const result = await refreshLocalExercises(actionContext());
         expect(result.val).to.be.instanceOf(Error);
     });

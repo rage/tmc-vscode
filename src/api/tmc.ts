@@ -314,13 +314,20 @@ export default class TMC {
     }
 
     public async getSetting(key: string): Promise<Result<string, Error>> {
+        return (await this.getSettingObject(key, createIs<string>())).map((x) => x ?? "");
+    }
+
+    public async getSettingObject<T>(
+        key: string,
+        checker: (object: unknown) => object is T,
+    ): Promise<Result<T | undefined, Error>> {
         return this._executeLangsCommand(
             {
                 args: ["settings", "--client-name", this.clientName, "get", key],
                 core: false,
             },
-            createIs<string>(),
-        ).then((x) => x.map((x) => x.data));
+            checker,
+        ).then((res) => res.map((x) => x.data ?? undefined));
     }
 
     public async setSetting(key: string, value: string): Promise<Result<void, Error>> {
