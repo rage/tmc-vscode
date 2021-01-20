@@ -90,6 +90,7 @@ async function exerciseDataFromV0toV1(
     const dataPath = memento.get<ExtensionSettingsPartial>(UNSTABLE_EXTENSION_SETTINGS_KEY)
         ?.dataPath;
     const closedExercises: { [key: string]: string[] } = {};
+    let atLeastOneSuccess = false;
     for (const exercise of exerciseData) {
         const { id, checksum, course, isOpen, name, path, organization, status } = exercise;
         if (exerciseIsClosedV0(status, isOpen)) {
@@ -115,7 +116,14 @@ async function exerciseDataFromV0toV1(
         );
         if (migrationResult.err) {
             Logger.error(`Migration failed for exercise ${course}/${name}:`, migrationResult.val);
+            continue;
         }
+
+        atLeastOneSuccess = true;
+    }
+
+    if (!atLeastOneSuccess) {
+        throw new Error("Exercise migration failed.");
     }
 
     const closeExercisesResult = await tmc.setSetting(

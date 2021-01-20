@@ -43,16 +43,25 @@ suite("Extension data migration", function () {
             .setup((x) =>
                 x.migrateExercise(It.isAny(), It.isAny(), It.isAny(), It.isAny(), It.isAny()),
             )
-            .returns(() => Promise.resolve(Err(new Error())));
+            .returns(async () => Err(new Error()));
+        tmcFail
+            .setup((x) => x.setSetting(It.isValue("closed-exercises"), It.isAny()))
+            .returns(async () => Err(new Error()));
+        tmcFail
+            .setup((x) => x.getSetting(It.isValue("projects-dir")))
+            .returns(async () => Err(new Error()));
         tmcSuccess = Mock.ofType<TMC>();
         tmcSuccess
             .setup((x) =>
                 x.migrateExercise(It.isAny(), It.isAny(), It.isAny(), It.isAny(), It.isAny()),
             )
-            .returns(() => Promise.resolve(Ok.EMPTY));
+            .returns(async () => Ok.EMPTY);
+        tmcSuccess
+            .setup((x) => x.setSetting(It.isValue("closed-exercises"), It.isAny()))
+            .returns(async () => Ok.EMPTY);
         tmcSuccess
             .setup((x) => x.getSetting(It.isValue("projects-dir")))
-            .returns(() => Promise.resolve(Ok("/langs/path/to/exercises")));
+            .returns(async () => Ok("/langs/path/to/exercises"));
     });
 
     test("should succeed without any data", async function () {

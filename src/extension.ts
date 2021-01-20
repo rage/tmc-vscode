@@ -51,7 +51,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const cliFolder = path.join(context.globalStoragePath, "cli");
     const cliPathResult = await init.downloadCorrectLangsVersion(cliFolder);
     if (cliPathResult.err) {
-        throw cliPathResult.val;
+        throwFatalError(cliPathResult.val, cliFolder);
     }
 
     const tmc = new TMC(cliPathResult.val, CLIENT_NAME, extensionVersion, TMC_LANGS_ROOT_URL, {
