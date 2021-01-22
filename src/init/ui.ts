@@ -1,6 +1,4 @@
 import du = require("du");
-import * as path from "path";
-import { Ok } from "ts-results";
 import * as vscode from "vscode";
 
 import {
@@ -15,9 +13,15 @@ import {
     removeCourse,
     updateCourse,
 } from "../actions";
+import { moveExtensionDataPath } from "../actions/moveExtensionDataPath";
 import { ActionContext } from "../actions/types";
-import { formatSizeInBytes, isCorrectWorkspaceOpen, Logger, LogLevel, sleep } from "../utils/";
-import { askForConfirmation, showError, showNotification } from "../window";
+import { formatSizeInBytes, Logger, LogLevel } from "../utils/";
+import {
+    askForConfirmation,
+    incrementPercentageWrapper,
+    showError,
+    showNotification,
+} from "../window";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -257,15 +261,6 @@ export function registerUiActions(actionContext: ActionContext): void {
         if (!msg.type) {
             return;
         }
-        const workspace = vscode.workspace.name?.split(" ")[0];
-        const open = workspace ? isCorrectWorkspaceOpen(resources, workspace) : false;
-        if (open) {
-            showNotification(
-                "Please close the TMC workspace from VSCode File menu and try again.",
-                ["OK", (): void => {}],
-            );
-            return;
-        }
 
         const old = resources.projectsDirectory;
         const options: vscode.OpenDialogOptions = {
@@ -274,45 +269,36 @@ export function registerUiActions(actionContext: ActionContext): void {
             canSelectMany: false,
             openLabel: "Select folder",
         };
-        const uri = await vscode.window.showOpenDialog(options);
-        if (uri && old) {
-            const newPath = path.join(uri[0].fsPath, "/tmcdata");
-            if (newPath === old) {
-                return;
-            }
+        const newPath = (await vscode.window.showOpenDialog(options))?.[0];
+        if (newPath && old) {
             const res = await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
                     title: "TestMyCode",
                 },
-                async (p) => {
-                    p.report({ message: "Moving TMC Data folder..." });
-                    // Have to wait here to allow for the notification to show up.
-                    await sleep(50);
-                    // TODO: Reimplement with Langs
-                    // return workspaceManager.moveFolder(old, newPath);
-                    return Ok(old);
+                async (progress) => {
+                    const progress2 = incrementPercentageWrapper(progress);
+                    return moveExtensionDataPath(actionContext, newPath, (update) =>
+                        progress2.report(update),
+                    );
                 },
             );
             if (res.ok) {
-                Logger.log(`Moved workspace folder from ${old} to ${newPath}`);
-                if (!res.val) {
-                    await settings.updateSetting({ setting: "oldDataPath", value: old });
-                }
-                showNotification(`TMC Data was successfully moved to ${newPath}`, [
+                Logger.log(`Moved workspace folder from ${old} to ${newPath.fsPath}`);
+                showNotification(`TMC Data was successfully moved to ${newPath.fsPath}`, [
                     "OK",
                     (): void => {},
                 ]);
-                resources.projectsDirectory = newPath;
-                await settings.updateSetting({ setting: "dataPath", value: newPath });
+                resources.projectsDirectory = newPath.fsPath;
+                await settings.updateSetting({ setting: "dataPath", value: newPath.fsPath });
             } else {
                 Logger.error(res.val);
-                // showError(res.val.message);
+                showError(res.val.message);
             }
             ui.webview.postMessage({
                 command: "setTmcDataFolder",
                 diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
-                path: newPath,
+                path: resources.projectsDirectory,
             });
         }
     });

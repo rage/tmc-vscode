@@ -240,6 +240,40 @@ export default class TMC {
     }
 
     /**
+     * Moves this instance's projects directory on disk. Uses TMC-langs `settings move-projects-dir`
+     * setting internally.
+     *
+     * @param newDirectory New location for projects directory.
+     * @param onUpdate Progress callback.
+     */
+    public async moveProjectsDirectory(
+        newDirectory: string,
+        onUpdate?: (value: { percent: number; message?: string }) => void,
+    ): Promise<Result<void, Error>> {
+        const onStdout = (res: LangsStatusUpdate<unknown>): void => {
+            onUpdate?.({
+                percent: res["percent-done"],
+                message: res.message ?? undefined,
+            });
+        };
+
+        return this._executeLangsCommand(
+            {
+                args: [
+                    "settings",
+                    "--client-name",
+                    this.clientName,
+                    "move-projects-dir",
+                    newDirectory,
+                ],
+                core: false,
+                onStdout,
+            },
+            createIs<unknown>(),
+        ).then((res) => (res.err ? res : Ok.EMPTY));
+    }
+
+    /**
      * Runs local tests for given exercise. Uses TMC-langs `run-tests` command internally.
      *
      * @param id ID of the exercise to test.
