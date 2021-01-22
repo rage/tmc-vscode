@@ -42,6 +42,16 @@ export interface LangsStatusUpdate<T> extends LangsOutputBase<T> {
     time: number | null;
 }
 
+export interface DownloadOrUpdateCourseExercisesResult {
+    downloaded: DownloadOrUpdateCourseExercise[];
+    skipped: DownloadOrUpdateCourseExercise[];
+}
+
+export interface DownloadOrUpdateCourseExercise {
+    "course-slug": string;
+    "exercise-slug": string;
+}
+
 export interface LocalExercise {
     "exercise-path": string;
     "exercise-slug": string;

@@ -47,7 +47,13 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
             return;
         }
 
-        // TODO: Show failed downloads as updateable exercises
+        ui.webview.postMessage(
+            ...userData.getCourses().map<WebviewMessage>((x) => ({
+                command: "setUpdateables",
+                courseId: x.id,
+                exerciseIds: downloadResult.val.failed,
+            })),
+        );
     };
 
     if (settings.getAutomaticallyUpdateExercises()) {

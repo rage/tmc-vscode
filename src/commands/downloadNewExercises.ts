@@ -1,37 +1,9 @@
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
-import { askForItem, showNotification } from "../window";
+import { askForItem, showError, showNotification } from "../window";
 
 export async function downloadNewExercises(actionContext: ActionContext): Promise<void> {
     const { userData } = actionContext;
-    const downloadNewExercises = async (courseId: number): Promise<void> => {
-        const course = userData.getCourse(courseId);
-        if (course.newExercises.length === 0) {
-            showNotification(`There are no new exercises for the course ${course.title}.`, [
-                "OK",
-                (): void => {},
-            ]);
-            return;
-        }
-        // const downloads: CourseExerciseDownloads = {
-        //     courseId: course.id,
-        //     exerciseIds: course.newExercises,
-        //     organizationSlug: course.organization,
-        //     courseName: course.name,
-        // };
-        await actions.downloadOrUpdateExercises(actionContext, course.newExercises);
-        // await userData.clearFromNewExercises(courseId, downloaded);
-        // const openResult = await actions.openExercises(
-        //     actionContext,
-        //     downloaded,
-        //     downloads.courseName,
-        // );
-        // if (openResult.err) {
-        //     const message = "Failed to open exercises after download.";
-        //     Logger.error(message, openResult.val);
-        //     showError(message);
-        // }
-    };
 
     const courses = userData.getCourses();
     const courseId = await askForItem<number>(
@@ -39,8 +11,21 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
         false,
         ...courses.map<[string, number]>((course) => [course.title, course.id]),
     );
+    if (!courseId) {
+        return;
+    }
 
-    if (courseId) {
-        await downloadNewExercises(courseId);
+    const course = userData.getCourse(courseId);
+    if (course.newExercises.length === 0) {
+        showNotification(`There are no new exercises for the course ${course.title}.`, [
+            "OK",
+            (): void => {},
+        ]);
+        return;
+    }
+
+    const downloadResult = await actions.downloadNewExercisesForCourse(actionContext, courseId);
+    if (downloadResult.err) {
+        showError(`Failed to download new exercises for course "${course.title}."`);
     }
 }

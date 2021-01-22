@@ -1,4 +1,6 @@
 export * from "./checkForExerciseUpdates";
+export * from "./downloadNewExercisesForCourse";
+export * from "./downloadOrUpdateCourseExercises";
 export * from "./moveExtensionDataPath";
 export * from "./refreshLocalExercises";
 export * from "./user";

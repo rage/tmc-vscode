@@ -29,9 +29,10 @@ import {
     showNotification,
 } from "../window";
 
+import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
-import { closeExercises, downloadOrUpdateExercises } from "./workspace";
+import { closeExercises } from "./workspace";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -353,7 +354,7 @@ export async function checkForCourseUpdates(
     actionContext: ActionContext,
     courseId?: number,
 ): Promise<void> {
-    const { ui, userData } = actionContext;
+    const { userData } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
     Logger.log(`Checking for course updates for courses ${filteredCourses.map((c) => c.name)}`);
@@ -364,25 +365,10 @@ export async function checkForCourseUpdates(
     }
 
     const handleDownload = async (course: LocalCourseData): Promise<void> => {
-        const newIds = Array.from(course.newExercises);
-        ui.webview.postMessage({
-            command: "setNewExercises",
-            courseId: course.id,
-            exerciseIds: [],
-        });
-        await downloadOrUpdateExercises(actionContext, newIds);
-        // await userData.clearFromNewExercises(course.id, downloaded);
-        ui.webview.postMessage({
-            command: "setNewExercises",
-            courseId: course.id,
-            exerciseIds: course.newExercises,
-        });
-        // const openResult = await openExercises(actionContext, downloaded, course.name);
-        // if (openResult.err) {
-        //     const message = "Failed to open new exercises.";
-        //     Logger.error(message, openResult.val);
-        //     showError(message);
-        // }
+        const downloadResult = await downloadNewExercisesForCourse(actionContext, course.id);
+        if (downloadResult.err) {
+            showError(`Failed to download new exercises for course "${course.title}."`);
+        }
     };
 
     for (const course of updatedCourses) {

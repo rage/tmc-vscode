@@ -1,4 +1,5 @@
 import du = require("du");
+import { Result } from "ts-results";
 import * as vscode from "vscode";
 
 import {
@@ -11,6 +12,7 @@ import {
     moveExtensionDataPath,
     openExercises,
     openWorkspace,
+    refreshLocalExercises,
     removeCourse,
     updateCourse,
 } from "../actions";
@@ -30,7 +32,7 @@ import {
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { ui, resources, settings, visibilityGroups } = actionContext;
+    const { ui, resources, settings, userData, visibilityGroups } = actionContext;
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
@@ -145,29 +147,47 @@ export function registerUiActions(actionContext: ActionContext): void {
                     exerciseIds: [],
                     courseId: msg.courseId,
                 });
-                await downloadOrUpdateExercises(
+                const downloadResult = await downloadOrUpdateExercises(
                     actionContext,
                     exerciseDownloads.map((x) => x.exerciseId),
                 );
-                // TODO: Handle failed downloads as remaining
-                const remaining: number[] = [];
-                ui.webview.postMessage({
-                    command: "setUpdateables",
-                    exerciseIds: remaining,
-                    courseId: msg.courseId,
-                });
+                if (downloadResult.ok) {
+                    ui.webview.postMessage({
+                        command: "setUpdateables",
+                        exerciseIds: downloadResult.val.failed,
+                        courseId: msg.courseId,
+                    });
+                }
                 return;
             }
-            await downloadOrUpdateExercises(actionContext, msg.ids);
-            // if (downloaded.length !== 0) {
-            //     await actionContext.userData.clearFromNewExercises(msg.courseId, downloaded);
-            //    const openResult = await openExercises(actionContext, downloaded, msg.courseName);
-            //     if (openResult.err) {
-            //         const message = "Failed to open exercises after download.";
-            //         Logger.error(message, openResult.val);
-            //         showError(message);
-            //     }
-            // }
+
+            ui.webview.postMessage({
+                command: "setNewExercises",
+                courseId: msg.courseId,
+                exerciseIds: [],
+            });
+
+            const downloadResult = await downloadOrUpdateExercises(actionContext, msg.ids);
+            if (downloadResult.err) {
+                Logger.error("Failed to download new exercises.", downloadResult.val);
+                showError("Failed to download new exercises.");
+                return;
+            }
+
+            const refreshResult = Result.all(
+                await userData.clearFromNewExercises(msg.courseId, downloadResult.val.successful),
+                await refreshLocalExercises(actionContext),
+            );
+            if (refreshResult.err) {
+                Logger.error("Failed to refresh workspace.", downloadResult.val);
+                showError("Failed to download new exercises.");
+            }
+
+            ui.webview.postMessage({
+                command: "setNewExercises",
+                courseId: msg.courseId,
+                exerciseIds: userData.getCourse(msg.courseId).newExercises,
+            });
         },
     );
     ui.webview.registerHandler("addCourse", async () => {

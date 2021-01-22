@@ -18,6 +18,7 @@ import { Logger } from "../utils/logger";
 import { showError, showWarning } from "../window";
 
 import {
+    DownloadOrUpdateCourseExercisesResult,
     LangsError,
     LangsOutputData,
     LangsStatusUpdate,
@@ -424,7 +425,7 @@ export default class TMC {
     public async downloadExercises(
         ids: number[],
         downloaded: (value: { id: number; percent: number; message?: string }) => void,
-    ): Promise<Result<void, Error>> {
+    ): Promise<Result<DownloadOrUpdateCourseExercisesResult, Error>> {
         const onStdout = (res: LangsStatusUpdate<unknown>): void => {
             if (is<{ "exercise-download": { id: number; path: string } }>(res.data)) {
                 downloaded({
@@ -445,7 +446,7 @@ export default class TMC {
                 core: true,
                 onStdout,
             },
-            createIs<unknown>(),
+            createIs<DownloadOrUpdateCourseExercisesResult>(),
         );
         if (result.err) {
             return result;
@@ -453,7 +454,7 @@ export default class TMC {
 
         // Invalidate exercise update cache
         this._responseCache.delete(TMC._exerciseUpdatesCacheKey);
-        return Ok.EMPTY;
+        return Ok(result.val.data);
     }
 
     /**
