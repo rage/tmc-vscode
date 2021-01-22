@@ -42,7 +42,6 @@ const v1_2_0: ExtensionSettingsV0 = {
 };
 
 const v2_0_0: ExtensionSettingsV1 = {
-    dataPath: "/tmcdata",
     downloadOldSubmission: false,
     hideMetaFiles: true,
     insiderVersion: true,

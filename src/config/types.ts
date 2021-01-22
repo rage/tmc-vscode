@@ -1,7 +1,6 @@
 import { LogLevel } from "../utils/";
 
 export type ExtensionSettingsData =
-    | { setting: "dataPath"; value: string }
     | { setting: "downloadOldSubmission"; value: boolean }
     | { setting: "hideMetaFiles"; value: boolean }
     | { setting: "insiderVersion"; value: boolean }

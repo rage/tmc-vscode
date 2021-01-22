@@ -73,17 +73,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         throwFatalError(migrationResult.val, cliFolder);
     }
 
-    let tmcDataPath = storage.getExtensionSettings()?.dataPath;
-    if (!tmcDataPath) {
-        const dataPathResult = await tmc.getSetting("projects-dir");
-        if (dataPathResult.err) {
-            Logger.error("Failed to define datapath:", dataPathResult.val);
-            throwFatalError(dataPathResult.val, cliFolder);
-        }
-
-        tmcDataPath = dataPathResult.val;
+    const dataPathResult = await tmc.getSetting("projects-dir");
+    if (dataPathResult.err) {
+        Logger.error("Failed to define datapath:", dataPathResult.val);
+        throwFatalError(dataPathResult.val, cliFolder);
     }
 
+    const tmcDataPath = dataPathResult.val;
     const workspaceFileFolder = path.join(context.globalStoragePath, "workspaces");
     const resourcesResult = await init.resourceInitialization(
         context,
@@ -98,7 +94,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const resources = resourcesResult.val;
     await init.settingsInitialization(storage);
-    const settings = new Settings(storage, resources, tmcDataPath);
+    const settings = new Settings(storage, resources);
     await settings.verifyWorkspaceSettingsIntegrity();
     Logger.configure(settings.getLogLevel());
 

@@ -488,7 +488,7 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
         {
             command: "setTmcDataFolder",
             diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
-            path: extensionSettingsResult.val.dataPath,
+            path: resources.projectsDirectory,
         },
     ]);
 }

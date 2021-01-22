@@ -289,8 +289,6 @@ export function registerUiActions(actionContext: ActionContext): void {
                     "OK",
                     (): void => {},
                 ]);
-                resources.projectsDirectory = newPath.fsPath;
-                await settings.updateSetting({ setting: "dataPath", value: newPath.fsPath });
             } else {
                 Logger.error(res.val);
                 showError(res.val.message);

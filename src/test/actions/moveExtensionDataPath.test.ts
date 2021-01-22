@@ -13,7 +13,7 @@ import { courseClosedExercises, localPythonCourseExercises } from "../fixtures/t
 import { v2_0_0 as userData } from "../fixtures/userData";
 import { workspaceExercises } from "../fixtures/workspaceManager";
 
-suite("changeExtensionDataPath action", function () {
+suite("moveExtensionDataPath action", function () {
     const courseName = "test-python-course";
     const newPath = vscode.Uri.file("/new/path");
     const openExercises = workspaceExercises.filter((x) => x.status === ExerciseStatus.Open);
@@ -36,7 +36,7 @@ suite("changeExtensionDataPath action", function () {
     setup(function () {
         tmcMock = Mock.ofType<TMC>();
         tmcMock
-            .setup((x) => x.setSetting(It.isAny(), It.isAny()))
+            .setup((x) => x.moveProjectsDirectory(It.isAny(), It.isAny()))
             .returns(async () => (tmcMoveSuccess ? Ok.EMPTY : Err(new Error())));
         tmcMock
             .setup((x) =>

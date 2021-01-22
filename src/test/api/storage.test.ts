@@ -5,7 +5,6 @@ import { createMockContext } from "../__mocks__/vscode";
 
 suite("Storage class", function () {
     const extensionSettings: ExtensionSettings = {
-        dataPath: "/path/to/exercises",
         downloadOldSubmission: true,
         hideMetaFiles: true,
         insiderVersion: false,

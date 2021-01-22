@@ -17,7 +17,7 @@ export async function moveExtensionDataPath(
     newPath: vscode.Uri,
     onUpdate?: (value: { percent: number; message?: string }) => void,
 ): Promise<Result<void, Error>> {
-    const { settings, tmc, workspaceManager } = actionContext;
+    const { resources, tmc, workspaceManager } = actionContext;
 
     const activeCourse = workspaceManager.activeCourse;
     if (activeCourse) {
@@ -39,6 +39,6 @@ export async function moveExtensionDataPath(
         return moveResult;
     }
 
-    await settings.updateSetting({ setting: "dataPath", value: newPath.fsPath });
+    resources.projectsDirectory = newPath.fsPath;
     return refreshLocalExercises(actionContext);
 }

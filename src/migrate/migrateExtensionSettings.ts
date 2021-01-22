@@ -1,8 +1,6 @@
 import { createIs } from "typescript-is";
 import * as vscode from "vscode";
 
-import TMC from "../api/tmc";
-
 import { MigratedData } from "./types";
 import validateData from "./validateData";
 
@@ -29,7 +27,6 @@ export interface ExtensionSettingsV0 {
 }
 
 export interface ExtensionSettingsV1 {
-    dataPath: string;
     downloadOldSubmission: boolean;
     hideMetaFiles: boolean;
     insiderVersion: boolean;
@@ -51,14 +48,10 @@ function logLevelV0toV1(logLevel: LogLevelV0): LogLevelV1 {
 
 async function extensionDataFromV0toV1(
     unstableData: ExtensionSettingsV0,
-    tmc: TMC,
 ): Promise<ExtensionSettingsV1> {
     const logLevel = unstableData.logLevel ? logLevelV0toV1(unstableData.logLevel) : "errors";
-    // I'll bet that I'll forget to check this properly
-    const newDefaultPath = (await tmc.getSetting("projects-dir")).unwrap();
 
     return {
-        dataPath: newDefaultPath,
         downloadOldSubmission: unstableData.downloadOldSubmission ?? true,
         hideMetaFiles: unstableData.hideMetaFiles ?? true,
         insiderVersion: unstableData.insiderVersion ?? false,
@@ -69,7 +62,6 @@ async function extensionDataFromV0toV1(
 
 export default async function migrateExtensionSettings(
     memento: vscode.Memento,
-    tmc: TMC,
 ): Promise<MigratedData<ExtensionSettingsV1>> {
     const obsoleteKeys: string[] = [];
     const dataV0 = validateData(
@@ -81,7 +73,7 @@ export default async function migrateExtensionSettings(
     }
 
     const dataV1 = dataV0
-        ? await extensionDataFromV0toV1(dataV0, tmc)
+        ? await extensionDataFromV0toV1(dataV0)
         : validateData(memento.get(EXTENSION_SETTINGS_KEY_V1), createIs<ExtensionSettingsV1>());
 
     return { data: dataV1, obsoleteKeys };

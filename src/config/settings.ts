@@ -13,7 +13,6 @@ import Resources from "./resources";
 import { ExtensionSettingsData } from "./types";
 
 export interface ExtensionSettings {
-    dataPath: string;
     downloadOldSubmission: boolean;
     hideMetaFiles: boolean;
     insiderVersion: boolean;
@@ -31,7 +30,7 @@ export interface ExtensionSettings {
  * extension.
  */
 export default class Settings {
-    private static readonly _defaultSettings: Omit<ExtensionSettings, "dataPath"> = {
+    private static readonly _defaultSettings: ExtensionSettings = {
         downloadOldSubmission: true,
         hideMetaFiles: true,
         insiderVersion: false,
@@ -46,13 +45,13 @@ export default class Settings {
     private _settings: ExtensionSettings;
     private _state: SessionState;
 
-    constructor(storage: Storage, resources: Resources, defaultProjectsDirectory: string) {
+    constructor(storage: Storage, resources: Resources) {
         this._storage = storage;
         this._resources = resources;
         const storedSettings = storage.getExtensionSettings();
         this._settings = storedSettings
             ? Settings._deserializeExtensionSettings(storedSettings)
-            : { ...Settings._defaultSettings, dataPath: defaultProjectsDirectory };
+            : Settings._defaultSettings;
         this._state = storage.getSessionState() ?? {};
     }
 
@@ -81,9 +80,6 @@ export default class Settings {
      */
     public async updateSetting(data: ExtensionSettingsData): Promise<void> {
         switch (data.setting) {
-            case "dataPath":
-                this._settings.dataPath = data.value;
-                break;
             case "downloadOldSubmission":
                 this._settings.downloadOldSubmission = data.value;
                 break;

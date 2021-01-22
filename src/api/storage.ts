@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 
 export interface ExtensionSettings {
-    dataPath: string;
     downloadOldSubmission: boolean;
     hideMetaFiles: boolean;
     insiderVersion: boolean;

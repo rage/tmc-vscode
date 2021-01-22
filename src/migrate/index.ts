@@ -24,7 +24,7 @@ export async function migrateExtensionDataFromPreviousVersions(
     const memento = context.globalState;
 
     try {
-        const migratedExtensionSettings = await migrateExtensionSettings(memento, tmc);
+        const migratedExtensionSettings = await migrateExtensionSettings(memento);
         const migratedSessionState = migrateSessionState(memento);
         const migratedUserData = migrateUserData(memento);
 
