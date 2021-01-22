@@ -7,14 +7,15 @@ import { ActionContext } from "../../actions/types";
 import TMC from "../../api/tmc";
 import WorkspaceManager from "../../api/workspaceManager";
 import { UserData } from "../../config/userdata";
-import { createMockActionContext } from "../__mocks__/actionContext";
-import { localPythonCourseExercises } from "../fixtures/tmc";
 import { v2_0_0 as userData } from "../fixtures/userData";
+import { createMockActionContext } from "../mocks/actionContext";
+import { createTMCMock, TMCMockValues } from "../mocks/tmc";
 
 suite("refreshLocalExercises action", function () {
     const stubContext = createMockActionContext();
 
     let tmcMock: IMock<TMC>;
+    let tmcMockValues: TMCMockValues;
     let userDataMock: IMock<UserData>;
     let workspaceManagerMock: IMock<WorkspaceManager>;
 
@@ -26,13 +27,7 @@ suite("refreshLocalExercises action", function () {
     });
 
     setup(function () {
-        tmcMock = Mock.ofType<TMC>();
-        tmcMock
-            .setup((x) => x.getSettingObject(It.isValue("closed-exercises"), It.isAny()))
-            .returns(async () => Ok([]));
-        tmcMock
-            .setup((x) => x.listLocalCourseExercises(It.isAny()))
-            .returns(async () => Ok(localPythonCourseExercises));
+        [tmcMock, tmcMockValues] = createTMCMock();
         userDataMock = Mock.ofType<UserData>();
         userDataMock.setup((x) => x.getCourses()).returns(() => userData.courses);
         workspaceManagerMock = Mock.ofType<WorkspaceManager>();
@@ -53,13 +48,8 @@ suite("refreshLocalExercises action", function () {
     });
 
     test("should tolerate Langs errors", async function () {
-        tmcMock.reset();
-        tmcMock
-            .setup((x) => x.getSettingObject(It.isValue("closed-exercises"), It.isAny()))
-            .returns(async () => Err(new Error()));
-        tmcMock
-            .setup((x) => x.listLocalCourseExercises(It.isAny()))
-            .returns(async () => Err(new Error()));
+        tmcMockValues.getSettingObjectClosedExercises = Err(new Error());
+        tmcMockValues.listLocalCourseExercisesPythonCourse = Err(new Error());
         const result = await refreshLocalExercises(actionContext());
         expect(result).to.be.equal(Ok.EMPTY);
     });

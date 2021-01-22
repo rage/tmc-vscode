@@ -6,8 +6,8 @@ import * as vscode from "vscode";
 
 import TMC from "../../api/tmc";
 import migrateExerciseData from "../../migrate/migrateExerciseData";
-import { createMockMemento } from "../__mocks__/vscode";
 import * as exerciseData from "../fixtures/exerciseData";
+import { createMockMemento } from "../mocks/vscode";
 
 const EXERCISE_DATA_KEY_V0 = "exerciseData";
 const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";

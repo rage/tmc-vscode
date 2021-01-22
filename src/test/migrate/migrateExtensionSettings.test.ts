@@ -7,8 +7,8 @@ import migrateExtensionSettings, {
     LogLevelV1,
 } from "../../migrate/migrateExtensionSettings";
 import { LogLevel } from "../../utils";
-import { createMockMemento } from "../__mocks__/vscode";
 import * as extensionSettings from "../fixtures/extensionSettings";
+import { createMockMemento } from "../mocks/vscode";
 
 use(chaiAsPromised);
 

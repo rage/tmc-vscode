@@ -7,11 +7,11 @@ import * as vscode from "vscode";
 import Storage from "../../api/storage";
 import TMC from "../../api/tmc";
 import { migrateExtensionDataFromPreviousVersions } from "../../migrate";
-import { createMockContext } from "../__mocks__/vscode";
 import * as exerciseData from "../fixtures/exerciseData";
 import * as extensionSettings from "../fixtures/extensionSettings";
 import * as sessionState from "../fixtures/sessionState";
 import * as userData from "../fixtures/userData";
+import { createMockContext } from "../mocks/vscode";
 
 const UNSTABLE_EXERCISE_DATA_KEY = "exerciseData";
 const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";

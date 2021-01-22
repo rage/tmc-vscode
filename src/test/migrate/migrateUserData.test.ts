@@ -2,9 +2,9 @@ import { expect } from "chai";
 import * as vscode from "vscode";
 
 import migrateUserData, { LocalCourseDataV0 } from "../../migrate/migrateUserData";
-import { createMockMemento } from "../__mocks__/vscode";
 import * as exerciseData from "../fixtures/exerciseData";
 import * as userData from "../fixtures/userData";
+import { createMockMemento } from "../mocks/vscode";
 
 const UNSTABLE_EXERCISE_DATA_KEY = "exerciseData";
 const USER_DATA_KEY_V0 = "userData";

@@ -1,7 +1,7 @@
 import { CourseClosedExercises } from "../../actions/types";
 import { LocalExercise } from "../../api/langsSchema";
 
-const checkExerciseUpdatesResult: Array<{ id: number }> = [{ id: 2 }];
+const checkExerciseUpdates: Array<{ id: number }> = [{ id: 2 }];
 
 const courseClosedExercises: CourseClosedExercises[] = [
     {
@@ -10,7 +10,7 @@ const courseClosedExercises: CourseClosedExercises[] = [
     },
 ];
 
-const localPythonCourseExercises: LocalExercise[] = [
+const listLocalCourseExercisesPythonCourse: LocalExercise[] = [
     {
         "exercise-path": "/tmc/vscode/test-python-course/hello_world",
         "exercise-slug": "hello_world",
@@ -21,4 +21,4 @@ const localPythonCourseExercises: LocalExercise[] = [
     },
 ];
 
-export { checkExerciseUpdatesResult, courseClosedExercises, localPythonCourseExercises };
+export { checkExerciseUpdates, courseClosedExercises, listLocalCourseExercisesPythonCourse };

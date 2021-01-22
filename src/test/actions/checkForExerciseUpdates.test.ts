@@ -6,15 +6,16 @@ import { checkForExerciseUpdates } from "../../actions";
 import { ActionContext } from "../../actions/types";
 import TMC from "../../api/tmc";
 import { UserData } from "../../config/userdata";
-import { createMockActionContext } from "../__mocks__/actionContext";
-import { checkExerciseUpdatesResult } from "../fixtures/tmc";
 import { v2_0_0 as userData } from "../fixtures/userData";
+import { createMockActionContext } from "../mocks/actionContext";
+import { createTMCMock, TMCMockValues } from "../mocks/tmc";
 
 suite("checkForExerciseUpdates action", function () {
     const stubContext = createMockActionContext();
     const updateableExercises = [{ courseId: 0, exerciseId: 2, exerciseName: "other_world" }];
 
     let tmcMock: IMock<TMC>;
+    let tmcMockValues: TMCMockValues;
     let userDataMock: IMock<UserData>;
 
     const actionContext = (): ActionContext => ({
@@ -24,10 +25,7 @@ suite("checkForExerciseUpdates action", function () {
     });
 
     setup(function () {
-        tmcMock = Mock.ofType<TMC>();
-        tmcMock
-            .setup((x) => x.checkExerciseUpdates(It.isAny()))
-            .returns(async () => Ok(checkExerciseUpdatesResult));
+        [tmcMock, tmcMockValues] = createTMCMock();
         userDataMock = Mock.ofType<UserData>();
         userDataMock.setup((x) => x.getCourses()).returns(() => userData.courses);
     });
@@ -48,26 +46,22 @@ suite("checkForExerciseUpdates action", function () {
     });
 
     test("should return empty array when there are no updates", async function () {
-        tmcMock.reset();
-        tmcMock.setup((x) => x.checkExerciseUpdates(It.isAny())).returns(async () => Ok([]));
+        tmcMockValues.checkExerciseUpdates = Ok([]);
         const result = await checkForExerciseUpdates(actionContext());
         expect(result.val).to.be.deep.equal([]);
     });
 
     test("should filter out unknown exercise ids", async function () {
-        tmcMock.reset();
-        tmcMock
-            .setup((x) => x.checkExerciseUpdates(It.isAny()))
-            .returns(async () => Ok([...checkExerciseUpdatesResult, { id: 404 }]));
+        tmcMockValues.checkExerciseUpdates = Ok([
+            ...tmcMockValues.checkExerciseUpdates,
+            { id: 404 },
+        ]);
         const result = await checkForExerciseUpdates(actionContext());
         expect(result.val).to.be.deep.equal(updateableExercises);
     });
 
     test("should result in error if Langs operation fails", async function () {
-        tmcMock.reset();
-        tmcMock
-            .setup((x) => x.checkExerciseUpdates(It.isAny()))
-            .returns(async () => Err(new Error()));
+        tmcMockValues.checkExerciseUpdates = Err(new Error());
         const result = await checkForExerciseUpdates(actionContext());
         expect(result.val).to.be.instanceOf(Error);
     });

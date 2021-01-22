@@ -2,8 +2,8 @@ import { expect } from "chai";
 import * as vscode from "vscode";
 
 import migrateSessionState from "../../migrate/migrateSessionState";
-import { createMockMemento } from "../__mocks__/vscode";
 import * as sessionState from "../fixtures/sessionState";
+import { createMockMemento } from "../mocks/vscode";
 
 const EXTENSION_VERSION_KEY = "extensionVersion";
 const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";

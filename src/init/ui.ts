@@ -8,12 +8,12 @@ import {
     displayUserCourses,
     downloadOrUpdateExercises,
     login,
+    moveExtensionDataPath,
     openExercises,
     openWorkspace,
     removeCourse,
     updateCourse,
 } from "../actions";
-import { moveExtensionDataPath } from "../actions/moveExtensionDataPath";
 import { ActionContext } from "../actions/types";
 import { formatSizeInBytes, Logger, LogLevel } from "../utils/";
 import {
