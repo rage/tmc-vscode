@@ -79,7 +79,7 @@ export async function testExercise(
 ): Promise<Result<void, Error>> {
     const { ui, tmc, userData, temporaryWebviewProvider } = actionContext;
 
-    const course = userData.getCourseByName(exercise.exerciseSlug);
+    const course = userData.getCourseByName(exercise.courseSlug);
     const exerciseId = course.exercises.find((x) => x.name === exercise.exerciseSlug)?.id;
     if (!exerciseId) {
         return Err(
@@ -157,7 +157,7 @@ export async function testExercise(
         title: "TMC Test Results",
         template: { templateName: "test-result", ...data, pasteLink: "" },
         messageHandler: async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
-            if (msg.type === "submitToServer" && msg.data) {
+            if (msg.type === "submitToServer") {
                 submitExercise(actionContext, exercise);
             } else if (msg.type === "sendToPaste" && msg.data) {
                 const pasteLink = await pasteExercise(
@@ -306,9 +306,8 @@ export async function submitExercise(
     });
     temporaryWebviewProvider.addToRecycables(temp);
 
-    const courseData = userData.getCourseByName(exercise.exerciseSlug) as Readonly<LocalCourseData>;
-
-    checkForCourseUpdates(actionContext, courseData.id);
+    const courseData = userData.getCourseByName(exercise.courseSlug) as Readonly<LocalCourseData>;
+    await checkForCourseUpdates(actionContext, courseData.id);
     vscode.commands.executeCommand("tmc.updateExercises", "silent");
 
     return Ok.EMPTY;

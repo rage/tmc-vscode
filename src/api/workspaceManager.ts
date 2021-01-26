@@ -72,7 +72,7 @@ export default class WorkspaceManager implements vscode.Disposable {
      */
     public get activeExercise(): Readonly<WorkspaceExercise> | undefined {
         const uri = vscode.window.activeTextEditor?.document.uri;
-        return uri && this._exercises.find((x) => x.uri.fsPath === uri?.fsPath);
+        return uri && this.getExerciseByPath(uri);
     }
 
     public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
@@ -81,7 +81,10 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     public getExerciseByPath(exercise: vscode.Uri): Readonly<WorkspaceExercise> | undefined {
-        return this._exercises.find((x) => x.uri.fsPath === exercise.fsPath);
+        // File is part of exercise if and only if it belongs to an exercise's subfolder
+        return this._exercises.find(
+            (x) => !path.relative(x.uri.fsPath, exercise.fsPath).startsWith(".."),
+        );
     }
 
     public getExerciseBySlug(
