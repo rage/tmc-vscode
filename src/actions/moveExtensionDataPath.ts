@@ -1,3 +1,5 @@
+import * as fs from "fs-extra";
+import * as path from "path";
 import { Result } from "ts-results";
 import * as vscode from "vscode";
 
@@ -25,6 +27,8 @@ export async function moveExtensionDataPath(
             .getExercisesByCourseSlug(activeCourse)
             .filter((x) => x.status === ExerciseStatus.Open)
             .map((x) => x.exerciseSlug);
+
+        // Close exercises without writing the result to "reopen" them with refreshLocalExercises
         const closeResult = await workspaceManager.closeCourseExercises(
             activeCourse,
             exercisesToClose,
@@ -34,11 +38,17 @@ export async function moveExtensionDataPath(
         }
     }
 
-    const moveResult = await tmc.moveProjectsDirectory(newPath.fsPath, onUpdate);
+    // Use given path if empty dir, otherwise append
+    let newFsPath = newPath.fsPath;
+    if (fs.readdirSync(newFsPath).length > 0) {
+        newFsPath = path.join(newFsPath, "tmcdata");
+    }
+
+    const moveResult = await tmc.moveProjectsDirectory(newFsPath, onUpdate);
     if (moveResult.err) {
         return moveResult;
     }
 
-    resources.projectsDirectory = newPath.fsPath;
+    resources.projectsDirectory = newFsPath;
     return refreshLocalExercises(actionContext);
 }
