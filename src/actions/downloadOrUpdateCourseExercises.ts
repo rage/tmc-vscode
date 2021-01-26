@@ -1,10 +1,14 @@
 import { concat, flatten, groupBy, partition } from "lodash";
+import * as pLimit from "p-limit";
 import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { incrementPercentageWrapper } from "../window";
 
 import { ActionContext } from "./types";
+
+// Use this until using Langs version with file locks
+const limit = pLimit(1);
 
 /**
  * Downloads given exercises and opens them in TMC workspace.
@@ -26,14 +30,16 @@ export async function downloadOrUpdateExercises(
         },
         (progress) => {
             const progress2 = incrementPercentageWrapper(progress);
-            return tmc.downloadExercises(exerciseIds, (download) => {
-                progress2.report(download);
-                ui.webview.postMessage({
-                    command: "exerciseStatusChange",
-                    exerciseId: download.id,
-                    status: "closed",
-                });
-            });
+            return limit(() =>
+                tmc.downloadExercises(exerciseIds, (download) => {
+                    progress2.report(download);
+                    ui.webview.postMessage({
+                        command: "exerciseStatusChange",
+                        exerciseId: download.id,
+                        status: "closed",
+                    });
+                }),
+            );
         },
     );
     if (downloadResult.err) {
