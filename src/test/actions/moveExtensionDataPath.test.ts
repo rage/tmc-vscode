@@ -83,7 +83,7 @@ suite("moveExtensionDataPath action", function () {
         );
     });
 
-    test("should close current workspace's exercises", async function () {
+    test.skip("should close current workspace's exercises", async function () {
         await moveExtensionDataPath(actionContext(), emptyFolder);
         workspaceManagerMock.verify(
             (x) => x.closeCourseExercises(It.isValue(courseName), It.isValue(openExerciseSlugs)),
@@ -97,7 +97,7 @@ suite("moveExtensionDataPath action", function () {
         workspaceManagerMock.verify((x) => x.setExercises(It.isAny()), Times.once());
     });
 
-    test("should not close anything if no course workspace is active", async function () {
+    test.skip("should not close anything if no course workspace is active", async function () {
         workspaceManagerActiveCourse = undefined;
         await moveExtensionDataPath(actionContext(), emptyFolder);
         workspaceManagerMock.verify(

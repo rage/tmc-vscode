@@ -3,8 +3,6 @@ import * as path from "path";
 import { Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { ExerciseStatus } from "../api/workspaceManager";
-
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
 
@@ -19,8 +17,10 @@ export async function moveExtensionDataPath(
     newPath: vscode.Uri,
     onUpdate?: (value: { percent: number; message?: string }) => void,
 ): Promise<Result<void, Error>> {
-    const { resources, tmc, workspaceManager } = actionContext;
+    const { resources, tmc } = actionContext;
 
+    // This appears to be unnecessary with current VS Code version
+    /*
     const activeCourse = workspaceManager.activeCourse;
     if (activeCourse) {
         const exercisesToClose = workspaceManager
@@ -37,6 +37,7 @@ export async function moveExtensionDataPath(
             return closeResult;
         }
     }
+    */
 
     // Use given path if empty dir, otherwise append
     let newFsPath = newPath.fsPath;
