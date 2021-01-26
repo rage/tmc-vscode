@@ -1,4 +1,6 @@
 import { expect } from "chai";
+import * as mockFs from "mock-fs";
+import * as path from "path";
 import { Err, Ok } from "ts-results";
 import { IMock, It, Mock, Times } from "typemoq";
 import * as vscode from "vscode";
@@ -14,8 +16,18 @@ import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
 
 suite("moveExtensionDataPath action", function () {
+    const virtualFileSystem = {
+        "/new/path/": {
+            empty: {},
+            nonempty: {
+                "file.txt": "",
+            },
+        },
+    };
+
     const courseName = "test-python-course";
-    const newPath = vscode.Uri.file("/new/path");
+    const emptyFolder = vscode.Uri.file("/new/path/empty");
+    const nonEmptyFolder = vscode.Uri.file("/new/path/nonempty");
     const openExercises = workspaceExercises.filter((x) => x.status === ExerciseStatus.Open);
     const openExerciseSlugs = openExercises.map((x) => x.exerciseSlug);
     const stubContext = createMockActionContext();
@@ -34,6 +46,7 @@ suite("moveExtensionDataPath action", function () {
     });
 
     setup(function () {
+        mockFs(virtualFileSystem);
         [tmcMock, tmcMockValues] = createTMCMock();
         userDataMock = Mock.ofType<UserData>();
         userDataMock.setup((x) => x.getCourses()).returns(() => userData.courses);
@@ -51,13 +64,27 @@ suite("moveExtensionDataPath action", function () {
         workspaceManagerActiveCourse = courseName;
     });
 
-    test("changes extension data path", async function () {
-        const result = await moveExtensionDataPath(actionContext(), newPath);
+    test("should change extension data path", async function () {
+        const result = await moveExtensionDataPath(actionContext(), emptyFolder);
         expect(result).to.be.equal(Ok.EMPTY);
+        tmcMock.verify(
+            (x) => x.moveProjectsDirectory(It.isValue(emptyFolder.fsPath), It.isAny()),
+            Times.once(),
+        );
+    });
+
+    test("should append tmcdata to path if target is not empty", async function () {
+        const result = await moveExtensionDataPath(actionContext(), nonEmptyFolder);
+        expect(result).to.be.equal(Ok.EMPTY);
+        const expected = path.join(nonEmptyFolder.fsPath, "tmcdata");
+        tmcMock.verify(
+            (x) => x.moveProjectsDirectory(It.isValue(expected), It.isAny()),
+            Times.once(),
+        );
     });
 
     test("should close current workspace's exercises", async function () {
-        await moveExtensionDataPath(actionContext(), newPath);
+        await moveExtensionDataPath(actionContext(), emptyFolder);
         workspaceManagerMock.verify(
             (x) => x.closeCourseExercises(It.isValue(courseName), It.isValue(openExerciseSlugs)),
             Times.once(),
@@ -65,14 +92,14 @@ suite("moveExtensionDataPath action", function () {
     });
 
     test("should set exercises again after moving", async function () {
-        await moveExtensionDataPath(actionContext(), newPath);
+        await moveExtensionDataPath(actionContext(), emptyFolder);
         // Due to usage of path.sep, exact matching not consistent between platforms
         workspaceManagerMock.verify((x) => x.setExercises(It.isAny()), Times.once());
     });
 
     test("should not close anything if no course workspace is active", async function () {
         workspaceManagerActiveCourse = undefined;
-        await moveExtensionDataPath(actionContext(), newPath);
+        await moveExtensionDataPath(actionContext(), emptyFolder);
         workspaceManagerMock.verify(
             (x) => x.closeCourseExercises(It.isValue(courseName), It.isValue(openExerciseSlugs)),
             Times.never(),
@@ -81,7 +108,11 @@ suite("moveExtensionDataPath action", function () {
 
     test("should result in error if TMC operation fails", async function () {
         tmcMockValues.moveProjectsDirectory = Err(new Error());
-        const result = await moveExtensionDataPath(actionContext(), newPath);
+        const result = await moveExtensionDataPath(actionContext(), emptyFolder);
         expect(result.val).to.be.instanceOf(Error);
+    });
+
+    teardown(function () {
+        mockFs.restore();
     });
 });

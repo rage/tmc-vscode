@@ -5,5 +5,4 @@ export type ExtensionSettingsData =
     | { setting: "hideMetaFiles"; value: boolean }
     | { setting: "insiderVersion"; value: boolean }
     | { setting: "logLevel"; value: LogLevel }
-    | { setting: "oldDataPath"; value: string }
     | { setting: "updateExercisesAutomatically"; value: boolean };

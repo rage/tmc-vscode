@@ -93,7 +93,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const resources = resourcesResult.val;
-    await init.settingsInitialization(storage);
     const settings = new Settings(storage, resources);
     await settings.verifyWorkspaceSettingsIntegrity();
     Logger.configure(settings.getLogLevel());

@@ -5,12 +5,10 @@ import { MigratedData } from "./types";
 import validateData from "./validateData";
 
 const SESSION_STATE_KEY_V1 = "session-state-v1";
-const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";
 const UNSTABLE_EXTENSION_VERSION_KEY = "extensionVersion";
 
 export interface SessionStateV1 {
     extensionVersion: string | undefined;
-    oldDataPath?: { path: string; timestamp: number } | undefined;
 }
 
 /**
@@ -18,14 +16,8 @@ export interface SessionStateV1 {
  * @param memento Memento object used to search for keys
  */
 function resolveInitialData(memento: vscode.Memento): SessionStateV1 {
-    interface ExtensionSettingsPartial {
-        oldDataPath?: { path: string; timestamp: number };
-    }
-
     return {
         extensionVersion: memento.get<string>(UNSTABLE_EXTENSION_VERSION_KEY),
-        oldDataPath: memento.get<ExtensionSettingsPartial>(UNSTABLE_EXTENSION_SETTINGS_KEY)
-            ?.oldDataPath,
     };
 }
 

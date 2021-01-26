@@ -14,7 +14,6 @@ suite("Storage class", function () {
 
     const sessionState: SessionState = {
         extensionVersion: "2.0.0",
-        oldDataPath: { path: "/path/to/exercises", timestamp: 1234 },
     };
 
     const userData: UserData = {

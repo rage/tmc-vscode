@@ -6,7 +6,6 @@ import * as sessionState from "../fixtures/sessionState";
 import { createMockMemento } from "../mocks/vscode";
 
 const EXTENSION_VERSION_KEY = "extensionVersion";
-const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";
 const SESSION_STATE_KEY_V1 = "session-state-v1";
 
 suite("Session state migration", function () {
@@ -21,7 +20,6 @@ suite("Session state migration", function () {
             const migrated = migrateSessionState(memento).data;
             expect(migrated).to.be.deep.equal({
                 extensionVersion: undefined,
-                oldDataPath: undefined,
             });
         });
 
@@ -43,29 +41,12 @@ suite("Session state migration", function () {
         test("fails with garbage data", async function () {
             await memento.update(EXTENSION_VERSION_KEY, { wonderwoman: "Diana Prince" });
             expect(() => migrateSessionState(memento)).to.throw(/missmatch/);
-
-            await memento.update(UNSTABLE_EXTENSION_SETTINGS_KEY, {
-                oldDataPath: { wonderwoman: "Diana Prince" },
-            });
-            expect(() => migrateSessionState(memento)).to.throw(/missmatch/);
-
-            await memento.update(EXTENSION_VERSION_KEY, undefined);
-            expect(() => migrateSessionState(memento)).to.throw(/missmatch/);
         });
 
         test("finds extension version", async function () {
             await memento.update(EXTENSION_VERSION_KEY, "1.3.4");
             const migrated = migrateSessionState(memento).data;
             expect(migrated?.extensionVersion).to.be.equal("1.3.4");
-        });
-
-        test("finds old data path", async function () {
-            await memento.update(UNSTABLE_EXTENSION_SETTINGS_KEY, {
-                oldDataPath: { path: "/path/to/exercises", timestamp: 1234 },
-            });
-            const migrated = migrateSessionState(memento).data;
-            expect(migrated?.oldDataPath?.path).to.be.equal("/path/to/exercises");
-            expect(migrated?.oldDataPath?.timestamp).to.be.equal(1234);
         });
     });
 

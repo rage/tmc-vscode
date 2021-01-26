@@ -38,7 +38,6 @@ export interface UserData {
 
 export interface SessionState {
     extensionVersion?: string | undefined;
-    oldDataPath?: { path: string; timestamp: number } | undefined;
 }
 
 /**

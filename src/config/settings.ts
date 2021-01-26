@@ -93,11 +93,6 @@ export default class Settings {
             case "logLevel":
                 this._settings.logLevel = data.value;
                 break;
-            case "oldDataPath":
-                this._state.oldDataPath = { path: data.value, timestamp: Date.now() };
-                Logger.log("Updated settings data", data);
-                await this._storage.updateSessionState(this._state);
-                return;
             case "updateExercisesAutomatically":
                 this._settings.updateExercisesAutomatically = data.value;
                 break;
