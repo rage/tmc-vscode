@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 
 import TMC from "../api/tmc";
 import { Logger } from "../utils";
+import { incrementPercentageWrapper } from "../window";
 
 import { MigratedData } from "./types";
 import validateData from "./validateData";
@@ -90,9 +91,10 @@ async function exerciseDataFromV0toV1(
     const dataPath = memento.get<ExtensionSettingsPartial>(UNSTABLE_EXTENSION_SETTINGS_KEY)
         ?.dataPath;
     const closedExercises: { [key: string]: string[] } = {};
-    let atLeastOneSuccess = false;
+
+    const exercisesToMigrate: Array<[LocalExerciseDataV0, string]> = [];
     for (const exercise of exerciseData) {
-        const { id, checksum, course, isOpen, name, path, organization, status } = exercise;
+        const { id, course, isOpen, name, path, organization, status } = exercise;
         if (exerciseIsClosedV0(status, isOpen)) {
             if (closedExercises[course]) {
                 closedExercises[course].push(name);
@@ -107,22 +109,45 @@ async function exerciseDataFromV0toV1(
             continue;
         }
 
-        const migrationResult = await tmc.migrateExercise(
-            course,
-            checksum,
-            id,
-            pathResult.val,
-            name,
-        );
-        if (migrationResult.err) {
-            Logger.error(`Migration failed for exercise ${course}/${name}:`, migrationResult.val);
-            continue;
-        }
-
-        atLeastOneSuccess = true;
+        exercisesToMigrate.push([exercise, pathResult.val]);
     }
 
-    if (!atLeastOneSuccess) {
+    if (exercisesToMigrate.length === 0) {
+        return;
+    }
+
+    const result = await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: "TestMyCode",
+        },
+        async (progress) => {
+            const progress2 = incrementPercentageWrapper(progress);
+            let atLeastOneSuccess = false;
+            let index = 0;
+            for (const [exercise, path] of exercisesToMigrate) {
+                const { checksum, course, id, name } = exercise;
+                const migrationResult = await tmc.migrateExercise(course, checksum, id, path, name);
+                if (migrationResult.ok) {
+                    atLeastOneSuccess = true;
+                } else {
+                    Logger.error(
+                        `Migration failed for exercise ${course}/${name}:`,
+                        migrationResult.val,
+                    );
+                }
+
+                progress2.report({
+                    percent: ++index / exercisesToMigrate.length,
+                    message: "Data migration in progress, please wait...",
+                });
+            }
+
+            return atLeastOneSuccess ? Ok.EMPTY : Err("Exercise migration failed.");
+        },
+    );
+
+    if (result.err) {
         throw new Error("Exercise migration failed.");
     }
 
