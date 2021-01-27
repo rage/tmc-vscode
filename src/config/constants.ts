@@ -71,9 +71,9 @@ export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Sec
  * If changed WORKSPACEROOTFILE is changed, remember to update
  * "workspaceContains:**\TMC-Readme.md", with the new name below
  */
-export const WORKSPACE_ROOT_FILE = "TMC-Readme.md";
-
+export const WORKSPACE_ROOT_FILE_NAME = "TMC-Readme.md";
 export const WORKSPACE_ROOT_FILE_TEXT = FAQ;
+export const WORKSPACE_ROOT_FOLDER_NAME = ".tmc";
 
 export const EXAM_TEST_RESULT = {
     testResult: {

@@ -1,6 +1,8 @@
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { WORKSPACE_ROOT_FILE_NAME, WORKSPACE_ROOT_FOLDER_NAME } from "./constants";
+
 export default class Resources {
     private _projectsDirectory: string;
 
@@ -24,7 +26,17 @@ export default class Resources {
     }
 
     get workspaceRootFolder(): vscode.Uri {
-        return vscode.Uri.file(path.join(this.workspaceFileFolder, ".tmc"));
+        return vscode.Uri.file(path.join(this.workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME));
+    }
+
+    get workspaceRootFile(): vscode.Uri {
+        return vscode.Uri.file(
+            path.join(
+                this.workspaceFileFolder,
+                WORKSPACE_ROOT_FOLDER_NAME,
+                WORKSPACE_ROOT_FILE_NAME,
+            ),
+        );
     }
 
     public getWorkspaceFilePath(courseName: string): string {

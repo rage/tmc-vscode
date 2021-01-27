@@ -4,7 +4,11 @@ import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { WORKSPACE_ROOT_FILE_TEXT, WORKSPACE_SETTINGS } from "../config/constants";
+import {
+    WORKSPACE_ROOT_FILE_NAME,
+    WORKSPACE_ROOT_FILE_TEXT,
+    WORKSPACE_SETTINGS,
+} from "../config/constants";
 import Resources from "../config/resources";
 import { Logger } from "../utils";
 import { showNotification } from "../window";
@@ -196,8 +200,8 @@ export default class WorkspaceManager implements vscode.Disposable {
         Logger.debug("Target path deleted", targetPath);
         if (path.relative(rootFilePath, targetPath) === "") {
             Logger.log(`Root file deleted ${targetPath}, fixing issue.`);
-            if (!fs.existsSync(path.join(basedir, ".tmc"))) {
-                fs.mkdirSync(path.join(basedir, ".tmc"), { recursive: true });
+            if (!fs.existsSync(path.join(basedir, WORKSPACE_ROOT_FILE_NAME))) {
+                fs.mkdirSync(path.join(basedir, WORKSPACE_ROOT_FILE_NAME), { recursive: true });
             }
 
             fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
@@ -233,7 +237,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         }
 
         Logger.log("Refreshing workspace structure in the current workspace");
-        if (workspaceFolders[0]?.name !== ".tmc") {
+        if (workspaceFolders[0]?.name !== WORKSPACE_ROOT_FILE_NAME) {
             Logger.warn("Fixing incorrect root folder. This may restart the extension.");
         }
 

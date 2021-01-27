@@ -4,7 +4,7 @@ import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import Storage from "../api/storage";
-import { EXTENSION_ID, WORKSPACE_SETTINGS } from "../config/constants";
+import { EXTENSION_ID, WORKSPACE_ROOT_FILE_TEXT, WORKSPACE_SETTINGS } from "../config/constants";
 import Resources from "../config/resources";
 import { Logger } from "../utils/logger";
 
@@ -29,7 +29,17 @@ export async function resourceInitialization(
         Logger.log(`Created tmc data directory at ${tmcDataPath}`);
     }
 
+    const resources = new Resources(
+        cssPath,
+        extensionVersion,
+        htmlPath,
+        mediaPath,
+        workspaceFileFolder,
+        tmcDataPath,
+    );
+
     // Verify that all course .code-workspaces are in-place on startup.
+    fs.ensureDirSync(workspaceFileFolder);
     const userData = storage.getUserData();
     userData?.courses.forEach((course) => {
         const tmcWorkspaceFilePath = path.join(
@@ -42,14 +52,9 @@ export async function resourceInitialization(
         }
     });
 
-    const resources = new Resources(
-        cssPath,
-        extensionVersion,
-        htmlPath,
-        mediaPath,
-        workspaceFileFolder,
-        tmcDataPath,
-    );
+    // Verify that .tmc folder and its contents exists
+    fs.ensureDirSync(resources.workspaceRootFolder.fsPath);
+    fs.writeFileSync(resources.workspaceRootFile.fsPath, WORKSPACE_ROOT_FILE_TEXT);
 
     return new Ok(resources);
 }
