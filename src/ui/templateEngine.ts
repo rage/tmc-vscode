@@ -99,7 +99,7 @@ export default class TemplateEngine {
                         <h5>Submit to TMC Paste</h5>
                         <p>You can submit your code to TMC Paste and share the link to the course discussion channel and ask for help.</p>
                         ${pasteLinkHTML}
-                        <input type='button' id='sendToPaste' value='Submit to TMC Paste' class='btn btn-primary' onclick='sendToPaste("${exerciseId[4]}")' />
+                        <input type='button' id='sendToPaste' value='Submit to TMC Paste' class='btn btn-primary' onclick='sendToPaste("${results.course}", "${results.exercise_name}")' />
                     </div>`;
                 } else {
                     return "<h1>Some tests failed on the server</h1>";
