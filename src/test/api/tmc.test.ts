@@ -380,26 +380,6 @@ suite("TMC", function () {
         });
     });
 
-    suite("#submitExercise()", function () {
-        // Current Langs doesn't actually check this
-        test.skip("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.submitExercise(1, PASSING_EXERCISE_PATH);
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("Makes submission when authenticated", async function () {
-            writeCliConfig();
-            const submission = (await tmc.submitExercise(1, PASSING_EXERCISE_PATH)).unwrap();
-            expect(submission.show_submission_url).to.include("localhost");
-        });
-
-        test("Causes RuntimeError for nonexistent exercise", async function () {
-            writeCliConfig();
-            const result = await tmc.submitExercise(404, MISSING_EXERCISE_PATH);
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
     suite("#submitExerciseAndWaitForResults()", function () {
         test("Causes AuthorizationError if not authenticated", async function () {
             const result = await tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
