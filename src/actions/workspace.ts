@@ -4,13 +4,13 @@
  * -------------------------------------------------------------------------------------------------
  */
 
-import { compact, groupBy } from "lodash";
+import { compact } from "lodash";
 import { Ok, Result } from "ts-results";
 
 import { ExerciseStatus } from "../api/workspaceManager";
 import * as UITypes from "../ui/types";
 
-import { ActionContext, CourseClosedExercises } from "./types";
+import { ActionContext } from "./types";
 
 /**
  * Opens given exercises, showing them in TMC workspace.
@@ -32,26 +32,26 @@ export async function openExercises(
         return openResult;
     }
 
-    const updatedExercises = groupBy(workspaceManager.getExercises(), (x) => x.courseSlug);
-    const mapped = Object.keys(updatedExercises).map<CourseClosedExercises>((x) => ({
-        "course-slug": x,
-        exercises: updatedExercises[x]
-            .filter((x) => x.status === ExerciseStatus.Closed)
-            .map((x) => x.exerciseSlug),
-    }));
-    const settingResult = await tmc.setSetting("closed-exercises", JSON.stringify(mapped));
-    if (settingResult.err) {
-        return settingResult;
+    const closedExerciseNames = workspaceManager
+        .getExercisesByCourseSlug(courseName)
+        .filter((x) => x.status === ExerciseStatus.Closed)
+        .map((x) => x.exerciseSlug);
+    const settingsResult = await tmc.setSetting(
+        `closed-exercises-for:${courseName}`,
+        JSON.stringify(closedExerciseNames),
+    );
+    if (settingsResult.err) {
+        return settingsResult;
     }
 
-    const courseExercises = workspaceManager.getExercisesByCourseSlug(courseName);
     ui.webview.postMessage(
-        ...courseExercises.map<UITypes.WebviewMessage>((ex) => ({
+        ...ids.map<UITypes.WebviewMessage>((id) => ({
             command: "exerciseStatusChange",
-            exerciseId: course.exercises.find((x) => x.name === ex.exerciseSlug)?.id ?? -1,
-            status: ex.status,
+            exerciseId: id,
+            status: "opened",
         })),
     );
+
     return new Ok(ids);
 }
 
@@ -75,25 +75,25 @@ export async function closeExercises(
         return closeResult;
     }
 
-    const updatedExercises = groupBy(workspaceManager.getExercises(), (x) => x.courseSlug);
-    const mapped = Object.keys(updatedExercises).map<CourseClosedExercises>((x) => ({
-        "course-slug": x,
-        exercises: updatedExercises[x]
-            .filter((x) => x.status === ExerciseStatus.Closed)
-            .map((x) => x.exerciseSlug),
-    }));
-    const settingResult = await tmc.setSetting("closed-exercises", JSON.stringify(mapped));
-    if (settingResult.err) {
-        return settingResult;
+    const closedExerciseNames = workspaceManager
+        .getExercisesByCourseSlug(courseName)
+        .filter((x) => x.status === ExerciseStatus.Closed)
+        .map((x) => x.exerciseSlug);
+    const settingsResult = await tmc.setSetting(
+        `closed-exercises-for:${courseName}`,
+        JSON.stringify(closedExerciseNames),
+    );
+    if (settingsResult.err) {
+        return settingsResult;
     }
 
-    const courseExercises = workspaceManager.getExercisesByCourseSlug(courseName);
     ui.webview.postMessage(
-        ...courseExercises.map<UITypes.WebviewMessage>((ex) => ({
+        ...ids.map<UITypes.WebviewMessage>((id) => ({
             command: "exerciseStatusChange",
-            exerciseId: course.exercises.find((x) => x.name === ex.exerciseSlug)?.id ?? -1,
-            status: ex.status,
+            exerciseId: id,
+            status: "closed",
         })),
     );
+
     return new Ok(ids);
 }

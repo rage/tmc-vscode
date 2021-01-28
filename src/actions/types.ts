@@ -18,11 +18,6 @@ export type ActionContext = {
     visibilityGroups: VisibilityGroups;
 };
 
-export interface CourseClosedExercises {
-    "course-slug": string;
-    exercises: string[];
-}
-
 /**
  * Required details for downloading exercises of a specific course.
  */

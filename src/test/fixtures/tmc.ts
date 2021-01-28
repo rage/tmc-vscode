@@ -1,14 +1,8 @@
-import { CourseClosedExercises } from "../../actions/types";
 import { LocalExercise } from "../../api/langsSchema";
 
 const checkExerciseUpdates: Array<{ id: number }> = [{ id: 2 }];
 
-const courseClosedExercises: CourseClosedExercises[] = [
-    {
-        "course-slug": "test-python-course",
-        exercises: ["other_world"],
-    },
-];
+const closedExercisesPythonCourse: string[] = ["other_world"];
 
 const listLocalCourseExercisesPythonCourse: LocalExercise[] = [
     {
@@ -21,4 +15,4 @@ const listLocalCourseExercisesPythonCourse: LocalExercise[] = [
     },
 ];
 
-export { checkExerciseUpdates, courseClosedExercises, listLocalCourseExercisesPythonCourse };
+export { checkExerciseUpdates, closedExercisesPythonCourse, listLocalCourseExercisesPythonCourse };

@@ -412,9 +412,12 @@ export default class TMC {
         downloaded: (value: { id: number; percent: number; message?: string }) => void,
     ): Promise<Result<DownloadOrUpdateCourseExercisesResult, Error>> {
         const onStdout = (res: StatusUpdateData): void => {
-            if (is<{ "exercise-download": { id: number; path: string } }>(res.data)) {
+            if (
+                res["update-data-kind"] === "client-update-data" &&
+                res.data?.["client-update-data-kind"] === "exercise-download"
+            ) {
                 downloaded({
-                    id: res.data["exercise-download"].id,
+                    id: res.data.id,
                     percent: res["percent-done"],
                     message: res.message ?? undefined,
                 });
@@ -432,7 +435,7 @@ export default class TMC {
                 onStdout,
             })
         ).andThen((result) =>
-            result.data?.["output-data-kind"] === "download-or-update-course-exercises-result"
+            result.data?.["output-data-kind"] === "exercise-download"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
         );
@@ -952,7 +955,7 @@ export default class TMC {
         // Special handling because it makes usage simpler
         if (is<FailedExerciseDownload>(outputDataKind)) {
             const data: Data = {
-                "output-data-kind": "download-or-update-course-exercises-result",
+                "output-data-kind": "exercise-download",
                 "output-data": {
                     downloaded: outputDataKind.completed,
                     skipped: outputDataKind.skipped,

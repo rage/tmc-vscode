@@ -7,6 +7,7 @@ import * as vscode from "vscode";
 import {
     WORKSPACE_ROOT_FILE_NAME,
     WORKSPACE_ROOT_FILE_TEXT,
+    WORKSPACE_ROOT_FOLDER_NAME,
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Resources from "../config/resources";
@@ -237,7 +238,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         }
 
         Logger.log("Refreshing workspace structure in the current workspace");
-        if (workspaceFolders[0]?.name !== WORKSPACE_ROOT_FILE_NAME) {
+        if (workspaceFolders[0]?.name !== WORKSPACE_ROOT_FOLDER_NAME) {
             Logger.warn("Fixing incorrect root folder. This may restart the extension.");
         }
 

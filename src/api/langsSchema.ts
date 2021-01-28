@@ -60,7 +60,7 @@ export type Data =
     | DataType<"test-result", RunResult>
     | DataType<"exercise-desc", unknown>
     | DataType<"updated-exercises", UpdatedExercise[]>
-    | DataType<"download-or-update-course-exercises-result", DownloadOrUpdateCourseExercisesResult>
+    | DataType<"exercise-download", DownloadOrUpdateCourseExercisesResult>
     | DataType<"combined-course-data", CombinedCourseData>
     | DataType<"course-details", CourseDetails["course"]>
     | DataType<"course-exercises", CourseExercise[]>

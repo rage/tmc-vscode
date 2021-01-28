@@ -1,19 +1,18 @@
 import { Ok, Result } from "ts-results";
 import { IMock, It, Mock } from "typemoq";
 
-import { CourseClosedExercises } from "../../actions/types";
 import { LocalExercise } from "../../api/langsSchema";
 import TMC from "../../api/tmc";
 import {
     checkExerciseUpdates,
-    courseClosedExercises,
+    closedExercisesPythonCourse,
     listLocalCourseExercisesPythonCourse,
 } from "../fixtures/tmc";
 
 export interface TMCMockValues {
     checkExerciseUpdates: Result<Array<{ id: number }>, Error>;
     clean: Result<void, Error>;
-    getSettingObjectClosedExercises: Result<CourseClosedExercises[], Error>;
+    getSettingObjectClosedExercises: Result<string[], Error>;
     moveProjectsDirectory: Result<void, Error>;
     listLocalCourseExercisesPythonCourse: Result<LocalExercise[], Error>;
 }
@@ -23,7 +22,7 @@ export function createTMCMock(): [IMock<TMC>, TMCMockValues] {
     const values: TMCMockValues = {
         checkExerciseUpdates: Ok(checkExerciseUpdates),
         clean: Ok.EMPTY,
-        getSettingObjectClosedExercises: Ok(courseClosedExercises),
+        getSettingObjectClosedExercises: Ok(closedExercisesPythonCourse),
         moveProjectsDirectory: Ok.EMPTY,
         listLocalCourseExercisesPythonCourse: Ok(listLocalCourseExercisesPythonCourse),
     };
@@ -39,7 +38,10 @@ export function createTMCMock(): [IMock<TMC>, TMCMockValues] {
     );
 
     mock.setup((x) =>
-        x.getSettingObject<CourseClosedExercises[]>(It.isValue("closed-exercises"), It.isAny()),
+        x.getSettingObject<string[]>(
+            It.isValue("closed-exercises-for:test-python-course"),
+            It.isAny(),
+        ),
     ).returns(async () => values.getSettingObjectClosedExercises);
 
     mock.setup((x) =>
