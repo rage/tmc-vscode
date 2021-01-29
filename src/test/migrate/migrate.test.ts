@@ -45,7 +45,7 @@ suite("Extension data migration", function () {
             )
             .returns(async () => Err(new Error()));
         tmcFail
-            .setup((x) => x.setSetting(It.isValue("closed-exercises"), It.isAny()))
+            .setup((x) => x.setSetting(It.isAny(), It.isAny()))
             .returns(async () => Err(new Error()));
         tmcFail
             .setup((x) => x.getSetting(It.isValue("projects-dir"), It.isAny()))
@@ -57,7 +57,9 @@ suite("Extension data migration", function () {
             )
             .returns(async () => Ok.EMPTY);
         tmcSuccess
-            .setup((x) => x.setSetting(It.isValue("closed-exercises"), It.isAny()))
+            .setup((x) =>
+                x.setSetting(It.isValue("closed-exercises-for:test-python-course"), It.isAny()),
+            )
             .returns(async () => Ok.EMPTY);
         tmcSuccess
             .setup((x) => x.getSetting<string>(It.isValue("projects-dir"), It.isAny()))

@@ -32,7 +32,7 @@ suite("Exercise data migration", function () {
             )
             .returns(async () => Ok.EMPTY);
         tmcMock
-            .setup((x) => x.setSetting("closed-exercises", It.isAny()))
+            .setup((x) => x.setSetting("closed-exercises-for:test-python-course", It.isAny()))
             .returns(async () => Ok.EMPTY);
     });
 
@@ -89,9 +89,13 @@ suite("Exercise data migration", function () {
             await memento.update(UNSTABLE_EXTENSION_SETTINGS_KEY, { dataPath: "/tmcdata" });
             await memento.update(EXERCISE_DATA_KEY_V0, exerciseData.v0_3_0);
             await migrateExerciseData(memento, tmcMock.object);
-            const testValue = JSON.stringify({ "test-python-course": ["other_world"] });
+            const testValue = JSON.stringify(["other_world"]);
             tmcMock.verify(
-                (x) => x.setSetting(It.isValue("closed-exercises"), It.isValue(testValue)),
+                (x) =>
+                    x.setSetting(
+                        It.isValue("closed-exercises-for:test-python-course"),
+                        It.isValue(testValue),
+                    ),
                 Times.once(),
             );
         });
