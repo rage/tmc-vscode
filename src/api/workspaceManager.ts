@@ -51,8 +51,10 @@ export default class WorkspaceManager implements vscode.Disposable {
         );
         this._watcher.onDidDelete((x) => this._fileDeleteAction(x.fsPath));
         this._disposables = [
-            vscode.workspace.onDidChangeWorkspaceFolders(this._onDidChangeWorkspaceFolders),
-            vscode.workspace.onDidOpenTextDocument(this._onDidOpenTextDocument),
+            vscode.workspace.onDidChangeWorkspaceFolders((e) =>
+                this._onDidChangeWorkspaceFolders(e),
+            ),
+            vscode.workspace.onDidOpenTextDocument((e) => this._onDidOpenTextDocument(e)),
         ];
     }
 
