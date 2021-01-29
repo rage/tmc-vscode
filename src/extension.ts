@@ -116,8 +116,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ui.webview.setContentFromTemplate({ templateName: "login" });
     });
 
-    await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
-
     const currentVersion = resources.extensionVersion;
     const previousState = storage.getSessionState();
     const previousVersion = previousState?.extensionVersion;
@@ -128,6 +126,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const userData = new UserData(storage);
     const workspaceManager = new WorkspaceManager(resources);
     context.subscriptions.push(workspaceManager);
+    if (workspaceManager.activeCourse) {
+        await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
+    }
+
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
     const actionContext = {
         resources,
