@@ -63,6 +63,8 @@ export const WORKSPACE_SETTINGS = {
  */
 export const NOTIFICATION_DELAY = 30 * 60 * 1000;
 
+export const API_CACHE_LIFETIME = 5 * 60 * 1000;
+export const CLI_PROCESS_TIMEOUT = 2 * 60 * 1000;
 export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000;
 
 export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Security-Policy"}" content="default-src 'none';" /></head></html>`;

@@ -3,6 +3,7 @@ import * as kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
 import { createIs, is } from "typescript-is";
 
+import { API_CACHE_LIFETIME, CLI_PROCESS_TIMEOUT } from "../config/constants";
 import {
     AuthenticationError,
     AuthorizationError,
@@ -38,9 +39,6 @@ import {
     SubmissionStatusReport,
     TestResults,
 } from "./types";
-
-const API_CACHE_LIFETIME = 5 * 60 * 1000;
-const CLI_PROCESS_TIMEOUT = 2 * 60 * 1000;
 
 interface Options {
     apiCacheLifetime?: string;
