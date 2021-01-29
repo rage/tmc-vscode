@@ -48,7 +48,7 @@ suite("refreshLocalExercises action", function () {
     });
 
     test("should tolerate Langs errors", async function () {
-        tmcMockValues.getSettingObjectClosedExercises = Err(new Error());
+        tmcMockValues.getSettingClosedExercises = Err(new Error());
         tmcMockValues.listLocalCourseExercisesPythonCourse = Err(new Error());
         const result = await refreshLocalExercises(actionContext());
         expect(result).to.be.equal(Ok.EMPTY);

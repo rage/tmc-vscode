@@ -48,7 +48,7 @@ suite("Extension data migration", function () {
             .setup((x) => x.setSetting(It.isValue("closed-exercises"), It.isAny()))
             .returns(async () => Err(new Error()));
         tmcFail
-            .setup((x) => x.getSetting(It.isValue("projects-dir")))
+            .setup((x) => x.getSetting(It.isValue("projects-dir"), It.isAny()))
             .returns(async () => Err(new Error()));
         tmcSuccess = Mock.ofType<TMC>();
         tmcSuccess
@@ -60,7 +60,7 @@ suite("Extension data migration", function () {
             .setup((x) => x.setSetting(It.isValue("closed-exercises"), It.isAny()))
             .returns(async () => Ok.EMPTY);
         tmcSuccess
-            .setup((x) => x.getSetting(It.isValue("projects-dir")))
+            .setup((x) => x.getSetting<string>(It.isValue("projects-dir"), It.isAny()))
             .returns(async () => Ok("/langs/path/to/exercises"));
     });
 

@@ -1,4 +1,5 @@
 import * as path from "path";
+import { createIs } from "typescript-is";
 import * as vscode from "vscode";
 
 import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
@@ -73,10 +74,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         throwFatalError(migrationResult.val, cliFolder);
     }
 
-    const dataPathResult = await tmc.getSetting("projects-dir");
+    const dataPathResult = await tmc.getSetting("projects-dir", createIs<string>());
     if (dataPathResult.err) {
         Logger.error("Failed to define datapath:", dataPathResult.val);
         throwFatalError(dataPathResult.val, cliFolder);
+    } else if (dataPathResult.val === undefined) {
+        Logger.error("Failed to define datapath: no value found.");
+        throwFatalError(new Error("No value for datapath."), cliFolder);
     }
 
     const tmcDataPath = dataPathResult.val;

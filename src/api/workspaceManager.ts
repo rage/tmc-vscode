@@ -63,7 +63,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         const workspaceFile = vscode.workspace.workspaceFile;
         if (
             !workspaceFile ||
-            workspaceFile.fsPath.startsWith(this._resources.workspaceFileFolder)
+            path.relative(workspaceFile.fsPath, this._resources.workspaceFileFolder) !== ".."
         ) {
             return undefined;
         }

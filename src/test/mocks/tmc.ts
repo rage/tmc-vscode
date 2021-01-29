@@ -12,7 +12,7 @@ import {
 export interface TMCMockValues {
     checkExerciseUpdates: Result<Array<{ id: number }>, Error>;
     clean: Result<void, Error>;
-    getSettingObjectClosedExercises: Result<string[], Error>;
+    getSettingClosedExercises: Result<string[], Error>;
     moveProjectsDirectory: Result<void, Error>;
     listLocalCourseExercisesPythonCourse: Result<LocalExercise[], Error>;
 }
@@ -22,7 +22,7 @@ export function createTMCMock(): [IMock<TMC>, TMCMockValues] {
     const values: TMCMockValues = {
         checkExerciseUpdates: Ok(checkExerciseUpdates),
         clean: Ok.EMPTY,
-        getSettingObjectClosedExercises: Ok(closedExercisesPythonCourse),
+        getSettingClosedExercises: Ok(closedExercisesPythonCourse),
         moveProjectsDirectory: Ok.EMPTY,
         listLocalCourseExercisesPythonCourse: Ok(listLocalCourseExercisesPythonCourse),
     };
@@ -38,11 +38,8 @@ export function createTMCMock(): [IMock<TMC>, TMCMockValues] {
     );
 
     mock.setup((x) =>
-        x.getSettingObject<string[]>(
-            It.isValue("closed-exercises-for:test-python-course"),
-            It.isAny(),
-        ),
-    ).returns(async () => values.getSettingObjectClosedExercises);
+        x.getSetting<string[]>(It.isValue("closed-exercises-for:test-python-course"), It.isAny()),
+    ).returns(async () => values.getSettingClosedExercises);
 
     mock.setup((x) =>
         x.listLocalCourseExercises(It.isValue("test-python-course")),

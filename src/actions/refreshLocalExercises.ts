@@ -24,10 +24,7 @@ export async function refreshLocalExercises(
         }
 
         const closedExercisesResult = (
-            await tmc.getSettingObject(
-                `closed-exercises-for:${course.name}`,
-                createIs<string[] | null>(),
-            )
+            await tmc.getSetting(`closed-exercises-for:${course.name}`, createIs<string[] | null>())
         ).mapErr((e) => {
             Logger.warn("Failed to determine closed status for exercises, defaulting to open.", e);
             return [];

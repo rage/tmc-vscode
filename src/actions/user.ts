@@ -30,9 +30,9 @@ import {
 } from "../window";
 
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
+import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
-import { closeExercises } from "./workspace";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -545,29 +545,32 @@ export async function addNewCourse(
     });
     workspaceManager.createWorkspaceFile(courseData.details.name);
     await displayUserCourses(actionContext);
-    return Ok.EMPTY;
+    return refreshLocalExercises(actionContext);
 }
 
 /**
- * Removes given course from UserData and closes all its exercises.
+ * Removes given course from UserData and removes its associated files. However, doesn't remove any
+ * exercises that are on disk.
+ *
  * @param id ID of the course to remove
  */
 export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, userData } = actionContext;
+    const { tmc, ui, userData, workspaceManager } = actionContext;
     const course = userData.getCourse(id);
     Logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
-    const closeResult = await closeExercises(
-        actionContext,
-        course.exercises.map((e) => e.id),
-        course.name,
-    );
-    if (closeResult.err) {
-        const message = "Failed to close exercises while removing course.";
-        Logger.error(message, closeResult.val);
-        showError(message);
+
+    const unsetResult = await tmc.unsetSetting(`closed-exercises-for:${course.name}`);
+    if (unsetResult.err) {
+        Logger.warn(`Failed to remove TMC-langs data for "${course.name}:"`, unsetResult.val);
     }
+
     userData.deleteCourse(id);
     ui.treeDP.removeChildWithId("myCourses", id.toString());
+
+    if (workspaceManager.activeCourse === course.name) {
+        Logger.log("Closing course workspace because it was removed.");
+        await vscode.commands.executeCommand("workbench.action.closeFolder");
+    }
 }
 
 /**

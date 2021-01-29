@@ -29,7 +29,7 @@ export function registerCommands(
             "tmcTreeView.removeCourse",
             async (treeNode: TmcTreeNode) => {
                 const confirmed = await askForConfirmation(
-                    `Do you want to remove ${treeNode.label} from your courses?`,
+                    `Do you want to remove ${treeNode.label} from your courses? This won't delete your downloaded exercises.`,
                     false,
                 );
                 if (confirmed) {

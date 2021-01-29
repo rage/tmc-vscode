@@ -1,7 +1,7 @@
 import * as cp from "child_process";
 import * as kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
-import { createIs, is } from "typescript-is";
+import { is } from "typescript-is";
 
 import { API_CACHE_LIFETIME, CLI_PROCESS_TIMEOUT } from "../config/constants";
 import {
@@ -325,11 +325,11 @@ export default class TMC {
         }).then((res) => (res.err ? res : Ok.EMPTY));
     }
 
-    public async getSetting(key: string): Promise<Result<string, Error>> {
-        return (await this.getSettingObject(key, createIs<string>())).map((x) => x ?? "");
-    }
-
-    public async getSettingObject<T>(
+    /**
+     * Gets the value for given key and asserts it's type. Uses TMC-langs `settings get` command
+     * internally.
+     */
+    public async getSetting<T>(
         key: string,
         checker: (object: unknown) => object is T,
     ): Promise<Result<T | undefined, Error>> {
@@ -349,9 +349,24 @@ export default class TMC {
             );
     }
 
+    /**
+     * Sets a value for given key in stored settings. Uses TMC-langs `settings set` command
+     * internally.
+     */
     public async setSetting(key: string, value: string): Promise<Result<void, Error>> {
         return this._executeLangsCommand({
             args: ["settings", "--client-name", this.clientName, "set", key, value],
+            core: false,
+        }).then((x) => x.andThen(() => Ok.EMPTY));
+    }
+
+    /**
+     * Unsets the value of given key in stored settings. Uses TMC-langs `settings unset` command
+     * internally.
+     */
+    public async unsetSetting(key: string): Promise<Result<void, Error>> {
+        return this._executeLangsCommand({
+            args: ["settings", "--client-name", this.clientName, "unset", key],
             core: false,
         }).then((x) => x.andThen(() => Ok.EMPTY));
     }
