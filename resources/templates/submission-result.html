@@ -134,8 +134,8 @@
             });
         }
 
-        function sendToPaste(idAsString) {
-            vscode.postMessage({ type: "sendToPaste", data: { exerciseId: idAsString } });
+        function sendToPaste(courseSlug, exerciseName) {
+            vscode.postMessage({ type: "sendToPaste", data: { courseSlug, exerciseName } });
         }
 
         function copyText() {

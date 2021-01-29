@@ -1,6 +1,5 @@
 import du = require("du");
-import * as _ from "lodash";
-import * as path from "path";
+import { Result } from "ts-results";
 import * as vscode from "vscode";
 
 import {
@@ -8,25 +7,23 @@ import {
     closeExercises,
     displayLocalCourseDetails,
     displayUserCourses,
-    downloadExercises,
-    downloadExerciseUpdates,
+    downloadOrUpdateExercises,
     login,
+    moveExtensionDataPath,
     openExercises,
     openWorkspace,
+    refreshLocalExercises,
     removeCourse,
     updateCourse,
 } from "../actions";
 import { ActionContext } from "../actions/types";
+import { formatSizeInBytes, Logger, LogLevel } from "../utils/";
 import {
-    formatSizeInBytes,
-    getPlatform,
-    getRustExecutable,
-    isCorrectWorkspaceOpen,
-    Logger,
-    LogLevel,
-    sleep,
-} from "../utils/";
-import { askForConfirmation, showError, showNotification } from "../window";
+    askForConfirmation,
+    incrementPercentageWrapper,
+    showError,
+    showNotification,
+} from "../window";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -35,11 +32,11 @@ import { askForConfirmation, showError, showNotification } from "../window";
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { workspaceManager, ui, resources, settings, visibilityGroups } = actionContext;
+    const { ui, resources, settings, userData, visibilityGroups } = actionContext;
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
-    ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.LOGGED_IN.not], {
+    ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.loggedIn.not], {
         command: "tmcTreeView.setContentFromTemplate",
         title: "",
         arguments: [{ templateName: "login" }],
@@ -49,7 +46,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.treeDP.registerAction(
         "My Courses",
         "myCourses",
-        [visibilityGroups.LOGGED_IN],
+        [visibilityGroups.loggedIn],
         {
             command: "tmc.myCourses",
             title: "Go to My Courses",
@@ -76,7 +73,7 @@ export function registerUiActions(actionContext: ActionContext): void {
         command: "tmc.openTMCExercisesFolder",
         title: "Open TMC Exercises Folder",
     });
-    ui.treeDP.registerAction("Log out", "logOut", [visibilityGroups.LOGGED_IN], {
+    ui.treeDP.registerAction("Log out", "logOut", [visibilityGroups.loggedIn], {
         command: "tmc.logout",
         title: "Log out",
     });
@@ -139,7 +136,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             ) {
                 return;
             }
-            const downloads = msg.ids.map((x) => ({
+            const exerciseDownloads = msg.ids.map((x) => ({
                 courseId: msg.courseId as number,
                 exerciseId: x,
                 organization: msg.organizationSlug as string,
@@ -150,33 +147,47 @@ export function registerUiActions(actionContext: ActionContext): void {
                     exerciseIds: [],
                     courseId: msg.courseId,
                 });
-                const [successful] = await downloadExerciseUpdates(actionContext, downloads);
-                const remaining = _.difference(
-                    msg.ids,
-                    successful.map((x) => x.exerciseId),
+                const downloadResult = await downloadOrUpdateExercises(
+                    actionContext,
+                    exerciseDownloads.map((x) => x.exerciseId),
                 );
-                ui.webview.postMessage({
-                    command: "setUpdateables",
-                    exerciseIds: remaining,
-                    courseId: msg.courseId,
-                });
+                if (downloadResult.ok) {
+                    ui.webview.postMessage({
+                        command: "setUpdateables",
+                        exerciseIds: downloadResult.val.failed,
+                        courseId: msg.courseId,
+                    });
+                }
                 return;
             }
-            const [successful] = await downloadExercises(actionContext, downloads);
-            const successfulIds = successful.map((ex) => ex.exerciseId);
-            if (successfulIds.length !== 0) {
-                await actionContext.userData.clearFromNewExercises(msg.courseId, successfulIds);
-                const openResult = await openExercises(
-                    actionContext,
-                    successfulIds,
-                    msg.courseName,
-                );
-                if (openResult.err) {
-                    const message = "Failed to open exercises after download.";
-                    Logger.error(message, openResult.val);
-                    showError(message);
-                }
+
+            ui.webview.postMessage({
+                command: "setNewExercises",
+                courseId: msg.courseId,
+                exerciseIds: [],
+            });
+
+            const downloadResult = await downloadOrUpdateExercises(actionContext, msg.ids);
+            if (downloadResult.err) {
+                Logger.error("Failed to download new exercises.", downloadResult.val);
+                showError("Failed to download new exercises.");
+                return;
             }
+
+            const refreshResult = Result.all(
+                await userData.clearFromNewExercises(msg.courseId, downloadResult.val.successful),
+                await refreshLocalExercises(actionContext),
+            );
+            if (refreshResult.err) {
+                Logger.error("Failed to refresh workspace.", downloadResult.val);
+                showError("Failed to download new exercises.");
+            }
+
+            ui.webview.postMessage({
+                command: "setNewExercises",
+                courseId: msg.courseId,
+                exerciseIds: userData.getCourse(msg.courseId).newExercises,
+            });
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
@@ -270,64 +281,42 @@ export function registerUiActions(actionContext: ActionContext): void {
         if (!msg.type) {
             return;
         }
-        const workspace = vscode.workspace.name?.split(" ")[0];
-        const open = workspace ? isCorrectWorkspaceOpen(resources, workspace) : false;
-        if (open) {
-            showNotification(
-                "Please close the TMC workspace from VSCode File menu and try again.",
-                ["OK", (): void => {}],
-            );
-            return;
-        }
 
-        const old = resources.dataPath;
+        const old = resources.projectsDirectory;
         const options: vscode.OpenDialogOptions = {
             canSelectFiles: false,
             canSelectFolders: true,
             canSelectMany: false,
             openLabel: "Select folder",
         };
-        const uri = await vscode.window.showOpenDialog(options);
-        if (uri && old) {
-            const newPath = path.join(uri[0].fsPath, "/tmcdata");
-            if (newPath === old) {
-                return;
-            }
+        const newPath = (await vscode.window.showOpenDialog(options))?.[0];
+        if (newPath && old) {
             const res = await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
                     title: "TestMyCode",
                 },
-                async (p) => {
-                    p.report({ message: "Moving TMC Data folder..." });
-                    // Have to wait here to allow for the notification to show up.
-                    await sleep(50);
-                    return workspaceManager.moveFolder(old, newPath);
+                async (progress) => {
+                    const progress2 = incrementPercentageWrapper(progress);
+                    return moveExtensionDataPath(actionContext, newPath, (update) =>
+                        progress2.report(update),
+                    );
                 },
             );
             if (res.ok) {
-                Logger.log(`Moved workspace folder from ${old} to ${newPath}`);
-                if (!res.val) {
-                    await settings.updateSetting({ setting: "oldDataPath", value: old });
-                }
-                showNotification(`TMC Data was successfully moved to ${newPath}`, [
+                Logger.log(`Moved workspace folder from ${old} to ${newPath.fsPath}`);
+                showNotification(`TMC Data was successfully moved to ${newPath.fsPath}`, [
                     "OK",
                     (): void => {},
                 ]);
-                resources.dataPath = newPath;
-                const platform = getPlatform();
-                const executable = getRustExecutable(platform);
-                const cliPath = path.join(newPath, "cli", executable);
-                resources.cliPath = cliPath;
-                await settings.updateSetting({ setting: "dataPath", value: newPath });
             } else {
                 Logger.error(res.val);
                 showError(res.val.message);
             }
             ui.webview.postMessage({
                 command: "setTmcDataFolder",
-                diskSize: formatSizeInBytes(await du(resources.dataPath)),
-                path: newPath,
+                diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
+                path: resources.projectsDirectory,
             });
         }
     });

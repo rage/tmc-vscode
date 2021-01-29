@@ -29,7 +29,7 @@ export function registerCommands(
             "tmcTreeView.removeCourse",
             async (treeNode: TmcTreeNode) => {
                 const confirmed = await askForConfirmation(
-                    `Do you want to remove ${treeNode.label} from your courses?`,
+                    `Do you want to remove ${treeNode.label} from your courses? This won't delete your downloaded exercises.`,
                     false,
                 );
                 if (confirmed) {
@@ -131,7 +131,7 @@ export function registerCommands(
         vscode.commands.registerCommand("tmc.openTMCExercisesFolder", async () => {
             vscode.commands.executeCommand(
                 "revealFileInOS",
-                vscode.Uri.file(actionContext.resources.dataPath),
+                vscode.Uri.file(actionContext.resources.projectsDirectory),
             );
         }),
 

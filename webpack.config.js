@@ -53,6 +53,9 @@ const config = () => {
         node: {
             __dirname: false,
         },
+        infrastructureLogging: {
+            level: "log",
+        },
         module: {
             rules: [
                 {
@@ -99,9 +102,7 @@ const config = () => {
                             loader: "ts-loader",
                             options: {
                                 compiler: "ttypescript",
-                                configFile: isDevelopmentMode
-                                    ? "tsconfig.json"
-                                    : "tsconfig.production.json",
+                                configFile: "tsconfig.json",
                             },
                         },
                     ],
@@ -123,7 +124,9 @@ const config = () => {
         mode: "development",
         devtool: "inline-source-map",
     });
-    /**@returns {import('webpack').Configuration}*/
+    // Type definition broken for the Nth time
+    // /**@returns {import('webpack').Configuration}*/
+    /**@returns {any} */
     const prodConfig = () => ({
         mode: "production",
         optimization: {

@@ -2,12 +2,10 @@ import { expect } from "chai";
 import { sync as delSync } from "del";
 import * as fs from "fs-extra";
 import * as path from "path";
-import * as TypeMoq from "typemoq";
 
 import TMC from "../../api/tmc";
 import { SubmissionFeedback } from "../../api/types";
-import { CLIENT_NAME } from "../../config/constants";
-import Resources from "../../config/resources";
+import { CLIENT_NAME, TMC_LANGS_CONFIG_DIR, TMC_LANGS_ROOT_URL } from "../../config/constants";
 import { AuthenticationError, AuthorizationError, RuntimeError } from "../../errors";
 import { getPlatform, getRustExecutable } from "../../utils/env";
 
@@ -49,10 +47,9 @@ suite("TMC", function () {
 
     setup(function () {
         removeCliConfig();
-        const resources = TypeMoq.Mock.ofType<Resources>();
-        resources.setup((x) => x.cliPath).returns(() => CLI_FILE);
-        resources.setup((x) => x.extensionVersion).returns(() => "test");
-        tmc = new TMC(resources.object);
+        tmc = new TMC(CLI_FILE, CLIENT_NAME, "test", TMC_LANGS_ROOT_URL, {
+            cliConfigDir: TMC_LANGS_CONFIG_DIR,
+        });
     });
 
     suite("#authenticate()", function () {
@@ -88,13 +85,6 @@ suite("TMC", function () {
             writeCliConfig();
             const result = await tmc.isAuthenticated();
             expect(result.val).to.be.true;
-        });
-    });
-
-    suite("#setAuthenticationToken()", function () {
-        test("Sets valid authentication token", async function () {
-            const result = await tmc.setAuthenticationToken({ access_token: "1234" });
-            expect(result.ok).to.be.true;
         });
     });
 
@@ -387,26 +377,6 @@ suite("TMC", function () {
 
         teardown(function () {
             removeArtifacts();
-        });
-    });
-
-    suite("#submitExercise()", function () {
-        // Current Langs doesn't actually check this
-        test.skip("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.submitExercise(1, PASSING_EXERCISE_PATH);
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("Makes submission when authenticated", async function () {
-            writeCliConfig();
-            const submission = (await tmc.submitExercise(1, PASSING_EXERCISE_PATH)).unwrap();
-            expect(submission.show_submission_url).to.include("localhost");
-        });
-
-        test("Causes RuntimeError for nonexistent exercise", async function () {
-            writeCliConfig();
-            const result = await tmc.submitExercise(404, MISSING_EXERCISE_PATH);
-            expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 

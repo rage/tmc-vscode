@@ -138,3 +138,25 @@ export async function showProgressNotification<T>(
         },
     );
 }
+
+/**
+ * Wraps increment-style `vscode.Progress` with a version that allows reporting direct percentages.
+ * This is mostly useful when using `vscode.window.withProgress`.
+ */
+export const incrementPercentageWrapper: (
+    progress: vscode.Progress<{ message?: string; increment: number }>,
+) => vscode.Progress<{ message?: string; percent: number }> = (progress) => {
+    let peak = 0;
+    const report: (value: { message?: string; percent: number }) => void = ({
+        message,
+        percent,
+    }) => {
+        const increment = 100 * (percent - peak);
+        if (increment > 0) {
+            progress.report({ message, increment });
+            peak = percent;
+        }
+    };
+
+    return { report };
+};

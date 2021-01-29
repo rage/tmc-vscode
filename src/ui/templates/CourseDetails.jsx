@@ -393,14 +393,6 @@ function script() {
         const notification = document.querySelector("div.update-notification");
         const button = notification.querySelector("button.update-button");
 
-        if (notification && button) {
-            button.addEventListener("click", function () {
-                button.disabled = true;
-                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
-                downloadSelectedExercises(updateableIds, "update");
-            });
-        }
-
         if (exerciseIds.length === 0) {
             button.disabled = true;
             notification.style.display = "none";
@@ -558,6 +550,17 @@ function script() {
             });
         }
 
+        // Exercise updates
+        const updateNotification = document.querySelector("div.update-notification");
+        const updateButton = updateNotification.querySelector("button.update-button");
+        if (updateButton) {
+            updateButton.addEventListener("click", function () {
+                updateButton.disabled = true;
+                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
+                downloadSelectedExercises(updateableIds, "update");
+            });
+        }
+
         // Course part cards
         const exerciseCards = document.querySelectorAll("div.exercise-card");
         for (let i = 0; i < exerciseCards.length; i++) {
@@ -634,12 +637,13 @@ function script() {
                         "td.exercise-selector",
                     );
                     if (singleCheckboxColumn) {
-                        singleCheckboxColumn.firstElementChild.addEventListener("click", function (
-                            event,
-                        ) {
-                            selectedCount += event.target.checked ? 1 : -1;
-                            refreshFooter();
-                        });
+                        singleCheckboxColumn.firstElementChild.addEventListener(
+                            "click",
+                            function (event) {
+                                selectedCount += event.target.checked ? 1 : -1;
+                                refreshFooter();
+                            },
+                        );
                     }
                 }
             }

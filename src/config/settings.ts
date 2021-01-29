@@ -1,13 +1,24 @@
-import { Err, Ok, Result } from "ts-results";
+import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import Storage, {
+    ExtensionSettings as SerializedExtensionSettings,
+    SessionState,
+} from "../api/storage";
 import { isCorrectWorkspaceOpen } from "../utils";
 import { Logger, LogLevel } from "../utils/logger";
 
 import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
 import Resources from "./resources";
-import Storage from "./storage";
-import { ExtensionSettings, ExtensionSettingsData } from "./types";
+import { ExtensionSettingsData } from "./types";
+
+export interface ExtensionSettings {
+    downloadOldSubmission: boolean;
+    hideMetaFiles: boolean;
+    insiderVersion: boolean;
+    logLevel: LogLevel;
+    updateExercisesAutomatically: boolean;
+}
 
 /**
  * Settings class communicates changes to persistent storage and manages TMC
@@ -19,16 +30,29 @@ import { ExtensionSettings, ExtensionSettingsData } from "./types";
  * extension.
  */
 export default class Settings {
+    private static readonly _defaultSettings: ExtensionSettings = {
+        downloadOldSubmission: true,
+        hideMetaFiles: true,
+        insiderVersion: false,
+        logLevel: LogLevel.Errors,
+        updateExercisesAutomatically: true,
+    };
+
     private readonly _storage: Storage;
 
     private readonly _resources: Resources;
 
     private _settings: ExtensionSettings;
+    private _state: SessionState;
 
-    constructor(storage: Storage, settings: ExtensionSettings, resources: Resources) {
+    constructor(storage: Storage, resources: Resources) {
         this._storage = storage;
         this._resources = resources;
-        this._settings = settings;
+        const storedSettings = storage.getExtensionSettings();
+        this._settings = storedSettings
+            ? Settings._deserializeExtensionSettings(storedSettings)
+            : Settings._defaultSettings;
+        this._state = storage.getSessionState() ?? {};
     }
 
     public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
@@ -56,9 +80,6 @@ export default class Settings {
      */
     public async updateSetting(data: ExtensionSettingsData): Promise<void> {
         switch (data.setting) {
-            case "dataPath":
-                this._settings.dataPath = data.value;
-                break;
             case "downloadOldSubmission":
                 this._settings.downloadOldSubmission = data.value;
                 break;
@@ -71,9 +92,6 @@ export default class Settings {
                 break;
             case "logLevel":
                 this._settings.logLevel = data.value;
-                break;
-            case "oldDataPath":
-                this._settings.oldDataPath = { path: data.value, timestamp: Date.now() };
                 break;
             case "updateExercisesAutomatically":
                 this._settings.updateExercisesAutomatically = data.value;
@@ -101,12 +119,7 @@ export default class Settings {
      * @returns ExtensionSettings object or error
      */
     public async getExtensionSettings(): Promise<Result<ExtensionSettings, Error>> {
-        const settings = this._storage.getExtensionSettings();
-        if (!settings) {
-            const msg = "Could not find settings from storage.";
-            return new Err(new Error(msg));
-        }
-        return new Ok(settings);
+        return Ok(this._settings);
     }
 
     /**
@@ -125,6 +138,28 @@ export default class Settings {
 
     public isInsider(): boolean {
         return this._settings.insiderVersion;
+    }
+
+    private static _deserializeExtensionSettings(
+        settings: SerializedExtensionSettings,
+    ): ExtensionSettings {
+        let logLevel: LogLevel = LogLevel.Errors;
+        switch (settings.logLevel) {
+            case "errors":
+                logLevel = LogLevel.Errors;
+                break;
+            case "none":
+                logLevel = LogLevel.None;
+                break;
+            case "verbose":
+                logLevel = LogLevel.Verbose;
+                break;
+        }
+
+        return {
+            ...settings,
+            logLevel,
+        };
     }
 
     /**

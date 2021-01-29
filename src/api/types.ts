@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/naming-convention */
+
 /**
  * GET /api/v8/core/org/{organization_slug}/courses
  */

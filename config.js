@@ -3,10 +3,9 @@
 
 const path = require("path");
 
-const TMC_LANGS_RUST_VERSION = "0.6.5";
+const TMC_LANGS_RUST_VERSION = "0.9.1";
 
 const localTMCServer = {
-    __ACCESS_TOKEN_URI__: JSON.stringify("http://localhost:3000/oauth/token"),
     __TMC_LANGS_CONFIG_DIR__: JSON.stringify(null),
     __TMC_LANGS_ROOT_URL__: JSON.stringify("http://localhost:3000"),
     __TMC_LANGS_RUST_DL_URL__: JSON.stringify("https://download.mooc.fi/tmc-langs-rust/"),
@@ -14,7 +13,6 @@ const localTMCServer = {
 };
 
 const mockBackend = {
-    __ACCESS_TOKEN_URI__: JSON.stringify("http://localhost:4001/oauth/token"),
     __TMC_LANGS_CONFIG_DIR__: JSON.stringify(path.join(__dirname, "backend", "cli")),
     __TMC_LANGS_ROOT_URL__: JSON.stringify("http://localhost:4001"),
     __TMC_LANGS_RUST_DL_URL__: JSON.stringify("http://localhost:4001/langs/"),
@@ -22,7 +20,6 @@ const mockBackend = {
 };
 
 const productionApi = {
-    __ACCESS_TOKEN_URI__: JSON.stringify("https://tmc.mooc.fi/oauth/token"),
     __TMC_LANGS_CONFIG_DIR__: JSON.stringify(null),
     __TMC_LANGS_ROOT_URL__: JSON.stringify("https://tmc.mooc.fi"),
     __TMC_LANGS_RUST_DL_URL__: JSON.stringify("https://download.mooc.fi/tmc-langs-rust/"),

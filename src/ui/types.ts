@@ -1,8 +1,8 @@
 import { FeedbackQuestion } from "../actions/types";
+import Storage, { LocalCourseData } from "../api/storage";
 import TMC from "../api/tmc";
 import { Course, Organization, SubmissionStatusReport } from "../api/types";
-import Storage from "../config/storage";
-import { ExtensionSettings, LocalCourseData } from "../config/types";
+import { ExtensionSettings } from "../config/settings";
 import { LogLevel } from "../utils/logger";
 
 import { MyCoursesProps } from "./templates/MyCourses";
@@ -17,16 +17,16 @@ export type HandlerContext = {
 };
 
 export type VisibilityGroups = {
-    LOGGED_IN: VisibilityGroup;
+    loggedIn: VisibilityGroup;
 };
 
 export type VisibilityGroup = {
-    _id: string;
+    id: string;
     not: VisibilityGroupNegated;
 };
 
 export type VisibilityGroupNegated = {
-    _id: string;
+    id: string;
 };
 
 export type TemplateData =
@@ -109,6 +109,7 @@ export type SubmissionStatusData = {
 export type TestResultData = {
     testResult: unknown;
     id: number;
+    courseSlug: string;
     exerciseName: string;
     tmcLogs: {
         stdout?: string;

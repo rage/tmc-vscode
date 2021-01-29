@@ -1,56 +1,45 @@
 import * as path from "path";
+import * as vscode from "vscode";
+
+import { WORKSPACE_ROOT_FILE_NAME, WORKSPACE_ROOT_FOLDER_NAME } from "./constants";
 
 export default class Resources {
-    private readonly _tmcWorkspaceFolderPathRelative: string;
-    private readonly _tmcExercisesFolderPathRelative: string;
-    private _tmcDataFolder: string;
-    private _cliPath: string;
+    private _projectsDirectory: string;
 
     constructor(
         readonly cssFolder: string,
         readonly extensionVersion: string,
         readonly htmlFolder: string,
         readonly mediaFolder: string,
-        tmcDataFolder: string,
-        tmcWorkspaceFolderPathRelative: string,
-        tmcExercisesFolderPathRelative: string,
-        cliPath: string,
+        readonly workspaceFileFolder: string,
+        projectsDirectory: string,
     ) {
-        this._tmcDataFolder = tmcDataFolder;
-        this._tmcWorkspaceFolderPathRelative = tmcWorkspaceFolderPathRelative;
-        this._tmcExercisesFolderPathRelative = tmcExercisesFolderPathRelative;
-        this._cliPath = cliPath;
+        this._projectsDirectory = projectsDirectory;
     }
 
-    get dataPath(): string {
-        return this._tmcDataFolder;
+    get projectsDirectory(): string {
+        return this._projectsDirectory;
     }
 
-    set dataPath(newPath: string) {
-        this._tmcDataFolder = newPath;
+    set projectsDirectory(directory: string) {
+        this._projectsDirectory = directory;
     }
 
-    get cliPath(): string {
-        return this._cliPath;
+    get workspaceRootFolder(): vscode.Uri {
+        return vscode.Uri.file(path.join(this.workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME));
     }
 
-    set cliPath(newPath: string) {
-        this._cliPath = newPath;
-    }
-
-    get workspaceFolderPath(): string {
-        return path.join(this._tmcDataFolder, this._tmcWorkspaceFolderPathRelative);
-    }
-
-    get exercisesFolderPath(): string {
-        return path.join(this._tmcDataFolder, this._tmcExercisesFolderPathRelative);
+    get workspaceRootFile(): vscode.Uri {
+        return vscode.Uri.file(
+            path.join(
+                this.workspaceFileFolder,
+                WORKSPACE_ROOT_FOLDER_NAME,
+                WORKSPACE_ROOT_FILE_NAME,
+            ),
+        );
     }
 
     public getWorkspaceFilePath(courseName: string): string {
-        return path.join(
-            this._tmcDataFolder,
-            this._tmcWorkspaceFolderPathRelative,
-            courseName + ".code-workspace",
-        );
+        return path.join(this.workspaceFileFolder, courseName + ".code-workspace");
     }
 }
