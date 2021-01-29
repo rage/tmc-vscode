@@ -1,4 +1,5 @@
 import { concat } from "lodash";
+import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
@@ -24,6 +25,8 @@ export async function migrateExtensionDataFromPreviousVersions(
     const memento = context.globalState;
 
     try {
+        const oldWorkspaceOpen = isOldWorkspaceOpen(context.globalState);
+
         const migratedExtensionSettings = await migrateExtensionSettings(memento);
         const migratedSessionState = migrateSessionState(memento);
         const migratedUserData = migrateUserData(memento);
@@ -45,9 +48,36 @@ export async function migrateExtensionDataFromPreviousVersions(
         for (const key of keysToRemove) {
             await memento.update(key, undefined);
         }
+
+        if (oldWorkspaceOpen) {
+            await vscode.commands.executeCommand("workbench.action.closeFolder");
+            // Migration is complete but prevent extension from proceeding
+            throw new Error("Version migration complete but restart required.");
+        }
     } catch (e) {
         return Err(e);
     }
 
     return Ok.EMPTY;
+}
+
+function isOldWorkspaceOpen(memento: vscode.Memento): boolean {
+    interface ExtensionSettingsPartial {
+        dataPath: string;
+    }
+
+    const workspaceFile = vscode.workspace.workspaceFile;
+    const dataPath = memento.get<ExtensionSettingsPartial>("extensionSettings")?.dataPath;
+
+    if (!workspaceFile || !dataPath) {
+        return false;
+    }
+
+    // Logger.debug("workspacefile " + workspaceFile.fsPath);
+    // Logger.debug("datapath " + vscode.Uri.file(dataPath).fsPath);
+    // Logger.debug(path.relative(workspaceFile.fsPath, vscode.Uri.file(dataPath).fsPath));
+    return (
+        path.relative(workspaceFile.fsPath, vscode.Uri.file(dataPath).fsPath) ===
+        path.join("..", "..")
+    );
 }
