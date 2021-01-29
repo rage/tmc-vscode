@@ -3,6 +3,7 @@ import * as pLimit from "p-limit";
 import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import { WebviewMessage } from "../ui/types";
 import { incrementPercentageWrapper } from "../window";
 
 import { ActionContext } from "./types";
@@ -59,6 +60,19 @@ export async function downloadOrUpdateExercises(
     });
     const successfulIds = new Set(flatten(successfulIdsByCourse));
     const [successful, failed] = partition(exerciseIds, (x) => successfulIds.has(x));
+
+    ui.webview.postMessage(
+        ...successful.map<WebviewMessage>((x) => ({
+            command: "exerciseStatusChange",
+            exerciseId: x,
+            status: "opened",
+        })),
+        ...failed.map<WebviewMessage>((x) => ({
+            command: "exerciseStatusChange",
+            exerciseId: x,
+            status: "closed",
+        })),
+    );
 
     return Ok({ successful, failed });
 }

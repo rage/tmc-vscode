@@ -184,13 +184,6 @@ export default class WorkspaceManager implements vscode.Disposable {
         this._disposables.forEach((x) => x.dispose());
     }
 
-    private _getActiveCourseWorkspace(): string | undefined {
-        // The name is of form "workspaceName (workspace)"
-        const workspaceName = vscode.workspace.name?.split(" ")[0];
-
-        return workspaceName;
-    }
-
     /**
      * Event listener function for workspace watcher delete.
      * @param targetPath Path to deleted item
@@ -215,7 +208,7 @@ export default class WorkspaceManager implements vscode.Disposable {
      * the top and then lists all that course's open exercises in alphanumeric order.
      */
     private async _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
-        const workspaceName = this._getActiveCourseWorkspace();
+        const workspaceName = this.activeCourse;
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceName || !workspaceFolders) {
             Logger.warn("Attempted refresh for a non-course workspace.");
@@ -224,7 +217,7 @@ export default class WorkspaceManager implements vscode.Disposable {
 
         const rootFolder = this._resources.workspaceRootFolder;
         const openExercises = this._exercises
-            .filter((x) => x.status === ExerciseStatus.Open)
+            .filter((x) => x.courseSlug === workspaceName && x.status === ExerciseStatus.Open)
             .sort((a, b) => a.exerciseSlug.localeCompare(b.exerciseSlug))
             .map((x) => ({ uri: x.uri }));
         const correctStructure = [{ uri: rootFolder }, ...openExercises];
