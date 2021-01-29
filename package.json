@@ -41,7 +41,8 @@
         "onCommand:tmc.runTests",
         "onCommand:tmc.selectAction",
         "onCommand:tmc.switchWorkspace",
-        "onCommand:tmc.welcome"
+        "onCommand:tmc.welcome",
+        "onCommand:tmc.wipe"
     ],
     "main": "./dist/extension",
     "contributes": {

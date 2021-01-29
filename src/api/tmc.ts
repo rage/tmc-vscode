@@ -361,6 +361,17 @@ export default class TMC {
     }
 
     /**
+     * Resets all settings back to initial values. Uses TMC-langs `settings reset` command
+     * internally.
+     */
+    public async resetSettings(): Promise<Result<void, Error>> {
+        return this._executeLangsCommand({
+            args: ["settings", "--client-name", this.clientName, "reset"],
+            core: false,
+        }).then((x) => x.andThen(() => Ok.EMPTY));
+    }
+
+    /**
      * Unsets the value of given key in stored settings. Uses TMC-langs `settings unset` command
      * internally.
      */
