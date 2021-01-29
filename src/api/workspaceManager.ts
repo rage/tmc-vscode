@@ -257,7 +257,7 @@ export default class WorkspaceManager implements vscode.Disposable {
 
         let incorrectFolderAdded = false;
         e.added.forEach((added) => {
-            const exercise = this._exercises.find((x) => x.uri === added.uri);
+            const exercise = this._exercises.find((x) => x.uri.fsPath === added.uri.fsPath);
             if (!exercise) {
                 incorrectFolderAdded = true;
             } else if (exercise.courseSlug === activeCourse) {
@@ -266,7 +266,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         });
 
         e.removed.forEach((removed) => {
-            const exercise = this._exercises.find((x) => x.uri === removed.uri);
+            const exercise = this._exercises.find((x) => x.uri.fsPath === removed.uri.fsPath);
             if (exercise) {
                 exercise.status = ExerciseStatus.Closed;
             }
@@ -278,6 +278,9 @@ export default class WorkspaceManager implements vscode.Disposable {
                 part of the current course ${activeCourse} and will be removed later.`,
                 ["Ok", (): void => {}],
             );
+        }
+        if (e.added.length > 5) {
+            vscode.commands.executeCommand("workbench.files.action.collapseExplorerFolders");
         }
     }
 
