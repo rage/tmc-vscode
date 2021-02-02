@@ -10,7 +10,7 @@ import {
     WORKSPACE_ROOT_FOLDER_NAME,
     WORKSPACE_SETTINGS,
 } from "../config/constants";
-import Resources from "../config/resources";
+import Resources, { EditorKind } from "../config/resources";
 import { Logger } from "../utils";
 import { showNotification } from "../window";
 
@@ -291,18 +291,19 @@ export default class WorkspaceManager implements vscode.Disposable {
         }
 
         // TODO: Check that document is a valid exercise
+        const isCode = this._resources.editorKind === EditorKind.Code;
         Logger.debug("Text document languageId " + e.languageId);
         switch (e.languageId) {
             case "c":
             case "cpp":
             case "objective-c":
             case "objective-cpp":
-                if (!vscode.extensions.getExtension("ms-vscode.cpptools")) {
+                if (isCode && !vscode.extensions.getExtension("ms-vscode.cpptools")) {
                     this.addWorkspaceRecommendation(activeCourse, ["ms-vscode.cpptools"]);
                 }
                 break;
             case "csharp":
-                if (!vscode.extensions.getExtension("ms-dotnettools.csharp")) {
+                if (isCode && !vscode.extensions.getExtension("ms-dotnettools.csharp")) {
                     this.addWorkspaceRecommendation(activeCourse, ["ms-dotnettools.csharp"]);
                 }
                 break;
@@ -315,18 +316,20 @@ export default class WorkspaceManager implements vscode.Disposable {
                 }
                 break;
             case "python":
-                if (
-                    !vscode.extensions.getExtension("ms-python.python") ||
-                    !vscode.extensions.getExtension("ms-python.vscode-pylance")
-                ) {
-                    this.addWorkspaceRecommendation(activeCourse, [
-                        "ms-python.python",
-                        "ms-python.vscode-pylance",
-                    ]);
+                if (!vscode.extensions.getExtension("ms-python.python")) {
+                    if (isCode && !vscode.extensions.getExtension("ms-python.vscode-pylance")) {
+                        this.addWorkspaceRecommendation(activeCourse, [
+                            "ms-python.vscode-pylance",
+                            "ms-python.python",
+                        ]);
+                    } else {
+                        this.addWorkspaceRecommendation(activeCourse, ["ms-python.python"]);
+                    }
                 }
+
                 break;
             case "java":
-                if (!vscode.extensions.getExtension("vscjava.vscode-java-pack")) {
+                if (isCode && !vscode.extensions.getExtension("vscjava.vscode-java-pack")) {
                     this.addWorkspaceRecommendation(activeCourse, ["vscjava.vscode-java-pack"]);
                 }
                 break;

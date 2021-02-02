@@ -42,10 +42,9 @@ function throwFatalError(error: Error, cliFolder: string): never {
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
-
     Logger.configure(LogLevel.Verbose);
     Logger.log(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`);
-    Logger.log(`VS Code version: ${vscode.version}`);
+    Logger.log(`${vscode.env.appName} version: ${vscode.version}`);
     Logger.log(`${EXTENSION_ID} version: ${extensionVersion}`);
     Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
 
