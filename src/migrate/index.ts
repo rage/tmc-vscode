@@ -6,7 +6,12 @@ import * as vscode from "vscode";
 
 import Storage from "../api/storage";
 import TMC from "../api/tmc";
-import { WORKSPACE_SETTINGS } from "../config/constants";
+import {
+    WORKSPACE_ROOT_FILE_NAME,
+    WORKSPACE_ROOT_FILE_TEXT,
+    WORKSPACE_ROOT_FOLDER_NAME,
+    WORKSPACE_SETTINGS,
+} from "../config/constants";
 import { HaltForReloadError } from "../errors";
 
 import migrateExerciseData from "./migrateExerciseData";
@@ -29,14 +34,11 @@ export async function migrateExtensionDataFromPreviousVersions(
 
     const activeOldWorkspaceName = getActiveOldWorkspaceName(context.globalState);
     if (activeOldWorkspaceName) {
-        // Copypaste from course initialization.
         const workspaceFileFolder = path.join(context.globalStoragePath, "workspaces");
-        fs.ensureDirSync(workspaceFileFolder);
-        const movedWorkspaceFile = path.join(workspaceFileFolder, activeOldWorkspaceName);
-        fs.writeFileSync(movedWorkspaceFile, JSON.stringify(WORKSPACE_SETTINGS));
+        createInitializationFiles(workspaceFileFolder, activeOldWorkspaceName);
         await vscode.commands.executeCommand(
             "vscode.openFolder",
-            vscode.Uri.file(movedWorkspaceFile),
+            vscode.Uri.file(path.join(workspaceFileFolder, activeOldWorkspaceName)),
         );
         return Err(new HaltForReloadError("Restart to start migration."));
     }
@@ -85,4 +87,18 @@ function getActiveOldWorkspaceName(memento: vscode.Memento): string | undefined 
         path.join("..", "..")
         ? last(workspaceFile?.fsPath.split(path.sep))
         : undefined;
+}
+
+// Copypaste code from resource initialization because that code isn't accessed yet.
+function createInitializationFiles(workspaceFileFolder: string, workspaceName: string): void {
+    fs.ensureDirSync(workspaceFileFolder);
+
+    const workspaceFile = path.join(workspaceFileFolder, workspaceName);
+    fs.writeFileSync(workspaceFile, JSON.stringify(WORKSPACE_SETTINGS));
+
+    const rootFolder = path.join(workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME);
+    fs.ensureDirSync(rootFolder);
+
+    const rootFile = path.join(rootFolder, WORKSPACE_ROOT_FILE_NAME);
+    fs.writeFileSync(rootFile, WORKSPACE_ROOT_FILE_TEXT);
 }
