@@ -16,7 +16,7 @@ import {
 } from "./config/constants";
 import Settings from "./config/settings";
 import { UserData } from "./config/userdata";
-import { EmptyLangsResponseError } from "./errors";
+import { EmptyLangsResponseError, HaltForReloadError } from "./errors";
 import * as init from "./init";
 import { migrateExtensionDataFromPreviousVersions } from "./migrate";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
@@ -71,6 +71,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const storage = new Storage(context);
     const migrationResult = await migrateExtensionDataFromPreviousVersions(context, storage, tmc);
     if (migrationResult.err) {
+        if (migrationResult.val instanceof HaltForReloadError) {
+            Logger.warn("Extension expected to restart");
+            return;
+        }
+
         throwFatalError(migrationResult.val, cliFolder);
     }
 
