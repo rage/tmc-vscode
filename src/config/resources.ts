@@ -3,7 +3,13 @@ import * as vscode from "vscode";
 
 import { WORKSPACE_ROOT_FILE_NAME, WORKSPACE_ROOT_FOLDER_NAME } from "./constants";
 
+export enum EditorKind {
+    Code,
+    VSCodium,
+}
+
 export default class Resources {
+    readonly editorKind: EditorKind;
     private _projectsDirectory: string;
 
     constructor(
@@ -14,6 +20,7 @@ export default class Resources {
         readonly workspaceFileFolder: string,
         projectsDirectory: string,
     ) {
+        this.editorKind = vscode.env.appName === "VSCodium" ? EditorKind.VSCodium : EditorKind.Code;
         this._projectsDirectory = projectsDirectory;
     }
 
