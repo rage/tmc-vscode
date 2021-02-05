@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
+import { BottleneckError } from "../errors";
 import { Logger } from "../utils";
 import { showError, showNotification } from "../window";
 
@@ -20,18 +21,23 @@ export async function pasteExercise(
         return;
     }
 
-    const link = await actions.pasteExercise(
+    const pasteResult = await actions.pasteExercise(
         actionContext,
         exercise.courseSlug,
         exercise.exerciseSlug,
     );
-    if (link.err) {
-        Logger.error("TMC Paste command failed.", link.val);
-        showError(`TMC Paste command failed. ${link.val.message}`);
+    if (pasteResult.err) {
+        if (pasteResult.val instanceof BottleneckError) {
+            Logger.warn(`Paste submission was cancelled: ${pasteResult.val.message}.`);
+            return;
+        }
+
+        Logger.error("TMC Paste command failed.", pasteResult.val);
+        showError(`TMC Paste command failed. ${pasteResult.val.message}`);
         return;
     }
-    showNotification(`Paste link: ${link.val}`, [
+    showNotification(`Paste link: ${pasteResult.val}`, [
         "Open URL",
-        (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link.val)),
+        (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(pasteResult.val)),
     ]);
 }

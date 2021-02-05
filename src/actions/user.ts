@@ -14,7 +14,7 @@ import { LocalCourseData } from "../api/storage";
 import { SubmissionFeedback } from "../api/types";
 import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
-import { ConnectionError, ForbiddenError } from "../errors";
+import { BottleneckError, ConnectionError, ForbiddenError } from "../errors";
 import { TestResultData } from "../ui/types";
 import {
     formatSizeInBytes,
@@ -273,6 +273,11 @@ export async function submitExercise(
     );
 
     if (submissionResult.err) {
+        if (submissionResult.val instanceof BottleneckError) {
+            Logger.warn(`Submission was cancelled: ${submissionResult.val.message}.`);
+            return Ok.EMPTY;
+        }
+
         temp.setContent({
             title: "TMC Server Submission",
             template: { templateName: "error", error: submissionResult.val },
