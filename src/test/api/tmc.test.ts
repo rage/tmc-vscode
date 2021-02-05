@@ -6,7 +6,12 @@ import * as path from "path";
 import TMC from "../../api/tmc";
 import { SubmissionFeedback } from "../../api/types";
 import { CLIENT_NAME, TMC_LANGS_CONFIG_DIR, TMC_LANGS_ROOT_URL } from "../../config/constants";
-import { AuthenticationError, AuthorizationError, RuntimeError } from "../../errors";
+import {
+    AuthenticationError,
+    AuthorizationError,
+    BottleneckError,
+    RuntimeError,
+} from "../../errors";
 import { getPlatform, getRustExecutable } from "../../utils/env";
 
 suite("TMC", function () {
@@ -395,7 +400,26 @@ suite("TMC", function () {
             expect(results.status).to.be.equal("ok");
         });
 
-        test("Returns submission link during the submission process");
+        test("Returns submission link during the submission process", async function () {
+            this.timeout(5000);
+            writeCliConfig();
+            let url: string | undefined;
+            await tmc.submitExerciseAndWaitForResults(
+                1,
+                PASSING_EXERCISE_PATH,
+                undefined,
+                (x) => (url = x),
+            );
+            expect(url).to.be.ok;
+        });
+
+        test("should result in BottleneckError if called twice too soon", async function () {
+            this.timeout(5000);
+            const first = tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
+            const second = tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
+            const [, secondResult] = await Promise.all([first, second]);
+            expect(secondResult.val).to.be.instanceOf(BottleneckError);
+        });
 
         test("Causes RuntimeError for nonexistent exercise", async function () {
             writeCliConfig();
@@ -415,6 +439,14 @@ suite("TMC", function () {
             writeCliConfig();
             const pasteUrl = (await tmc.submitExerciseToPaste(1, PASSING_EXERCISE_PATH)).unwrap();
             expect(pasteUrl).to.include("localhost");
+        });
+
+        test("should result in BottleneckError if called twice too soon", async function () {
+            this.timeout(5000);
+            const first = tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
+            const second = tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
+            const [, secondResult] = await Promise.all([first, second]);
+            expect(secondResult.val).to.be.instanceOf(BottleneckError);
         });
 
         test("Causes RuntimeError for nonexistent exercise", async function () {

@@ -17,6 +17,10 @@ export class AuthorizationError extends BaseError {
     public readonly name = "Authorization Error";
 }
 
+export class BottleneckError extends BaseError {
+    public readonly name = "Bottleneck Error";
+}
+
 export class ConnectionError extends BaseError {
     public readonly name = "Connection Error";
 }
