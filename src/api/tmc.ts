@@ -3,10 +3,15 @@ import * as kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
 import { is } from "typescript-is";
 
-import { API_CACHE_LIFETIME, CLI_PROCESS_TIMEOUT } from "../config/constants";
+import {
+    API_CACHE_LIFETIME,
+    CLI_PROCESS_TIMEOUT,
+    MINIMUM_SUBMISSION_INTERVAL,
+} from "../config/constants";
 import {
     AuthenticationError,
     AuthorizationError,
+    BottleneckError,
     ConnectionError,
     EmptyLangsResponseError,
     ForbiddenError,
@@ -84,6 +89,7 @@ interface CacheConfig {
 export default class TMC {
     private static readonly _exerciseUpdatesCacheKey = "exercise-updates";
 
+    private _nextSubmissionAllowedTimestamp: number;
     private readonly _options: Options;
     private readonly _responseCache: Map<string, ResponseCacheEntry>;
     private _onLogin?: () => void;
@@ -101,6 +107,7 @@ export default class TMC {
         private readonly apiRootUrl: string,
         options?: Options,
     ) {
+        this._nextSubmissionAllowedTimestamp = 0;
         this._options = { ...options };
         this._responseCache = new Map();
     }
@@ -796,6 +803,9 @@ export default class TMC {
      * Submits an exercise to server and waits for test results. Uses TMC-langs `submit` core
      * command internally.
      *
+     * This function can only be called once per `MINIMUM_SUBMISSION_INTERVAL` and this limitation
+     * is shared with `submitExerciseToPaste()`.
+     *
      * @param exerciseId Id of the exercise.
      * @param progressCallback Optional callback function that can be used to get status reports.
      */
@@ -805,6 +815,13 @@ export default class TMC {
         progressCallback?: (progressPct: number, message?: string) => void,
         onSubmissionUrl?: (url: string) => void,
     ): Promise<Result<SubmissionStatusReport, Error>> {
+        const now = Date.now();
+        if (now < this._nextSubmissionAllowedTimestamp) {
+            return Err(new BottleneckError("This command can't be executed at the moment."));
+        } else {
+            this._nextSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL;
+        }
+
         const submitUrl = `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`;
         const onStdout = (res: StatusUpdateData): void => {
             progressCallback?.(100 * res["percent-done"], res.message ?? undefined);
@@ -833,6 +850,9 @@ export default class TMC {
      * Submits given exercise to TMC Paste and provides a link to it. Uses TMC-langs `paste` core
      * command internally.
      *
+     * This function can only be called once per `MINIMUM_SUBMISSION_INTERVAL` and this limitation
+     * is shared with `submitExerciseAndWaitForResults()`.
+     *
      * @param exerciseId Id of the exercise.
      * @returns TMC paste link.
      */
@@ -840,6 +860,13 @@ export default class TMC {
         exerciseId: number,
         exercisePath: string,
     ): Promise<Result<string, Error>> {
+        const now = Date.now();
+        if (now < this._nextSubmissionAllowedTimestamp) {
+            return Err(new BottleneckError("This command can't be executed at the moment."));
+        } else {
+            this._nextSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL;
+        }
+
         const submitUrl = `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`;
 
         return (
