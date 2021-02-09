@@ -20,16 +20,6 @@ export type ActionContext = {
     visibilityGroups: VisibilityGroups;
 };
 
-/**
- * Required details for downloading exercises of a specific course.
- */
-export interface CourseExerciseDownloads {
-    courseId: number;
-    exerciseIds: number[];
-    organizationSlug: string;
-    courseName: string;
-}
-
 export type FeedbackQuestion = {
     id: number;
     kind: string;
