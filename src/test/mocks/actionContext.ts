@@ -1,6 +1,7 @@
 import { Mock } from "typemoq";
 
 import { ActionContext } from "../../actions/types";
+import Dialog from "../../api/dialog";
 import TMC from "../../api/tmc";
 import WorkspaceManager from "../../api/workspaceManager";
 import Resouces from "../../config/resources";
@@ -12,6 +13,7 @@ import UI from "../../ui/ui";
 
 export function createMockActionContext(): ActionContext {
     return {
+        dialog: Mock.ofType<Dialog>().object,
         resources: Mock.ofType<Resouces>().object,
         settings: Mock.ofType<Settings>().object,
         temporaryWebviewProvider: Mock.ofType<TemporaryWebviewProvider>().object,

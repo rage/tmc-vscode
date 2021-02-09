@@ -22,12 +22,7 @@ import {
     Logger,
     parseFeedbackQuestion,
 } from "../utils/";
-import {
-    askForConfirmation,
-    getActiveEditorExecutablePath,
-    showError,
-    showNotification,
-} from "../window";
+import { getActiveEditorExecutablePath } from "../window";
 
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
 import { refreshLocalExercises } from "./refreshLocalExercises";
@@ -77,7 +72,7 @@ export async function testExercise(
     actionContext: ActionContext,
     exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { ui, tmc, userData, temporaryWebviewProvider } = actionContext;
+    const { dialog, ui, tmc, userData, temporaryWebviewProvider } = actionContext;
 
     const course = userData.getCourseByName(exercise.courseSlug);
     const exerciseId = course.exercises.find((x) => x.name === exercise.exerciseSlug)?.id;
@@ -160,20 +155,22 @@ export async function testExercise(
             if (msg.type === "submitToServer") {
                 submitExercise(actionContext, exercise);
             } else if (msg.type === "sendToPaste" && msg.data) {
-                const pasteLink = await pasteExercise(
+                const pasteResult = await pasteExercise(
                     actionContext,
                     msg.data.courseSlug as string,
                     msg.data.exerciseName as string,
                 );
-                if (pasteLink.err) {
-                    Logger.error(`${pasteLink.val.message}`, pasteLink.val);
-                    showError(`Failed to send to TMC Paste: ${pasteLink.val.message}`);
+                if (pasteResult.err) {
+                    dialog.errorNotification(
+                        `Failed to send to TMC Paste: ${pasteResult.val.message}.`,
+                        pasteResult.val,
+                    );
                     temp.postMessage({
                         command: "showPasteLink",
-                        pasteLink: `${pasteLink.val.message}`,
+                        pasteLink: `${pasteResult.val.message}`,
                     });
                 } else {
-                    const value = pasteLink.val || "Link not provided by server.";
+                    const value = pasteResult.val || "Link not provided by server.";
                     temp.postMessage({ command: "showPasteLink", pasteLink: value });
                 }
             } else if (msg.type === "closeWindow") {
@@ -193,7 +190,7 @@ export async function submitExercise(
     actionContext: ActionContext,
     exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { temporaryWebviewProvider, tmc, userData } = actionContext;
+    const { dialog, temporaryWebviewProvider, tmc, userData } = actionContext;
     Logger.log(`Submitting exercise ${exercise.exerciseSlug} to server`);
 
     const course = userData.getCourseByName(exercise.courseSlug);
@@ -226,20 +223,22 @@ export async function submitExercise(
         } else if (msg.type === "closeWindow") {
             temp.dispose();
         } else if (msg.type === "sendToPaste" && msg.data) {
-            const pasteLink = await pasteExercise(
+            const pasteResult = await pasteExercise(
                 actionContext,
                 msg.data.courseSlug as string,
                 msg.data.exerciseName as string,
             );
-            if (pasteLink.err) {
-                Logger.error(`${pasteLink.val.message}`, pasteLink.val);
-                showError(`Failed to send to TMC Paste: ${pasteLink.val.message}`);
+            if (pasteResult.err) {
+                dialog.errorNotification(
+                    `Failed to send to TMC Paste: ${pasteResult.val.message}.`,
+                    pasteResult.val,
+                );
                 temp.postMessage({
                     command: "showPasteLink",
-                    pasteLink: `${pasteLink.val.message}`,
+                    pasteLink: `${pasteResult.val.message}`,
                 });
             } else {
-                const value = pasteLink.val || "Link not provided by server.";
+                const value = pasteResult.val || "Link not provided by server.";
                 temp.postMessage({ command: "showPasteLink", pasteLink: value });
             }
         }
@@ -321,7 +320,7 @@ export async function submitExercise(
 /**
  * Sends the exercise to the TMC Paste server.
  * @param id Exercise ID
- * @returns TMC Pastebin link if the action was successful.
+ * @returns TMC Paste link if the action was successful.
  */
 export async function pasteExercise(
     actionContext: ActionContext,
@@ -358,7 +357,7 @@ export async function checkForCourseUpdates(
     actionContext: ActionContext,
     courseId?: number,
 ): Promise<void> {
-    const { userData } = actionContext;
+    const { dialog, userData } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
     Logger.log(`Checking for course updates for courses ${filteredCourses.map((c) => c.name)}`);
@@ -371,13 +370,16 @@ export async function checkForCourseUpdates(
     const handleDownload = async (course: LocalCourseData): Promise<void> => {
         const downloadResult = await downloadNewExercisesForCourse(actionContext, course.id);
         if (downloadResult.err) {
-            showError(`Failed to download new exercises for course "${course.title}."`);
+            dialog.errorNotification(
+                `Failed to download new exercises for course "${course.title}."`,
+                downloadResult.val,
+            );
         }
     };
 
     for (const course of updatedCourses) {
         if (course.newExercises.length > 0 && !course.disabled) {
-            showNotification(
+            dialog.notification(
                 `Found ${course.newExercises.length} new exercises for ${course.name}. Do you wish to download them now?`,
                 ["Download", async (): Promise<void> => handleDownload(course)],
                 [
@@ -401,7 +403,7 @@ export async function checkForCourseUpdates(
  * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
  */
 export async function openWorkspace(actionContext: ActionContext, name: string): Promise<void> {
-    const { resources, workspaceManager } = actionContext;
+    const { dialog, resources, workspaceManager } = actionContext;
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
     const tmcWorkspaceFile = resources.getWorkspaceFilePath(name);
     const workspaceAsUri = vscode.Uri.file(tmcWorkspaceFile);
@@ -411,7 +413,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
     if (!isCorrectWorkspaceOpen(resources, name)) {
         if (
             !currentWorkspaceFile ||
-            (await askForConfirmation(
+            (await dialog.confirmation(
                 "Do you want to open TMC workspace and close the current one?",
             ))
         ) {
@@ -422,7 +424,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
             // Restarts VSCode
         } else {
             const choice = "Close current & open Course Workspace";
-            await showError(
+            await dialog.warningNotification(
                 "Please close the current workspace before opening a course workspace.",
                 [
                     choice,
@@ -446,13 +448,11 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
  * Settings webview
  */
 export async function openSettings(actionContext: ActionContext): Promise<void> {
-    const { ui, resources, settings } = actionContext;
+    const { dialog, ui, resources, settings } = actionContext;
     Logger.log("Display extension settings");
     const extensionSettingsResult = await settings.getExtensionSettings();
     if (extensionSettingsResult.err) {
-        const message = "Failed to fetch Settings.";
-        Logger.error(message, extensionSettingsResult.val);
-        showError(message);
+        dialog.errorNotification("Failed to fetch settings.", extensionSettingsResult.val);
         return;
     }
 
@@ -583,7 +583,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
  * connection errors as successful operations where the data was not actually updated.
  *
  * @param courseId ID of the course to update.
- * @returns Boolean value representing whether the data from server was succesfully received.
+ * @returns Boolean value representing whether the data from server was successfully received.
  */
 export async function updateCourse(
     actionContext: ActionContext,

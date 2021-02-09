@@ -3,9 +3,9 @@ import * as fs from "fs-extra";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 
-import { TMC_LANGS_RUST_DL_URL } from "../config/constants";
+import Dialog from "../api/dialog";
+import { TMC_LANGS_RUST_DL_URL, TMC_LANGS_RUST_VERSION } from "../config/constants";
 import { downloadFile, getPlatform, getRustExecutable, Logger } from "../utils";
-import { showProgressNotification } from "../window";
 
 /**
  * Downloads correct langs version for the current extension version, unless already present. Will
@@ -13,7 +13,10 @@ import { showProgressNotification } from "../window";
  *
  * @param cliFolder
  */
-async function downloadCorrectLangsVersion(cliFolder: string): Promise<Result<string, Error>> {
+async function downloadCorrectLangsVersion(
+    cliFolder: string,
+    dialog: Dialog,
+): Promise<Result<string, Error>> {
     const platform = getPlatform();
     Logger.log("Detected platform " + platform);
     Logger.log("Platform " + process.platform + " Arch " + process.arch);
@@ -30,11 +33,11 @@ async function downloadCorrectLangsVersion(cliFolder: string): Promise<Result<st
 
     const cliUrl = TMC_LANGS_RUST_DL_URL + executable;
     Logger.log(`Downloading TMC-langs from ${cliUrl} to ${cliPath}`);
-    const [langsDownloadResult] = await showProgressNotification(
-        "Downloading TMC-langs...",
-        async (p) =>
-            await downloadFile(cliUrl, cliPath, undefined, (_progress: number, increment: number) =>
-                p.report({ increment }),
+    const langsDownloadResult = await dialog.progressNotification(
+        `Downloading TMC-langs ${TMC_LANGS_RUST_VERSION}...`,
+        async (progress) =>
+            await downloadFile(cliUrl, cliPath, undefined, (percent) =>
+                progress.report({ percent }),
             ),
     );
     if (langsDownloadResult.err) {

@@ -1,3 +1,4 @@
+import Dialog from "../api/dialog";
 import TMC from "../api/tmc";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
@@ -8,6 +9,7 @@ import { VisibilityGroups } from "../ui/types";
 import UI from "../ui/ui";
 
 export type ActionContext = {
+    dialog: Dialog;
     resources: Resources;
     settings: Settings;
     temporaryWebviewProvider: TemporaryWebviewProvider;

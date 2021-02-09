@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 
 import { ActionContext } from "../actions/types";
 import { Logger } from "../utils";
-import { showError } from "../window";
 
 /**
  * Removes language specific meta files from exercise directory.
@@ -11,11 +10,10 @@ export async function cleanExercise(
     actionContext: ActionContext,
     resource: vscode.Uri | undefined,
 ): Promise<void> {
-    const { tmc, workspaceManager } = actionContext;
+    const { dialog, tmc, workspaceManager } = actionContext;
 
     if (resource && !workspaceManager.uriIsExercise(resource)) {
-        Logger.error("Currently open editor is not part of a TMC exercise");
-        showError("Currently open editor is not part of a TMC exercise");
+        dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
         return;
     }
 
@@ -27,8 +25,6 @@ export async function cleanExercise(
 
     const cleanResult = await tmc.clean(exerciseToClean.fsPath);
     if (cleanResult.err) {
-        const message = "Failed to clean exercise.";
-        Logger.error(message, cleanResult.val);
-        showError(message);
+        dialog.errorNotification("Failed to clean exercise.", cleanResult.val);
     }
 }

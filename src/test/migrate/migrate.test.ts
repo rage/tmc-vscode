@@ -4,6 +4,7 @@ import { Err, Ok } from "ts-results";
 import { IMock, It, Mock } from "typemoq";
 import * as vscode from "vscode";
 
+import Dialog from "../../api/dialog";
 import Storage from "../../api/storage";
 import TMC from "../../api/tmc";
 import { migrateExtensionDataFromPreviousVersions } from "../../migrate";
@@ -11,6 +12,7 @@ import * as exerciseData from "../fixtures/exerciseData";
 import * as extensionSettings from "../fixtures/extensionSettings";
 import * as sessionState from "../fixtures/sessionState";
 import * as userData from "../fixtures/userData";
+import { createDialogMock } from "../mocks/dialog";
 import { createMockContext } from "../mocks/vscode";
 
 const UNSTABLE_EXERCISE_DATA_KEY = "exerciseData";
@@ -30,6 +32,7 @@ suite("Extension data migration", function () {
     };
 
     let context: vscode.ExtensionContext;
+    let dialogMock: IMock<Dialog>;
     let tmcSuccess: IMock<TMC>;
     let tmcFail: IMock<TMC>;
     let storage: Storage;
@@ -37,7 +40,10 @@ suite("Extension data migration", function () {
     setup(function () {
         mockFs(virtualFileSystem);
         context = createMockContext();
+        [dialogMock] = createDialogMock();
+
         storage = new Storage(context);
+
         tmcFail = Mock.ofType<TMC>();
         tmcFail
             .setup((x) =>
@@ -70,6 +76,7 @@ suite("Extension data migration", function () {
         const result = await migrateExtensionDataFromPreviousVersions(
             context,
             storage,
+            dialogMock.object,
             tmcSuccess.object,
         );
         expect(result.ok).to.be.true;
@@ -84,6 +91,7 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
+                dialogMock.object,
                 tmcSuccess.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
@@ -97,6 +105,7 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
+                dialogMock.object,
                 tmcFail.object,
             );
             expect(result.val).to.be.instanceOf(Error);
@@ -115,6 +124,7 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
+                dialogMock.object,
                 tmcSuccess.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
@@ -128,6 +138,7 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
+                dialogMock.object,
                 tmcFail.object,
             );
             expect(result.val).to.be.instanceOf(Error);
@@ -150,6 +161,7 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
+                dialogMock.object,
                 tmcSuccess.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
@@ -170,6 +182,7 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
+                dialogMock.object,
                 tmcFail.object,
             );
             expect(result.val).to.be.instanceOf(Error);
@@ -196,6 +209,7 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
+                dialogMock.object,
                 tmcSuccess.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
@@ -216,6 +230,7 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
+                dialogMock.object,
                 tmcFail.object,
             );
             expect(result.val).to.be.instanceOf(Error);
@@ -239,6 +254,7 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
+                dialogMock.object,
                 tmcSuccess.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);

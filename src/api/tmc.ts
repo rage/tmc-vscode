@@ -20,7 +20,6 @@ import {
     RuntimeError,
 } from "../errors";
 import { Logger } from "../utils/logger";
-import { showError } from "../window";
 
 import {
     Data,
@@ -991,7 +990,6 @@ export default class TMC {
             case "not-logged-in":
                 this._responseCache.clear();
                 this._onLogout?.();
-                showError("Your TMC session has expired, please log in.");
                 return Err(new AuthorizationError(message, traceString));
             case "obsolete-client":
                 return Err(

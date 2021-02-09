@@ -18,12 +18,6 @@ import {
 } from "../actions";
 import { ActionContext } from "../actions/types";
 import { formatSizeInBytes, Logger, LogLevel } from "../utils/";
-import {
-    askForConfirmation,
-    incrementPercentageWrapper,
-    showError,
-    showNotification,
-} from "../window";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -32,7 +26,7 @@ import {
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { ui, resources, settings, userData, visibilityGroups } = actionContext;
+    const { dialog, ui, resources, settings, userData, visibilityGroups } = actionContext;
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
@@ -169,8 +163,7 @@ export function registerUiActions(actionContext: ActionContext): void {
 
             const downloadResult = await downloadOrUpdateExercises(actionContext, msg.ids);
             if (downloadResult.err) {
-                Logger.error("Failed to download new exercises.", downloadResult.val);
-                showError("Failed to download new exercises.");
+                dialog.errorNotification("Failed to download new exercises.", downloadResult.val);
                 return;
             }
 
@@ -179,8 +172,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 await refreshLocalExercises(actionContext),
             );
             if (refreshResult.err) {
-                Logger.error("Failed to refresh workspace.", downloadResult.val);
-                showError("Failed to download new exercises.");
+                dialog.errorNotification("Failed to refresh local exercises.", refreshResult.val);
             }
 
             ui.webview.postMessage({
@@ -193,9 +185,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.webview.registerHandler("addCourse", async () => {
         const result = await addNewCourse(actionContext);
         if (result.err) {
-            const message = `Failed to add new course: ${result.val.message}`;
-            Logger.error(message, result.val);
-            showError(message);
+            dialog.errorNotification(`Failed to add new course: ${result.val.message}`);
         }
     });
     ui.webview.registerHandler(
@@ -206,14 +196,13 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             const course = actionContext.userData.getCourse(msg.id);
             if (
-                await askForConfirmation(
+                await dialog.explicitConfirmation(
                     `Do you want to remove ${course.name} from your courses? This won't delete your downloaded exercises.`,
-                    true,
                 )
             ) {
                 await removeCourse(actionContext, msg.id);
                 await displayUserCourses(actionContext);
-                showNotification(`${course.name} was removed from courses.`);
+                dialog.notification(`${course.name} was removed from courses.`);
             }
         },
     );
@@ -240,8 +229,10 @@ export function registerUiActions(actionContext: ActionContext): void {
             } else {
                 const updateResult = await updateCourse(actionContext, courseId);
                 if (updateResult.err) {
-                    Logger.error("Failed to update course", updateResult.val);
-                    showError(`Failed to update course: ${updateResult.val.message}`);
+                    dialog.errorNotification(
+                        `Failed to update course: ${updateResult.val.message}`,
+                        updateResult.val,
+                    );
                 }
                 if (uiState === ui.webview.getStateId()) {
                     displayLocalCourseDetails(actionContext, courseId);
@@ -257,9 +248,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             const result = await openExercises(actionContext, msg.ids, msg.courseName);
             if (result.err) {
-                const message = "Error while opening exercises.";
-                Logger.error(message, result.val);
-                showError(message);
+                dialog.errorNotification("Errored while opening selected exercises.", result.val);
             }
         },
     );
@@ -271,9 +260,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
             const result = await closeExercises(actionContext, msg.ids, msg.courseName);
             if (result.err) {
-                const message = "Error while closing selected exercises.";
-                Logger.error(message, result.val);
-                showError(message);
+                dialog.errorNotification("Errored while closing selected exercises.", result.val);
             }
         },
     );
@@ -291,27 +278,22 @@ export function registerUiActions(actionContext: ActionContext): void {
         };
         const newPath = (await vscode.window.showOpenDialog(options))?.[0];
         if (newPath && old) {
-            const res = await vscode.window.withProgress(
-                {
-                    location: vscode.ProgressLocation.Notification,
-                    title: "TestMyCode",
-                },
-                async (progress) => {
-                    const progress2 = incrementPercentageWrapper(progress);
+            const res = await dialog.progressNotification(
+                "Moving projects directory...",
+                (progress) => {
                     return moveExtensionDataPath(actionContext, newPath, (update) =>
-                        progress2.report(update),
+                        progress.report(update),
                     );
                 },
             );
             if (res.ok) {
                 Logger.log(`Moved workspace folder from ${old} to ${newPath.fsPath}`);
-                showNotification(`TMC Data was successfully moved to ${newPath.fsPath}`, [
+                dialog.notification(`TMC Data was successfully moved to ${newPath.fsPath}`, [
                     "OK",
                     (): void => {},
                 ]);
             } else {
-                Logger.error(res.val);
-                showError(res.val.message);
+                dialog.errorNotification(res.val.message, res.val);
             }
             ui.webview.postMessage({
                 command: "setTmcDataFolder",

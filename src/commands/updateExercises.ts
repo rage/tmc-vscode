@@ -5,16 +5,15 @@ import { ActionContext } from "../actions/types";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import { WebviewMessage } from "../ui/types";
 import { Logger } from "../utils";
-import { showError, showNotification } from "../window";
 
 export async function updateExercises(actionContext: ActionContext, silent: string): Promise<void> {
     Logger.log("Checking for exercise updates");
-    const { settings, ui, userData } = actionContext;
+    const { dialog, settings, ui, userData } = actionContext;
 
     const updateablesResult = await actions.checkForExerciseUpdates(actionContext);
     if (updateablesResult.err) {
         Logger.warn("Failed to check for exercise updates.", updateablesResult.val);
-        silent !== "silent" && showError("Failed to check for exercise updates.");
+        silent !== "silent" && dialog.errorNotification("Failed to check for exercise updates.");
         return;
     }
 
@@ -25,7 +24,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
     });
 
     if (exercisesToUpdate.length === 0) {
-        silent !== "silent" && showNotification("All exercises are up to date.");
+        silent !== "silent" && dialog.notification("All exercises are up to date.");
         return;
     }
 
@@ -42,8 +41,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
             exercisesToUpdate.map((x) => x.exerciseId),
         );
         if (downloadResult.err) {
-            Logger.error("Failed to update exercises", downloadResult.val);
-            showError("Failed to update exercises.");
+            dialog.errorNotification("Failed to update exercises.", downloadResult.val);
             return;
         }
 
@@ -60,7 +58,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
         return downloadHandler();
     }
 
-    showNotification(
+    dialog.notification(
         `Found updates for ${exercisesToUpdate.length} exercises. Do you wish to download them?`,
         ["Download", downloadHandler],
         [
