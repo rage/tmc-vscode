@@ -1,7 +1,6 @@
 import { expect } from "chai";
 import * as mockFs from "mock-fs";
-import { Ok } from "ts-results";
-import { IMock, It, Mock, Times } from "typemoq";
+import { IMock, It, Times } from "typemoq";
 import * as vscode from "vscode";
 
 import Dialog from "../../api/dialog";
@@ -9,6 +8,7 @@ import TMC from "../../api/tmc";
 import migrateExerciseData from "../../migrate/migrateExerciseData";
 import * as exerciseData from "../fixtures/exerciseData";
 import { createDialogMock } from "../mocks/dialog";
+import { createTMCMock } from "../mocks/tmc";
 import { createMockMemento } from "../mocks/vscode";
 
 const EXERCISE_DATA_KEY_V0 = "exerciseData";
@@ -29,15 +29,7 @@ suite("Exercise data migration", function () {
     setup(function () {
         [dialogMock] = createDialogMock();
         memento = createMockMemento();
-        tmcMock = Mock.ofType<TMC>();
-        tmcMock
-            .setup((x) =>
-                x.migrateExercise(It.isAny(), It.isAny(), It.isAny(), It.isAny(), It.isAny()),
-            )
-            .returns(async () => Ok.EMPTY);
-        tmcMock
-            .setup((x) => x.setSetting("closed-exercises-for:test-python-course", It.isAny()))
-            .returns(async () => Ok.EMPTY);
+        [tmcMock] = createTMCMock();
     });
 
     suite("between versions", function () {
