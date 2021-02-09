@@ -6,16 +6,16 @@
 declare const __DEBUG_MODE__: boolean;
 declare const __TMC_LANGS_CONFIG_DIR__: string | null;
 declare const __TMC_LANGS_ROOT_URL__: string;
-declare const __TMC_LANGS_RUST_DL_URL__: string;
-declare const __TMC_LANGS_RUST_VERSION__: string;
+declare const __TMC_LANGS_DL_URL__: string;
+declare const __TMC_LANGS_VERSION__: string;
 
 import FAQ from "../../docs/FAQ.md";
 
 export const DEBUG_MODE = __DEBUG_MODE__;
 export const TMC_LANGS_CONFIG_DIR = __TMC_LANGS_CONFIG_DIR__ || undefined;
 export const TMC_LANGS_ROOT_URL = __TMC_LANGS_ROOT_URL__;
-export const TMC_LANGS_RUST_DL_URL = __TMC_LANGS_RUST_DL_URL__;
-export const TMC_LANGS_RUST_VERSION = __TMC_LANGS_RUST_VERSION__;
+export const TMC_LANGS_DL_URL = __TMC_LANGS_DL_URL__;
+export const TMC_LANGS_VERSION = __TMC_LANGS_VERSION__;
 
 export const CLIENT_NAME = "vscode_plugin";
 export const EXTENSION_ID = "moocfi.test-my-code";

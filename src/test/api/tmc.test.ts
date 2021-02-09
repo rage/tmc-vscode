@@ -5,21 +5,26 @@ import * as path from "path";
 
 import TMC from "../../api/tmc";
 import { SubmissionFeedback } from "../../api/types";
-import { CLIENT_NAME, TMC_LANGS_CONFIG_DIR, TMC_LANGS_ROOT_URL } from "../../config/constants";
+import {
+    CLIENT_NAME,
+    TMC_LANGS_CONFIG_DIR,
+    TMC_LANGS_ROOT_URL,
+    TMC_LANGS_VERSION,
+} from "../../config/constants";
 import {
     AuthenticationError,
     AuthorizationError,
     BottleneckError,
     RuntimeError,
 } from "../../errors";
-import { getPlatform, getRustExecutable } from "../../utils/env";
+import { getLangsCLIForPlatform, getPlatform } from "../../utils/";
 
 suite("TMC", function () {
     // Use CLI from backend folder to run tests. The location is relative to the dist-folder
     // where webpack builds the test bundle.
     const BACKEND_FOLDER = path.join(__dirname, "..", "backend");
     const CLI_PATH = path.join(BACKEND_FOLDER, "cli");
-    const CLI_FILE = path.join(CLI_PATH, getRustExecutable(getPlatform()));
+    const CLI_FILE = path.join(CLI_PATH, getLangsCLIForPlatform(getPlatform(), TMC_LANGS_VERSION));
     const ARTIFACT_PATH = path.join(BACKEND_FOLDER, "testArtifacts");
 
     const FEEDBACK_URL = "http://localhost:4001/feedback";
