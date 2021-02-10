@@ -1,9 +1,10 @@
 import { expect } from "chai";
 import * as mockFs from "mock-fs";
-import { Err, Ok } from "ts-results";
-import { IMock, It, Mock } from "typemoq";
+import { Ok } from "ts-results";
+import { IMock } from "typemoq";
 import * as vscode from "vscode";
 
+import Dialog from "../../api/dialog";
 import Storage from "../../api/storage";
 import TMC from "../../api/tmc";
 import { migrateExtensionDataFromPreviousVersions } from "../../migrate";
@@ -11,6 +12,8 @@ import * as exerciseData from "../fixtures/exerciseData";
 import * as extensionSettings from "../fixtures/extensionSettings";
 import * as sessionState from "../fixtures/sessionState";
 import * as userData from "../fixtures/userData";
+import { createDialogMock } from "../mocks/dialog";
+import { createFailingTMCMock, createTMCMock } from "../mocks/tmc";
 import { createMockContext } from "../mocks/vscode";
 
 const UNSTABLE_EXERCISE_DATA_KEY = "exerciseData";
@@ -30,47 +33,24 @@ suite("Extension data migration", function () {
     };
 
     let context: vscode.ExtensionContext;
-    let tmcSuccess: IMock<TMC>;
-    let tmcFail: IMock<TMC>;
+    let dialogMock: IMock<Dialog>;
     let storage: Storage;
+    let tmcMock: IMock<TMC>;
 
     setup(function () {
         mockFs(virtualFileSystem);
         context = createMockContext();
+        [dialogMock] = createDialogMock();
         storage = new Storage(context);
-        tmcFail = Mock.ofType<TMC>();
-        tmcFail
-            .setup((x) =>
-                x.migrateExercise(It.isAny(), It.isAny(), It.isAny(), It.isAny(), It.isAny()),
-            )
-            .returns(async () => Err(new Error()));
-        tmcFail
-            .setup((x) => x.setSetting(It.isAny(), It.isAny()))
-            .returns(async () => Err(new Error()));
-        tmcFail
-            .setup((x) => x.getSetting(It.isValue("projects-dir"), It.isAny()))
-            .returns(async () => Err(new Error()));
-        tmcSuccess = Mock.ofType<TMC>();
-        tmcSuccess
-            .setup((x) =>
-                x.migrateExercise(It.isAny(), It.isAny(), It.isAny(), It.isAny(), It.isAny()),
-            )
-            .returns(async () => Ok.EMPTY);
-        tmcSuccess
-            .setup((x) =>
-                x.setSetting(It.isValue("closed-exercises-for:test-python-course"), It.isAny()),
-            )
-            .returns(async () => Ok.EMPTY);
-        tmcSuccess
-            .setup((x) => x.getSetting<string>(It.isValue("projects-dir"), It.isAny()))
-            .returns(async () => Ok("/langs/path/to/exercises"));
+        [tmcMock] = createTMCMock();
     });
 
     test("should succeed without any data", async function () {
         const result = await migrateExtensionDataFromPreviousVersions(
             context,
             storage,
-            tmcSuccess.object,
+            dialogMock.object,
+            tmcMock.object,
         );
         expect(result.ok).to.be.true;
     });
@@ -84,7 +64,8 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
-                tmcSuccess.object,
+                dialogMock.object,
+                tmcMock.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
             expect(storage.getUserData()).to.not.be.undefined;
@@ -92,12 +73,14 @@ suite("Extension data migration", function () {
         });
 
         test("should not change anything if Langs fails", async function () {
+            [tmcMock] = createFailingTMCMock();
             await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_1_0);
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_1_0);
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
-                tmcFail.object,
+                dialogMock.object,
+                tmcMock.object,
             );
             expect(result.val).to.be.instanceOf(Error);
             expect(storage.getUserData()).to.be.undefined;
@@ -115,7 +98,8 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
-                tmcSuccess.object,
+                dialogMock.object,
+                tmcMock.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
             expect(storage.getUserData()).to.not.be.undefined;
@@ -123,12 +107,14 @@ suite("Extension data migration", function () {
         });
 
         test("should not modify data if Langs fails", async function () {
+            [tmcMock] = createFailingTMCMock();
             await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_2_0);
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_2_0);
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
-                tmcFail.object,
+                dialogMock.object,
+                tmcMock.object,
             );
             expect(result.val).to.be.instanceOf(Error);
             expect(storage.getUserData()).to.be.undefined;
@@ -150,7 +136,8 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
-                tmcSuccess.object,
+                dialogMock.object,
+                tmcMock.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
             expect(storage.getUserData()).to.not.be.undefined;
@@ -161,6 +148,7 @@ suite("Extension data migration", function () {
         });
 
         test("should not modify data if Langs fails", async function () {
+            [tmcMock] = createFailingTMCMock();
             await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_3_0);
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_3_0);
             await context.globalState.update(
@@ -170,7 +158,8 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
-                tmcFail.object,
+                dialogMock.object,
+                tmcMock.object,
             );
             expect(result.val).to.be.instanceOf(Error);
             expect(storage.getUserData()).to.be.undefined;
@@ -196,7 +185,8 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
-                tmcSuccess.object,
+                dialogMock.object,
+                tmcMock.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
             expect(storage.getUserData()).to.not.be.undefined;
@@ -207,6 +197,7 @@ suite("Extension data migration", function () {
         });
 
         test("should not modify data if Langs fails", async function () {
+            [tmcMock] = createFailingTMCMock();
             await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_9_0);
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_9_0);
             await context.globalState.update(
@@ -216,7 +207,8 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
-                tmcFail.object,
+                dialogMock.object,
+                tmcMock.object,
             );
             expect(result.val).to.be.instanceOf(Error);
             expect(storage.getUserData()).to.be.undefined;
@@ -239,7 +231,8 @@ suite("Extension data migration", function () {
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
                 storage,
-                tmcSuccess.object,
+                dialogMock.object,
+                tmcMock.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
             expect(storage.getUserData()).to.not.be.undefined;

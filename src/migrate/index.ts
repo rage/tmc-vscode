@@ -4,6 +4,7 @@ import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import Dialog from "../api/dialog";
 import Storage from "../api/storage";
 import TMC from "../api/tmc";
 import {
@@ -28,6 +29,7 @@ import migrateUserData from "./migrateUserData";
 export async function migrateExtensionDataFromPreviousVersions(
     context: vscode.ExtensionContext,
     storage: Storage,
+    dialog: Dialog,
     tmc: TMC,
 ): Promise<Result<void, Error>> {
     const memento = context.globalState;
@@ -49,7 +51,7 @@ export async function migrateExtensionDataFromPreviousVersions(
         const migratedUserData = migrateUserData(memento);
 
         // Workspace data migration - this one is a bit more tricky so do it last.
-        const migratedExerciseData = await migrateExerciseData(memento, tmc);
+        const migratedExerciseData = await migrateExerciseData(memento, dialog, tmc);
 
         await storage.updateExtensionSettings(migratedExtensionSettings.data);
         await storage.updateSessionState(migratedSessionState.data);

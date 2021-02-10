@@ -3,6 +3,7 @@ import { createIs } from "typescript-is";
 import * as vscode from "vscode";
 
 import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
+import Dialog from "./api/dialog";
 import Storage from "./api/storage";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
@@ -22,7 +23,6 @@ import { migrateExtensionDataFromPreviousVersions } from "./migrate";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
 import { Logger, LogLevel, semVerCompare } from "./utils";
-import { showError } from "./window";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 
@@ -35,7 +35,9 @@ function throwFatalError(error: Error, cliFolder: string): never {
         );
     }
 
-    showError("TestMyCode initialization failed. Please see logs for details.");
+    vscode.window.showErrorMessage(
+        "TestMyCode initialization failed. Please see logs for details.",
+    );
     Logger.show();
     throw error;
 }
@@ -48,8 +50,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     Logger.log(`${EXTENSION_ID} version: ${extensionVersion}`);
     Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
 
+    const dialog = new Dialog();
     const cliFolder = path.join(context.globalStoragePath, "cli");
-    const cliPathResult = await init.downloadCorrectLangsVersion(cliFolder);
+    const cliPathResult = await init.downloadCorrectLangsVersion(cliFolder, dialog);
     if (cliPathResult.err) {
         throwFatalError(cliPathResult.val, cliFolder);
     }
@@ -68,7 +71,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated);
 
     const storage = new Storage(context);
-    const migrationResult = await migrateExtensionDataFromPreviousVersions(context, storage, tmc);
+    const migrationResult = await migrateExtensionDataFromPreviousVersions(
+        context,
+        storage,
+        dialog,
+        tmc,
+    );
     if (migrationResult.err) {
         if (migrationResult.val instanceof HaltForReloadError) {
             Logger.warn("Extension expected to restart");
@@ -115,6 +123,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ui.treeDP.updateVisibility([visibilityGroups.loggedIn]);
     });
     tmc.on("logout", async () => {
+        dialog.warningNotification("Your TMC session has expired, please log in.");
         await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
         ui.treeDP.updateVisibility([visibilityGroups.loggedIn.not]);
         ui.webview.setContentFromTemplate({ templateName: "login" });
@@ -136,6 +145,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
     const actionContext = {
+        dialog,
         resources,
         settings,
         temporaryWebviewProvider,

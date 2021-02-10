@@ -17,24 +17,18 @@ import {
 // https://github.com/rage/tmc-langs-rust/blob/master/tmc-client/src/tmc_client.rs
 // -------------------------------------------------------------------------------------------------
 
-type ClientUpdateDataEnum<K extends string, V> = {
-    "client-update-data-kind": K;
-} & V;
-
 export type ClientUpdateData =
-    | ClientUpdateDataEnum<"exercise-download", { id: number; path: string }>
-    | ClientUpdateDataEnum<"posted-submission", SubmissionResponse>;
+    | ({ "client-update-data-kind": "exercise-download" } & { id: number; path: string })
+    | ({ "client-update-data-kind": "posted-submission" } & SubmissionResponse);
 
 // -------------------------------------------------------------------------------------------------
 // https://github.com/rage/tmc-langs-rust/blob/master/tmc-langs-cli/src/output.rs
 // -------------------------------------------------------------------------------------------------
 
-type OutputType<K extends string, V> = { "output-kind": K } & V;
-
 export type Output =
-    | OutputType<"output-data", OutputData>
-    | OutputType<"status-update", StatusUpdateData>
-    | OutputType<"warnings", Warnings>;
+    | ({ "output-kind": "output-data" } & OutputData)
+    | ({ "output-kind": "status-update" } & StatusUpdateData)
+    | ({ "output-kind": "warnings" } & Warnings);
 
 export interface OutputData {
     status: Status;
@@ -79,13 +73,9 @@ export type Data =
     | DataType<"config-value", unknown>
     | DataType<"tmc-config", TmcConfig>;
 
-type StatusUpdateDataType<T extends string, V> = {
-    "update-data-kind": T;
-} & V;
-
 export type StatusUpdateData =
-    | StatusUpdateDataType<"client-update-data", StatusUpdate<ClientUpdateData>>
-    | StatusUpdateDataType<"none", StatusUpdate<null>>;
+    | ({ "update-data-kind": "client-update-data" } & StatusUpdate<ClientUpdateData>)
+    | ({ "update-data-kind": "none" } & StatusUpdate<null>);
 
 export type Status = "finished" | "crashed";
 

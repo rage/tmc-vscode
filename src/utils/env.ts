@@ -1,8 +1,4 @@
-import { is } from "typescript-is";
-
-import { TMC_LANGS_RUST_VERSION } from "../config/constants";
-
-export function getPlatform():
+export type Platform =
     | "linux32"
     | "linux64"
     | "linuxarm64"
@@ -12,7 +8,9 @@ export function getPlatform():
     | "macosarm64"
     | "macos64"
     | "macos32"
-    | "other" {
+    | "other";
+
+export function getPlatform(): Platform {
     const platform = process.platform;
     const arch = process.arch;
     if (platform === "linux") {
@@ -36,48 +34,26 @@ export function getPlatform():
     return "other";
 }
 
-export function getRustExecutable(platform: string): string {
+export function getLangsCLIForPlatform(platform: Platform, version: string): string {
     switch (platform) {
         case "linux32":
-            return "tmc-langs-cli-i686-unknown-linux-gnu-" + TMC_LANGS_RUST_VERSION;
+            return `tmc-langs-cli-i686-unknown-linux-gnu-${version}`;
         case "linux64":
-            return "tmc-langs-cli-x86_64-unknown-linux-gnu-" + TMC_LANGS_RUST_VERSION;
+            return `tmc-langs-cli-x86_64-unknown-linux-gnu-${version}`;
         case "linuxarm":
-            return "tmc-langs-cli-armv7-unknown-linux-gnueabihf-" + TMC_LANGS_RUST_VERSION;
+            return `tmc-langs-cli-armv7-unknown-linux-gnueabihf-${version}`;
         case "linuxarm64":
-            return "tmc-langs-cli-aarch64-unknown-linux-gnu-" + TMC_LANGS_RUST_VERSION;
+            return `tmc-langs-cli-aarch64-unknown-linux-gnu-${version}`;
         case "macos64":
-            return "tmc-langs-cli-x86_64-apple-darwin-" + TMC_LANGS_RUST_VERSION;
+            return `tmc-langs-cli-x86_64-apple-darwin-${version}`;
         case "macosarm64":
-            return "tmc-langs-cli-aarch64-apple-darwin-" + TMC_LANGS_RUST_VERSION;
+            return `tmc-langs-cli-aarch64-apple-darwin-${version}`;
         case "windows32":
-            return "tmc-langs-cli-i686-pc-windows-msvc-" + TMC_LANGS_RUST_VERSION + ".exe";
+            return `tmc-langs-cli-i686-pc-windows-msvc-${version}.exe`;
         case "windows64":
-            return "tmc-langs-cli-x86_64-pc-windows-msvc-" + TMC_LANGS_RUST_VERSION + ".exe";
+            return `tmc-langs-cli-x86_64-pc-windows-msvc-${version}.exe`;
         default:
-            return "tmc-langs-cli-x86_64-unknown-linux-gnu-" + TMC_LANGS_RUST_VERSION;
-        // Currently set linux CLI as default, this is experimental, in future return error.
-        // return new Err(new Error("Unexpected OS type from Node."));
+            // Currently set linux CLI as default, this is experimental, in future return error.
+            return `tmc-langs-cli-x86_64-unknown-linux-gnu-${version}`;
     }
-}
-
-/**
- * Runs a test to see whether or not superfluous properties are enabled within typescript-is
- * properties.
- */
-export function superfluousPropertiesEnabled(): boolean {
-    // Use configuration properties to see whether superflous object properties are enabled in
-    // tsconfig. In the code this feature is primarily used when fetched API data is being parsed.
-    // For configuration, see tsconfig.json used by webpack.dev.json
-    // and tsconfig.production.json used by webpack.prod.json
-    type TestType = {
-        strict: boolean;
-    };
-
-    const testObject = {
-        strict: true,
-        superflous: "a superfluous property",
-    };
-
-    return is<TestType>(testObject);
 }

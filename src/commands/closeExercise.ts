@@ -2,20 +2,17 @@ import * as vscode from "vscode";
 
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
-import { Logger } from "../utils";
-import { askForConfirmation, showError } from "../window";
 
 export async function closeExercise(
     actionContext: ActionContext,
     resource: vscode.Uri | undefined,
 ): Promise<void> {
-    const { userData, workspaceManager } = actionContext;
+    const { dialog, userData, workspaceManager } = actionContext;
     const exercise = resource
         ? workspaceManager.getExerciseByPath(resource)
         : workspaceManager.activeExercise;
     if (!exercise) {
-        Logger.error("Currently open editor is not part of a TMC exercise");
-        showError("Currently open editor is not part of a TMC exercise");
+        dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
         return;
     }
 
@@ -23,7 +20,7 @@ export async function closeExercise(
     if (
         exerciseId &&
         (userData.getPassed(exerciseId) ||
-            (await askForConfirmation(
+            (await dialog.confirmation(
                 `Are you sure you want to close uncompleted exercise ${exercise.exerciseSlug}?`,
             )))
     ) {
@@ -33,11 +30,10 @@ export async function closeExercise(
             exercise.courseSlug,
         );
         if (result.err) {
-            const message = "Error when closing exercise.";
-            Logger.error(message, result.val);
-            showError(message);
+            dialog.errorNotification("Error when closing exercise.", result.val);
             return;
         }
+
         vscode.commands.executeCommand("workbench.action.closeActiveEditor");
     }
 }

@@ -4,9 +4,9 @@ import { Err, Ok, Result } from "ts-results";
 import { createIs } from "typescript-is";
 import * as vscode from "vscode";
 
+import Dialog from "../api/dialog";
 import TMC from "../api/tmc";
 import { Logger } from "../utils";
-import { incrementPercentageWrapper } from "../window";
 
 import { MigratedData } from "./types";
 import validateData from "./validateData";
@@ -82,6 +82,7 @@ function resolveExercisePathV0(
 async function exerciseDataFromV0toV1(
     exerciseData: LocalExerciseDataV0[],
     memento: vscode.Memento,
+    dialog: Dialog,
     tmc: TMC,
 ): Promise<void> {
     interface ExtensionSettingsPartial {
@@ -116,36 +117,30 @@ async function exerciseDataFromV0toV1(
         return;
     }
 
-    const result = await vscode.window.withProgress(
-        {
-            location: vscode.ProgressLocation.Notification,
-            title: "TestMyCode",
-        },
-        async (progress) => {
-            const progress2 = incrementPercentageWrapper(progress);
-            let atLeastOneSuccess = false;
-            let index = 0;
-            for (const [exercise, path] of exercisesToMigrate) {
-                const { checksum, course, id, name } = exercise;
-                const migrationResult = await tmc.migrateExercise(course, checksum, id, path, name);
-                if (migrationResult.ok) {
-                    atLeastOneSuccess = true;
-                } else {
-                    Logger.error(
-                        `Migration failed for exercise ${course}/${name}:`,
-                        migrationResult.val,
-                    );
-                }
-
-                progress2.report({
-                    percent: ++index / exercisesToMigrate.length,
-                    message: "Data migration in progress, please wait...",
-                });
+    const message = "Data migration in progress, please wait...";
+    const result = await dialog.progressNotification(message, async (progress) => {
+        let atLeastOneSuccess = false;
+        let index = 0;
+        for (const [exercise, path] of exercisesToMigrate) {
+            const { checksum, course, id, name } = exercise;
+            const migrationResult = await tmc.migrateExercise(course, checksum, id, path, name);
+            if (migrationResult.ok) {
+                atLeastOneSuccess = true;
+            } else {
+                Logger.error(
+                    `Migration failed for exercise ${course}/${name}:`,
+                    migrationResult.val,
+                );
             }
 
-            return atLeastOneSuccess ? Ok.EMPTY : Err("Exercise migration failed.");
-        },
-    );
+            progress.report({
+                percent: ++index / exercisesToMigrate.length,
+                message,
+            });
+        }
+
+        return atLeastOneSuccess ? Ok.EMPTY : Err("Exercise migration failed.");
+    });
 
     if (result.err) {
         throw new Error("Exercise migration failed.");
@@ -164,6 +159,7 @@ async function exerciseDataFromV0toV1(
 
 export default async function migrateExerciseData(
     memento: vscode.Memento,
+    dialog: Dialog,
     tmc: TMC,
 ): Promise<MigratedData<undefined>> {
     const obsoleteKeys: string[] = [];
@@ -173,7 +169,7 @@ export default async function migrateExerciseData(
         createIs<LocalExerciseDataV0[]>(),
     );
     if (dataV0) {
-        await exerciseDataFromV0toV1(dataV0, memento, tmc);
+        await exerciseDataFromV0toV1(dataV0, memento, dialog, tmc);
         obsoleteKeys.push(EXERCISE_DATA_KEY_V0);
     }
 

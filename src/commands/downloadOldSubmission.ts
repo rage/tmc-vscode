@@ -3,7 +3,6 @@ import * as vscode from "vscode";
 import { ActionContext } from "../actions/types";
 import { OldSubmission } from "../api/types";
 import { dateToString, Logger, parseDate } from "../utils";
-import { askForItem, showError, showNotification } from "../window";
 
 /**
  * Looks for older submissions of the given exercise and lets user choose which one to download.
@@ -15,41 +14,36 @@ export async function downloadOldSubmission(
     actionContext: ActionContext,
     resource: vscode.Uri | undefined,
 ): Promise<void> {
-    const { tmc, userData, workspaceManager } = actionContext;
+    const { dialog, tmc, userData, workspaceManager } = actionContext;
 
     const exercise = resource
         ? workspaceManager.getExerciseByPath(resource)
         : workspaceManager.activeExercise;
     if (!exercise) {
-        Logger.error("Currently open editor is not part of a TMC exercise.");
-        showError("Currently open editor is not part of a TMC exercise.");
+        dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
         return;
     }
 
     const exerciseId = userData.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id;
     if (!exerciseId) {
-        Logger.error("Failed to resolve exercise id.");
-        showError("Failed to resolve exercise id.");
+        dialog.errorNotification("Failed to resolve exercise id.");
         return;
     }
 
     Logger.debug("Fetching old submissions");
     const submissionsResult = await tmc.getOldSubmissions(exerciseId);
     if (submissionsResult.err) {
-        Logger.error("Failed to fetch old submissions:", submissionsResult.val);
-        showError("Failed to fetch old submissions.");
+        dialog.errorNotification("Failed to fetch old submissions.", submissionsResult.val);
         return;
     }
 
     if (submissionsResult.val.length === 0) {
-        Logger.log(`No previous submissions found for exercise ${exerciseId}`);
-        showNotification(`No previous submissions found for ${exercise.exerciseSlug}.`);
+        dialog.notification(`No previous submissions found for exercise ${exerciseId}`);
         return;
     }
 
-    const submission = await askForItem(
+    const submission = await dialog.selectItem(
         exercise.exerciseSlug + ": Select a submission",
-        false,
         ...submissionsResult.val.map<[string, OldSubmission]>((a) => [
             dateToString(parseDate(a.processing_attempts_started_at)) +
                 "| " +
@@ -57,19 +51,13 @@ export async function downloadOldSubmission(
             a,
         ]),
     );
-
     if (!submission) {
         return;
     }
 
-    const submitFirst = await askForItem(
+    const submitFirst = await dialog.confirmation(
         "Do you want to save the current state of the exercise by submitting it to TMC Server?",
-        false,
-        ["Yes", true],
-        ["No", false],
-        ["Cancel", undefined],
     );
-
     if (submitFirst === undefined) {
         Logger.debug("Answer for submitting first not provided, returning early.");
         return;
@@ -85,8 +73,7 @@ export async function downloadOldSubmission(
         submitFirst,
     );
     if (oldDownloadResult.err) {
-        Logger.error("Failed to download old submission", oldDownloadResult.val);
-        showError(`Failed to download old submission: ${oldDownloadResult.val.message}`);
+        dialog.errorNotification("Failed to download old submission.", oldDownloadResult.val);
     }
 
     if (editor && document) {

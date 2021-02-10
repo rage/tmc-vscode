@@ -1,10 +1,8 @@
 import { concat, flatten, groupBy, partition } from "lodash";
 import * as pLimit from "p-limit";
 import { Ok, Result } from "ts-results";
-import * as vscode from "vscode";
 
 import { WebviewMessage } from "../ui/types";
-import { incrementPercentageWrapper } from "../window";
 
 import { ActionContext } from "./types";
 
@@ -21,27 +19,22 @@ export async function downloadOrUpdateExercises(
     actionContext: ActionContext,
     exerciseIds: number[],
 ): Promise<Result<{ successful: number[]; failed: number[] }, Error>> {
-    const { tmc, ui, userData } = actionContext;
+    const { dialog, tmc, ui, userData } = actionContext;
 
     // TODO: How to download latest submission in new version?
-    const downloadResult = await vscode.window.withProgress(
-        {
-            location: vscode.ProgressLocation.Notification,
-            title: "TestMyCode",
-        },
-        (progress) => {
-            const progress2 = incrementPercentageWrapper(progress);
-            return limit(() =>
+    const downloadResult = await dialog.progressNotification(
+        "Downloading exercises...",
+        (progress) =>
+            limit(() =>
                 tmc.downloadExercises(exerciseIds, (download) => {
-                    progress2.report(download);
+                    progress.report(download);
                     ui.webview.postMessage({
                         command: "exerciseStatusChange",
                         exerciseId: download.id,
                         status: "closed",
                     });
                 }),
-            );
-        },
+            ),
     );
     if (downloadResult.err) {
         return downloadResult;

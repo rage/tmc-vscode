@@ -1,19 +1,18 @@
 import * as fs from "fs-extra";
-import { Ok, Result } from "ts-results";
+import { Err, Ok } from "ts-results";
 import * as vscode from "vscode";
 
 import { ActionContext } from "../actions/types";
 import { deactivate } from "../extension";
 import { Logger } from "../utils";
-import { askForConfirmation, showNotification } from "../window";
 
 export async function wipe(
     actionContext: ActionContext,
     context: vscode.ExtensionContext,
 ): Promise<void> {
-    const { resources, tmc, userData, workspaceManager } = actionContext;
+    const { dialog, resources, tmc, userData, workspaceManager } = actionContext;
     if (workspaceManager.activeCourse) {
-        showNotification(
+        dialog.notification(
             "Please close the TMC Workspace before wiping data and make sure you have closed all files related to TMC.",
             [
                 "Close workspace",
@@ -26,17 +25,15 @@ export async function wipe(
         return;
     }
 
-    const wipe = await askForConfirmation(
+    const wipe = await dialog.explicitConfirmation(
         "Are you sure you want to wipe all data for the TMC Extension?",
-        true,
     );
     if (!wipe) {
         return;
     }
 
-    const reallyWipe = await askForConfirmation(
+    const reallyWipe = await dialog.explicitConfirmation(
         "This action cannot be undone. This might permanently delete the extension data, exercises, settings...",
-        true,
     );
     if (!reallyWipe) {
         return;
@@ -51,12 +48,13 @@ export async function wipe(
             progress.report({ message: "Removing extension data..." });
 
             // Remove exercises
-            const result1 = Result.wrap(() => {
+            try {
                 fs.removeSync(resources.projectsDirectory);
-            });
-            if (result1.err) return result1;
+            } catch (e) {
+                return Err(new Error("Failed to remove projects directory."));
+            }
 
-            // Reset langs settings
+            // Reset Langs settings
             const result2 = await tmc.resetSettings();
             if (result2.err) return result2;
 
@@ -74,8 +72,7 @@ export async function wipe(
     );
 
     if (wipeResult.err) {
-        Logger.error("Failed to wipe extension data: ", wipeResult.val);
-        showNotification("Failed to wipe extension data.");
+        dialog.errorNotification("Failed to wipe extension data.", wipeResult.val);
         return;
     }
 

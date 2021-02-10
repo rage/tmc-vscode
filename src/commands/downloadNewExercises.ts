@@ -1,14 +1,12 @@
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
-import { askForItem, showError, showNotification } from "../window";
 
 export async function downloadNewExercises(actionContext: ActionContext): Promise<void> {
-    const { userData } = actionContext;
+    const { dialog, userData } = actionContext;
 
     const courses = userData.getCourses();
-    const courseId = await askForItem<number>(
+    const courseId = await dialog.selectItem(
         "Download new exercises for course?",
-        false,
         ...courses.map<[string, number]>((course) => [course.title, course.id]),
     );
     if (!courseId) {
@@ -17,7 +15,7 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
 
     const course = userData.getCourse(courseId);
     if (course.newExercises.length === 0) {
-        showNotification(`There are no new exercises for the course ${course.title}.`, [
+        dialog.notification(`There are no new exercises for the course ${course.title}.`, [
             "OK",
             (): void => {},
         ]);
@@ -26,6 +24,9 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
 
     const downloadResult = await actions.downloadNewExercisesForCourse(actionContext, courseId);
     if (downloadResult.err) {
-        showError(`Failed to download new exercises for course "${course.title}."`);
+        dialog.errorNotification(
+            `Failed to download new exercises for course "${course.title}."`,
+            downloadResult.val,
+        );
     }
 }

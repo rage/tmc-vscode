@@ -20,13 +20,13 @@ import {
     RuntimeError,
 } from "../errors";
 import { Logger } from "../utils/logger";
-import { showError, showWarning } from "../window";
 
 import {
     Data,
     DownloadOrUpdateCourseExercisesResult,
     FailedExerciseDownload,
     LocalExercise,
+    Output,
     OutputData,
     StatusUpdateData,
 } from "./langsSchema";
@@ -990,7 +990,6 @@ export default class TMC {
             case "not-logged-in":
                 this._responseCache.clear();
                 this._onLogout?.();
-                showError("Your TMC session has expired, please log in.");
                 return Err(new AuthorizationError(message, traceString));
             case "obsolete-client":
                 return Err(
@@ -1093,6 +1092,12 @@ export default class TMC {
                 for (const part of parts) {
                     try {
                         const json = JSON.parse(part.trim());
+                        if (!is<Output>(json)) {
+                            Logger.error("TMC-langs response didn't match expected type");
+                            Logger.debug(part);
+                            continue;
+                        }
+
                         switch (json["output-kind"]) {
                             case "output-data":
                                 theResult = json;
@@ -1101,7 +1106,6 @@ export default class TMC {
                                 onStdout?.(json);
                                 break;
                             case "warnings":
-                                showWarning(json.warnings.join("\n"));
                                 break;
                             default:
                                 Logger.error("TMC-langs response didn't match expected type");

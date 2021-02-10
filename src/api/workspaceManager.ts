@@ -12,7 +12,6 @@ import {
 } from "../config/constants";
 import Resources, { EditorKind } from "../config/resources";
 import { Logger } from "../utils";
-import { showNotification } from "../window";
 
 export enum ExerciseStatus {
     Closed = "closed",
@@ -112,8 +111,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     /**
-     * Checks whether or not the given `uri` is an exercise or not.
-     * @param uri
+     * Checks whether or not the given `Uri` is an exercise or not.
      */
     public uriIsExercise(uri: vscode.Uri): boolean {
         const exerciseFolderPath = this._resources.projectsDirectory;
@@ -273,10 +271,8 @@ export default class WorkspaceManager implements vscode.Disposable {
         });
 
         if (incorrectFolderAdded) {
-            showNotification(
-                `Exercises or folders you added to this workspace are not
-                part of the current course ${activeCourse} and will be removed later.`,
-                ["Ok", (): void => {}],
+            Logger.warn(
+                `Folders added that are not part of course ${activeCourse}. These may be removed later.`,
             );
         }
         if (e.added.length > 5) {

@@ -3,8 +3,6 @@ import * as vscode from "vscode";
 import { ActionContext } from "../actions/types";
 import { Logger } from "../utils/logger";
 
-import { showError } from "./dialog";
-export * from "./dialog";
 /**
  * Get the active text editor and figure out the language ID
  * and the executable path from recommended extensions
@@ -54,7 +52,6 @@ function getPythonPath(
     } catch (error) {
         const message = "Error while fetching python executable string";
         Logger.error(message, error);
-        showError(message);
         return undefined;
     }
 }
