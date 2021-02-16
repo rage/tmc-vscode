@@ -252,7 +252,11 @@ function component(data) {
                             </button>
                         </div>
                         <div class="col-md-3">
-                            <button class="btn btn-primary m-1 w-100" id="download-selected">
+                            <button
+                                class="btn btn-primary m-1 w-100"
+                                id="download-selected"
+                                disabled
+                            >
                                 Download
                             </button>
                         </div>
@@ -373,10 +377,13 @@ function script() {
     }
 
     function setCourseDisabledStatus(courseId, disabled) {
+        const contextMenuDownloadSelected = document.getElementById("download-selected");
         const notification = document.getElementById("course-disabled-notification");
         if (disabled) {
+            contextMenuDownloadSelected.disabled = true;
             notification.style.display = "block";
         } else {
+            contextMenuDownloadSelected.disabled = false;
             notification.style.display = "none";
         }
     }
