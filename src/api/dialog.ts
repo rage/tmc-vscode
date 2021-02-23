@@ -20,8 +20,6 @@ export default class Dialog {
         (): void => Logger.show(),
     ];
 
-    private static readonly _okButton: NotificationButton = ["Ok", (): void => {}];
-
     /**
      * Creates a new instance of Dialogue class.
      */
@@ -46,13 +44,15 @@ export default class Dialog {
         error?: Error,
         ...items: NotificationButton[]
     ): Promise<void> {
-        Logger.error(notification, error);
         if (error) {
-            items = items.concat(Dialog._logsButton);
+            // Refactor notice: This looks a bit iffy. Maybe error should always exist when calling
+            // this function?
+            Logger.error(notification, error);
+            items = items.concat([Dialog._logsButton]);
         }
 
         return vscode.window
-            .showErrorMessage(`TestMyCode: ${error}`, ...items.map((item) => item[0]))
+            .showErrorMessage(`TestMyCode: ${notification}`, ...items.map((item) => item[0]))
             .then((selection) => {
                 items.find((item) => item[0] === selection)?.[1]();
             });
@@ -129,10 +129,6 @@ export default class Dialog {
         message: string,
         ...items: NotificationButton[]
     ): Promise<void> {
-        if (items.length === 0) {
-            items = [Dialog._okButton];
-        }
-
         return vscode.window
             .showWarningMessage(`TestMyCode: ${message}`, ...items.map((item) => item[0]))
             .then((selection) => {
