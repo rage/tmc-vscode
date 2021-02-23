@@ -30,12 +30,15 @@ async function downloadCorrectLangsVersion(
 
     const cliUrl = TMC_LANGS_DL_URL + executable;
     Logger.log(`Downloading TMC-langs from ${cliUrl} to ${cliPath}`);
+    const message = `Downloading TMC-langs ${TMC_LANGS_VERSION}...`;
     const langsDownloadResult = await dialog.progressNotification(
-        `Downloading TMC-langs ${TMC_LANGS_VERSION}...`,
+        message,
         async (progress) =>
-            await downloadFile(cliUrl, cliPath, undefined, (percent) =>
-                progress.report({ percent }),
-            ),
+            await downloadFile(cliUrl, cliPath, undefined, (percent) => {
+                // downloadFile gives both percent between 0-100 and discrete increment.
+                // Divide here at least until deciding if "increments" are no longer necessary.
+                progress.report({ message, percent: percent / 100 });
+            }),
     );
     if (langsDownloadResult.err) {
         Logger.error("An error occurred while downloading TMC-langs:", langsDownloadResult.val);

@@ -15,5 +15,5 @@
     "html.validate.scripts": false,
     "html.validate.styles": false,
     "spellright.language": ["en"],
-    "spellright.documentTypes": ["markdown", "latex", "plaintext"]
+    "spellright.documentTypes": ["markdown", "latex", "plaintext", "typescript"]
 }
