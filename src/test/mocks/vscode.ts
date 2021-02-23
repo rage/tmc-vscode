@@ -1,6 +1,8 @@
 import { Mock } from "typemoq";
 import * as vscode from "vscode";
 
+type Memento = vscode.Memento & { setKeysForSync(keys: string[]): void };
+
 /**
  * Creates a new `vscode.ExtensionContext` mock object that uses mocked globalState.
  */
@@ -16,10 +18,10 @@ export function createMockContext(): vscode.ExtensionContext {
 /**
  * Creates a new `vscode.Memento` mock object that wraps a map object.
  */
-export function createMockMemento(): vscode.Memento {
+export function createMockMemento(): Memento {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const storage = new Map<string, any>();
-    const mockMemento = Mock.ofType<vscode.Memento>();
+    const mockMemento = Mock.ofType<Memento>();
     mockMemento.setup((x) => x.get).returns(() => <T>(x: string): T | undefined => storage.get(x));
     mockMemento
         .setup((x) => x.update)

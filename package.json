@@ -18,7 +18,7 @@
         "theme": "light"
     },
     "engines": {
-        "vscode": "^1.40.0"
+        "vscode": "^1.52.0"
     },
     "categories": [
         "Other"
@@ -408,7 +408,7 @@
         "@types/node": "^14.14.25",
         "@types/node-fetch": "^2.5.8",
         "@types/unzipper": "^0.10.3",
-        "@types/vscode": "^1.40.0",
+        "@types/vscode": "1.52.0",
         "@typescript-eslint/eslint-plugin": "^4.15.0",
         "@typescript-eslint/parser": "^4.15.0",
         "babel-loader": "^8.2.2",
