@@ -12,15 +12,15 @@ export async function wipe(
 ): Promise<void> {
     const { dialog, resources, tmc, userData, workspaceManager } = actionContext;
     if (workspaceManager.activeCourse) {
-        dialog.notification(
-            "Please close the TMC Workspace before wiping data and make sure you have closed all files related to TMC.",
+        dialog.warningNotification(
+            "Extension data can't be wiped now because a TMC Workspace is open. \
+Please close the workspace and any related files before running this command again.",
             [
                 "Close workspace",
                 (): void => {
                     vscode.commands.executeCommand("workbench.action.closeFolder");
                 },
             ],
-            ["Cancel", (): void => {}],
         );
         return;
     }
