@@ -30,6 +30,7 @@ export const HIDE_META_FILES = {
     "**/.settings": true,
     "**/.tmcproject.json": true,
     "**/.tmc.json": true,
+    "**/.tmc.lock": true,
 };
 
 export const SHOW_META_FILES = {
@@ -41,6 +42,7 @@ export const SHOW_META_FILES = {
     "**/.settings": false,
     "**/.tmcproject.json": false,
     "**/.tmc.json": false,
+    "**/.tmc.lock": false,
 };
 
 export const WATCHER_EXCLUDE = {
