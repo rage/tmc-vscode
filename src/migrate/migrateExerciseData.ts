@@ -117,7 +117,8 @@ async function exerciseDataFromV0toV1(
         return;
     }
 
-    const message = "Data migration in progress, please wait...";
+    const message =
+        "Migrating exercises on disk for extension version 2. Please do not close the editor...";
     const result = await dialog.progressNotification(message, async (progress) => {
         let atLeastOneSuccess = false;
         let index = 0;
