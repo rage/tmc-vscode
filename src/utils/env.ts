@@ -44,10 +44,11 @@ export function getLangsCLIForPlatform(platform: Platform, version: string): str
             return `tmc-langs-cli-armv7-unknown-linux-gnueabihf-${version}`;
         case "linuxarm64":
             return `tmc-langs-cli-aarch64-unknown-linux-gnu-${version}`;
+        case "macosarm64":
+            // return `tmc-langs-cli-aarch64-apple-darwin-${version}`;
+            // falls through
         case "macos64":
             return `tmc-langs-cli-x86_64-apple-darwin-${version}`;
-        case "macosarm64":
-            return `tmc-langs-cli-aarch64-apple-darwin-${version}`;
         case "windows32":
             return `tmc-langs-cli-i686-pc-windows-msvc-${version}.exe`;
         case "windows64":

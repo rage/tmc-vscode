@@ -68,7 +68,7 @@ function component({ version }) {
                     <h3>Exercise management</h3>
                     <p>
                         The main focus of this release is to introduce a new management system for
-                        exercises on disk. These features have been moved to TMC-Langs that is the
+                        exercises on disk. These features have been moved to TMC-langs that is the
                         centralized utility for main TestMyCode related functions. This new
                         architecture reduces previously existing major overheads and allows for some
                         performance optimizations.

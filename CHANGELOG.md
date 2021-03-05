@@ -9,8 +9,9 @@
 - Improved usage of `Wipe all extension data` command.
 - Technical improvements to settings page.
 - Bumped lowest supported VS Code version from 1.40.0 to 1.52.0.
-- Bumped TMC-langs to version 0.11.1.
 - TMC-langs and exercise workspace files are now stored always in a consistent location.
+- Bumped TMC-langs to version 0.11.1.
+- MacOS 11 to use x86 build of TMC-langs for now.
 
 #### Fixed
 - Don't try to recommend unavailable extensions on VSCodium.
