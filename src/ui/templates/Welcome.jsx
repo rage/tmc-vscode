@@ -74,8 +74,8 @@ function component({ version }) {
                         performance optimizations.
                     </p>
                     <p>
-                        Unfortunately this change required for all exercises to be migrated to a
-                        new default location. If you would like to, you may now move them back again
+                        Unfortunately this change required for all exercises to be migrated to a new
+                        default location. If you would like to, you may now move them back again
                         from the settings view.
                     </p>
                 </div>

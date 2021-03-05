@@ -3,7 +3,7 @@
 
 const path = require("path");
 
-const TMC_LANGS_RUST_VERSION = "0.11.0";
+const TMC_LANGS_RUST_VERSION = "0.11.1";
 
 const localTMCServer = {
     __TMC_LANGS_CONFIG_DIR__: JSON.stringify(null),
