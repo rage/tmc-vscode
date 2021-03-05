@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.0.0] - Unreleased
+## [2.0.0] - 2021-03-07
 
 #### Changed
 - Major changes to exercise workspace management logic.
@@ -8,8 +8,8 @@
 - Improved logic when changing exercise data location.
 - Improved usage of `Wipe all extension data` command.
 - Technical improvements to settings page.
-- Bumped TMC-langs to version 0.6.5.
 - Bumped lowest supported VS Code version from 1.40.0 to 1.52.0.
+- Bumped TMC-langs to version 0.11.0.
 - TMC-langs and exercise workspace files are now stored always in a consistent location.
 
 #### Fixed
@@ -19,6 +19,9 @@
 - Automatically download old submission temporarily.
 - Authentication status migration from versions below 1.0.
 - Fake OK-buttons from notifications to follow new extension guidelines.
+
+#### Security
+- Updated dependencies.
 
 ## [1.3.4] - 2020-11-10
 

@@ -11,9 +11,7 @@ const createElement = require("./templateUtils").createElement;
 /**
  * @param {import("./Welcome").WelcomeProps} props
  */
-function component(props) {
-    const { version, newTreeView, actionsExplorer } = props;
-
+function component({ version }) {
     return (
         <div class="container welcome-container">
             <header>
@@ -49,7 +47,7 @@ function component(props) {
             </div>
 
             <div class="content_area">
-                <h2>What's new in 1.3?</h2>
+                <h2>What's new in 2.0?</h2>
                 <div class="content_section">
                     <p>
                         Here is a little overview of latest features. To see all the changes for
@@ -61,59 +59,40 @@ function component(props) {
                     </p>
                 </div>
                 <div class="content_section">
-                    <h3>Improved caching for API data</h3>
+                    <h5>
+                        Caution! It is not recommended to downgrade the extension version to below
+                        2.0!
+                    </h5>
+                </div>
+                <div class="content_section">
+                    <h3>Exercise management</h3>
                     <p>
-                        The caching system for TMC API data has been reworked. Previous version
-                        didn't invalidate data over time, so it had limited use potential. Most
-                        responses will now be re-used for up to five minutes, after which they will
-                        be re-fetched.
+                        The main focus of this release is to introduce a new management system for
+                        exercises on disk. These features have been moved to TMC-Langs that is the
+                        centralized utility for main TestMyCode related functions. This new
+                        architecture reduces previously existing major overheads and allows for some
+                        performance optimizations.
+                    </p>
+                    <p>
+                        Unfortunately this change required for all exercises to be migrated to a
+                        new default location. If you would like to, you may now move them back again
+                        from the settings view.
                     </p>
                 </div>
                 <div class="content_section">
-                    <h3>Arm64 build of TMC-langs for Mac OS</h3>
+                    <h3>Improved exercise downloads</h3>
                     <p>
-                        New native build of TMC-langs is now provided for MAC OS 11 users with ARM
-                        architecture.
-                    </p>
-                </div>
-                <h2 style="py-2">Previous releases</h2>
-                <div class="content_section">
-                    <h3>Automatic exercise updates</h3>
-                    <p>
-                        When there are updates available to exercises, the extension will now
-                        download them automatically for you. This allows fixes and improvements for
-                        exercises to to reach users more consistently. The old behavior can be
-                        toggled back from the settings.
+                        Following the change to exercise management, downloading new exercises is
+                        now significantly faster.
                     </p>
                 </div>
                 <div class="content_section">
-                    <h3>Alternative way to run tests for Jupyter Notebooks</h3>
+                    <h3>Improvements to TMC workspace</h3>
                     <p>
-                        In VSCode Explorer view, we've added the possibility to run exercise related
-                        actions by right clicking on exercise files or folders. This allows to run
-                        tests for exercises that don't have the TMC icons displayed at the top
-                        right.
+                        TMC Workspace files have now been located in a consistent location separate
+                        from where exercises are. This allows for more user-friendly experience when
+                        moving the exercises folder or using the extension data wipe command.
                     </p>
-                    <img
-                        style="margin-bottom: 1em;"
-                        class="rounded mx-auto d-block"
-                        src={actionsExplorer}
-                    />
-                </div>
-                <div class="content_section">
-                    <h3>New TMC Tree view</h3>
-                    <p>
-                        You can now see your courses listed in the TMC Tree view under My Courses.
-                        We've added actions in this view so you are able to Add, Remove and Refresh
-                        courses. You can add and refresh courses from buttons marked in the red
-                        rectangle. When you refresh courses it will check for new updates and
-                        exercises for all courses.
-                    </p>
-                    <img
-                        style="margin-bottom: 1em;"
-                        class="rounded mx-auto d-block"
-                        src={newTreeView}
-                    />
                 </div>
             </div>
 
