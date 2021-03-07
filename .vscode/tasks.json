@@ -18,8 +18,8 @@
                 "base": "$tsc-watch",
                 "background": {
                     "activeOnStart": true,
-                    "beginsPattern": "^\\[webpack-cli\\] Compilation starting\\.\\.\\.",
-                    "endsPattern": "^\\[webpack-cli\\] watching files for updates\\.\\.\\."
+                    "beginsPattern": "^     \\[webpack-cli\\] Compilation starting\\.\\.\\.",
+                    "endsPattern": "^    \\[webpack-cli\\] Compiler is watching files for updates\\.\\.\\."
                 }
             },
             "isBackground": true,
@@ -44,7 +44,7 @@
             "type": "pickString",
             "id": "zBackend",
             "description": "Select backend mode",
-            "options": ["local", "production"],
+            "options": ["mockBackend", "localTMCServer", "production"],
             "default": "production"
         }
     ]

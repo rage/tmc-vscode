@@ -8,14 +8,22 @@ const TerserPlugin = require("terser-webpack-plugin");
 const webpack = require("webpack");
 const merge = require("webpack-merge").merge;
 
-const { localApi, productionApi } = require("./config");
+const { mockBackend, localTMCServer, productionApi } = require("./config");
 
 /**@type {() => import("webpack").Configuration} */
 const config = () => {
     const isDevelopmentMode = process.env.NODE_ENV && process.env.NODE_ENV === "development";
 
-    const apiConfig =
-        process.env.BACKEND && process.env.BACKEND === "local" ? localApi : productionApi;
+    const apiConfig = (() => {
+        switch (process.env.BACKEND) {
+            case "mockBackend":
+                return mockBackend;
+            case "localTMCServer":
+                return localTMCServer;
+            default:
+                return productionApi;
+        }
+    })();
 
     /**@type {import('webpack').Configuration}*/
     const commonConfig = {
@@ -44,6 +52,9 @@ const config = () => {
         },
         node: {
             __dirname: false,
+        },
+        infrastructureLogging: {
+            level: "log",
         },
         module: {
             rules: [
@@ -91,9 +102,7 @@ const config = () => {
                             loader: "ts-loader",
                             options: {
                                 compiler: "ttypescript",
-                                configFile: isDevelopmentMode
-                                    ? "tsconfig.json"
-                                    : "tsconfig.production.json",
+                                configFile: "tsconfig.json",
                             },
                         },
                     ],
@@ -115,7 +124,9 @@ const config = () => {
         mode: "development",
         devtool: "inline-source-map",
     });
-    /**@returns {import('webpack').Configuration}*/
+    // Type definition broken for the Nth time
+    // /**@returns {import('webpack').Configuration}*/
+    /**@returns {any} */
     const prodConfig = () => ({
         mode: "production",
         optimization: {

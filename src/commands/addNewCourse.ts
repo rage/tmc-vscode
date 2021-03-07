@@ -1,21 +1,17 @@
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
-import { Logger } from "../utils";
-import { askForItem, showError } from "../window";
 
 export async function addNewCourse(actionContext: ActionContext): Promise<void> {
-    const { tmc } = actionContext;
-    const organizations = await tmc.getOrganizations();
-    if (organizations.err) {
-        const message = "Failed to fetch organizations.";
-        showError(message);
-        Logger.error(message, organizations.val);
+    const { dialog, tmc } = actionContext;
+    const organizationsResult = await tmc.getOrganizations();
+    if (organizationsResult.err) {
+        dialog.errorNotification("Failed to fetch organizations.", organizationsResult.val);
         return;
     }
-    const chosenOrg = await askForItem<string>(
+
+    const chosenOrg = await dialog.selectItem(
         "Which organization?",
-        false,
-        ...organizations.val.map<[string, string]>((org) => [org.name, org.slug]),
+        ...organizationsResult.val.map<[string, string]>((org) => [org.name, org.slug]),
     );
     if (chosenOrg === undefined) {
         return;
@@ -23,14 +19,11 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
 
     const courses = await tmc.getCourses(chosenOrg);
     if (courses.err) {
-        const message = `Failed to fetch organization courses for ${chosenOrg}`;
-        showError(message);
-        Logger.error(message, courses.val);
+        dialog.errorNotification(`Failed to fetch organization courses for ${chosenOrg}.`);
         return;
     }
-    const chosenCourse = await askForItem<number>(
+    const chosenCourse = await dialog.selectItem<number>(
         "Which course?",
-        false,
         ...courses.val.map<[string, number]>((course) => [course.title, course.id]),
     );
     if (chosenCourse === undefined) {
@@ -42,8 +35,6 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
         course: chosenCourse,
     });
     if (result.err) {
-        const message = "Failed to add course via menu.";
-        showError(message);
-        Logger.error(message, result.val);
+        dialog.errorNotification("Failed to add course.", result.val);
     }
 }

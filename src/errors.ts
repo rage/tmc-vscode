@@ -17,6 +17,10 @@ export class AuthorizationError extends BaseError {
     public readonly name = "Authorization Error";
 }
 
+export class BottleneckError extends BaseError {
+    public readonly name = "Bottleneck Error";
+}
+
 export class ConnectionError extends BaseError {
     public readonly name = "Connection Error";
 }
@@ -33,6 +37,10 @@ export class ForbiddenError extends BaseError {
     public readonly name = "Forbidden Error";
 }
 
+export class HaltForReloadError extends BaseError {
+    public readonly name = "Reload Required error";
+}
+
 export class InvalidTokenError extends BaseError {
     public readonly name = "Invalid Token Error";
 }
@@ -40,6 +48,7 @@ export class InvalidTokenError extends BaseError {
 export class ObsoleteClientError extends BaseError {
     public readonly name = "Obsolete Client Error";
 }
+
 export class RuntimeError extends BaseError {
     public readonly name = "Runtime Error";
 }

@@ -1,64 +1,52 @@
 import * as path from "path";
+import * as vscode from "vscode";
+
+import { WORKSPACE_ROOT_FILE_NAME, WORKSPACE_ROOT_FOLDER_NAME } from "./constants";
+
+export enum EditorKind {
+    Code,
+    VSCodium,
+}
 
 export default class Resources {
-    public readonly cssFolder: string;
-    public readonly htmlFolder: string;
-    public readonly mediaFolder: string;
-    public readonly extensionVersion: string;
-    private readonly _tmcWorkspaceFolderPathRelative: string;
-    private readonly _tmcExercisesFolderPathRelative: string;
-    private _tmcDataFolder: string;
-    private _cliPath: string;
+    readonly editorKind: EditorKind;
+    private _projectsDirectory: string;
 
     constructor(
-        cssFolder: string,
-        extensionVersion: string,
-        htmlFolder: string,
-        mediaFolder: string,
-        tmcDataFolder: string,
-        tmcWorkspaceFolderPathRelative: string,
-        tmcExercisesFolderPathRelative: string,
-        cliPath: string,
+        readonly cssFolder: string,
+        readonly extensionVersion: string,
+        readonly htmlFolder: string,
+        readonly mediaFolder: string,
+        readonly workspaceFileFolder: string,
+        projectsDirectory: string,
     ) {
-        this.cssFolder = cssFolder;
-        this.extensionVersion = extensionVersion;
-        this.htmlFolder = htmlFolder;
-        this.mediaFolder = mediaFolder;
-        this._tmcDataFolder = tmcDataFolder;
-        this._tmcWorkspaceFolderPathRelative = tmcWorkspaceFolderPathRelative;
-        this._tmcExercisesFolderPathRelative = tmcExercisesFolderPathRelative;
-        this._cliPath = cliPath;
+        this.editorKind = vscode.env.appName === "VSCodium" ? EditorKind.VSCodium : EditorKind.Code;
+        this._projectsDirectory = projectsDirectory;
     }
 
-    public setDataPath(dataPath: string): void {
-        this._tmcDataFolder = dataPath;
+    get projectsDirectory(): string {
+        return this._projectsDirectory;
     }
 
-    public getCliPath(): string {
-        return this._cliPath;
+    set projectsDirectory(directory: string) {
+        this._projectsDirectory = directory;
     }
 
-    public setCliPath(cliPath: string): void {
-        this._cliPath = cliPath;
+    get workspaceRootFolder(): vscode.Uri {
+        return vscode.Uri.file(path.join(this.workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME));
     }
 
-    public getWorkspaceFolderPath(): string {
-        return path.join(this._tmcDataFolder, this._tmcWorkspaceFolderPathRelative);
-    }
-
-    public getWorkspaceFilePath(courseName: string): string {
-        return path.join(
-            this._tmcDataFolder,
-            this._tmcWorkspaceFolderPathRelative,
-            courseName + ".code-workspace",
+    get workspaceRootFile(): vscode.Uri {
+        return vscode.Uri.file(
+            path.join(
+                this.workspaceFileFolder,
+                WORKSPACE_ROOT_FOLDER_NAME,
+                WORKSPACE_ROOT_FILE_NAME,
+            ),
         );
     }
 
-    public getExercisesFolderPath(): string {
-        return path.join(this._tmcDataFolder, this._tmcExercisesFolderPathRelative);
-    }
-
-    public getDataPath(): string {
-        return this._tmcDataFolder;
+    public getWorkspaceFilePath(courseName: string): string {
+        return path.join(this.workspaceFileFolder, courseName + ".code-workspace");
     }
 }

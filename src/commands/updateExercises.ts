@@ -1,57 +1,32 @@
-import * as _ from "lodash";
+import { uniq } from "lodash";
 
 import * as actions from "../actions";
-import { ActionContext, CourseExerciseDownloads } from "../actions/types";
+import { ActionContext } from "../actions/types";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import { WebviewMessage } from "../ui/types";
 import { Logger } from "../utils";
-import { showError, showNotification } from "../window";
 
 export async function updateExercises(actionContext: ActionContext, silent: string): Promise<void> {
     Logger.log("Checking for exercise updates");
-    const { settings, ui, userData } = actionContext;
-    const updateResults = await actions.checkForExerciseUpdates(actionContext, undefined, {
-        useCache: false,
-    });
+    const { dialog, settings, ui, userData } = actionContext;
 
-    const [successful, failed] = updateResults.reduce<[CourseExerciseDownloads[], Error[]]>(
-        (sorted, next) => {
-            if (next.ok) {
-                return [sorted[0].concat(next.val), sorted[1]];
-            } else {
-                return [sorted[0], sorted[1].concat(next.val)];
-            }
-        },
-        [[], []],
-    );
-
-    if (failed.length > 0) {
-        Logger.warn("Failed to check updates for some courses.");
-        failed.forEach((x) => Logger.debug("Update failed: ", x));
-        silent !== "silent" && showError("Failed to check updates for some courses.");
-    }
-
-    const now = Date.now();
-    const filtered = successful.filter((x) => {
-        const course = userData.getCourse(x.courseId);
-        return x.exerciseIds.length > 0 && course.notifyAfter <= now && !course.disabled;
-    });
-
-    const updates = _.sumBy(filtered, (x) => x.exerciseIds.length);
-    if (updates === 0) {
-        silent !== "silent" && showNotification("All exercises are up to date.");
+    const updateablesResult = await actions.checkForExerciseUpdates(actionContext);
+    if (updateablesResult.err) {
+        Logger.warn("Failed to check for exercise updates.", updateablesResult.val);
+        silent !== "silent" && dialog.errorNotification("Failed to check for exercise updates.");
         return;
     }
 
-    const exercises = _.flatten(
-        filtered.map((x) =>
-            x.exerciseIds.map((e) => ({
-                courseId: x.courseId,
-                exerciseId: e,
-                organization: x.organizationSlug,
-            })),
-        ),
-    );
+    const now = Date.now();
+    const exercisesToUpdate = updateablesResult.val.filter((x) => {
+        const course = userData.getCourse(x.courseId);
+        return course.notifyAfter <= now && !course.disabled;
+    });
+
+    if (exercisesToUpdate.length === 0) {
+        silent !== "silent" && dialog.notification("All exercises are up to date.");
+        return;
+    }
 
     const downloadHandler = async (): Promise<void> => {
         ui.webview.postMessage(
@@ -61,35 +36,38 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
                 exerciseIds: [],
             })),
         );
-        const [, failed] = await actions.downloadExerciseUpdates(actionContext, exercises);
-        if (failed.length > 0) {
-            Logger.error("Failed to update exercises", failed[0]);
-            showError("Failed to update exercises.");
+        const downloadResult = await actions.downloadOrUpdateExercises(
+            actionContext,
+            exercisesToUpdate.map((x) => x.exerciseId),
+        );
+        if (downloadResult.err) {
+            dialog.errorNotification("Failed to update exercises.", downloadResult.val);
+            return;
         }
 
-        const failedCoursesToExercises = _.groupBy(failed, (x) => x.courseId);
-        const messages: WebviewMessage[] = Object.keys(failedCoursesToExercises).map((key) => ({
-            command: "setUpdateables",
-            courseId: parseInt(key),
-            exerciseIds: failedCoursesToExercises[key].map((x) => x.exerciseId),
-        }));
-        Logger.debug(messages);
-        ui.webview.postMessage(...messages);
+        ui.webview.postMessage(
+            ...userData.getCourses().map<WebviewMessage>((x) => ({
+                command: "setUpdateables",
+                courseId: x.id,
+                exerciseIds: downloadResult.val.failed,
+            })),
+        );
     };
 
     if (settings.getAutomaticallyUpdateExercises()) {
         return downloadHandler();
     }
 
-    showNotification(
-        `Found updates for ${updates} exercises. Do you wish to download them?`,
+    dialog.notification(
+        `Found updates for ${exercisesToUpdate.length} exercises. Do you wish to download them?`,
         ["Download", downloadHandler],
         [
             "Remind me later",
             async (): Promise<void> => {
                 const now2 = Date.now();
-                filtered.forEach((x) =>
-                    userData.setNotifyDate(x.courseId, now2 + NOTIFICATION_DELAY),
+                const uniqueCourseIds = uniq(exercisesToUpdate.map((x) => x.courseId));
+                uniqueCourseIds.forEach((x) =>
+                    userData.setNotifyDate(x, now2 + NOTIFICATION_DELAY),
                 );
             },
         ],

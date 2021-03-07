@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.0.0] - 2021-03-07
+
+#### Changed
+- Major changes to exercise workspace management logic.
+- Drastically improved exercise downloading performance.
+- Improved logic when changing exercise data location.
+- Improved usage of `Wipe all extension data` command.
+- Technical improvements to settings page.
+- Bumped lowest supported VS Code version from 1.40.0 to 1.52.0.
+- TMC-langs and exercise workspace files are now stored always in a consistent location.
+- Bumped TMC-langs to version 0.11.1.
+- MacOS 11 to use x86 build of TMC-langs for now.
+
+#### Fixed
+- Don't try to recommend unavailable extensions on VSCodium.
+
+#### Removed
+- Automatically download old submission temporarily.
+- Authentication status migration from versions below 1.0.
+- Fake OK-buttons from notifications to follow new extension guidelines.
+
+#### Security
+- Updated dependencies.
+
 ## [1.3.4] - 2020-11-10
 
 #### Changed
@@ -71,7 +95,7 @@
 - Buttons to clear new exercises buffer from notification or course card.
 - Inform user if TMC Extension is too old.
 - Access to course details page from the TMC Tree Menu.
-- Refresh button to fetch course and exericse updates in TMC Tree View.
+- Refresh button to fetch course and exercise updates in TMC Tree View.
 
 #### Changed
 - Technical improvements to Login page.
@@ -185,10 +209,10 @@
 #### Added
 - Support for disabled courses.
 - Refresh button to course details page.
-- Show material url in course details if defined.
+- Show material URL in course details if defined.
 
 #### Changed
-- After reseting an exercise or downloading an old submission, reopen the active file.
+- After resetting an exercise or downloading an old submission, reopen the active file.
 - Improvements to move TMC data folder operation and cleanup.
 - No longer auto-open exercise lists when starting a download.
 - Less pronounced hover effect on clickable cards.
@@ -352,7 +376,7 @@
 ## [0.2.0] - 2020-03-30
 
 #### Added
-- Send code to TMC Pastebin.
+- Send code to TMC Paste.
 - Dropdown menu for TMC Commands next to run tests button.
 
 #### Changed

@@ -1,10 +1,8 @@
 import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 
+import Storage, { LocalCourseData, LocalCourseExercise } from "../api/storage";
 import { Logger } from "../utils/logger";
-
-import Storage from "./storage";
-import { LocalCourseData, LocalCourseExercise } from "./types";
 
 export class UserData {
     private _courses: Map<number, LocalCourseData>;
@@ -39,6 +37,17 @@ export class UserData {
 
     public getCourseByName(name: string): Readonly<LocalCourseData> {
         return this.getCourses().filter((x) => x.name === name)[0];
+    }
+
+    public getExerciseByName(
+        courseSlug: string,
+        exerciseName: string,
+    ): Readonly<LocalCourseExercise> | undefined {
+        for (const course of this._courses.values()) {
+            if (course.name === courseSlug) {
+                return course.exercises.find((x) => x.name === exerciseName);
+            }
+        }
     }
 
     public addCourse(data: LocalCourseData): void {

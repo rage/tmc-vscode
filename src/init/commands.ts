@@ -7,13 +7,12 @@ import * as commands from "../commands";
 import { TmcTreeNode } from "../ui/treeview/treenode";
 import { TemplateData } from "../ui/types";
 import { Logger } from "../utils/";
-import { askForConfirmation, askForItem, showError, showNotification } from "../window";
 
 export function registerCommands(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
 ): void {
-    const { ui, userData } = actionContext;
+    const { dialog, ui, userData } = actionContext;
     Logger.log("Registering TMC VSCode commands");
 
     // Commands not shown to user in Command Palette / TMC Action menu
@@ -28,9 +27,8 @@ export function registerCommands(
         vscode.commands.registerCommand(
             "tmcTreeView.removeCourse",
             async (treeNode: TmcTreeNode) => {
-                const confirmed = await askForConfirmation(
-                    `Do you want to remove ${treeNode.label} from your courses?`,
-                    false,
+                const confirmed = await dialog.confirmation(
+                    `Do you want to remove ${treeNode.label} from your courses? This won't delete your downloaded exercises.`,
                 );
                 if (confirmed) {
                     await removeCourse(actionContext, Number(treeNode.id));
@@ -69,9 +67,8 @@ export function registerCommands(
             }
             courseId =
                 courseId ??
-                (await askForItem<number>(
+                (await dialog.selectItem(
                     "Which course page do you want to open?",
-                    false,
                     ...courses.map<[string, number]>((c) => [c.title, c.id]),
                 ));
             if (courseId) {
@@ -102,21 +99,24 @@ export function registerCommands(
             if (username && password) {
                 const authed = await actions.login(actionContext, username, password);
                 if (authed.err) {
-                    showError(`Failed to login. ${authed.val.message}.`);
+                    dialog.errorNotification(`Failed to login: ${authed.val.message}.`, authed.val);
                 }
             }
         }),
 
         vscode.commands.registerCommand("tmc.logout", async () => {
-            if (await askForConfirmation("Are you sure you want to log out?")) {
+            if (await dialog.confirmation("Are you sure you want to log out?")) {
                 const { ui } = actionContext;
                 const deauth = await actions.logout(actionContext);
                 if (deauth.err) {
-                    showError(`Failed to logout. ${deauth.val.message}`);
+                    dialog.errorNotification(
+                        `Failed to logout: ${deauth.val.message}.`,
+                        deauth.val,
+                    );
                     return;
                 }
                 ui.webview.dispose();
-                showNotification("Logged out from TestMyCode.");
+                dialog.notification("Logged out from TestMyCode.");
             }
         }),
 
@@ -131,7 +131,7 @@ export function registerCommands(
         vscode.commands.registerCommand("tmc.openTMCExercisesFolder", async () => {
             vscode.commands.executeCommand(
                 "revealFileInOS",
-                vscode.Uri.file(actionContext.resources.getDataPath()),
+                vscode.Uri.file(actionContext.resources.projectsDirectory),
             );
         }),
 

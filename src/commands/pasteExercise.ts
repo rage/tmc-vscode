@@ -2,31 +2,40 @@ import * as vscode from "vscode";
 
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
+import { BottleneckError } from "../errors";
 import { Logger } from "../utils";
-import { showError, showNotification } from "../window";
 
 export async function pasteExercise(
     actionContext: ActionContext,
     resource: vscode.Uri | undefined,
 ): Promise<void> {
-    const { workspaceManager } = actionContext;
-    const exerciseId =
-        workspaceManager.checkIfPathIsExercise(resource?.fsPath) ??
-        workspaceManager.getCurrentExerciseId();
-    if (!exerciseId) {
-        Logger.error("Currently open editor is not part of a TMC exercise");
-        showError("Currently open editor is not part of a TMC exercise");
+    const { dialog, workspaceManager } = actionContext;
+
+    const exercise = resource
+        ? workspaceManager.getExerciseByPath(resource)
+        : workspaceManager.activeExercise;
+    if (!exercise) {
+        dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
         return;
     }
 
-    const link = await actions.pasteExercise(actionContext, exerciseId);
-    if (link.err) {
-        Logger.error("TMC Paste command failed.", link.val);
-        showError(`TMC Paste command failed. ${link.val.message}`);
+    const pasteResult = await actions.pasteExercise(
+        actionContext,
+        exercise.courseSlug,
+        exercise.exerciseSlug,
+    );
+    if (pasteResult.err) {
+        if (pasteResult.val instanceof BottleneckError) {
+            Logger.warn(`Paste submission was cancelled: ${pasteResult.val.message}.`);
+            return;
+        }
+
+        dialog.errorNotification("TMC Paste command failed.", pasteResult.val);
         return;
     }
-    showNotification(`Paste link: ${link.val}`, [
+
+    dialog.notification(`Paste link: ${pasteResult.val}`, [
         "Open URL",
-        (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(link.val)),
+        (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(pasteResult.val)),
     ]);
 }

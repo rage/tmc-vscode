@@ -100,7 +100,7 @@ export default class TmcMenuTree {
         if (
             new Set(
                 groups.map((group) =>
-                    group._id.startsWith("!") ? group._id.substring(1) : group._id,
+                    group.id.startsWith("!") ? group.id.substring(1) : group.id,
                 ),
             ).size !== groups.length
         ) {

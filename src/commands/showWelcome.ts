@@ -7,7 +7,8 @@ import { WebviewMessage } from "../ui/types";
 export async function showWelcome(actionContext: ActionContext): Promise<void> {
     const { resources, settings, ui } = actionContext;
     const insiderStatus: WebviewMessage = {
-        command: "setInsiderStatus",
+        command: "setBooleanSetting",
+        setting: "insider",
         enabled: settings.isInsider(),
     };
     ui.webview.setContentFromTemplate(

@@ -1,50 +1,93 @@
 import * as fs from "fs-extra";
-import * as path from "path";
+import { Err, Ok } from "ts-results";
 import * as vscode from "vscode";
 
 import { ActionContext } from "../actions/types";
-import { activate, deactivate } from "../extension";
-import { isCorrectWorkspaceOpen, Logger } from "../utils";
-import { askForConfirmation, showNotification } from "../window";
+import { deactivate } from "../extension";
+import { Logger } from "../utils";
 
 export async function wipe(
     actionContext: ActionContext,
     context: vscode.ExtensionContext,
 ): Promise<void> {
-    const { resources, tmc, userData } = actionContext;
-    const workspace = vscode.workspace.name?.split(" ")[0];
-    if (workspace && isCorrectWorkspaceOpen(resources, workspace)) {
-        showNotification(
-            "Please close the TMC Workspace before wiping data and make sure you have closed all files related to TMC.",
-            ["OK", (): void => {}],
+    const { dialog, resources, tmc, userData, workspaceManager } = actionContext;
+    if (workspaceManager.activeCourse) {
+        dialog.warningNotification(
+            "Extension data can't be wiped now because a TMC Workspace is open. \
+Please close the workspace and any related files before running this command again.",
+            [
+                "Close workspace",
+                (): void => {
+                    vscode.commands.executeCommand("workbench.action.closeFolder");
+                },
+            ],
         );
         return;
     }
-    const wipe = await askForConfirmation(
+
+    const wipe = await dialog.explicitConfirmation(
         "Are you sure you want to wipe all data for the TMC Extension?",
-        true,
     );
     if (!wipe) {
         return;
     }
-    const reallyWipe = await askForConfirmation(
+
+    const reallyWipe = await dialog.explicitConfirmation(
         "This action cannot be undone. This might permanently delete the extension data, exercises, settings...",
-        true,
     );
-    if (reallyWipe) {
-        // Remove logout event handler to not show login page.
-        tmc.on("logout", () => {});
-        await vscode.commands.executeCommand("tmc.logout");
-        fs.removeSync(path.join(resources.getDataPath()));
-        await userData.wipeDataFromStorage();
-        deactivate();
-        for (const sub of context.subscriptions) {
-            try {
-                sub.dispose();
-            } catch (e) {
-                Logger.error(e);
-            }
-        }
-        activate(context);
+    if (!reallyWipe) {
+        return;
     }
+
+    const wipeResult = await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: "TestMyCode",
+        },
+        async (progress) => {
+            progress.report({ message: "Removing extension data..." });
+
+            // Remove exercises
+            try {
+                fs.removeSync(resources.projectsDirectory);
+            } catch (e) {
+                return Err(new Error("Failed to remove projects directory."));
+            }
+
+            // Reset Langs settings
+            const result2 = await tmc.resetSettings();
+            if (result2.err) return result2;
+
+            // Maybe logout should have setting to disable events?
+            tmc.on("logout", () => {});
+            const result3 = await tmc.deauthenticate();
+            if (result3.err) return result3;
+
+            // Clear storage
+            await userData.wipeDataFromStorage();
+
+            // All clear
+            return Ok.EMPTY;
+        },
+    );
+
+    if (wipeResult.err) {
+        dialog.errorNotification("Failed to wipe extension data.", wipeResult.val);
+        return;
+    }
+
+    await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", undefined);
+    await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", undefined);
+
+    deactivate();
+    for (const sub of context.subscriptions) {
+        try {
+            sub.dispose();
+        } catch (e) {
+            Logger.error(e);
+        }
+    }
+
+    Logger.log("Extension wipe completed.");
+    await vscode.commands.executeCommand("workbench.action.reloadWindow");
 }

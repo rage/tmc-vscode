@@ -252,7 +252,11 @@ function component(data) {
                             </button>
                         </div>
                         <div class="col-md-3">
-                            <button class="btn btn-primary m-1 w-100" id="download-selected">
+                            <button
+                                class="btn btn-primary m-1 w-100"
+                                id="download-selected"
+                                disabled
+                            >
                                 Download
                             </button>
                         </div>
@@ -373,10 +377,13 @@ function script() {
     }
 
     function setCourseDisabledStatus(courseId, disabled) {
+        const contextMenuDownloadSelected = document.getElementById("download-selected");
         const notification = document.getElementById("course-disabled-notification");
         if (disabled) {
+            contextMenuDownloadSelected.disabled = true;
             notification.style.display = "block";
         } else {
+            contextMenuDownloadSelected.disabled = false;
             notification.style.display = "none";
         }
     }
@@ -392,14 +399,6 @@ function script() {
 
         const notification = document.querySelector("div.update-notification");
         const button = notification.querySelector("button.update-button");
-
-        if (notification && button) {
-            button.addEventListener("click", function () {
-                button.disabled = true;
-                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
-                downloadSelectedExercises(updateableIds, "update");
-            });
-        }
 
         if (exerciseIds.length === 0) {
             button.disabled = true;
@@ -558,6 +557,17 @@ function script() {
             });
         }
 
+        // Exercise updates
+        const updateNotification = document.querySelector("div.update-notification");
+        const updateButton = updateNotification.querySelector("button.update-button");
+        if (updateButton) {
+            updateButton.addEventListener("click", function () {
+                updateButton.disabled = true;
+                const updateableIds = this.dataset.exercises.split(",").map((id) => parseInt(id));
+                downloadSelectedExercises(updateableIds, "update");
+            });
+        }
+
         // Course part cards
         const exerciseCards = document.querySelectorAll("div.exercise-card");
         for (let i = 0; i < exerciseCards.length; i++) {
@@ -634,12 +644,13 @@ function script() {
                         "td.exercise-selector",
                     );
                     if (singleCheckboxColumn) {
-                        singleCheckboxColumn.firstElementChild.addEventListener("click", function (
-                            event,
-                        ) {
-                            selectedCount += event.target.checked ? 1 : -1;
-                            refreshFooter();
-                        });
+                        singleCheckboxColumn.firstElementChild.addEventListener(
+                            "click",
+                            function (event) {
+                                selectedCount += event.target.checked ? 1 : -1;
+                                refreshFooter();
+                            },
+                        );
                     }
                 }
             }

@@ -4,18 +4,17 @@
  * -------------------------------------------------------------------------------------------------
  */
 
-import { sync as delSync } from "del";
 import du = require("du");
 import * as fs from "fs-extra";
 import * as _ from "lodash";
-import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import { LocalCourseData } from "../api/storage";
 import { SubmissionFeedback } from "../api/types";
+import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
-import { ExerciseStatus, LocalCourseData } from "../config/types";
-import { ConnectionError, ForbiddenError } from "../errors";
+import { BottleneckError, ConnectionError, ForbiddenError } from "../errors";
 import { TestResultData } from "../ui/types";
 import {
     formatSizeInBytes,
@@ -23,16 +22,12 @@ import {
     Logger,
     parseFeedbackQuestion,
 } from "../utils/";
-import {
-    askForConfirmation,
-    getActiveEditorExecutablePath,
-    showError,
-    showNotification,
-} from "../window";
+import { getActiveEditorExecutablePath } from "../window";
 
+import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
+import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext, FeedbackQuestion } from "./types";
 import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
-import { closeExercises, downloadExercises, openExercises } from "./workspace";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -75,27 +70,33 @@ export async function logout(actionContext: ActionContext): Promise<Result<void,
  */
 export async function testExercise(
     actionContext: ActionContext,
-    id: number,
+    exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { ui, tmc, userData, workspaceManager, temporaryWebviewProvider } = actionContext;
-    const exerciseDetails = workspaceManager.getExerciseDataById(id);
-    if (exerciseDetails.err) {
-        return exerciseDetails;
+    const { dialog, ui, tmc, userData, temporaryWebviewProvider } = actionContext;
+
+    const course = userData.getCourseByName(exercise.courseSlug);
+    const exerciseId = course.exercises.find((x) => x.name === exercise.exerciseSlug)?.id;
+    if (!exerciseId) {
+        return Err(
+            new Error(
+                `ID for exercise ${exercise.courseSlug}/${exercise.exerciseSlug} was not found.`,
+            ),
+        );
     }
 
-    const course = userData.getCourseByName(exerciseDetails.val.course);
-    let data: TestResultData = { ...EXAM_TEST_RESULT, id, disabled: course.disabled };
+    let data: TestResultData = {
+        ...EXAM_TEST_RESULT,
+        id: exerciseId,
+        disabled: course.disabled,
+        courseSlug: course.name,
+    };
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
     if (!course.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext);
-        const exercisePath = workspaceManager.getExercisePathById(id);
-        if (exercisePath.err) {
-            return exercisePath;
-        }
-        const [testRunner, interrupt] = tmc.runTests(exercisePath.val, executablePath);
+        const [testRunner, interrupt] = tmc.runTests(exercise.uri.fsPath, executablePath);
         let aborted = false;
-        const exerciseName = exerciseDetails.val.name;
+        const exerciseName = exercise.exerciseSlug;
 
         temp.setContent({
             title: "TMC Running tests",
@@ -138,7 +139,8 @@ export async function testExercise(
         Logger.log(`Tests finished for ${exerciseName}`);
         data = {
             testResult: testResult.val,
-            id,
+            id: exerciseId,
+            courseSlug: course.name,
             exerciseName,
             tmcLogs: {},
             disabled: course.disabled,
@@ -150,19 +152,25 @@ export async function testExercise(
         title: "TMC Test Results",
         template: { templateName: "test-result", ...data, pasteLink: "" },
         messageHandler: async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
-            if (msg.type === "submitToServer" && msg.data) {
-                submitExercise(actionContext, msg.data.exerciseId as number);
+            if (msg.type === "submitToServer") {
+                submitExercise(actionContext, exercise);
             } else if (msg.type === "sendToPaste" && msg.data) {
-                const pasteLink = await pasteExercise(actionContext, msg.data.exerciseId as number);
-                if (pasteLink.err) {
-                    Logger.error(`${pasteLink.val.message}`, pasteLink.val);
-                    showError(`Failed to send to TMC Paste: ${pasteLink.val.message}`);
+                const pasteResult = await pasteExercise(
+                    actionContext,
+                    msg.data.courseSlug as string,
+                    msg.data.exerciseName as string,
+                );
+                if (pasteResult.err) {
+                    dialog.errorNotification(
+                        `Failed to send to TMC Paste: ${pasteResult.val.message}.`,
+                        pasteResult.val,
+                    );
                     temp.postMessage({
                         command: "showPasteLink",
-                        pasteLink: `${pasteLink.val.message}`,
+                        pasteLink: `${pasteResult.val.message}`,
                     });
                 } else {
-                    const value = pasteLink.val || "Link not provided by server.";
+                    const value = pasteResult.val || "Link not provided by server.";
                     temp.postMessage({ command: "showPasteLink", pasteLink: value });
                 }
             } else if (msg.type === "closeWindow") {
@@ -180,18 +188,21 @@ export async function testExercise(
  */
 export async function submitExercise(
     actionContext: ActionContext,
-    id: number,
+    exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { temporaryWebviewProvider, tmc, userData, workspaceManager } = actionContext;
+    const { dialog, temporaryWebviewProvider, tmc, userData } = actionContext;
+    Logger.log(`Submitting exercise ${exercise.exerciseSlug} to server`);
 
-    Logger.log(
-        `Submitting exercise ${workspaceManager.getExerciseDataById(id).val.name} to server`,
-    );
-
-    const exerciseDetails = workspaceManager.getExerciseDataById(id);
-    if (exerciseDetails.err) {
-        return exerciseDetails;
+    const course = userData.getCourseByName(exercise.courseSlug);
+    const exerciseId = course.exercises.find((x) => x.name === exercise.exerciseSlug)?.id;
+    if (!exerciseId) {
+        return Err(
+            new Error(
+                `ID for exercise ${exercise.exerciseSlug}/${exercise.exerciseSlug} was not found.`,
+            ),
+        );
     }
+
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
     const messageHandler = async (msg: {
@@ -212,30 +223,32 @@ export async function submitExercise(
         } else if (msg.type === "closeWindow") {
             temp.dispose();
         } else if (msg.type === "sendToPaste" && msg.data) {
-            const pasteLink = await pasteExercise(actionContext, Number(msg.data.exerciseId));
-            if (pasteLink.err) {
-                Logger.error(`${pasteLink.val.message}`, pasteLink.val);
-                showError(`Failed to send to TMC Paste: ${pasteLink.val.message}`);
+            const pasteResult = await pasteExercise(
+                actionContext,
+                msg.data.courseSlug as string,
+                msg.data.exerciseName as string,
+            );
+            if (pasteResult.err) {
+                dialog.errorNotification(
+                    `Failed to send to TMC Paste: ${pasteResult.val.message}.`,
+                    pasteResult.val,
+                );
                 temp.postMessage({
                     command: "showPasteLink",
-                    pasteLink: `${pasteLink.val.message}`,
+                    pasteLink: `${pasteResult.val.message}`,
                 });
             } else {
-                const value = pasteLink.val || "Link not provided by server.";
+                const value = pasteResult.val || "Link not provided by server.";
                 temp.postMessage({ command: "showPasteLink", pasteLink: value });
             }
         }
     };
 
     const messages: string[] = [];
-    const exerciseFolderPath = workspaceManager.getExercisePathById(id);
-    if (exerciseFolderPath.err) {
-        return exerciseFolderPath;
-    }
     let submissionUrl = "";
     const submissionResult = await tmc.submitExerciseAndWaitForResults(
-        id,
-        exerciseFolderPath.val,
+        exerciseId,
+        exercise.uri.fsPath,
         (progressPct, message) => {
             if (message && message !== _.last(messages)) {
                 messages.push(message);
@@ -259,6 +272,11 @@ export async function submitExercise(
     );
 
     if (submissionResult.err) {
+        if (submissionResult.val instanceof BottleneckError) {
+            Logger.warn(`Submission was cancelled: ${submissionResult.val.message}.`);
+            return Ok.EMPTY;
+        }
+
         temp.setContent({
             title: "TMC Server Submission",
             template: { templateName: "error", error: submissionResult.val },
@@ -292,11 +310,8 @@ export async function submitExercise(
     });
     temporaryWebviewProvider.addToRecycables(temp);
 
-    const courseData = userData.getCourseByName(exerciseDetails.val.course) as Readonly<
-        LocalCourseData
-    >;
-
-    checkForCourseUpdates(actionContext, courseData.id);
+    const courseData = userData.getCourseByName(exercise.courseSlug) as Readonly<LocalCourseData>;
+    await checkForCourseUpdates(actionContext, courseData.id);
     vscode.commands.executeCommand("tmc.updateExercises", "silent");
 
     return Ok.EMPTY;
@@ -305,19 +320,22 @@ export async function submitExercise(
 /**
  * Sends the exercise to the TMC Paste server.
  * @param id Exercise ID
- * @returns TMC Pastebin link if the action was successful.
+ * @returns TMC Paste link if the action was successful.
  */
 export async function pasteExercise(
     actionContext: ActionContext,
-    id: number,
+    courseSlug: string,
+    exerciseName: string,
 ): Promise<Result<string, Error>> {
-    const { tmc, workspaceManager } = actionContext;
-    const exerciseFolderPath = workspaceManager.getExercisePathById(id);
-    if (exerciseFolderPath.err) {
-        return exerciseFolderPath;
+    const { tmc, userData, workspaceManager } = actionContext;
+
+    const exerciseId = userData.getExerciseByName(courseSlug, exerciseName)?.id;
+    const exercisePath = workspaceManager.getExerciseBySlug(courseSlug, exerciseName)?.uri.fsPath;
+    if (!exerciseId || !exercisePath) {
+        return Err(new Error("Failed to resolve exercise id"));
     }
 
-    const pasteResult = await tmc.submitExerciseToPaste(id, exerciseFolderPath.val);
+    const pasteResult = await tmc.submitExerciseToPaste(exerciseId, exercisePath);
     if (pasteResult.err) {
         return pasteResult;
     }
@@ -339,7 +357,7 @@ export async function checkForCourseUpdates(
     actionContext: ActionContext,
     courseId?: number,
 ): Promise<void> {
-    const { ui, userData } = actionContext;
+    const { dialog, userData } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
     Logger.log(`Checking for course updates for courses ${filteredCourses.map((c) => c.name)}`);
@@ -350,38 +368,18 @@ export async function checkForCourseUpdates(
     }
 
     const handleDownload = async (course: LocalCourseData): Promise<void> => {
-        const newIds = Array.from(course.newExercises);
-        ui.webview.postMessage({
-            command: "setNewExercises",
-            courseId: course.id,
-            exerciseIds: [],
-        });
-        const [successful] = await downloadExercises(
-            actionContext,
-            newIds.map((x) => ({
-                courseId: course.id,
-                exerciseId: x,
-                organization: course.organization,
-            })),
-        );
-        const successfulIds = successful.map((ex) => ex.exerciseId);
-        await userData.clearFromNewExercises(course.id, successfulIds);
-        ui.webview.postMessage({
-            command: "setNewExercises",
-            courseId: course.id,
-            exerciseIds: course.newExercises,
-        });
-        const openResult = await openExercises(actionContext, successfulIds, course.name);
-        if (openResult.err) {
-            const message = "Failed to open new exercises.";
-            Logger.error(message, openResult.val);
-            showError(message);
+        const downloadResult = await downloadNewExercisesForCourse(actionContext, course.id);
+        if (downloadResult.err) {
+            dialog.errorNotification(
+                `Failed to download new exercises for course "${course.title}."`,
+                downloadResult.val,
+            );
         }
     };
 
     for (const course of updatedCourses) {
         if (course.newExercises.length > 0 && !course.disabled) {
-            showNotification(
+            dialog.notification(
                 `Found ${course.newExercises.length} new exercises for ${course.name}. Do you wish to download them now?`,
                 ["Download", async (): Promise<void> => handleDownload(course)],
                 [
@@ -405,7 +403,7 @@ export async function checkForCourseUpdates(
  * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
  */
 export async function openWorkspace(actionContext: ActionContext, name: string): Promise<void> {
-    const { resources, workspaceManager } = actionContext;
+    const { dialog, resources, workspaceManager } = actionContext;
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
     const tmcWorkspaceFile = resources.getWorkspaceFilePath(name);
     const workspaceAsUri = vscode.Uri.file(tmcWorkspaceFile);
@@ -415,7 +413,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
     if (!isCorrectWorkspaceOpen(resources, name)) {
         if (
             !currentWorkspaceFile ||
-            (await askForConfirmation(
+            (await dialog.confirmation(
                 "Do you want to open TMC workspace and close the current one?",
             ))
         ) {
@@ -426,7 +424,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
             // Restarts VSCode
         } else {
             const choice = "Close current & open Course Workspace";
-            await showError(
+            await dialog.warningNotification(
                 "Please close the current workspace before opening a course workspace.",
                 [
                     choice,
@@ -450,23 +448,39 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
  * Settings webview
  */
 export async function openSettings(actionContext: ActionContext): Promise<void> {
-    const { ui, resources, settings } = actionContext;
+    const { dialog, ui, resources, settings } = actionContext;
     Logger.log("Display extension settings");
-    const extensionSettings = await settings.getExtensionSettings();
-    if (extensionSettings.err) {
-        const message = "Failed to fetch Settings.";
-        Logger.error(message, extensionSettings.val);
-        showError(message);
+    const extensionSettingsResult = await settings.getExtensionSettings();
+    if (extensionSettingsResult.err) {
+        dialog.errorNotification("Failed to fetch settings.", extensionSettingsResult.val);
         return;
     }
-    ui.webview.setContentFromTemplate(
+
+    const extensionSettings = extensionSettingsResult.val;
+    ui.webview.setContentFromTemplate({ templateName: "settings" }, true, [
         {
-            templateName: "settings",
-            extensionSettings: extensionSettings.val,
-            tmcDataSize: formatSizeInBytes(await du(resources.getDataPath())),
+            command: "setBooleanSetting",
+            setting: "downloadOldSubmission",
+            enabled: extensionSettings.hideMetaFiles,
         },
-        true,
-    );
+        {
+            command: "setBooleanSetting",
+            setting: "hideMetaFiles",
+            enabled: extensionSettings.hideMetaFiles,
+        },
+        { command: "setBooleanSetting", setting: "insider", enabled: settings.isInsider() },
+        {
+            command: "setBooleanSetting",
+            setting: "updateExercisesAutomatically",
+            enabled: settings.getAutomaticallyUpdateExercises(),
+        },
+        { command: "setLogLevel", level: settings.getLogLevel() },
+        {
+            command: "setTmcDataFolder",
+            diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
+            path: resources.projectsDirectory,
+        },
+    ]);
 }
 
 interface NewCourseOptions {
@@ -526,7 +540,7 @@ export async function addNewCourse(
         newExercises: [],
         notifyAfter: 0,
         disabled: courseData.settings.disabled_status === "enabled" ? false : true,
-        material_url: courseData.settings.material_url,
+        materialUrl: courseData.settings.material_url,
     };
     userData.addCourse(localData);
     ui.treeDP.addChildWithId("myCourses", localData.id, localData.title, {
@@ -536,38 +550,32 @@ export async function addNewCourse(
     });
     workspaceManager.createWorkspaceFile(courseData.details.name);
     await displayUserCourses(actionContext);
-    return Ok.EMPTY;
+    return refreshLocalExercises(actionContext);
 }
 
 /**
- * Removes given course from UserData and closes all its exercises.
+ * Removes given course from UserData and removes its associated files. However, doesn't remove any
+ * exercises that are on disk.
+ *
  * @param id ID of the course to remove
  */
 export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
-    const { ui, userData, workspaceManager, resources } = actionContext;
+    const { tmc, ui, userData, workspaceManager } = actionContext;
     const course = userData.getCourse(id);
     Logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
-    const closeResult = await closeExercises(
-        actionContext,
-        course.exercises.map((e) => e.id),
-        course.name,
-    );
-    if (closeResult.err) {
-        const message = "Failed to close exercises while removing course.";
-        Logger.error(message, closeResult.val);
-        showError(message);
+
+    const unsetResult = await tmc.unsetSetting(`closed-exercises-for:${course.name}`);
+    if (unsetResult.err) {
+        Logger.warn(`Failed to remove TMC-langs data for "${course.name}:"`, unsetResult.val);
     }
-    const exercises = workspaceManager.getAllExerciseDataByCourseName(course.name);
-    const missingIds = exercises
-        .filter((e) => e.status === ExerciseStatus.MISSING)
-        .map((e) => e.id);
-    Logger.log(`Removing ${missingIds.length} exercise data with Missing status`);
-    workspaceManager.deleteExercise(...missingIds);
-    delSync(path.join(resources.getWorkspaceFolderPath(), course.name, ".code-workspace"), {
-        force: true,
-    });
+
     userData.deleteCourse(id);
     ui.treeDP.removeChildWithId("myCourses", id.toString());
+
+    if (workspaceManager.activeCourse === course.name) {
+        Logger.log("Closing course workspace because it was removed.");
+        await vscode.commands.executeCommand("workbench.action.closeFolder");
+    }
 }
 
 /**
@@ -575,7 +583,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
  * connection errors as successful operations where the data was not actually updated.
  *
  * @param courseId ID of the course to update.
- * @returns Boolean value representing whether the data from server was succesfully received.
+ * @returns Boolean value representing whether the data from server was successfully received.
  */
 export async function updateCourse(
     actionContext: ActionContext,
@@ -634,7 +642,7 @@ export async function updateCourse(
         awardedPoints,
         description: details.description || "",
         disabled: settings.disabled_status !== "enabled",
-        material_url: settings.material_url,
+        materialUrl: settings.material_url,
         perhapsExamMode: settings.hide_submission_results,
     });
 

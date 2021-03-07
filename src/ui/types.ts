@@ -1,8 +1,9 @@
 import { FeedbackQuestion } from "../actions/types";
+import Storage, { LocalCourseData } from "../api/storage";
 import TMC from "../api/tmc";
 import { Course, Organization, SubmissionStatusReport } from "../api/types";
-import Storage from "../config/storage";
-import { ExtensionSettings, LocalCourseData } from "../config/types";
+import { ExtensionSettings } from "../config/settings";
+import { LogLevel } from "../utils/logger";
 
 import { MyCoursesProps } from "./templates/MyCourses";
 import { WelcomeProps } from "./templates/Welcome";
@@ -16,16 +17,16 @@ export type HandlerContext = {
 };
 
 export type VisibilityGroups = {
-    LOGGED_IN: VisibilityGroup;
+    loggedIn: VisibilityGroup;
 };
 
 export type VisibilityGroup = {
-    _id: string;
+    id: string;
     not: VisibilityGroupNegated;
 };
 
 export type VisibilityGroupNegated = {
-    _id: string;
+    id: string;
 };
 
 export type TemplateData =
@@ -36,7 +37,7 @@ export type TemplateData =
     | ({ templateName: "my-courses" } & MyCoursesProps)
     | ({ templateName: "organization" } & OrganizationData)
     | ({ templateName: "running-tests" } & RunningTestsData)
-    | ({ templateName: "settings" } & SettingsData)
+    | { templateName: "settings" }
     | ({ templateName: "submission-result" } & SubmissionResultData)
     | ({ templateName: "submission-status" } & SubmissionStatusData)
     | ({ templateName: "test-result" } & TestResultData)
@@ -108,6 +109,7 @@ export type SubmissionStatusData = {
 export type TestResultData = {
     testResult: unknown;
     id: number;
+    courseSlug: string;
     exerciseName: string;
     tmcLogs: {
         stdout?: string;
@@ -132,15 +134,32 @@ export interface ExerciseStatusChange {
     status: ExerciseStatus;
 }
 
+export interface SetDataFolder {
+    command: "setTmcDataFolder";
+    path: string;
+    diskSize: string;
+}
+
+export interface LoginError {
+    command: "loginError";
+    error: string;
+}
+
 export interface SetCourseDisabledStatus {
     command: "setCourseDisabledStatus";
     courseId: number;
     disabled: boolean;
 }
 
-export interface SetInsiderStatus {
-    command: "setInsiderStatus";
+export interface SetBooleanSetting {
+    command: "setBooleanSetting";
+    setting: "downloadOldSubmission" | "hideMetaFiles" | "insider" | "updateExercisesAutomatically";
     enabled: boolean;
+}
+
+export interface SetLogLevel {
+    command: "setLogLevel";
+    level: LogLevel;
 }
 
 export interface SetNextCourseDeadline {
@@ -161,16 +180,13 @@ export interface SetUpdateables {
     courseId: number;
 }
 
-export interface LoginError {
-    command: "loginError";
-    error: string;
-}
-
 export type WebviewMessage =
     | ExerciseStatusChange
     | LoginError
+    | SetBooleanSetting
     | SetCourseDisabledStatus
-    | SetInsiderStatus
+    | SetDataFolder
     | SetNextCourseDeadline
     | SetNewExercises
+    | SetLogLevel
     | SetUpdateables;

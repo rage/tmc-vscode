@@ -1,104 +1,151 @@
 import * as path from "path";
+import { createIs } from "typescript-is";
 import * as vscode from "vscode";
 
-import { checkForCourseUpdates } from "./actions";
+import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
+import Dialog from "./api/dialog";
+import Storage from "./api/storage";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
-import { DEBUG_MODE, EXERCISE_CHECK_INTERVAL } from "./config/constants";
+import {
+    CLIENT_NAME,
+    DEBUG_MODE,
+    EXERCISE_CHECK_INTERVAL,
+    EXTENSION_ID,
+    TMC_LANGS_CONFIG_DIR,
+    TMC_LANGS_ROOT_URL,
+} from "./config/constants";
 import Settings from "./config/settings";
-import Storage from "./config/storage";
 import { UserData } from "./config/userdata";
-import { validateAndFix } from "./config/validate";
-import { EmptyLangsResponseError } from "./errors";
+import { EmptyLangsResponseError, HaltForReloadError } from "./errors";
 import * as init from "./init";
-import { newVSCodeWorkspaceMigration } from "./migrate";
+import { migrateExtensionDataFromPreviousVersions } from "./migrate";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
 import { Logger, LogLevel, semVerCompare } from "./utils";
-import { showError } from "./window";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 
+function throwFatalError(error: Error, cliFolder: string): never {
+    if (error instanceof EmptyLangsResponseError) {
+        Logger.error(
+            "The above error may have been caused by an interfering antivirus program. " +
+                "Please add an exception for the following folder:",
+            cliFolder,
+        );
+    }
+
+    vscode.window.showErrorMessage(
+        "TestMyCode initialization failed. Please see logs for details.",
+    );
+    Logger.show();
+    throw error;
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
     Logger.configure(LogLevel.Verbose);
-    Logger.log(`Starting extension in "${DEBUG_MODE ? "development" : "production"}" mode.`);
+    Logger.log(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`);
+    Logger.log(`${vscode.env.appName} version: ${vscode.version}`);
+    Logger.log(`${EXTENSION_ID} version: ${extensionVersion}`);
+    Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
+
+    const dialog = new Dialog();
+    const cliFolder = path.join(context.globalStoragePath, "cli");
+    const cliPathResult = await init.downloadCorrectLangsVersion(cliFolder, dialog);
+    if (cliPathResult.err) {
+        throwFatalError(cliPathResult.val, cliFolder);
+    }
+
+    const tmc = new TMC(cliPathResult.val, CLIENT_NAME, extensionVersion, TMC_LANGS_ROOT_URL, {
+        cliConfigDir: TMC_LANGS_CONFIG_DIR,
+    });
+
+    const authenticatedResult = await tmc.isAuthenticated();
+    if (authenticatedResult.err) {
+        Logger.error("Failed to check if authenticated:", authenticatedResult.val.message);
+        throwFatalError(authenticatedResult.val, cliFolder);
+    }
+
+    const authenticated = authenticatedResult.val;
+    await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated);
 
     const storage = new Storage(context);
+    const migrationResult = await migrateExtensionDataFromPreviousVersions(
+        context,
+        storage,
+        dialog,
+        tmc,
+    );
+    if (migrationResult.err) {
+        if (migrationResult.val instanceof HaltForReloadError) {
+            Logger.warn("Extension expected to restart");
+            return;
+        }
 
-    const resourcesResult = await init.resourceInitialization(context, storage);
-    if (resourcesResult.err) {
-        const message = "TestMyCode Initialization failed.";
-        Logger.error(message, resourcesResult.val);
-        showError(message);
-        return;
+        throwFatalError(migrationResult.val, cliFolder);
     }
-    const resources = resourcesResult.val;
 
-    const settingsResult = await init.settingsInitialization(storage, resources);
-    const settings = new Settings(storage, settingsResult, resources);
+    const dataPathResult = await tmc.getSetting("projects-dir", createIs<string>());
+    if (dataPathResult.err) {
+        Logger.error("Failed to define datapath:", dataPathResult.val);
+        throwFatalError(dataPathResult.val, cliFolder);
+    } else if (dataPathResult.val === undefined) {
+        Logger.error("Failed to define datapath: no value found.");
+        throwFatalError(new Error("No value for datapath."), cliFolder);
+    }
+
+    const tmcDataPath = dataPathResult.val;
+    const workspaceFileFolder = path.join(context.globalStoragePath, "workspaces");
+    const resourcesResult = await init.resourceInitialization(
+        context,
+        storage,
+        tmcDataPath,
+        workspaceFileFolder,
+    );
+    if (resourcesResult.err) {
+        Logger.error("Resource initialization failed: ", resourcesResult.val);
+        throwFatalError(resourcesResult.val, cliFolder);
+    }
+
+    const resources = resourcesResult.val;
+    const settings = new Settings(storage, resources);
     await settings.verifyWorkspaceSettingsIntegrity();
     Logger.configure(settings.getLogLevel());
 
-    await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
-
-    const currentVersion = resources.extensionVersion;
-    const previousVersion = storage.getExtensionVersion();
-    if (currentVersion !== previousVersion) {
-        storage.updateExtensionVersion(currentVersion);
-    }
-
-    Logger.log(`VSCode version: ${vscode.version}`);
-    Logger.log(`TMC extension version: ${resources.extensionVersion}`);
-    Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
-
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
-    const tmc = new TMC(resources);
-
-    const authenticated = await tmc.isAuthenticated();
-    if (authenticated.err) {
-        showError("TestMyCode initialization failed. Please see logs for details.");
-        Logger.error("Failed to check if authenticated:", authenticated.val.message);
-        if (authenticated.val instanceof EmptyLangsResponseError) {
-            Logger.error(
-                "The above error may have been caused by an interfering antivirus program. " +
-                    "Please add an exception for the following folder:",
-                path.resolve(resources.getCliPath(), ".."),
-            );
-        }
-        Logger.show();
-        return;
-    }
-
-    const validationResult = await validateAndFix(storage, tmc, ui, resources);
-    if (validationResult.err) {
-        const message = "Data reconstruction failed.";
-        Logger.error(message, validationResult.val);
-        showError(message);
-        return;
-    }
-
-    await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated.val);
-    const LOGGED_IN = ui.treeDP.createVisibilityGroup(authenticated.val);
+    const loggedIn = ui.treeDP.createVisibilityGroup(authenticated);
     const visibilityGroups = {
-        LOGGED_IN,
+        loggedIn,
     };
-
     tmc.on("login", async () => {
         await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", true);
-        ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN]);
+        ui.treeDP.updateVisibility([visibilityGroups.loggedIn]);
     });
     tmc.on("logout", async () => {
+        dialog.warningNotification("Your TMC session has expired, please log in.");
         await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
-        ui.treeDP.updateVisibility([visibilityGroups.LOGGED_IN.not]);
+        ui.treeDP.updateVisibility([visibilityGroups.loggedIn.not]);
         ui.webview.setContentFromTemplate({ templateName: "login" });
     });
 
-    const workspaceManager = new WorkspaceManager(storage, resources);
-    await workspaceManager.initialize();
+    const currentVersion = resources.extensionVersion;
+    const previousState = storage.getSessionState();
+    const previousVersion = previousState?.extensionVersion;
+    if (currentVersion !== previousVersion) {
+        storage.updateSessionState({ extensionVersion: currentVersion });
+    }
 
     const userData = new UserData(storage);
+    const workspaceManager = new WorkspaceManager(resources);
+    context.subscriptions.push(workspaceManager);
+    if (workspaceManager.activeCourse) {
+        await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
+    }
+
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
     const actionContext = {
+        dialog,
         resources,
         settings,
         temporaryWebviewProvider,
@@ -109,16 +156,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         visibilityGroups,
     };
 
-    // Remove newVSCodeWorkspaceMigration plan when release of 2.0.0
-    newVSCodeWorkspaceMigration(actionContext);
-
-    // Start watcher after migration.
-    workspaceManager.startWatcher();
+    const refreshResult = await refreshLocalExercises(actionContext);
+    if (refreshResult.err) {
+        Logger.warn("Failed to set initial exercises.", refreshResult.val);
+    }
 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
 
-    if (authenticated.val) {
+    if (authenticated) {
         vscode.commands.executeCommand("tmc.updateExercises", "silent");
         checkForCourseUpdates(actionContext);
     }
@@ -141,8 +187,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             authenticated.val,
         );
     }, EXERCISE_CHECK_INTERVAL);
-
-    init.watchForWorkspaceChanges(actionContext);
 
     const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor");
     if (versionDiff === undefined || versionDiff > 0) {

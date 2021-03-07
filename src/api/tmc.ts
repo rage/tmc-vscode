@@ -1,21 +1,17 @@
 import * as cp from "child_process";
-import * as ClientOauth2 from "client-oauth2";
 import * as kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
-import { createIs, is } from "typescript-is";
+import { is } from "typescript-is";
 
 import {
-    CLIENT_NAME,
-    TMC_API_CACHE_LIFETIME,
-    TMC_LANGS_CONFIG_DIR,
-    TMC_LANGS_ROOT_URL,
-    TMC_LANGS_TIMEOUT,
+    API_CACHE_LIFETIME,
+    CLI_PROCESS_TIMEOUT,
+    MINIMUM_SUBMISSION_INTERVAL,
 } from "../config/constants";
-import Resources from "../config/resources";
 import {
-    ApiError,
     AuthenticationError,
     AuthorizationError,
+    BottleneckError,
     ConnectionError,
     EmptyLangsResponseError,
     ForbiddenError,
@@ -23,10 +19,17 @@ import {
     ObsoleteClientError,
     RuntimeError,
 } from "../errors";
-import { sleep } from "../utils/";
 import { Logger } from "../utils/logger";
-import { showError, showWarning } from "../window";
 
+import {
+    Data,
+    DownloadOrUpdateCourseExercisesResult,
+    FailedExerciseDownload,
+    LocalExercise,
+    Output,
+    OutputData,
+    StatusUpdateData,
+} from "./langsSchema";
 import {
     Course,
     CourseData,
@@ -38,58 +41,15 @@ import {
     Organization,
     SubmissionFeedback,
     SubmissionFeedbackResponse,
-    SubmissionResponse,
     SubmissionStatusReport,
     TestResults,
 } from "./types";
 
-// ---------------------------------------------------------------------------------------------- //
-
-// Output schema for TMC Langs 0.6.2
-// https://github.com/rage/tmc-langs-rust/blob/master/tmc-langs-cli/src/output.rs
-
-interface LangsOutputBase<T> {
-    data: T;
-    message: string | null;
-    "percent-done": number;
+interface Options {
+    apiCacheLifetime?: string;
+    cliConfigDir?: string;
+    cliExecutionTimeout?: number;
 }
-
-interface LangsStatusUpdate<T> extends LangsOutputBase<T> {
-    "output-kind": "status-update";
-    finished: boolean;
-    time: number | null;
-}
-
-interface LangsOutputData<T> extends LangsOutputBase<T> {
-    "output-kind": "output-data";
-    result:
-        | "logged-in"
-        | "logged-out"
-        | "not-logged-in"
-        | "error"
-        | "sent-data"
-        | "retrieved-data"
-        | "executed-command";
-    status: "crashed" | "finished";
-}
-
-interface LangsWarning {
-    "output-kind": "warnings";
-    warnings: string[];
-}
-
-interface LangsError {
-    kind:
-        | "generic"
-        | "forbidden"
-        | "not-logged-in"
-        | "connection-error"
-        | "obsolete-client"
-        | "invalid-token";
-    trace: string[];
-}
-
-// ---------------------------------------------------------------------------------------------- //
 
 interface LangsProcessArgs {
     args: string[];
@@ -98,18 +58,17 @@ interface LangsProcessArgs {
     /** Which args should be obfuscated in logs. */
     obfuscate?: number[];
     onStderr?: (data: string) => void;
-    onStdout?: (data: LangsStatusUpdate<unknown>) => void;
-    onWarning?: (data: string[]) => void;
+    onStdout?: (data: StatusUpdateData) => void;
     stdin?: string;
 }
 
-interface LangsProcessRunner<T> {
+interface LangsProcessRunner {
     interrupt(): void;
-    result: Promise<Result<LangsOutputData<T>, Error>>;
+    result: Promise<Result<OutputData, Error>>;
 }
 
 interface ResponseCacheEntry {
-    response: LangsOutputData<unknown>;
+    response: OutputData;
     timestamp: number;
 }
 
@@ -117,18 +76,21 @@ interface CacheOptions {
     forceRefresh?: boolean;
 }
 
-interface CacheConfig<T1, T2> {
+interface CacheConfig {
     forceRefresh?: boolean;
     key: string;
     /** Optional remapper for assigning parts of the result to different keys. */
-    remapper?: (response: LangsOutputData<T1>) => Array<[string, LangsOutputData<T2>]>;
+    remapper?: (response: OutputData) => Array<[string, OutputData]>;
 }
 
 /**
  * A Class that provides an interface to all TMC services.
  */
 export default class TMC {
-    private readonly _resources: Resources;
+    private static readonly _exerciseUpdatesCacheKey = "exercise-updates";
+
+    private _nextSubmissionAllowedTimestamp: number;
+    private readonly _options: Options;
     private readonly _responseCache: Map<string, ResponseCacheEntry>;
     private _onLogin?: () => void;
     private _onLogout?: () => void;
@@ -136,11 +98,17 @@ export default class TMC {
     /**
      * Creates a new instance of TMC interface class.
      *
-     * @param storage Used to store authentication token.
-     * @param resources Used to locate TMC-langs executable.
+     * @param configuration
      */
-    constructor(resources: Resources) {
-        this._resources = resources;
+    constructor(
+        private readonly cliPath: string,
+        private readonly clientName: string,
+        private readonly clientVersion: string,
+        private readonly apiRootUrl: string,
+        options?: Options,
+    ) {
+        this._nextSubmissionAllowedTimestamp = 0;
+        this._options = { ...options };
         this._responseCache = new Map();
     }
 
@@ -156,7 +124,6 @@ export default class TMC {
                 this._onLogin = callback;
                 break;
             case "logout":
-                this._responseCache.clear();
                 this._onLogout = callback;
                 break;
         }
@@ -176,43 +143,14 @@ export default class TMC {
      * @param password Password.
      */
     public async authenticate(username: string, password: string): Promise<Result<void, Error>> {
-        const loginResult = await this._executeLangsCommand(
-            {
-                args: ["login", "--email", username, "--base64"],
-                core: true,
-                obfuscate: [2],
-                stdin: Buffer.from(password).toString("base64"),
-            },
-            createIs<unknown>(),
-        );
+        const loginResult = await this._executeLangsCommand({
+            args: ["login", "--email", username, "--base64"],
+            core: true,
+            obfuscate: [2],
+            stdin: Buffer.from(password).toString("base64"),
+        });
         if (loginResult.err) {
             return Err(new AuthenticationError(loginResult.val.message));
-        }
-
-        this._onLogin?.();
-        return Ok.EMPTY;
-    }
-
-    /**
-     * Passes an access token to TMC-langs. Uses TMC-langs `login` core command internally.
-     *
-     * @deprecated Since version 1.0.0. Should only be used for passing the token to TMC-langs from
-     * older versions.
-     *
-     * @param token Authorization token.
-     */
-    public async setAuthenticationToken(token: ClientOauth2.Data): Promise<Result<void, Error>> {
-        const setTokenResult = await this._executeLangsCommand(
-            {
-                args: ["login", "--set-access-token", token.access_token],
-                core: true,
-                obfuscate: [2],
-            },
-            createIs<unknown>(),
-        );
-
-        if (setTokenResult.err) {
-            return setTokenResult;
         }
 
         this._onLogin?.();
@@ -226,10 +164,7 @@ export default class TMC {
      * @returns Boolean indicating if the user is authenticated.
      */
     public async isAuthenticated(): Promise<Result<boolean, Error>> {
-        const loggedInResult = await this._executeLangsCommand(
-            { args: ["logged-in"], core: true },
-            createIs<ClientOauth2.Data | null>(),
-        );
+        const loggedInResult = await this._executeLangsCommand({ args: ["logged-in"], core: true });
         if (loggedInResult.err) {
             return loggedInResult;
         }
@@ -248,14 +183,12 @@ export default class TMC {
      * Deauthenticates current user. Uses TMC-langs `logout` core command internally.
      */
     public async deauthenticate(): Promise<Result<void, Error>> {
-        const logoutResult = await this._executeLangsCommand(
-            { args: ["logout"], core: true },
-            createIs<unknown>(),
-        );
+        const logoutResult = await this._executeLangsCommand({ args: ["logout"], core: true });
         if (logoutResult.err) {
             return logoutResult;
         }
 
+        this._responseCache.clear();
         this._onLogout?.();
         return Ok.EMPTY;
     }
@@ -271,10 +204,62 @@ export default class TMC {
      * @param id ID of the exercise to clean.
      */
     public async clean(exercisePath: string): Promise<Result<void, Error>> {
-        return this._executeLangsCommand(
-            { args: ["clean", "--exercise-path", exercisePath], core: false },
-            createIs<unknown>(),
-        ).then((res) => (res.err ? res : Ok.EMPTY));
+        return this._executeLangsCommand({
+            args: ["clean", "--exercise-path", exercisePath],
+            core: false,
+        }).then((res) => (res.err ? res : Ok.EMPTY));
+    }
+
+    /**
+     * Lists local exercises for given course. Uses TMC-langs `list-local-course-exercises` command
+     * internally.
+     *
+     * @param courseSlug Course which's exercises should be listed.
+     */
+    public async listLocalCourseExercises(
+        courseSlug: string,
+    ): Promise<Result<LocalExercise[], Error>> {
+        return (
+            await this._executeLangsCommand({
+                args: [
+                    "list-local-course-exercises",
+                    "--client-name",
+                    this.clientName,
+                    "--course-slug",
+                    courseSlug,
+                ],
+                core: false,
+            })
+        ).andThen((x) =>
+            x.data?.["output-data-kind"] === "local-exercises"
+                ? Ok(x.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
+    }
+
+    /**
+     * Moves this instance's projects directory on disk. Uses TMC-langs `settings move-projects-dir`
+     * setting internally.
+     *
+     * @param newDirectory New location for projects directory.
+     * @param onUpdate Progress callback.
+     */
+    public async moveProjectsDirectory(
+        newDirectory: string,
+        onUpdate?: (value: { percent: number; message?: string }) => void,
+    ): Promise<Result<void, Error>> {
+        const onStdout = (res: StatusUpdateData): void => {
+            onUpdate?.({
+                percent: res["percent-done"],
+                message: res.message ?? undefined,
+            });
+        };
+
+        return this._executeLangsCommand({
+            args: ["settings", "--client-name", this.clientName, "move-projects-dir", newDirectory],
+            core: false,
+            onStdout,
+        }).then((res) => (res.err ? res : Ok.EMPTY));
     }
 
     /**
@@ -297,15 +282,111 @@ export default class TMC {
             core: false,
             env,
             onStderr: (data) => Logger.log("Rust Langs", data),
-            onWarning: (data) => showWarning(data.join("\n")),
         });
         const postResult = result.then((res) =>
             res
-                .andThen((x) => this._checkLangsResponse(x, createIs<TestResults>()))
-                .map((x) => x.data),
+                .andThen(this._checkLangsResponse)
+                .andThen((x) =>
+                    x.data?.["output-data-kind"] === "test-result"
+                        ? Ok(x.data["output-data"])
+                        : Err(new Error("Unexpected Langs result.")),
+                ),
         );
 
         return [postResult, interrupt];
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Settings commands
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Migrates exercise under TMC-langs's management. The new location will be determined by
+     * langs's `projects-dir` setting.
+     */
+    public async migrateExercise(
+        courseSlug: string,
+        exerciseChecksum: string,
+        exerciseId: number,
+        exercisePath: string,
+        exerciseSlug: string,
+    ): Promise<Result<void, Error>> {
+        return this._executeLangsCommand({
+            args: [
+                "settings",
+                "--client-name",
+                this.clientName,
+                "migrate",
+                "--course-slug",
+                courseSlug,
+                "--exercise-checksum",
+                exerciseChecksum,
+                "--exercise-id",
+                `${exerciseId}`,
+                "--exercise-path",
+                exercisePath,
+                "--exercise-slug",
+                exerciseSlug,
+            ],
+            core: false,
+        }).then((res) => (res.err ? res : Ok.EMPTY));
+    }
+
+    /**
+     * Gets the value for given key and asserts it's type. Uses TMC-langs `settings get` command
+     * internally.
+     */
+    public async getSetting<T>(
+        key: string,
+        checker: (object: unknown) => object is T,
+    ): Promise<Result<T | undefined, Error>> {
+        return (
+            await this._executeLangsCommand({
+                args: ["settings", "--client-name", this.clientName, "get", key],
+                core: false,
+            })
+        )
+            .andThen((result) =>
+                result.data?.["output-data-kind"] === "config-value"
+                    ? Ok(result.data["output-data"])
+                    : Err(new Error("Unexpected Langs result.")),
+            )
+            .andThen((result) =>
+                checker(result) ? Ok(result) : Err(new Error("Invalid object type.")),
+            );
+    }
+
+    /**
+     * Sets a value for given key in stored settings. Uses TMC-langs `settings set` command
+     * internally.
+     */
+    public async setSetting(key: string, value: string): Promise<Result<void, Error>> {
+        return this._executeLangsCommand({
+            args: ["settings", "--client-name", this.clientName, "set", key, value],
+            core: false,
+        }).then((x) => x.andThen(() => Ok.EMPTY));
+    }
+
+    /**
+     * Resets all settings back to initial values. Uses TMC-langs `settings reset` command
+     * internally.
+     */
+    public async resetSettings(): Promise<Result<void, Error>> {
+        return this._executeLangsCommand({
+            args: ["settings", "--client-name", this.clientName, "reset"],
+            core: false,
+        }).then((x) => x.andThen(() => Ok.EMPTY));
+    }
+
+    /**
+     * Unsets the value of given key in stored settings. Uses TMC-langs `settings unset` command
+     * internally.
+     */
+    public async unsetSetting(key: string): Promise<Result<void, Error>> {
+        return this._executeLangsCommand({
+            args: ["settings", "--client-name", this.clientName, "unset", key],
+            core: false,
+        }).then((x) => x.andThen(() => Ok.EMPTY));
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -313,6 +394,26 @@ export default class TMC {
     // ---------------------------------------------------------------------------------------------
 
     /**
+     * Checks for updates for all exercises in this client's context. Uses TMC-langs
+     * `check-exercise-updates` core command internally.
+     */
+    public async checkExerciseUpdates(
+        options?: CacheOptions,
+    ): Promise<Result<Array<{ id: number }>, Error>> {
+        return (
+            await this._executeLangsCommand(
+                { args: ["check-exercise-updates"], core: true },
+                { forceRefresh: options?.forceRefresh, key: TMC._exerciseUpdatesCacheKey },
+            )
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "updated-exercises"
+                ? Ok(result.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
+    }
+
+    /**
+     * @deprecated - Migrate to `downloadExercises`
      * Downloads an exercise to the provided filepath. Uses TMC-langs `download-or-update-exercise`
      * core command internally.
      *
@@ -325,13 +426,57 @@ export default class TMC {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         progressCallback?: (downloadedPct: number, increment: number) => void,
     ): Promise<Result<void, Error>> {
-        return this._executeLangsCommand(
-            {
-                args: ["download-or-update-exercises", "--exercise", id.toString(), exercisePath],
+        return this._executeLangsCommand({
+            args: ["download-or-update-exercises", "--exercise", id.toString(), exercisePath],
+            core: true,
+        }).then((res) => (res.err ? res : Ok.EMPTY));
+    }
+
+    /**
+     * Downloads multiple exercises to TMC-langs' configured project directory. Uses TMC-langs
+     * `download-or-update-course-exercises` core command internally.
+     *
+     * @param ids Ids of the exercises to download.
+     */
+    public async downloadExercises(
+        ids: number[],
+        downloaded: (value: { id: number; percent: number; message?: string }) => void,
+    ): Promise<Result<DownloadOrUpdateCourseExercisesResult, Error>> {
+        const onStdout = (res: StatusUpdateData): void => {
+            if (
+                res["update-data-kind"] === "client-update-data" &&
+                res.data?.["client-update-data-kind"] === "exercise-download"
+            ) {
+                downloaded({
+                    id: res.data.id,
+                    percent: res["percent-done"],
+                    message: res.message ?? undefined,
+                });
+            }
+        };
+
+        const result = (
+            await this._executeLangsCommand({
+                args: [
+                    "download-or-update-course-exercises",
+                    "--exercise-id",
+                    ...ids.map((id) => id.toString()),
+                ],
                 core: true,
-            },
-            createIs<unknown>(),
-        ).then((res) => (res.err ? res : Ok.EMPTY));
+                onStdout,
+            })
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "exercise-download"
+                ? Ok(result.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
+        if (result.err) {
+            return result;
+        }
+
+        // Invalidate exercise update cache
+        this._responseCache.delete(TMC._exerciseUpdatesCacheKey);
+        return result;
     }
 
     /**
@@ -366,11 +511,11 @@ export default class TMC {
         if (saveOldState) {
             args.push(
                 "--submission-url",
-                `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`,
+                `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`,
             );
         }
 
-        return this._executeLangsCommand({ args, core: true }, createIs<unknown>()).then((res) =>
+        return this._executeLangsCommand({ args, core: true }).then((res) =>
             res.err ? res : Ok.EMPTY,
         );
     }
@@ -382,15 +527,23 @@ export default class TMC {
      * @param organization Slug of the organization.
      * @returns Array of the organization's courses.
      */
-    public getCourses(
+    public async getCourses(
         organization: string,
         options?: CacheOptions,
     ): Promise<Result<Course[], Error>> {
-        return this._executeLangsCommand(
-            { args: ["get-courses", "--organization", organization], core: true },
-            createIs<Course[]>(),
-            { forceRefresh: options?.forceRefresh, key: `organization-${organization}-courses` },
-        ).then((res) => res.map((r) => r.data));
+        return (
+            await this._executeLangsCommand(
+                { args: ["get-courses", "--organization", organization], core: true },
+                {
+                    forceRefresh: options?.forceRefresh,
+                    key: `organization-${organization}-courses`,
+                },
+            )
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "courses"
+                ? Ok(result.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
     }
 
     /**
@@ -404,20 +557,44 @@ export default class TMC {
         courseId: number,
         options?: CacheOptions,
     ): Promise<Result<CourseData, Error>> {
-        const remapper: CacheConfig<CourseData, unknown>["remapper"] = (response) => {
-            const { details, exercises, settings } = response.data;
+        const remapper: CacheConfig["remapper"] = (response) => {
+            if (response.data?.["output-data-kind"] !== "combined-course-data") return [];
+            const { details, exercises, settings } = response.data["output-data"];
             return [
-                [`course-${courseId}-details`, { ...response, data: details }],
-                [`course-${courseId}-exercises`, { ...response, data: exercises }],
-                [`course-${courseId}-settings`, { ...response, data: settings }],
+                [
+                    `course-${courseId}-details`,
+                    {
+                        ...response,
+                        data: { "output-data-kind": "course-details", "output-data": details },
+                    },
+                ],
+                [
+                    `course-${courseId}-exercises`,
+                    {
+                        ...response,
+                        data: { "output-data-kind": "course-exercises", "output-data": exercises },
+                    },
+                ],
+                [
+                    `course-${courseId}-settings`,
+                    {
+                        ...response,
+                        data: { "output-data-kind": "course-data", "output-data": settings },
+                    },
+                ],
             ];
         };
 
-        return this._executeLangsCommand<CourseData>(
-            { args: ["get-course-data", "--course-id", courseId.toString()], core: true },
-            createIs<CourseData>(),
-            { forceRefresh: options?.forceRefresh, key: `course-${courseId}-data`, remapper },
-        ).then((res) => res.map((r) => r.data));
+        return (
+            await this._executeLangsCommand(
+                { args: ["get-course-data", "--course-id", courseId.toString()], core: true },
+                { forceRefresh: options?.forceRefresh, key: `course-${courseId}-data`, remapper },
+            )
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "combined-course-data"
+                ? Ok(result.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
     }
 
     /**
@@ -431,11 +608,18 @@ export default class TMC {
         courseId: number,
         options?: CacheOptions,
     ): Promise<Result<CourseDetails, Error>> {
-        return this._executeLangsCommand(
-            { args: ["get-course-details", "--course-id", courseId.toString()], core: true },
-            createIs<CourseDetails["course"]>(),
-            { forceRefresh: options?.forceRefresh, key: `course-${courseId}-details` },
-        ).then((res) => res.map((r) => ({ course: r.data })));
+        return (
+            await this._executeLangsCommand(
+                { args: ["get-course-details", "--course-id", courseId.toString()], core: true },
+                { forceRefresh: options?.forceRefresh, key: `course-${courseId}-details` },
+            )
+        )
+            .andThen((result) =>
+                result.data?.["output-data-kind"] === "course-details"
+                    ? Ok(result.data["output-data"])
+                    : Err(new Error("Unexpected Langs result.")),
+            )
+            .map((x) => ({ course: x }));
     }
 
     /**
@@ -449,11 +633,16 @@ export default class TMC {
         courseId: number,
         options?: CacheOptions,
     ): Promise<Result<CourseExercise[], Error>> {
-        return this._executeLangsCommand(
-            { args: ["get-course-exercises", "--course-id", courseId.toString()], core: true },
-            createIs<CourseExercise[]>(),
-            { forceRefresh: options?.forceRefresh, key: `course-${courseId}-exercises` },
-        ).then((res) => res.map((r) => r.data));
+        return (
+            await this._executeLangsCommand(
+                { args: ["get-course-exercises", "--course-id", courseId.toString()], core: true },
+                { forceRefresh: options?.forceRefresh, key: `course-${courseId}-exercises` },
+            )
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "course-exercises"
+                ? Ok(result.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
     }
 
     /**
@@ -463,15 +652,20 @@ export default class TMC {
      * @param courseId Id of the course.
      * @returns Info of the course.
      */
-    public getCourseSettings(
+    public async getCourseSettings(
         courseId: number,
         options?: CacheOptions,
     ): Promise<Result<CourseSettings, Error>> {
-        return this._executeLangsCommand(
-            { args: ["get-course-settings", "--course-id", courseId.toString()], core: true },
-            createIs<CourseSettings>(),
-            { forceRefresh: options?.forceRefresh, key: `course-${courseId}-settings` },
-        ).then((res) => res.map((r) => r.data));
+        return (
+            await this._executeLangsCommand(
+                { args: ["get-course-settings", "--course-id", courseId.toString()], core: true },
+                { forceRefresh: options?.forceRefresh, key: `course-${courseId}-settings` },
+            )
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "course-data"
+                ? Ok(result.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
     }
 
     /**
@@ -485,14 +679,19 @@ export default class TMC {
         exerciseId: number,
         options?: CacheOptions,
     ): Promise<Result<ExerciseDetails, Error>> {
-        return this._executeLangsCommand(
-            {
-                args: ["get-exercise-details", "--exercise-id", exerciseId.toString()],
-                core: true,
-            },
-            createIs<ExerciseDetails>(),
-            { forceRefresh: options?.forceRefresh, key: `exercise-${exerciseId}-details` },
-        ).then((res) => res.map((r) => r.data));
+        return (
+            await this._executeLangsCommand(
+                {
+                    args: ["get-exercise-details", "--exercise-id", exerciseId.toString()],
+                    core: true,
+                },
+                { forceRefresh: options?.forceRefresh, key: `exercise-${exerciseId}-details` },
+            )
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "exercise-details"
+                ? Ok(result.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
     }
 
     /**
@@ -503,13 +702,16 @@ export default class TMC {
      * @returns Array of old submissions.
      */
     public async getOldSubmissions(exerciseId: number): Promise<Result<OldSubmission[], Error>> {
-        return this._executeLangsCommand(
-            {
+        return (
+            await this._executeLangsCommand({
                 args: ["get-exercise-submissions", "--exercise-id", exerciseId.toString()],
                 core: true,
-            },
-            createIs<OldSubmission[]>(),
-        ).then((res) => res.map((r) => r.data));
+            })
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "submissions"
+                ? Ok(result.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
     }
 
     /**
@@ -523,11 +725,16 @@ export default class TMC {
         organizationSlug: string,
         options?: CacheOptions,
     ): Promise<Result<Organization, Error>> {
-        return this._executeLangsCommand(
-            { args: ["get-organization", "--organization", organizationSlug], core: true },
-            createIs<Organization>(),
-            { forceRefresh: options?.forceRefresh, key: `organization-${organizationSlug}` },
-        ).then((res) => res.map((r) => r.data));
+        return (
+            await this._executeLangsCommand(
+                { args: ["get-organization", "--organization", organizationSlug], core: true },
+                { forceRefresh: options?.forceRefresh, key: `organization-${organizationSlug}` },
+            )
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "organization"
+                ? Ok(result.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
     }
 
     /**
@@ -536,14 +743,24 @@ export default class TMC {
      * @returns A list of organizations.
      */
     public async getOrganizations(options?: CacheOptions): Promise<Result<Organization[], Error>> {
-        const remapper: CacheConfig<Organization[], unknown>["remapper"] = (res) =>
-            res.data.map((x) => [`organization-${x.slug}`, { ...res, data: x }]);
+        const remapper: CacheConfig["remapper"] = (res) => {
+            if (res.data?.["output-data-kind"] !== "organizations") return [];
+            return res.data["output-data"].map<[string, OutputData]>((x) => [
+                `organization-${x.slug}`,
+                { ...res, data: { "output-data-kind": "organization", "output-data": x } },
+            ]);
+        };
 
-        return this._executeLangsCommand(
-            { args: ["get-organizations"], core: true },
-            createIs<Organization[]>(),
-            { forceRefresh: options?.forceRefresh, key: "organizations", remapper },
-        ).then((res) => res.map((r) => r.data));
+        return (
+            await this._executeLangsCommand(
+                { args: ["get-organizations"], core: true },
+                { forceRefresh: options?.forceRefresh, key: "organizations", remapper },
+            )
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "organizations"
+                ? Ok(result.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
     }
 
     /**
@@ -570,11 +787,11 @@ export default class TMC {
         if (saveOldState) {
             args.push(
                 "--submission-url",
-                `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`,
+                `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`,
             );
         }
 
-        const result = await this._executeLangsCommand({ args, core: true }, createIs<unknown>());
+        const result = await this._executeLangsCommand({ args, core: true });
         if (result.err) {
             return result;
         }
@@ -583,36 +800,11 @@ export default class TMC {
     }
 
     /**
-     * Submits given exercise to server. Uses TMC-langs `submit` core command internally.
-     *
-     * @param exerciseId Id of the exercise.
-     * @returns Response for sending the exercise.
-     */
-    public async submitExercise(
-        exerciseId: number,
-        exercisePath: string,
-    ): Promise<Result<SubmissionResponse, Error>> {
-        const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
-
-        return this._executeLangsCommand(
-            {
-                args: [
-                    "submit",
-                    "--dont-block",
-                    "--submission-path",
-                    exercisePath,
-                    "--submission-url",
-                    submitUrl,
-                ],
-                core: true,
-            },
-            createIs<SubmissionResponse>(),
-        ).then((res) => res.map((r) => r.data));
-    }
-
-    /**
      * Submits an exercise to server and waits for test results. Uses TMC-langs `submit` core
      * command internally.
+     *
+     * This function can only be called once per `MINIMUM_SUBMISSION_INTERVAL` and this limitation
+     * is shared with `submitExerciseToPaste()`.
      *
      * @param exerciseId Id of the exercise.
      * @param progressCallback Optional callback function that can be used to get status reports.
@@ -623,27 +815,43 @@ export default class TMC {
         progressCallback?: (progressPct: number, message?: string) => void,
         onSubmissionUrl?: (url: string) => void,
     ): Promise<Result<SubmissionStatusReport, Error>> {
-        const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
-        const onStdout = (res: LangsStatusUpdate<unknown>): void => {
+        const now = Date.now();
+        if (now < this._nextSubmissionAllowedTimestamp) {
+            return Err(new BottleneckError("This command can't be executed at the moment."));
+        } else {
+            this._nextSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL;
+        }
+
+        const submitUrl = `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`;
+        const onStdout = (res: StatusUpdateData): void => {
             progressCallback?.(100 * res["percent-done"], res.message ?? undefined);
-            if (is<{ PostedSubmission: SubmissionResponse }>(res.data)) {
-                onSubmissionUrl?.(res.data.PostedSubmission.show_submission_url);
+            if (
+                res["update-data-kind"] === "client-update-data" &&
+                res.data?.["client-update-data-kind"] === "posted-submission"
+            ) {
+                onSubmissionUrl?.(res.data.show_submission_url);
             }
         };
 
-        return this._executeLangsCommand(
-            {
+        return (
+            await this._executeLangsCommand({
                 args: ["submit", "--submission-path", exercisePath, "--submission-url", submitUrl],
                 core: true,
                 onStdout,
-            },
-            createIs<SubmissionStatusReport>(),
-        ).then((res) => res.map((r) => r.data));
+            })
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "submission-finished"
+                ? Ok(result.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
     }
 
     /**
      * Submits given exercise to TMC Paste and provides a link to it. Uses TMC-langs `paste` core
      * command internally.
+     *
+     * This function can only be called once per `MINIMUM_SUBMISSION_INTERVAL` and this limitation
+     * is shared with `submitExerciseAndWaitForResults()`.
      *
      * @param exerciseId Id of the exercise.
      * @returns TMC paste link.
@@ -652,15 +860,25 @@ export default class TMC {
         exerciseId: number,
         exercisePath: string,
     ): Promise<Result<string, Error>> {
-        const submitUrl = `${TMC_LANGS_ROOT_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
+        const now = Date.now();
+        if (now < this._nextSubmissionAllowedTimestamp) {
+            return Err(new BottleneckError("This command can't be executed at the moment."));
+        } else {
+            this._nextSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL;
+        }
 
-        return this._executeLangsCommand(
-            {
+        const submitUrl = `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`;
+
+        return (
+            await this._executeLangsCommand({
                 args: ["paste", "--submission-path", exercisePath, "--submission-url", submitUrl],
                 core: true,
-            },
-            createIs<SubmissionResponse>(),
-        ).then((res) => res.map((r) => r.data.paste_url));
+            })
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "new-submission"
+                ? Ok(result.data["output-data"].paste_url)
+                : Err(new Error("Unexpected Langs result.")),
+        );
     }
 
     /**
@@ -678,13 +896,17 @@ export default class TMC {
             (acc, next) => acc.concat("--feedback", next.question_id.toString(), next.answer),
             [],
         );
-        return this._executeLangsCommand(
-            {
+
+        return (
+            await this._executeLangsCommand({
                 args: ["send-feedback", ...feedbackArgs, "--feedback-url", feedbackUrl],
                 core: true,
-            },
-            createIs<SubmissionFeedbackResponse>(),
-        ).then((res) => res.map((r) => r.data));
+            })
+        ).andThen((result) =>
+            result.data?.["output-data-kind"] === "submission-feedback-response"
+                ? Ok(result.data["output-data"])
+                : Err(new Error("Unexpected Langs result.")),
+        );
     }
 
     /**
@@ -699,45 +921,40 @@ export default class TMC {
      * responses.
      * @returns Result that resolves to a checked LansResponse.
      */
-    private async _executeLangsCommand<T>(
+    private async _executeLangsCommand(
         langsArgs: LangsProcessArgs,
-        checker: (object: unknown) => object is T,
-        cacheConfig?: CacheConfig<T, unknown>,
-    ): Promise<Result<LangsOutputData<T>, Error>> {
+        cacheConfig?: CacheConfig,
+    ): Promise<Result<OutputData, Error>> {
         const cacheKey = cacheConfig?.key;
         const currentTime = Date.now();
         if (!cacheConfig?.forceRefresh && cacheKey) {
             const cachedEntry = this._responseCache.get(cacheKey);
             if (cachedEntry) {
                 const { response, timestamp } = cachedEntry;
-                const cachedDataLifeLeft = timestamp + TMC_API_CACHE_LIFETIME - currentTime;
-                if (checker(response.data)) {
-                    if (cachedDataLifeLeft > 0) {
-                        const prettySecondsLeft = Math.ceil(cachedDataLifeLeft / 1000);
-                        Logger.log(
-                            `Using cached data for key: ${cacheKey}. Still valid for ${prettySecondsLeft}s`,
-                        );
-                        return Ok({ ...response, data: response.data });
-                    }
-                    Logger.debug(`Discarding invalidated cache data for key: ${cacheKey}`);
-                    this._responseCache.delete(cacheKey);
-                } else {
-                    Logger.debug(`Incorrect cache data type for key: ${cacheKey}`);
+                const cachedDataLifeLeft = timestamp + API_CACHE_LIFETIME - currentTime;
+                if (cachedDataLifeLeft > 0) {
+                    const prettySecondsLeft = Math.ceil(cachedDataLifeLeft / 1000);
+                    Logger.log(
+                        `Using cached data for key: ${cacheKey}. Still valid for ${prettySecondsLeft}s`,
+                    );
+                    return Ok(response);
                 }
+                Logger.debug(`Discarding invalidated cache data for key: ${cacheKey}`);
+                this._responseCache.delete(cacheKey);
             }
         }
 
         const result = (await this._spawnLangsProcess(langsArgs).result).andThen((x) =>
-            this._checkLangsResponse(x, checker),
+            this._checkLangsResponse(x),
         );
         if (result.err) {
             return result;
         }
 
         const response = result.val;
-        if (cacheKey) {
+        if (response && cacheKey) {
             this._responseCache.set(cacheKey, { response, timestamp: currentTime });
-            cacheConfig?.remapper?.(result.val).forEach(([key, response]) => {
+            cacheConfig?.remapper?.(response).forEach(([key, response]) => {
                 this._responseCache.set(key, { response, timestamp: currentTime });
             });
         }
@@ -748,58 +965,57 @@ export default class TMC {
     /**
      * Checks langs response for generic errors.
      */
-    private _checkLangsResponse<T>(
-        langsResponse: LangsOutputData<unknown>,
-        checker: (object: unknown) => object is T,
-    ): Result<LangsOutputData<T>, Error> {
-        const { data, result, status } = langsResponse;
-        const message = langsResponse.message || "null";
-        if (status === "crashed") {
-            if (is<string[]>(data)) {
-                const msg = "Langs process crashed: ";
-                Logger.error(msg, data.join("\n"));
-                return new Err(new RuntimeError(msg + message, data.join("\n")));
-            }
-            return new Err(new Error("Langs process crashed: " + message));
+    private _checkLangsResponse(langsResponse: OutputData): Result<OutputData, Error> {
+        if (langsResponse.status === "crashed") {
+            Logger.error(`Langs process crashed: ${langsResponse.message}`, langsResponse.data);
+            return Err(new RuntimeError("Langs process crashed."));
         }
-        if (result === "error") {
-            if (is<LangsError>(data)) {
-                const { kind, trace } = data;
-                const traceString = trace.join("\n");
-                Logger.error("TMC Langs errored.", kind, traceString);
-                switch (kind) {
-                    case "connection-error":
-                        return new Err(new ConnectionError(message, traceString));
-                    case "forbidden":
-                        return new Err(new ForbiddenError(message, traceString));
-                    case "invalid-token":
-                        this._onLogout?.();
-                        showError("Your TMC session has expired, please log in.");
-                        return new Err(new InvalidTokenError(message));
-                    case "not-logged-in":
-                        this._onLogout?.();
-                        return new Err(new AuthorizationError(message, traceString));
-                    case "obsolete-client":
-                        return new Err(
-                            new ObsoleteClientError(
-                                message +
-                                    "\nYoure TMC Extension is out of date, please update it." +
-                                    "\nhttps://code.visualstudio.com/docs/editor/extension-gallery",
-                                traceString,
-                            ),
-                        );
-                    default:
-                        return new Err(new RuntimeError(message, traceString));
-                }
-            }
-            Logger.error("Unexpected langs error type.");
-            return new Err(new ApiError(message));
+
+        if (langsResponse.data?.["output-data-kind"] !== "error") {
+            return Ok(langsResponse);
         }
-        if (!checker(data)) {
-            Logger.debug("Unexpected response data type: ", data);
-            return new Err(new ApiError("Unexpected response data type."));
+
+        const message = langsResponse.message;
+        const traceString = langsResponse.data["output-data"].trace.join("\n");
+        const outputDataKind = langsResponse.data["output-data"].kind;
+        switch (outputDataKind) {
+            case "connection-error":
+                return Err(new ConnectionError(message, traceString));
+            case "forbidden":
+                return Err(new ForbiddenError(message, traceString));
+            case "invalid-token":
+                this._responseCache.clear();
+                this._onLogout?.();
+                return Err(new InvalidTokenError(message));
+            case "not-logged-in":
+                this._responseCache.clear();
+                this._onLogout?.();
+                return Err(new AuthorizationError(message, traceString));
+            case "obsolete-client":
+                return Err(
+                    new ObsoleteClientError(
+                        message +
+                            "\nYour TMC Extension is out of date, please update it." +
+                            "\nhttps://code.visualstudio.com/docs/editor/extension-gallery",
+                        traceString,
+                    ),
+                );
         }
-        return new Ok({ ...langsResponse, data, result, status });
+
+        // Special handling because it makes usage simpler
+        if (is<FailedExerciseDownload>(outputDataKind)) {
+            const data: Data = {
+                "output-data-kind": "exercise-download",
+                "output-data": {
+                    downloaded: outputDataKind.completed,
+                    skipped: outputDataKind.skipped,
+                },
+            };
+
+            return Ok({ ...langsResponse, data });
+        }
+
+        return Err(new RuntimeError(message, traceString));
     }
 
     /**
@@ -807,48 +1023,47 @@ export default class TMC {
      *
      * @returns Rust process runner.
      */
-    private _spawnLangsProcess(commandArgs: LangsProcessArgs): LangsProcessRunner<unknown> {
-        const { args, core, env, obfuscate, onStderr, onStdout, onWarning, stdin } = commandArgs;
+    private _spawnLangsProcess(commandArgs: LangsProcessArgs): LangsProcessRunner {
+        const { args, core, env, obfuscate, onStderr, onStdout, stdin } = commandArgs;
         const CORE_ARGS = [
             "core",
             "--client-name",
-            CLIENT_NAME,
+            this.clientName,
             "--client-version",
-            this._resources.extensionVersion,
+            this.clientVersion,
         ];
 
-        let theResult: LangsOutputData<unknown> | undefined;
+        let theResult: OutputData | undefined;
         let stdoutBuffer = "";
 
-        const executable = this._resources.getCliPath();
         const executableArgs = core ? CORE_ARGS.concat(args) : args;
-
         const obfuscatedArgs = args.map((x, i) => (obfuscate?.includes(i) ? "***" : x));
         const logableArgs = core ? CORE_ARGS.concat(obfuscatedArgs) : obfuscatedArgs;
-        Logger.log([executable, ...logableArgs].map((x) => JSON.stringify(x)).join(" "));
+        Logger.log(
+            "Run: " + [this.cliPath, ...logableArgs].map((x) => JSON.stringify(x)).join(" "),
+        );
 
         let active = true;
         let interrupted = false;
-        const cprocess = cp.spawn(executable, executableArgs, {
+        const cprocess = cp.spawn(this.cliPath, executableArgs, {
             env: {
                 ...process.env,
                 ...env,
                 RUST_LOG: "debug",
-                TMC_LANGS_ROOT_URL,
-                TMC_LANGS_CONFIG_DIR,
+                TMC_LANGS_ROOT_URL: this.apiRootUrl,
+                TMC_LANGS_CONFIG_DIR: this._options.cliConfigDir,
             },
         });
         stdin && cprocess.stdin.write(stdin + "\n");
 
         const processResult = new Promise<number | null>((resolve, reject) => {
-            // let resultCode: number | null = null;
-            // let stdoutEnded = false;
+            let resultCode: number | undefined;
+            let stdoutEnded = false;
 
-            // TODO: move to rust
             const timeout = setTimeout(() => {
                 kill(cprocess.pid);
                 reject("Process didn't seem to finish or was taking a really long time.");
-            }, TMC_LANGS_TIMEOUT);
+            }, CLI_PROCESS_TIMEOUT);
 
             cprocess.on("error", (error) => {
                 clearTimeout(timeout);
@@ -857,19 +1072,19 @@ export default class TMC {
             cprocess.stderr.on("data", (chunk) => {
                 onStderr?.(chunk.toString());
             });
-            // cprocess.stdout.on("end", () => {
-            //     stdoutEnded = true;
-            //     if (resultCode) {
-            //         clearTimeout(timeout);
-            //         resolve(resultCode);
-            //     }
-            // });
+            cprocess.stdout.on("end", () => {
+                stdoutEnded = true;
+                if (resultCode !== undefined) {
+                    clearTimeout(timeout);
+                    resolve(resultCode);
+                }
+            });
             cprocess.on("exit", (code) => {
-                // resultCode = code;
-                // if (stdoutEnded) {
-                clearTimeout(timeout);
-                resolve(code);
-                // }
+                resultCode = code ?? 0;
+                if (stdoutEnded) {
+                    clearTimeout(timeout);
+                    resolve(code);
+                }
             });
             cprocess.stdout.on("data", (chunk) => {
                 const parts = (stdoutBuffer + chunk.toString()).split("\n");
@@ -877,17 +1092,24 @@ export default class TMC {
                 for (const part of parts) {
                     try {
                         const json = JSON.parse(part.trim());
-                        if (is<LangsStatusUpdate<unknown>>(json)) {
-                            onStdout?.(json);
-                        } else if (is<LangsOutputData<unknown>>(json)) {
-                            theResult = json;
-                        } else if (is<LangsWarning>(json)) {
-                            if (json.warnings.length !== 0) {
-                                onWarning?.(json.warnings);
-                            }
-                        } else {
+                        if (!is<Output>(json)) {
                             Logger.error("TMC-langs response didn't match expected type");
                             Logger.debug(part);
+                            continue;
+                        }
+
+                        switch (json["output-kind"]) {
+                            case "output-data":
+                                theResult = json;
+                                break;
+                            case "status-update":
+                                onStdout?.(json);
+                                break;
+                            case "warnings":
+                                break;
+                            default:
+                                Logger.error("TMC-langs response didn't match expected type");
+                                Logger.debug(part);
                         }
                     } catch (e) {
                         Logger.warn("Failed to parse TMC-langs output");
@@ -897,19 +1119,15 @@ export default class TMC {
             });
         });
 
-        const result = (async (): LangsProcessRunner<unknown>["result"] => {
+        const result = (async (): LangsProcessRunner["result"] => {
             try {
                 await processResult;
-                while (!cprocess.stdout.destroyed) {
-                    Logger.debug("stdout still active, waiting...");
-                    await sleep(50);
-                }
             } catch (error) {
-                return new Err(new RuntimeError(error));
+                return Err(new RuntimeError(error));
             }
 
             if (interrupted) {
-                return new Err(new RuntimeError("TMC Langs process was killed."));
+                return Err(new RuntimeError("TMC Langs process was killed."));
             }
 
             if (stdoutBuffer !== "") {

@@ -3,7 +3,6 @@
 You need the following installed on your computer:
 - Visual Studio Code
 - Node.js / npm
-- Java JDK and JRE
 
 Setup the environment:
 
@@ -27,15 +26,6 @@ Setup the environment:
 
 ## Third party resources
 
-* [TMC REST Api Documentation](http://testmycode.github.io/tmc-server/)
-* [TMC Langs "Documentation"](https://github.com/testmycode/tmc-langs/blob/master/tmc-langs-cli/src/main/java/fi/helsinki/cs/tmc/langs/cli/Main.java)
-* [client-oauth2 Resource Owner Password Credentials Grant](https://www.npmjs.com/package/client-oauth2#resource-owner-password-credentials-grant)
-* [node-fetch Documentation](https://www.npmjs.com/package/node-fetch#common-usage)
-* [TypeMoq for mocking in tests](https://github.com/florinn/typemoq)
+* [TMC API](http://testmycode.github.io/tmc-server/)
+* [TMC Langs](https://github.com/rage/tmc-langs-rust)
 * [VSCode API Documentation](https://code.visualstudio.com/api/references/commands)
-
-### Worth checking out for future development
-
-* [Selenium / vscode-extension-tester](https://developers.redhat.com/blog/2019/11/18/new-tools-for-automating-end-to-end-tests-for-vs-code-extensions/)
-* [json-server](https://www.npmjs.com/package/json-server)
-* [vscode-extension-tester](https://github.com/redhat-developer/vscode-extension-tester/)

@@ -2,21 +2,29 @@ import { expect } from "chai";
 import { sync as delSync } from "del";
 import * as fs from "fs-extra";
 import * as path from "path";
-import * as TypeMoq from "typemoq";
 
 import TMC from "../../api/tmc";
 import { SubmissionFeedback } from "../../api/types";
-import { CLIENT_NAME } from "../../config/constants";
-import Resources from "../../config/resources";
-import { AuthenticationError, AuthorizationError, RuntimeError } from "../../errors";
-import { getPlatform, getRustExecutable } from "../../utils/env";
+import {
+    CLIENT_NAME,
+    TMC_LANGS_CONFIG_DIR,
+    TMC_LANGS_ROOT_URL,
+    TMC_LANGS_VERSION,
+} from "../../config/constants";
+import {
+    AuthenticationError,
+    AuthorizationError,
+    BottleneckError,
+    RuntimeError,
+} from "../../errors";
+import { getLangsCLIForPlatform, getPlatform } from "../../utils/";
 
 suite("TMC", function () {
     // Use CLI from backend folder to run tests. The location is relative to the dist-folder
     // where webpack builds the test bundle.
     const BACKEND_FOLDER = path.join(__dirname, "..", "backend");
     const CLI_PATH = path.join(BACKEND_FOLDER, "cli");
-    const CLI_FILE = path.join(CLI_PATH, getRustExecutable(getPlatform()));
+    const CLI_FILE = path.join(CLI_PATH, getLangsCLIForPlatform(getPlatform(), TMC_LANGS_VERSION));
     const ARTIFACT_PATH = path.join(BACKEND_FOLDER, "testArtifacts");
 
     const FEEDBACK_URL = "http://localhost:4001/feedback";
@@ -49,10 +57,9 @@ suite("TMC", function () {
 
     setup(function () {
         removeCliConfig();
-        const resources = TypeMoq.Mock.ofType<Resources>();
-        resources.setup((x) => x.getCliPath()).returns(() => CLI_FILE);
-        resources.setup((x) => x.extensionVersion).returns(() => "test");
-        tmc = new TMC(resources.object);
+        tmc = new TMC(CLI_FILE, CLIENT_NAME, "test", TMC_LANGS_ROOT_URL, {
+            cliConfigDir: TMC_LANGS_CONFIG_DIR,
+        });
     });
 
     suite("#authenticate()", function () {
@@ -88,13 +95,6 @@ suite("TMC", function () {
             writeCliConfig();
             const result = await tmc.isAuthenticated();
             expect(result.val).to.be.true;
-        });
-    });
-
-    suite("#setAuthenticationToken()", function () {
-        test("Sets valid authentication token", async function () {
-            const result = await tmc.setAuthenticationToken({ access_token: "1234" });
-            expect(result.ok).to.be.true;
         });
     });
 
@@ -390,26 +390,6 @@ suite("TMC", function () {
         });
     });
 
-    suite("#submitExercise()", function () {
-        // Current Langs doesn't actually check this
-        test.skip("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.submitExercise(1, PASSING_EXERCISE_PATH);
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("Makes submission when authenticated", async function () {
-            writeCliConfig();
-            const submission = (await tmc.submitExercise(1, PASSING_EXERCISE_PATH)).unwrap();
-            expect(submission.show_submission_url).to.include("localhost");
-        });
-
-        test("Causes RuntimeError for nonexistent exercise", async function () {
-            writeCliConfig();
-            const result = await tmc.submitExercise(404, MISSING_EXERCISE_PATH);
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
     suite("#submitExerciseAndWaitForResults()", function () {
         test("Causes AuthorizationError if not authenticated", async function () {
             const result = await tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
@@ -425,7 +405,26 @@ suite("TMC", function () {
             expect(results.status).to.be.equal("ok");
         });
 
-        test("Returns submission link during the submission process");
+        test("Returns submission link during the submission process", async function () {
+            this.timeout(5000);
+            writeCliConfig();
+            let url: string | undefined;
+            await tmc.submitExerciseAndWaitForResults(
+                1,
+                PASSING_EXERCISE_PATH,
+                undefined,
+                (x) => (url = x),
+            );
+            expect(url).to.be.ok;
+        });
+
+        test("should result in BottleneckError if called twice too soon", async function () {
+            this.timeout(5000);
+            const first = tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
+            const second = tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
+            const [, secondResult] = await Promise.all([first, second]);
+            expect(secondResult.val).to.be.instanceOf(BottleneckError);
+        });
 
         test("Causes RuntimeError for nonexistent exercise", async function () {
             writeCliConfig();
@@ -445,6 +444,14 @@ suite("TMC", function () {
             writeCliConfig();
             const pasteUrl = (await tmc.submitExerciseToPaste(1, PASSING_EXERCISE_PATH)).unwrap();
             expect(pasteUrl).to.include("localhost");
+        });
+
+        test("should result in BottleneckError if called twice too soon", async function () {
+            this.timeout(5000);
+            const first = tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
+            const second = tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
+            const [, secondResult] = await Promise.all([first, second]);
+            expect(secondResult.val).to.be.instanceOf(BottleneckError);
         });
 
         test("Causes RuntimeError for nonexistent exercise", async function () {

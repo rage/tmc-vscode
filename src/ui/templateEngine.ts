@@ -11,7 +11,7 @@ import { SubmissionResultReport, TestResult } from "../api/types";
 import Resources from "../config/resources";
 import { getProgressBar, parseTestResultsText } from "../utils/";
 
-import { CourseDetails, Login, MyCourses, Webview, Welcome } from "./templates";
+import { CourseDetails, Login, MyCourses, Settings, Webview, Welcome } from "./templates";
 import { TemplateData } from "./types";
 
 export default class TemplateEngine {
@@ -46,10 +46,6 @@ export default class TemplateEngine {
                 logs: { stdout: number[]; stderr: number[] },
                 tmcLogs?: { stdout: string; stderr: string },
             ) => {
-                // Java langs 'run tests' returns: PASSED, TESTS_FAILED; COMPILE_FAILED and own logs
-                // Python langs 'run tests' returns: PASSED, TESTS_FAILED, but not COMPILE_FAILED
-                // 'tmcLogs' are the tmc-langs.jar generated stdout/stderr
-                // 'logs' are the logs returned within TmcLangsTestResults type (if any)
                 if (tmcLogs?.stdout && status !== "COMPILE_FAILED") {
                     return `<h1>0 TESTS RUN, SEE LOGS FOR INFO</h1><h2>stdout:</h2><pre>${tmcLogs.stdout}</pre><h2>stderr:</h2><pre>${tmcLogs.stderr}</pre>`;
                 }
@@ -103,7 +99,7 @@ export default class TemplateEngine {
                         <h5>Submit to TMC Paste</h5>
                         <p>You can submit your code to TMC Paste and share the link to the course discussion channel and ask for help.</p>
                         ${pasteLinkHTML}
-                        <input type='button' id='sendToPaste' value='Submit to TMC Paste' class='btn btn-primary' onclick='sendToPaste("${exerciseId[4]}")' />
+                        <input type='button' id='sendToPaste' value='Submit to TMC Paste' class='btn btn-primary' onclick='sendToPaste("${results.course}", "${results.exercise_name}")' />
                     </div>`;
                 } else {
                     return "<h1>Some tests failed on the server</h1>";
@@ -285,6 +281,13 @@ export default class TemplateEngine {
                     cssBlob,
                     cspSource: webview.cspSource,
                     script: MyCourses.script,
+                });
+            case "settings":
+                return Webview.render({
+                    children: Settings.component(),
+                    cssBlob,
+                    cspSource: webview.cspSource,
+                    script: Settings.script,
                 });
             case "welcome":
                 return Webview.render({

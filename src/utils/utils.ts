@@ -1,4 +1,3 @@
-import ClientOAuth2 = require("client-oauth2");
 import * as fs from "fs-extra";
 import * as fetch from "node-fetch";
 import * as path from "path";
@@ -24,17 +23,13 @@ export async function downloadFile(
     url: string,
     filePath: string,
     headers?: { [key: string]: string },
-    authToken?: ClientOAuth2.Token,
     progressCallback?: (downloadedPct: number, increment: number) => void,
 ): Promise<Result<void, Error>> {
     fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
 
     let response: fetch.Response;
     try {
-        let request = { url, method: "get", headers };
-        if (authToken) {
-            request = authToken.sign(request);
-        }
+        const request = { url, method: "get", headers };
         response = await fetch.default(request.url, request);
         const sizeString = response.headers.get("content-length");
         if (sizeString && progressCallback) {
@@ -58,7 +53,7 @@ export async function downloadFile(
     }
 
     try {
-        await new Promise((resolve, reject) =>
+        await new Promise<void>((resolve, reject) =>
             response.buffer().then((buffer) => {
                 fs.writeFile(filePath, buffer, (err) => (err ? reject(err) : resolve()));
             }),

@@ -14,7 +14,7 @@ export class Visibility {
         this._idsByGroup.set(groupId, []);
         this._idsByGroup.set(this._negate(groupId), []);
         this._enabledSet.add(visible ? groupId : this._negate(groupId));
-        return { _id: groupId, not: { _id: this._negate(groupId) } };
+        return { id: groupId, not: { id: this._negate(groupId) } };
     }
 
     /**
@@ -51,16 +51,16 @@ export class Visibility {
         }
 
         groups.forEach((x) => {
-            const group = this._idsByGroup.get(x._id);
+            const group = this._idsByGroup.get(x.id);
             if (!group) {
-                throw new Error("No such visibility group: " + this._normalize(x._id));
+                throw new Error("No such visibility group: " + this._normalize(x.id));
             } else {
                 group.push(id);
             }
         });
         this._groupsById.set(
             id,
-            groups.map((x) => x._id),
+            groups.map((x) => x.id),
         );
     }
 
@@ -72,7 +72,7 @@ export class Visibility {
     public setGroupVisible(
         group: VisibilityGroup | VisibilityGroupNegated,
     ): Array<[string, boolean]> {
-        const groupId = group._id;
+        const groupId = group.id;
         if (this._enabledSet.has(groupId)) {
             return [];
         }

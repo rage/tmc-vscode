@@ -1,7 +1,8 @@
 [![](https://vsmarketplacebadge.apphb.com/version-short/moocfi.test-my-code.svg)](https://marketplace.visualstudio.com/items?itemName=moocfi.test-my-code)
 [![](https://vsmarketplacebadge.apphb.com/downloads-short/moocfi.test-my-code.svg)](https://marketplace.visualstudio.com/items?itemName=moocfi.test-my-code)
 [![](https://vsmarketplacebadge.apphb.com/rating-star/moocfi.test-my-code.svg)](https://marketplace.visualstudio.com/items?itemName=moocfi.test-my-code&ssr=false#review-details)  
-![Node CI](https://github.com/rage/tmc-vscode/workflows/Node%20CI/badge.svg)
+![Extension tests](https://github.com/rage/tmc-vscode/workflows/Extension%20tests/badge.svg)
+![Build and Upload](https://github.com/rage/tmc-vscode/workflows/Build%20and%20Upload/badge.svg)
 ![Code scanning](https://github.com/rage/tmc-vscode/workflows/Code%20scanning/badge.svg)
 
 # TestMyCode for Visual Studio Code
@@ -14,7 +15,6 @@ Students of its various organizations can download, complete and return course e
 * Visual Studio Code version 1.40.xx or above
 * [TestMyCode](https://tmc.mooc.fi/) account
 * Course-specific system environment   
-  * For _Java courses_, use same version of JDK and JRE
 
 ## Getting started
 
