@@ -8,6 +8,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { SubmissionResultReport, TestResult } from "../api/types";
+import { TMC_BACKEND_URL } from "../config/constants";
 import Resources from "../config/resources";
 import { getProgressBar, parseTestResultsText } from "../utils/";
 
@@ -32,8 +33,8 @@ export default class TemplateEngine {
          */
         handlebars.registerHelper("resolve_logo_path", (logoPath: string) => {
             return !logoPath.endsWith("missing.png")
-                ? `https://tmc.mooc.fi${logoPath}`
-                : "https://tmc.mooc.fi/logos/small_logo/missing.png";
+                ? `${TMC_BACKEND_URL}${logoPath}`
+                : `${TMC_BACKEND_URL}/logos/small_logo/missing.png`;
         });
 
         /**
@@ -65,7 +66,7 @@ export default class TemplateEngine {
                         <input type='button' id='sendToPaste' value='Submit to TMC Paste' class='btn btn-primary' onclick='sendToPaste()' />
                     </div>`;
                 } else if (status === "COMPILE_FAILED") {
-                    return `<h1>COMPILE FAILED</h1><pre>${logs.stdout}</pre>`;
+                    return `<h1>COMPILE FAILED, SEE LOGS FOR INFO</h1><h2>stdout:</h2><pre>${logs.stdout}</pre><h2>stderr:</h2><pre>${logs.stderr}</pre>`;
                 } else {
                     return "<h1>Something went seriously wrong while running the tests</h1>";
                 }

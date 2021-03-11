@@ -13,7 +13,6 @@ import {
     EXERCISE_CHECK_INTERVAL,
     EXTENSION_ID,
     TMC_LANGS_CONFIG_DIR,
-    TMC_LANGS_ROOT_URL,
 } from "./config/constants";
 import Settings from "./config/settings";
 import { UserData } from "./config/userdata";
@@ -57,7 +56,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         throwFatalError(cliPathResult.val, cliFolder);
     }
 
-    const tmc = new TMC(cliPathResult.val, CLIENT_NAME, extensionVersion, TMC_LANGS_ROOT_URL, {
+    const tmc = new TMC(cliPathResult.val, CLIENT_NAME, extensionVersion, {
         cliConfigDir: TMC_LANGS_CONFIG_DIR,
     });
 
