@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.0.1] - 2021-03-11
+
+#### Fixed
+- Broken light theme icons after lowest supported VS Code version bump.
+- Missing logs when compile fails due to compile error.
+
+#### Security
+- Updated dependencies.
+
+
 ## [2.0.0] - 2021-03-07
 
 #### Changed

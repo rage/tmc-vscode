@@ -12,7 +12,6 @@ import {
     DEBUG_MODE,
     EXERCISE_CHECK_INTERVAL,
     EXTENSION_ID,
-    TMC_BACKEND_URL,
     TMC_LANGS_CONFIG_DIR,
 } from "./config/constants";
 import Settings from "./config/settings";
