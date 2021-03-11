@@ -9,7 +9,12 @@ const openTMCSideBar = async (
     activityBar: ActivityBar,
     timeout?: number,
 ): Promise<Map<string, WebElement>> => {
-    const content = (await activityBar.getViewControl("TestMyCode").openView()).getContent();
+    const viewControl = await activityBar.getViewControl("TestMyCode");
+    if (!viewControl) {
+        return new Map();
+    }
+
+    const content = (await viewControl.openView()).getContent();
     const sections = await waitForElements(() => content.getSections());
     const elements = await waitForElements(() => sections[0].getVisibleItems(), undefined, timeout);
 
