@@ -22,13 +22,16 @@ import {
 import { Logger } from "../utils/logger";
 
 import {
+    CombinedCourseData,
     Data,
     DownloadOrUpdateCourseExercisesResult,
     FailedExerciseDownload,
     LocalExercise,
     Output,
     OutputData,
+    RunResult,
     StatusUpdateData,
+    UpdatedExercise,
 } from "./langsSchema";
 import {
     Course,
@@ -41,6 +44,7 @@ import {
     Organization,
     SubmissionFeedback,
     SubmissionFeedbackResponse,
+    SubmissionResultReport,
     SubmissionStatusReport,
     TestResults,
 } from "./types";
@@ -230,7 +234,7 @@ export default class TMC {
                 ],
                 core: false,
             })
-        ).andThen((x) =>
+        ).andThen<LocalExercise[], Error>((x) =>
             x.data?.["output-data-kind"] === "local-exercises"
                 ? Ok(x.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
@@ -286,7 +290,7 @@ export default class TMC {
         const postResult = result.then((res) =>
             res
                 .andThen(this._checkLangsResponse)
-                .andThen((x) =>
+                .andThen<RunResult, Error>((x) =>
                     x.data?.["output-data-kind"] === "test-result"
                         ? Ok(x.data["output-data"])
                         : Err(new Error("Unexpected Langs result.")),
@@ -351,7 +355,7 @@ export default class TMC {
                     ? Ok(result.data["output-data"])
                     : Err(new Error("Unexpected Langs result.")),
             )
-            .andThen((result) =>
+            .andThen<T, Error>((result) =>
                 checker(result) ? Ok(result) : Err(new Error("Invalid object type.")),
             );
     }
@@ -405,7 +409,7 @@ export default class TMC {
                 { args: ["check-exercise-updates"], core: true },
                 { forceRefresh: options?.forceRefresh, key: TMC._exerciseUpdatesCacheKey },
             )
-        ).andThen((result) =>
+        ).andThen<UpdatedExercise[], Error>((result) =>
             result.data?.["output-data-kind"] === "updated-exercises"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
@@ -465,7 +469,7 @@ export default class TMC {
                 core: true,
                 onStdout,
             })
-        ).andThen((result) =>
+        ).andThen<DownloadOrUpdateCourseExercisesResult, Error>((result) =>
             result.data?.["output-data-kind"] === "exercise-download"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
@@ -539,7 +543,7 @@ export default class TMC {
                     key: `organization-${organization}-courses`,
                 },
             )
-        ).andThen((result) =>
+        ).andThen<Course[], Error>((result) =>
             result.data?.["output-data-kind"] === "courses"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
@@ -590,7 +594,7 @@ export default class TMC {
                 { args: ["get-course-data", "--course-id", courseId.toString()], core: true },
                 { forceRefresh: options?.forceRefresh, key: `course-${courseId}-data`, remapper },
             )
-        ).andThen((result) =>
+        ).andThen<CombinedCourseData, Error>((result) =>
             result.data?.["output-data-kind"] === "combined-course-data"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
@@ -614,7 +618,7 @@ export default class TMC {
                 { forceRefresh: options?.forceRefresh, key: `course-${courseId}-details` },
             )
         )
-            .andThen((result) =>
+            .andThen<CourseDetails["course"], Error>((result) =>
                 result.data?.["output-data-kind"] === "course-details"
                     ? Ok(result.data["output-data"])
                     : Err(new Error("Unexpected Langs result.")),
@@ -638,7 +642,7 @@ export default class TMC {
                 { args: ["get-course-exercises", "--course-id", courseId.toString()], core: true },
                 { forceRefresh: options?.forceRefresh, key: `course-${courseId}-exercises` },
             )
-        ).andThen((result) =>
+        ).andThen<CourseExercise[], Error>((result) =>
             result.data?.["output-data-kind"] === "course-exercises"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
@@ -661,7 +665,7 @@ export default class TMC {
                 { args: ["get-course-settings", "--course-id", courseId.toString()], core: true },
                 { forceRefresh: options?.forceRefresh, key: `course-${courseId}-settings` },
             )
-        ).andThen((result) =>
+        ).andThen<CourseSettings, Error>((result) =>
             result.data?.["output-data-kind"] === "course-data"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
@@ -687,7 +691,7 @@ export default class TMC {
                 },
                 { forceRefresh: options?.forceRefresh, key: `exercise-${exerciseId}-details` },
             )
-        ).andThen((result) =>
+        ).andThen<ExerciseDetails, Error>((result) =>
             result.data?.["output-data-kind"] === "exercise-details"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
@@ -707,7 +711,7 @@ export default class TMC {
                 args: ["get-exercise-submissions", "--exercise-id", exerciseId.toString()],
                 core: true,
             })
-        ).andThen((result) =>
+        ).andThen<OldSubmission[], Error>((result) =>
             result.data?.["output-data-kind"] === "submissions"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
@@ -730,7 +734,7 @@ export default class TMC {
                 { args: ["get-organization", "--organization", organizationSlug], core: true },
                 { forceRefresh: options?.forceRefresh, key: `organization-${organizationSlug}` },
             )
-        ).andThen((result) =>
+        ).andThen<Organization, Error>((result) =>
             result.data?.["output-data-kind"] === "organization"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
@@ -756,7 +760,7 @@ export default class TMC {
                 { args: ["get-organizations"], core: true },
                 { forceRefresh: options?.forceRefresh, key: "organizations", remapper },
             )
-        ).andThen((result) =>
+        ).andThen<Organization[], Error>((result) =>
             result.data?.["output-data-kind"] === "organizations"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
@@ -839,7 +843,7 @@ export default class TMC {
                 core: true,
                 onStdout,
             })
-        ).andThen((result) =>
+        ).andThen<SubmissionResultReport, Error>((result) =>
             result.data?.["output-data-kind"] === "submission-finished"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
@@ -874,7 +878,7 @@ export default class TMC {
                 args: ["paste", "--submission-path", exercisePath, "--submission-url", submitUrl],
                 core: true,
             })
-        ).andThen((result) =>
+        ).andThen<string, Error>((result) =>
             result.data?.["output-data-kind"] === "new-submission"
                 ? Ok(result.data["output-data"].paste_url)
                 : Err(new Error("Unexpected Langs result.")),
@@ -902,7 +906,7 @@ export default class TMC {
                 args: ["send-feedback", ...feedbackArgs, "--feedback-url", feedbackUrl],
                 core: true,
             })
-        ).andThen((result) =>
+        ).andThen<SubmissionFeedbackResponse, Error>((result) =>
             result.data?.["output-data-kind"] === "submission-feedback-response"
                 ? Ok(result.data["output-data"])
                 : Err(new Error("Unexpected Langs result.")),
