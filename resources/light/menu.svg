@@ -1,0 +1,23 @@
+<svg height="16" width="16" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="16" height="2" fill="orangered" />
+
+    <rect x="0" y="4" width="16" height="2" fill="orangered" />
+
+    <rect x="0" y="8" width="16" height="2" fill="orangered" />
+
+    <!-- TMC -->
+    <g fill="orangered" transform="translate(1, 12)">
+        <!-- T -->
+        <rect x="0" y="0" width="3" height="1" />
+        <rect x="1" y="1" width="1" height="3" fill="orangered" />
+        <!-- C -->
+        <rect x="4" y="0" width="5" height="1" fill="orangered" />
+        <rect x="4" y="1" width="1" height="3" fill="orangered" />
+        <rect x="6" y="1" width="1" height="3" fill="orangered" />
+        <rect x="8" y="1" width="1" height="3" fill="orangered" />
+        <!-- C -->
+        <rect x="10" y="0" width="4" height="1" fill="orangered" />
+        <rect x="10" y="1" width="1" height="2" fill="orangered" />
+        <rect x="10" y="3" width="4" height="1" fill="orangered" />
+    </g>
+</svg>

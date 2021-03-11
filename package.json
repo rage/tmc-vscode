@@ -139,13 +139,19 @@
             {
                 "command": "tmc.testExercise",
                 "title": "Run Tests",
-                "icon": "media/test.svg",
+                "icon": {
+                    "dark": "resources/dark/test.svg",
+                    "light": "resources/light/test.svg"
+                },
                 "category": "TestMyCode"
             },
             {
                 "command": "tmc.selectAction",
                 "title": "Action Menu",
-                "icon": "media/menu.svg",
+                "icon": {
+                    "dark": "resources/dark/menu.svg",
+                    "light": "resources/light/menu.svg"
+                },
                 "category": "TestMyCode"
             },
             {
