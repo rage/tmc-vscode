@@ -5,12 +5,7 @@ import * as path from "path";
 
 import TMC from "../../api/tmc";
 import { SubmissionFeedback } from "../../api/types";
-import {
-    CLIENT_NAME,
-    TMC_LANGS_CONFIG_DIR,
-    TMC_LANGS_ROOT_URL,
-    TMC_LANGS_VERSION,
-} from "../../config/constants";
+import { CLIENT_NAME, TMC_LANGS_CONFIG_DIR, TMC_LANGS_VERSION } from "../../config/constants";
 import {
     AuthenticationError,
     AuthorizationError,
@@ -57,7 +52,7 @@ suite("TMC", function () {
 
     setup(function () {
         removeCliConfig();
-        tmc = new TMC(CLI_FILE, CLIENT_NAME, "test", TMC_LANGS_ROOT_URL, {
+        tmc = new TMC(CLI_FILE, CLIENT_NAME, "test", {
             cliConfigDir: TMC_LANGS_CONFIG_DIR,
         });
     });

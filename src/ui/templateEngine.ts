@@ -8,6 +8,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { SubmissionResultReport, TestResult } from "../api/types";
+import { TMC_BACKEND_URL } from "../config/constants";
 import Resources from "../config/resources";
 import { getProgressBar, parseTestResultsText } from "../utils/";
 
@@ -32,8 +33,8 @@ export default class TemplateEngine {
          */
         handlebars.registerHelper("resolve_logo_path", (logoPath: string) => {
             return !logoPath.endsWith("missing.png")
-                ? `https://tmc.mooc.fi${logoPath}`
-                : "https://tmc.mooc.fi/logos/small_logo/missing.png";
+                ? `${TMC_BACKEND_URL}${logoPath}`
+                : `${TMC_BACKEND_URL}/logos/small_logo/missing.png`;
         });
 
         /**

@@ -7,6 +7,7 @@ import {
     API_CACHE_LIFETIME,
     CLI_PROCESS_TIMEOUT,
     MINIMUM_SUBMISSION_INTERVAL,
+    TMC_BACKEND_URL,
 } from "../config/constants";
 import {
     AuthenticationError,
@@ -108,7 +109,6 @@ export default class TMC {
         private readonly cliPath: string,
         private readonly clientName: string,
         private readonly clientVersion: string,
-        private readonly apiRootUrl: string,
         options?: Options,
     ) {
         this._nextSubmissionAllowedTimestamp = 0;
@@ -515,7 +515,7 @@ export default class TMC {
         if (saveOldState) {
             args.push(
                 "--submission-url",
-                `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`,
+                `${TMC_BACKEND_URL}/api/v8/core/exercises/${exerciseId}/submissions`,
             );
         }
 
@@ -791,7 +791,7 @@ export default class TMC {
         if (saveOldState) {
             args.push(
                 "--submission-url",
-                `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`,
+                `${TMC_BACKEND_URL}/api/v8/core/exercises/${exerciseId}/submissions`,
             );
         }
 
@@ -826,7 +826,7 @@ export default class TMC {
             this._nextSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL;
         }
 
-        const submitUrl = `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`;
+        const submitUrl = `${TMC_BACKEND_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
         const onStdout = (res: StatusUpdateData): void => {
             progressCallback?.(100 * res["percent-done"], res.message ?? undefined);
             if (
@@ -871,7 +871,7 @@ export default class TMC {
             this._nextSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL;
         }
 
-        const submitUrl = `${this.apiRootUrl}/api/v8/core/exercises/${exerciseId}/submissions`;
+        const submitUrl = `${TMC_BACKEND_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
 
         return (
             await this._executeLangsCommand({
@@ -1054,7 +1054,7 @@ export default class TMC {
                 ...process.env,
                 ...env,
                 RUST_LOG: "debug",
-                TMC_LANGS_ROOT_URL: this.apiRootUrl,
+                TMC_LANGS_ROOT_URL: TMC_BACKEND_URL,
                 TMC_LANGS_CONFIG_DIR: this._options.cliConfigDir,
             },
         });

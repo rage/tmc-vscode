@@ -146,7 +146,7 @@ const config = () => {
     console.log(
         `Webpack building in ${isDevelopmentMode ? "development" : "production"} configuration.`,
     );
-    console.log(`Configured backend: ${apiConfig.__TMC_LANGS_ROOT_URL__}`);
+    console.log(`Configured backend: ${apiConfig.__TMC_BACKEND__URL__}`);
 
     return merge(commonConfig, isDevelopmentMode ? devConfig() : prodConfig());
 };
