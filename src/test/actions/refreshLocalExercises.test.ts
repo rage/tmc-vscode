@@ -10,6 +10,7 @@ import { UserData } from "../../config/userdata";
 import { v2_0_0 as userData } from "../fixtures/userData";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
+import { createWorkspaceMangerMock, WorkspaceManagerMockValues } from "../mocks/workspaceManager";
 
 suite("refreshLocalExercises action", function () {
     const stubContext = createMockActionContext();
@@ -18,6 +19,7 @@ suite("refreshLocalExercises action", function () {
     let tmcMockValues: TMCMockValues;
     let userDataMock: IMock<UserData>;
     let workspaceManagerMock: IMock<WorkspaceManager>;
+    let workspaceManagerMockValues: WorkspaceManagerMockValues;
 
     const actionContext = (): ActionContext => ({
         ...stubContext,
@@ -30,8 +32,7 @@ suite("refreshLocalExercises action", function () {
         [tmcMock, tmcMockValues] = createTMCMock();
         userDataMock = Mock.ofType<UserData>();
         userDataMock.setup((x) => x.getCourses()).returns(() => userData.courses);
-        workspaceManagerMock = Mock.ofType<WorkspaceManager>();
-        workspaceManagerMock.setup((x) => x.setExercises(It.isAny())).returns(async () => Ok.EMPTY);
+        [workspaceManagerMock, workspaceManagerMockValues] = createWorkspaceMangerMock();
     });
 
     test("should set exercises to WorkspaceManager", async function () {
@@ -55,10 +56,7 @@ suite("refreshLocalExercises action", function () {
     });
 
     test("should return error if WorkspaceManager operation fails", async function () {
-        workspaceManagerMock.reset();
-        workspaceManagerMock
-            .setup((x) => x.setExercises(It.isAny()))
-            .returns(async () => Err(new Error()));
+        workspaceManagerMockValues.setExercises = Err(new Error());
         const result = await refreshLocalExercises(actionContext());
         expect(result.val).to.be.instanceOf(Error);
     });

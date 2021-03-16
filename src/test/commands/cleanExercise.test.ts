@@ -1,5 +1,5 @@
 import * as path from "path";
-import { IMock, It, Mock, Times } from "typemoq";
+import { IMock, It, Times } from "typemoq";
 import * as vscode from "vscode";
 
 import { ActionContext } from "../../actions/types";
@@ -8,6 +8,7 @@ import WorkspaceManager, { ExerciseStatus } from "../../api/workspaceManager";
 import { cleanExercise } from "../../commands";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock } from "../mocks/tmc";
+import { createWorkspaceMangerMock, WorkspaceManagerMockValues } from "../mocks/workspaceManager";
 
 suite("Clean exercise command", function () {
     const BACKEND_FOLDER = path.join(__dirname, "..", "backend");
@@ -19,6 +20,7 @@ suite("Clean exercise command", function () {
 
     let tmcMock: IMock<TMC>;
     let workspaceManagerMock: IMock<WorkspaceManager>;
+    let workspaceManagerMockValues: WorkspaceManagerMockValues;
 
     function actionContext(): ActionContext {
         return {
@@ -30,37 +32,32 @@ suite("Clean exercise command", function () {
 
     setup(function () {
         [tmcMock] = createTMCMock();
-        workspaceManagerMock = Mock.ofType<WorkspaceManager>();
+        [workspaceManagerMock, workspaceManagerMockValues] = createWorkspaceMangerMock();
     });
 
     test("should clean active exercise by default", async function () {
-        workspaceManagerMock.setup((x) => x.uriIsExercise(It.isAny())).returns(() => true);
-        workspaceManagerMock
-            .setup((x) => x.activeExercise)
-            .returns(() => ({
-                courseSlug: "test-python-course",
-                exerciseSlug: "part01-01_passing_exercise",
-                status: ExerciseStatus.Open,
-                uri,
-            }));
+        workspaceManagerMockValues.activeExercise = {
+            courseSlug: "test-python-course",
+            exerciseSlug: "part01-01_passing_exercise",
+            status: ExerciseStatus.Open,
+            uri,
+        };
         await cleanExercise(actionContext(), undefined);
         tmcMock.verify((x) => x.clean(It.isValue(uri.fsPath)), Times.once());
     });
 
     test("should not clean active non-exercise", async function () {
-        workspaceManagerMock.setup((x) => x.activeExercise).returns(() => undefined);
         await cleanExercise(actionContext(), undefined);
         tmcMock.verify((x) => x.clean(It.isAny()), Times.never());
     });
 
     test("should clean provided exercise", async function () {
-        workspaceManagerMock.setup((x) => x.uriIsExercise(It.isAny())).returns(() => true);
         await cleanExercise(actionContext(), uri);
         tmcMock.verify((x) => x.clean(It.isValue(uri.fsPath)), Times.once());
     });
 
     test("should not clean provided non-exercise", async function () {
-        workspaceManagerMock.setup((x) => x.uriIsExercise(It.isAny())).returns(() => false);
+        workspaceManagerMockValues.uriIsExercise = false;
         await cleanExercise(actionContext(), uri);
         tmcMock.verify((x) => x.clean(It.isAny()), Times.never());
     });
