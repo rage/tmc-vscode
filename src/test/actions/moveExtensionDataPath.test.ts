@@ -2,7 +2,7 @@ import { expect } from "chai";
 import * as mockFs from "mock-fs";
 import * as path from "path";
 import { Err, Ok } from "ts-results";
-import { IMock, It, Mock, Times } from "typemoq";
+import { IMock, It, Times } from "typemoq";
 import * as vscode from "vscode";
 
 import { moveExtensionDataPath } from "../../actions";
@@ -10,10 +10,10 @@ import { ActionContext } from "../../actions/types";
 import TMC from "../../api/tmc";
 import WorkspaceManager, { ExerciseStatus } from "../../api/workspaceManager";
 import { UserData } from "../../config/userdata";
-import { v2_0_0 as userData } from "../fixtures/userData";
 import { workspaceExercises } from "../fixtures/workspaceManager";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
+import { createUserDataMock } from "../mocks/userdata";
 import { createWorkspaceMangerMock, WorkspaceManagerMockValues } from "../mocks/workspaceManager";
 
 suite("moveExtensionDataPath action", function () {
@@ -49,8 +49,7 @@ suite("moveExtensionDataPath action", function () {
     setup(function () {
         mockFs(virtualFileSystem);
         [tmcMock, tmcMockValues] = createTMCMock();
-        userDataMock = Mock.ofType<UserData>();
-        userDataMock.setup((x) => x.getCourses()).returns(() => userData.courses);
+        [userDataMock] = createUserDataMock();
         [workspaceManagerMock, workspaceManagerMockValues] = createWorkspaceMangerMock();
         workspaceManagerMockValues.activeCourse = courseName;
     });

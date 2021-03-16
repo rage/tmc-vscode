@@ -1,15 +1,15 @@
 import { expect } from "chai";
 import { Err, Ok } from "ts-results";
-import { IMock, It, Mock, Times } from "typemoq";
+import { IMock, It, Times } from "typemoq";
 
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises";
 import { ActionContext } from "../../actions/types";
 import TMC from "../../api/tmc";
 import WorkspaceManager from "../../api/workspaceManager";
 import { UserData } from "../../config/userdata";
-import { v2_0_0 as userData } from "../fixtures/userData";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
+import { createUserDataMock, UserDataMockValues } from "../mocks/userdata";
 import { createWorkspaceMangerMock, WorkspaceManagerMockValues } from "../mocks/workspaceManager";
 
 suite("refreshLocalExercises action", function () {
@@ -18,6 +18,7 @@ suite("refreshLocalExercises action", function () {
     let tmcMock: IMock<TMC>;
     let tmcMockValues: TMCMockValues;
     let userDataMock: IMock<UserData>;
+    let userDataMockValues: UserDataMockValues;
     let workspaceManagerMock: IMock<WorkspaceManager>;
     let workspaceManagerMockValues: WorkspaceManagerMockValues;
 
@@ -30,8 +31,7 @@ suite("refreshLocalExercises action", function () {
 
     setup(function () {
         [tmcMock, tmcMockValues] = createTMCMock();
-        userDataMock = Mock.ofType<UserData>();
-        userDataMock.setup((x) => x.getCourses()).returns(() => userData.courses);
+        [userDataMock, userDataMockValues] = createUserDataMock();
         [workspaceManagerMock, workspaceManagerMockValues] = createWorkspaceMangerMock();
     });
 
@@ -42,8 +42,7 @@ suite("refreshLocalExercises action", function () {
     });
 
     test("should work without any courses", async function () {
-        userDataMock.reset();
-        userDataMock.setup((x) => x.getCourses()).returns(() => []);
+        userDataMockValues.getCourses = [];
         const result = await refreshLocalExercises(actionContext());
         expect(result).to.be.equal(Ok.EMPTY);
     });
