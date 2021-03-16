@@ -10,7 +10,7 @@ import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { LocalCourseData } from "../api/storage";
+import { LocalCourseData, LocalCourseExercise } from "../api/storage";
 import { SubmissionFeedback } from "../api/types";
 import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
@@ -190,7 +190,13 @@ export async function submitExercise(
     actionContext: ActionContext,
     exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { dialog, temporaryWebviewProvider, tmc, userData } = actionContext;
+    const {
+        dialog,
+        exerciseDecorationProvider,
+        temporaryWebviewProvider,
+        tmc,
+        userData,
+    } = actionContext;
     Logger.log(`Submitting exercise ${exercise.exerciseSlug} to server`);
 
     const course = userData.getCourseByName(exercise.courseSlug);
@@ -294,6 +300,9 @@ export async function submitExercise(
     let feedbackQuestions: FeedbackQuestion[] = [];
 
     if (statusData.status === "ok" && statusData.all_tests_passed) {
+        userData.setExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug).then(() => {
+            exerciseDecorationProvider.updateDecorationsForExercises(exercise);
+        });
         if (statusData.feedback_questions) {
             feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
         }
@@ -589,7 +598,7 @@ export async function updateCourse(
     actionContext: ActionContext,
     courseId: number,
 ): Promise<Result<boolean, Error>> {
-    const { tmc, ui, userData } = actionContext;
+    const { exerciseDecorationProvider, tmc, ui, userData, workspaceManager } = actionContext;
     const postMessage = (courseId: number, disabled: boolean, exerciseIds: number[]): void => {
         ui.webview.postMessage(
             {
@@ -658,6 +667,12 @@ export async function updateCourse(
     );
     if (updateExercisesResult.err) {
         return updateExercisesResult;
+    }
+
+    if (courseData.name === workspaceManager.activeCourse) {
+        exerciseDecorationProvider.updateDecorationsForExercises(
+            ...workspaceManager.getExercisesByCourseSlug(courseData.name),
+        );
     }
 
     const course = userData.getCourse(courseId);

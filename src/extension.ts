@@ -167,6 +167,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
 
+    context.subscriptions.push(
+        vscode.window.registerFileDecorationProvider(exerciseDecorationProvider),
+    );
+
     if (authenticated) {
         vscode.commands.executeCommand("tmc.updateExercises", "silent");
         checkForCourseUpdates(actionContext);
@@ -190,10 +194,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             authenticated.val,
         );
     }, EXERCISE_CHECK_INTERVAL);
-
-    context.subscriptions.push(
-        vscode.window.registerFileDecorationProvider(exerciseDecorationProvider),
-    );
 
     const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor");
     if (versionDiff === undefined || versionDiff > 0) {
