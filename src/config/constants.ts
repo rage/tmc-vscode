@@ -53,6 +53,7 @@ export const WATCHER_EXCLUDE = {
 export const WORKSPACE_SETTINGS = {
     folders: [{ path: ".tmc" }],
     settings: {
+        "explorer.decorations.colors": false,
         "workbench.editor.closeOnFileDelete": true,
         "files.autoSave": "onFocusChange",
         "files.exclude": { ...HIDE_META_FILES },

@@ -8,6 +8,7 @@ export interface WorkspaceManagerMockValues {
     activeCourse?: string;
     activeExercise?: Readonly<WorkspaceExercise>;
     closeExercises: Result<void, Error>;
+    getExerciseByPath: Readonly<WorkspaceExercise> | undefined;
     getExercisesByCoursePythonCourse: ReadonlyArray<WorkspaceExercise>;
     setExercises: Result<void, Error>;
     uriIsExercise: boolean;
@@ -18,6 +19,7 @@ export function createWorkspaceMangerMock(): [IMock<WorkspaceManager>, Workspace
         activeCourse: undefined,
         activeExercise: undefined,
         closeExercises: Ok.EMPTY,
+        getExerciseByPath: undefined,
         getExercisesByCoursePythonCourse: workspaceExercises,
         setExercises: Ok.EMPTY,
         uriIsExercise: true,
@@ -36,6 +38,8 @@ function setupMockValues(values: WorkspaceManagerMockValues): IMock<WorkspaceMan
     mock.setup((x) => x.closeCourseExercises(It.isAny(), It.isAny())).returns(
         async () => values.closeExercises,
     );
+
+    mock.setup((x) => x.getExerciseByPath(It.isAny())).returns(() => values.getExerciseByPath);
 
     mock.setup((x) => x.getExercisesByCourseSlug(It.isValue("test-python-course"))).returns(
         () => values.getExercisesByCoursePythonCourse,

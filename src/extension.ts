@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 
 import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
 import Dialog from "./api/dialog";
+import { ExerciseDecorationProvider } from "./api/exerciseDecorationProvider";
 import Storage from "./api/storage";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
@@ -186,6 +187,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             authenticated.val,
         );
     }, EXERCISE_CHECK_INTERVAL);
+
+    const decorator = new ExerciseDecorationProvider(userData, workspaceManager);
+    context.subscriptions.push(vscode.window.registerFileDecorationProvider(decorator));
 
     const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor");
     if (versionDiff === undefined || versionDiff > 0) {
