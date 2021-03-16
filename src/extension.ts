@@ -3,6 +3,7 @@ import { createIs } from "typescript-is";
 import * as vscode from "vscode";
 
 import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
+import { ActionContext } from "./actions/types";
 import Dialog from "./api/dialog";
 import { ExerciseDecorationProvider } from "./api/exerciseDecorationProvider";
 import Storage from "./api/storage";
@@ -144,8 +145,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
-    const actionContext = {
+    const exerciseDecorationProvider = new ExerciseDecorationProvider(userData, workspaceManager);
+    const actionContext: ActionContext = {
         dialog,
+        exerciseDecorationProvider,
         resources,
         settings,
         temporaryWebviewProvider,
@@ -188,8 +191,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
     }, EXERCISE_CHECK_INTERVAL);
 
-    const decorator = new ExerciseDecorationProvider(userData, workspaceManager);
-    context.subscriptions.push(vscode.window.registerFileDecorationProvider(decorator));
+    context.subscriptions.push(
+        vscode.window.registerFileDecorationProvider(exerciseDecorationProvider),
+    );
 
     const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor");
     if (versionDiff === undefined || versionDiff > 0) {

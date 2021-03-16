@@ -1,12 +1,13 @@
 import * as vscode from "vscode";
 
-import WorkspaceManager from "../api/workspaceManager";
+import WorkspaceManager, { WorkspaceExercise } from "../api/workspaceManager";
 import { UserData } from "../config/userdata";
 
 /**
  * Class that adds decorations like completion icons for exercises.
  */
-export class ExerciseDecorationProvider implements vscode.FileDecorationProvider {
+export class ExerciseDecorationProvider
+    implements vscode.Disposable, vscode.FileDecorationProvider {
     public onDidChangeFileDecorations: vscode.Event<vscode.Uri | vscode.Uri[] | undefined>;
 
     private static _passedExercise = new vscode.FileDecoration(
@@ -23,6 +24,8 @@ export class ExerciseDecorationProvider implements vscode.FileDecorationProvider
 
     private static _expiredExercise = new vscode.FileDecoration("✗", "Deadline exceeded.");
 
+    private _eventEmiter: vscode.EventEmitter<vscode.Uri | vscode.Uri[]>;
+
     /**
      * Creates a new instance of an `ExerciseDecorationProvider`.
      */
@@ -30,9 +33,12 @@ export class ExerciseDecorationProvider implements vscode.FileDecorationProvider
         private readonly userData: UserData,
         private readonly workspaceManager: WorkspaceManager,
     ) {
-        this.onDidChangeFileDecorations = new vscode.EventEmitter<
-            vscode.Uri | vscode.Uri[]
-        >().event;
+        this._eventEmiter = new vscode.EventEmitter();
+        this.onDidChangeFileDecorations = this._eventEmiter.event;
+    }
+
+    public dispose(): void {
+        this._eventEmiter.dispose();
     }
 
     public provideFileDecoration(uri: vscode.Uri): vscode.ProviderResult<vscode.FileDecoration> {
@@ -59,5 +65,13 @@ export class ExerciseDecorationProvider implements vscode.FileDecorationProvider
         if (deadlinePassed) {
             return ExerciseDecorationProvider._expiredExercise;
         }
+    }
+
+    /**
+     * Trigger decorator event for given exercises. Requires this object to be registered with
+     * `vscode.window.registerFileDecorationProvider` for any effects to take any effect.
+     */
+    public updateDecorationsForExercises(...exercises: ReadonlyArray<WorkspaceExercise>): void {
+        this._eventEmiter.fire(exercises.map((x) => x.uri));
     }
 }
