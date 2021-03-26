@@ -3,7 +3,9 @@ import { createIs } from "typescript-is";
 import * as vscode from "vscode";
 
 import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
+import { ActionContext } from "./actions/types";
 import Dialog from "./api/dialog";
+import { ExerciseDecorationProvider } from "./api/exerciseDecorationProvider";
 import Storage from "./api/storage";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
@@ -143,8 +145,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
-    const actionContext = {
+    const exerciseDecorationProvider = new ExerciseDecorationProvider(userData, workspaceManager);
+    const actionContext: ActionContext = {
         dialog,
+        exerciseDecorationProvider,
         resources,
         settings,
         temporaryWebviewProvider,
@@ -162,6 +166,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
+
+    context.subscriptions.push(
+        vscode.window.registerFileDecorationProvider(exerciseDecorationProvider),
+    );
 
     if (authenticated) {
         vscode.commands.executeCommand("tmc.updateExercises", "silent");

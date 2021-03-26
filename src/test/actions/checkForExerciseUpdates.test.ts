@@ -1,14 +1,14 @@
 import { expect } from "chai";
 import { Err, Ok } from "ts-results";
-import { IMock, It, Mock, Times } from "typemoq";
+import { IMock, It, Times } from "typemoq";
 
 import { checkForExerciseUpdates } from "../../actions";
 import { ActionContext } from "../../actions/types";
 import TMC from "../../api/tmc";
 import { UserData } from "../../config/userdata";
-import { v2_0_0 as userData } from "../fixtures/userData";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
+import { createUserDataMock } from "../mocks/userdata";
 
 suite("checkForExerciseUpdates action", function () {
     const stubContext = createMockActionContext();
@@ -26,8 +26,7 @@ suite("checkForExerciseUpdates action", function () {
 
     setup(function () {
         [tmcMock, tmcMockValues] = createTMCMock();
-        userDataMock = Mock.ofType<UserData>();
-        userDataMock.setup((x) => x.getCourses()).returns(() => userData.courses);
+        [userDataMock] = createUserDataMock();
     });
 
     test("should return exercise updates", async function () {

@@ -50,6 +50,19 @@ export class UserData {
         }
     }
 
+    public async setExerciseAsPassed(courseSlug: string, exerciseName: string): Promise<void> {
+        for (const course of this._courses.values()) {
+            if (course.name === courseSlug) {
+                const exercise = course.exercises.find((x) => x.name === exerciseName);
+                if (exercise) {
+                    exercise.passed = true;
+                    await this._updatePersistentData();
+                    break;
+                }
+            }
+        }
+    }
+
     public addCourse(data: LocalCourseData): void {
         if (this._courses.has(data.id)) {
             throw new Error("Trying to add an already existing course");

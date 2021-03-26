@@ -2,7 +2,7 @@ import { expect } from "chai";
 import * as mockFs from "mock-fs";
 import * as path from "path";
 import { Err, Ok } from "ts-results";
-import { IMock, It, Mock, Times } from "typemoq";
+import { IMock, It, Times } from "typemoq";
 import * as vscode from "vscode";
 
 import { moveExtensionDataPath } from "../../actions";
@@ -10,10 +10,11 @@ import { ActionContext } from "../../actions/types";
 import TMC from "../../api/tmc";
 import WorkspaceManager, { ExerciseStatus } from "../../api/workspaceManager";
 import { UserData } from "../../config/userdata";
-import { v2_0_0 as userData } from "../fixtures/userData";
 import { workspaceExercises } from "../fixtures/workspaceManager";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
+import { createUserDataMock } from "../mocks/userdata";
+import { createWorkspaceMangerMock, WorkspaceManagerMockValues } from "../mocks/workspaceManager";
 
 suite("moveExtensionDataPath action", function () {
     const virtualFileSystem = {
@@ -36,7 +37,7 @@ suite("moveExtensionDataPath action", function () {
     let tmcMockValues: TMCMockValues;
     let userDataMock: IMock<UserData>;
     let workspaceManagerMock: IMock<WorkspaceManager>;
-    let workspaceManagerActiveCourse: string | undefined;
+    let workspaceManagerMockValues: WorkspaceManagerMockValues;
 
     const actionContext = (): ActionContext => ({
         ...stubContext,
@@ -48,20 +49,9 @@ suite("moveExtensionDataPath action", function () {
     setup(function () {
         mockFs(virtualFileSystem);
         [tmcMock, tmcMockValues] = createTMCMock();
-        userDataMock = Mock.ofType<UserData>();
-        userDataMock.setup((x) => x.getCourses()).returns(() => userData.courses);
-        workspaceManagerMock = Mock.ofType<WorkspaceManager>();
-        workspaceManagerMock
-            .setup((x) => x.activeCourse)
-            .returns(() => workspaceManagerActiveCourse);
-        workspaceManagerMock
-            .setup((x) => x.closeCourseExercises(It.isAny(), It.isAny()))
-            .returns(async () => Ok.EMPTY);
-        workspaceManagerMock
-            .setup((x) => x.getExercisesByCourseSlug(It.isValue(courseName)))
-            .returns(() => workspaceExercises);
-        workspaceManagerMock.setup((x) => x.setExercises(It.isAny())).returns(async () => Ok.EMPTY);
-        workspaceManagerActiveCourse = courseName;
+        [userDataMock] = createUserDataMock();
+        [workspaceManagerMock, workspaceManagerMockValues] = createWorkspaceMangerMock();
+        workspaceManagerMockValues.activeCourse = courseName;
     });
 
     test("should change extension data path", async function () {
@@ -98,7 +88,7 @@ suite("moveExtensionDataPath action", function () {
     });
 
     test.skip("should not close anything if no course workspace is active", async function () {
-        workspaceManagerActiveCourse = undefined;
+        workspaceManagerMockValues.activeCourse = undefined;
         await moveExtensionDataPath(actionContext(), emptyFolder);
         workspaceManagerMock.verify(
             (x) => x.closeCourseExercises(It.isValue(courseName), It.isValue(openExerciseSlugs)),
