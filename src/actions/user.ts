@@ -10,7 +10,7 @@ import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { LocalCourseData, LocalCourseExercise } from "../api/storage";
+import { LocalCourseData } from "../api/storage";
 import { SubmissionFeedback } from "../api/types";
 import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";

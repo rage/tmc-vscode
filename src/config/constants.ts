@@ -54,10 +54,11 @@ export const WORKSPACE_SETTINGS = {
     folders: [{ path: ".tmc" }],
     settings: {
         "explorer.decorations.colors": false,
-        "workbench.editor.closeOnFileDelete": true,
         "files.autoSave": "onFocusChange",
         "files.exclude": { ...HIDE_META_FILES },
         "files.watcherExclude": { ...WATCHER_EXCLUDE },
+        "problems.decorations.enabled": false,
+        "workbench.editor.closeOnFileDelete": true,
     },
 };
 
