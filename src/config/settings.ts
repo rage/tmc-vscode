@@ -61,6 +61,7 @@ export default class Settings {
             Logger.log("TMC Workspace open, verifying workspace settings integrity.");
             await this._setFilesExcludeInWorkspace(this._settings.hideMetaFiles);
             await this._verifyWatcherPatternExclusion();
+            await this._forceTMCWorkspaceSettings();
         }
     }
 
@@ -180,9 +181,9 @@ export default class Settings {
     private async _updateWorkspaceSetting(section: string, value: unknown): Promise<void> {
         const workspace = vscode.workspace.name?.split(" ")[0];
         if (workspace && isCorrectWorkspaceOpen(this._resources, workspace)) {
-            const oldValue = this.getWorkspaceSettings(section);
             let newValue = value;
             if (value instanceof Object) {
+                const oldValue = this.getWorkspaceSettings(section);
                 newValue = { ...oldValue, ...value };
             }
             await vscode.workspace
@@ -201,5 +202,14 @@ export default class Settings {
      */
     private async _verifyWatcherPatternExclusion(): Promise<void> {
         await this._updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
+    }
+
+    /**
+     * Force some settings for TMC .code-workspace files.
+     */
+    private async _forceTMCWorkspaceSettings(): Promise<void> {
+        await this._updateWorkspaceSetting("explorer.decorations.colors", false);
+        await this._updateWorkspaceSetting("explorer.decorations.badges", true);
+        await this._updateWorkspaceSetting("problems.decorations.enabled", false);
     }
 }

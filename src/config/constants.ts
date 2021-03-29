@@ -31,6 +31,7 @@ export const HIDE_META_FILES = {
     "**/.tmcproject.json": true,
     "**/.tmc.json": true,
     "**/.tmc.lock": true,
+    "**/.tmc_test_results.hmac.sha256": true,
 };
 
 export const SHOW_META_FILES = {
@@ -43,6 +44,7 @@ export const SHOW_META_FILES = {
     "**/.tmcproject.json": false,
     "**/.tmc.json": false,
     "**/.tmc.lock": false,
+    "**/.tmc_test_results.hmac.sha256": false,
 };
 
 export const WATCHER_EXCLUDE = {
