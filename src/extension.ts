@@ -111,6 +111,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const resources = resourcesResult.val;
     const settings = new Settings(storage, resources);
+    // We still rely on VSCode Extenion Host restart when workspace switches
     await settings.verifyWorkspaceSettingsIntegrity();
     Logger.configure(settings.getLogLevel());
 
