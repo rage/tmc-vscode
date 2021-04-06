@@ -1,7 +1,7 @@
 //@ts-check
 
 /**@type {import("./env").getPlatform} */
-export function getPlatform() {
+function getPlatform() {
     const platform = process.platform;
     const arch = process.arch;
     if (platform === "linux") {
@@ -26,7 +26,7 @@ export function getPlatform() {
 }
 
 /**@type {import("./env").getLangsCLIForPlatform} */
-export function getLangsCLIForPlatform(platform, version) {
+function getLangsCLIForPlatform(platform, version) {
     switch (platform) {
         case "linux32":
             return `tmc-langs-cli-i686-unknown-linux-gnu-${version}`;
@@ -50,3 +50,5 @@ export function getLangsCLIForPlatform(platform, version) {
             return `tmc-langs-cli-x86_64-unknown-linux-gnu-${version}`;
     }
 }
+
+module.exports = { getLangsCLIForPlatform, getPlatform };
