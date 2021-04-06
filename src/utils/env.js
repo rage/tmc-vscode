@@ -1,16 +1,7 @@
-export type Platform =
-    | "linux32"
-    | "linux64"
-    | "linuxarm64"
-    | "linuxarm"
-    | "windows32"
-    | "windows64"
-    | "macosarm64"
-    | "macos64"
-    | "macos32"
-    | "other";
+//@ts-check
 
-export function getPlatform(): Platform {
+/**@type {import("./env").getPlatform} */
+export function getPlatform() {
     const platform = process.platform;
     const arch = process.arch;
     if (platform === "linux") {
@@ -34,7 +25,8 @@ export function getPlatform(): Platform {
     return "other";
 }
 
-export function getLangsCLIForPlatform(platform: Platform, version: string): string {
+/**@type {import("./env").getLangsCLIForPlatform} */
+export function getLangsCLIForPlatform(platform, version) {
     switch (platform) {
         case "linux32":
             return `tmc-langs-cli-i686-unknown-linux-gnu-${version}`;
