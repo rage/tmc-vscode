@@ -10,6 +10,8 @@ export type Platform =
     | "windows64"
     | "other";
 
-export function getPlatform(): Platform;
+export function getAllLangsCLIs(version: string): string[];
 
 export function getLangsCLIForPlatform(platform: Platform, version: string): string;
+
+export function getPlatform(): Platform;

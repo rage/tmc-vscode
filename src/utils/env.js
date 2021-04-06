@@ -1,5 +1,27 @@
 //@ts-check
 
+const uniq = require("lodash").uniq;
+
+/**@type {import("./env").Platform[]} */
+const allPlatforms = [
+    "linux32",
+    "linux64",
+    "linuxarm",
+    "linuxarm64",
+    "macos32",
+    "macos64",
+    "macosarm64",
+    "windows32",
+    "windows64",
+    "other",
+];
+
+/**@type {import("./env").getAllLangsCLIs} */
+function getAllLangsCLIs(version) {
+    const allCLIs = allPlatforms.map((x) => getLangsCLIForPlatform(x, version));
+    return uniq(allCLIs);
+}
+
 /**@type {import("./env").getPlatform} */
 function getPlatform() {
     const platform = process.platform;
@@ -51,4 +73,4 @@ function getLangsCLIForPlatform(platform, version) {
     }
 }
 
-module.exports = { getLangsCLIForPlatform, getPlatform };
+module.exports = { getAllLangsCLIs, getLangsCLIForPlatform, getPlatform };
