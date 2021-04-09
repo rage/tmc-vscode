@@ -22,7 +22,7 @@ fi
 packageLockVersion=`grep -Eo '"version":.+$' package-lock.json`
 if [[ ! $packageLockVersion =~ '"version": "'$tagVersion'",' ]]
 then
-    echo "Error: The version in package-lock.json doesn't match with the tag. Did you forget to run npm install?"
+    echo "Error: The version in package-lock.json doesn't match with the tag."
     exitCode=1
 fi
 
@@ -32,6 +32,14 @@ changelogEntry=`grep -Ec "\["$tagVersion"\] - [0-9]{4}(-[0-9]{2}){2}$" CHANGELOG
 if [[ $changelogEntry != 1 ]]
 then
     echo "Error: Version entry in CHANGELOG.md either missing or not formated properly."
+    exitCode=1
+fi
+
+# All configured Langs versions should exist on the download server.
+node ./bin/verifyThatLangsBuildsExist.js
+if [ $? != 0 ]
+then
+    echo "Error: Failed to verify that all Langs builds exist."
     exitCode=1
 fi
 

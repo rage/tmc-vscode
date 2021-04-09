@@ -1,16 +1,29 @@
-export type Platform =
-    | "linux32"
-    | "linux64"
-    | "linuxarm64"
-    | "linuxarm"
-    | "windows32"
-    | "windows64"
-    | "macosarm64"
-    | "macos64"
-    | "macos32"
-    | "other";
+//@ts-check
 
-export function getPlatform(): Platform {
+const uniq = require("lodash").uniq;
+
+/**@type {import("./env").Platform[]} */
+const allPlatforms = [
+    "linux32",
+    "linux64",
+    "linuxarm",
+    "linuxarm64",
+    "macos32",
+    "macos64",
+    "macosarm64",
+    "windows32",
+    "windows64",
+    "other",
+];
+
+/**@type {import("./env").getAllLangsCLIs} */
+function getAllLangsCLIs(version) {
+    const allCLIs = allPlatforms.map((x) => getLangsCLIForPlatform(x, version));
+    return uniq(allCLIs);
+}
+
+/**@type {import("./env").getPlatform} */
+function getPlatform() {
     const platform = process.platform;
     const arch = process.arch;
     if (platform === "linux") {
@@ -34,7 +47,8 @@ export function getPlatform(): Platform {
     return "other";
 }
 
-export function getLangsCLIForPlatform(platform: Platform, version: string): string {
+/**@type {import("./env").getLangsCLIForPlatform} */
+function getLangsCLIForPlatform(platform, version) {
     switch (platform) {
         case "linux32":
             return `tmc-langs-cli-i686-unknown-linux-gnu-${version}`;
@@ -58,3 +72,5 @@ export function getLangsCLIForPlatform(platform: Platform, version: string): str
             return `tmc-langs-cli-x86_64-unknown-linux-gnu-${version}`;
     }
 }
+
+module.exports = { getAllLangsCLIs, getLangsCLIForPlatform, getPlatform };
