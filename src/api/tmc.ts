@@ -53,7 +53,11 @@ import {
 interface Options {
     apiCacheLifetime?: string;
     cliConfigDir?: string;
-    cliExecutionTimeout?: number;
+    timeout?: number;
+}
+
+interface ExecutionOptions {
+    timeout: number;
 }
 
 interface LangsProcessArgs {
@@ -65,6 +69,7 @@ interface LangsProcessArgs {
     onStderr?: (data: string) => void;
     onStdout?: (data: StatusUpdateData) => void;
     stdin?: string;
+    processTimeout?: number;
 }
 
 interface LangsProcessRunner {
@@ -167,8 +172,12 @@ export default class TMC {
      *
      * @returns Boolean indicating if the user is authenticated.
      */
-    public async isAuthenticated(): Promise<Result<boolean, Error>> {
-        const loggedInResult = await this._executeLangsCommand({ args: ["logged-in"], core: true });
+    public async isAuthenticated(options?: ExecutionOptions): Promise<Result<boolean, Error>> {
+        const loggedInResult = await this._executeLangsCommand({
+            args: ["logged-in"],
+            core: true,
+            processTimeout: options?.timeout,
+        });
         if (loggedInResult.err) {
             return loggedInResult;
         }
@@ -286,6 +295,7 @@ export default class TMC {
             core: false,
             env,
             onStderr: (data) => Logger.log("Rust Langs", data),
+            processTimeout: CLI_PROCESS_TIMEOUT,
         });
         const postResult = result.then((res) =>
             res
@@ -1028,7 +1038,16 @@ export default class TMC {
      * @returns Rust process runner.
      */
     private _spawnLangsProcess(commandArgs: LangsProcessArgs): LangsProcessRunner {
-        const { args, core, env, obfuscate, onStderr, onStdout, stdin } = commandArgs;
+        const {
+            args,
+            core,
+            env,
+            obfuscate,
+            onStderr,
+            onStdout,
+            stdin,
+            processTimeout,
+        } = commandArgs;
         const CORE_ARGS = [
             "core",
             "--client-name",
@@ -1064,13 +1083,15 @@ export default class TMC {
             let resultCode: number | undefined;
             let stdoutEnded = false;
 
-            const timeout = setTimeout(() => {
-                kill(cprocess.pid);
-                reject("Process didn't seem to finish or was taking a really long time.");
-            }, CLI_PROCESS_TIMEOUT);
+            const timeout =
+                processTimeout &&
+                setTimeout(() => {
+                    kill(cprocess.pid);
+                    reject("Process didn't seem to finish or was taking a really long time.");
+                }, processTimeout);
 
             cprocess.on("error", (error) => {
-                clearTimeout(timeout);
+                timeout && clearTimeout(timeout);
                 reject(error);
             });
             cprocess.stderr.on("data", (chunk) => {
@@ -1079,14 +1100,14 @@ export default class TMC {
             cprocess.stdout.on("end", () => {
                 stdoutEnded = true;
                 if (resultCode !== undefined) {
-                    clearTimeout(timeout);
+                    timeout && clearTimeout(timeout);
                     resolve(resultCode);
                 }
             });
             cprocess.on("exit", (code) => {
                 resultCode = code ?? 0;
                 if (stdoutEnded) {
-                    clearTimeout(timeout);
+                    timeout && clearTimeout(timeout);
                     resolve(code);
                 }
             });

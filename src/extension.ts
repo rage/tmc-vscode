@@ -50,7 +50,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
 
     const dialog = new Dialog();
-    const cliFolder = path.join(context.globalStoragePath, "cli");
+    const cliFolder = path.join(context.globalStorageUri.fsPath, "cli");
     const cliPathResult = await init.downloadCorrectLangsVersion(cliFolder, dialog);
     if (cliPathResult.err) {
         throwFatalError(cliPathResult.val, cliFolder);
@@ -60,7 +60,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         cliConfigDir: TMC_LANGS_CONFIG_DIR,
     });
 
-    const authenticatedResult = await tmc.isAuthenticated();
+    const authenticatedResult = await tmc.isAuthenticated({ timeout: 15000 });
     if (authenticatedResult.err) {
         Logger.error("Failed to check if authenticated:", authenticatedResult.val.message);
         throwFatalError(authenticatedResult.val, cliFolder);

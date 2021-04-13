@@ -39,37 +39,37 @@ Please close the workspace and any related files before running this command aga
         return;
     }
 
-    const wipeResult = await vscode.window.withProgress(
-        {
-            location: vscode.ProgressLocation.Notification,
-            title: "TestMyCode",
-        },
-        async (progress) => {
-            progress.report({ message: "Removing extension data..." });
+    // Change to Explorer view to avoid instant restart
+    await vscode.commands.executeCommand("workbench.files.action.focusFilesExplorer");
 
-            // Remove exercises
-            try {
-                fs.removeSync(resources.projectsDirectory);
-            } catch (e) {
-                return Err(new Error("Failed to remove projects directory."));
-            }
+    const message = "Removing extension data...";
+    const wipeResult = await dialog.progressNotification(message, async (progress) => {
+        // Remove exercises
+        try {
+            fs.removeSync(resources.projectsDirectory);
+        } catch (e) {
+            return Err(new Error("Failed to remove projects directory."));
+        }
+        progress.report({ message, percent: 0.25 });
 
-            // Reset Langs settings
-            const result2 = await tmc.resetSettings();
-            if (result2.err) return result2;
+        // Reset Langs settings
+        const result2 = await tmc.resetSettings();
+        if (result2.err) return result2;
+        progress.report({ message, percent: 0.5 });
 
-            // Maybe logout should have setting to disable events?
-            tmc.on("logout", () => {});
-            const result3 = await tmc.deauthenticate();
-            if (result3.err) return result3;
+        // Maybe logout should have setting to disable events?
+        tmc.on("logout", () => {});
+        const result3 = await tmc.deauthenticate();
+        if (result3.err) return result3;
+        progress.report({ message, percent: 0.75 });
 
-            // Clear storage
-            await userData.wipeDataFromStorage();
+        // Clear storage
+        await userData.wipeDataFromStorage();
+        progress.report({ message, percent: 1 });
 
-            // All clear
-            return Ok.EMPTY;
-        },
-    );
+        // All clear
+        return Ok.EMPTY;
+    });
 
     if (wipeResult.err) {
         dialog.errorNotification("Failed to wipe extension data.", wipeResult.val);
