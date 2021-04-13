@@ -3,6 +3,18 @@
 ## [2.1.0] - Unreleased
 
 
+## [2.0.2] - 2021-04-13
+
+#### Fixed
+- Prevent extension from immediately restarting after `Wipe all extension data` command.
+
+#### Removed
+- Timeout from most TMC-Langs processes to avoid issues with slow connections.
+
+#### Security
+- Updated dependencies.
+
+
 ## [2.0.1] - 2021-03-11
 
 #### Fixed
