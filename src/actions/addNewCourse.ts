@@ -4,7 +4,6 @@ import { LocalCourseData } from "../api/storage";
 import { Logger } from "../utils";
 
 import { refreshLocalExercises } from "./refreshLocalExercises";
-import { selectOrganizationAndCourse } from "./selectOrganizationAndCourse";
 import { ActionContext } from "./types";
 import { displayUserCourses } from "./webview";
 
@@ -13,20 +12,11 @@ import { displayUserCourses } from "./webview";
  */
 export async function addNewCourse(
     actionContext: ActionContext,
-    organization?: string,
-    course?: number,
+    organization: string,
+    course: number,
 ): Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
     Logger.log("Adding new course");
-
-    if (!organization || !course) {
-        const orgAndCourse = await selectOrganizationAndCourse(actionContext);
-        if (orgAndCourse.err) {
-            return orgAndCourse;
-        }
-        organization = orgAndCourse.val.organization;
-        course = orgAndCourse.val.course;
-    }
 
     const courseDataResult = await tmc.getCourseData(course);
     if (courseDataResult.err) {
