@@ -1,6 +1,11 @@
 import { expect } from "chai";
 import * as vscode from "vscode";
 
+import {
+    LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
+    LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
+    LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
+} from "../../config/constants";
 import migrateUserData, { LocalCourseDataV0 } from "../../migrate/migrateUserData";
 import * as exerciseData from "../fixtures/exerciseData";
 import * as userData from "../fixtures/userData";
@@ -86,11 +91,32 @@ suite("User data migration", function () {
 
         test("should succeed with version 2.0.0 data", async function () {
             await memento.update(USER_DATA_KEY_V1, userData.v2_0_0);
-            expect(migrateUserData(memento).data).to.be.deep.equal(userData.v2_0_0);
+            const courses = migrateUserData(memento).data?.courses;
+            courses?.forEach((course) => {
+                course.exercises.forEach((x) => {
+                    expect(x.availablePoints).to.be.equal(
+                        LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
+                    );
+                    if (x.passed) {
+                        expect(x.awardedPoints).to.be.equal(
+                            LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
+                        );
+                    } else {
+                        expect(x.availablePoints).to.be.equal(
+                            LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
+                        );
+                    }
+                });
+            });
+        });
+
+        test("should succeed with version 2.1.0 data", async function () {
+            await memento.update(USER_DATA_KEY_V1, userData.v2_1_0);
+            expect(migrateUserData(memento).data).to.be.deep.equal(userData.v2_1_0);
         });
 
         test("should succeed with backwards compatible future data", async function () {
-            const data = { ...userData.v2_0_0, batman: "Bruce Wayne" };
+            const data = { ...userData.v2_1_0, batman: "Bruce Wayne" };
             await memento.update(USER_DATA_KEY_V1, data);
             expect(migrateUserData(memento).data).to.be.deep.equal(data);
         });

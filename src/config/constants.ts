@@ -21,6 +21,22 @@ export const CLIENT_NAME = "vscode_plugin";
 export const EXTENSION_ID = "moocfi.test-my-code";
 export const OUTPUT_CHANNEL_NAME = "TestMyCode";
 
+/**
+ * Delay for notifications that offer a "remind me later" option.
+ */
+export const NOTIFICATION_DELAY = 30 * 60 * 1000;
+
+export const API_CACHE_LIFETIME = 5 * 60 * 1000;
+export const CLI_PROCESS_TIMEOUT = 2 * 60 * 1000;
+export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000;
+
+/** Minimum time that should be waited between submission attempts. */
+export const MINIMUM_SUBMISSION_INTERVAL = 5 * 1000;
+
+export const LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER = 1;
+export const LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER = 1;
+export const LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER = LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER;
+
 export const HIDE_META_FILES = {
     "**/__pycache__": true,
     "**/.available_points.json": true,
@@ -63,18 +79,6 @@ export const WORKSPACE_SETTINGS = {
         "workbench.editor.closeOnFileDelete": true,
     },
 };
-
-/**
- * Delay for notifications that offer a "remind me later" option.
- */
-export const NOTIFICATION_DELAY = 30 * 60 * 1000;
-
-export const API_CACHE_LIFETIME = 5 * 60 * 1000;
-export const CLI_PROCESS_TIMEOUT = 2 * 60 * 1000;
-export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000;
-
-/** Minimum time that should be waited between submission attempts. */
-export const MINIMUM_SUBMISSION_INTERVAL = 5 * 1000;
 
 export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Security-Policy"}" content="default-src 'none';" /></head></html>`;
 

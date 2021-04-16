@@ -2,6 +2,7 @@ import { Result } from "ts-results";
 
 import { LocalCourseData } from "../api/storage";
 import { Logger } from "../utils";
+import { combineApiExerciseData } from "../utils/apiData";
 
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
@@ -33,13 +34,7 @@ export async function addNewCourse(
 
     const localData: LocalCourseData = {
         description: courseData.details.description || "",
-        exercises: courseData.details.exercises.map((e) => ({
-            id: e.id,
-            name: e.name,
-            deadline: e.deadline,
-            passed: e.completed,
-            softDeadline: e.soft_deadline,
-        })),
+        exercises: combineApiExerciseData(courseData.details.exercises, courseData.exercises),
         id: courseData.details.id,
         name: courseData.details.name,
         title: courseData.details.title,

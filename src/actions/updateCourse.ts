@@ -2,6 +2,7 @@ import { Ok, Result } from "ts-results";
 
 import { ConnectionError, ForbiddenError } from "../errors";
 import { Logger } from "../utils";
+import { combineApiExerciseData } from "../utils/apiData";
 
 import { ActionContext } from "./types";
 
@@ -75,13 +76,7 @@ export async function updateCourse(
 
     const updateExercisesResult = await userData.updateExercises(
         courseId,
-        details.exercises.map((x) => ({
-            id: x.id,
-            name: x.name,
-            deadline: x.deadline,
-            passed: x.completed,
-            softDeadline: x.soft_deadline,
-        })),
+        combineApiExerciseData(details.exercises, exercises),
     );
     if (updateExercisesResult.err) {
         return updateExercisesResult;

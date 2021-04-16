@@ -1,6 +1,7 @@
 import { expect } from "chai";
 
-import Storage, { ExtensionSettings, SessionState, UserData } from "../../api/storage";
+import Storage, { ExtensionSettings, SessionState } from "../../api/storage";
+import { v2_1_0 as userData } from "../fixtures/userData";
 import { createMockContext } from "../mocks/vscode";
 
 suite("Storage class", function () {
@@ -14,41 +15,6 @@ suite("Storage class", function () {
 
     const sessionState: SessionState = {
         extensionVersion: "2.0.0",
-    };
-
-    const userData: UserData = {
-        courses: [
-            {
-                id: 0,
-                availablePoints: 3,
-                awardedPoints: 0,
-                description: "Python Course",
-                disabled: true,
-                exercises: [
-                    {
-                        id: 1,
-                        deadline: null,
-                        name: "hello_world",
-                        passed: false,
-                        softDeadline: null,
-                    },
-                    {
-                        id: 2,
-                        deadline: "20201214",
-                        name: "other_hello_world",
-                        passed: false,
-                        softDeadline: "20201212",
-                    },
-                ],
-                materialUrl: "mooc.fi",
-                name: "test-python-course",
-                newExercises: [2, 3, 4],
-                notifyAfter: 1234,
-                organization: "test",
-                perhapsExamMode: true,
-                title: "The Python Course",
-            },
-        ],
     };
 
     let storage: Storage;
