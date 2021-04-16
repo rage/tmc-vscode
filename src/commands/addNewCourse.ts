@@ -30,10 +30,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
         return;
     }
 
-    const result = await actions.addNewCourse(actionContext, {
-        organization: chosenOrg,
-        course: chosenCourse,
-    });
+    const result = await actions.addNewCourse(actionContext, chosenOrg, chosenCourse);
     if (result.err) {
         dialog.errorNotification("Failed to add course.", result.val);
     }

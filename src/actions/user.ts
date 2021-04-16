@@ -25,9 +25,7 @@ import {
 import { getActiveEditorExecutablePath } from "../window";
 
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
-import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext, FeedbackQuestion } from "./types";
-import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -490,76 +488,6 @@ export async function openSettings(actionContext: ActionContext): Promise<void> 
             path: resources.projectsDirectory,
         },
     ]);
-}
-
-interface NewCourseOptions {
-    organization?: string;
-    course?: number;
-}
-/**
- * Adds a new course to user's courses.
- */
-export async function addNewCourse(
-    actionContext: ActionContext,
-    options?: NewCourseOptions,
-): Promise<Result<void, Error>> {
-    const { tmc, ui, userData, workspaceManager } = actionContext;
-    Logger.log("Adding new course");
-    let organization = options?.organization;
-    let course = options?.course;
-
-    if (!organization || !course) {
-        const orgAndCourse = await selectOrganizationAndCourse(actionContext);
-        if (orgAndCourse.err) {
-            return orgAndCourse;
-        }
-        organization = orgAndCourse.val.organization;
-        course = orgAndCourse.val.course;
-    }
-
-    const courseDataResult = await tmc.getCourseData(course);
-    if (courseDataResult.err) {
-        return courseDataResult;
-    }
-    const courseData = courseDataResult.val;
-
-    let availablePoints = 0;
-    let awardedPoints = 0;
-    courseData.exercises.forEach((x) => {
-        availablePoints += x.available_points.length;
-        awardedPoints += x.awarded_points.length;
-    });
-
-    const localData: LocalCourseData = {
-        description: courseData.details.description || "",
-        exercises: courseData.details.exercises.map((e) => ({
-            id: e.id,
-            name: e.name,
-            deadline: e.deadline,
-            passed: e.completed,
-            softDeadline: e.soft_deadline,
-        })),
-        id: courseData.details.id,
-        name: courseData.details.name,
-        title: courseData.details.title,
-        organization: organization,
-        availablePoints: availablePoints,
-        awardedPoints: awardedPoints,
-        perhapsExamMode: courseData.settings.hide_submission_results,
-        newExercises: [],
-        notifyAfter: 0,
-        disabled: courseData.settings.disabled_status === "enabled" ? false : true,
-        materialUrl: courseData.settings.material_url,
-    };
-    userData.addCourse(localData);
-    ui.treeDP.addChildWithId("myCourses", localData.id, localData.title, {
-        command: "tmc.courseDetails",
-        title: "Go To Course Details",
-        arguments: [localData.id],
-    });
-    workspaceManager.createWorkspaceFile(courseData.details.name);
-    await displayUserCourses(actionContext);
-    return refreshLocalExercises(actionContext);
 }
 
 /**

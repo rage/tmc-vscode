@@ -1,3 +1,4 @@
+export * from "./addNewCourse";
 export * from "./checkForExerciseUpdates";
 export * from "./downloadNewExercisesForCourse";
 export * from "./downloadOrUpdateCourseExercises";
