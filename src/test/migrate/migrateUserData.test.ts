@@ -102,7 +102,7 @@ suite("User data migration", function () {
                             LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
                         );
                     } else {
-                        expect(x.availablePoints).to.be.equal(
+                        expect(x.awardedPoints).to.be.equal(
                             LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
                         );
                     }
