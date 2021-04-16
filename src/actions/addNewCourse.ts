@@ -4,8 +4,9 @@ import { LocalCourseData } from "../api/storage";
 import { Logger } from "../utils";
 
 import { refreshLocalExercises } from "./refreshLocalExercises";
+import { selectOrganizationAndCourse } from "./selectOrganizationAndCourse";
 import { ActionContext } from "./types";
-import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
+import { displayUserCourses } from "./webview";
 
 /**
  * Adds a new course to user's courses.
