@@ -72,6 +72,10 @@ export default class ExerciseDecorationProvider
         if (deadlinePassed) {
             return ExerciseDecorationProvider._expiredExercise;
         }
+
+        if (apiExercise.awardedPoints > 0) {
+            return ExerciseDecorationProvider._partiallyCompletedExercise;
+        }
     }
 
     /**
