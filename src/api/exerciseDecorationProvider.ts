@@ -6,7 +6,7 @@ import { UserData } from "../config/userdata";
 /**
  * Class that adds decorations like completion icons for exercises.
  */
-export class ExerciseDecorationProvider
+export default class ExerciseDecorationProvider
     implements vscode.Disposable, vscode.FileDecorationProvider {
     public onDidChangeFileDecorations: vscode.Event<vscode.Uri | vscode.Uri[] | undefined>;
 

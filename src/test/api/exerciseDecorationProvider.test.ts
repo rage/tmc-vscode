@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { IMock, It, Times } from "typemoq";
 import * as vscode from "vscode";
 
-import { ExerciseDecorationProvider } from "../../api/exerciseDecorationProvider";
+import ExerciseDecorationProvider from "../../api/exerciseDecorationProvider";
 import WorkspaceManager from "../../api/workspaceManager";
 import { UserData } from "../../config/userdata";
 import { userDataExerciseHelloWorld } from "../fixtures/userData";

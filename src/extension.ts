@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
 import { ActionContext } from "./actions/types";
 import Dialog from "./api/dialog";
-import { ExerciseDecorationProvider } from "./api/exerciseDecorationProvider";
+import ExerciseDecorationProvider from "./api/exerciseDecorationProvider";
 import Storage from "./api/storage";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
