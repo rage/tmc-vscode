@@ -6,5 +6,6 @@ export * from "./moveExtensionDataPath";
 export * from "./refreshLocalExercises";
 export * from "./selectOrganizationAndCourse";
 export * from "./user";
+export * from "./updateCourse";
 export * from "./webview";
 export * from "./workspace";
