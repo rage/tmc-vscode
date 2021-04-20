@@ -13,8 +13,8 @@ const channel = `[${OUTPUT_CHANNEL_NAME}]`;
 export class Logger {
     static output: OutputChannel | undefined;
 
-    static configure(level: LogLevel): void {
-        this.level = level;
+    static configure(level?: LogLevel): void {
+        this.level = level ?? LogLevel.Errors;
     }
 
     static get level(): LogLevel {

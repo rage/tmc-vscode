@@ -16,12 +16,7 @@ import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { BottleneckError } from "../errors";
 import { TestResultData } from "../ui/types";
-import {
-    formatSizeInBytes,
-    isCorrectWorkspaceOpen,
-    Logger,
-    parseFeedbackQuestion,
-} from "../utils/";
+import { formatSizeInBytes, Logger, parseFeedbackQuestion } from "../utils/";
 import { getActiveEditorExecutablePath } from "../window";
 
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
@@ -418,7 +413,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
     Logger.log(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
     Logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
 
-    if (!isCorrectWorkspaceOpen(resources, name)) {
+    if (!workspaceManager.activeCourse) {
         if (
             !currentWorkspaceFile ||
             (await dialog.confirmation(
@@ -453,6 +448,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
 }
 
 /**
+ * Deprecated
  * Settings webview
  */
 export async function openSettings(actionContext: ActionContext): Promise<void> {

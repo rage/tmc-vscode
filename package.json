@@ -180,6 +180,53 @@
                 "title": "Wipe all extension data"
             }
         ],
+        "configuration": {
+            "title": "TestMyCode",
+            "properties": {
+                "testMyCode.downloadOldSubmissionByDefault": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "When downloading exercises, download your latest submission instead of the exercise template."
+                },
+                "testMyCode.hideMetaFiles": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Hide exercise meta files that are not relevant for completing exercises."
+                },
+                "testMyCode.insiderVersion": {
+                    "type": "boolean",
+                    "scope": "application",
+                    "default": false,
+                    "description": "Insider version to test new features for the TestMyCode extension."
+                },
+                "testMyCode.logLevel": {
+                    "type": "string",
+                    "scope": "application",
+                    "default": "errors",
+                    "enum": [
+                        "none",
+                        "errors",
+                        "verbose"
+                    ],
+                    "enumDescriptions": [
+                        "No extension logging.",
+                        "Log only warning and error messages.",
+                        "Log info, warning and error messages."
+                    ]
+                },
+                "testMyCode.updateExercisesAutomatically": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Download exercise updates automatically, if found."
+                },
+                "testMyCode.dataPath": {
+                    "type": "string",
+                    "scope": "application",
+                    "default": "/",
+                    "description": "Currently a placeholder for setting the TMC Data Folder path."
+                }
+            }
+        },
         "keybindings": [
             {
                 "command": "tmc.closeExercise",

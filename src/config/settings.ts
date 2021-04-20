@@ -1,3 +1,4 @@
+import * as path from "path";
 import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
@@ -5,10 +6,8 @@ import Storage, {
     ExtensionSettings as SerializedExtensionSettings,
     SessionState,
 } from "../api/storage";
-import { isCorrectWorkspaceOpen } from "../utils";
 import { Logger, LogLevel } from "../utils/logger";
 
-import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
 import Resources from "./resources";
 import { ExtensionSettingsData } from "./types";
 
@@ -21,13 +20,7 @@ export interface ExtensionSettings {
 }
 
 /**
- * Settings class communicates changes to persistent storage and manages TMC
- * Workspace.code-workspace settings. Workspace settings will only be updated when it is open.
- *
- * Perhaps TODO: Read and Write the .code-workspace file without using vscode premade functions for
- * workspace, because they require the workspace to be open. Currently this approach works, because
- * extension settings are saved to storage and VSCode restarts when our workspace is opened by the
- * extension.
+ * TODO: Deprecate class
  */
 export default class Settings {
     private static readonly _defaultSettings: ExtensionSettings = {
@@ -55,16 +48,6 @@ export default class Settings {
         this._state = storage.getSessionState() ?? {};
     }
 
-    public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
-        const workspace = vscode.workspace.name;
-        if (workspace && isCorrectWorkspaceOpen(this._resources, workspace.split(" ")[0])) {
-            Logger.log("TMC Workspace open, verifying workspace settings integrity.");
-            await this._setFilesExcludeInWorkspace(this._settings.hideMetaFiles);
-            await this._verifyWatcherPatternExclusion();
-            await this._forceTMCWorkspaceSettings();
-        }
-    }
-
     /**
      * Update extension settings to storage.
      * @param settings ExtensionSettings object
@@ -80,22 +63,61 @@ export default class Settings {
      * 'dataPath', value: '~/newpath' }
      */
     public async updateSetting(data: ExtensionSettingsData): Promise<void> {
+        // This is to ensure that settings globalStorage and the vscode settings match for now...
+        const workspaceFile = vscode.workspace.workspaceFile;
+        let isOurWorkspace: string | undefined = undefined;
+        if (
+            workspaceFile &&
+            path.relative(workspaceFile.fsPath, this._resources.workspaceFileFolder) === ".."
+        ) {
+            isOurWorkspace = vscode.workspace.name?.split(" ")[0];
+        }
+
         switch (data.setting) {
             case "downloadOldSubmission":
                 this._settings.downloadOldSubmission = data.value;
+                if (isOurWorkspace) {
+                    await vscode.workspace
+                        .getConfiguration(
+                            "testMyCode",
+                            vscode.Uri.file(this._resources.getWorkspaceFilePath(isOurWorkspace)),
+                        )
+                        .update("downloadOldSubmission", data.value);
+                }
                 break;
             case "hideMetaFiles":
                 this._settings.hideMetaFiles = data.value;
-                this._setFilesExcludeInWorkspace(data.value);
+                if (isOurWorkspace) {
+                    await vscode.workspace
+                        .getConfiguration(
+                            "testMyCode",
+                            vscode.Uri.file(this._resources.getWorkspaceFilePath(isOurWorkspace)),
+                        )
+                        .update("hideMetaFiles", data.value);
+                }
                 break;
             case "insiderVersion":
                 this._settings.insiderVersion = data.value;
+                await vscode.workspace
+                    .getConfiguration("testMyCode")
+                    .update("insiderVersion", data.value);
                 break;
             case "logLevel":
                 this._settings.logLevel = data.value;
+                await vscode.workspace
+                    .getConfiguration("testMyCode")
+                    .update("logLevel", data.value);
                 break;
             case "updateExercisesAutomatically":
                 this._settings.updateExercisesAutomatically = data.value;
+                if (isOurWorkspace) {
+                    await vscode.workspace
+                        .getConfiguration(
+                            "testMyCode",
+                            vscode.Uri.file(this._resources.getWorkspaceFilePath(isOurWorkspace)),
+                        )
+                        .update("updateExercisesAutomatically", data.value);
+                }
                 break;
         }
         Logger.log("Updated settings data", data);
@@ -123,20 +145,6 @@ export default class Settings {
         return Ok(this._settings);
     }
 
-    /**
-     * Returns the section for the Workspace setting. If undefined, returns all settings.
-     * @param section A dot-separated identifier.
-     */
-    public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration | undefined {
-        const workspace = vscode.workspace.name?.split(" ")[0];
-        if (workspace && isCorrectWorkspaceOpen(this._resources, workspace)) {
-            return vscode.workspace.getConfiguration(
-                section,
-                vscode.Uri.file(this._resources.getWorkspaceFilePath(workspace)),
-            );
-        }
-    }
-
     public isInsider(): boolean {
         return this._settings.insiderVersion;
     }
@@ -161,55 +169,5 @@ export default class Settings {
             ...settings,
             logLevel,
         };
-    }
-
-    /**
-     * Updates files.exclude values in TMC Workspace.code-workspace.
-     * Keeps all user/workspace defined excluding patterns.
-     * @param hide true to hide meta files in TMC workspace.
-     */
-    private async _setFilesExcludeInWorkspace(hide: boolean): Promise<void> {
-        const value = hide ? HIDE_META_FILES : SHOW_META_FILES;
-        await this._updateWorkspaceSetting("files.exclude", value);
-    }
-
-    /**
-     * Updates a section for the TMC Workspace.code-workspace file, if the workspace is open.
-     * @param section Configuration name, supports dotted names.
-     * @param value The new value
-     */
-    private async _updateWorkspaceSetting(section: string, value: unknown): Promise<void> {
-        const workspace = vscode.workspace.name?.split(" ")[0];
-        if (workspace && isCorrectWorkspaceOpen(this._resources, workspace)) {
-            let newValue = value;
-            if (value instanceof Object) {
-                const oldValue = this.getWorkspaceSettings(section);
-                newValue = { ...oldValue, ...value };
-            }
-            await vscode.workspace
-                .getConfiguration(
-                    undefined,
-                    vscode.Uri.file(this._resources.getWorkspaceFilePath(workspace)),
-                )
-                .update(section, newValue, vscode.ConfigurationTarget.Workspace);
-        }
-    }
-
-    /**
-     * Makes sure that folders and its contents aren't deleted by our watcher.
-     * .vscode folder needs to be unwatched, otherwise adding settings to WorkspaceFolder level
-     * doesn't work. For example defining Python interpreter for the Exercise folder.
-     */
-    private async _verifyWatcherPatternExclusion(): Promise<void> {
-        await this._updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
-    }
-
-    /**
-     * Force some settings for TMC .code-workspace files.
-     */
-    private async _forceTMCWorkspaceSettings(): Promise<void> {
-        await this._updateWorkspaceSetting("explorer.decorations.colors", false);
-        await this._updateWorkspaceSetting("explorer.decorations.badges", true);
-        await this._updateWorkspaceSetting("problems.decorations.enabled", false);
     }
 }

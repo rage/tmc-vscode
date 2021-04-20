@@ -5,13 +5,16 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import {
+    HIDE_META_FILES,
+    SHOW_META_FILES,
+    WATCHER_EXCLUDE,
     WORKSPACE_ROOT_FILE_NAME,
     WORKSPACE_ROOT_FILE_TEXT,
     WORKSPACE_ROOT_FOLDER_NAME,
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Resources, { EditorKind } from "../config/resources";
-import { Logger } from "../utils";
+import { Logger, LogLevel } from "../utils";
 
 export enum ExerciseStatus {
     Closed = "closed",
@@ -54,6 +57,19 @@ export default class WorkspaceManager implements vscode.Disposable {
                 this._onDidChangeWorkspaceFolders(e),
             ),
             vscode.workspace.onDidOpenTextDocument((e) => this._onDidOpenTextDocument(e)),
+            vscode.workspace.onDidChangeConfiguration((e) => {
+                if (e.affectsConfiguration("testMyCode.logLevel")) {
+                    Logger.configure(
+                        vscode.workspace.getConfiguration("testMyCode").get<LogLevel>("logLevel"),
+                    );
+                }
+                if (e.affectsConfiguration("testMyCode.hideMetaFiles")) {
+                    this.excludeMetaFilesInWorkspace(
+                        vscode.workspace.getConfiguration("testMyCode").get("hideMetaFiles") ??
+                            true,
+                    );
+                }
+            }),
         ];
     }
 
@@ -185,6 +201,40 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     /**
+     * Updates files.exclude values in TMC Workspace.code-workspace.
+     * Keeps all user/workspace defined excluding patterns.
+     * @param hide true to hide meta files in TMC workspace.
+     */
+    public async excludeMetaFilesInWorkspace(hide: boolean): Promise<void> {
+        const value = hide ? HIDE_META_FILES : SHOW_META_FILES;
+        await this._updateWorkspaceSetting("files.exclude", value);
+    }
+
+    /**
+     * Returns the section for the Workspace setting.
+     * If not found, returns User scope setting.
+     * @param section A dot-separated identifier.
+     */
+    public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration {
+        const activeCourse = this.activeCourse;
+        if (activeCourse) {
+            return vscode.workspace.getConfiguration(section, vscode.workspace.workspaceFile);
+        }
+        return vscode.workspace.getConfiguration(section);
+    }
+
+    public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
+        if (this.activeCourse) {
+            Logger.log("TMC Workspace open, verifying workspace settings integrity.");
+            await this.excludeMetaFilesInWorkspace(
+                this.getWorkspaceSettings("testMyCode").get<boolean>("hideMetaFiles") ?? true,
+            );
+            await this._verifyWatcherPatternExclusion();
+            await this._forceTMCWorkspaceSettings();
+        }
+    }
+
+    /**
      * Event listener function for workspace watcher delete.
      * @param targetPath Path to deleted item
      */
@@ -201,6 +251,15 @@ export default class WorkspaceManager implements vscode.Disposable {
             fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
             return;
         }
+    }
+
+    /**
+     * Force some settings for TMC .code-workspace files that.
+     */
+    private async _forceTMCWorkspaceSettings(): Promise<void> {
+        await this._updateWorkspaceSetting("explorer.decorations.colors", false);
+        await this._updateWorkspaceSetting("explorer.decorations.badges", true);
+        await this._updateWorkspaceSetting("problems.decorations.enabled", false);
     }
 
     /**
@@ -330,5 +389,36 @@ export default class WorkspaceManager implements vscode.Disposable {
                 }
                 break;
         }
+    }
+
+    /**
+     * Updates a section for the TMC Workspace.code-workspace file, if the workspace is open.
+     * @param section Configuration name, supports dotted names.
+     * @param value The new value
+     */
+    private async _updateWorkspaceSetting(section: string, value: unknown): Promise<void> {
+        const activeCourse = this.activeCourse;
+        if (activeCourse) {
+            let newValue = value;
+            if (value instanceof Object) {
+                const oldValue = this.getWorkspaceSettings(section);
+                newValue = { ...oldValue, ...value };
+            }
+            await vscode.workspace
+                .getConfiguration(
+                    undefined,
+                    vscode.Uri.file(this._resources.getWorkspaceFilePath(activeCourse)),
+                )
+                .update(section, newValue, vscode.ConfigurationTarget.Workspace);
+        }
+    }
+
+    /**
+     * Makes sure that folders and its contents aren't deleted by our watcher.
+     * .vscode folder needs to be unwatched, otherwise adding settings to WorkspaceFolder level
+     * doesn't work. For example defining Python interpreter for the Exercise folder.
+     */
+    private async _verifyWatcherPatternExclusion(): Promise<void> {
+        await this._updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
     }
 }

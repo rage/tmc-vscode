@@ -27,7 +27,15 @@ import { formatSizeInBytes, Logger, LogLevel } from "../utils/";
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { dialog, ui, resources, settings, userData, visibilityGroups } = actionContext;
+    const {
+        dialog,
+        ui,
+        resources,
+        settings,
+        userData,
+        visibilityGroups,
+        workspaceManager,
+    } = actionContext;
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
@@ -331,6 +339,7 @@ export function registerUiActions(actionContext: ActionContext): void {
                 return;
             }
             await settings.updateSetting({ setting: "hideMetaFiles", value: msg.data });
+            await workspaceManager.excludeMetaFilesInWorkspace(msg.data);
             ui.webview.postMessage({
                 command: "setBooleanSetting",
                 setting: "hideMetaFiles",
