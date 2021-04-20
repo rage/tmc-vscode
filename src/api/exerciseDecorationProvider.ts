@@ -10,9 +10,8 @@ export default class ExerciseDecorationProvider
     implements vscode.Disposable, vscode.FileDecorationProvider {
     public onDidChangeFileDecorations: vscode.Event<vscode.Uri | vscode.Uri[] | undefined>;
 
-    // Use ⬤ instead?
     private static _passedExercise = new vscode.FileDecoration(
-        "✓",
+        "⬤",
         "Exercise completed!",
         new vscode.ThemeColor("gitDecoration.addedResourceForeground"),
     );

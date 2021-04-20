@@ -31,10 +31,10 @@ suite("ExerciseDecoratorProvider class", function () {
         );
     });
 
-    test("should decorate passed exercise with a checkmark", function () {
+    test("should decorate passed exercise with a filled circle", function () {
         userDataMockValues.getExerciseByName = { ...userDataExerciseHelloWorld, passed: true };
         const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri);
-        expect((decoration as vscode.FileDecoration).badge).to.be.equal("✓");
+        expect((decoration as vscode.FileDecoration).badge).to.be.equal("⬤");
     });
 
     test("should decorate expired exercise with an X mark", function () {
