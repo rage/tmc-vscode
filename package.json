@@ -373,6 +373,7 @@
         "ci:all": "npm ci && cd backend && npm ci",
         "pretest": "cross-env NODE_ENV=development BACKEND=mockBackend npm run webpack",
         "test": "node ./bin/runTests.js",
+        "test-only": "node ./bin/runTests.js",
         "eslint-check": "eslint . --ext .js,.ts",
         "eslint": "eslint --fix . --ext .js,.ts",
         "lint-check": "npm run eslint-check && npm run prettier-check",

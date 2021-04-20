@@ -1,18 +1,40 @@
 import { expect } from "chai";
+import * as cp from "child_process";
 import { sync as delSync } from "del";
 import * as fs from "fs-extra";
 import * as path from "path";
+import * as kill from "tree-kill";
 
-import TMC from "../../api/tmc";
-import { SubmissionFeedback } from "../../api/types";
-import { CLIENT_NAME, TMC_LANGS_CONFIG_DIR, TMC_LANGS_VERSION } from "../../config/constants";
-import {
-    AuthenticationError,
-    AuthorizationError,
-    BottleneckError,
-    RuntimeError,
-} from "../../errors";
-import { getLangsCLIForPlatform, getPlatform } from "../../utils/";
+import TMC from "../api/tmc";
+import { SubmissionFeedback } from "../api/types";
+import { CLIENT_NAME, TMC_LANGS_CONFIG_DIR, TMC_LANGS_VERSION } from "../config/constants";
+import { AuthenticationError, AuthorizationError, BottleneckError, RuntimeError } from "../errors";
+import { getLangsCLIForPlatform, getPlatform } from "../utils/";
+
+async function startServer(): Promise<cp.ChildProcess> {
+    let ready = false;
+    console.log(path.join(__dirname, "..", "backend"));
+    const server = cp.spawn("npm", ["start"], {
+        cwd: path.join(__dirname, "..", "backend"),
+        shell: "bash",
+    });
+    server.stdout.on("data", (chunk) => {
+        if (chunk.toString().startsWith("Server listening to")) {
+            ready = true;
+        }
+    });
+
+    const timeout = setTimeout(() => {
+        throw new Error("Failed to start server");
+    }, 10000);
+
+    while (!ready) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    clearTimeout(timeout);
+    return server;
+}
 
 suite("TMC", function () {
     // Use CLI from backend folder to run tests. The location is relative to the dist-folder
@@ -26,6 +48,13 @@ suite("TMC", function () {
     const COURSE_PATH = path.join(BACKEND_FOLDER, "resources", "test-python-course");
     const PASSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-01_passing_exercise");
     const MISSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-404_missing_exercise");
+
+    let server: cp.ChildProcess | undefined;
+
+    suiteSetup(async function () {
+        this.timeout(30000);
+        server = await startServer();
+    });
 
     function removeArtifacts(): void {
         delSync(ARTIFACT_PATH, { force: true });
@@ -456,7 +485,7 @@ suite("TMC", function () {
         });
     });
 
-    suite("$submitSubmissionFeedback()", function () {
+    suite("#submitSubmissionFeedback()", function () {
         const feedback: SubmissionFeedback = {
             status: [{ question_id: 0, answer: "42" }],
         };
@@ -467,5 +496,8 @@ suite("TMC", function () {
         });
     });
 
-    suiteTeardown(removeCliConfig);
+    suiteTeardown(function () {
+        removeCliConfig();
+        server && kill(server.pid);
+    });
 });
