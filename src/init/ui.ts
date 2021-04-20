@@ -14,6 +14,7 @@ import {
     openWorkspace,
     refreshLocalExercises,
     removeCourse,
+    selectOrganizationAndCourse,
     updateCourse,
 } from "../actions";
 import { ActionContext } from "../actions/types";
@@ -183,7 +184,15 @@ export function registerUiActions(actionContext: ActionContext): void {
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
-        const result = await addNewCourse(actionContext);
+        const orgAndCourse = await selectOrganizationAndCourse(actionContext);
+        if (orgAndCourse.err) {
+            return dialog.errorNotification(
+                `Failed to add new course: ${orgAndCourse.val.message}`,
+            );
+        }
+        const organization = orgAndCourse.val.organization;
+        const course = orgAndCourse.val.course;
+        const result = await addNewCourse(actionContext, organization, course);
         if (result.err) {
             dialog.errorNotification(`Failed to add new course: ${result.val.message}`);
         }

@@ -26,6 +26,8 @@ export interface LocalCourseData {
 
 export interface LocalCourseExercise {
     id: number;
+    availablePoints: number;
+    awardedPoints: number;
     name: string;
     deadline: string | null;
     passed: boolean;

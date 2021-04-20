@@ -44,6 +44,17 @@ suite("ExerciseDecoratorProvider class", function () {
         expect((decoration as vscode.FileDecoration).badge).to.be.equal("✗");
     });
 
+    test("should decorate partially completed exercise with small circle", function () {
+        const partialCompletion = {
+            ...userDataExerciseHelloWorld,
+            awardedPoints: 1,
+            passed: false,
+        };
+        userDataMockValues.getExerciseByName = partialCompletion;
+        const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri);
+        expect((decoration as vscode.FileDecoration).badge).to.be.equal("○");
+    });
+
     test("should decorate exercise missing from UserData with information symbol", function () {
         userDataMockValues.getExerciseByName = undefined;
         const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri);
