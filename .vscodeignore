@@ -18,7 +18,7 @@ types/**
 **/.gitmodules
 **/.eslintignore
 **/.eslintrc.json
-**/dist/testBundle*
+**/dist/test*
 **/tsconfig.json
 **/tsconfig.production.json
 **/tslint.json

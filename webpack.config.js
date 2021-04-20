@@ -56,6 +56,14 @@ const config = () => {
         infrastructureLogging: {
             level: "log",
         },
+        optimization: {
+            splitChunks: {
+                chunks: "all",
+                name(module, chunks) {
+                    return chunks.find((x) => x.name === "extension") ? "lib" : "testlib";
+                },
+            },
+        },
         module: {
             rules: [
                 {
