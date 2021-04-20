@@ -41,4 +41,4 @@ jobs:
             - name: Integration tests
               uses: GabrielBB/xvfb-action@v1.0
               with:
-                  run: npm run test-only integration
+                  run: npm run test-integration-only integration

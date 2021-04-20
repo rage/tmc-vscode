@@ -26,7 +26,7 @@ async function startServer(): Promise<cp.ChildProcess> {
 
     const timeout = setTimeout(() => {
         throw new Error("Failed to start server");
-    }, 10000);
+    }, 20000);
 
     while (!ready) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
