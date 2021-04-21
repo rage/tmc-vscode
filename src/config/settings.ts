@@ -63,7 +63,10 @@ export default class Settings {
      * 'dataPath', value: '~/newpath' }
      */
     public async updateSetting(data: ExtensionSettingsData): Promise<void> {
-        // This is to ensure that settings globalStorage and the vscode settings match for now...
+        /*
+        The following below is to ensure that User scope settings match the settings
+        we currently store in extension context globalStorage.
+        */
         const workspaceFile = vscode.workspace.workspaceFile;
         let isOurWorkspace: string | undefined = undefined;
         if (
@@ -76,23 +79,17 @@ export default class Settings {
         switch (data.setting) {
             case "downloadOldSubmission":
                 this._settings.downloadOldSubmission = data.value;
-                if (isOurWorkspace) {
+                if (isOurWorkspace && workspaceFile) {
                     await vscode.workspace
-                        .getConfiguration(
-                            "testMyCode",
-                            vscode.Uri.file(this._resources.getWorkspaceFilePath(isOurWorkspace)),
-                        )
+                        .getConfiguration("testMyCode")
                         .update("downloadOldSubmission", data.value);
                 }
                 break;
             case "hideMetaFiles":
                 this._settings.hideMetaFiles = data.value;
-                if (isOurWorkspace) {
+                if (isOurWorkspace && workspaceFile) {
                     await vscode.workspace
-                        .getConfiguration(
-                            "testMyCode",
-                            vscode.Uri.file(this._resources.getWorkspaceFilePath(isOurWorkspace)),
-                        )
+                        .getConfiguration("testMyCode")
                         .update("hideMetaFiles", data.value);
                 }
                 break;
@@ -110,12 +107,9 @@ export default class Settings {
                 break;
             case "updateExercisesAutomatically":
                 this._settings.updateExercisesAutomatically = data.value;
-                if (isOurWorkspace) {
+                if (isOurWorkspace && workspaceFile) {
                     await vscode.workspace
-                        .getConfiguration(
-                            "testMyCode",
-                            vscode.Uri.file(this._resources.getWorkspaceFilePath(isOurWorkspace)),
-                        )
+                        .getConfiguration("testMyCode")
                         .update("updateExercisesAutomatically", data.value);
                 }
                 break;

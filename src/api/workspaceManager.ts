@@ -57,16 +57,40 @@ export default class WorkspaceManager implements vscode.Disposable {
                 this._onDidChangeWorkspaceFolders(e),
             ),
             vscode.workspace.onDidOpenTextDocument((e) => this._onDidOpenTextDocument(e)),
-            vscode.workspace.onDidChangeConfiguration((e) => {
-                if (e.affectsConfiguration("testMyCode.logLevel")) {
+            vscode.workspace.onDidChangeConfiguration(async (event) => {
+                if (event.affectsConfiguration("testMyCode.logLevel")) {
                     Logger.configure(
                         vscode.workspace.getConfiguration("testMyCode").get<LogLevel>("logLevel"),
                     );
                 }
-                if (e.affectsConfiguration("testMyCode.hideMetaFiles")) {
-                    this.excludeMetaFilesInWorkspace(
-                        vscode.workspace.getConfiguration("testMyCode").get("hideMetaFiles") ??
-                            true,
+                if (event.affectsConfiguration("testMyCode.hideMetaFiles")) {
+                    const configuration = this.getWorkspaceSettings("testMyCode");
+                    const value = configuration.get<boolean | undefined>("hideMetaFiles");
+                    /* https://github.com/microsoft/vscode/issues/58038
+                    Force set the value to true in .code-workspace file,
+                    because for some reason true isn't set and the key/value pair is removed
+                    */
+                    if (value) {
+                        await this._updateWorkspaceSetting("testMyCode.hideMetaFiles", value);
+                    }
+                    await this.excludeMetaFilesInWorkspace(value ?? false);
+                }
+                if (event.affectsConfiguration("testMyCode.downloadOldSubmission")) {
+                    const value = this.getWorkspaceSettings("testMyCode").get<boolean | undefined>(
+                        "downloadOldSubmission",
+                    );
+                    await this._updateWorkspaceSetting(
+                        "testMyCode.downloadOldSubmission",
+                        value ?? false,
+                    );
+                }
+                if (event.affectsConfiguration("testMyCode.updateExercisesAutomatically")) {
+                    const value = this.getWorkspaceSettings("testMyCode").get<boolean | undefined>(
+                        "updateExercisesAutomatically",
+                    );
+                    await this._updateWorkspaceSetting(
+                        "testMyCode.updateExercisesAutomatically",
+                        value ?? false,
                     );
                 }
             }),
@@ -211,13 +235,12 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     /**
-     * Returns the section for the Workspace setting.
-     * If not found, returns User scope setting.
+     * Returns the section for the Workspace setting (i.e. .code-workspace).
+     * If section not found in multi-root workspace file, returns User scope setting.
      * @param section A dot-separated identifier.
      */
     public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration {
-        const activeCourse = this.activeCourse;
-        if (activeCourse) {
+        if (this.activeCourse) {
             return vscode.workspace.getConfiguration(section, vscode.workspace.workspaceFile);
         }
         return vscode.workspace.getConfiguration(section);
@@ -226,11 +249,44 @@ export default class WorkspaceManager implements vscode.Disposable {
     public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
         if (this.activeCourse) {
             Logger.log("TMC Workspace open, verifying workspace settings integrity.");
-            await this.excludeMetaFilesInWorkspace(
-                this.getWorkspaceSettings("testMyCode").get<boolean>("hideMetaFiles") ?? true,
+            const hideMetaFiles = this.getWorkspaceSettings("testMyCode").get<boolean | undefined>(
+                "hideMetaFiles",
             );
+            await this.excludeMetaFilesInWorkspace(hideMetaFiles ?? false);
+            await this.ensureSettingsAreStoredInMultiRootWorkspace();
             await this._verifyWatcherPatternExclusion();
             await this._forceTMCWorkspaceSettings();
+        }
+    }
+
+    /**
+     * Ensures that settings defined in package.json are written to the multi-root
+     * workspace file. If the key can't be found in the .code-workspace file, it will write the
+     * setting defined in the User scope to the file.
+     * https://github.com/microsoft/vscode/issues/58038
+     */
+    public async ensureSettingsAreStoredInMultiRootWorkspace(): Promise<void> {
+        /* For some reason .code-workspace if key value is true, it will remove the
+        key/value pair from the .code-workspace/multi-root file this is
+        something we do not want, as we want to enforce course specific settings */
+        const configuration = this.getWorkspaceSettings("testMyCode");
+        if (configuration.has("hideMetaFiles")) {
+            await this._updateWorkspaceSetting(
+                "testMyCode.hideMetaFiles",
+                configuration.get<boolean>("hideMetaFiles"),
+            );
+        }
+        if (configuration.has("downloadOldSubmission")) {
+            await this._updateWorkspaceSetting(
+                "testMyCode.downloadOldSubmission",
+                configuration.get<boolean>("downloadOldSubmission"),
+            );
+        }
+        if (configuration.has("updateExercisesAutomatically")) {
+            await this._updateWorkspaceSetting(
+                "testMyCode.updateExercisesAutomatically",
+                configuration.get<boolean>("updateExercisesAutomatically"),
+            );
         }
     }
 
@@ -254,7 +310,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     /**
-     * Force some settings for TMC .code-workspace files that.
+     * Force some settings for TMC multi-root workspaces that we want.
      */
     private async _forceTMCWorkspaceSettings(): Promise<void> {
         await this._updateWorkspaceSetting("explorer.decorations.colors", false);

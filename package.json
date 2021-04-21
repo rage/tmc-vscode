@@ -183,7 +183,7 @@
         "configuration": {
             "title": "TestMyCode",
             "properties": {
-                "testMyCode.downloadOldSubmissionByDefault": {
+                "testMyCode.downloadOldSubmission": {
                     "type": "boolean",
                     "default": true,
                     "description": "When downloading exercises, download your latest submission instead of the exercise template."
@@ -217,7 +217,7 @@
                 "testMyCode.updateExercisesAutomatically": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Download exercise updates automatically, if found."
+                    "description": "Download exercise updates automatically."
                 },
                 "testMyCode.dataPath": {
                     "type": "string",

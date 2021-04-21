@@ -413,7 +413,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
     Logger.log(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
     Logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
 
-    if (!workspaceManager.activeCourse) {
+    if (!(currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString())) {
         if (
             !currentWorkspaceFile ||
             (await dialog.confirmation(
