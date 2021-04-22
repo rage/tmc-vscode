@@ -223,7 +223,7 @@
                     "type": "string",
                     "scope": "application",
                     "default": "/",
-                    "description": "Currently a placeholder for setting the TMC Data Folder path."
+                    "description": "Folder where your exercises are stored. \nThis is just a placeholder, this can be changed on My Course page."
                 }
             }
         },

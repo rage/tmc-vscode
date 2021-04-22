@@ -110,7 +110,7 @@ export default class WorkspaceManager implements vscode.Disposable {
                     );
                 }
                 if (event.affectsConfiguration("testMyCode.tmcDataPath")) {
-                    Logger.warn("Not supported yet.");
+                    Logger.warn("Not supported.");
                 }
             }),
         ];
@@ -149,6 +149,10 @@ export default class WorkspaceManager implements vscode.Disposable {
             return undefined;
         }
         return workspaceFile;
+    }
+
+    public async setTmcDataPath(path: string): Promise<void> {
+        await vscode.workspace.getConfiguration("testMyCode").update("dataPath", path, true);
     }
 
     public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
@@ -301,9 +305,9 @@ export default class WorkspaceManager implements vscode.Disposable {
             // If not User scope setting, we write it to multi-root workspace.
             if (value.scope !== "application") {
                 const codeSettings = this.getWorkspaceSettings().inspect(key);
-                if (codeSettings?.workspaceValue) {
+                if (codeSettings?.workspaceValue !== undefined) {
                     this._updateWorkspaceSetting(key, codeSettings.workspaceValue);
-                } else if (codeSettings?.globalValue) {
+                } else if (codeSettings?.globalValue !== undefined) {
                     this._updateWorkspaceSetting(key, codeSettings.globalValue);
                 } else {
                     this._updateWorkspaceSetting(key, codeSettings?.defaultValue);

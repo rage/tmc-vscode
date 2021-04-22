@@ -142,6 +142,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const userData = new UserData(storage);
     const workspaceManager = new WorkspaceManager(resources);
     context.subscriptions.push(workspaceManager);
+    workspaceManager.setTmcDataPath(tmcDataPath);
     if (workspaceManager.activeCourse) {
         await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
         await workspaceManager.verifyWorkspaceSettingsIntegrity();
