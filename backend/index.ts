@@ -53,6 +53,7 @@ const submissions = [
         exerciseName: passingExercise.name,
         id: 0,
         passed: true,
+        timestamp: new Date(2000, 1, 1),
         userId: 0,
     }),
 ];
@@ -134,6 +135,7 @@ app.post(
                 exerciseName: passingExercise.name,
                 id: passingExercise.id,
                 passed: true,
+                timestamp: new Date(),
                 userId: 0,
             }),
         );

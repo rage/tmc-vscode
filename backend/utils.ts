@@ -155,35 +155,39 @@ interface CreateOldSubmissionParams {
     exerciseName: string;
     id: number;
     passed: boolean;
+    timestamp: Date;
     userId: number;
 }
 
-const createOldSubmission = (params: CreateOldSubmissionParams): OldSubmission => ({
-    all_tests_passed: params.passed,
-    course_id: params.courseId,
-    created_at: "",
-    exercise_name: params.exerciseName,
-    id: params.id,
-    message_for_paste: "",
-    message_for_reviewer: "",
-    newer_submission_reviewed: false,
-    params_json: "",
-    paste_available: false,
-    paste_key: "",
-    points: "",
-    pretest_error: "",
-    processed: true,
-    processing_attempts_started_at: "",
-    processing_began_at: "",
-    processing_completed_at: "",
-    processing_tried_at: "",
-    requests_review: false,
-    requires_review: false,
-    review_dismissed: false,
-    reviewed: false,
-    times_sent_to_sandbox: 1,
-    user_id: 0,
-});
+const createOldSubmission = (params: CreateOldSubmissionParams): OldSubmission => {
+    const timestamp = params.timestamp.toISOString();
+    return {
+        all_tests_passed: params.passed,
+        course_id: params.courseId,
+        created_at: timestamp,
+        exercise_name: params.exerciseName,
+        id: params.id,
+        message_for_paste: "",
+        message_for_reviewer: "",
+        newer_submission_reviewed: false,
+        params_json: "",
+        paste_available: false,
+        paste_key: "",
+        points: "",
+        pretest_error: "",
+        processed: true,
+        processing_attempts_started_at: timestamp,
+        processing_began_at: timestamp,
+        processing_completed_at: timestamp,
+        processing_tried_at: timestamp,
+        requests_review: false,
+        requires_review: false,
+        review_dismissed: false,
+        reviewed: false,
+        times_sent_to_sandbox: 1,
+        user_id: 0,
+    };
+};
 
 const respondWithFile = (res: Response, file: string): void =>
     res.sendFile(file, (error) => {
