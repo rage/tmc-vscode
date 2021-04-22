@@ -29,6 +29,15 @@ export interface WorkspaceExercise {
     uri: vscode.Uri;
 }
 
+interface ConfigurationProperties {
+    default?: unknown;
+    type?: string;
+    description?: string;
+    scope?: string;
+    enum?: Array<string>;
+    enumDescriptions?: Array<string>;
+}
+
 /**
  * Class for managing active workspace.
  */
@@ -58,40 +67,50 @@ export default class WorkspaceManager implements vscode.Disposable {
             ),
             vscode.workspace.onDidOpenTextDocument((e) => this._onDidOpenTextDocument(e)),
             vscode.workspace.onDidChangeConfiguration(async (event) => {
+                /* https://github.com/microsoft/vscode/issues/58038
+                Sometimes we need to force set the value to true in .code-workspace file,
+                because for some reason true isn't set and the key/value pair is removed
+                */
                 if (event.affectsConfiguration("testMyCode.logLevel")) {
                     Logger.configure(
-                        vscode.workspace.getConfiguration("testMyCode").get<LogLevel>("logLevel"),
+                        this.getWorkspaceSettings("testMyCode").get<LogLevel>("logLevel"),
                     );
                 }
-                if (event.affectsConfiguration("testMyCode.hideMetaFiles")) {
+                if (event.affectsConfiguration("testMyCode.hideMetaFiles", this.workspaceFileUri)) {
                     const configuration = this.getWorkspaceSettings("testMyCode");
                     const value = configuration.get<boolean | undefined>("hideMetaFiles");
-                    /* https://github.com/microsoft/vscode/issues/58038
-                    Force set the value to true in .code-workspace file,
-                    because for some reason true isn't set and the key/value pair is removed
-                    */
                     if (value) {
                         await this._updateWorkspaceSetting("testMyCode.hideMetaFiles", value);
                     }
-                    await this.excludeMetaFilesInWorkspace(value ?? false);
+                    await this.excludeMetaFilesInWorkspace(value);
                 }
-                if (event.affectsConfiguration("testMyCode.downloadOldSubmission")) {
+                if (
+                    event.affectsConfiguration(
+                        "testMyCode.downloadOldSubmission",
+                        this.workspaceFileUri,
+                    )
+                ) {
                     const value = this.getWorkspaceSettings("testMyCode").get<boolean | undefined>(
                         "downloadOldSubmission",
                     );
-                    await this._updateWorkspaceSetting(
-                        "testMyCode.downloadOldSubmission",
-                        value ?? false,
-                    );
+                    await this._updateWorkspaceSetting("testMyCode.downloadOldSubmission", value);
                 }
-                if (event.affectsConfiguration("testMyCode.updateExercisesAutomatically")) {
+                if (
+                    event.affectsConfiguration(
+                        "testMyCode.updateExercisesAutomatically",
+                        this.workspaceFileUri,
+                    )
+                ) {
                     const value = this.getWorkspaceSettings("testMyCode").get<boolean | undefined>(
                         "updateExercisesAutomatically",
                     );
                     await this._updateWorkspaceSetting(
                         "testMyCode.updateExercisesAutomatically",
-                        value ?? false,
+                        value,
                     );
+                }
+                if (event.affectsConfiguration("testMyCode.tmcDataPath")) {
+                    Logger.warn("Not supported yet.");
                 }
             }),
         ];
@@ -119,6 +138,17 @@ export default class WorkspaceManager implements vscode.Disposable {
     public get activeExercise(): Readonly<WorkspaceExercise> | undefined {
         const uri = vscode.window.activeTextEditor?.document.uri;
         return uri && this.getExerciseByPath(uri);
+    }
+
+    public get workspaceFileUri(): vscode.Uri | undefined {
+        const workspaceFile = vscode.workspace.workspaceFile;
+        if (
+            !workspaceFile ||
+            path.relative(workspaceFile.fsPath, this._resources.workspaceFileFolder) !== ".."
+        ) {
+            return undefined;
+        }
+        return workspaceFile;
     }
 
     public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
@@ -224,12 +254,10 @@ export default class WorkspaceManager implements vscode.Disposable {
         this._disposables.forEach((x) => x.dispose());
     }
 
-    /**
-     * Updates files.exclude values in TMC Workspace.code-workspace.
-     * Keeps all user/workspace defined excluding patterns.
-     * @param hide true to hide meta files in TMC workspace.
-     */
-    public async excludeMetaFilesInWorkspace(hide: boolean): Promise<void> {
+    public async excludeMetaFilesInWorkspace(hide: boolean | undefined): Promise<void> {
+        if (hide === undefined) {
+            return;
+        }
         const value = hide ? HIDE_META_FILES : SHOW_META_FILES;
         await this._updateWorkspaceSetting("files.exclude", value);
     }
@@ -241,7 +269,7 @@ export default class WorkspaceManager implements vscode.Disposable {
      */
     public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration {
         if (this.activeCourse) {
-            return vscode.workspace.getConfiguration(section, vscode.workspace.workspaceFile);
+            return vscode.workspace.getConfiguration(section, this.workspaceFileUri);
         }
         return vscode.workspace.getConfiguration(section);
     }
@@ -262,32 +290,26 @@ export default class WorkspaceManager implements vscode.Disposable {
     /**
      * Ensures that settings defined in package.json are written to the multi-root
      * workspace file. If the key can't be found in the .code-workspace file, it will write the
-     * setting defined in the User scope to the file.
+     * setting defined in the User scope to the file. Last resort, default value.
      * https://github.com/microsoft/vscode/issues/58038
      */
     public async ensureSettingsAreStoredInMultiRootWorkspace(): Promise<void> {
-        /* For some reason .code-workspace if key value is true, it will remove the
-        key/value pair from the .code-workspace/multi-root file this is
-        something we do not want, as we want to enforce course specific settings */
-        const configuration = this.getWorkspaceSettings("testMyCode");
-        if (configuration.has("hideMetaFiles")) {
-            await this._updateWorkspaceSetting(
-                "testMyCode.hideMetaFiles",
-                configuration.get<boolean>("hideMetaFiles"),
-            );
-        }
-        if (configuration.has("downloadOldSubmission")) {
-            await this._updateWorkspaceSetting(
-                "testMyCode.downloadOldSubmission",
-                configuration.get<boolean>("downloadOldSubmission"),
-            );
-        }
-        if (configuration.has("updateExercisesAutomatically")) {
-            await this._updateWorkspaceSetting(
-                "testMyCode.updateExercisesAutomatically",
-                configuration.get<boolean>("updateExercisesAutomatically"),
-            );
-        }
+        const extension = vscode.extensions.getExtension("moocfi.test-my-code");
+        const extensionDefinedSettings: Record<string, ConfigurationProperties> =
+            extension?.packageJSON?.contributes?.configuration?.properties;
+        Object.entries(extensionDefinedSettings).forEach(([key, value]) => {
+            // If not User scope setting, we write it to multi-root workspace.
+            if (value.scope !== "application") {
+                const codeSettings = this.getWorkspaceSettings().inspect(key);
+                if (codeSettings?.workspaceValue) {
+                    this._updateWorkspaceSetting(key, codeSettings.workspaceValue);
+                } else if (codeSettings?.globalValue) {
+                    this._updateWorkspaceSetting(key, codeSettings.globalValue);
+                } else {
+                    this._updateWorkspaceSetting(key, codeSettings?.defaultValue);
+                }
+            }
+        });
     }
 
     /**
