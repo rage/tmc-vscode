@@ -7,9 +7,15 @@ import * as kill from "tree-kill";
 
 import TMC from "../api/tmc";
 import { SubmissionFeedback } from "../api/types";
-import { CLIENT_NAME, TMC_LANGS_CONFIG_DIR, TMC_LANGS_VERSION } from "../config/constants";
+import { CLIENT_NAME, TMC_LANGS_VERSION } from "../config/constants";
 import { AuthenticationError, AuthorizationError, BottleneckError, RuntimeError } from "../errors";
 import { getLangsCLIForPlatform, getPlatform } from "../utils/";
+
+const PROJECT_ROOT = path.join(__dirname, "..");
+const ARTIFACT_FOLDER = path.join(PROJECT_ROOT, "test-artifacts", "tmc_langs_cli_spec");
+
+// This one is mandated by TMC-langs.
+const CLIENT_CONFIG_DIR_NAME = `tmc-${CLIENT_NAME}`;
 
 async function startServer(): Promise<cp.ChildProcess> {
     let ready = false;
@@ -42,7 +48,6 @@ suite("TMC", function () {
     const BACKEND_FOLDER = path.join(__dirname, "..", "backend");
     const CLI_PATH = path.join(BACKEND_FOLDER, "cli");
     const CLI_FILE = path.join(CLI_PATH, getLangsCLIForPlatform(getPlatform(), TMC_LANGS_VERSION));
-    const ARTIFACT_PATH = path.join(BACKEND_FOLDER, "testArtifacts");
 
     const FEEDBACK_URL = "http://localhost:4001/feedback";
     const COURSE_PATH = path.join(BACKEND_FOLDER, "resources", "test-python-course");
@@ -56,101 +61,93 @@ suite("TMC", function () {
         server = await startServer();
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    function removeArtifacts(): void {
-        delSync(ARTIFACT_PATH, { force: true });
-    }
-
-    function removeCliConfig(): void {
-        const config = path.join(CLI_PATH, `tmc-${CLIENT_NAME}`);
-        delSync(config, { force: true });
-    }
-
-    function writeCliConfig(): void {
-        const configPath = path.join(CLI_PATH, `tmc-${CLIENT_NAME}`);
-        if (!fs.existsSync(configPath)) {
-            fs.mkdirSync(configPath, { recursive: true });
-        }
-
-        fs.writeFileSync(
-            path.join(configPath, "credentials.json"),
-            '{"access_token":"1234","token_type":"bearer","scope":"public"}',
-        );
-    }
-
     let tmc: TMC;
+    let tmcUnauthenticated: TMC;
 
     setup(function () {
-        removeCliConfig();
+        const authenticatedConfigDir = path.join(ARTIFACT_FOLDER, CLIENT_CONFIG_DIR_NAME);
+        if (!fs.existsSync(authenticatedConfigDir)) {
+            fs.mkdirSync(authenticatedConfigDir, { recursive: true });
+        }
+        fs.writeFileSync(
+            path.join(authenticatedConfigDir, "credentials.json"),
+            '{"access_token":"1234","token_type":"bearer","scope":"public"}',
+        );
         tmc = new TMC(CLI_FILE, CLIENT_NAME, "test", {
-            cliConfigDir: TMC_LANGS_CONFIG_DIR,
+            cliConfigDir: ARTIFACT_FOLDER,
+        });
+
+        const unauthenticatedArtifactFolder = path.join(ARTIFACT_FOLDER, "__unauthenticated");
+        const unauthenticatedConfigDir = path.join(
+            unauthenticatedArtifactFolder,
+            CLIENT_CONFIG_DIR_NAME,
+        );
+        delSync(unauthenticatedConfigDir, { force: true });
+        tmcUnauthenticated = new TMC(CLI_FILE, CLIENT_NAME, "test", {
+            cliConfigDir: unauthenticatedConfigDir,
         });
     });
 
-    suite("#authenticate()", function () {
-        test.skip("Causes AuthenticationError with empty credentials", async function () {
-            const result = await tmc.authenticate("", "");
+    suite("authenticate()", function () {
+        test.skip("should result in AuthenticationError with empty credentials", async function () {
+            const result = await tmcUnauthenticated.authenticate("", "");
             expect(result.val).to.be.instanceOf(AuthenticationError);
         });
 
-        test("Causes AuthenticationError with incorrect credentials", async function () {
-            const result = await tmc.authenticate("TestMyCode", "hunter2");
+        test("should result in AuthenticationError with incorrect credentials", async function () {
+            const result = await tmcUnauthenticated.authenticate("TestMyCode", "hunter2");
             expect(result.val).to.be.instanceOf(AuthenticationError);
         });
 
-        test("Succeeds with correct credentials", async function () {
-            const result = await tmc.authenticate("TestMyExtension", "hunter2");
+        test("should succeed with correct credentials", async function () {
+            const result = await tmcUnauthenticated.authenticate("TestMyExtension", "hunter2");
             expect(result.ok).to.be.true;
         });
 
-        test("Causes AuthenticationError when already authenticated", async function () {
-            writeCliConfig();
+        test("should result in AuthenticationError when already authenticated", async function () {
             const result = await tmc.authenticate("TestMyExtension", "hunter2");
             expect(result.val).to.be.instanceOf(AuthenticationError);
         });
     });
 
-    suite("#isAuthenticated()", function () {
-        test("Returns false when user config is missing", async function () {
-            const result = await tmc.isAuthenticated();
+    suite("isAuthenticated()", function () {
+        test("should return false when user config is missing", async function () {
+            const result = await tmcUnauthenticated.isAuthenticated();
             expect(result.val).to.be.false;
         });
 
-        test("Returns true when user config exists", async function () {
-            writeCliConfig();
+        test("should return true when user config exists", async function () {
             const result = await tmc.isAuthenticated();
             expect(result.val).to.be.true;
         });
     });
 
-    suite("#deauthenticate()", function () {
-        test("Deauthenticates", async function () {
+    suite("deauthenticate()", function () {
+        test("should deauthenticate the user", async function () {
             const result = await tmc.deauthenticate();
             expect(result.ok).to.be.true;
         });
     });
 
-    suite("#clean()", function () {
-        test("Clears exercise", async function () {
+    suite("clean()", function () {
+        test("should clean the exercise", async function () {
             const result = (await tmc.clean(PASSING_EXERCISE_PATH)).unwrap();
             expect(result).to.be.undefined;
         });
 
-        test("Causes RuntimeError for nonexistent exercise", async function () {
+        test("should result in RuntimeError for nonexistent exercise", async function () {
             const result = await tmc.clean(MISSING_EXERCISE_PATH);
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
-    suite("#runTests()", function () {
-        test("Returns test results", async function () {
+    suite("runTests()", function () {
+        test("should return test results", async function () {
             const result = (await tmc.runTests(PASSING_EXERCISE_PATH)[0]).unwrap();
             expect(result.status).to.be.equal("PASSED");
         }).timeout(20000);
 
-        test("Can be interrupted");
-
-        test("Causes RuntimeError for nonexistent exercise", async function () {
+        test("should result in RuntimeError for nonexistent exercise", async function () {
             const result = await tmc.runTests(MISSING_EXERCISE_PATH)[0];
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
@@ -222,159 +219,145 @@ suite("TMC", function () {
         });
     }); */
 
-    suite("#getCourseData()", function () {
+    suite("getCourseData()", function () {
         // Fails with TMC-langs 0.15.0 because data.output-data.kind is "generic"
-        test.skip("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.getCourseData(0);
+        test.skip("should result in AuthorizationError if not authenticated", async function () {
+            const result = await tmcUnauthenticated.getCourseData(0);
             expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
-        test("Returns course data when authenticated", async function () {
-            writeCliConfig();
+        test("should result in course data when authenticated", async function () {
             const data = (await tmc.getCourseData(0)).unwrap();
             expect(data.details.name).to.be.equal("python-course");
             expect(data.exercises.length).to.be.equal(2);
             expect(data.settings.name).to.be.equal("python-course");
         });
 
-        test("Causes RuntimeError for nonexistent course", async function () {
-            writeCliConfig();
+        test("should result in RuntimeError for nonexistent course", async function () {
             const result = await tmc.getCourseData(404);
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
-    suite("#getCourseDetails()", function () {
-        test("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.getCourseDetails(0);
+    suite("getCourseDetails()", function () {
+        test("should result in AuthorizationError if not authenticated", async function () {
+            const result = await tmcUnauthenticated.getCourseDetails(0);
             expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
-        test("Returns course details of given course", async function () {
-            writeCliConfig();
+        test("should return course details of given course", async function () {
             const course = (await tmc.getCourseDetails(0)).unwrap().course;
             expect(course.id).to.be.equal(0);
             expect(course.name).to.be.equal("python-course");
         });
 
-        test("Causes RuntimeError for nonexistent course", async function () {
-            writeCliConfig();
+        test("should result in RuntimeError for nonexistent course", async function () {
             const result = await tmc.getCourseDetails(404);
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
-    suite("#getCourseExercises()", function () {
-        test("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.getCourseExercises(0);
+    suite("getCourseExercises()", function () {
+        test("should result in AuthorizationError if not authenticated", async function () {
+            const result = await tmcUnauthenticated.getCourseExercises(0);
             expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
-        test("Returns course exercises of the given course", async function () {
-            writeCliConfig();
+        test("should return course exercises of the given course", async function () {
             const exercises = (await tmc.getCourseExercises(0)).unwrap();
             expect(exercises.length).to.be.equal(2);
         });
 
-        test("Causes RuntimeError for nonexistent course", async function () {
-            writeCliConfig();
+        test("should result in RuntimeError with nonexistent course", async function () {
             const result = await tmc.getCourseExercises(404);
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
-    suite("#getCourses()", function () {
-        test("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.getCourses("test");
+    suite("getCourses()", function () {
+        test("should result in AuthorizationError if not authenticated", async function () {
+            const result = await tmcUnauthenticated.getCourses("test");
             expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
-        test("Returns courses when authenticated", async function () {
-            writeCliConfig();
+        test("should return courses when authenticated", async function () {
             const course = (await tmc.getCourses("test")).unwrap();
             expect(course.length).to.be.equal(1);
             expect(course.some((x) => x.name === "python-course")).to.be.true;
         });
 
-        test("Causes RuntimeError for nonexistent organization", async function () {
-            writeCliConfig();
+        test("should result in RuntimeError for nonexistent organization", async function () {
             const result = await tmc.getCourses("404");
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
-    suite("#getCourseSettings()", function () {
-        test("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.getCourseSettings(0);
+    suite("getCourseSettings()", function () {
+        test("should result in AuthorizationError if not authenticated", async function () {
+            const result = await tmcUnauthenticated.getCourseSettings(0);
             expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
-        test("Returns course settings when authenticated", async function () {
-            writeCliConfig();
+        test("should return course settings when authenticated", async function () {
             const course = (await tmc.getCourseSettings(0)).unwrap();
             expect(course.name).to.be.equal("python-course");
         });
 
-        test("Causes RuntimeError for nonexistent course", async function () {
-            writeCliConfig();
+        test("should result in RuntimeError with nonexistent course", async function () {
             const result = await tmc.getCourseSettings(404);
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
-    suite("#getExerciseDetails()", function () {
-        test("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.getExerciseDetails(1);
+    suite("getExerciseDetails()", function () {
+        test("should result in AuthorizationError if not authenticated", async function () {
+            const result = await tmcUnauthenticated.getExerciseDetails(1);
             expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
-        test("Returns exercise details when authenticated", async function () {
-            writeCliConfig();
+        test("should return exercise details when authenticated", async function () {
             const exercise = (await tmc.getExerciseDetails(1)).unwrap();
             expect(exercise.exercise_name).to.be.equal("part01-01_passing_exercise");
         });
 
-        test("Causes RuntimeError for nonexistent exercise", async function () {
-            writeCliConfig();
+        test("should result in RuntimeError for nonexistent exercise", async function () {
             const result = await tmc.getExerciseDetails(404);
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
-    suite("#getOldSubmissions()", function () {
-        test("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.getOldSubmissions(1);
+    suite("getOldSubmissions()", function () {
+        test("should result in AuthorizationError if not authenticated", async function () {
+            const result = await tmcUnauthenticated.getOldSubmissions(1);
             expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
-        test("Returns old submissions when authenticated", async function () {
-            writeCliConfig();
+        test("should return old submissions when authenticated", async function () {
             const submissions = (await tmc.getOldSubmissions(1)).unwrap();
             expect(submissions.length).to.be.greaterThan(0);
         });
 
-        test("Causes RuntimeError for nonexistent exercise", async function () {
-            writeCliConfig();
+        test("should result in RuntimeError for nonexistent exercise", async function () {
             const result = await tmc.getOldSubmissions(404);
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
-    suite("#getOrganizations()", function () {
-        test("Returns organizations", async function () {
+    suite("getOrganizations()", function () {
+        test("should return organizations", async function () {
             const result = await tmc.getOrganizations();
             expect(result.unwrap().length).to.be.equal(1, "Expected to get one organization.");
         });
     });
 
-    suite("#getOrganization()", function () {
-        test("Returns given organization", async function () {
+    suite("getOrganization()", function () {
+        test("should return given organization", async function () {
             const organization = (await tmc.getOrganization("test")).unwrap();
             expect(organization.slug).to.be.equal("test");
             expect(organization.name).to.be.equal("Test Organization");
         });
 
-        test("Returns RuntimeError for nonexistent organization", async function () {
+        test("should result in RuntimeError for nonexistent organization", async function () {
             const result = await tmc.getOrganization("404");
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
@@ -416,24 +399,25 @@ suite("TMC", function () {
         });
     }); */
 
-    suite("#submitExerciseAndWaitForResults()", function () {
-        test("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
+    suite("submitExerciseAndWaitForResults()", function () {
+        test("should result in AuthorizationError if not authenticated", async function () {
+            const result = await tmcUnauthenticated.submitExerciseAndWaitForResults(
+                1,
+                PASSING_EXERCISE_PATH,
+            );
             expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
-        test("Makes a submission and returns results when authenticated", async function () {
+        test("should make a submission and give results when authenticated", async function () {
             this.timeout(5000);
-            writeCliConfig();
             const results = (
                 await tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH)
             ).unwrap();
             expect(results.status).to.be.equal("ok");
         });
 
-        test("Returns submission link during the submission process", async function () {
+        test("should return submission link during the submission process", async function () {
             this.timeout(5000);
-            writeCliConfig();
             let url: string | undefined;
             await tmc.submitExerciseAndWaitForResults(
                 1,
@@ -452,22 +436,20 @@ suite("TMC", function () {
             expect(secondResult.val).to.be.instanceOf(BottleneckError);
         });
 
-        test("Causes RuntimeError for nonexistent exercise", async function () {
-            writeCliConfig();
+        test("should result in RuntimeError for nonexistent exercise", async function () {
             const result = await tmc.submitExerciseAndWaitForResults(1, MISSING_EXERCISE_PATH);
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
-    suite("#submitExerciseToPaste()", function () {
+    suite("submitExerciseToPaste()", function () {
         // Current Langs doesn't actually check this
-        test.skip("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.submitExerciseToPaste(1, PASSING_EXERCISE_PATH);
+        test.skip("should result in AuthorizationError if not authenticated", async function () {
+            const result = await tmcUnauthenticated.submitExerciseToPaste(1, PASSING_EXERCISE_PATH);
             expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
-        test("Makes a paste submission when authenticated", async function () {
-            writeCliConfig();
+        test("should make a paste submission when authenticated", async function () {
             const pasteUrl = (await tmc.submitExerciseToPaste(1, PASSING_EXERCISE_PATH)).unwrap();
             expect(pasteUrl).to.include("localhost");
         });
@@ -480,26 +462,24 @@ suite("TMC", function () {
             expect(secondResult.val).to.be.instanceOf(BottleneckError);
         });
 
-        test("Causes RuntimeError for nonexistent exercise", async function () {
-            writeCliConfig();
+        test("should result in RuntimeError for nonexistent exercise", async function () {
             const result = await tmc.submitExerciseToPaste(404, MISSING_EXERCISE_PATH);
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
     });
 
-    suite("#submitSubmissionFeedback()", function () {
+    suite("submitSubmissionFeedback()", function () {
         const feedback: SubmissionFeedback = {
             status: [{ question_id: 0, answer: "42" }],
         };
 
-        test("Submits feedback when authenticated", async function () {
+        test("should submit feedback when authenticated", async function () {
             const result = await tmc.submitSubmissionFeedback(FEEDBACK_URL, feedback);
             expect(result.ok).to.be.true;
         });
     });
 
     suiteTeardown(function () {
-        removeCliConfig();
         server && kill(server.pid);
     });
 });
