@@ -182,7 +182,9 @@ suite("TMC", function () {
 
         test("should download exercise", async function () {
             const result = await tmc.downloadExercises([1], () => {});
-            expect(result.ok).to.be.true;
+            if (result.err) {
+                expect.fail(result.val.message + ": " + result.val.stack);
+            }
         });
     });
 
@@ -404,7 +406,9 @@ suite("TMC", function () {
 
         test("should reset exercise", async function () {
             const result = await tmc.resetExercise(1, exercisePath, false);
-            expect(result.ok).to.be.true;
+            if (result.err) {
+                expect.fail(result.val.message + ": " + result.val.stack);
+            }
         });
 
         test("should not save old state if the flag is off", async function () {
