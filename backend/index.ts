@@ -27,6 +27,15 @@ import {
 
 const PORT = 4001;
 
+interface DetailsForLangs {
+    exercises: Array<{
+        id: number;
+        checksum: string;
+        course_name: string;
+        exercise_name: string;
+    }>;
+}
+
 const testOrganization = createOrganization({
     information: "This is a test organization from a local development server.",
     name: "Test Organization",
@@ -109,6 +118,19 @@ app.get(`/api/v8/core/courses/${pythonCourse.id}`, (req, res: Response<CourseDet
             ...pythonCourse,
             exercises: [passingExercise, failingExercise],
         },
+    }),
+);
+
+// downloadExercises()
+// TODO: Filter to only exercises that were given as params.
+app.get("/api/v8/core/exercises/details", (req, res: Response<DetailsForLangs>) =>
+    res.json({
+        exercises: [passingExercise].map((x) => ({
+            id: x.id,
+            checksum: x.checksum,
+            course_name: "python-course",
+            exercise_name: x.exercise_name,
+        })),
     }),
 );
 

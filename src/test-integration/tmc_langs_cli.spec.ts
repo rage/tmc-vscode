@@ -2,6 +2,7 @@ import { expect } from "chai";
 import * as cp from "child_process";
 import { sync as delSync } from "del";
 import * as fs from "fs-extra";
+import { ncp } from "ncp";
 import * as path from "path";
 import * as kill from "tree-kill";
 
@@ -11,8 +12,18 @@ import { CLIENT_NAME, TMC_LANGS_VERSION } from "../config/constants";
 import { AuthenticationError, AuthorizationError, BottleneckError, RuntimeError } from "../errors";
 import { getLangsCLIForPlatform, getPlatform } from "../utils/";
 
+// __dirname is the dist folder when executed.
 const PROJECT_ROOT = path.join(__dirname, "..");
 const ARTIFACT_FOLDER = path.join(PROJECT_ROOT, "test-artifacts", "tmc_langs_cli_spec");
+
+// Use CLI from backend folder to run tests.
+const BACKEND_FOLDER = path.join(PROJECT_ROOT, "backend");
+const CLI_PATH = path.join(BACKEND_FOLDER, "cli");
+const CLI_FILE = path.join(CLI_PATH, getLangsCLIForPlatform(getPlatform(), TMC_LANGS_VERSION));
+const COURSE_PATH = path.join(BACKEND_FOLDER, "resources", "test-python-course");
+const PASSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-01_passing_exercise");
+const MISSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-404_missing_exercise");
+const FEEDBACK_URL = "http://localhost:4001/feedback";
 
 // This one is mandated by TMC-langs.
 const CLIENT_CONFIG_DIR_NAME = `tmc-${CLIENT_NAME}`;
@@ -42,18 +53,20 @@ async function startServer(): Promise<cp.ChildProcess> {
     return server;
 }
 
+function setupProjectsDir(dirName: string): string {
+    const authenticatedConfigDir = path.join(ARTIFACT_FOLDER, CLIENT_CONFIG_DIR_NAME);
+    if (!fs.existsSync(authenticatedConfigDir)) {
+        fs.mkdirSync(authenticatedConfigDir, { recursive: true });
+    }
+    const projectsDir = path.join(ARTIFACT_FOLDER, dirName);
+    fs.writeFileSync(
+        path.join(authenticatedConfigDir, "config.toml"),
+        `projects-dir = '${projectsDir}'\n`,
+    );
+    return projectsDir;
+}
+
 suite("TMC", function () {
-    // Use CLI from backend folder to run tests. The location is relative to the dist-folder
-    // where webpack builds the test bundle.
-    const BACKEND_FOLDER = path.join(__dirname, "..", "backend");
-    const CLI_PATH = path.join(BACKEND_FOLDER, "cli");
-    const CLI_FILE = path.join(CLI_PATH, getLangsCLIForPlatform(getPlatform(), TMC_LANGS_VERSION));
-
-    const FEEDBACK_URL = "http://localhost:4001/feedback";
-    const COURSE_PATH = path.join(BACKEND_FOLDER, "resources", "test-python-course");
-    const PASSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-01_passing_exercise");
-    const MISSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-404_missing_exercise");
-
     let server: cp.ChildProcess | undefined;
 
     suiteSetup(async function () {
@@ -153,71 +166,77 @@ suite("TMC", function () {
         });
     });
 
-    /* suite("#downloadExercise()", function () {
+    suite("downloadExercises()", function () {
         this.timeout(5000);
-        const downloadPath = path.join(ARTIFACT_PATH, "downloadsExercise");
 
-        test("Downloads exercise", async function () {
-            const result = await tmc.downloadExercise(1, downloadPath);
-            expect(result.ok).to.be.true;
+        setup(function () {
+            const projectsDir = setupProjectsDir("downloadExercises");
+            delSync(projectsDir, { force: true });
         });
 
-        teardown(function () {
-            removeArtifacts();
-        });
-    }); */
-
-    /* suite("#downloadOldSubmission()", function () {
-        this.timeout(5000);
-        const downloadPath = path.join(ARTIFACT_PATH, "downloadsOldSubmission");
-
-        setup(async function () {
-            await tmc.downloadExercise(1, downloadPath);
-        });
-
-        test("Causes AuthorizationError if not authenticated", async function () {
-            const result = await tmc.downloadOldSubmission(1, downloadPath, 404, false);
+        // Current langs version returns generic error so handling fails
+        test.skip("should result in AuthorizationError if not authenticated", async function () {
+            const result = await tmcUnauthenticated.downloadExercises([1], () => {});
             expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
-        test("Downloads old submission", async function () {
-            writeCliConfig();
-            const submissionId = (await tmc.getOldSubmissions(1)).unwrap()[0].id;
-            const result = await tmc.downloadOldSubmission(1, downloadPath, submissionId, false);
+        test("should download exercise", async function () {
+            const result = await tmc.downloadExercises([1], () => {});
+            expect(result.ok).to.be.true;
+        });
+    });
+
+    suite("downloadOldSubmission()", function () {
+        this.timeout(5000);
+
+        let exercisePath: string;
+
+        setup(function () {
+            const projectsDir = setupProjectsDir("downloadOldSubmission");
+            exercisePath = path.join(projectsDir, "part01-01_passing_exercise");
+            if (!fs.existsSync(exercisePath)) {
+                fs.ensureDirSync(exercisePath);
+                ncp(PASSING_EXERCISE_PATH, exercisePath, () => {});
+            }
+        });
+
+        test.skip("should result in AuthorizationError if not authenticated", async function () {
+            const result = await tmcUnauthenticated.downloadOldSubmission(
+                1,
+                exercisePath,
+                404,
+                false,
+            );
+            expect(result.val).to.be.instanceOf(AuthorizationError);
+        });
+
+        test("should download old submission", async function () {
+            const result = await tmc.downloadOldSubmission(1, exercisePath, 0, false);
             expect(result.ok).to.be.true;
         });
 
-        test("Doesn't save old state if not expected", async function () {
-            writeCliConfig();
+        test("should not save old state when the flag is off", async function () {
+            // This test is based on a side effect of making a new submission.
             const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-            await tmc.downloadOldSubmission(1, downloadPath, submissions[0].id, false);
+            await tmc.downloadOldSubmission(1, exercisePath, 0, false);
             const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
             expect(newSubmissions.length).to.be.equal(submissions.length);
         });
 
-        test("Saves old state if expected", async function () {
-            writeCliConfig();
+        test("should save old state when the flag is on", async function () {
+            // This test is based on a side effect of making a new submission.
             const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-            await tmc.downloadOldSubmission(1, downloadPath, submissions[0].id, true);
+            await tmc.downloadOldSubmission(1, exercisePath, 0, true);
             const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
             expect(newSubmissions.length).to.be.equal(submissions.length + 1);
         });
 
-        test("Causes RuntimeError for nonexistent exercise", async function () {
-            writeCliConfig();
-            const result = await tmc.downloadOldSubmission(
-                1,
-                path.resolve(downloadPath, "..", "404"),
-                1,
-                false,
-            );
+        test("should cause RuntimeError for nonexistent exercise", async function () {
+            const missingExercisePath = path.resolve(exercisePath, "..", "404");
+            const result = await tmc.downloadOldSubmission(1, missingExercisePath, 0, false);
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
-
-        teardown(function () {
-            removeArtifacts();
-        });
-    }); */
+    });
 
     suite("getCourseData()", function () {
         // Fails with TMC-langs 0.15.0 because data.output-data.kind is "generic"
@@ -363,41 +382,47 @@ suite("TMC", function () {
         });
     });
 
-    /* suite("#resetExercise()", function () {
+    suite("resetExercise()", function () {
         this.timeout(5000);
-        const downloadPath = path.join(ARTIFACT_PATH, "downloadsOldSubmission");
 
-        setup(async function () {
-            await tmc.downloadExercise(1, downloadPath);
+        let exercisePath: string;
+
+        setup(function () {
+            const projectsDir = setupProjectsDir("resetExercise");
+            exercisePath = path.join(projectsDir, "part01-01_passing_exercise");
+            if (!fs.existsSync(exercisePath)) {
+                fs.ensureDirSync(exercisePath);
+                ncp(PASSING_EXERCISE_PATH, exercisePath, () => {});
+            }
         });
 
-        test("Downloads old submission", async function () {
-            writeCliConfig();
-            const submissionId = (await tmc.getOldSubmissions(1)).unwrap()[0].id;
-            const result = await tmc.downloadOldSubmission(1, downloadPath, submissionId, false);
+        // This actually passes
+        test.skip("should result in AuthorizationError if not authenticated", async function () {
+            const result = await tmcUnauthenticated.resetExercise(1, exercisePath, false);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
+        });
+
+        test("should reset exercise", async function () {
+            const result = await tmc.resetExercise(1, exercisePath, false);
             expect(result.ok).to.be.true;
         });
 
-        test("Doesn't save old state if not expected", async function () {
-            writeCliConfig();
+        test("should not save old state if the flag is off", async function () {
+            // This test is based on a side effect of making a new submission.
             const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-            await tmc.downloadOldSubmission(1, downloadPath, submissions[0].id, false);
+            await tmc.resetExercise(1, exercisePath, false);
             const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
             expect(newSubmissions.length).to.be.equal(submissions.length);
         });
 
-        test("Saves old state if expected", async function () {
-            writeCliConfig();
+        test("should save old state if the flag is on", async function () {
+            // This test is based on a side effect of making a new submission.
             const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-            await tmc.downloadOldSubmission(1, downloadPath, submissions[0].id, true);
+            await tmc.resetExercise(1, exercisePath, true);
             const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
             expect(newSubmissions.length).to.be.equal(submissions.length + 1);
         });
-
-        teardown(function () {
-            removeArtifacts();
-        });
-    }); */
+    });
 
     suite("submitExerciseAndWaitForResults()", function () {
         test("should result in AuthorizationError if not authenticated", async function () {
