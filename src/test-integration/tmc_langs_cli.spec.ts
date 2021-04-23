@@ -28,6 +28,8 @@ const FEEDBACK_URL = "http://localhost:4001/feedback";
 // This one is mandated by TMC-langs.
 const CLIENT_CONFIG_DIR_NAME = `tmc-${CLIENT_NAME}`;
 
+const FAIL_MESSAGE = "TMC-langs execution failed: ";
+
 async function startServer(): Promise<cp.ChildProcess> {
     let ready = false;
     console.log(path.join(__dirname, "..", "backend"));
@@ -101,44 +103,74 @@ suite("TMC", function () {
         });
     });
 
-    suite("authenticate()", function () {
-        test.skip("should result in AuthenticationError with empty credentials", async function () {
-            const result = await tmcUnauthenticated.authenticate("", "");
-            expect(result.val).to.be.instanceOf(AuthenticationError);
+    suite("authentication", function () {
+        const incorrectUsername = "TestMyEkstension";
+        const username = "TestMyExtension";
+        const password = "hunter2";
+
+        let onLoggedInCalls: number;
+        let onLoggedOutCalls: number;
+
+        setup(function () {
+            onLoggedInCalls = 0;
+            onLoggedOutCalls = 0;
+            tmcUnauthenticated.on("login", () => onLoggedInCalls++);
+            tmcUnauthenticated.on("logout", () => onLoggedOutCalls++);
         });
 
-        test("should result in AuthenticationError with incorrect credentials", async function () {
-            const result = await tmcUnauthenticated.authenticate("TestMyCode", "hunter2");
-            expect(result.val).to.be.instanceOf(AuthenticationError);
+        test("should fail with empty credentials");
+
+        test("should fail with incorrect credentials", async function () {
+            const result1 = await tmcUnauthenticated.authenticate(incorrectUsername, password);
+            expect(result1.val).to.be.instanceOf(AuthenticationError);
+            expect(onLoggedInCalls).to.be.equal(0);
+
+            const result2 = await tmcUnauthenticated.isAuthenticated();
+            result2.err && expect.fail(FAIL_MESSAGE + result2.val.message);
+            expect(result2.val).to.be.equal(false);
+
+            expect(onLoggedOutCalls).to.be.equal(0);
         });
 
         test("should succeed with correct credentials", async function () {
-            const result = await tmcUnauthenticated.authenticate("TestMyExtension", "hunter2");
-            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+            const result1 = await tmcUnauthenticated.authenticate(username, password);
+            result1.err && expect.fail(FAIL_MESSAGE + result1.val.message);
+            expect(onLoggedInCalls).to.be.equal(1);
+
+            const result2 = await tmcUnauthenticated.isAuthenticated();
+            result2.err && expect.fail(FAIL_MESSAGE + result2.val.message);
+            expect(result2.val).to.be.equal(true);
+
+            expect(onLoggedOutCalls).to.be.equal(0);
         });
 
-        test("should result in AuthenticationError when already authenticated", async function () {
-            const result = await tmc.authenticate("TestMyExtension", "hunter2");
-            expect(result.val).to.be.instanceOf(AuthenticationError);
-        });
-    });
-
-    suite("isAuthenticated()", function () {
-        test("should return false when user config is missing", async function () {
-            const result = await tmcUnauthenticated.isAuthenticated();
-            expect(result.val).to.be.false;
-        });
-
-        test("should return true when user config exists", async function () {
-            const result = await tmc.isAuthenticated();
-            expect(result.val).to.be.true;
+        test("should fail when already authenticated", async function () {
+            const result2 = await tmc.authenticate(username, password);
+            expect(result2.val).to.be.instanceOf(AuthenticationError);
         });
     });
 
-    suite("deauthenticate()", function () {
-        test("should deauthenticate the user", async function () {
-            const result = await tmc.deauthenticate();
-            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+    suite("deauthentication", function () {
+        let onLoggedInCalls: number;
+        let onLoggedOutCalls: number;
+
+        setup(function () {
+            onLoggedInCalls = 0;
+            onLoggedOutCalls = 0;
+            tmc.on("login", () => onLoggedInCalls++);
+            tmc.on("logout", () => onLoggedOutCalls++);
+        });
+
+        test("should succeed", async function () {
+            const result1 = await tmc.deauthenticate();
+            result1.err && expect.fail(FAIL_MESSAGE + result1.val.message);
+            expect(onLoggedOutCalls).to.be.equal(1);
+
+            const result2 = await tmc.isAuthenticated();
+            result2.err && expect.fail(FAIL_MESSAGE + result2.val.message);
+            expect(result2.val).to.be.false;
+
+            expect(onLoggedInCalls).to.be.equal(0);
         });
     });
 
