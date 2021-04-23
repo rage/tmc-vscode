@@ -114,7 +114,7 @@ suite("TMC", function () {
 
         test("should succeed with correct credentials", async function () {
             const result = await tmcUnauthenticated.authenticate("TestMyExtension", "hunter2");
-            expect(result.ok).to.be.true;
+            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
         });
 
         test("should result in AuthenticationError when already authenticated", async function () {
@@ -138,7 +138,7 @@ suite("TMC", function () {
     suite("deauthenticate()", function () {
         test("should deauthenticate the user", async function () {
             const result = await tmc.deauthenticate();
-            expect(result.ok).to.be.true;
+            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
         });
     });
 
@@ -182,9 +182,7 @@ suite("TMC", function () {
 
         test("should download exercise", async function () {
             const result = await tmc.downloadExercises([1], () => {});
-            if (result.err) {
-                expect.fail(result.val.message + ": " + result.val.stack);
-            }
+            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
         });
     });
 
@@ -214,7 +212,7 @@ suite("TMC", function () {
 
         test("should download old submission", async function () {
             const result = await tmc.downloadOldSubmission(1, exercisePath, 0, false);
-            expect(result.ok).to.be.true;
+            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
         });
 
         test("should not save old state when the flag is off", async function () {
@@ -408,9 +406,7 @@ suite("TMC", function () {
         test.skip("should reset exercise", async function () {
             const exercisePath = setupExercise("resetExercise1");
             const result = await tmc.resetExercise(1, exercisePath, false);
-            if (result.err) {
-                expect.fail(result.val.message + ": " + result.val.stack);
-            }
+            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
         });
 
         test("should not save old state if the flag is off", async function () {
@@ -508,7 +504,7 @@ suite("TMC", function () {
 
         test("should submit feedback when authenticated", async function () {
             const result = await tmc.submitSubmissionFeedback(FEEDBACK_URL, feedback);
-            expect(result.ok).to.be.true;
+            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
         });
     });
 
