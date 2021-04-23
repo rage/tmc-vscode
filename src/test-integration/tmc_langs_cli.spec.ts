@@ -387,24 +387,25 @@ suite("TMC", function () {
     suite("resetExercise()", function () {
         this.timeout(5000);
 
-        let exercisePath: string;
-
-        setup(function () {
-            const projectsDir = setupProjectsDir("resetExercise");
-            exercisePath = path.join(projectsDir, "part01-01_passing_exercise");
+        function setupExercise(folderName: string): string {
+            const projectsDir = setupProjectsDir(folderName);
+            const exercisePath = path.join(projectsDir, "part01-01_passing_exercise");
             if (!fs.existsSync(exercisePath)) {
                 fs.ensureDirSync(exercisePath);
                 ncp(PASSING_EXERCISE_PATH, exercisePath, () => {});
             }
-        });
+            return exercisePath;
+        }
 
         // This actually passes
         test.skip("should result in AuthorizationError if not authenticated", async function () {
+            const exercisePath = setupExercise("resetExercise0");
             const result = await tmcUnauthenticated.resetExercise(1, exercisePath, false);
             expect(result.val).to.be.instanceOf(AuthorizationError);
         });
 
         test("should reset exercise", async function () {
+            const exercisePath = setupExercise("resetExercise1");
             const result = await tmc.resetExercise(1, exercisePath, false);
             if (result.err) {
                 expect.fail(result.val.message + ": " + result.val.stack);
@@ -413,6 +414,7 @@ suite("TMC", function () {
 
         test("should not save old state if the flag is off", async function () {
             // This test is based on a side effect of making a new submission.
+            const exercisePath = setupExercise("resetExercise2");
             const submissions = (await tmc.getOldSubmissions(1)).unwrap();
             await tmc.resetExercise(1, exercisePath, false);
             const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
@@ -421,6 +423,7 @@ suite("TMC", function () {
 
         test("should save old state if the flag is on", async function () {
             // This test is based on a side effect of making a new submission.
+            const exercisePath = setupExercise("resetExercise3");
             const submissions = (await tmc.getOldSubmissions(1)).unwrap();
             await tmc.resetExercise(1, exercisePath, true);
             const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
