@@ -49,7 +49,7 @@ function getPythonPath(
         } else {
             return actionContext.workspaceManager
                 .getWorkspaceSettings()
-                ?.get<string>("python.pythonPath");
+                .get<string | undefined>("python.pythonPath");
         }
     } catch (error) {
         const message = "Error while fetching python executable string";

@@ -110,7 +110,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const resources = resourcesResult.val;
-    const settings = new Settings(storage, resources);
     Logger.configure(
         vscode.workspace.getConfiguration("testMyCode").get<LogLevel>("logLevel") ??
             LogLevel.Errors,
@@ -147,6 +146,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
         await workspaceManager.verifyWorkspaceSettingsIntegrity();
     }
+
+    const settings = new Settings(storage, resources);
+    context.subscriptions.push(settings);
+    settings.onChangeHideMetaFiles = async (value: boolean): Promise<void> => {
+        await workspaceManager.updateWorkspaceSetting("testMyCode.hideMetaFiles", value);
+        await workspaceManager.excludeMetaFilesInWorkspace(value);
+    };
+    settings.onChangeDownloadOldSubmission = async (value: boolean): Promise<void> => {
+        await workspaceManager.updateWorkspaceSetting("testMyCode.downloadOldSubmission", value);
+    };
+    settings.onChangeUpdateExercisesAutomatically = async (value: boolean): Promise<void> => {
+        await workspaceManager.updateWorkspaceSetting(
+            "testMyCode.updateExercisesAutomatically",
+            value,
+        );
+    };
 
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
     const exerciseDecorationProvider = new ExerciseDecorationProvider(userData, workspaceManager);

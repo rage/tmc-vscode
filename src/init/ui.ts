@@ -18,7 +18,7 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext } from "../actions/types";
-import { formatSizeInBytes, Logger, LogLevel } from "../utils/";
+import { formatSizeInBytes, Logger } from "../utils/";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -27,15 +27,7 @@ import { formatSizeInBytes, Logger, LogLevel } from "../utils/";
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const {
-        dialog,
-        ui,
-        resources,
-        settings,
-        userData,
-        visibilityGroups,
-        workspaceManager,
-    } = actionContext;
+    const { dialog, ui, resources, settings, userData, visibilityGroups } = actionContext;
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
@@ -321,45 +313,12 @@ export function registerUiActions(actionContext: ActionContext): void {
     });
 
     ui.webview.registerHandler(
-        "changeLogLevel",
-        async (msg: { type?: "changeLogLevel"; data?: LogLevel }) => {
-            if (!(msg.type && msg.data)) {
-                return;
-            }
-            await settings.updateSetting({ setting: "logLevel", value: msg.data });
-            Logger.configure(msg.data);
-            ui.webview.postMessage({ command: "setLogLevel", level: msg.data });
-        },
-    );
-
-    ui.webview.registerHandler(
-        "hideMetaFiles",
-        async (msg: { type?: "hideMetaFiles"; data?: boolean }) => {
-            if (!(msg.type && msg.data !== undefined)) {
-                return;
-            }
-            await settings.updateSetting({ setting: "hideMetaFiles", value: msg.data });
-            await workspaceManager.excludeMetaFilesInWorkspace(msg.data);
-            ui.webview.postMessage({
-                command: "setBooleanSetting",
-                setting: "hideMetaFiles",
-                enabled: msg.data,
-            });
-        },
-    );
-
-    ui.webview.registerHandler(
         "insiderStatus",
         async (msg: { type?: "insiderStatus"; data?: boolean }) => {
             if (!(msg.type && msg.data !== undefined)) {
                 return;
             }
-            await settings.updateSetting({ setting: "insiderVersion", value: msg.data });
-            ui.webview.postMessage({
-                command: "setBooleanSetting",
-                setting: "insider",
-                enabled: msg.data,
-            });
+            await settings.configureIsInsider(!!msg.data);
         },
     );
 
@@ -376,47 +335,4 @@ export function registerUiActions(actionContext: ActionContext): void {
         }
         vscode.commands.executeCommand("workbench.action.openExtensionLogsFolder");
     });
-
-    ui.webview.registerHandler("openEditorDirection", (msg: { type?: "openEditorDirection" }) => {
-        if (!msg.type) {
-            return;
-        }
-        const search = "workbench.editor.openSideBySideDirection";
-        // openWorkspaceSettings doesn't take search params:
-        // https://github.com/microsoft/vscode/issues/90086
-        vscode.commands.executeCommand("workbench.action.openSettings", search);
-    });
-
-    ui.webview.registerHandler(
-        "downloadOldSubmissionSetting",
-        async (msg: { type?: "downloadOldSubmissionSetting"; data?: boolean }) => {
-            if (!(msg.type && msg.data !== undefined)) {
-                return;
-            }
-            await settings.updateSetting({ setting: "downloadOldSubmission", value: msg.data });
-            ui.webview.postMessage({
-                command: "setBooleanSetting",
-                setting: "downloadOldSubmission",
-                enabled: msg.data,
-            });
-        },
-    );
-
-    ui.webview.registerHandler(
-        "updateExercisesAutomaticallySetting",
-        async (msg: { type?: "updateExercisesAutomaticallySetting"; data?: boolean }) => {
-            if (!(msg.type && msg.data !== undefined)) {
-                return;
-            }
-            await settings.updateSetting({
-                setting: "updateExercisesAutomatically",
-                value: msg.data,
-            });
-            ui.webview.postMessage({
-                command: "setBooleanSetting",
-                setting: "updateExercisesAutomatically",
-                enabled: msg.data,
-            });
-        },
-    );
 }

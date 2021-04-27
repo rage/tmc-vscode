@@ -14,7 +14,7 @@ import {
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Resources, { EditorKind } from "../config/resources";
-import { Logger, LogLevel } from "../utils";
+import { Logger } from "../utils";
 
 export enum ExerciseStatus {
     Closed = "closed",
@@ -66,53 +66,6 @@ export default class WorkspaceManager implements vscode.Disposable {
                 this._onDidChangeWorkspaceFolders(e),
             ),
             vscode.workspace.onDidOpenTextDocument((e) => this._onDidOpenTextDocument(e)),
-            vscode.workspace.onDidChangeConfiguration(async (event) => {
-                /* https://github.com/microsoft/vscode/issues/58038
-                Sometimes we need to force set the value to true in .code-workspace file,
-                because for some reason true isn't set and the key/value pair is removed
-                */
-                if (event.affectsConfiguration("testMyCode.logLevel")) {
-                    Logger.configure(
-                        this.getWorkspaceSettings("testMyCode").get<LogLevel>("logLevel"),
-                    );
-                }
-                if (event.affectsConfiguration("testMyCode.hideMetaFiles", this.workspaceFileUri)) {
-                    const configuration = this.getWorkspaceSettings("testMyCode");
-                    const value = configuration.get<boolean | undefined>("hideMetaFiles");
-                    if (value) {
-                        await this._updateWorkspaceSetting("testMyCode.hideMetaFiles", value);
-                    }
-                    await this.excludeMetaFilesInWorkspace(value);
-                }
-                if (
-                    event.affectsConfiguration(
-                        "testMyCode.downloadOldSubmission",
-                        this.workspaceFileUri,
-                    )
-                ) {
-                    const value = this.getWorkspaceSettings("testMyCode").get<boolean | undefined>(
-                        "downloadOldSubmission",
-                    );
-                    await this._updateWorkspaceSetting("testMyCode.downloadOldSubmission", value);
-                }
-                if (
-                    event.affectsConfiguration(
-                        "testMyCode.updateExercisesAutomatically",
-                        this.workspaceFileUri,
-                    )
-                ) {
-                    const value = this.getWorkspaceSettings("testMyCode").get<boolean | undefined>(
-                        "updateExercisesAutomatically",
-                    );
-                    await this._updateWorkspaceSetting(
-                        "testMyCode.updateExercisesAutomatically",
-                        value,
-                    );
-                }
-                if (event.affectsConfiguration("testMyCode.tmcDataPath")) {
-                    Logger.warn("Not supported.");
-                }
-            }),
         ];
     }
 
@@ -258,12 +211,9 @@ export default class WorkspaceManager implements vscode.Disposable {
         this._disposables.forEach((x) => x.dispose());
     }
 
-    public async excludeMetaFilesInWorkspace(hide: boolean | undefined): Promise<void> {
-        if (hide === undefined) {
-            return;
-        }
+    public async excludeMetaFilesInWorkspace(hide: boolean): Promise<void> {
         const value = hide ? HIDE_META_FILES : SHOW_META_FILES;
-        await this._updateWorkspaceSetting("files.exclude", value);
+        await this.updateWorkspaceSetting("files.exclude", value);
     }
 
     /**
@@ -281,10 +231,11 @@ export default class WorkspaceManager implements vscode.Disposable {
     public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
         if (this.activeCourse) {
             Logger.log("TMC Workspace open, verifying workspace settings integrity.");
-            const hideMetaFiles = this.getWorkspaceSettings("testMyCode").get<boolean | undefined>(
+            const hideMetaFiles = this.getWorkspaceSettings("testMyCode").get<boolean>(
                 "hideMetaFiles",
+                true,
             );
-            await this.excludeMetaFilesInWorkspace(hideMetaFiles ?? false);
+            await this.excludeMetaFilesInWorkspace(hideMetaFiles);
             await this.ensureSettingsAreStoredInMultiRootWorkspace();
             await this._verifyWatcherPatternExclusion();
             await this._forceTMCWorkspaceSettings();
@@ -295,25 +246,48 @@ export default class WorkspaceManager implements vscode.Disposable {
      * Ensures that settings defined in package.json are written to the multi-root
      * workspace file. If the key can't be found in the .code-workspace file, it will write the
      * setting defined in the User scope to the file. Last resort, default value.
+     *
+     * This is to ensure that workspace defined settings really overrides the user scope...
      * https://github.com/microsoft/vscode/issues/58038
      */
     public async ensureSettingsAreStoredInMultiRootWorkspace(): Promise<void> {
         const extension = vscode.extensions.getExtension("moocfi.test-my-code");
         const extensionDefinedSettings: Record<string, ConfigurationProperties> =
             extension?.packageJSON?.contributes?.configuration?.properties;
-        Object.entries(extensionDefinedSettings).forEach(([key, value]) => {
-            // If not User scope setting, we write it to multi-root workspace.
-            if (value.scope !== "application") {
-                const codeSettings = this.getWorkspaceSettings().inspect(key);
+        for (const [key, value] of Object.entries(extensionDefinedSettings)) {
+            if (value.scope !== "application" && value.type === "boolean") {
+                const codeSettings = this.getWorkspaceSettings().inspect<boolean>(key);
                 if (codeSettings?.workspaceValue !== undefined) {
-                    this._updateWorkspaceSetting(key, codeSettings.workspaceValue);
+                    await this.updateWorkspaceSetting(key, codeSettings.workspaceValue);
                 } else if (codeSettings?.globalValue !== undefined) {
-                    this._updateWorkspaceSetting(key, codeSettings.globalValue);
+                    await this.updateWorkspaceSetting(key, codeSettings.globalValue);
                 } else {
-                    this._updateWorkspaceSetting(key, codeSettings?.defaultValue);
+                    await this.updateWorkspaceSetting(key, codeSettings?.defaultValue);
                 }
             }
-        });
+        }
+    }
+
+    /**
+     * Updates a section for the TMC Workspace.code-workspace file, if the workspace is open.
+     * @param section Configuration name, supports dotted names.
+     * @param value The new value
+     */
+    public async updateWorkspaceSetting(section: string, value: unknown): Promise<void> {
+        const activeCourse = this.activeCourse;
+        if (activeCourse) {
+            let newValue = value;
+            if (value instanceof Object) {
+                const oldValue = this.getWorkspaceSettings(section);
+                newValue = { ...oldValue, ...value };
+            }
+            await vscode.workspace
+                .getConfiguration(
+                    undefined,
+                    vscode.Uri.file(this._resources.getWorkspaceFilePath(activeCourse)),
+                )
+                .update(section, newValue, vscode.ConfigurationTarget.Workspace);
+        }
     }
 
     /**
@@ -339,9 +313,9 @@ export default class WorkspaceManager implements vscode.Disposable {
      * Force some settings for TMC multi-root workspaces that we want.
      */
     private async _forceTMCWorkspaceSettings(): Promise<void> {
-        await this._updateWorkspaceSetting("explorer.decorations.colors", false);
-        await this._updateWorkspaceSetting("explorer.decorations.badges", true);
-        await this._updateWorkspaceSetting("problems.decorations.enabled", false);
+        await this.updateWorkspaceSetting("explorer.decorations.colors", false);
+        await this.updateWorkspaceSetting("explorer.decorations.badges", true);
+        await this.updateWorkspaceSetting("problems.decorations.enabled", false);
     }
 
     /**
@@ -474,33 +448,11 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     /**
-     * Updates a section for the TMC Workspace.code-workspace file, if the workspace is open.
-     * @param section Configuration name, supports dotted names.
-     * @param value The new value
-     */
-    private async _updateWorkspaceSetting(section: string, value: unknown): Promise<void> {
-        const activeCourse = this.activeCourse;
-        if (activeCourse) {
-            let newValue = value;
-            if (value instanceof Object) {
-                const oldValue = this.getWorkspaceSettings(section);
-                newValue = { ...oldValue, ...value };
-            }
-            await vscode.workspace
-                .getConfiguration(
-                    undefined,
-                    vscode.Uri.file(this._resources.getWorkspaceFilePath(activeCourse)),
-                )
-                .update(section, newValue, vscode.ConfigurationTarget.Workspace);
-        }
-    }
-
-    /**
      * Makes sure that folders and its contents aren't deleted by our watcher.
      * .vscode folder needs to be unwatched, otherwise adding settings to WorkspaceFolder level
      * doesn't work. For example defining Python interpreter for the Exercise folder.
      */
     private async _verifyWatcherPatternExclusion(): Promise<void> {
-        await this._updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
+        await this.updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
     }
 }
