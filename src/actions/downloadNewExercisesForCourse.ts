@@ -2,7 +2,7 @@ import { Ok, Result } from "ts-results";
 
 import { Logger } from "../utils";
 
-import { downloadOrUpdateExercises } from "./downloadOrUpdateCourseExercises";
+import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises";
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
 

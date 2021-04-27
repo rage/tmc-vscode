@@ -57,9 +57,9 @@ export interface ErrorResponse {
 }
 
 export interface FailedExerciseDownload {
-    completed: DownloadOrUpdateCourseExercise[];
-    skipped: DownloadOrUpdateCourseExercise[];
-    failed: Array<[DownloadOrUpdateCourseExercise, string[]]>;
+    completed: ExerciseDownload[];
+    skipped: ExerciseDownload[];
+    failed: Array<[ExerciseDownload, string[]]>;
 }
 
 export type ErrorResponseKind =
@@ -78,11 +78,13 @@ export interface CombinedCourseData {
 }
 
 export interface DownloadOrUpdateCourseExercisesResult {
-    downloaded: DownloadOrUpdateCourseExercise[];
-    skipped: DownloadOrUpdateCourseExercise[];
+    downloaded: ExerciseDownload[];
+    skipped: ExerciseDownload[];
+    failed: Array<[ExerciseDownload, string]> | null;
 }
 
-export interface DownloadOrUpdateCourseExercise {
+export interface ExerciseDownload {
+    id: number;
     "course-slug": string;
     "exercise-slug": string;
     path: string;
