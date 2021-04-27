@@ -9,6 +9,7 @@ import ExerciseDecorationProvider from "./api/exerciseDecorationProvider";
 import Storage from "./api/storage";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
+import * as commands from "./commands";
 import {
     CLIENT_NAME,
     DEBUG_MODE,
@@ -111,8 +112,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const resources = resourcesResult.val;
     Logger.configure(
-        vscode.workspace.getConfiguration("testMyCode").get<LogLevel>("logLevel") ??
-            LogLevel.Errors,
+        vscode.workspace.getConfiguration("testMyCode").get<LogLevel>("logLevel", LogLevel.Errors),
     );
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
@@ -141,7 +141,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const userData = new UserData(storage);
     const workspaceManager = new WorkspaceManager(resources);
     context.subscriptions.push(workspaceManager);
-    workspaceManager.setTmcDataPath(tmcDataPath);
     if (workspaceManager.activeCourse) {
         await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
         await workspaceManager.verifyWorkspaceSettingsIntegrity();
@@ -185,6 +184,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
+
+    await settings.setTmcDataPathPlaceholder(tmcDataPath);
+    settings.onChangeTmcDataPath = async (): Promise<void> => {
+        await commands.changeTmcDataPath(actionContext);
+    };
 
     context.subscriptions.push(
         vscode.window.registerFileDecorationProvider(exerciseDecorationProvider),

@@ -104,10 +104,6 @@ export default class WorkspaceManager implements vscode.Disposable {
         return workspaceFile;
     }
 
-    public async setTmcDataPath(path: string): Promise<void> {
-        await vscode.workspace.getConfiguration("testMyCode").update("dataPath", path, true);
-    }
-
     public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
         this._exercises = exercises;
         return this._refreshActiveCourseWorkspace();

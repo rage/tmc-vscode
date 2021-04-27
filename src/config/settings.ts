@@ -37,6 +37,7 @@ export default class Settings implements vscode.Disposable {
     private _onChangeHideMetaFiles?: (value: boolean) => void;
     private _onChangeDownloadOldSubmission?: (value: boolean) => void;
     private _onChangeUpdateExercisesAutomatically?: (value: boolean) => void;
+    private _onChangeTmcDataPath?: () => void;
 
     /**
      * @deprecated Storage dependency should be removed when major 3.0 release.
@@ -71,8 +72,11 @@ export default class Settings implements vscode.Disposable {
                         .get<boolean>("insiderVersion", false);
                     this._settings.insiderVersion = value;
                 }
-                if (event.affectsConfiguration("testMyCode.tmcDataPath")) {
-                    Logger.warn("Not supported.");
+                if (event.affectsConfiguration("testMyCode.dataPath.changeTmcDataPath")) {
+                    this._onChangeTmcDataPath?.();
+                    await vscode.workspace
+                        .getConfiguration()
+                        .update("testMyCode.dataPath.changeTmcDataPath", false, true);
                 }
 
                 // Workspace settings
@@ -96,12 +100,16 @@ export default class Settings implements vscode.Disposable {
         ];
     }
 
+    public set onChangeDownloadOldSubmission(callback: (value: boolean) => void) {
+        this._onChangeDownloadOldSubmission = callback;
+    }
+
     public set onChangeHideMetaFiles(callback: (value: boolean) => void) {
         this._onChangeHideMetaFiles = callback;
     }
 
-    public set onChangeDownloadOldSubmission(callback: (value: boolean) => void) {
-        this._onChangeDownloadOldSubmission = callback;
+    public set onChangeTmcDataPath(callback: () => void) {
+        this._onChangeTmcDataPath = callback;
     }
 
     public set onChangeUpdateExercisesAutomatically(callback: (value: boolean) => void) {
@@ -110,6 +118,12 @@ export default class Settings implements vscode.Disposable {
 
     public dispose(): void {
         this._disposables.forEach((x) => x.dispose());
+    }
+
+    public async setTmcDataPathPlaceholder(path: string): Promise<void> {
+        await vscode.workspace
+            .getConfiguration("testMyCode.dataPath")
+            .update("currentLocation", path, true);
     }
 
     public async updateExtensionSettingsToStorage(settings: ExtensionSettings): Promise<void> {

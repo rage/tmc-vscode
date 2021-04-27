@@ -77,6 +77,11 @@
                 "category": "TestMyCode"
             },
             {
+                "command": "tmc.changeTmcDataPath",
+                "title": "Change TMC data path",
+                "category": "TestMyCode"
+            },
+            {
                 "command": "tmc.cleanExercise",
                 "title": "Clean Exercise",
                 "category": "TestMyCode"
@@ -183,6 +188,18 @@
         "configuration": {
             "title": "TestMyCode",
             "properties": {
+                "testMyCode.dataPath.changeTmcDataPath": {
+                    "type": "boolean",
+                    "scope": "application",
+                    "default": false,
+                    "description": "Toggle this checkmark to select a new location."
+                },
+                "testMyCode.dataPath.currentLocation": {
+                    "type": "string",
+                    "scope": "application",
+                    "default": "/",
+                    "description": "Folder where your exercises are stored on your disk. \nPlaceholder for the value, change location by toggling checkbox above."
+                },
                 "testMyCode.downloadOldSubmission": {
                     "type": "boolean",
                     "default": true,
@@ -218,12 +235,6 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Download exercise updates automatically."
-                },
-                "testMyCode.dataPath": {
-                    "type": "string",
-                    "scope": "application",
-                    "default": "/",
-                    "description": "Folder where your exercises are stored. \nThis is just a placeholder, this can be changed on My Course page."
                 }
             }
         },
@@ -494,7 +505,6 @@
     },
     "dependencies": {
         "del": "^6.0.0",
-        "du": "^1.0.0",
         "fs-extra": "^9.1.0",
         "handlebars": "^4.7.7",
         "lodash": "^4.17.21",

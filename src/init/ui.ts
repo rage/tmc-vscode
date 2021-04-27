@@ -1,4 +1,3 @@
-import du = require("du");
 import { Result } from "ts-results";
 import * as vscode from "vscode";
 
@@ -9,7 +8,6 @@ import {
     displayUserCourses,
     downloadOrUpdateExercises,
     login,
-    moveExtensionDataPath,
     openExercises,
     openWorkspace,
     refreshLocalExercises,
@@ -18,7 +16,7 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext } from "../actions/types";
-import { formatSizeInBytes, Logger } from "../utils/";
+import { Logger } from "../utils/";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -27,7 +25,7 @@ import { formatSizeInBytes, Logger } from "../utils/";
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { dialog, ui, resources, settings, userData, visibilityGroups } = actionContext;
+    const { dialog, ui, settings, userData, visibilityGroups } = actionContext;
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
@@ -273,44 +271,6 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
         },
     );
-    ui.webview.registerHandler("changeTmcDataPath", async (msg: { type?: "changeTmcDataPath" }) => {
-        if (!msg.type) {
-            return;
-        }
-
-        const old = resources.projectsDirectory;
-        const options: vscode.OpenDialogOptions = {
-            canSelectFiles: false,
-            canSelectFolders: true,
-            canSelectMany: false,
-            openLabel: "Select folder",
-        };
-        const newPath = (await vscode.window.showOpenDialog(options))?.[0];
-        if (newPath && old) {
-            const res = await dialog.progressNotification(
-                "Moving projects directory...",
-                (progress) => {
-                    return moveExtensionDataPath(actionContext, newPath, (update) =>
-                        progress.report(update),
-                    );
-                },
-            );
-            if (res.ok) {
-                Logger.log(`Moved workspace folder from ${old} to ${newPath.fsPath}`);
-                dialog.notification(`TMC Data was successfully moved to ${newPath.fsPath}`, [
-                    "OK",
-                    (): void => {},
-                ]);
-            } else {
-                dialog.errorNotification(res.val.message, res.val);
-            }
-            ui.webview.postMessage({
-                command: "setTmcDataFolder",
-                diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
-                path: resources.projectsDirectory,
-            });
-        }
-    });
 
     ui.webview.registerHandler(
         "insiderStatus",
