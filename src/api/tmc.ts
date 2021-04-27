@@ -927,8 +927,6 @@ export default class TMC {
         if (langsResponse.data?.["output-data-kind"] !== "error" && validator(langsResponse)) {
             return Ok(langsResponse);
         }
-        Logger.log("asd " + langsResponse.data?.["output-data-kind"] !== "error");
-        Logger.log("sdf " + validator(langsResponse));
 
         const data = langsResponse.data?.["output-data"];
         if (!is<ErrorResponse>(data)) {

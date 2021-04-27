@@ -80,7 +80,7 @@ export interface CombinedCourseData {
 export interface DownloadOrUpdateCourseExercisesResult {
     downloaded: ExerciseDownload[];
     skipped: ExerciseDownload[];
-    failed: Array<[ExerciseDownload, string]> | null;
+    failed?: Array<[ExerciseDownload, string]>;
 }
 
 export interface ExerciseDownload {

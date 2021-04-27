@@ -53,7 +53,7 @@ suite("downloadOrUpdateExercises action", function () {
     const createDownloadResult = (
         downloaded: ExerciseDownload[],
         skipped: ExerciseDownload[],
-        failed: Array<[ExerciseDownload, string]> | null,
+        failed: Array<[ExerciseDownload, string]> | undefined,
     ): Result<DownloadOrUpdateCourseExercisesResult, Error> => {
         return Ok({
             downloaded,
@@ -84,19 +84,31 @@ suite("downloadOrUpdateExercises action", function () {
     });
 
     test("should return ids of successful downloads", async function () {
-        tmcMockValues.downloadExercises = createDownloadResult([helloWorld, otherWorld], [], null);
+        tmcMockValues.downloadExercises = createDownloadResult(
+            [helloWorld, otherWorld],
+            [],
+            undefined,
+        );
         const result = (await downloadOrUpdateExercises(actionContext(), [1, 2])).unwrap();
         expect(result.successful).to.be.deep.equal([1, 2]);
     });
 
     test("should return ids of skipped downloads as successful", async function () {
-        tmcMockValues.downloadExercises = createDownloadResult([], [helloWorld, otherWorld], null);
+        tmcMockValues.downloadExercises = createDownloadResult(
+            [],
+            [helloWorld, otherWorld],
+            undefined,
+        );
         const result = (await downloadOrUpdateExercises(actionContext(), [1, 2])).unwrap();
         expect(result.successful).to.be.deep.equal([1, 2]);
     });
 
     test("should combine successful and skipped downloads", async function () {
-        tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [otherWorld], null);
+        tmcMockValues.downloadExercises = createDownloadResult(
+            [helloWorld],
+            [otherWorld],
+            undefined,
+        );
         const result = (await downloadOrUpdateExercises(actionContext(), [1])).unwrap();
         expect(result.successful).to.be.deep.equal([1, 2]);
     });
@@ -121,7 +133,7 @@ suite("downloadOrUpdateExercises action", function () {
             .returns(async (_, cb) => {
                 // Callback is only used for successful downloads
                 cb({ id: helloWorld.id, percent: 0.5 });
-                return createDownloadResult([helloWorld], [], null);
+                return createDownloadResult([helloWorld], [], undefined);
             });
         await downloadOrUpdateExercises(actionContext(), [1]);
         expect(webviewMessages.length).to.be.greaterThanOrEqual(
@@ -139,7 +151,7 @@ suite("downloadOrUpdateExercises action", function () {
     });
 
     test("should post status updates for skipped download", async function () {
-        tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [], null);
+        tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [], undefined);
         await downloadOrUpdateExercises(actionContext(), [1]);
         expect(webviewMessages.length).to.be.greaterThanOrEqual(
             2,
@@ -173,7 +185,7 @@ suite("downloadOrUpdateExercises action", function () {
     });
 
     test("should post status updates for exercises missing from langs response", async function () {
-        tmcMockValues.downloadExercises = createDownloadResult([], [], null);
+        tmcMockValues.downloadExercises = createDownloadResult([], [], undefined);
         await downloadOrUpdateExercises(actionContext(), [1]);
         expect(webviewMessages.length).to.be.greaterThanOrEqual(
             2,

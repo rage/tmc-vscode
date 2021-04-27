@@ -161,7 +161,7 @@ suite("TMC", function () {
             tmc.on("logout", () => onLoggedOutCalls++);
         });
 
-        test("should succeed", async function () {
+        test("should deathenticate the user", async function () {
             const result1 = await tmc.deauthenticate();
             result1.err && expect.fail(FAIL_MESSAGE + result1.val.message);
             expect(onLoggedOutCalls).to.be.equal(1);
