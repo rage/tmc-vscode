@@ -41,8 +41,14 @@ suite("tmc langs cli spec", function () {
     let testDir: string;
 
     setup(function () {
-        const testDirName = this.currentTest?.fullTitle().replace(/\s/g, "_");
+        let testDirName = this.currentTest?.fullTitle().replace(/\s/g, "_");
         if (!testDirName) throw new Error("Illegal function call.");
+        if (testDirName?.length > 72) {
+            testDirName =
+                testDirName.substring(0, 40) +
+                ".." +
+                testDirName.substring(testDirName.length - 30);
+        }
         testDir = path.join(ARTIFACT_FOLDER, testDirName);
     });
 
