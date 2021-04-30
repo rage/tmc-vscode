@@ -470,6 +470,7 @@ export default class TMC {
             {
                 args: [
                     "download-or-update-course-exercises",
+                    "--download-template",
                     "--exercise-id",
                     ...ids.map((id) => id.toString()),
                 ],
@@ -760,7 +761,7 @@ export default class TMC {
         }
         const res = await this._executeLangsCommand(
             { args, core: true },
-            createIs<OutputData<unknown>>(),
+            createIs<UncheckedOutputData>(),
         );
         return res.err ? res : Ok.EMPTY;
     }
@@ -930,7 +931,8 @@ export default class TMC {
 
         const data = langsResponse.data?.["output-data"];
         if (!is<ErrorResponse>(data)) {
-            return Err(new Error("Unexpected TMC-langs response:" + langsResponse.data));
+            Logger.debug(`Unexpected TMC-langs response. ${langsResponse.data}`);
+            return Err(new Error("Unexpected TMC-langs response."));
         }
 
         const message = langsResponse.message;

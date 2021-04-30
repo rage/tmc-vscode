@@ -2,7 +2,6 @@ import { expect } from "chai";
 import * as cp from "child_process";
 import { sync as delSync } from "del";
 import * as fs from "fs-extra";
-import { ncp } from "ncp";
 import * as path from "path";
 import * as kill from "tree-kill";
 
@@ -14,21 +13,451 @@ import { getLangsCLIForPlatform, getPlatform } from "../utils/";
 
 // __dirname is the dist folder when executed.
 const PROJECT_ROOT = path.join(__dirname, "..");
-const ARTIFACT_FOLDER = path.join(PROJECT_ROOT, "test-artifacts", "tmc_langs_cli_spec");
+const ARTIFACT_FOLDER = path.join(PROJECT_ROOT, "test-artifacts");
 
 // Use CLI from backend folder to run tests.
 const BACKEND_FOLDER = path.join(PROJECT_ROOT, "backend");
 const CLI_PATH = path.join(BACKEND_FOLDER, "cli");
 const CLI_FILE = path.join(CLI_PATH, getLangsCLIForPlatform(getPlatform(), TMC_LANGS_VERSION));
-const COURSE_PATH = path.join(BACKEND_FOLDER, "resources", "test-python-course");
-const PASSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-01_passing_exercise");
-const MISSING_EXERCISE_PATH = path.join(COURSE_PATH, "part01-404_missing_exercise");
 const FEEDBACK_URL = "http://localhost:4001/feedback";
+
+// Example backend credentials
+const USERNAME = "TestMyExtension";
+const PASSWORD = "hunter2";
 
 // This one is mandated by TMC-langs.
 const CLIENT_CONFIG_DIR_NAME = `tmc-${CLIENT_NAME}`;
 
 const FAIL_MESSAGE = "TMC-langs execution failed: ";
+
+suite("tmc langs cli spec", function () {
+    let server: cp.ChildProcess | undefined;
+
+    suiteSetup(async function () {
+        this.timeout(30000);
+        server = await startServer();
+    });
+
+    let testDir: string;
+
+    setup(function () {
+        const testDirName = this.currentTest?.fullTitle().replace(/\s/g, "_");
+        if (!testDirName) throw new Error("Illegal function call.");
+        testDir = path.join(ARTIFACT_FOLDER, testDirName);
+    });
+
+    suite("authenticated user", function () {
+        let onLoggedInCalls: number;
+        let onLoggedOutCalls: number;
+        let projectsDir: string;
+        let tmc: TMC;
+
+        setup(function () {
+            const configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME);
+            writeCredentials(configDir);
+            onLoggedInCalls = 0;
+            onLoggedOutCalls = 0;
+            projectsDir = setupProjectsDir(configDir, path.join(testDir, "tmcdata"));
+            tmc = new TMC(CLI_FILE, CLIENT_NAME, "test", {
+                cliConfigDir: testDir,
+            });
+            tmc.on("login", () => onLoggedInCalls++);
+            tmc.on("logout", () => onLoggedOutCalls++);
+        });
+
+        test("should not be able to re-authenticate", async function () {
+            const result = await tmc.authenticate(USERNAME, PASSWORD);
+            expect(result.val).to.be.instanceOf(AuthenticationError);
+        });
+
+        test("should be able to deauthenticate", async function () {
+            const result1 = await tmc.deauthenticate();
+            result1.err && expect.fail(FAIL_MESSAGE + result1.val.message);
+            expect(onLoggedOutCalls).to.be.equal(1);
+
+            const result2 = await tmc.isAuthenticated();
+            result2.err && expect.fail(FAIL_MESSAGE + result2.val.message);
+            expect(result2.val).to.be.false;
+
+            expect(onLoggedInCalls).to.be.equal(0);
+        });
+
+        test("should be able to download an existing exercise", async function () {
+            const result = await tmc.downloadExercises([1], () => {});
+            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+        }).timeout(10000);
+
+        // Missing ids are skipped for some reason
+        test.skip("should not be able to download a non-existent exercise", async function () {
+            const downloads = (await tmc.downloadExercises([404], () => {})).unwrap();
+            expect(downloads.failed?.length).to.be.equal(1);
+        });
+
+        test("should get existing api data", async function () {
+            const data = (await tmc.getCourseData(0)).unwrap();
+            expect(data.details.name).to.be.equal("python-course");
+            expect(data.exercises.length).to.be.equal(2);
+            expect(data.settings.name).to.be.equal("python-course");
+
+            const details = (await tmc.getCourseDetails(0)).unwrap().course;
+            expect(details.id).to.be.equal(0);
+            expect(details.name).to.be.equal("python-course");
+
+            const exercises = (await tmc.getCourseExercises(0)).unwrap();
+            expect(exercises.length).to.be.equal(2);
+
+            const settings = (await tmc.getCourseSettings(0)).unwrap();
+            expect(settings.name).to.be.equal("python-course");
+
+            const courses = (await tmc.getCourses("test")).unwrap();
+            expect(courses.length).to.be.equal(1);
+            expect(courses.some((x) => x.name === "python-course")).to.be.true;
+
+            const exercise = (await tmc.getExerciseDetails(1)).unwrap();
+            expect(exercise.exercise_name).to.be.equal("part01-01_passing_exercise");
+
+            const submissions = (await tmc.getOldSubmissions(1)).unwrap();
+            expect(submissions.length).to.be.greaterThan(0);
+
+            const organization = (await tmc.getOrganization("test")).unwrap();
+            expect(organization.slug).to.be.equal("test");
+            expect(organization.name).to.be.equal("Test Organization");
+
+            const organizations = (await tmc.getOrganizations()).unwrap();
+            expect(organizations.length).to.be.equal(1, "Expected to get one organization.");
+        });
+
+        test("should encounter errors when trying to get non-existing api data", async function () {
+            const dataResult = await tmc.getCourseData(404);
+            expect(dataResult.val).to.be.instanceOf(RuntimeError);
+
+            const detailsResult = await tmc.getCourseDetails(404);
+            expect(detailsResult.val).to.be.instanceOf(RuntimeError);
+
+            const exercisesResult = await tmc.getCourseExercises(404);
+            expect(exercisesResult.val).to.be.instanceOf(RuntimeError);
+
+            const settingsResult = await tmc.getCourseSettings(404);
+            expect(settingsResult.val).to.be.instanceOf(RuntimeError);
+
+            const coursesResult = await tmc.getCourses("404");
+            expect(coursesResult.val).to.be.instanceOf(RuntimeError);
+
+            const exerciseResult = await tmc.getExerciseDetails(404);
+            expect(exerciseResult.val).to.be.instanceOf(RuntimeError);
+
+            const submissionsResult = await tmc.getOldSubmissions(404);
+            expect(submissionsResult.val).to.be.instanceOf(RuntimeError);
+
+            const result = await tmc.getOrganization("404");
+            expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+
+        test("should be able to give feedback", async function () {
+            const feedback: SubmissionFeedback = {
+                status: [{ question_id: 0, answer: "42" }],
+            };
+            const result = await tmc.submitSubmissionFeedback(FEEDBACK_URL, feedback);
+            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+        });
+
+        suite("with a local exercise", function () {
+            this.timeout(20000);
+
+            let exercisePath: string;
+
+            setup(async function () {
+                delSync(projectsDir, { force: true });
+                const result = await tmc.downloadExercises([1], () => {});
+                exercisePath = result.unwrap().downloaded[0].path;
+            });
+
+            test("should be able to clean the exercise", async function () {
+                const result = (await tmc.clean(exercisePath)).unwrap();
+                expect(result).to.be.undefined;
+            });
+
+            test("should be able to run tests for exercise", async function () {
+                const result = (await tmc.runTests(exercisePath)[0]).unwrap();
+                expect(result.status).to.be.equal("PASSED");
+            });
+
+            test("should be able to save the exercise state and revert it to an old submission", async function () {
+                const submissions = (await tmc.getOldSubmissions(1)).unwrap();
+                const result = await tmc.downloadOldSubmission(1, exercisePath, 0, true);
+                result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+
+                // State saving check is based on a side effect of making a new submission.
+                const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
+                expect(newSubmissions.length).to.be.equal(submissions.length + 1);
+            });
+
+            test("should be able to download an old submission without saving the current state", async function () {
+                const submissions = (await tmc.getOldSubmissions(1)).unwrap();
+                const result = await tmc.downloadOldSubmission(1, exercisePath, 0, false);
+                result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+
+                // State saving check :monis based on a side effect of making a new submission.
+                const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
+                expect(newSubmissions.length).to.be.equal(submissions.length);
+            });
+
+            test("should be able to save the exercise state and reset it to original template", async function () {
+                const submissions = (await tmc.getOldSubmissions(1)).unwrap();
+                const result = await tmc.resetExercise(1, exercisePath, true);
+                result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+
+                // State saving check is based on a side effect of making a new submission.
+                const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
+                expect(newSubmissions.length).to.be.equal(submissions.length + 1);
+            });
+
+            test("should be able to reset exercise without saving the current state", async function () {
+                const submissions = (await tmc.getOldSubmissions(1)).unwrap();
+                const result = await tmc.resetExercise(1, exercisePath, false);
+                result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+
+                // State saving check is based on a side effect of making a new submission.
+                const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
+                expect(newSubmissions.length).to.be.equal(submissions.length);
+            });
+
+            test("should be able to submit the exercise for evaluation", async function () {
+                let url: string | undefined;
+                const results = (
+                    await tmc.submitExerciseAndWaitForResults(
+                        1,
+                        exercisePath,
+                        undefined,
+                        (x) => (url = x),
+                    )
+                ).unwrap();
+                expect(results.status).to.be.equal("ok");
+                !url && expect.fail("expected to receive submission url during submission.");
+            });
+
+            test("should encounter an error if trying to submit the exercise twice too soon", async function () {
+                const first = tmc.submitExerciseAndWaitForResults(1, exercisePath);
+                const second = tmc.submitExerciseAndWaitForResults(1, exercisePath);
+                const [, secondResult] = await Promise.all([first, second]);
+                expect(secondResult.val).to.be.instanceOf(BottleneckError);
+            });
+
+            test("should be able to submit the exercise to TMC-paste", async function () {
+                const pasteUrl = (await tmc.submitExerciseToPaste(1, exercisePath)).unwrap();
+                expect(pasteUrl).to.include("localhost");
+            });
+
+            test("should encounter an error if trying to submit to paste twice too soon", async function () {
+                const first = tmc.submitExerciseToPaste(1, exercisePath);
+                const second = tmc.submitExerciseToPaste(1, exercisePath);
+                const [, secondResult] = await Promise.all([first, second]);
+                expect(secondResult.val).to.be.instanceOf(BottleneckError);
+            });
+        });
+
+        suite("with a missing local exercise", function () {
+            let missingExercisePath: string;
+
+            setup(async function () {
+                missingExercisePath = path.join(projectsDir, "missing-course", "missing-exercise");
+            });
+
+            test("should encounter an error when attempting to clean it", async function () {
+                const result = await tmc.clean(missingExercisePath);
+                expect(result.val).to.be.instanceOf(RuntimeError);
+            });
+
+            test("should encounter an error when attempting to run tests for it", async function () {
+                const result = await tmc.runTests(missingExercisePath)[0];
+                expect(result.val).to.be.instanceOf(RuntimeError);
+            });
+
+            test("should encounter an error when attempting to revert to an older submission", async function () {
+                const result = await tmc.downloadOldSubmission(1, missingExercisePath, 0, false);
+                expect(result.val).to.be.instanceOf(RuntimeError);
+            });
+
+            test("should encounter an error when trying to reset it", async function () {
+                const result = await tmc.resetExercise(1, missingExercisePath, false);
+                expect(result.val).to.be.instanceOf(RuntimeError);
+            });
+
+            test("should encounter an error when trying to submit it", async function () {
+                const result = await tmc.submitExerciseAndWaitForResults(1, missingExercisePath);
+                expect(result.val).to.be.instanceOf(RuntimeError);
+            });
+
+            test("should encounter an error when trying to submit it to TMC-paste", async function () {
+                const result = await tmc.submitExerciseToPaste(404, missingExercisePath);
+                expect(result.val).to.be.instanceOf(RuntimeError);
+            });
+        });
+    });
+
+    suite("unauthenticated user", function () {
+        let onLoggedInCalls: number;
+        let onLoggedOutCalls: number;
+        let configDir: string;
+        let projectsDir: string;
+        let tmc: TMC;
+
+        setup(function () {
+            configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME);
+            clearCredentials(configDir);
+            onLoggedInCalls = 0;
+            onLoggedOutCalls = 0;
+            projectsDir = setupProjectsDir(configDir, path.join(testDir, "tmcdata"));
+            tmc = new TMC(CLI_FILE, CLIENT_NAME, "test", {
+                cliConfigDir: testDir,
+            });
+            tmc.on("login", () => onLoggedInCalls++);
+            tmc.on("logout", () => onLoggedOutCalls++);
+        });
+
+        // TODO: There was something fishy with this test
+        test("should not be able to authenticate with empty credentials");
+
+        test("should not be able to authenticate with incorrect credentials", async function () {
+            const result = await tmc.authenticate(USERNAME, "batman123");
+            expect(result.val).to.be.instanceOf(AuthenticationError);
+        });
+
+        test("should be able to authenticate with correct credentials", async function () {
+            const result1 = await tmc.authenticate(USERNAME, PASSWORD);
+            result1.err && expect.fail(FAIL_MESSAGE + result1.val.message);
+            expect(onLoggedInCalls).to.be.equal(1);
+
+            const result2 = await tmc.isAuthenticated();
+            result2.err && expect.fail(FAIL_MESSAGE + result2.val.message);
+            expect(result2.val).to.be.true;
+
+            expect(onLoggedOutCalls).to.be.equal(0);
+        });
+
+        test("should not be able to download an exercise", async function () {
+            const result = await tmc.downloadExercises([1], () => {});
+            expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+
+        test("should not get existing api data in general", async function () {
+            const dataResult = await tmc.getCourseData(0);
+            expect(dataResult.val).to.be.instanceOf(RuntimeError);
+
+            const detailsResult = await tmc.getCourseDetails(0);
+            expect(detailsResult.val).to.be.instanceOf(AuthorizationError);
+
+            const exercisesResult = await tmc.getCourseExercises(0);
+            expect(exercisesResult.val).to.be.instanceOf(AuthorizationError);
+
+            const settingsResult = await tmc.getCourseSettings(0);
+            expect(settingsResult.val).to.be.instanceOf(AuthorizationError);
+
+            const coursesResult = await tmc.getCourses("test");
+            expect(coursesResult.val).to.be.instanceOf(AuthorizationError);
+
+            const exerciseResult = await tmc.getExerciseDetails(1);
+            expect(exerciseResult.val).to.be.instanceOf(AuthorizationError);
+
+            const submissionsResult = await tmc.getOldSubmissions(1);
+            expect(submissionsResult.val).to.be.instanceOf(AuthorizationError);
+        });
+
+        test("should be able to get valid organization data", async function () {
+            const organization = (await tmc.getOrganization("test")).unwrap();
+            expect(organization.slug).to.be.equal("test");
+            expect(organization.name).to.be.equal("Test Organization");
+
+            const organizations = (await tmc.getOrganizations()).unwrap();
+            expect(organizations.length).to.be.equal(1, "Expected to get one organization.");
+        });
+
+        test("should encounter error if trying to get non-existing organization data", async function () {
+            const result = await tmc.getOrganization("404");
+            expect(result.val).to.be.instanceOf(RuntimeError);
+        });
+
+        // This seems to ok?
+        test.skip("should not be able to give feedback", async function () {
+            const feedback: SubmissionFeedback = {
+                status: [{ question_id: 0, answer: "42" }],
+            };
+            const result = await tmc.submitSubmissionFeedback(FEEDBACK_URL, feedback);
+            expect(result.val).to.be.instanceOf(AuthorizationError);
+        });
+
+        suite("with a local exercise", function () {
+            this.timeout(20000);
+
+            let exercisePath: string;
+
+            setup(async function () {
+                delSync(projectsDir, { force: true });
+                writeCredentials(configDir);
+                const result = await tmc.downloadExercises([1], () => {});
+                clearCredentials(configDir);
+                exercisePath = result.unwrap().downloaded[0].path;
+            });
+
+            test("should be able to clean the exercise", async function () {
+                const result = (await tmc.clean(exercisePath)).unwrap();
+                expect(result).to.be.undefined;
+            });
+
+            test("should be able to run tests for exercise", async function () {
+                const result = (await tmc.runTests(exercisePath)[0]).unwrap();
+                expect(result.status).to.be.equal("PASSED");
+            });
+
+            test("should not be able to load old submission", async function () {
+                const result = await tmc.downloadOldSubmission(1, exercisePath, 0, true);
+                expect(result.val).to.be.instanceOf(RuntimeError);
+            });
+
+            test("should not be able to reset exercise", async function () {
+                const result = await tmc.resetExercise(1, exercisePath, true);
+                expect(result.val).to.be.instanceOf(AuthorizationError);
+            });
+
+            test("should not be able to submit exercise", async function () {
+                const result = await tmc.submitExerciseAndWaitForResults(1, exercisePath);
+                expect(result.val).to.be.instanceOf(AuthorizationError);
+            });
+
+            // This actually works
+            test.skip("should not be able to submit exercise to TMC-paste", async function () {
+                const result = await tmc.submitExerciseToPaste(1, exercisePath);
+                expect(result.val).to.be.instanceOf(AuthorizationError);
+            });
+        });
+    });
+
+    suiteTeardown(function () {
+        server && kill(server.pid);
+    });
+});
+
+function writeCredentials(configDir: string): void {
+    if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
+    }
+    fs.writeFileSync(
+        path.join(configDir, "credentials.json"),
+        '{"access_token":"1234","token_type":"bearer","scope":"public"}',
+    );
+}
+
+function clearCredentials(configDir: string): void {
+    delSync(configDir, { force: true });
+}
+
+function setupProjectsDir(configDir: string, projectsDir: string): string {
+    if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(configDir, "config.toml"), `projects-dir = '${projectsDir}'\n`);
+    return projectsDir;
+}
 
 async function startServer(): Promise<cp.ChildProcess> {
     let ready = false;
@@ -54,493 +483,3 @@ async function startServer(): Promise<cp.ChildProcess> {
     clearTimeout(timeout);
     return server;
 }
-
-function setupProjectsDir(dirName: string): string {
-    const authenticatedConfigDir = path.join(ARTIFACT_FOLDER, CLIENT_CONFIG_DIR_NAME);
-    if (!fs.existsSync(authenticatedConfigDir)) {
-        fs.mkdirSync(authenticatedConfigDir, { recursive: true });
-    }
-    const projectsDir = path.join(ARTIFACT_FOLDER, dirName);
-    fs.writeFileSync(
-        path.join(authenticatedConfigDir, "config.toml"),
-        `projects-dir = '${projectsDir}'\n`,
-    );
-    return projectsDir;
-}
-
-suite("TMC", function () {
-    let server: cp.ChildProcess | undefined;
-
-    suiteSetup(async function () {
-        this.timeout(30000);
-        server = await startServer();
-    });
-
-    let tmc: TMC;
-    let tmcUnauthenticated: TMC;
-
-    setup(function () {
-        const authenticatedConfigDir = path.join(ARTIFACT_FOLDER, CLIENT_CONFIG_DIR_NAME);
-        if (!fs.existsSync(authenticatedConfigDir)) {
-            fs.mkdirSync(authenticatedConfigDir, { recursive: true });
-        }
-        fs.writeFileSync(
-            path.join(authenticatedConfigDir, "credentials.json"),
-            '{"access_token":"1234","token_type":"bearer","scope":"public"}',
-        );
-        tmc = new TMC(CLI_FILE, CLIENT_NAME, "test", {
-            cliConfigDir: ARTIFACT_FOLDER,
-        });
-
-        const unauthenticatedArtifactFolder = path.join(ARTIFACT_FOLDER, "__unauthenticated");
-        const unauthenticatedConfigDir = path.join(
-            unauthenticatedArtifactFolder,
-            CLIENT_CONFIG_DIR_NAME,
-        );
-        delSync(unauthenticatedConfigDir, { force: true });
-        tmcUnauthenticated = new TMC(CLI_FILE, CLIENT_NAME, "test", {
-            cliConfigDir: unauthenticatedConfigDir,
-        });
-    });
-
-    suite("authentication", function () {
-        const incorrectUsername = "TestMyEkstension";
-        const username = "TestMyExtension";
-        const password = "hunter2";
-
-        let onLoggedInCalls: number;
-        let onLoggedOutCalls: number;
-
-        setup(function () {
-            onLoggedInCalls = 0;
-            onLoggedOutCalls = 0;
-            tmcUnauthenticated.on("login", () => onLoggedInCalls++);
-            tmcUnauthenticated.on("logout", () => onLoggedOutCalls++);
-        });
-
-        test("should fail with empty credentials");
-
-        test("should fail with incorrect credentials", async function () {
-            const result1 = await tmcUnauthenticated.authenticate(incorrectUsername, password);
-            expect(result1.val).to.be.instanceOf(AuthenticationError);
-            expect(onLoggedInCalls).to.be.equal(0);
-
-            const result2 = await tmcUnauthenticated.isAuthenticated();
-            result2.err && expect.fail(FAIL_MESSAGE + result2.val.message);
-            expect(result2.val).to.be.equal(false);
-
-            expect(onLoggedOutCalls).to.be.equal(0);
-        });
-
-        test("should succeed with correct credentials", async function () {
-            const result1 = await tmcUnauthenticated.authenticate(username, password);
-            result1.err && expect.fail(FAIL_MESSAGE + result1.val.message);
-            expect(onLoggedInCalls).to.be.equal(1);
-
-            const result2 = await tmcUnauthenticated.isAuthenticated();
-            result2.err && expect.fail(FAIL_MESSAGE + result2.val.message);
-            expect(result2.val).to.be.equal(true);
-
-            expect(onLoggedOutCalls).to.be.equal(0);
-        });
-
-        test("should fail when already authenticated", async function () {
-            const result2 = await tmc.authenticate(username, password);
-            expect(result2.val).to.be.instanceOf(AuthenticationError);
-        });
-    });
-
-    suite("deauthentication", function () {
-        let onLoggedInCalls: number;
-        let onLoggedOutCalls: number;
-
-        setup(function () {
-            onLoggedInCalls = 0;
-            onLoggedOutCalls = 0;
-            tmc.on("login", () => onLoggedInCalls++);
-            tmc.on("logout", () => onLoggedOutCalls++);
-        });
-
-        test("should deathenticate the user", async function () {
-            const result1 = await tmc.deauthenticate();
-            result1.err && expect.fail(FAIL_MESSAGE + result1.val.message);
-            expect(onLoggedOutCalls).to.be.equal(1);
-
-            const result2 = await tmc.isAuthenticated();
-            result2.err && expect.fail(FAIL_MESSAGE + result2.val.message);
-            expect(result2.val).to.be.false;
-
-            expect(onLoggedInCalls).to.be.equal(0);
-        });
-    });
-
-    suite("clean()", function () {
-        test("should clean the exercise", async function () {
-            const result = (await tmc.clean(PASSING_EXERCISE_PATH)).unwrap();
-            expect(result).to.be.undefined;
-        });
-
-        test("should result in RuntimeError for nonexistent exercise", async function () {
-            const result = await tmc.clean(MISSING_EXERCISE_PATH);
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("runTests()", function () {
-        test("should return test results", async function () {
-            const result = (await tmc.runTests(PASSING_EXERCISE_PATH)[0]).unwrap();
-            expect(result.status).to.be.equal("PASSED");
-        }).timeout(20000);
-
-        test("should result in RuntimeError for nonexistent exercise", async function () {
-            const result = await tmc.runTests(MISSING_EXERCISE_PATH)[0];
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("downloadExercises()", function () {
-        this.timeout(5000);
-
-        setup(function () {
-            const projectsDir = setupProjectsDir("downloadExercises");
-            delSync(projectsDir, { force: true });
-        });
-
-        // Current langs version returns generic error so handling fails
-        test.skip("should result in AuthorizationError if not authenticated", async function () {
-            const result = await tmcUnauthenticated.downloadExercises([1], () => {});
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("should download exercise", async function () {
-            const result = await tmc.downloadExercises([1], () => {});
-            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
-        });
-    });
-
-    suite("downloadOldSubmission()", function () {
-        this.timeout(5000);
-
-        let exercisePath: string;
-
-        setup(function () {
-            const projectsDir = setupProjectsDir("downloadOldSubmission");
-            exercisePath = path.join(projectsDir, "part01-01_passing_exercise");
-            if (!fs.existsSync(exercisePath)) {
-                fs.ensureDirSync(exercisePath);
-                ncp(PASSING_EXERCISE_PATH, exercisePath, () => {});
-            }
-        });
-
-        test.skip("should result in AuthorizationError if not authenticated", async function () {
-            const result = await tmcUnauthenticated.downloadOldSubmission(
-                1,
-                exercisePath,
-                404,
-                false,
-            );
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("should download old submission", async function () {
-            const result = await tmc.downloadOldSubmission(1, exercisePath, 0, false);
-            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
-        });
-
-        test("should not save old state when the flag is off", async function () {
-            // This test is based on a side effect of making a new submission.
-            const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-            await tmc.downloadOldSubmission(1, exercisePath, 0, false);
-            const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
-            expect(newSubmissions.length).to.be.equal(submissions.length);
-        });
-
-        test("should save old state when the flag is on", async function () {
-            // This test is based on a side effect of making a new submission.
-            const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-            await tmc.downloadOldSubmission(1, exercisePath, 0, true);
-            const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
-            expect(newSubmissions.length).to.be.equal(submissions.length + 1);
-        });
-
-        test("should cause RuntimeError for nonexistent exercise", async function () {
-            const missingExercisePath = path.resolve(exercisePath, "..", "404");
-            const result = await tmc.downloadOldSubmission(1, missingExercisePath, 0, false);
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("getCourseData()", function () {
-        // Fails with TMC-langs 0.15.0 because data.output-data.kind is "generic"
-        test.skip("should result in AuthorizationError if not authenticated", async function () {
-            const result = await tmcUnauthenticated.getCourseData(0);
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("should result in course data when authenticated", async function () {
-            const data = (await tmc.getCourseData(0)).unwrap();
-            expect(data.details.name).to.be.equal("python-course");
-            expect(data.exercises.length).to.be.equal(2);
-            expect(data.settings.name).to.be.equal("python-course");
-        });
-
-        test("should result in RuntimeError for nonexistent course", async function () {
-            const result = await tmc.getCourseData(404);
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("getCourseDetails()", function () {
-        test("should result in AuthorizationError if not authenticated", async function () {
-            const result = await tmcUnauthenticated.getCourseDetails(0);
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("should return course details of given course", async function () {
-            const course = (await tmc.getCourseDetails(0)).unwrap().course;
-            expect(course.id).to.be.equal(0);
-            expect(course.name).to.be.equal("python-course");
-        });
-
-        test("should result in RuntimeError for nonexistent course", async function () {
-            const result = await tmc.getCourseDetails(404);
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("getCourseExercises()", function () {
-        test("should result in AuthorizationError if not authenticated", async function () {
-            const result = await tmcUnauthenticated.getCourseExercises(0);
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("should return course exercises of the given course", async function () {
-            const exercises = (await tmc.getCourseExercises(0)).unwrap();
-            expect(exercises.length).to.be.equal(2);
-        });
-
-        test("should result in RuntimeError with nonexistent course", async function () {
-            const result = await tmc.getCourseExercises(404);
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("getCourses()", function () {
-        test("should result in AuthorizationError if not authenticated", async function () {
-            const result = await tmcUnauthenticated.getCourses("test");
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("should return courses when authenticated", async function () {
-            const course = (await tmc.getCourses("test")).unwrap();
-            expect(course.length).to.be.equal(1);
-            expect(course.some((x) => x.name === "python-course")).to.be.true;
-        });
-
-        test("should result in RuntimeError for nonexistent organization", async function () {
-            const result = await tmc.getCourses("404");
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("getCourseSettings()", function () {
-        test("should result in AuthorizationError if not authenticated", async function () {
-            const result = await tmcUnauthenticated.getCourseSettings(0);
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("should return course settings when authenticated", async function () {
-            const course = (await tmc.getCourseSettings(0)).unwrap();
-            expect(course.name).to.be.equal("python-course");
-        });
-
-        test("should result in RuntimeError with nonexistent course", async function () {
-            const result = await tmc.getCourseSettings(404);
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("getExerciseDetails()", function () {
-        test("should result in AuthorizationError if not authenticated", async function () {
-            const result = await tmcUnauthenticated.getExerciseDetails(1);
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("should return exercise details when authenticated", async function () {
-            const exercise = (await tmc.getExerciseDetails(1)).unwrap();
-            expect(exercise.exercise_name).to.be.equal("part01-01_passing_exercise");
-        });
-
-        test("should result in RuntimeError for nonexistent exercise", async function () {
-            const result = await tmc.getExerciseDetails(404);
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("getOldSubmissions()", function () {
-        test("should result in AuthorizationError if not authenticated", async function () {
-            const result = await tmcUnauthenticated.getOldSubmissions(1);
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("should return old submissions when authenticated", async function () {
-            const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-            expect(submissions.length).to.be.greaterThan(0);
-        });
-
-        test("should result in RuntimeError for nonexistent exercise", async function () {
-            const result = await tmc.getOldSubmissions(404);
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("getOrganizations()", function () {
-        test("should return organizations", async function () {
-            const result = await tmc.getOrganizations();
-            expect(result.unwrap().length).to.be.equal(1, "Expected to get one organization.");
-        });
-    });
-
-    suite("getOrganization()", function () {
-        test("should return given organization", async function () {
-            const organization = (await tmc.getOrganization("test")).unwrap();
-            expect(organization.slug).to.be.equal("test");
-            expect(organization.name).to.be.equal("Test Organization");
-        });
-
-        test("should result in RuntimeError for nonexistent organization", async function () {
-            const result = await tmc.getOrganization("404");
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("resetExercise()", function () {
-        this.timeout(5000);
-
-        function setupExercise(folderName: string): string {
-            const projectsDir = setupProjectsDir(folderName);
-            const exercisePath = path.join(projectsDir, "part01-01_passing_exercise");
-            if (!fs.existsSync(exercisePath)) {
-                fs.ensureDirSync(exercisePath);
-                ncp(PASSING_EXERCISE_PATH, exercisePath, () => {});
-            }
-            return exercisePath;
-        }
-
-        // This actually passes
-        test.skip("should result in AuthorizationError if not authenticated", async function () {
-            const exercisePath = setupExercise("resetExercise0");
-            const result = await tmcUnauthenticated.resetExercise(1, exercisePath, false);
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        // Windows CI can't handle this for some reason?
-        test.skip("should reset exercise", async function () {
-            const exercisePath = setupExercise("resetExercise1");
-            const result = await tmc.resetExercise(1, exercisePath, false);
-            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
-        });
-
-        test("should not save old state if the flag is off", async function () {
-            // This test is based on a side effect of making a new submission.
-            const exercisePath = setupExercise("resetExercise2");
-            const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-            await tmc.resetExercise(1, exercisePath, false);
-            const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
-            expect(newSubmissions.length).to.be.equal(submissions.length);
-        });
-
-        test("should save old state if the flag is on", async function () {
-            // This test is based on a side effect of making a new submission.
-            const exercisePath = setupExercise("resetExercise3");
-            const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-            await tmc.resetExercise(1, exercisePath, true);
-            const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
-            expect(newSubmissions.length).to.be.equal(submissions.length + 1);
-        });
-    });
-
-    suite("submitExerciseAndWaitForResults()", function () {
-        test("should result in AuthorizationError if not authenticated", async function () {
-            const result = await tmcUnauthenticated.submitExerciseAndWaitForResults(
-                1,
-                PASSING_EXERCISE_PATH,
-            );
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("should make a submission and give results when authenticated", async function () {
-            this.timeout(5000);
-            const results = (
-                await tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH)
-            ).unwrap();
-            expect(results.status).to.be.equal("ok");
-        });
-
-        test("should return submission link during the submission process", async function () {
-            this.timeout(5000);
-            let url: string | undefined;
-            await tmc.submitExerciseAndWaitForResults(
-                1,
-                PASSING_EXERCISE_PATH,
-                undefined,
-                (x) => (url = x),
-            );
-            expect(url).to.be.ok;
-        });
-
-        test("should result in BottleneckError if called twice too soon", async function () {
-            this.timeout(5000);
-            const first = tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
-            const second = tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
-            const [, secondResult] = await Promise.all([first, second]);
-            expect(secondResult.val).to.be.instanceOf(BottleneckError);
-        });
-
-        test("should result in RuntimeError for nonexistent exercise", async function () {
-            const result = await tmc.submitExerciseAndWaitForResults(1, MISSING_EXERCISE_PATH);
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("submitExerciseToPaste()", function () {
-        // Current Langs doesn't actually check this
-        test.skip("should result in AuthorizationError if not authenticated", async function () {
-            const result = await tmcUnauthenticated.submitExerciseToPaste(1, PASSING_EXERCISE_PATH);
-            expect(result.val).to.be.instanceOf(AuthorizationError);
-        });
-
-        test("should make a paste submission when authenticated", async function () {
-            const pasteUrl = (await tmc.submitExerciseToPaste(1, PASSING_EXERCISE_PATH)).unwrap();
-            expect(pasteUrl).to.include("localhost");
-        });
-
-        test("should result in BottleneckError if called twice too soon", async function () {
-            this.timeout(5000);
-            const first = tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
-            const second = tmc.submitExerciseAndWaitForResults(1, PASSING_EXERCISE_PATH);
-            const [, secondResult] = await Promise.all([first, second]);
-            expect(secondResult.val).to.be.instanceOf(BottleneckError);
-        });
-
-        test("should result in RuntimeError for nonexistent exercise", async function () {
-            const result = await tmc.submitExerciseToPaste(404, MISSING_EXERCISE_PATH);
-            expect(result.val).to.be.instanceOf(RuntimeError);
-        });
-    });
-
-    suite("submitSubmissionFeedback()", function () {
-        const feedback: SubmissionFeedback = {
-            status: [{ question_id: 0, answer: "42" }],
-        };
-
-        test("should submit feedback when authenticated", async function () {
-            const result = await tmc.submitSubmissionFeedback(FEEDBACK_URL, feedback);
-            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
-        });
-    });
-
-    suiteTeardown(function () {
-        server && kill(server.pid);
-    });
-});

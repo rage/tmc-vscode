@@ -122,17 +122,19 @@ app.get(`/api/v8/core/courses/${pythonCourse.id}`, (req, res: Response<CourseDet
 );
 
 // downloadExercises()
-// TODO: Filter to only exercises that were given as params.
-app.get("/api/v8/core/exercises/details", (req, res: Response<DetailsForLangs>) =>
-    res.json({
-        exercises: [passingExercise].map((x) => ({
+app.get("/api/v8/core/exercises/details", (req, res: Response<DetailsForLangs>) => {
+    const rawIds = req.query.ids;
+    const ids = Array.isArray(rawIds) ? rawIds : [rawIds];
+    const filtered = [passingExercise].filter((x) => ids.includes(x.id.toString()));
+    return res.json({
+        exercises: filtered.map((x) => ({
             id: x.id,
             checksum: x.checksum,
             course_name: "python-course",
             exercise_name: x.exercise_name,
         })),
-    }),
-);
+    });
+});
 
 // getExerciseDetails(1)
 app.get(`/api/v8/core/exercises/${passingExercise.id}`, (req, res: Response<ExerciseDetails>) =>
