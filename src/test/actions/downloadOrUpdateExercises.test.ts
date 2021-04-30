@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { first, last } from "lodash";
-import { Ok, Result } from "ts-results";
+import { Err, Ok, Result } from "ts-results";
 import { IMock, It, Times } from "typemoq";
 
 import { downloadOrUpdateExercises } from "../../actions";
@@ -81,6 +81,13 @@ suite("downloadOrUpdateExercises action", function () {
     test("should not call TMC-langs if no exercises are given", async function () {
         await downloadOrUpdateExercises(actionContext(), []);
         expect(tmcMock.verify((x) => x.downloadExercises(It.isAny(), It.isAny()), Times.never()));
+    });
+
+    test("should return error if TMC-langs fails", async function () {
+        const error = new Error();
+        tmcMockValues.downloadExercises = Err(error);
+        const result = await downloadOrUpdateExercises(actionContext(), [1, 2]);
+        expect(result.val).to.be.equal(error);
     });
 
     test("should return ids of successful downloads", async function () {
@@ -167,7 +174,7 @@ suite("downloadOrUpdateExercises action", function () {
         );
     });
 
-    test("should post status updates of failing download", async function () {
+    test("should post status updates for failing download", async function () {
         tmcMockValues.downloadExercises = createDownloadResult([], [], [[helloWorld, ""]]);
         await downloadOrUpdateExercises(actionContext(), [1]);
         expect(webviewMessages.length).to.be.greaterThanOrEqual(
@@ -186,6 +193,24 @@ suite("downloadOrUpdateExercises action", function () {
 
     test("should post status updates for exercises missing from langs response", async function () {
         tmcMockValues.downloadExercises = createDownloadResult([], [], undefined);
+        await downloadOrUpdateExercises(actionContext(), [1]);
+        expect(webviewMessages.length).to.be.greaterThanOrEqual(
+            2,
+            "expected at least two status messages",
+        );
+        expect(first(webviewMessages)).to.be.deep.equal(
+            wrapToMessage(helloWorld.id, "downloading"),
+            'expected first message to be "downloading"',
+        );
+        expect(last(webviewMessages)).to.be.deep.equal(
+            wrapToMessage(helloWorld.id, "downloadFailed"),
+            'expected last message to be "downloadFailed"',
+        );
+    });
+
+    test("should post status updates when TMC-langs operation fails", async function () {
+        const error = new Error();
+        tmcMockValues.downloadExercises = Err(error);
         await downloadOrUpdateExercises(actionContext(), [1]);
         expect(webviewMessages.length).to.be.greaterThanOrEqual(
             2,
