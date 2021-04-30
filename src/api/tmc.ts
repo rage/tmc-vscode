@@ -449,28 +449,31 @@ export default class TMC {
      * `download-or-update-course-exercises` core command internally.
      *
      * @param ids Ids of the exercises to download.
+     * @param downloadTemplate Flag for downloading exercise template instead of latest submission.
      */
     public async downloadExercises(
         ids: number[],
-        downloaded: (value: { id: number; percent: number; message?: string }) => void,
+        downloadTemplate: boolean,
+        onDownloaded: (value: { id: number; percent: number; message?: string }) => void,
     ): Promise<Result<DownloadOrUpdateCourseExercisesResult, Error>> {
         const onStdout = (res: StatusUpdateData): void => {
             if (
                 res["update-data-kind"] === "client-update-data" &&
                 res.data?.["client-update-data-kind"] === "exercise-download"
             ) {
-                downloaded({
+                onDownloaded({
                     id: res.data.id,
                     percent: res["percent-done"],
                     message: res.message ?? undefined,
                 });
             }
         };
+        const flags = downloadTemplate ? ["--download-template"] : [];
         const res = await this._executeLangsCommand(
             {
                 args: [
                     "download-or-update-course-exercises",
-                    "--download-template",
+                    ...flags,
                     "--exercise-id",
                     ...ids.map((id) => id.toString()),
                 ],

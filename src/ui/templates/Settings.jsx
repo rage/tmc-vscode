@@ -85,12 +85,6 @@ const component = () => {
                                 Downloads the latest submission of an exercise by default, when
                                 available.
                             </p>
-                            <p>
-                                <strong>
-                                    Note: this feature is currently unavailable and will be added
-                                    back in future version.
-                                </strong>
-                            </p>
                             <div class="custom-control custom-switch">
                                 <input
                                     type="checkbox"

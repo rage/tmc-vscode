@@ -103,7 +103,7 @@ function setupMockValues(values: TMCMockValues): IMock<TMC> {
         async () => values.checkExerciseUpdates,
     );
 
-    mock.setup((x) => x.downloadExercises(It.isAny(), It.isAny())).returns(
+    mock.setup((x) => x.downloadExercises(It.isAny(), It.isAny(), It.isAny())).returns(
         async () => values.downloadExercises,
     );
 

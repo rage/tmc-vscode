@@ -83,13 +83,13 @@ suite("tmc langs cli spec", function () {
         });
 
         test("should be able to download an existing exercise", async function () {
-            const result = await tmc.downloadExercises([1], () => {});
+            const result = await tmc.downloadExercises([1], true, () => {});
             result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
         }).timeout(10000);
 
         // Missing ids are skipped for some reason
         test.skip("should not be able to download a non-existent exercise", async function () {
-            const downloads = (await tmc.downloadExercises([404], () => {})).unwrap();
+            const downloads = (await tmc.downloadExercises([404], true, () => {})).unwrap();
             expect(downloads.failed?.length).to.be.equal(1);
         });
 
@@ -168,7 +168,7 @@ suite("tmc langs cli spec", function () {
 
             setup(async function () {
                 delSync(projectsDir, { force: true });
-                const result = await tmc.downloadExercises([1], () => {});
+                const result = await tmc.downloadExercises([1], true, () => {});
                 exercisePath = result.unwrap().downloaded[0].path;
             });
 
@@ -336,7 +336,7 @@ suite("tmc langs cli spec", function () {
         });
 
         test("should not be able to download an exercise", async function () {
-            const result = await tmc.downloadExercises([1], () => {});
+            const result = await tmc.downloadExercises([1], true, () => {});
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
 
@@ -394,7 +394,7 @@ suite("tmc langs cli spec", function () {
             setup(async function () {
                 delSync(projectsDir, { force: true });
                 writeCredentials(configDir);
-                const result = await tmc.downloadExercises([1], () => {});
+                const result = await tmc.downloadExercises([1], true, () => {});
                 clearCredentials(configDir);
                 exercisePath = result.unwrap().downloaded[0].path;
             });

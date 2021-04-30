@@ -8,11 +8,13 @@ import { ActionContext } from "../../actions/types";
 import Dialog from "../../api/dialog";
 import { DownloadOrUpdateCourseExercisesResult, ExerciseDownload } from "../../api/langsSchema";
 import TMC from "../../api/tmc";
+import Settings from "../../config/settings";
 import { ExerciseStatus, WebviewMessage } from "../../ui/types";
 import UI from "../../ui/ui";
 import TmcWebview from "../../ui/webview";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createDialogMock } from "../mocks/dialog";
+import { createSettingsMock, SettingsMockValues } from "../mocks/settings";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
 import { createUIMock, UIMockValues } from "../mocks/ui";
 import { createWebviewMock, WebviewMockValues } from "../mocks/webview";
@@ -35,6 +37,8 @@ suite("downloadOrUpdateExercises action", function () {
     const stubContext = createMockActionContext();
 
     let dialogMock: IMock<Dialog>;
+    let settingsMock: IMock<Settings>;
+    let settingsMockValues: SettingsMockValues;
     let tmcMock: IMock<TMC>;
     let tmcMockValues: TMCMockValues;
     let uiMock: IMock<UI>;
@@ -46,6 +50,7 @@ suite("downloadOrUpdateExercises action", function () {
     const actionContext = (): ActionContext => ({
         ...stubContext,
         dialog: dialogMock.object,
+        settings: settingsMock.object,
         tmc: tmcMock.object,
         ui: uiMock.object,
     });
@@ -64,6 +69,7 @@ suite("downloadOrUpdateExercises action", function () {
 
     setup(function () {
         [dialogMock] = createDialogMock();
+        [settingsMock, settingsMockValues] = createSettingsMock();
         [tmcMock, tmcMockValues] = createTMCMock();
         [uiMock, uiMockValues] = createUIMock();
         webviewMessages = [];
@@ -80,7 +86,12 @@ suite("downloadOrUpdateExercises action", function () {
 
     test("should not call TMC-langs if no exercises are given", async function () {
         await downloadOrUpdateExercises(actionContext(), []);
-        expect(tmcMock.verify((x) => x.downloadExercises(It.isAny(), It.isAny()), Times.never()));
+        expect(
+            tmcMock.verify(
+                (x) => x.downloadExercises(It.isAny(), It.isAny(), It.isAny()),
+                Times.never(),
+            ),
+        );
     });
 
     test("should return error if TMC-langs fails", async function () {
@@ -133,11 +144,39 @@ suite("downloadOrUpdateExercises action", function () {
         expect(result.failed).to.be.deep.equal([1, 2]);
     });
 
+    test("should download template if downloadOldSubmission setting is off", async function () {
+        tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [], undefined);
+        settingsMockValues.getDownloadOldSubmission = false;
+        await downloadOrUpdateExercises(actionContext(), [1]);
+        tmcMock.verify(
+            (x) => x.downloadExercises(It.isAny(), It.isValue(true), It.isAny()),
+            Times.once(),
+        );
+        tmcMock.verify(
+            (x) => x.downloadExercises(It.isAny(), It.isValue(false), It.isAny()),
+            Times.never(),
+        );
+    });
+
+    test("should not necessarily download template if downloadOldSubmission setting is on", async function () {
+        tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [], undefined);
+        settingsMockValues.getDownloadOldSubmission = true;
+        await downloadOrUpdateExercises(actionContext(), [1]);
+        tmcMock.verify(
+            (x) => x.downloadExercises(It.isAny(), It.isValue(true), It.isAny()),
+            Times.never(),
+        );
+        tmcMock.verify(
+            (x) => x.downloadExercises(It.isAny(), It.isValue(false), It.isAny()),
+            Times.once(),
+        );
+    });
+
     test("should post status updates of succeeding download", async function () {
         tmcMock.reset();
         tmcMock
-            .setup((x) => x.downloadExercises(It.isAny(), It.isAny()))
-            .returns(async (_, cb) => {
+            .setup((x) => x.downloadExercises(It.isAny(), It.isAny(), It.isAny()))
+            .returns(async (_1, _2, cb) => {
                 // Callback is only used for successful downloads
                 cb({ id: helloWorld.id, percent: 0.5 });
                 return createDownloadResult([helloWorld], [], undefined);

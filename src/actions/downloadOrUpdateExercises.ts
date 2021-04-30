@@ -25,7 +25,7 @@ export async function downloadOrUpdateExercises(
     actionContext: ActionContext,
     exerciseIds: number[],
 ): Promise<Result<DownloadResults, Error>> {
-    const { dialog, tmc, ui } = actionContext;
+    const { dialog, settings, tmc, ui } = actionContext;
     if (exerciseIds.length === 0) {
         return Ok({ successful: [], failed: [] });
     }
@@ -33,12 +33,12 @@ export async function downloadOrUpdateExercises(
     ui.webview.postMessage(...exerciseIds.map((x) => wrapToMessage(x, "downloading")));
     const statuses = new Map<number, ExerciseStatus>(exerciseIds.map((x) => [x, "downloadFailed"]));
 
-    // TODO: How to download latest submission in new version?
+    const downloadTemplate = !settings.getDownloadOldSubmission();
     const downloadResult = await dialog.progressNotification(
         "Downloading exercises...",
         (progress) =>
             limit(() =>
-                tmc.downloadExercises(exerciseIds, (download) => {
+                tmc.downloadExercises(exerciseIds, downloadTemplate, (download) => {
                     progress.report(download);
                     statuses.set(download.id, "closed");
                     ui.webview.postMessage(wrapToMessage(download.id, "closed"));
