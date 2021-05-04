@@ -256,40 +256,6 @@ export default class TMC {
     }
 
     /**
-     * Moves this instance's projects directory on disk. Uses TMC-langs `settings move-projects-dir`
-     * setting internally.
-     *
-     * @param newDirectory New location for projects directory.
-     * @param onUpdate Progress callback.
-     */
-    public async moveProjectsDirectory(
-        newDirectory: string,
-        onUpdate?: (value: { percent: number; message?: string }) => void,
-    ): Promise<Result<void, Error>> {
-        const onStdout = (res: StatusUpdateData): void => {
-            onUpdate?.({
-                percent: res["percent-done"],
-                message: res.message ?? undefined,
-            });
-        };
-        const res = await this._executeLangsCommand(
-            {
-                args: [
-                    "settings",
-                    "--client-name",
-                    this.clientName,
-                    "move-projects-dir",
-                    newDirectory,
-                ],
-                core: false,
-                onStdout,
-            },
-            createIs<OutputData<unknown>>(),
-        );
-        return res.err ? res : Ok.EMPTY;
-    }
-
-    /**
      * Runs local tests for given exercise. Uses TMC-langs `run-tests` command internally.
      *
      * @param id ID of the exercise to test.
@@ -354,7 +320,41 @@ export default class TMC {
                 ],
                 core: false,
             },
-            createIs<OutputData<null>>(),
+            createIs<UncheckedOutputData>(),
+        );
+        return res.err ? res : Ok.EMPTY;
+    }
+
+    /**
+     * Moves this instance's projects directory on disk. Uses TMC-langs `settings move-projects-dir`
+     * setting internally.
+     *
+     * @param newDirectory New location for projects directory.
+     * @param onUpdate Progress callback.
+     */
+    public async moveProjectsDirectory(
+        newDirectory: string,
+        onUpdate?: (value: { percent: number; message?: string }) => void,
+    ): Promise<Result<void, Error>> {
+        const onStdout = (res: StatusUpdateData): void => {
+            onUpdate?.({
+                percent: res["percent-done"],
+                message: res.message ?? undefined,
+            });
+        };
+        const res = await this._executeLangsCommand(
+            {
+                args: [
+                    "settings",
+                    "--client-name",
+                    this.clientName,
+                    "move-projects-dir",
+                    newDirectory,
+                ],
+                core: false,
+                onStdout,
+            },
+            createIs<UncheckedOutputData>(),
         );
         return res.err ? res : Ok.EMPTY;
     }

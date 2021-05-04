@@ -26,10 +26,8 @@ const FEEDBACK_URL = "http://localhost:4001/feedback";
 const USERNAME = "TestMyExtension";
 const PASSWORD = "hunter2";
 
-// This one is mandated by TMC-langs.
+// Config dir name must follow conventions mandated by TMC-langs.
 const CLIENT_CONFIG_DIR_NAME = `tmc-${CLIENT_NAME}`;
-
-const FAIL_MESSAGE = "TMC-langs execution failed: ";
 
 suite("tmc langs cli spec", function () {
     let server: cp.ChildProcess | undefined;
@@ -54,13 +52,14 @@ suite("tmc langs cli spec", function () {
     });
 
     suite("authenticated user", function () {
+        let configDir: string;
         let onLoggedInCalls: number;
         let onLoggedOutCalls: number;
         let projectsDir: string;
         let tmc: TMC;
 
         setup(function () {
-            const configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME);
+            configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME);
             writeCredentials(configDir);
             onLoggedInCalls = 0;
             onLoggedOutCalls = 0;
@@ -78,13 +77,11 @@ suite("tmc langs cli spec", function () {
         });
 
         test("should be able to deauthenticate", async function () {
-            const result1 = await tmc.deauthenticate();
-            result1.err && expect.fail(FAIL_MESSAGE + result1.val.message);
+            await unwrapResult(tmc.deauthenticate());
             expect(onLoggedOutCalls).to.be.equal(1);
 
-            const result2 = await tmc.isAuthenticated();
-            result2.err && expect.fail(FAIL_MESSAGE + result2.val.message);
-            expect(result2.val).to.be.false;
+            const result = await unwrapResult(tmc.isAuthenticated());
+            expect(result).to.be.false;
 
             expect(onLoggedInCalls).to.be.equal(0);
         });
@@ -185,8 +182,7 @@ suite("tmc langs cli spec", function () {
             const feedback: SubmissionFeedback = {
                 status: [{ question_id: 0, answer: "42" }],
             };
-            const result = await tmc.submitSubmissionFeedback(FEEDBACK_URL, feedback);
-            result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+            await unwrapResult(tmc.submitSubmissionFeedback(FEEDBACK_URL, feedback));
         });
 
         suite("with a local exercise", function () {
@@ -196,72 +192,88 @@ suite("tmc langs cli spec", function () {
 
             setup(async function () {
                 delSync(projectsDir, { force: true });
-                const result = await tmc.downloadExercises([1], true, () => {});
-                exercisePath = result.unwrap().downloaded[0].path;
+                const result = (await tmc.downloadExercises([1], true, () => {})).unwrap();
+                exercisePath = result.downloaded[0].path;
             });
 
             test("should be able to clean the exercise", async function () {
-                const result = (await tmc.clean(exercisePath)).unwrap();
-                expect(result).to.be.undefined;
+                await unwrapResult(tmc.clean(exercisePath));
             });
 
             test("should be able to run tests for exercise", async function () {
-                const result = (await tmc.runTests(exercisePath)[0]).unwrap();
+                const result = await unwrapResult(tmc.runTests(exercisePath)[0]);
                 expect(result.status).to.be.equal("PASSED");
             });
 
+            test("should be able to migrate the exercise to langs projects directory", async function () {
+                // By changing projects directory path, the exercise is no longer there. Therefore
+                // it can be "migrated".
+                projectsDir = setupProjectsDir(configDir, path.join(testDir, "tmcdata2"));
+                fs.emptyDirSync(projectsDir);
+                await unwrapResult(
+                    tmc.migrateExercise("python-course", "abc123", 1, exercisePath, "hello-world"),
+                );
+            });
+
+            test("should be able to move projects directory", async function () {
+                const newProjectsDir = path.resolve(projectsDir, "..", "tmcdata2");
+                fs.emptyDirSync(newProjectsDir);
+                await unwrapResult(tmc.moveProjectsDirectory(newProjectsDir));
+            });
+
+            test("should be able to check for exercise updates", async function () {
+                const result = await unwrapResult(tmc.checkExerciseUpdates());
+                expect(result.length).to.be.equal(0);
+            });
+
             test("should be able to save the exercise state and revert it to an old submission", async function () {
-                const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-                const result = await tmc.downloadOldSubmission(1, exercisePath, 0, true);
-                result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+                const submissions = await unwrapResult(tmc.getOldSubmissions(1));
+                await unwrapResult(tmc.downloadOldSubmission(1, exercisePath, 0, true));
 
                 // State saving check is based on a side effect of making a new submission.
-                const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
+                const newSubmissions = await unwrapResult(tmc.getOldSubmissions(1));
                 expect(newSubmissions.length).to.be.equal(submissions.length + 1);
             });
 
             test("should be able to download an old submission without saving the current state", async function () {
-                const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-                const result = await tmc.downloadOldSubmission(1, exercisePath, 0, false);
-                result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+                const submissions = await unwrapResult(tmc.getOldSubmissions(1));
+                await unwrapResult(tmc.downloadOldSubmission(1, exercisePath, 0, false));
 
-                // State saving check :monis based on a side effect of making a new submission.
-                const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
+                // State saving check is based on a side effect of making a new submission.
+                const newSubmissions = await unwrapResult(tmc.getOldSubmissions(1));
                 expect(newSubmissions.length).to.be.equal(submissions.length);
             });
 
             // Langs fails to remove folder on Windows CI
             test.skip("should be able to save the exercise state and reset it to original template", async function () {
-                const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-                const result = await tmc.resetExercise(1, exercisePath, true);
-                result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+                const submissions = await unwrapResult(tmc.getOldSubmissions(1));
+                await unwrapResult(tmc.resetExercise(1, exercisePath, true));
 
                 // State saving check is based on a side effect of making a new submission.
-                const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
+                const newSubmissions = await unwrapResult(tmc.getOldSubmissions(1));
                 expect(newSubmissions.length).to.be.equal(submissions.length + 1);
             });
 
             // Langs fails to remove folder on Windows CI
             test.skip("should be able to reset exercise without saving the current state", async function () {
-                const submissions = (await tmc.getOldSubmissions(1)).unwrap();
-                const result = await tmc.resetExercise(1, exercisePath, false);
-                result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
+                const submissions = await unwrapResult(tmc.getOldSubmissions(1));
+                await unwrapResult(tmc.resetExercise(1, exercisePath, false));
 
                 // State saving check is based on a side effect of making a new submission.
-                const newSubmissions = (await tmc.getOldSubmissions(1)).unwrap();
+                const newSubmissions = await unwrapResult(tmc.getOldSubmissions(1));
                 expect(newSubmissions.length).to.be.equal(submissions.length);
             });
 
             test("should be able to submit the exercise for evaluation", async function () {
                 let url: string | undefined;
-                const results = (
-                    await tmc.submitExerciseAndWaitForResults(
+                const results = await unwrapResult(
+                    tmc.submitExerciseAndWaitForResults(
                         1,
                         exercisePath,
                         undefined,
                         (x) => (url = x),
-                    )
-                ).unwrap();
+                    ),
+                );
                 expect(results.status).to.be.equal("ok");
                 !url && expect.fail("expected to receive submission url during submission.");
             });
@@ -274,7 +286,7 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should be able to submit the exercise to TMC-paste", async function () {
-                const pasteUrl = (await tmc.submitExerciseToPaste(1, exercisePath)).unwrap();
+                const pasteUrl = await unwrapResult(tmc.submitExerciseToPaste(1, exercisePath));
                 expect(pasteUrl).to.include("localhost");
             });
 
@@ -354,13 +366,11 @@ suite("tmc langs cli spec", function () {
         });
 
         test("should be able to authenticate with correct credentials", async function () {
-            const result1 = await tmc.authenticate(USERNAME, PASSWORD);
-            result1.err && expect.fail(FAIL_MESSAGE + result1.val.message);
+            await unwrapResult(tmc.authenticate(USERNAME, PASSWORD));
             expect(onLoggedInCalls).to.be.equal(1);
 
-            const result2 = await tmc.isAuthenticated();
-            result2.err && expect.fail(FAIL_MESSAGE + result2.val.message);
-            expect(result2.val).to.be.true;
+            const result2 = await unwrapResult(tmc.isAuthenticated());
+            expect(result2).to.be.true;
 
             expect(onLoggedOutCalls).to.be.equal(0);
         });
@@ -394,11 +404,11 @@ suite("tmc langs cli spec", function () {
         });
 
         test("should be able to get valid organization data", async function () {
-            const organization = (await tmc.getOrganization("test")).unwrap();
+            const organization = await unwrapResult(tmc.getOrganization("test"));
             expect(organization.slug).to.be.equal("test");
             expect(organization.name).to.be.equal("Test Organization");
 
-            const organizations = (await tmc.getOrganizations()).unwrap();
+            const organizations = await unwrapResult(tmc.getOrganizations());
             expect(organizations.length).to.be.equal(1, "Expected to get one organization.");
         });
 
@@ -430,12 +440,12 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should be able to clean the exercise", async function () {
-                const result = (await tmc.clean(exercisePath)).unwrap();
+                const result = await unwrapResult(tmc.clean(exercisePath));
                 expect(result).to.be.undefined;
             });
 
             test("should be able to run tests for exercise", async function () {
-                const result = (await tmc.runTests(exercisePath)[0]).unwrap();
+                const result = await unwrapResult(tmc.runTests(exercisePath)[0]);
                 expect(result.status).to.be.equal("PASSED");
             });
 
@@ -491,7 +501,7 @@ function setupProjectsDir(configDir: string, projectsDir: string): string {
 
 async function unwrapResult<T>(result: Promise<Result<T, Error>>): Promise<T> {
     const res = await result;
-    if (res.err) expect.fail(FAIL_MESSAGE + res.val.message);
+    if (res.err) expect.fail(`TMC-langs execution failed: ${res.val.message}`);
     return res.val;
 }
 
