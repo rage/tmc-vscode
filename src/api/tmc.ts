@@ -372,11 +372,14 @@ export default class TMC {
                 args: ["settings", "--client-name", this.clientName, "get", key],
                 core: false,
             },
-            createIs<OutputData<unknown>>(),
+            createIs<UncheckedOutputData>(),
         );
-        return res.andThen<T, Error>((x) => {
-            const result_1 = x.data["output-data"];
-            return checker(result_1) ? Ok(result_1) : Err(new Error("Invalid object type."));
+        return res.andThen<T | undefined, Error>((x) => {
+            const data = x.data?.["output-data"];
+            if (data === undefined || data === null) {
+                return Ok(undefined);
+            }
+            return checker(data) ? Ok(data) : Err(new Error("Invalid object type."));
         });
     }
 
@@ -390,7 +393,7 @@ export default class TMC {
                 args: ["settings", "--client-name", this.clientName, "set", key, value],
                 core: false,
             },
-            createIs<OutputData<null>>(),
+            createIs<UncheckedOutputData>(),
         );
         return res.err ? res : Ok.EMPTY;
     }
@@ -405,7 +408,7 @@ export default class TMC {
                 args: ["settings", "--client-name", this.clientName, "reset"],
                 core: false,
             },
-            createIs<OutputData<null>>(),
+            createIs<UncheckedOutputData>(),
         );
         return res.err ? res : Ok.EMPTY;
     }
@@ -420,7 +423,7 @@ export default class TMC {
                 args: ["settings", "--client-name", this.clientName, "unset", key],
                 core: false,
             },
-            createIs<OutputData<null>>(),
+            createIs<UncheckedOutputData>(),
         );
         return res.err ? res : Ok.EMPTY;
     }
