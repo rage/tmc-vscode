@@ -358,7 +358,10 @@ suite("tmc langs cli spec", function () {
         });
 
         // TODO: There was something fishy with this test
-        test("should not be able to authenticate with empty credentials");
+        test("should not be able to authenticate with empty credentials", async function () {
+            const result = await tmc.authenticate("", "");
+            expect(result.val).to.be.instanceOf(AuthenticationError);
+        });
 
         test("should not be able to authenticate with incorrect credentials", async function () {
             const result = await tmc.authenticate(USERNAME, "batman123");

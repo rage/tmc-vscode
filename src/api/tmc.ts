@@ -150,6 +150,9 @@ export default class TMC {
      * @param password Password.
      */
     public async authenticate(username: string, password: string): Promise<Result<void, Error>> {
+        if (!username || !password) {
+            return Err(new AuthenticationError("Username and password may not be empty."));
+        }
         const res = await this._executeLangsCommand(
             {
                 args: ["login", "--email", username, "--base64"],
@@ -967,20 +970,6 @@ export default class TMC {
                     ),
                 );
         }
-
-        // TODO: actual todo
-        // Special handling because it makes usage simpler
-        // if (is<FailedExerciseDownload>(outputDataKind)) {
-        //     const data: Data = {
-        //         "output-data-kind": "exercise-download",
-        //         "output-data": {
-        //             downloaded: outputDataKind.completed,
-        //             skipped: outputDataKind.skipped,
-        //         },
-        //     };
-
-        //     return Ok({ ...langsResponse, data });
-        // }
 
         return Err(new RuntimeError(message, traceString));
     }
