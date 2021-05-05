@@ -1,6 +1,7 @@
 # Project files
 .vscode-test/
 node_modules/
+test-artifacts/
 test-resources/
 .eslintcache
 vscode.proposed.d.ts

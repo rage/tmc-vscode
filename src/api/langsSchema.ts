@@ -1,17 +1,6 @@
-import {
-    Course,
-    CourseDetails,
-    CourseExercise,
-    CourseSettings,
-    ExerciseDetails,
-    OldSubmission,
-    Organization,
-    SubmissionFeedbackResponse,
-    SubmissionResponse,
-    SubmissionResultReport,
-} from "./types";
+import { CourseDetails, CourseExercise, CourseSettings, SubmissionResponse } from "./types";
 
-// * Output schema for TMC-Langs 0.9.1 *
+// * Output schema for TMC-Langs 0.17.3 *
 
 // -------------------------------------------------------------------------------------------------
 // https://github.com/rage/tmc-langs-rust/blob/master/tmc-client/src/tmc_client.rs
@@ -26,52 +15,28 @@ export type ClientUpdateData =
 // -------------------------------------------------------------------------------------------------
 
 export type Output =
-    | ({ "output-kind": "output-data" } & OutputData)
+    | ({ "output-kind": "output-data" } & UncheckedOutputData)
     | ({ "output-kind": "status-update" } & StatusUpdateData)
     | ({ "output-kind": "warnings" } & Warnings);
 
-export interface OutputData {
+export interface UncheckedOutputData {
     status: Status;
     message: string;
     result: OutputResult;
-    data: Data | null;
+    data: DataType<string, unknown> | null;
+}
+
+export interface OutputData<T> {
+    status: Status;
+    message: string;
+    result: OutputResult;
+    data: DataType<string, T>;
 }
 
 interface DataType<T extends string, V> {
     "output-data-kind": T;
     "output-data": V;
 }
-
-export type Data =
-    | DataType<"error", LangsError>
-    | DataType<"validation", unknown>
-    | DataType<"free-disk-space", number>
-    | DataType<"available-points", string[]>
-    | DataType<"exercises", string[]>
-    | DataType<"exercise-packaging-configuration", unknown>
-    | DataType<"local-exercises", LocalExercise[]>
-    | DataType<"refresh-result", unknown>
-    | DataType<"test-result", RunResult>
-    | DataType<"exercise-desc", unknown>
-    | DataType<"updated-exercises", UpdatedExercise[]>
-    | DataType<"exercise-download", DownloadOrUpdateCourseExercisesResult>
-    | DataType<"combined-course-data", CombinedCourseData>
-    | DataType<"course-details", CourseDetails["course"]>
-    | DataType<"course-exercises", CourseExercise[]>
-    | DataType<"course-data", CourseSettings>
-    | DataType<"courses", Course[]>
-    | DataType<"exercise-details", ExerciseDetails>
-    | DataType<"submissions", OldSubmission[]>
-    | DataType<"update-result", unknown>
-    | DataType<"organization", Organization>
-    | DataType<"organizations", Organization[]>
-    | DataType<"reviews", unknown>
-    | DataType<"token", unknown>
-    | DataType<"new-submission", SubmissionResponse>
-    | DataType<"submission-feedback-response", SubmissionFeedbackResponse>
-    | DataType<"submission-finished", SubmissionResultReport>
-    | DataType<"config-value", unknown>
-    | DataType<"tmc-config", TmcConfig>;
 
 export type StatusUpdateData =
     | ({ "update-data-kind": "client-update-data" } & StatusUpdate<ClientUpdateData>)
@@ -86,18 +51,18 @@ export type OutputResult =
     | "error"
     | "executed-command";
 
-export interface LangsError {
-    kind: LangsErrorKind;
+export interface ErrorResponse {
+    kind: ErrorResponseKind;
     trace: string[];
 }
 
 export interface FailedExerciseDownload {
-    completed: DownloadOrUpdateCourseExercise[];
-    skipped: DownloadOrUpdateCourseExercise[];
-    failed: Array<[DownloadOrUpdateCourseExercise, string[]]>;
+    completed: ExerciseDownload[];
+    skipped: ExerciseDownload[];
+    failed: Array<[ExerciseDownload, string[]]>;
 }
 
-export type LangsErrorKind =
+export type ErrorResponseKind =
     | "generic"
     | "forbidden"
     | "not-logged-in"
@@ -113,11 +78,13 @@ export interface CombinedCourseData {
 }
 
 export interface DownloadOrUpdateCourseExercisesResult {
-    downloaded: DownloadOrUpdateCourseExercise[];
-    skipped: DownloadOrUpdateCourseExercise[];
+    downloaded: ExerciseDownload[];
+    skipped: ExerciseDownload[];
+    failed?: Array<[ExerciseDownload, string]>;
 }
 
-export interface DownloadOrUpdateCourseExercise {
+export interface ExerciseDownload {
+    id: number;
     "course-slug": string;
     "exercise-slug": string;
     path: string;
