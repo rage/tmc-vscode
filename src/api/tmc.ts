@@ -1038,16 +1038,8 @@ export default class TMC {
      * @returns Rust process runner.
      */
     private _spawnLangsProcess(commandArgs: LangsProcessArgs): LangsProcessRunner {
-        const {
-            args,
-            core,
-            env,
-            obfuscate,
-            onStderr,
-            onStdout,
-            stdin,
-            processTimeout,
-        } = commandArgs;
+        const { args, core, env, obfuscate, onStderr, onStdout, stdin, processTimeout } =
+            commandArgs;
         const CORE_ARGS = [
             "core",
             "--client-name",

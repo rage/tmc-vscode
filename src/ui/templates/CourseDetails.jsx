@@ -469,8 +469,8 @@ function script() {
                     completed++;
                 }
 
-                const s = exerciseTableRow[j].querySelector("td.exercise-status").dataset
-                    .workspaceStatus;
+                const s =
+                    exerciseTableRow[j].querySelector("td.exercise-status").dataset.workspaceStatus;
                 switch (s) {
                     case "opened":
                         opened++;
@@ -640,9 +640,8 @@ function script() {
                 const exerciseTableRows = exerciseTable.querySelectorAll("tr.exercise-table-row");
                 for (let j = 0; j < exerciseTableRows.length; j++) {
                     const exerciseTableRow = exerciseTableRows[j];
-                    const singleCheckboxColumn = exerciseTableRow.querySelector(
-                        "td.exercise-selector",
-                    );
+                    const singleCheckboxColumn =
+                        exerciseTableRow.querySelector("td.exercise-selector");
                     if (singleCheckboxColumn) {
                         singleCheckboxColumn.firstElementChild.addEventListener(
                             "click",
