@@ -9,7 +9,6 @@ import ExerciseDecorationProvider from "./api/exerciseDecorationProvider";
 import Storage from "./api/storage";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
-import * as commands from "./commands";
 import {
     CLIENT_NAME,
     DEBUG_MODE,
@@ -148,19 +147,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const settings = new Settings(storage, resources);
     context.subscriptions.push(settings);
-    settings.onChangeHideMetaFiles = async (value: boolean): Promise<void> => {
-        await workspaceManager.updateWorkspaceSetting("testMyCode.hideMetaFiles", value);
-        await workspaceManager.excludeMetaFilesInWorkspace(value);
-    };
-    settings.onChangeDownloadOldSubmission = async (value: boolean): Promise<void> => {
-        await workspaceManager.updateWorkspaceSetting("testMyCode.downloadOldSubmission", value);
-    };
-    settings.onChangeUpdateExercisesAutomatically = async (value: boolean): Promise<void> => {
-        await workspaceManager.updateWorkspaceSetting(
-            "testMyCode.updateExercisesAutomatically",
-            value,
-        );
-    };
 
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
     const exerciseDecorationProvider = new ExerciseDecorationProvider(userData, workspaceManager);
@@ -184,11 +170,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
-
-    await settings.setTmcDataPathPlaceholder(tmcDataPath);
-    settings.onChangeTmcDataPath = async (): Promise<void> => {
-        await commands.changeTmcDataPath(actionContext);
-    };
+    init.registerSettingsCallbacks(actionContext);
 
     context.subscriptions.push(
         vscode.window.registerFileDecorationProvider(exerciseDecorationProvider),
