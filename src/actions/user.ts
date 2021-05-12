@@ -446,46 +446,6 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
     }
 }
 
-// /**
-//  * Deprecated
-//  * Settings webview
-//  */
-// export async function openSettings(actionContext: ActionContext): Promise<void> {
-//     const { dialog, ui, resources, settings } = actionContext;
-//     Logger.log("Display extension settings");
-//     const extensionSettingsResult = await settings.getExtensionSettings();
-//     if (extensionSettingsResult.err) {
-//         dialog.errorNotification("Failed to fetch settings.", extensionSettingsResult.val);
-//         return;
-//     }
-
-//     const extensionSettings = extensionSettingsResult.val;
-//     ui.webview.setContentFromTemplate({ templateName: "settings" }, true, [
-//         {
-//             command: "setBooleanSetting",
-//             setting: "downloadOldSubmission",
-//             enabled: extensionSettings.hideMetaFiles,
-//         },
-//         {
-//             command: "setBooleanSetting",
-//             setting: "hideMetaFiles",
-//             enabled: extensionSettings.hideMetaFiles,
-//         },
-//         { command: "setBooleanSetting", setting: "insider", enabled: settings.isInsider() },
-//         {
-//             command: "setBooleanSetting",
-//             setting: "updateExercisesAutomatically",
-//             enabled: settings.getAutomaticallyUpdateExercises(),
-//         },
-//         { command: "setLogLevel", level: settings.getLogLevel() },
-//         {
-//             command: "setTmcDataFolder",
-//             diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
-//             path: resources.projectsDirectory,
-//         },
-//     ]);
-// }
-
 /**
  * Removes given course from UserData and removes its associated files. However, doesn't remove any
  * exercises that are on disk.

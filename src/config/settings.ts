@@ -72,11 +72,18 @@ export default class Settings implements vscode.Disposable {
                         .get<boolean>("insiderVersion", false);
                     this._settings.insiderVersion = value;
                 }
+                // Hacky work-around, because VSCode Settings UI
+                // doesn't support buttons to toggle an event
                 if (event.affectsConfiguration("testMyCode.dataPath.changeTmcDataPath")) {
-                    this._onChangeTmcDataPath?.();
-                    await vscode.workspace
-                        .getConfiguration()
-                        .update("testMyCode.dataPath.changeTmcDataPath", false, true);
+                    const value = vscode.workspace
+                        .getConfiguration("testMyCode")
+                        .get<boolean>("dataPath.changeTmcDataPath", false);
+                    if (value) {
+                        this._onChangeTmcDataPath?.();
+                        await vscode.workspace
+                            .getConfiguration()
+                            .update("testMyCode.dataPath.changeTmcDataPath", false, true);
+                    }
                 }
 
                 // Workspace settings

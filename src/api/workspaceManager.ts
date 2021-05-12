@@ -93,6 +93,9 @@ export default class WorkspaceManager implements vscode.Disposable {
         return uri && this.getExerciseByPath(uri);
     }
 
+    /**
+     * Currently active course workspace uri, or `undefined` otherwise.
+     */
     public get workspaceFileUri(): vscode.Uri | undefined {
         const workspaceFile = vscode.workspace.workspaceFile;
         if (
