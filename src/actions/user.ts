@@ -189,13 +189,8 @@ export async function submitExercise(
     actionContext: ActionContext,
     exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const {
-        dialog,
-        exerciseDecorationProvider,
-        temporaryWebviewProvider,
-        tmc,
-        userData,
-    } = actionContext;
+    const { dialog, exerciseDecorationProvider, temporaryWebviewProvider, tmc, userData } =
+        actionContext;
     Logger.log(`Submitting exercise ${exercise.exerciseSlug} to server`);
 
     const course = userData.getCourseByName(exercise.courseSlug);
