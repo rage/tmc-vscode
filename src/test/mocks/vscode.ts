@@ -22,7 +22,13 @@ export function createMockMemento(): Memento {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const storage = new Map<string, any>();
     const mockMemento = Mock.ofType<Memento>();
-    mockMemento.setup((x) => x.get).returns(() => <T>(x: string): T | undefined => storage.get(x));
+    mockMemento
+        .setup((x) => x.get)
+        .returns(
+            () =>
+                <T>(x: string): T | undefined =>
+                    storage.get(x),
+        );
     mockMemento
         .setup((x) => x.update)
         .returns(() => async (key, value): Promise<void> => {

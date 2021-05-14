@@ -1,7 +1,7 @@
 import { Err, Ok, Result } from "ts-results";
 import { IMock, It, Mock } from "typemoq";
 
-import { LocalExercise } from "../../api/langsSchema";
+import { DownloadOrUpdateCourseExercisesResult, LocalExercise } from "../../api/langsSchema";
 import TMC from "../../api/tmc";
 import {
     checkExerciseUpdates,
@@ -9,8 +9,11 @@ import {
     listLocalCourseExercisesPythonCourse,
 } from "../fixtures/tmc";
 
+const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."));
+
 export interface TMCMockValues {
     clean: Result<void, Error>;
+    downloadExercises: Result<DownloadOrUpdateCourseExercisesResult, Error>;
     listLocalCourseExercisesPythonCourse: Result<LocalExercise[], Error>;
     getSettingClosedExercises: Result<string[], Error>;
     getSettingProjectsDir: Result<string, Error>;
@@ -23,6 +26,7 @@ export interface TMCMockValues {
 export function createTMCMock(): [IMock<TMC>, TMCMockValues] {
     const values: TMCMockValues = {
         clean: Ok.EMPTY,
+        downloadExercises: NOT_MOCKED_ERROR,
         listLocalCourseExercisesPythonCourse: Ok(listLocalCourseExercisesPythonCourse),
         getSettingClosedExercises: Ok(closedExercisesPythonCourse),
         getSettingProjectsDir: Ok("/langs/path/to/exercises"),
@@ -40,6 +44,7 @@ export function createFailingTMCMock(): [IMock<TMC>, TMCMockValues] {
     const error = Err(new Error());
     const values: TMCMockValues = {
         clean: error,
+        downloadExercises: NOT_MOCKED_ERROR,
         listLocalCourseExercisesPythonCourse: error,
         getSettingClosedExercises: error,
         getSettingProjectsDir: error,
@@ -96,6 +101,10 @@ function setupMockValues(values: TMCMockValues): IMock<TMC> {
 
     mock.setup((x) => x.checkExerciseUpdates(It.isAny())).returns(
         async () => values.checkExerciseUpdates,
+    );
+
+    mock.setup((x) => x.downloadExercises(It.isAny(), It.isAny(), It.isAny())).returns(
+        async () => values.downloadExercises,
     );
 
     return mock;

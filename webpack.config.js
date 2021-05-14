@@ -31,6 +31,7 @@ const config = () => {
         entry: {
             extension: "./src/extension.ts",
             "testBundle.test": glob.sync("./src/test/**/*.test.ts"),
+            "integration.spec": glob.sync("./src/test-integration/**/*.spec.ts"),
         },
         output: {
             path: path.resolve(__dirname, "dist"),
@@ -55,6 +56,14 @@ const config = () => {
         },
         infrastructureLogging: {
             level: "log",
+        },
+        optimization: {
+            splitChunks: {
+                chunks: "all",
+                name(module, chunks) {
+                    return chunks.find((x) => x.name === "extension") ? "lib" : "testlib";
+                },
+            },
         },
         module: {
             rules: [

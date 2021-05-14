@@ -11,7 +11,7 @@ function run() {
     });
 
     return new Promise((c, e) => {
-        mocha.addFile(path.resolve(__dirname, "..", "dist", "testBundle.test.js"));
+        mocha.addFile(path.resolve(__dirname, "..", "dist", "integration.spec.js"));
 
         try {
             // Run the mocha test

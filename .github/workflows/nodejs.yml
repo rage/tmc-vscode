@@ -34,7 +34,11 @@ jobs:
                   npm run setup
                   chmod -R +x cli
                   cd ..
-            - name: Run tests
+            - name: Unit tests
               uses: GabrielBB/xvfb-action@v1.0
               with:
                   run: npm test
+            - name: Integration tests
+              uses: GabrielBB/xvfb-action@v1.0
+              with:
+                  run: npm run test-integration-only integration
