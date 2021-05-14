@@ -24,10 +24,10 @@ jobs:
               uses: actions/setup-node@v1
               with:
                   node-version: ${{ matrix.node-version }}
-            - name: Build E2E images
-              run: docker build -f ./containers/ubuntu-test/Dockerfile . -t tmc-vscode-ubuntu-test
-            - name: Run ui tests
-              run: docker run -t --rm tmc-vscode-ubuntu-test
+            #- name: Build E2E images
+            #  run: docker build -f ./containers/ubuntu-test/Dockerfile . -t tmc-vscode-ubuntu-test
+            #- name: Run ui tests
+            #  run: docker run -t --rm tmc-vscode-ubuntu-test
             - name: Package extension
               run: |
                   npm run ci:all
