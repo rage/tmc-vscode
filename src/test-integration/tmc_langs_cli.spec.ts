@@ -2,6 +2,7 @@ import { expect } from "chai";
 import * as cp from "child_process";
 import { sync as delSync } from "del";
 import * as fs from "fs-extra";
+import { first } from "lodash";
 import * as path from "path";
 import * as kill from "tree-kill";
 import { Result } from "ts-results";
@@ -198,6 +199,12 @@ suite("tmc langs cli spec", function () {
 
             test("should be able to clean the exercise", async function () {
                 await unwrapResult(tmc.clean(exercisePath));
+            });
+
+            test("should be able to list local exercises", async function () {
+                const result = await unwrapResult(tmc.listLocalCourseExercises("python-course"));
+                expect(result.length).to.be.equal(1);
+                expect(first(result)?.["exercise-path"]).to.be.equal(exercisePath);
             });
 
             test("should be able to run tests for exercise", async function () {
@@ -438,14 +445,20 @@ suite("tmc langs cli spec", function () {
             setup(async function () {
                 delSync(projectsDir, { force: true });
                 writeCredentials(configDir);
-                const result = await tmc.downloadExercises([1], true, () => {});
+                const result = (await tmc.downloadExercises([1], true, () => {})).unwrap();
                 clearCredentials(configDir);
-                exercisePath = result.unwrap().downloaded[0].path;
+                exercisePath = result.downloaded[0].path;
             });
 
             test("should be able to clean the exercise", async function () {
                 const result = await unwrapResult(tmc.clean(exercisePath));
                 expect(result).to.be.undefined;
+            });
+
+            test("should be able to list local exercises", async function () {
+                const result = await unwrapResult(tmc.listLocalCourseExercises("python-course"));
+                expect(result.length).to.be.equal(1);
+                expect(first(result)?.["exercise-path"]).to.be.equal(exercisePath);
             });
 
             test("should be able to run tests for exercise", async function () {
@@ -492,7 +505,7 @@ function writeCredentials(configDir: string): void {
 }
 
 function clearCredentials(configDir: string): void {
-    delSync(configDir, { force: true });
+    delSync(path.join(configDir, "credentials.json"), { force: true });
 }
 
 function setupProjectsDir(configDir: string, projectsDir: string): string {
