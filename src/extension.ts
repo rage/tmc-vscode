@@ -145,7 +145,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await workspaceManager.verifyWorkspaceSettingsIntegrity();
     }
 
-    const settings = new Settings(storage, resources);
+    const settings = new Settings(storage);
     context.subscriptions.push(settings);
 
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);

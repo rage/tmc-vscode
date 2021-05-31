@@ -1,4 +1,3 @@
-import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import Storage, {
@@ -7,8 +6,9 @@ import Storage, {
 } from "../api/storage";
 import { Logger, LogLevel } from "../utils/logger";
 
-import Resources from "./resources";
-
+/**
+ * @deprecated Default values are now implemented in package.json / VSCode settings.
+ */
 export interface ExtensionSettings {
     downloadOldSubmission: boolean;
     hideMetaFiles: boolean;
@@ -26,6 +26,9 @@ export interface ExtensionSettings {
  * so that we can test and don't need workspaceManager dependency.
  */
 export default class Settings implements vscode.Disposable {
+    /**
+     * @deprecated Default values are now implemented in package.json / VSCode settings.
+     */
     private static readonly _defaultSettings: ExtensionSettings = {
         downloadOldSubmission: true,
         hideMetaFiles: true,
@@ -43,16 +46,19 @@ export default class Settings implements vscode.Disposable {
      * @deprecated Storage dependency should be removed when major 3.0 release.
      */
     private readonly _storage: Storage;
-    private readonly _resources: Resources;
 
+    /**
+     * @deprecated Values will be stored in VSCode Settings
+     */
     private _settings: ExtensionSettings;
     private _state: SessionState;
     private _disposables: vscode.Disposable[];
 
-    constructor(storage: Storage, resources: Resources) {
+    constructor(storage: Storage) {
         this._storage = storage;
-        this._resources = resources;
+        // Remove on major 3.0
         const storedSettings = storage.getExtensionSettings();
+        // Remove on major 3.0
         this._settings = storedSettings
             ? Settings._deserializeExtensionSettings(storedSettings)
             : Settings._defaultSettings;
@@ -133,6 +139,9 @@ export default class Settings implements vscode.Disposable {
             .update("currentLocation", path, true);
     }
 
+    /**
+     * @deprecated Storage dependency should be removed when major 3.0 release.
+     */
     public async updateExtensionSettingsToStorage(settings: ExtensionSettings): Promise<void> {
         await this._storage.updateExtensionSettings(settings);
     }
@@ -151,10 +160,6 @@ export default class Settings implements vscode.Disposable {
         return this._getWorkspaceSettingValue("updateExercisesAutomatically");
     }
 
-    public async getExtensionSettings(): Promise<Result<ExtensionSettings, Error>> {
-        return Ok(this._settings);
-    }
-
     public isInsider(): boolean {
         return vscode.workspace
             .getConfiguration("testMyCode")
@@ -163,10 +168,13 @@ export default class Settings implements vscode.Disposable {
 
     public async configureIsInsider(value: boolean): Promise<void> {
         this._settings.insiderVersion = value;
-        vscode.workspace.getConfiguration("testMyCode").update("insiderVersion", value, true);
+        await vscode.workspace.getConfiguration("testMyCode").update("insiderVersion", value, true);
         await this.updateExtensionSettingsToStorage(this._settings);
     }
 
+    /**
+     * @deprecated To be removed aswell when Storage dependency removed in major 3.0.
+     */
     private static _deserializeExtensionSettings(
         settings: SerializedExtensionSettings,
     ): ExtensionSettings {
