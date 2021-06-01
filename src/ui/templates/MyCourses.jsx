@@ -108,8 +108,8 @@ const component = (props) => {
 
     return (
         <div class="container">
-            <div class="row py-2">
-                <div class="col-md-8">
+            <div class="row pb-3">
+                <div class="col-md-7">
                     <h1 data-se="my-courses-title">My Courses</h1>
                     <div>
                         <input
@@ -121,13 +121,13 @@ const component = (props) => {
                         />
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <h5>TMC Data</h5>
+                <div class="col-md-5">
+                    <h5>TMC Exercises</h5>
                     <div>
-                        Currently your TMC data (<span id="tmc-data-size" />) is located at:
+                        Currently your exercises (<span id="tmc-data-size" />) are located at:
                     </div>
                     <p>
-                        <span id="tmc-data-path" />
+                        <pre style="white-space: pre;" id="tmc-data-path"></pre>
                     </p>
                     <button class="btn btn-secondary btn-sm" id="change-tmc-datapath-btn">
                         Change path

@@ -76,19 +76,6 @@ export default class Settings implements vscode.Disposable {
                         .get<boolean>("insiderVersion", false);
                     this._settings.insiderVersion = value;
                 }
-                // Hacky work-around, because VSCode Settings UI
-                // doesn't support buttons to toggle an event
-                if (event.affectsConfiguration("testMyCode.dataPath.changeTmcDataPath")) {
-                    const value = vscode.workspace
-                        .getConfiguration("testMyCode")
-                        .get<boolean>("dataPath.changeTmcDataPath", false);
-                    if (value) {
-                        this._onChangeTmcDataPath?.();
-                        await vscode.workspace
-                            .getConfiguration()
-                            .update("testMyCode.dataPath.changeTmcDataPath", false, true);
-                    }
-                }
 
                 // Workspace settings
                 if (event.affectsConfiguration("testMyCode.hideMetaFiles")) {
@@ -129,12 +116,6 @@ export default class Settings implements vscode.Disposable {
 
     public dispose(): void {
         this._disposables.forEach((x) => x.dispose());
-    }
-
-    public async setTmcDataPathPlaceholder(path: string): Promise<void> {
-        await vscode.workspace
-            .getConfiguration("testMyCode.dataPath")
-            .update("currentLocation", path, true);
     }
 
     /**

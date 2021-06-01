@@ -17,7 +17,7 @@ export async function moveExtensionDataPath(
     newPath: vscode.Uri,
     onUpdate?: (value: { percent: number; message?: string }) => void,
 ): Promise<Result<void, Error>> {
-    const { resources, tmc, settings } = actionContext;
+    const { resources, tmc } = actionContext;
 
     // This appears to be unnecessary with current VS Code version
     /*
@@ -51,6 +51,5 @@ export async function moveExtensionDataPath(
     }
 
     resources.projectsDirectory = newFsPath;
-    await settings.setTmcDataPathPlaceholder(newFsPath);
     return refreshLocalExercises(actionContext);
 }

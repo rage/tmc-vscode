@@ -188,18 +188,6 @@
         "configuration": {
             "title": "TestMyCode",
             "properties": {
-                "testMyCode.dataPath.changeTmcDataPath": {
-                    "type": "boolean",
-                    "scope": "application",
-                    "default": false,
-                    "description": "Toggle this checkmark to select a new location for your TMC exercises."
-                },
-                "testMyCode.dataPath.currentLocation": {
-                    "type": "string",
-                    "scope": "application",
-                    "default": "/",
-                    "description": "Folder where your exercises are stored on your disk. \nPlaceholder for the value, change location by toggling checkbox above."
-                },
                 "testMyCode.downloadOldSubmission": {
                     "type": "boolean",
                     "default": true,
