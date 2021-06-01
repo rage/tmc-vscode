@@ -2,6 +2,7 @@ import { expect } from "chai";
 import * as cp from "child_process";
 import { sync as delSync } from "del";
 import * as fs from "fs-extra";
+import { first } from "lodash";
 import * as path from "path";
 import * as kill from "tree-kill";
 import { Result } from "ts-results";
@@ -12,7 +13,7 @@ import { CLIENT_NAME, TMC_LANGS_VERSION } from "../config/constants";
 import { AuthenticationError, AuthorizationError, BottleneckError, RuntimeError } from "../errors";
 import { getLangsCLIForPlatform, getPlatform } from "../utils/";
 
-// __dirname is the dist folder when executed.
+// __dirname is the dist folder when built.
 const PROJECT_ROOT = path.join(__dirname, "..");
 const ARTIFACT_FOLDER = path.join(PROJECT_ROOT, "test-artifacts");
 
@@ -112,7 +113,7 @@ suite("tmc langs cli spec", function () {
             result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
         }).timeout(10000);
 
-        // Missing ids are skipped for some reason
+        // Ids missing from the server are missing from the response.
         test.skip("should not be able to download a non-existent exercise", async function () {
             const downloads = (await tmc.downloadExercises([404], true, () => {})).unwrap();
             expect(downloads.failed?.length).to.be.equal(1);
@@ -198,6 +199,12 @@ suite("tmc langs cli spec", function () {
 
             test("should be able to clean the exercise", async function () {
                 await unwrapResult(tmc.clean(exercisePath));
+            });
+
+            test("should be able to list local exercises", async function () {
+                const result = await unwrapResult(tmc.listLocalCourseExercises("python-course"));
+                expect(result.length).to.be.equal(1);
+                expect(first(result)?.["exercise-path"]).to.be.equal(exercisePath);
             });
 
             test("should be able to run tests for exercise", async function () {
@@ -315,7 +322,8 @@ suite("tmc langs cli spec", function () {
                 expect(result.val).to.be.instanceOf(RuntimeError);
             });
 
-            test("should encounter an error when attempting to revert to an older submission", async function () {
+            // Downloads exercise on Langs 0.18
+            test.skip("should encounter an error when attempting to revert to an older submission", async function () {
                 const result = await tmc.downloadOldSubmission(1, missingExercisePath, 0, false);
                 expect(result.val).to.be.instanceOf(RuntimeError);
             });
@@ -437,14 +445,20 @@ suite("tmc langs cli spec", function () {
             setup(async function () {
                 delSync(projectsDir, { force: true });
                 writeCredentials(configDir);
-                const result = await tmc.downloadExercises([1], true, () => {});
+                const result = (await tmc.downloadExercises([1], true, () => {})).unwrap();
                 clearCredentials(configDir);
-                exercisePath = result.unwrap().downloaded[0].path;
+                exercisePath = result.downloaded[0].path;
             });
 
             test("should be able to clean the exercise", async function () {
                 const result = await unwrapResult(tmc.clean(exercisePath));
                 expect(result).to.be.undefined;
+            });
+
+            test("should be able to list local exercises", async function () {
+                const result = await unwrapResult(tmc.listLocalCourseExercises("python-course"));
+                expect(result.length).to.be.equal(1);
+                expect(first(result)?.["exercise-path"]).to.be.equal(exercisePath);
             });
 
             test("should be able to run tests for exercise", async function () {
@@ -491,7 +505,7 @@ function writeCredentials(configDir: string): void {
 }
 
 function clearCredentials(configDir: string): void {
-    delSync(configDir, { force: true });
+    delSync(path.join(configDir, "credentials.json"), { force: true });
 }
 
 function setupProjectsDir(configDir: string, projectsDir: string): string {
