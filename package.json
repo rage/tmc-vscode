@@ -507,6 +507,7 @@
     },
     "dependencies": {
         "del": "^6.0.0",
+        "du": "^1.0.0",
         "fs-extra": "^10.0.0",
         "handlebars": "^4.7.7",
         "lodash": "^4.17.21",
