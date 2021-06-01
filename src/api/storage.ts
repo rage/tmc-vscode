@@ -64,6 +64,9 @@ export default class Storage {
         return this._context.globalState.get<UserData>(Storage._userDataKey);
     }
 
+    /**
+     * @deprecated Extension Settings will be stored in VSCode, remove on major 3.0 release.
+     */
     public getExtensionSettings(): ExtensionSettings | undefined {
         return this._context.globalState.get<ExtensionSettings>(Storage._extensionSettingsKey);
     }

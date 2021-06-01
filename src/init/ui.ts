@@ -97,6 +97,13 @@ export function registerUiActions(actionContext: ActionContext): void {
         displayUserCourses(actionContext);
     });
 
+    ui.webview.registerHandler("changeTmcDataPath", async (msg: { type?: "changeTmcDataPath" }) => {
+        if (!msg.type) {
+            return;
+        }
+        await vscode.commands.executeCommand("tmc.changeTmcDataPath");
+    });
+
     ui.webview.registerHandler(
         "clearNewExercises",
         (msg: { type?: "clearNewExercises"; courseId?: number }) => {

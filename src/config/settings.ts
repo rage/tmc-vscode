@@ -56,9 +56,7 @@ export default class Settings implements vscode.Disposable {
 
     constructor(storage: Storage) {
         this._storage = storage;
-        // Remove on major 3.0
         const storedSettings = storage.getExtensionSettings();
-        // Remove on major 3.0
         this._settings = storedSettings
             ? Settings._deserializeExtensionSettings(storedSettings)
             : Settings._defaultSettings;

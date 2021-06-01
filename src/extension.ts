@@ -110,9 +110,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const resources = resourcesResult.val;
-    Logger.configure(
-        vscode.workspace.getConfiguration("testMyCode").get<LogLevel>("logLevel", LogLevel.Errors),
-    );
+
+    const settings = new Settings(storage);
+    context.subscriptions.push(settings);
+
+    Logger.configure(settings.getLogLevel());
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
     const loggedIn = ui.treeDP.createVisibilityGroup(authenticated);
@@ -144,9 +146,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
         await workspaceManager.verifyWorkspaceSettingsIntegrity();
     }
-
-    const settings = new Settings(storage);
-    context.subscriptions.push(settings);
 
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
     const exerciseDecorationProvider = new ExerciseDecorationProvider(userData, workspaceManager);

@@ -1,14 +1,15 @@
+import du = require("du");
 import * as vscode from "vscode";
 
 import { moveExtensionDataPath } from "../actions";
 import { ActionContext } from "../actions/types";
-import { Logger } from "../utils";
+import { formatSizeInBytes, Logger } from "../utils";
 
 /**
  * Removes language specific meta files from exercise directory.
  */
 export async function changeTmcDataPath(actionContext: ActionContext): Promise<void> {
-    const { dialog, resources } = actionContext;
+    const { dialog, resources, ui } = actionContext;
 
     const old = resources.projectsDirectory;
     const options: vscode.OpenDialogOptions = {
@@ -36,5 +37,10 @@ export async function changeTmcDataPath(actionContext: ActionContext): Promise<v
         } else {
             dialog.errorNotification(res.val.message, res.val);
         }
+        ui.webview.postMessage({
+            command: "setTmcDataFolder",
+            diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
+            path: resources.projectsDirectory,
+        });
     }
 }
