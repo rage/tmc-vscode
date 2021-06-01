@@ -1,9 +1,6 @@
 import * as vscode from "vscode";
 
-import Storage, {
-    ExtensionSettings as SerializedExtensionSettings,
-    SessionState,
-} from "../api/storage";
+import Storage, { SessionState } from "../api/storage";
 import { Logger, LogLevel } from "../utils/logger";
 
 /**
@@ -26,40 +23,20 @@ export interface ExtensionSettings {
  * so that we can test and don't need workspaceManager dependency.
  */
 export default class Settings implements vscode.Disposable {
-    /**
-     * @deprecated Default values are now implemented in package.json / VSCode settings.
-     */
-    private static readonly _defaultSettings: ExtensionSettings = {
-        downloadOldSubmission: true,
-        hideMetaFiles: true,
-        insiderVersion: false,
-        logLevel: LogLevel.Errors,
-        updateExercisesAutomatically: true,
-    };
-
     private _onChangeHideMetaFiles?: (value: boolean) => void;
     private _onChangeDownloadOldSubmission?: (value: boolean) => void;
     private _onChangeUpdateExercisesAutomatically?: (value: boolean) => void;
-    private _onChangeTmcDataPath?: () => void;
 
     /**
      * @deprecated Storage dependency should be removed when major 3.0 release.
      */
     private readonly _storage: Storage;
 
-    /**
-     * @deprecated Values will be stored in VSCode Settings
-     */
-    private _settings: ExtensionSettings;
     private _state: SessionState;
     private _disposables: vscode.Disposable[];
 
     constructor(storage: Storage) {
         this._storage = storage;
-        const storedSettings = storage.getExtensionSettings();
-        this._settings = storedSettings
-            ? Settings._deserializeExtensionSettings(storedSettings)
-            : Settings._defaultSettings;
         this._state = storage.getSessionState() ?? {};
         this._disposables = [
             vscode.workspace.onDidChangeConfiguration(async (event) => {
@@ -68,32 +45,22 @@ export default class Settings implements vscode.Disposable {
                         .getConfiguration("testMyCode")
                         .get<LogLevel>("logLevel", LogLevel.Errors);
                     Logger.configure(value);
-                    this._settings.logLevel = value;
-                }
-                if (event.affectsConfiguration("testMyCode.insiderVersion")) {
-                    const value = vscode.workspace
-                        .getConfiguration("testMyCode")
-                        .get<boolean>("insiderVersion", false);
-                    this._settings.insiderVersion = value;
                 }
 
                 // Workspace settings
                 if (event.affectsConfiguration("testMyCode.hideMetaFiles")) {
                     const value = this._getWorkspaceSettingValue("hideMetaFiles");
                     this._onChangeHideMetaFiles?.(value);
-                    this._settings.hideMetaFiles = value;
                 }
                 if (event.affectsConfiguration("testMyCode.downloadOldSubmission")) {
                     const value = this._getWorkspaceSettingValue("downloadOldSubmission");
                     this._onChangeDownloadOldSubmission?.(value);
-                    this._settings.downloadOldSubmission = value;
                 }
                 if (event.affectsConfiguration("testMyCode.updateExercisesAutomatically")) {
                     const value = this._getWorkspaceSettingValue("updateExercisesAutomatically");
                     this._onChangeUpdateExercisesAutomatically?.(value);
-                    this._settings.updateExercisesAutomatically = value;
                 }
-                await this.updateExtensionSettingsToStorage(this._settings);
+                await this.updateExtensionSettingsToStorage();
             }),
         ];
     }
@@ -104,10 +71,6 @@ export default class Settings implements vscode.Disposable {
 
     public set onChangeHideMetaFiles(callback: (value: boolean) => void) {
         this._onChangeHideMetaFiles = callback;
-    }
-
-    public set onChangeTmcDataPath(callback: () => void) {
-        this._onChangeTmcDataPath = callback;
     }
 
     public set onChangeUpdateExercisesAutomatically(callback: (value: boolean) => void) {
@@ -121,7 +84,15 @@ export default class Settings implements vscode.Disposable {
     /**
      * @deprecated Storage dependency should be removed when major 3.0 release.
      */
-    public async updateExtensionSettingsToStorage(settings: ExtensionSettings): Promise<void> {
+    public async updateExtensionSettingsToStorage(): Promise<void> {
+        const settings: ExtensionSettings = {
+            downloadOldSubmission: this._getUserSettingValue("downloadOldSubmission"),
+            hideMetaFiles: this._getUserSettingValue("hideMetaFiles"),
+            updateExercisesAutomatically: this._getUserSettingValue("updateExercisesAutomatically"),
+            logLevel:
+                vscode.workspace.getConfiguration().get("testMyCode.logLevel") ?? LogLevel.Errors,
+            insiderVersion: this._getUserSettingValue("insiderVersion"),
+        };
         await this._storage.updateExtensionSettings(settings);
     }
 
@@ -146,37 +117,13 @@ export default class Settings implements vscode.Disposable {
     }
 
     public async configureIsInsider(value: boolean): Promise<void> {
-        this._settings.insiderVersion = value;
         await vscode.workspace.getConfiguration("testMyCode").update("insiderVersion", value, true);
-        await this.updateExtensionSettingsToStorage(this._settings);
+        await this.updateExtensionSettingsToStorage();
     }
 
     /**
-     * @deprecated To be removed aswell when Storage dependency removed in major 3.0.
-     */
-    private static _deserializeExtensionSettings(
-        settings: SerializedExtensionSettings,
-    ): ExtensionSettings {
-        let logLevel: LogLevel = LogLevel.Errors;
-        switch (settings.logLevel) {
-            case "errors":
-                logLevel = LogLevel.Errors;
-                break;
-            case "none":
-                logLevel = LogLevel.None;
-                break;
-            case "verbose":
-                logLevel = LogLevel.Verbose;
-                break;
-        }
-
-        return {
-            ...settings,
-            logLevel,
-        };
-    }
-
-    /**
+     * Used to fetch boolean values from VSCode settings API Workspace scope
+     *
      * workspaceValue is undefined in multi-root workspace if it matches defaultValue
      * We want to "force" the value in the multi-root workspace, because then
      * the workspace scope > user scope.
@@ -188,6 +135,19 @@ export default class Settings implements vscode.Disposable {
             return !!scopeSettings?.defaultValue;
         } else {
             return scopeSettings.workspaceValue;
+        }
+    }
+
+    /**
+     * Used to fetch boolean values from VSCode settings API User Scope
+     */
+    private _getUserSettingValue(section: string): boolean {
+        const configuration = vscode.workspace.getConfiguration("testMyCode");
+        const scopeSettings = configuration.inspect<boolean>(section);
+        if (scopeSettings?.globalValue === undefined) {
+            return !!scopeSettings?.defaultValue;
+        } else {
+            return scopeSettings.globalValue;
         }
     }
 }

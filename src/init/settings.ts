@@ -1,5 +1,4 @@
 import { ActionContext } from "../actions/types";
-import * as commands from "../commands";
 
 export async function registerSettingsCallbacks(actionContext: ActionContext): Promise<void> {
     const { settings, workspaceManager } = actionContext;
@@ -15,8 +14,5 @@ export async function registerSettingsCallbacks(actionContext: ActionContext): P
             "testMyCode.updateExercisesAutomatically",
             value,
         );
-    };
-    settings.onChangeTmcDataPath = async (): Promise<void> => {
-        await commands.changeTmcDataPath(actionContext);
     };
 }

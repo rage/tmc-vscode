@@ -77,6 +77,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         storage,
         dialog,
         tmc,
+        vscode.workspace.getConfiguration(),
     );
     if (migrationResult.err) {
         if (migrationResult.val instanceof HaltForReloadError) {

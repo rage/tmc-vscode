@@ -14,7 +14,7 @@ import * as sessionState from "../fixtures/sessionState";
 import * as userData from "../fixtures/userData";
 import { createDialogMock } from "../mocks/dialog";
 import { createFailingTMCMock, createTMCMock } from "../mocks/tmc";
-import { createMockContext } from "../mocks/vscode";
+import { createMockContext, createMockWorkspaceConfiguration } from "../mocks/vscode";
 
 const UNSTABLE_EXERCISE_DATA_KEY = "exerciseData";
 const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";
@@ -36,11 +36,13 @@ suite("Extension data migration", function () {
     let dialogMock: IMock<Dialog>;
     let storage: Storage;
     let tmcMock: IMock<TMC>;
+    let settingsMock: IMock<vscode.WorkspaceConfiguration>;
 
     setup(function () {
         mockFs(virtualFileSystem);
         context = createMockContext();
         [dialogMock] = createDialogMock();
+        settingsMock = createMockWorkspaceConfiguration();
         storage = new Storage(context);
         [tmcMock] = createTMCMock();
     });
@@ -51,6 +53,7 @@ suite("Extension data migration", function () {
             storage,
             dialogMock.object,
             tmcMock.object,
+            settingsMock.object,
         );
         expect(result.ok).to.be.true;
     });
@@ -66,6 +69,7 @@ suite("Extension data migration", function () {
                 storage,
                 dialogMock.object,
                 tmcMock.object,
+                settingsMock.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
             expect(storage.getUserData()).to.not.be.undefined;
@@ -81,6 +85,7 @@ suite("Extension data migration", function () {
                 storage,
                 dialogMock.object,
                 tmcMock.object,
+                settingsMock.object,
             );
             expect(result.val).to.be.instanceOf(Error);
             expect(storage.getUserData()).to.be.undefined;
@@ -100,6 +105,7 @@ suite("Extension data migration", function () {
                 storage,
                 dialogMock.object,
                 tmcMock.object,
+                settingsMock.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
             expect(storage.getUserData()).to.not.be.undefined;
@@ -115,6 +121,7 @@ suite("Extension data migration", function () {
                 storage,
                 dialogMock.object,
                 tmcMock.object,
+                settingsMock.object,
             );
             expect(result.val).to.be.instanceOf(Error);
             expect(storage.getUserData()).to.be.undefined;
@@ -138,6 +145,7 @@ suite("Extension data migration", function () {
                 storage,
                 dialogMock.object,
                 tmcMock.object,
+                settingsMock.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
             expect(storage.getUserData()).to.not.be.undefined;
@@ -160,6 +168,7 @@ suite("Extension data migration", function () {
                 storage,
                 dialogMock.object,
                 tmcMock.object,
+                settingsMock.object,
             );
             expect(result.val).to.be.instanceOf(Error);
             expect(storage.getUserData()).to.be.undefined;
@@ -187,6 +196,7 @@ suite("Extension data migration", function () {
                 storage,
                 dialogMock.object,
                 tmcMock.object,
+                settingsMock.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
             expect(storage.getUserData()).to.not.be.undefined;
@@ -209,6 +219,7 @@ suite("Extension data migration", function () {
                 storage,
                 dialogMock.object,
                 tmcMock.object,
+                settingsMock.object,
             );
             expect(result.val).to.be.instanceOf(Error);
             expect(storage.getUserData()).to.be.undefined;
@@ -233,6 +244,7 @@ suite("Extension data migration", function () {
                 storage,
                 dialogMock.object,
                 tmcMock.object,
+                settingsMock.object,
             );
             expect(result).to.be.equal(Ok.EMPTY);
             expect(storage.getUserData()).to.not.be.undefined;
