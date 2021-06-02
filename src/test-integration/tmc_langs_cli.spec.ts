@@ -179,7 +179,7 @@ suite("tmc langs cli spec", function () {
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
 
-        test("should be able to give feedback", async function () {
+        test.skip("should be able to give feedback", async function () {
             const feedback: SubmissionFeedback = {
                 status: [{ question_id: 0, answer: "42" }],
             };
@@ -387,8 +387,8 @@ suite("tmc langs cli spec", function () {
         });
 
         test("should not be able to download an exercise", async function () {
-            const result = await tmc.downloadExercises([1], true, () => {});
-            expect(result.val).to.be.instanceOf(RuntimeError);
+            const result = (await tmc.downloadExercises([1], true, () => {})).unwrap();
+            expect(result.failed?.length).to.be.equal(1);
         });
 
         test("should not get existing api data in general", async function () {

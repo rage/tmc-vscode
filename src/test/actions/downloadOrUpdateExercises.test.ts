@@ -58,7 +58,7 @@ suite("downloadOrUpdateExercises action", function () {
     const createDownloadResult = (
         downloaded: ExerciseDownload[],
         skipped: ExerciseDownload[],
-        failed: Array<[ExerciseDownload, string]> | undefined,
+        failed: Array<[ExerciseDownload, string[]]> | undefined,
     ): Result<DownloadOrUpdateCourseExercisesResult, Error> => {
         return Ok({
             downloaded,
@@ -136,8 +136,8 @@ suite("downloadOrUpdateExercises action", function () {
             [],
             [],
             [
-                [helloWorld, ""],
-                [otherWorld, ""],
+                [helloWorld, [""]],
+                [otherWorld, [""]],
             ],
         );
         const result = (await downloadOrUpdateExercises(actionContext(), [1, 2])).unwrap();
@@ -214,7 +214,7 @@ suite("downloadOrUpdateExercises action", function () {
     });
 
     test("should post status updates for failing download", async function () {
-        tmcMockValues.downloadExercises = createDownloadResult([], [], [[helloWorld, ""]]);
+        tmcMockValues.downloadExercises = createDownloadResult([], [], [[helloWorld, [""]]]);
         await downloadOrUpdateExercises(actionContext(), [1]);
         expect(webviewMessages.length).to.be.greaterThanOrEqual(
             2,
