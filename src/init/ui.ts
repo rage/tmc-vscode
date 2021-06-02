@@ -1,4 +1,3 @@
-import du = require("du");
 import { Result } from "ts-results";
 import * as vscode from "vscode";
 
@@ -9,7 +8,6 @@ import {
     displayUserCourses,
     downloadOrUpdateExercises,
     login,
-    moveExtensionDataPath,
     openExercises,
     openWorkspace,
     refreshLocalExercises,
@@ -18,7 +16,7 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext } from "../actions/types";
-import { formatSizeInBytes, Logger, LogLevel } from "../utils/";
+import { Logger } from "../utils/";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.
@@ -27,7 +25,7 @@ import { formatSizeInBytes, Logger, LogLevel } from "../utils/";
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { dialog, ui, resources, settings, userData, visibilityGroups } = actionContext;
+    const { dialog, ui, settings, userData, visibilityGroups } = actionContext;
     Logger.log("Initializing UI Actions");
 
     // Register UI actions
@@ -97,6 +95,13 @@ export function registerUiActions(actionContext: ActionContext): void {
     );
     ui.webview.registerHandler("myCourses", () => {
         displayUserCourses(actionContext);
+    });
+
+    ui.webview.registerHandler("changeTmcDataPath", async (msg: { type?: "changeTmcDataPath" }) => {
+        if (!msg.type) {
+            return;
+        }
+        await vscode.commands.executeCommand("tmc.changeTmcDataPath");
     });
 
     ui.webview.registerHandler(
@@ -273,71 +278,6 @@ export function registerUiActions(actionContext: ActionContext): void {
             }
         },
     );
-    ui.webview.registerHandler("changeTmcDataPath", async (msg: { type?: "changeTmcDataPath" }) => {
-        if (!msg.type) {
-            return;
-        }
-
-        const old = resources.projectsDirectory;
-        const options: vscode.OpenDialogOptions = {
-            canSelectFiles: false,
-            canSelectFolders: true,
-            canSelectMany: false,
-            openLabel: "Select folder",
-        };
-        const newPath = (await vscode.window.showOpenDialog(options))?.[0];
-        if (newPath && old) {
-            const res = await dialog.progressNotification(
-                "Moving projects directory...",
-                (progress) => {
-                    return moveExtensionDataPath(actionContext, newPath, (update) =>
-                        progress.report(update),
-                    );
-                },
-            );
-            if (res.ok) {
-                Logger.log(`Moved workspace folder from ${old} to ${newPath.fsPath}`);
-                dialog.notification(`TMC Data was successfully moved to ${newPath.fsPath}`, [
-                    "OK",
-                    (): void => {},
-                ]);
-            } else {
-                dialog.errorNotification(res.val.message, res.val);
-            }
-            ui.webview.postMessage({
-                command: "setTmcDataFolder",
-                diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
-                path: resources.projectsDirectory,
-            });
-        }
-    });
-
-    ui.webview.registerHandler(
-        "changeLogLevel",
-        async (msg: { type?: "changeLogLevel"; data?: LogLevel }) => {
-            if (!(msg.type && msg.data)) {
-                return;
-            }
-            await settings.updateSetting({ setting: "logLevel", value: msg.data });
-            Logger.configure(msg.data);
-            ui.webview.postMessage({ command: "setLogLevel", level: msg.data });
-        },
-    );
-
-    ui.webview.registerHandler(
-        "hideMetaFiles",
-        async (msg: { type?: "hideMetaFiles"; data?: boolean }) => {
-            if (!(msg.type && msg.data !== undefined)) {
-                return;
-            }
-            await settings.updateSetting({ setting: "hideMetaFiles", value: msg.data });
-            ui.webview.postMessage({
-                command: "setBooleanSetting",
-                setting: "hideMetaFiles",
-                enabled: msg.data,
-            });
-        },
-    );
 
     ui.webview.registerHandler(
         "insiderStatus",
@@ -345,12 +285,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (!(msg.type && msg.data !== undefined)) {
                 return;
             }
-            await settings.updateSetting({ setting: "insiderVersion", value: msg.data });
-            ui.webview.postMessage({
-                command: "setBooleanSetting",
-                setting: "insider",
-                enabled: msg.data,
-            });
+            await settings.configureIsInsider(!!msg.data);
         },
     );
 
@@ -367,47 +302,4 @@ export function registerUiActions(actionContext: ActionContext): void {
         }
         vscode.commands.executeCommand("workbench.action.openExtensionLogsFolder");
     });
-
-    ui.webview.registerHandler("openEditorDirection", (msg: { type?: "openEditorDirection" }) => {
-        if (!msg.type) {
-            return;
-        }
-        const search = "workbench.editor.openSideBySideDirection";
-        // openWorkspaceSettings doesn't take search params:
-        // https://github.com/microsoft/vscode/issues/90086
-        vscode.commands.executeCommand("workbench.action.openSettings", search);
-    });
-
-    ui.webview.registerHandler(
-        "downloadOldSubmissionSetting",
-        async (msg: { type?: "downloadOldSubmissionSetting"; data?: boolean }) => {
-            if (!(msg.type && msg.data !== undefined)) {
-                return;
-            }
-            await settings.updateSetting({ setting: "downloadOldSubmission", value: msg.data });
-            ui.webview.postMessage({
-                command: "setBooleanSetting",
-                setting: "downloadOldSubmission",
-                enabled: msg.data,
-            });
-        },
-    );
-
-    ui.webview.registerHandler(
-        "updateExercisesAutomaticallySetting",
-        async (msg: { type?: "updateExercisesAutomaticallySetting"; data?: boolean }) => {
-            if (!(msg.type && msg.data !== undefined)) {
-                return;
-            }
-            await settings.updateSetting({
-                setting: "updateExercisesAutomatically",
-                value: msg.data,
-            });
-            ui.webview.postMessage({
-                command: "setBooleanSetting",
-                setting: "updateExercisesAutomatically",
-                enabled: msg.data,
-            });
-        },
-    );
 }

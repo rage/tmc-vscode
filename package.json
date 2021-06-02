@@ -77,6 +77,11 @@
                 "category": "TestMyCode"
             },
             {
+                "command": "tmc.changeTmcDataPath",
+                "title": "Change TMC data path",
+                "category": "TestMyCode"
+            },
+            {
                 "command": "tmc.cleanExercise",
                 "title": "Clean Exercise",
                 "category": "TestMyCode"
@@ -180,6 +185,47 @@
                 "title": "Wipe all extension data"
             }
         ],
+        "configuration": {
+            "title": "TestMyCode",
+            "properties": {
+                "testMyCode.downloadOldSubmission": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "When downloading exercises, download your latest submission instead of the exercise template."
+                },
+                "testMyCode.hideMetaFiles": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Hide exercise meta files that are not relevant for completing exercises."
+                },
+                "testMyCode.insiderVersion": {
+                    "type": "boolean",
+                    "scope": "application",
+                    "default": false,
+                    "description": "Insider version to test new features for the TestMyCode extension."
+                },
+                "testMyCode.logLevel": {
+                    "type": "string",
+                    "scope": "application",
+                    "default": "errors",
+                    "enum": [
+                        "none",
+                        "errors",
+                        "verbose"
+                    ],
+                    "enumDescriptions": [
+                        "No extension logging.",
+                        "Log only warning and error messages.",
+                        "Log info, warning and error messages."
+                    ]
+                },
+                "testMyCode.updateExercisesAutomatically": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Download exercise updates automatically."
+                }
+            }
+        },
         "keybindings": [
             {
                 "command": "tmc.closeExercise",

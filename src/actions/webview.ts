@@ -4,11 +4,19 @@
  * -------------------------------------------------------------------------------------------------
  */
 
+import du = require("du");
+
 import { Exercise } from "../api/types";
 import { ExerciseStatus } from "../api/workspaceManager";
 import * as UITypes from "../ui/types";
 import { WebviewMessage } from "../ui/types";
-import { dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utils/";
+import {
+    dateToString,
+    formatSizeInBytes,
+    Logger,
+    parseDate,
+    parseNextDeadlineAfter,
+} from "../utils/";
 
 import { checkForExerciseUpdates } from "./checkForExerciseUpdates";
 import { ActionContext } from "./types";
@@ -17,7 +25,7 @@ import { ActionContext } from "./types";
  * Displays a summary page of user's courses.
  */
 export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
-    const { userData, tmc, ui } = actionContext;
+    const { userData, tmc, ui, resources } = actionContext;
     Logger.log("Displaying My Courses view");
 
     const courses = userData.getCourses();
@@ -35,6 +43,11 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
     ui.webview.setContentFromTemplate({ templateName: "my-courses", courses }, false, [
         ...newExercisesCourses,
         ...disabledStatusCourses,
+        {
+            command: "setTmcDataFolder",
+            diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
+            path: resources.projectsDirectory,
+        },
     ]);
 
     const now = new Date();

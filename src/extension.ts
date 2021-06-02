@@ -77,6 +77,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         storage,
         dialog,
         tmc,
+        vscode.workspace.getConfiguration(),
     );
     if (migrationResult.err) {
         if (migrationResult.val instanceof HaltForReloadError) {
@@ -97,7 +98,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const tmcDataPath = dataPathResult.val;
-    const workspaceFileFolder = path.join(context.globalStoragePath, "workspaces");
+    const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces");
     const resourcesResult = await init.resourceInitialization(
         context,
         storage,
@@ -110,9 +111,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const resources = resourcesResult.val;
-    const settings = new Settings(storage, resources);
-    // We still rely on VSCode Extenion Host restart when workspace switches
-    await settings.verifyWorkspaceSettingsIntegrity();
+
+    const settings = new Settings(storage);
+    context.subscriptions.push(settings);
+
     Logger.configure(settings.getLogLevel());
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
@@ -143,6 +145,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(workspaceManager);
     if (workspaceManager.activeCourse) {
         await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
+        await workspaceManager.verifyWorkspaceSettingsIntegrity();
     }
 
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
@@ -167,6 +170,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
+    init.registerSettingsCallbacks(actionContext);
 
     context.subscriptions.push(
         vscode.window.registerFileDecorationProvider(exerciseDecorationProvider),

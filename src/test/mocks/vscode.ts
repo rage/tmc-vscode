@@ -1,4 +1,4 @@
-import { Mock } from "typemoq";
+import { IMock, It, Mock } from "typemoq";
 import * as vscode from "vscode";
 
 type Memento = vscode.Memento & { setKeysForSync(keys: string[]): void };
@@ -35,4 +35,14 @@ export function createMockMemento(): Memento {
             storage.set(key, value);
         });
     return mockMemento.object;
+}
+
+export function createMockWorkspaceConfiguration(): IMock<vscode.WorkspaceConfiguration> {
+    const mockWorkspaceConfiguration = Mock.ofType<vscode.WorkspaceConfiguration>();
+
+    mockWorkspaceConfiguration
+        .setup((x) => x.update(It.isAny(), It.isAny(), It.isAny()))
+        .returns(async () => {});
+
+    return mockWorkspaceConfiguration;
 }

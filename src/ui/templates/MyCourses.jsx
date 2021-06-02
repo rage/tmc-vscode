@@ -108,15 +108,31 @@ const component = (props) => {
 
     return (
         <div class="container">
-            <h1 data-se="my-courses-title">My Courses</h1>
-            <div>
-                <input
-                    type="button"
-                    class="btn btn-primary mb-4 mt-2"
-                    id="add-new-course"
-                    value="Add new course"
-                    data-se="add-new-course"
-                />
+            <div class="row pb-3">
+                <div class="col-md-7">
+                    <h1 data-se="my-courses-title">My Courses</h1>
+                    <div>
+                        <input
+                            type="button"
+                            class="btn btn-primary mb-4 mt-2"
+                            id="add-new-course"
+                            value="Add new course"
+                            data-se="add-new-course"
+                        />
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <h5>TMC Exercises Location</h5>
+                    <div>
+                        Currently your exercises (<span id="tmc-data-size" />) are located at:
+                    </div>
+                    <p>
+                        <pre style="white-space: pre;" id="tmc-data-path"></pre>
+                    </p>
+                    <button class="btn btn-secondary btn-sm" id="change-tmc-datapath-btn">
+                        Change path
+                    </button>
+                </div>
             </div>
             {courses.length > 0 ? (
                 courses.map(mapCourse).join("")
@@ -134,6 +150,10 @@ const script = () => {
 
     document.getElementById("add-new-course").addEventListener("click", () => {
         vscode.postMessage({ type: "addCourse" });
+    });
+    const changeTMCDataPathButton = document.getElementById("change-tmc-datapath-btn");
+    changeTMCDataPathButton.addEventListener("click", () => {
+        vscode.postMessage({ type: "changeTmcDataPath" });
     });
 
     /**
@@ -218,6 +238,8 @@ const script = () => {
         });
     }
 
+    const tmcDataPath = document.getElementById("tmc-data-path");
+    const tmcDataSize = document.getElementById("tmc-data-size");
     window.addEventListener("message", (event) => {
         for (let i = 0; i < event.data.length; i++) {
             /**@type {import("../types").WebviewMessage} */
@@ -238,6 +260,11 @@ const script = () => {
                 }
                 case "setCourseDisabledStatus": {
                     setCourseDisabledStatus(message.courseId, message.disabled);
+                    break;
+                }
+                case "setTmcDataFolder": {
+                    tmcDataPath.innerText = message.path;
+                    tmcDataSize.innerText = message.diskSize;
                     break;
                 }
             }

@@ -2,11 +2,9 @@ import * as fs from "fs-extra";
 import * as fetch from "node-fetch";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
-import * as vscode from "vscode";
 
 import { FeedbackQuestion } from "../actions/types";
 import { SubmissionFeedbackQuestion } from "../api/types";
-import Resources from "../config/resources";
 import { ConnectionError } from "../errors";
 
 import { Logger } from "./logger";
@@ -64,18 +62,6 @@ export async function downloadFile(
     }
 
     return Ok.EMPTY;
-}
-
-/**
- * Checks if currently open vscode workspace file path and given courseName path matches.
- *
- * @param resources
- * @param courseName
- */
-export function isCorrectWorkspaceOpen(resources: Resources, courseName: string): boolean {
-    const currentWorkspaceFile = vscode.workspace.workspaceFile;
-    const tmcWorkspaceFile = vscode.Uri.file(resources.getWorkspaceFilePath(courseName));
-    return currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString();
 }
 
 /**

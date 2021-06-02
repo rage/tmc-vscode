@@ -48,6 +48,10 @@ export function registerCommands(
             commands.addNewCourse(actionContext),
         ),
 
+        vscode.commands.registerCommand("tmc.changeTmcDataPath", async () =>
+            commands.changeTmcDataPath(actionContext),
+        ),
+
         vscode.commands.registerCommand(
             "tmc.cleanExercise",
             async (resource: vscode.Uri | undefined) =>
@@ -125,7 +129,7 @@ export function registerCommands(
         }),
 
         vscode.commands.registerCommand("tmc.openSettings", async () => {
-            actions.openSettings(actionContext);
+            vscode.commands.executeCommand("workbench.action.openSettings", "TestMyCode");
         }),
 
         vscode.commands.registerCommand("tmc.openTMCExercisesFolder", async () => {

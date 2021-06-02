@@ -4,7 +4,6 @@
  * -------------------------------------------------------------------------------------------------
  */
 
-import du = require("du");
 import * as fs from "fs-extra";
 import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
@@ -16,12 +15,7 @@ import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { BottleneckError } from "../errors";
 import { TestResultData } from "../ui/types";
-import {
-    formatSizeInBytes,
-    isCorrectWorkspaceOpen,
-    Logger,
-    parseFeedbackQuestion,
-} from "../utils/";
+import { Logger, parseFeedbackQuestion } from "../utils/";
 import { getActiveEditorExecutablePath } from "../window";
 
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
@@ -413,7 +407,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
     Logger.log(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
     Logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
 
-    if (!isCorrectWorkspaceOpen(resources, name)) {
+    if (!(currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString())) {
         if (
             !currentWorkspaceFile ||
             (await dialog.confirmation(
@@ -445,45 +439,6 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
         await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri);
         await vscode.commands.executeCommand("workbench.files.action.focusFilesExplorer");
     }
-}
-
-/**
- * Settings webview
- */
-export async function openSettings(actionContext: ActionContext): Promise<void> {
-    const { dialog, ui, resources, settings } = actionContext;
-    Logger.log("Display extension settings");
-    const extensionSettingsResult = await settings.getExtensionSettings();
-    if (extensionSettingsResult.err) {
-        dialog.errorNotification("Failed to fetch settings.", extensionSettingsResult.val);
-        return;
-    }
-
-    const extensionSettings = extensionSettingsResult.val;
-    ui.webview.setContentFromTemplate({ templateName: "settings" }, true, [
-        {
-            command: "setBooleanSetting",
-            setting: "downloadOldSubmission",
-            enabled: extensionSettings.hideMetaFiles,
-        },
-        {
-            command: "setBooleanSetting",
-            setting: "hideMetaFiles",
-            enabled: extensionSettings.hideMetaFiles,
-        },
-        { command: "setBooleanSetting", setting: "insider", enabled: settings.isInsider() },
-        {
-            command: "setBooleanSetting",
-            setting: "updateExercisesAutomatically",
-            enabled: settings.getAutomaticallyUpdateExercises(),
-        },
-        { command: "setLogLevel", level: settings.getLogLevel() },
-        {
-            command: "setTmcDataFolder",
-            diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
-            path: resources.projectsDirectory,
-        },
-    ]);
 }
 
 /**

@@ -47,7 +47,9 @@ function getPythonPath(
                 : extension.exports.settings.getExecutionCommand(document.uri);
             return execCommand.join(" ");
         } else {
-            return actionContext.settings.getWorkspaceSettings()?.get<string>("python.pythonPath");
+            return actionContext.workspaceManager
+                .getWorkspaceSettings()
+                .get<string | undefined>("python.pythonPath");
         }
     } catch (error) {
         const message = "Error while fetching python executable string";
