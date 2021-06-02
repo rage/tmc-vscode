@@ -122,7 +122,7 @@ const component = (props) => {
                     </div>
                 </div>
                 <div class="col-md-5">
-                    <h5>TMC Exercises</h5>
+                    <h5>TMC Exercises Location</h5>
                     <div>
                         Currently your exercises (<span id="tmc-data-size" />) are located at:
                     </div>

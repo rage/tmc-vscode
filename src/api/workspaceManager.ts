@@ -235,35 +235,9 @@ export default class WorkspaceManager implements vscode.Disposable {
                 true,
             );
             await this.excludeMetaFilesInWorkspace(hideMetaFiles);
-            await this.ensureSettingsAreStoredInMultiRootWorkspace();
+            await this._ensureSettingsAreStoredInMultiRootWorkspace();
             await this._verifyWatcherPatternExclusion();
             await this._forceTMCWorkspaceSettings();
-        }
-    }
-
-    /**
-     * Ensures that settings defined in package.json are written to the multi-root
-     * workspace file. If the key can't be found in the .code-workspace file, it will write the
-     * setting defined in the User scope to the file. Last resort, default value.
-     *
-     * This is to ensure that workspace defined settings really overrides the user scope...
-     * https://github.com/microsoft/vscode/issues/58038
-     */
-    public async ensureSettingsAreStoredInMultiRootWorkspace(): Promise<void> {
-        const extension = vscode.extensions.getExtension("moocfi.test-my-code");
-        const extensionDefinedSettings: Record<string, ConfigurationProperties> =
-            extension?.packageJSON?.contributes?.configuration?.properties;
-        for (const [key, value] of Object.entries(extensionDefinedSettings)) {
-            if (value.scope !== "application" && value.type === "boolean") {
-                const codeSettings = this.getWorkspaceSettings().inspect<boolean>(key);
-                if (codeSettings?.workspaceValue !== undefined) {
-                    await this.updateWorkspaceSetting(key, codeSettings.workspaceValue);
-                } else if (codeSettings?.globalValue !== undefined) {
-                    await this.updateWorkspaceSetting(key, codeSettings.globalValue);
-                } else {
-                    await this.updateWorkspaceSetting(key, codeSettings?.defaultValue);
-                }
-            }
         }
     }
 
@@ -286,6 +260,32 @@ export default class WorkspaceManager implements vscode.Disposable {
                     vscode.Uri.file(this._resources.getWorkspaceFilePath(activeCourse)),
                 )
                 .update(section, newValue, vscode.ConfigurationTarget.Workspace);
+        }
+    }
+
+    /**
+     * Ensures that settings defined in package.json are written to the multi-root
+     * workspace file. If the key can't be found in the .code-workspace file, it will write the
+     * setting defined in the User scope to the file. Last resort, default value.
+     *
+     * This is to ensure that workspace defined settings really overrides the user scope...
+     * https://github.com/microsoft/vscode/issues/58038
+     */
+    private async _ensureSettingsAreStoredInMultiRootWorkspace(): Promise<void> {
+        const extension = vscode.extensions.getExtension("moocfi.test-my-code");
+        const extensionDefinedSettings: Record<string, ConfigurationProperties> =
+            extension?.packageJSON?.contributes?.configuration?.properties;
+        for (const [key, value] of Object.entries(extensionDefinedSettings)) {
+            if (value.scope !== "application" && value.type === "boolean") {
+                const codeSettings = this.getWorkspaceSettings().inspect<boolean>(key);
+                if (codeSettings?.workspaceValue !== undefined) {
+                    await this.updateWorkspaceSetting(key, codeSettings.workspaceValue);
+                } else if (codeSettings?.globalValue !== undefined) {
+                    await this.updateWorkspaceSetting(key, codeSettings.globalValue);
+                } else {
+                    await this.updateWorkspaceSetting(key, codeSettings?.defaultValue);
+                }
+            }
         }
     }
 
