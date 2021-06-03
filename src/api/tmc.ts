@@ -361,7 +361,7 @@ export default class TMC {
      * Sets a value for given key in stored settings. Uses TMC-langs `settings set` command
      * internally.
      */
-    public async setSetting(key: string, value: string): Promise<Result<void, Error>> {
+    public async setSetting(key: string, value: unknown): Promise<Result<void, Error>> {
         const res = await this._executeLangsCommand(
             { args: ["settings", "set", key, JSON.stringify(value)] },
             createIs<UncheckedOutputData>(),

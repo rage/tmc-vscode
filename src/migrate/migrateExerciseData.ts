@@ -151,7 +151,7 @@ async function exerciseDataFromV0toV1(
     for (const key of Object.keys(closedExercises)) {
         const closeExercisesResult = await tmc.setSetting(
             `closed-exercises-for:${key}`,
-            JSON.stringify(closedExercises[key]),
+            closedExercises[key],
         );
         if (closeExercisesResult.err) {
             Logger.error("Failed to migrate status of closed exercises.", closeExercisesResult.val);
