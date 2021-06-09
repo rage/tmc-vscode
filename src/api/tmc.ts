@@ -361,7 +361,7 @@ export default class TMC {
      * Sets a value for given key in stored settings. Uses TMC-langs `settings set` command
      * internally.
      */
-    public async setSetting(key: string, value: string): Promise<Result<void, Error>> {
+    public async setSetting(key: string, value: unknown): Promise<Result<void, Error>> {
         const res = await this._executeLangsCommand(
             { args: ["settings", "set", key, JSON.stringify(value)] },
             createIs<UncheckedOutputData>(),
@@ -486,12 +486,6 @@ export default class TMC {
             "--submission-id",
             submissionId.toString(),
         ];
-        if (saveOldState) {
-            args.push(
-                "--submission-url",
-                `${TMC_BACKEND_URL}/api/v8/core/exercises/${exerciseId}/submissions`,
-            );
-        }
         const res = await this._executeLangsCommand({ args }, createIs<UncheckedOutputData>());
         return res.err ? res : Ok.EMPTY;
     }
@@ -717,12 +711,6 @@ export default class TMC {
             "--exercise-path",
             exercisePath,
         ];
-        if (saveOldState) {
-            args.push(
-                "--submission-url",
-                `${TMC_BACKEND_URL}/api/v8/core/exercises/${exerciseId}/submissions`,
-            );
-        }
         const res = await this._executeLangsCommand({ args }, createIs<UncheckedOutputData>());
         return res.err ? res : Ok.EMPTY;
     }
@@ -750,7 +738,6 @@ export default class TMC {
             this._nextSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL;
         }
 
-        const submitUrl = `${TMC_BACKEND_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
         const onStdout = (res: StatusUpdateData): void => {
             progressCallback?.(100 * res["percent-done"], res.message ?? undefined);
             if (
@@ -766,10 +753,10 @@ export default class TMC {
                 args: [
                     "core",
                     "submit",
+                    "--exercise-id",
+                    exerciseId.toString(),
                     "--submission-path",
                     exercisePath,
-                    "--submission-url",
-                    submitUrl,
                 ],
                 onStdout,
             },
@@ -798,16 +785,15 @@ export default class TMC {
         } else {
             this._nextSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL;
         }
-        const submitUrl = `${TMC_BACKEND_URL}/api/v8/core/exercises/${exerciseId}/submissions`;
         const res = await this._executeLangsCommand(
             {
                 args: [
                     "core",
                     "paste",
+                    "--exercise-id",
+                    exerciseId.toString(),
                     "--submission-path",
                     exercisePath,
-                    "--submission-url",
-                    submitUrl,
                 ],
             },
             createIs<OutputData<SubmissionResponse>>(),

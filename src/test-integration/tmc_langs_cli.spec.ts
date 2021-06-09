@@ -429,7 +429,7 @@ suite("tmc langs cli spec", function () {
         });
 
         // This seems to ok?
-        test.skip("should not be able to give feedback", async function () {
+        test("should not be able to give feedback", async function () {
             const feedback: SubmissionFeedback = {
                 status: [{ question_id: 0, answer: "42" }],
             };

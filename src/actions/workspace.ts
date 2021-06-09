@@ -38,7 +38,7 @@ export async function openExercises(
         .map((x) => x.exerciseSlug);
     const settingsResult = await tmc.setSetting(
         `closed-exercises-for:${courseName}`,
-        JSON.stringify(closedExerciseNames),
+        closedExerciseNames,
     );
     if (settingsResult.err) {
         return settingsResult;
@@ -81,7 +81,7 @@ export async function closeExercises(
         .map((x) => x.exerciseSlug);
     const settingsResult = await tmc.setSetting(
         `closed-exercises-for:${courseName}`,
-        JSON.stringify(closedExerciseNames),
+        closedExerciseNames,
     );
     if (settingsResult.err) {
         return settingsResult;

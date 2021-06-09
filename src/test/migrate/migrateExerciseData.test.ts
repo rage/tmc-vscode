@@ -87,7 +87,7 @@ suite("Exercise data migration", function () {
             await memento.update(UNSTABLE_EXTENSION_SETTINGS_KEY, { dataPath: "/tmcdata" });
             await memento.update(EXERCISE_DATA_KEY_V0, exerciseData.v0_3_0);
             await migrateExerciseData(memento, dialogMock.object, tmcMock.object);
-            const testValue = JSON.stringify(["other_world"]);
+            const testValue = ["other_world"];
             tmcMock.verify(
                 (x) =>
                     x.setSetting(
