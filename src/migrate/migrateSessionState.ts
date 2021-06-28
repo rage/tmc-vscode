@@ -8,7 +8,7 @@ const SESSION_STATE_KEY_V1 = "session-state-v1";
 const UNSTABLE_EXTENSION_VERSION_KEY = "extensionVersion";
 
 export interface SessionStateV1 {
-    extensionVersion: string | undefined;
+    extensionVersion?: string | undefined;
 }
 
 /**
