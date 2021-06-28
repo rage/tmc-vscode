@@ -7,7 +7,7 @@ export default function validateData<T>(
     }
 
     if (!validator(data)) {
-        throw Error(`Data type missmatch: ${JSON.stringify(data)}`);
+        throw new Error(`Data type missmatch: ${JSON.stringify(data)}`);
     }
 
     return data;
