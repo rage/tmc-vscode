@@ -490,7 +490,7 @@ suite("tmc langs cli spec", function () {
     });
 
     suiteTeardown(function () {
-        server && kill(server.pid);
+        server && kill(server.pid as number);
     });
 });
 
