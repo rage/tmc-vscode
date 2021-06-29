@@ -191,13 +191,13 @@ suite("downloadOrUpdateExercises action", function () {
             'expected first message to be "downloading"',
         );
         expect(last(webviewMessages)).to.be.deep.equal(
-            wrapToMessage(helloWorld.id, "closed"),
-            'expected last message to be "closed"',
+            wrapToMessage(helloWorld.id, "opened"),
+            'expected last message to be "opened"',
         );
     });
 
     test("should post status updates for skipped download", async function () {
-        tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [], undefined);
+        tmcMockValues.downloadExercises = createDownloadResult([], [helloWorld], undefined);
         await downloadOrUpdateExercises(actionContext(), [1]);
         expect(webviewMessages.length).to.be.greaterThanOrEqual(
             2,

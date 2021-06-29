@@ -15,11 +15,8 @@ export async function showWelcome(actionContext: ActionContext): Promise<void> {
         {
             templateName: "welcome",
             version: resources.extensionVersion,
-            newTreeView: vscode.Uri.file(
-                path.join(resources.mediaFolder, "welcome_new_treeview.png"),
-            ),
-            actionsExplorer: vscode.Uri.file(
-                path.join(resources.mediaFolder, "welcome_actions_jupyter.png"),
+            exerciseDecorations: vscode.Uri.file(
+                path.join(resources.mediaFolder, "welcome_exercise_decorations.png"),
             ),
             tmcLogoFile: vscode.Uri.file(path.join(resources.mediaFolder, "TMC.png")),
         },

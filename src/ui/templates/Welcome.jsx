@@ -11,7 +11,7 @@ const createElement = require("./templateUtils").createElement;
 /**
  * @param {import("./Welcome").WelcomeProps} props
  */
-function component({ version }) {
+function component({ version, exerciseDecorations }) {
     return (
         <div class="container welcome-container">
             <header>
@@ -47,10 +47,10 @@ function component({ version }) {
             </div>
 
             <div class="content_area">
-                <h2>What's new in 2.0?</h2>
+                <h2>What's new in 2.1?</h2>
                 <div class="content_section">
                     <p>
-                        Here is a little overview of latest features. To see all the changes for
+                        Here is a short overview of latest features. To see all the changes for
                         version {version}, please refer to the{" "}
                         <a href="https://github.com/rage/tmc-vscode/blob/master/CHANGELOG.md">
                             CHANGELOG
@@ -59,39 +59,42 @@ function component({ version }) {
                     </p>
                 </div>
                 <div class="content_section">
-                    <h5>
-                        Caution! It is not recommended to downgrade the extension version to below
-                        2.0!
-                    </h5>
+                    <h3>Exercise Decorations</h3>
+                    <p>
+                        You can now see completed and partially completed (i.e. received some
+                        points) exercises with an icon on the course workspace.
+                        <br />
+                        You can also see if the deadline has been exceeded and if the exercise has
+                        been removed or renamed in the course. By hovering on an exercise with an
+                        icon, you should see an information message explaining the status.
+                    </p>
+                    <img
+                        style="margin-bottom: 1em;"
+                        class="rounded mx-auto d-block"
+                        src={exerciseDecorations}
+                    />
                 </div>
                 <div class="content_section">
-                    <h3>Exercise management</h3>
+                    <h3>Migrated to VSCode Settings</h3>
                     <p>
-                        The main focus of this release is to introduce a new management system for
-                        exercises on disk. These features have been moved to TMC-langs that is the
-                        centralized utility for main TestMyCode related functions. This new
-                        architecture reduces previously existing major overheads and allows for some
-                        performance optimizations.
-                    </p>
-                    <p>
-                        Unfortunately this change required for all exercises to be migrated to a new
-                        default location. If you would like to, you may now move them back again
-                        from the settings view.
+                        Old custom settings view has been removed in favor of VS Code's native
+                        settings page. <br />
+                        With this change, users can now specify course specific settings when having
+                        the course workspace open in VSCode by going to Settings and selecting the
+                        Workspace tab. <br />
+                        Settings defined in the Workspace tab are of higher priority than those
+                        defined in the User scope. When adding a new course, it will copy the
+                        settings defined in the User scope to the Workspace.
                     </p>
                 </div>
                 <div class="content_section">
-                    <h3>Improved exercise downloads</h3>
+                    <h3>Automatically download old submissions</h3>
                     <p>
-                        Following the change to exercise management, downloading new exercises is
-                        now significantly faster.
-                    </p>
-                </div>
-                <div class="content_section">
-                    <h3>Improvements to TMC workspace</h3>
-                    <p>
-                        TMC Workspace files have now been located in a consistent location separate
-                        from where exercises are. This allows for more user-friendly experience when
-                        moving the exercises folder or using the extension data wipe command.
+                        Prior to version 2.0.0, downloaded exercises were restored to the state of
+                        their latest submission.
+                        <br />
+                        This feature has been re-enabled and the extension automatically downloads
+                        your latest submission if enabled in settings.
                     </p>
                 </div>
             </div>

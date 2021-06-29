@@ -287,8 +287,7 @@ export default class TemplateEngine {
                 return Webview.render({
                     children: Welcome.component({
                         ...templateData,
-                        newTreeView: webview.asWebviewUri(templateData.newTreeView),
-                        actionsExplorer: webview.asWebviewUri(templateData.actionsExplorer),
+                        exerciseDecorations: webview.asWebviewUri(templateData.exerciseDecorations),
                         tmcLogoFile: webview.asWebviewUri(templateData.tmcLogoFile),
                     }),
                     cspSource: webview.cspSource,
