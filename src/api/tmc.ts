@@ -966,7 +966,7 @@ export default class TMC {
             const timeout =
                 processTimeout &&
                 setTimeout(() => {
-                    kill(cprocess.pid);
+                    kill(cprocess.pid as number);
                     reject("Process didn't seem to finish or was taking a really long time.");
                 }, processTimeout);
 
@@ -1053,7 +1053,7 @@ export default class TMC {
             if (active) {
                 active = false;
                 interrupted = true;
-                kill(cprocess.pid);
+                kill(cprocess.pid as number);
             }
         };
 
