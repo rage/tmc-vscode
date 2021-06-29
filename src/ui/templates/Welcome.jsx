@@ -64,9 +64,9 @@ function component({ version, exerciseDecorations }) {
                         You can now see completed and partially completed (i.e. received some
                         points) exercises with an icon on the course workspace.
                         <br />
-                        You can also see if the deadline has been exceeded and if the exercise
-                        has been removed or renamed in the course. By hovering on an exercise with
-                        an icon, you should see an information message explaining the status.
+                        You can also see if the deadline has been exceeded and if the exercise has
+                        been removed or renamed in the course. By hovering on an exercise with an
+                        icon, you should see an information message explaining the status.
                     </p>
                     <img
                         style="margin-bottom: 1em;"
@@ -77,8 +77,8 @@ function component({ version, exerciseDecorations }) {
                 <div class="content_section">
                     <h3>Migrated to VSCode Settings</h3>
                     <p>
-                        We removed our own Settings webview and migrated the user and course
-                        specific settings to the VSCode Settings page. <br />
+                        Old custom settings view has been removed in favor of VS Code's native
+                        settings page. <br />
                         With this change, users can now specify course specific settings when having
                         the course workspace open in VSCode by going to Settings and selecting the
                         Workspace tab. <br />
@@ -90,8 +90,9 @@ function component({ version, exerciseDecorations }) {
                 <div class="content_section">
                     <h3>Automatically download old submissions</h3>
                     <p>
-                        Since TMC VSCode version 2.0.0 we had to disable automatically downloading
-                        latest submission. <br />
+                        Prior to version 2.0.0, downloaded exercises were restored to the state of
+                        their latest submission.
+                        <br />
                         This feature has been re-enabled and the extension automatically downloads
                         your latest submission if enabled in settings.
                     </p>
