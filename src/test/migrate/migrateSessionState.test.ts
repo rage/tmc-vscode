@@ -53,7 +53,9 @@ suite("Session state migration", function () {
     suite("with stable data", function () {
         test("fails with garbage version 1 data", async function () {
             await memento.update(SESSION_STATE_KEY_V1, { wonderwoman: "Diana Prince" });
-            expect(() => migrateSessionState(memento)).to.throw(/missmatch/);
+            const migrated = migrateSessionState(memento);
+            console.log(migrated);
+            expect(() => migrated).to.throw(/missmatch/);
         });
     });
 });
