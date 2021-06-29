@@ -2,7 +2,7 @@
     "name": "test-my-code",
     "displayName": "TestMyCode",
     "description": "TestMyCode extension for Visual Studio Code",
-    "version": "2.0.2",
+    "version": "2.0.3",
     "license": "MIT",
     "publisher": "moocfi",
     "repository": {
