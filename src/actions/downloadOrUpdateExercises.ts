@@ -52,7 +52,7 @@ export async function downloadOrUpdateExercises(
 
     const { downloaded, failed, skipped } = downloadResult.val;
     skipped.length > 0 && Logger.warn(`${skipped.length} downloads were skipped.`);
-    downloaded.forEach((x) => statuses.set(x.id, "closed"));
+    downloaded.forEach((x) => statuses.set(x.id, "opened"));
     skipped.forEach((x) => statuses.set(x.id, "closed"));
     failed?.forEach(([exercise, reason]) => {
         Logger.error(`Failed to download exercise ${exercise["exercise-slug"]}: ${reason}`);
