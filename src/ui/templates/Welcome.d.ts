@@ -3,8 +3,7 @@ import { Uri } from "vscode";
 interface WelcomeProps {
     /** Version if the plugin to show to the user. */
     version: string;
-    newTreeView: Uri;
-    actionsExplorer: Uri;
+    exerciseDecorations: Uri;
     tmcLogoFile: Uri;
 }
 
