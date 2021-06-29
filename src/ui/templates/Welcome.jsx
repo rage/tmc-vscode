@@ -64,7 +64,7 @@ function component({ version, exerciseDecorations }) {
                         You can now see completed and partially completed (i.e. received some
                         points) exercises with an icon on the course workspace.
                         <br />
-                        We also implemented showing if the deadline has exceeded and if the exercise
+                        You can also see if the deadline has been exceeded and if the exercise
                         has been removed or renamed in the course. By hovering on an exercise with
                         an icon, you should see an information message explaining the status.
                     </p>
