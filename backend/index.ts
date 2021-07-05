@@ -27,6 +27,15 @@ import {
 
 const PORT = 4001;
 
+interface DetailsForLangs {
+    exercises: Array<{
+        id: number;
+        checksum: string;
+        course_name: string;
+        exercise_name: string;
+    }>;
+}
+
 const testOrganization = createOrganization({
     information: "This is a test organization from a local development server.",
     name: "Test Organization",
@@ -53,6 +62,7 @@ const submissions = [
         exerciseName: passingExercise.name,
         id: 0,
         passed: true,
+        timestamp: new Date(2000, 1, 1),
         userId: 0,
     }),
 ];
@@ -111,6 +121,21 @@ app.get(`/api/v8/core/courses/${pythonCourse.id}`, (req, res: Response<CourseDet
     }),
 );
 
+// downloadExercises()
+app.get("/api/v8/core/exercises/details", (req, res: Response<DetailsForLangs>) => {
+    const rawIds = req.query.ids;
+    const ids = Array.isArray(rawIds) ? rawIds : [rawIds];
+    const filtered = [passingExercise].filter((x) => ids.includes(x.id.toString()));
+    return res.json({
+        exercises: filtered.map((x) => ({
+            id: x.id,
+            checksum: x.checksum,
+            course_name: "python-course",
+            exercise_name: x.exercise_name,
+        })),
+    });
+});
+
 // getExerciseDetails(1)
 app.get(`/api/v8/core/exercises/${passingExercise.id}`, (req, res: Response<ExerciseDetails>) =>
     res.json({ ...passingExercise, course_id: pythonCourse.id, course_name: pythonCourse.name }),
@@ -134,6 +159,7 @@ app.post(
                 exerciseName: passingExercise.name,
                 id: passingExercise.id,
                 passed: true,
+                timestamp: new Date(),
                 userId: 0,
             }),
         );

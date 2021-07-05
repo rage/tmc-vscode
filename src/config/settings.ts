@@ -1,17 +1,11 @@
-import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import Storage, {
-    ExtensionSettings as SerializedExtensionSettings,
-    SessionState,
-} from "../api/storage";
-import { isCorrectWorkspaceOpen } from "../utils";
+import Storage, { SessionState } from "../api/storage";
 import { Logger, LogLevel } from "../utils/logger";
 
-import { HIDE_META_FILES, SHOW_META_FILES, WATCHER_EXCLUDE } from "./constants";
-import Resources from "./resources";
-import { ExtensionSettingsData } from "./types";
-
+/**
+ * @deprecated Default values are now implemented in package.json / VSCode settings.
+ */
 export interface ExtensionSettings {
     downloadOldSubmission: boolean;
     hideMetaFiles: boolean;
@@ -21,185 +15,139 @@ export interface ExtensionSettings {
 }
 
 /**
- * Settings class communicates changes to persistent storage and manages TMC
- * Workspace.code-workspace settings. Workspace settings will only be updated when it is open.
+ * Class to manage VSCode setting changes and trigger events based on changes.
+ * Remove Storage dependency once 3.0 major release is being done, as then
+ * we do not need to be backwards compatible.
  *
- * Perhaps TODO: Read and Write the .code-workspace file without using vscode premade functions for
- * workspace, because they require the workspace to be open. Currently this approach works, because
- * extension settings are saved to storage and VSCode restarts when our workspace is opened by the
- * extension.
+ * Handle multi-root workspace changes by creating callbacks in extension.ts,
+ * so that we can test and don't need workspaceManager dependency.
  */
-export default class Settings {
-    private static readonly _defaultSettings: ExtensionSettings = {
-        downloadOldSubmission: true,
-        hideMetaFiles: true,
-        insiderVersion: false,
-        logLevel: LogLevel.Errors,
-        updateExercisesAutomatically: true,
-    };
+export default class Settings implements vscode.Disposable {
+    private _onChangeHideMetaFiles?: (value: boolean) => void;
+    private _onChangeDownloadOldSubmission?: (value: boolean) => void;
+    private _onChangeUpdateExercisesAutomatically?: (value: boolean) => void;
 
+    /**
+     * @deprecated Storage dependency should be removed when major 3.0 release.
+     */
     private readonly _storage: Storage;
 
-    private readonly _resources: Resources;
-
-    private _settings: ExtensionSettings;
     private _state: SessionState;
+    private _disposables: vscode.Disposable[];
 
-    constructor(storage: Storage, resources: Resources) {
+    constructor(storage: Storage) {
         this._storage = storage;
-        this._resources = resources;
-        const storedSettings = storage.getExtensionSettings();
-        this._settings = storedSettings
-            ? Settings._deserializeExtensionSettings(storedSettings)
-            : Settings._defaultSettings;
         this._state = storage.getSessionState() ?? {};
+        this._disposables = [
+            vscode.workspace.onDidChangeConfiguration(async (event) => {
+                if (event.affectsConfiguration("testMyCode.logLevel")) {
+                    const value = vscode.workspace
+                        .getConfiguration("testMyCode")
+                        .get<LogLevel>("logLevel", LogLevel.Errors);
+                    Logger.configure(value);
+                }
+
+                // Workspace settings
+                if (event.affectsConfiguration("testMyCode.hideMetaFiles")) {
+                    const value = this._getWorkspaceSettingValue("hideMetaFiles");
+                    this._onChangeHideMetaFiles?.(value);
+                }
+                if (event.affectsConfiguration("testMyCode.downloadOldSubmission")) {
+                    const value = this._getWorkspaceSettingValue("downloadOldSubmission");
+                    this._onChangeDownloadOldSubmission?.(value);
+                }
+                if (event.affectsConfiguration("testMyCode.updateExercisesAutomatically")) {
+                    const value = this._getWorkspaceSettingValue("updateExercisesAutomatically");
+                    this._onChangeUpdateExercisesAutomatically?.(value);
+                }
+                await this.updateExtensionSettingsToStorage();
+            }),
+        ];
     }
 
-    public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
-        const workspace = vscode.workspace.name;
-        if (workspace && isCorrectWorkspaceOpen(this._resources, workspace.split(" ")[0])) {
-            Logger.log("TMC Workspace open, verifying workspace settings integrity.");
-            await this._setFilesExcludeInWorkspace(this._settings.hideMetaFiles);
-            await this._verifyWatcherPatternExclusion();
-        }
+    public set onChangeDownloadOldSubmission(callback: (value: boolean) => void) {
+        this._onChangeDownloadOldSubmission = callback;
+    }
+
+    public set onChangeHideMetaFiles(callback: (value: boolean) => void) {
+        this._onChangeHideMetaFiles = callback;
+    }
+
+    public set onChangeUpdateExercisesAutomatically(callback: (value: boolean) => void) {
+        this._onChangeUpdateExercisesAutomatically = callback;
+    }
+
+    public dispose(): void {
+        this._disposables.forEach((x) => x.dispose());
     }
 
     /**
-     * Update extension settings to storage.
-     * @param settings ExtensionSettings object
+     * @deprecated Storage dependency should be removed when major 3.0 release.
      */
-    public async updateExtensionSettingsToStorage(settings: ExtensionSettings): Promise<void> {
+    public async updateExtensionSettingsToStorage(): Promise<void> {
+        const settings: ExtensionSettings = {
+            downloadOldSubmission: this._getUserSettingValue("downloadOldSubmission"),
+            hideMetaFiles: this._getUserSettingValue("hideMetaFiles"),
+            updateExercisesAutomatically: this._getUserSettingValue("updateExercisesAutomatically"),
+            logLevel:
+                vscode.workspace.getConfiguration().get("testMyCode.logLevel") ?? LogLevel.Errors,
+            insiderVersion: this._getUserSettingValue("insiderVersion"),
+        };
         await this._storage.updateExtensionSettings(settings);
     }
 
-    /**
-     * Updates individual setting for user and adds them to user storage.
-     *
-     * @param {ExtensionSettingsData} data ExtensionSettingsData object, for example { setting:
-     * 'dataPath', value: '~/newpath' }
-     */
-    public async updateSetting(data: ExtensionSettingsData): Promise<void> {
-        switch (data.setting) {
-            case "downloadOldSubmission":
-                this._settings.downloadOldSubmission = data.value;
-                break;
-            case "hideMetaFiles":
-                this._settings.hideMetaFiles = data.value;
-                this._setFilesExcludeInWorkspace(data.value);
-                break;
-            case "insiderVersion":
-                this._settings.insiderVersion = data.value;
-                break;
-            case "logLevel":
-                this._settings.logLevel = data.value;
-                break;
-            case "updateExercisesAutomatically":
-                this._settings.updateExercisesAutomatically = data.value;
-                break;
-        }
-        Logger.log("Updated settings data", data);
-        await this.updateExtensionSettingsToStorage(this._settings);
-    }
-
     public getLogLevel(): LogLevel {
-        return this._settings.logLevel;
+        return vscode.workspace
+            .getConfiguration("testMyCode")
+            .get<LogLevel>("logLevel", LogLevel.Errors);
     }
 
     public getDownloadOldSubmission(): boolean {
-        return this._settings.downloadOldSubmission;
+        return this._getWorkspaceSettingValue("downloadOldSubmission");
     }
 
     public getAutomaticallyUpdateExercises(): boolean {
-        return this._settings.updateExercisesAutomatically;
-    }
-
-    /**
-     * Gets the extension settings from storage.
-     *
-     * @returns ExtensionSettings object or error
-     */
-    public async getExtensionSettings(): Promise<Result<ExtensionSettings, Error>> {
-        return Ok(this._settings);
-    }
-
-    /**
-     * Returns the section for the Workspace setting. If undefined, returns all settings.
-     * @param section A dot-separated identifier.
-     */
-    public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration | undefined {
-        const workspace = vscode.workspace.name?.split(" ")[0];
-        if (workspace && isCorrectWorkspaceOpen(this._resources, workspace)) {
-            return vscode.workspace.getConfiguration(
-                section,
-                vscode.Uri.file(this._resources.getWorkspaceFilePath(workspace)),
-            );
-        }
+        return this._getWorkspaceSettingValue("updateExercisesAutomatically");
     }
 
     public isInsider(): boolean {
-        return this._settings.insiderVersion;
+        return vscode.workspace
+            .getConfiguration("testMyCode")
+            .get<boolean>("insiderVersion", false);
     }
 
-    private static _deserializeExtensionSettings(
-        settings: SerializedExtensionSettings,
-    ): ExtensionSettings {
-        let logLevel: LogLevel = LogLevel.Errors;
-        switch (settings.logLevel) {
-            case "errors":
-                logLevel = LogLevel.Errors;
-                break;
-            case "none":
-                logLevel = LogLevel.None;
-                break;
-            case "verbose":
-                logLevel = LogLevel.Verbose;
-                break;
-        }
-
-        return {
-            ...settings,
-            logLevel,
-        };
+    public async configureIsInsider(value: boolean): Promise<void> {
+        await vscode.workspace.getConfiguration("testMyCode").update("insiderVersion", value, true);
+        await this.updateExtensionSettingsToStorage();
     }
 
     /**
-     * Updates files.exclude values in TMC Workspace.code-workspace.
-     * Keeps all user/workspace defined excluding patterns.
-     * @param hide true to hide meta files in TMC workspace.
+     * Used to fetch boolean values from VSCode settings API Workspace scope
+     *
+     * workspaceValue is undefined in multi-root workspace if it matches defaultValue
+     * We want to "force" the value in the multi-root workspace, because then
+     * the workspace scope > user scope.
      */
-    private async _setFilesExcludeInWorkspace(hide: boolean): Promise<void> {
-        const value = hide ? HIDE_META_FILES : SHOW_META_FILES;
-        await this._updateWorkspaceSetting("files.exclude", value);
-    }
-
-    /**
-     * Updates a section for the TMC Workspace.code-workspace file, if the workspace is open.
-     * @param section Configuration name, supports dotted names.
-     * @param value The new value
-     */
-    private async _updateWorkspaceSetting(section: string, value: unknown): Promise<void> {
-        const workspace = vscode.workspace.name?.split(" ")[0];
-        if (workspace && isCorrectWorkspaceOpen(this._resources, workspace)) {
-            const oldValue = this.getWorkspaceSettings(section);
-            let newValue = value;
-            if (value instanceof Object) {
-                newValue = { ...oldValue, ...value };
-            }
-            await vscode.workspace
-                .getConfiguration(
-                    undefined,
-                    vscode.Uri.file(this._resources.getWorkspaceFilePath(workspace)),
-                )
-                .update(section, newValue, vscode.ConfigurationTarget.Workspace);
+    private _getWorkspaceSettingValue(section: string): boolean {
+        const configuration = vscode.workspace.getConfiguration("testMyCode");
+        const scopeSettings = configuration.inspect<boolean>(section);
+        if (scopeSettings?.workspaceValue === undefined) {
+            return !!scopeSettings?.defaultValue;
+        } else {
+            return scopeSettings.workspaceValue;
         }
     }
 
     /**
-     * Makes sure that folders and its contents aren't deleted by our watcher.
-     * .vscode folder needs to be unwatched, otherwise adding settings to WorkspaceFolder level
-     * doesn't work. For example defining Python interpreter for the Exercise folder.
+     * Used to fetch boolean values from VSCode settings API User Scope
      */
-    private async _verifyWatcherPatternExclusion(): Promise<void> {
-        await this._updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
+    private _getUserSettingValue(section: string): boolean {
+        const configuration = vscode.workspace.getConfiguration("testMyCode");
+        const scopeSettings = configuration.inspect<boolean>(section);
+        if (scopeSettings?.globalValue === undefined) {
+            return !!scopeSettings?.defaultValue;
+        } else {
+            return scopeSettings.globalValue;
+        }
     }
 }

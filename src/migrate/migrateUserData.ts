@@ -1,6 +1,13 @@
 import { createIs } from "typescript-is";
 import * as vscode from "vscode";
 
+import { LocalCourseData } from "../api/storage";
+import {
+    LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
+    LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
+    LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
+} from "../config/constants";
+
 import { MigratedData } from "./types";
 import validateData from "./validateData";
 
@@ -39,6 +46,8 @@ export interface LocalCourseDataV1 {
     organization: string;
     exercises: Array<{
         id: number;
+        awardedPoints?: number;
+        availablePoints?: number;
         name: string;
         deadline: string | null;
         passed: boolean;
@@ -95,9 +104,25 @@ function courseDataFromV0ToV1(
     });
 }
 
+export function resolveMissingFields(localCourseData: LocalCourseDataV1[]): LocalCourseData[] {
+    return localCourseData.map((course) => {
+        const exercises = course.exercises.map((x) => {
+            const resolvedAwardedPoints = x.passed
+                ? LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER
+                : LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER;
+            return {
+                ...x,
+                availablePoints: x.availablePoints ?? LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
+                awardedPoints: x.awardedPoints ?? resolvedAwardedPoints,
+            };
+        });
+        return { ...course, exercises };
+    });
+}
+
 export default function migrateUserData(
     memento: vscode.Memento,
-): MigratedData<{ courses: LocalCourseDataV1[] }> {
+): MigratedData<{ courses: LocalCourseData[] }> {
     const obsoleteKeys: string[] = [];
     const dataV0 = validateData(
         memento.get(USER_DATA_KEY_V0),
@@ -111,5 +136,7 @@ export default function migrateUserData(
         ? { courses: courseDataFromV0ToV1(dataV0.courses, memento) }
         : validateData(memento.get(USER_DATA_KEY_V1), createIs<{ courses: LocalCourseDataV1[] }>());
 
-    return { data: dataV1, obsoleteKeys };
+    const data = dataV1 ? { ...dataV1, courses: resolveMissingFields(dataV1?.courses) } : undefined;
+
+    return { data, obsoleteKeys };
 }

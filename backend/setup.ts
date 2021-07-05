@@ -23,7 +23,7 @@ const copyTMCPythonModules = async (): Promise<void> => {
         ncp(module, target, () => {});
     });
     console.log("Modules copied!");
-
+    await new Promise((res) => setTimeout(res, 1000));
     await Promise.all(
         pythonExercises.map(async (exercise) => {
             console.log(`Creating download archive for ${exercise}`);

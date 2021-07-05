@@ -2,7 +2,7 @@
     "name": "test-my-code",
     "displayName": "TestMyCode",
     "description": "TestMyCode extension for Visual Studio Code",
-    "version": "2.0.3",
+    "version": "2.1.0",
     "license": "MIT",
     "publisher": "moocfi",
     "repository": {
@@ -74,6 +74,11 @@
             {
                 "command": "tmc.addNewCourse",
                 "title": "Add New Course...",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.changeTmcDataPath",
+                "title": "Change TMC data path",
                 "category": "TestMyCode"
             },
             {
@@ -180,6 +185,47 @@
                 "title": "Wipe all extension data"
             }
         ],
+        "configuration": {
+            "title": "TestMyCode",
+            "properties": {
+                "testMyCode.downloadOldSubmission": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "When downloading exercises, download your latest submission instead of the exercise template."
+                },
+                "testMyCode.hideMetaFiles": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Hide exercise meta files that are not relevant for completing exercises."
+                },
+                "testMyCode.insiderVersion": {
+                    "type": "boolean",
+                    "scope": "application",
+                    "default": false,
+                    "description": "Insider version to test new features for the TestMyCode extension."
+                },
+                "testMyCode.logLevel": {
+                    "type": "string",
+                    "scope": "application",
+                    "default": "errors",
+                    "enum": [
+                        "none",
+                        "errors",
+                        "verbose"
+                    ],
+                    "enumDescriptions": [
+                        "No extension logging.",
+                        "Log only warning and error messages.",
+                        "Log info, warning and error messages."
+                    ]
+                },
+                "testMyCode.updateExercisesAutomatically": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Download exercise updates automatically."
+                }
+            }
+        },
         "keybindings": [
             {
                 "command": "tmc.closeExercise",
@@ -373,6 +419,8 @@
         "ci:all": "npm ci && cd backend && npm ci",
         "pretest": "cross-env NODE_ENV=development BACKEND=mockBackend npm run webpack",
         "test": "node ./bin/runTests.js",
+        "test-integration": "npm pretest && node ./bin/runIntegration.js",
+        "test-integration-only": "node ./bin/runIntegration.js",
         "eslint-check": "eslint . --ext .js,.ts",
         "eslint": "eslint --fix . --ext .js,.ts",
         "lint-check": "npm run eslint-check && npm run prettier-check",

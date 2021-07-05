@@ -12,7 +12,7 @@ import { TMC_BACKEND_URL } from "../config/constants";
 import Resources from "../config/resources";
 import { getProgressBar, parseTestResultsText } from "../utils/";
 
-import { CourseDetails, Login, MyCourses, Settings, Webview, Welcome } from "./templates";
+import { CourseDetails, Login, MyCourses, Webview, Welcome } from "./templates";
 import { TemplateData } from "./types";
 
 export default class TemplateEngine {
@@ -283,19 +283,11 @@ export default class TemplateEngine {
                     cspSource: webview.cspSource,
                     script: MyCourses.script,
                 });
-            case "settings":
-                return Webview.render({
-                    children: Settings.component(),
-                    cssBlob,
-                    cspSource: webview.cspSource,
-                    script: Settings.script,
-                });
             case "welcome":
                 return Webview.render({
                     children: Welcome.component({
                         ...templateData,
-                        newTreeView: webview.asWebviewUri(templateData.newTreeView),
-                        actionsExplorer: webview.asWebviewUri(templateData.actionsExplorer),
+                        exerciseDecorations: webview.asWebviewUri(templateData.exerciseDecorations),
                         tmcLogoFile: webview.asWebviewUri(templateData.tmcLogoFile),
                     }),
                     cspSource: webview.cspSource,

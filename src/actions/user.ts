@@ -4,7 +4,6 @@
  * -------------------------------------------------------------------------------------------------
  */
 
-import du = require("du");
 import * as fs from "fs-extra";
 import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
@@ -14,20 +13,14 @@ import { LocalCourseData } from "../api/storage";
 import { SubmissionFeedback } from "../api/types";
 import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
-import { BottleneckError, ConnectionError, ForbiddenError } from "../errors";
+import { BottleneckError } from "../errors";
 import { TestResultData } from "../ui/types";
-import {
-    formatSizeInBytes,
-    isCorrectWorkspaceOpen,
-    Logger,
-    parseFeedbackQuestion,
-} from "../utils/";
+import { Logger, parseFeedbackQuestion } from "../utils/";
 import { getActiveEditorExecutablePath } from "../window";
 
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
-import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext, FeedbackQuestion } from "./types";
-import { displayUserCourses, selectOrganizationAndCourse } from "./webview";
+import { updateCourse } from "./updateCourse";
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -190,7 +183,8 @@ export async function submitExercise(
     actionContext: ActionContext,
     exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { dialog, temporaryWebviewProvider, tmc, userData } = actionContext;
+    const { dialog, exerciseDecorationProvider, temporaryWebviewProvider, tmc, userData } =
+        actionContext;
     Logger.log(`Submitting exercise ${exercise.exerciseSlug} to server`);
 
     const course = userData.getCourseByName(exercise.courseSlug);
@@ -294,6 +288,9 @@ export async function submitExercise(
     let feedbackQuestions: FeedbackQuestion[] = [];
 
     if (statusData.status === "ok" && statusData.all_tests_passed) {
+        userData.setExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug).then(() => {
+            exerciseDecorationProvider.updateDecorationsForExercises(exercise);
+        });
         if (statusData.feedback_questions) {
             feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
         }
@@ -410,7 +407,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
     Logger.log(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
     Logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
 
-    if (!isCorrectWorkspaceOpen(resources, name)) {
+    if (!(currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString())) {
         if (
             !currentWorkspaceFile ||
             (await dialog.confirmation(
@@ -445,115 +442,6 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
 }
 
 /**
- * Settings webview
- */
-export async function openSettings(actionContext: ActionContext): Promise<void> {
-    const { dialog, ui, resources, settings } = actionContext;
-    Logger.log("Display extension settings");
-    const extensionSettingsResult = await settings.getExtensionSettings();
-    if (extensionSettingsResult.err) {
-        dialog.errorNotification("Failed to fetch settings.", extensionSettingsResult.val);
-        return;
-    }
-
-    const extensionSettings = extensionSettingsResult.val;
-    ui.webview.setContentFromTemplate({ templateName: "settings" }, true, [
-        {
-            command: "setBooleanSetting",
-            setting: "downloadOldSubmission",
-            enabled: extensionSettings.hideMetaFiles,
-        },
-        {
-            command: "setBooleanSetting",
-            setting: "hideMetaFiles",
-            enabled: extensionSettings.hideMetaFiles,
-        },
-        { command: "setBooleanSetting", setting: "insider", enabled: settings.isInsider() },
-        {
-            command: "setBooleanSetting",
-            setting: "updateExercisesAutomatically",
-            enabled: settings.getAutomaticallyUpdateExercises(),
-        },
-        { command: "setLogLevel", level: settings.getLogLevel() },
-        {
-            command: "setTmcDataFolder",
-            diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
-            path: resources.projectsDirectory,
-        },
-    ]);
-}
-
-interface NewCourseOptions {
-    organization?: string;
-    course?: number;
-}
-/**
- * Adds a new course to user's courses.
- */
-export async function addNewCourse(
-    actionContext: ActionContext,
-    options?: NewCourseOptions,
-): Promise<Result<void, Error>> {
-    const { tmc, ui, userData, workspaceManager } = actionContext;
-    Logger.log("Adding new course");
-    let organization = options?.organization;
-    let course = options?.course;
-
-    if (!organization || !course) {
-        const orgAndCourse = await selectOrganizationAndCourse(actionContext);
-        if (orgAndCourse.err) {
-            return orgAndCourse;
-        }
-        organization = orgAndCourse.val.organization;
-        course = orgAndCourse.val.course;
-    }
-
-    const courseDataResult = await tmc.getCourseData(course);
-    if (courseDataResult.err) {
-        return courseDataResult;
-    }
-    const courseData = courseDataResult.val;
-
-    let availablePoints = 0;
-    let awardedPoints = 0;
-    courseData.exercises.forEach((x) => {
-        availablePoints += x.available_points.length;
-        awardedPoints += x.awarded_points.length;
-    });
-
-    const localData: LocalCourseData = {
-        description: courseData.details.description || "",
-        exercises: courseData.details.exercises.map((e) => ({
-            id: e.id,
-            name: e.name,
-            deadline: e.deadline,
-            passed: e.completed,
-            softDeadline: e.soft_deadline,
-        })),
-        id: courseData.details.id,
-        name: courseData.details.name,
-        title: courseData.details.title,
-        organization: organization,
-        availablePoints: availablePoints,
-        awardedPoints: awardedPoints,
-        perhapsExamMode: courseData.settings.hide_submission_results,
-        newExercises: [],
-        notifyAfter: 0,
-        disabled: courseData.settings.disabled_status === "enabled" ? false : true,
-        materialUrl: courseData.settings.material_url,
-    };
-    userData.addCourse(localData);
-    ui.treeDP.addChildWithId("myCourses", localData.id, localData.title, {
-        command: "tmc.courseDetails",
-        title: "Go To Course Details",
-        arguments: [localData.id],
-    });
-    workspaceManager.createWorkspaceFile(courseData.details.name);
-    await displayUserCourses(actionContext);
-    return refreshLocalExercises(actionContext);
-}
-
-/**
  * Removes given course from UserData and removes its associated files. However, doesn't remove any
  * exercises that are on disk.
  *
@@ -576,92 +464,4 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
         Logger.log("Closing course workspace because it was removed.");
         await vscode.commands.executeCommand("workbench.action.closeFolder");
     }
-}
-
-/**
- * Updates the given course by re-fetching all data from the server. Handles authorization and
- * connection errors as successful operations where the data was not actually updated.
- *
- * @param courseId ID of the course to update.
- * @returns Boolean value representing whether the data from server was successfully received.
- */
-export async function updateCourse(
-    actionContext: ActionContext,
-    courseId: number,
-): Promise<Result<boolean, Error>> {
-    const { tmc, ui, userData } = actionContext;
-    const postMessage = (courseId: number, disabled: boolean, exerciseIds: number[]): void => {
-        ui.webview.postMessage(
-            {
-                command: "setNewExercises",
-                courseId,
-                exerciseIds,
-            },
-            {
-                command: "setCourseDisabledStatus",
-                courseId,
-                disabled,
-            },
-        );
-    };
-    const courseData = userData.getCourse(courseId);
-    const updateResult = await tmc.getCourseData(courseId, { forceRefresh: true });
-    if (updateResult.err) {
-        if (updateResult.val instanceof ForbiddenError) {
-            if (!courseData.disabled) {
-                Logger.warn(
-                    `Failed to access information for course ${courseData.name}. Marking as disabled.`,
-                );
-                const course = userData.getCourse(courseId);
-                await userData.updateCourse({ ...course, disabled: true });
-                postMessage(course.id, true, []);
-            } else {
-                Logger.warn(
-                    `ForbiddenError above probably caused by course still being disabled ${courseData.name}`,
-                );
-                postMessage(courseData.id, true, []);
-            }
-            return Ok(false);
-        } else if (updateResult.val instanceof ConnectionError) {
-            Logger.warn("Failed to fetch data from TMC servers, data not updated.");
-            return Ok(false);
-        } else {
-            return updateResult;
-        }
-    }
-
-    const { details, exercises, settings } = updateResult.val;
-    const [availablePoints, awardedPoints] = exercises.reduce(
-        (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
-        [0, 0],
-    );
-
-    await userData.updateCourse({
-        ...courseData,
-        availablePoints,
-        awardedPoints,
-        description: details.description || "",
-        disabled: settings.disabled_status !== "enabled",
-        materialUrl: settings.material_url,
-        perhapsExamMode: settings.hide_submission_results,
-    });
-
-    const updateExercisesResult = await userData.updateExercises(
-        courseId,
-        details.exercises.map((x) => ({
-            id: x.id,
-            name: x.name,
-            deadline: x.deadline,
-            passed: x.completed,
-            softDeadline: x.soft_deadline,
-        })),
-    );
-    if (updateExercisesResult.err) {
-        return updateExercisesResult;
-    }
-
-    const course = userData.getCourse(courseId);
-    postMessage(course.id, course.disabled, course.newExercises);
-
-    return Ok(true);
 }

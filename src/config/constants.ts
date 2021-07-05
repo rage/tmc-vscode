@@ -21,6 +21,23 @@ export const CLIENT_NAME = "vscode_plugin";
 export const EXTENSION_ID = "moocfi.test-my-code";
 export const OUTPUT_CHANNEL_NAME = "TestMyCode";
 
+/**
+ * Delay for notifications that offer a "remind me later" option.
+ */
+export const NOTIFICATION_DELAY = 30 * 60 * 1000;
+
+export const API_CACHE_LIFETIME = 5 * 60 * 1000;
+export const CLI_PROCESS_TIMEOUT = 2 * 60 * 1000;
+export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000;
+
+/** Minimum time that should be waited between submission attempts. */
+export const MINIMUM_SUBMISSION_INTERVAL = 5 * 1000;
+
+export const LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER = 1;
+export const LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER =
+    LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER;
+export const LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER = 0;
+
 export const HIDE_META_FILES = {
     "**/__pycache__": true,
     "**/.available_points.json": true,
@@ -31,6 +48,7 @@ export const HIDE_META_FILES = {
     "**/.tmcproject.json": true,
     "**/.tmc.json": true,
     "**/.tmc.lock": true,
+    "**/.tmc_test_results.hmac.sha256": true,
 };
 
 export const SHOW_META_FILES = {
@@ -43,6 +61,7 @@ export const SHOW_META_FILES = {
     "**/.tmcproject.json": false,
     "**/.tmc.json": false,
     "**/.tmc.lock": false,
+    "**/.tmc_test_results.hmac.sha256": false,
 };
 
 export const WATCHER_EXCLUDE = {
@@ -53,24 +72,14 @@ export const WATCHER_EXCLUDE = {
 export const WORKSPACE_SETTINGS = {
     folders: [{ path: ".tmc" }],
     settings: {
-        "workbench.editor.closeOnFileDelete": true,
+        "explorer.decorations.colors": false,
         "files.autoSave": "onFocusChange",
         "files.exclude": { ...HIDE_META_FILES },
         "files.watcherExclude": { ...WATCHER_EXCLUDE },
+        "problems.decorations.enabled": false,
+        "workbench.editor.closeOnFileDelete": true,
     },
 };
-
-/**
- * Delay for notifications that offer a "remind me later" option.
- */
-export const NOTIFICATION_DELAY = 30 * 60 * 1000;
-
-export const API_CACHE_LIFETIME = 5 * 60 * 1000;
-export const CLI_PROCESS_TIMEOUT = 2 * 60 * 1000;
-export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000;
-
-/** Minimum time that should be waited between submission attempts. */
-export const MINIMUM_SUBMISSION_INTERVAL = 5 * 1000;
 
 export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Security-Policy"}" content="default-src 'none';" /></head></html>`;
 

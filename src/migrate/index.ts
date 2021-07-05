@@ -31,6 +31,7 @@ export async function migrateExtensionDataFromPreviousVersions(
     storage: Storage,
     dialog: Dialog,
     tmc: TMC,
+    settings: vscode.WorkspaceConfiguration,
 ): Promise<Result<void, Error>> {
     const memento = context.globalState;
 
@@ -46,7 +47,7 @@ export async function migrateExtensionDataFromPreviousVersions(
     }
 
     try {
-        const migratedExtensionSettings = await migrateExtensionSettings(memento);
+        const migratedExtensionSettings = await migrateExtensionSettings(memento, settings);
         const migratedSessionState = migrateSessionState(memento);
         const migratedUserData = migrateUserData(memento);
 

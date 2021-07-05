@@ -1,3 +1,5 @@
+//@ts-check
+
 const Mocha = require("mocha");
 const path = require("path");
 

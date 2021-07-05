@@ -3,7 +3,9 @@ import { createIs } from "typescript-is";
 import * as vscode from "vscode";
 
 import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
+import { ActionContext } from "./actions/types";
 import Dialog from "./api/dialog";
+import ExerciseDecorationProvider from "./api/exerciseDecorationProvider";
 import Storage from "./api/storage";
 import TMC from "./api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
@@ -75,6 +77,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         storage,
         dialog,
         tmc,
+        vscode.workspace.getConfiguration(),
     );
     if (migrationResult.err) {
         if (migrationResult.val instanceof HaltForReloadError) {
@@ -95,7 +98,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const tmcDataPath = dataPathResult.val;
-    const workspaceFileFolder = path.join(context.globalStoragePath, "workspaces");
+    const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces");
     const resourcesResult = await init.resourceInitialization(
         context,
         storage,
@@ -108,8 +111,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     const resources = resourcesResult.val;
-    const settings = new Settings(storage, resources);
-    await settings.verifyWorkspaceSettingsIntegrity();
+
+    const settings = new Settings(storage);
+    context.subscriptions.push(settings);
+
     Logger.configure(settings.getLogLevel());
 
     const ui = new UI(context, resources, vscode.window.createStatusBarItem());
@@ -140,11 +145,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(workspaceManager);
     if (workspaceManager.activeCourse) {
         await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true);
+        await workspaceManager.verifyWorkspaceSettingsIntegrity();
     }
 
     const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
-    const actionContext = {
+    const exerciseDecorationProvider = new ExerciseDecorationProvider(userData, workspaceManager);
+    const actionContext: ActionContext = {
         dialog,
+        exerciseDecorationProvider,
         resources,
         settings,
         temporaryWebviewProvider,
@@ -162,6 +170,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     init.registerUiActions(actionContext);
     init.registerCommands(context, actionContext);
+    init.registerSettingsCallbacks(actionContext);
+
+    context.subscriptions.push(
+        vscode.window.registerFileDecorationProvider(exerciseDecorationProvider),
+    );
 
     if (authenticated) {
         vscode.commands.executeCommand("tmc.updateExercises", "silent");

@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.1.0] - 2021-07-05
+
+#### Added
+
+- Exercise decorations: Show completed, expired, partially completed and missing in course workspace file tree.
+- Automatically download old submission (disabled since version 2.0.0).
+
+#### Changed
+- Bumped TMC-langs to version 0.21.0-beta-4.
+- Moved Extension Settings behind VSCode Settings API. [Read more...](https://code.visualstudio.com/docs/getstarted/settings)
+- Moved TMC folder selection to My Courses page.
+
+#### Removed
+- Custom Settings webview.
+
+#### Security
+- Updated dependencies.
 ## [2.0.3] - 2021-06-28
 
 #### Fixed
