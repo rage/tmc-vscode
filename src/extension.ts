@@ -117,7 +117,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     Logger.configure(settings.getLogLevel());
 
-    const ui = new UI(context, resources, vscode.window.createStatusBarItem());
+    const ui = new UI(context, resources);
     const loggedIn = ui.treeDP.createVisibilityGroup(authenticated);
     const visibilityGroups = {
         loggedIn,
