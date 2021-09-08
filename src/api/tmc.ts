@@ -1032,7 +1032,8 @@ export default class TMC {
             try {
                 await processResult;
             } catch (error) {
-                return Err(new RuntimeError(error));
+                // Typing change from update
+                return Err(new RuntimeError(error as string));
             }
 
             if (interrupted) {
