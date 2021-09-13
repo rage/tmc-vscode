@@ -540,7 +540,7 @@ async function startServer(): Promise<cp.ChildProcess> {
     }, 20000);
 
     while (!ready) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000, []));
     }
 
     clearTimeout(timeout);

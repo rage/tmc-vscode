@@ -1,7 +1,7 @@
 //@ts-check
 
+const runTests = require("@vscode/test-electron").runTests;
 const path = require("path");
-const runTests = require("vscode-test").runTests;
 
 async function main() {
     let exitCode = 0;

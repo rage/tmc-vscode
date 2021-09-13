@@ -1,4 +1,4 @@
-import * as pLimit from "p-limit";
+import pLimit from "p-limit";
 import { Ok, Result } from "ts-results";
 
 import { ExerciseStatus, WebviewMessage } from "../ui/types";
