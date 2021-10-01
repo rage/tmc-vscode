@@ -6,7 +6,7 @@
 - Better support for MacOS Big Sur.
 
 #### Changed
-- Bumped TMC-langs to version 0.23.0.
+- Bumped TMC-langs to version 0.23.1.
 
 ## [2.1.0] - 2021-07-05
 
