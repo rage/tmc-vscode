@@ -463,7 +463,7 @@
         "@types/node": "^16.10.2",
         "@types/node-fetch": "^2.5.10",
         "@types/unzipper": "^0.10.4",
-        "@types/vscode": "^1.60.0",
+        "@types/vscode": "^1.52.0",
         "@typescript-eslint/eslint-plugin": "^4.32.0",
         "@typescript-eslint/parser": "^4.32.0",
         "@vscode/test-electron": "^1.6.2",
