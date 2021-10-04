@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.1] - 2021-10-04
+
+#### Added
+- Better support for MacOS Big Sur.
+
+#### Changed
+- Bumped TMC-langs to version 0.23.1.
+
 ## [2.1.0] - 2021-07-05
 
 #### Added
