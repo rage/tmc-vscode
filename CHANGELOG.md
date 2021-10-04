@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.1.1] - 2021-xx-xx
+## [2.1.1] - 2021-10-04
 
 #### Added
 - Better support for MacOS Big Sur.
