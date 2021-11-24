@@ -33,6 +33,7 @@ interface DetailsForLangs {
         checksum: string;
         course_name: string;
         exercise_name: string;
+        hide_submission_results: boolean;
     }>;
 }
 
@@ -132,6 +133,7 @@ app.get("/api/v8/core/exercises/details", (req, res: Response<DetailsForLangs>) 
             checksum: x.checksum,
             course_name: "python-course",
             exercise_name: x.exercise_name,
+            hide_submission_results: false,
         })),
     });
 });
