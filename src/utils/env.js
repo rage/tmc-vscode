@@ -59,8 +59,7 @@ function getLangsCLIForPlatform(platform, version) {
         case "linuxarm64":
             return `tmc-langs-cli-aarch64-unknown-linux-gnu-${version}`;
         case "macosarm64":
-        // return `tmc-langs-cli-aarch64-apple-darwin-${version}`;
-        // falls through
+            return `tmc-langs-cli-aarch64-apple-darwin-${version}`;
         case "macos64":
             return `tmc-langs-cli-x86_64-apple-darwin-${version}`;
         case "windows32":

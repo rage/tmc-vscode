@@ -68,7 +68,8 @@ export async function migrateExtensionDataFromPreviousVersions(
             await memento.update(key, undefined);
         }
     } catch (e) {
-        return Err(e);
+        // Typing change from update
+        return Err(e as Error);
     }
 
     return Ok.EMPTY;

@@ -51,7 +51,8 @@ async function downloadCorrectLangsVersion(
         await fs.close(fd);
     } catch (e) {
         Logger.error("Error changing permissions for CLI", e);
-        return Err(e);
+        // Typing change from update
+        return Err(e as Error);
     }
 
     return Ok(cliPath);

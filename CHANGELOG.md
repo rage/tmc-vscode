@@ -1,6 +1,21 @@
 # Changelog
 
 ## [2.2.0] - YYYY-MM-DD
+## [2.1.2] - 2021-11-24
+
+#### Changed
+- Bumped TMC-langs to version 0.23.2.
+
+#### Fixed
+- TMC-langs: Download old submission to fallback to template download if 403 encountered (e.g. exam mode) when fetching users' old submissions.
+
+## [2.1.1] - 2021-10-04
+
+#### Added
+- Better support for MacOS Big Sur.
+
+#### Changed
+- Bumped TMC-langs to version 0.23.1.
 
 ## [2.1.0] - 2021-07-05
 

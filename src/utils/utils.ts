@@ -33,7 +33,8 @@ export async function downloadFile(
         if (sizeString && progressCallback) {
             let downloaded = 0;
             const size = parseInt(sizeString, 10);
-            response.body.on("data", (chunk: Buffer) => {
+            // Typing change from update
+            (response.body as NonNullable<typeof response.body>).on("data", (chunk: Buffer) => {
                 downloaded += chunk.length;
                 progressCallback(
                     Math.round((downloaded / size) * 100),
@@ -43,7 +44,8 @@ export async function downloadFile(
         }
     } catch (error) {
         Logger.error(error);
-        return new Err(new ConnectionError("Connection error: " + error.name));
+        // Typing change from update
+        return new Err(new ConnectionError("Connection error: " + (error as Error).name));
     }
 
     if (!response.ok) {
