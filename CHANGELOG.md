@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.1.2] - 2021-11-22
+## [2.1.2] - 2021-11-24
 
 #### Changed
 - Bumped TMC-langs to version 0.23.2.
