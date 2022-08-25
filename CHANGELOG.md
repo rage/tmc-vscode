@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.3] - 2022-08-25
+
+#### Added
+- Support for C# exercises that use .NET 6.0.
+
+#### Changed
+- Bumped TMC-langs to version 0.25.0.
+
 ## [2.1.2] - 2021-11-24
 
 #### Changed
