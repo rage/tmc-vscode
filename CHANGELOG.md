@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.1.5] - 2022-08-29
+
+### Changed
+
+Bumped TMC-langs to version 0.25.2.
+
 ## [2.1.4] - 2022-08-29
 
 ### Changed
