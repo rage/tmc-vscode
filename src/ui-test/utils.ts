@@ -1,12 +1,15 @@
-import { promise } from "vscode-extension-tester";
+// import { promise } from "vscode-extension-tester";
 
 /**
  * Waits until a positive amount of provided elements are found and returns them. If the optional
  * timeout parameter is given, stops searching at that point.
  */
 const waitForElements = async <T>(
-    elementsProvider: () => promise.Promise<T[]>,
-    comparator: (t: T) => Promise<boolean> = async (): Promise<boolean> => true,
+    // Unused code, type used to be promise.Promise<T[]>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    elementsProvider: () => any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    comparator: (t: any) => Promise<boolean> = async (): Promise<boolean> => true,
     timeout?: number,
 ): Promise<T[]> => {
     let elements: T[];
