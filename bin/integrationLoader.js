@@ -10,22 +10,24 @@ function run() {
         color: true,
     });
 
-    return new Promise((c, e) => {
-        mocha.addFile(path.resolve(__dirname, "..", "dist", "integration.spec.js"));
+    return /** @type {Promise<void>} */ (
+        new Promise((c, e) => {
+            mocha.addFile(path.resolve(__dirname, "..", "dist", "integration.spec.js"));
 
-        try {
-            // Run the mocha test
-            mocha.run((failures) => {
-                if (failures > 0) {
-                    e(new Error(`${failures} tests failed.`));
-                } else {
-                    c();
-                }
-            });
-        } catch (err) {
-            e(err);
-        }
-    });
+            try {
+                // Run the mocha test
+                mocha.run((failures) => {
+                    if (failures > 0) {
+                        e(new Error(`${failures} tests failed.`));
+                    } else {
+                        c();
+                    }
+                });
+            } catch (err) {
+                e(err);
+            }
+        })
+    );
 }
 
 exports.run = run;
