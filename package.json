@@ -32,17 +32,8 @@
     ],
     "activationEvents": [
         "workspaceContains:**/TMC-Readme.md",
-        "onView:tmcView",
-        "onCommand:tmc.cleanExercise",
-        "onCommand:tmc.closeExercise",
-        "onCommand:tmc.login",
-        "onCommand:tmc.logout",
-        "onCommand:tmc.openSettings",
         "onCommand:tmc.runTests",
-        "onCommand:tmc.selectAction",
-        "onCommand:tmc.switchWorkspace",
-        "onCommand:tmc.welcome",
-        "onCommand:tmc.wipe"
+        "onCommand:tmc.welcome"
     ],
     "main": "./dist/extension",
     "contributes": {
