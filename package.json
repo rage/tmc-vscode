@@ -1,25 +1,8 @@
 {
     "name": "test-my-code",
     "displayName": "TestMyCode",
-    "description": "TestMyCode extension for Visual Studio Code",
     "version": "2.1.5",
-    "license": "MIT",
-    "publisher": "moocfi",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/rage/tmc-vscode.git"
-    },
-    "bugs": {
-        "url": "https://github.com/rage/tmc-vscode/issues"
-    },
-    "icon": "media/TMC.png",
-    "galleryBanner": {
-        "color": "#ffab0e",
-        "theme": "light"
-    },
-    "engines": {
-        "vscode": "^1.52.0"
-    },
+    "description": "TestMyCode extension for Visual Studio Code",
     "categories": [
         "Other"
     ],
@@ -30,12 +13,37 @@
         "code",
         "multi-root ready"
     ],
-    "activationEvents": [
-        "workspaceContains:**/TMC-Readme.md",
-        "onCommand:tmc.runTests",
-        "onCommand:tmc.welcome"
-    ],
+    "bugs": {
+        "url": "https://github.com/rage/tmc-vscode/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/rage/tmc-vscode.git"
+    },
+    "license": "MIT",
+    "publisher": "moocfi",
     "main": "./dist/extension",
+    "scripts": {
+        "ci:all": "npm ci && cd backend && npm ci",
+        "clean-local-rust-config": "cd backend && cd cli && rm -rf tmc-vscode_plugin",
+        "eslint": "eslint --fix . --ext .js,.ts",
+        "eslint-check": "eslint . --ext .js,.ts",
+        "postinstall": "babel node_modules/ts-results --out-dir node_modules/ts-results --plugins=@babel/plugin-transform-modules-commonjs",
+        "lint-check": "npm run eslint-check && npm run prettier-check",
+        "prepare": "husky install",
+        "prettier": "prettier --write --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
+        "prettier-check": "prettier --check --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
+        "release": "./bin/publishRelease.sh",
+        "setup-ultimate": "git clean -X -d -f && git submodule update --init && npm run ci:all && cd backend && npm run setup",
+        "pretest": "cross-env NODE_ENV=development BACKEND=mockBackend npm run webpack",
+        "test": "node ./bin/runTests.js",
+        "test-integration": "npm pretest && node ./bin/runIntegration.js",
+        "test-integration-only": "node ./bin/runIntegration.js",
+        "update-submodules": "git submodule foreach git pull origin master",
+        "vscode:prepublish": "cross-env NODE_ENV=production npm run webpack",
+        "webpack": "webpack",
+        "webpack:watch": "webpack --watch"
+    },
     "contributes": {
         "commands": [
             {
@@ -386,6 +394,14 @@
                 }
             ]
         },
+        "views": {
+            "tmc": [
+                {
+                    "id": "tmcView",
+                    "name": "Menu"
+                }
+            ]
+        },
         "viewsContainers": {
             "activitybar": [
                 {
@@ -394,43 +410,44 @@
                     "icon": "media/TMC.png"
                 }
             ]
-        },
-        "views": {
-            "tmc": [
-                {
-                    "id": "tmcView",
-                    "name": "Menu"
-                }
-            ]
         }
     },
-    "scripts": {
-        "vscode:prepublish": "cross-env NODE_ENV=production npm run webpack",
-        "clean-local-rust-config": "cd backend && cd cli && rm -rf tmc-vscode_plugin",
-        "ci:all": "npm ci && cd backend && npm ci",
-        "pretest": "cross-env NODE_ENV=development BACKEND=mockBackend npm run webpack",
-        "test": "node ./bin/runTests.js",
-        "test-integration": "npm pretest && node ./bin/runIntegration.js",
-        "test-integration-only": "node ./bin/runIntegration.js",
-        "eslint-check": "eslint . --ext .js,.ts",
-        "eslint": "eslint --fix . --ext .js,.ts",
-        "lint-check": "npm run eslint-check && npm run prettier-check",
-        "postinstall": "babel node_modules/ts-results --out-dir node_modules/ts-results --plugins=@babel/plugin-transform-modules-commonjs",
-        "prettier-check": "prettier --check --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
-        "prettier": "prettier --write --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
-        "release": "./bin/publishRelease.sh",
-        "setup-ultimate": "git clean -X -d -f && git submodule update --init && npm run ci:all && cd backend && npm run setup",
-        "update-submodules": "git submodule foreach git pull origin master",
-        "webpack": "webpack",
-        "webpack:watch": "webpack --watch",
-        "prepare": "husky install"
+    "activationEvents": [
+        "workspaceContains:**/TMC-Readme.md",
+        "onCommand:tmc.runTests",
+        "onCommand:tmc.welcome"
+    ],
+    "husky": {
+        "hooks": {
+            "pre-commit": "lint-staged"
+        }
+    },
+    "lint-staged": {
+        "*.{html,js,json,jsx,ts,yml}": [
+            "prettier --check"
+        ],
+        "*.{js,ts}": [
+            "eslint --cache --max-warnings 0"
+        ]
     },
     "prettier": {
+        "arrowParens": "always",
+        "endOfLine": "lf",
         "printWidth": 100,
         "tabWidth": 4,
-        "trailingComma": "all",
-        "arrowParens": "always",
-        "endOfLine": "lf"
+        "trailingComma": "all"
+    },
+    "dependencies": {
+        "del": "^7.0.0",
+        "du": "^1.0.0",
+        "fs-extra": "^11.1.0",
+        "handlebars": "^4.7.7",
+        "lodash": "^4.17.21",
+        "node-fetch": "^2.6.7",
+        "p-limit": "^4.0.0",
+        "tree-kill": "^1.2.2",
+        "ts-results": "^3.3.0",
+        "typescript-is": "^0.19.0"
     },
     "devDependencies": {
         "@babel/cli": "^7.19.3",
@@ -479,29 +496,12 @@
         "webpack-cli": "^5.0.1",
         "webpack-merge": "^5.8.0"
     },
-    "dependencies": {
-        "del": "^7.0.0",
-        "du": "^1.0.0",
-        "fs-extra": "^11.1.0",
-        "handlebars": "^4.7.7",
-        "lodash": "^4.17.21",
-        "node-fetch": "^2.6.7",
-        "p-limit": "^4.0.0",
-        "tree-kill": "^1.2.2",
-        "ts-results": "^3.3.0",
-        "typescript-is": "^0.19.0"
+    "engines": {
+        "vscode": "^1.52.0"
     },
-    "husky": {
-        "hooks": {
-            "pre-commit": "lint-staged"
-        }
-    },
-    "lint-staged": {
-        "*.{html,js,json,jsx,ts,yml}": [
-            "prettier --check"
-        ],
-        "*.{js,ts}": [
-            "eslint --cache --max-warnings 0"
-        ]
+    "icon": "media/TMC.png",
+    "galleryBanner": {
+        "color": "#ffab0e",
+        "theme": "light"
     }
 }
