@@ -2,13 +2,15 @@
 
 exitCode=0
 
-if [[ ! $1 =~ ^[v][0-9]+\.[0-9]+\.[0-9]+$ ]]
+# Tag must match the tag scheme, GH uses refs/tags/vX.Y.Z as param, thus cut
+tag=$(echo "$1" | cut -d'/' -f 3)
+if [[ ! $tag =~ ^[v][0-9]+\.[0-9]+\.[0-9]+$ ]]
 then
     echo "Error: Github Tag must match the format vX.Y.Z"
     exitCode=1
 fi
 
-# Tag must match the version scheme
+# Version must match the version scheme
 tagVersion=$(echo "$1" | cut -d'v' -f 2)
 if [[ ! $tagVersion =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 then

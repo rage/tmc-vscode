@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import * as cp from "child_process";
-import { sync as delSync } from "del";
+import { deleteSync } from "del";
 import * as fs from "fs-extra";
 import { first } from "lodash";
 import * as path from "path";
@@ -192,7 +192,7 @@ suite("tmc langs cli spec", function () {
             let exercisePath: string;
 
             setup(async function () {
-                delSync(projectsDir, { force: true });
+                deleteSync(projectsDir, { force: true });
                 const result = (await tmc.downloadExercises([1], true, () => {})).unwrap();
                 exercisePath = result.downloaded[0].path;
             });
@@ -443,7 +443,7 @@ suite("tmc langs cli spec", function () {
             let exercisePath: string;
 
             setup(async function () {
-                delSync(projectsDir, { force: true });
+                deleteSync(projectsDir, { force: true });
                 writeCredentials(configDir);
                 const result = (await tmc.downloadExercises([1], true, () => {})).unwrap();
                 clearCredentials(configDir);
@@ -505,7 +505,7 @@ function writeCredentials(configDir: string): void {
 }
 
 function clearCredentials(configDir: string): void {
-    delSync(path.join(configDir, "credentials.json"), { force: true });
+    deleteSync(path.join(configDir, "credentials.json"), { force: true });
 }
 
 function setupProjectsDir(configDir: string, projectsDir: string): string {

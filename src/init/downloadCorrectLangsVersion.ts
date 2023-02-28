@@ -1,4 +1,4 @@
-import { sync as delSync } from "del";
+import { deleteSync } from "del";
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
@@ -26,7 +26,7 @@ async function downloadCorrectLangsVersion(
         return Ok(cliPath);
     }
 
-    delSync(cliFolder, { force: true });
+    deleteSync(cliFolder, { force: true });
 
     const cliUrl = TMC_LANGS_DL_URL + executable;
     Logger.log(`Downloading TMC-langs from ${cliUrl} to ${cliPath}`);
