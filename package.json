@@ -413,9 +413,7 @@
         }
     },
     "activationEvents": [
-        "workspaceContains:**/TMC-Readme.md",
-        "onCommand:tmc.runTests",
-        "onCommand:tmc.welcome"
+        "workspaceContains:**/TMC-Readme.md"
     ],
     "husky": {
         "hooks": {
