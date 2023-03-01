@@ -1,7 +1,7 @@
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
-import { createIs } from "typescript-is";
+import { createIs } from "typia";
 import * as vscode from "vscode";
 
 import Dialog from "../api/dialog";

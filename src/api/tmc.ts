@@ -1,7 +1,7 @@
 import * as cp from "child_process";
 import * as kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
-import { createIs, is } from "typescript-is";
+import { createIs, is } from "typia";
 
 import {
     API_CACHE_LIFETIME,

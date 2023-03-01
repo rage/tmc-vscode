@@ -1,5 +1,5 @@
 import { Result } from "ts-results";
-import { createIs } from "typescript-is";
+import { createIs } from "typia";
 import * as vscode from "vscode";
 
 import { ExerciseStatus, WorkspaceExercise } from "../api/workspaceManager";

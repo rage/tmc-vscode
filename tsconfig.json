@@ -7,8 +7,7 @@
         "lib": ["es6"],
         "plugins": [
             {
-                "transform": "typescript-is/lib/transform-inline/transformer",
-                "disallowSuperfluousObjectProperties": false
+                "transform": "typia/lib/transform"
             }
         ],
         "typeRoots": ["./types", "./node_modules/@types"],
