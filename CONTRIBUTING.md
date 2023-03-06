@@ -12,10 +12,10 @@ git clone https://github.com/rage/tmc-vscode.git
 
 ### Prerequisites
 
-- [Git](https://git-scm.com/)
-- [NodeJS / npm](https://nodejs.org/)
-- [VSCode](https://code.visualstudio.com/)
-- [vsce](https://www.npmjs.com/package/vsce)
+-   [Git](https://git-scm.com/)
+-   [NodeJS / npm](https://nodejs.org/)
+-   [VSCode](https://code.visualstudio.com/)
+-   [vsce](https://www.npmjs.com/package/vsce)
 
 ### Dependencies
 
@@ -23,6 +23,12 @@ From a terminal, where you have cloned the repository, execute the following com
 
 ```
 npm ci
+```
+
+Repeat the same for the testing backend:
+
+```
+cd backend && npm ci
 ```
 
 ### Build
@@ -60,4 +66,4 @@ vsce package
 
 ## Submitting a Pull Request
 
-Submit a pull request and tag the issues in the body using "Resolves #id" or "Fixes #id".
+Submit a pull request, and if it fixes problems that have an existing issues on GitHub, tag the issues in the body using "Resolves #issue_id" or "Fixes #issue_id".
