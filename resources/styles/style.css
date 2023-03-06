@@ -289,7 +289,7 @@ body.vscode-light .show-all-button:hover {
 }
 
 .content-collapsible {
-    padding: 5px 18px;
+    margin: 5px 18px;
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.2s ease-out;

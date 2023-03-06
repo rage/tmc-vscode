@@ -1,7 +1,7 @@
 import * as cp from "child_process";
 import * as kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
-import { createIs, is } from "typescript-is";
+import { createIs, is } from "typia";
 
 import {
     API_CACHE_LIFETIME,
@@ -154,7 +154,7 @@ export default class TMC {
         }
         const res = await this._executeLangsCommand(
             {
-                args: ["core", "login", "--email", username, "--base64"],
+                args: ["core", "login", "--stdin", "--email", username, "--base64"],
                 obfuscate: [3],
                 stdin: Buffer.from(password).toString("base64"),
             },

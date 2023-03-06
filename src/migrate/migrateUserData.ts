@@ -1,4 +1,4 @@
-import { createIs } from "typescript-is";
+import { createIs } from "typia";
 import * as vscode from "vscode";
 
 import { LocalCourseData } from "../api/storage";

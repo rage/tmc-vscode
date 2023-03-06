@@ -30,8 +30,8 @@ const config = () => {
         target: "node",
         entry: {
             extension: "./src/extension.ts",
-            "testBundle.test": glob.sync("./src/test/**/*.test.ts"),
-            "integration.spec": glob.sync("./src/test-integration/**/*.spec.ts"),
+            "testBundle.test": glob.globSync("./src/test/**/*.test.ts"),
+            "integration.spec": glob.globSync("./src/test-integration/**/*.spec.ts"),
         },
         output: {
             path: path.resolve(__dirname, "dist"),
@@ -50,6 +50,10 @@ const config = () => {
             alias: {
                 handlebars: "handlebars/dist/handlebars.min.js",
             },
+            // solves an issue with ts-loader with ttypescript
+            // using the incorrect import paths for .d.ts files:
+            // https://github.com/TypeStrong/ts-loader/issues/1501
+            preferRelative: true,
         },
         node: {
             __dirname: false,

@@ -1,5 +1,5 @@
 import * as path from "path";
-import { createIs } from "typescript-is";
+import { createIs } from "typia";
 import * as vscode from "vscode";
 
 import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
