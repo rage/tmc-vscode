@@ -65,7 +65,7 @@ export async function testExercise(
     actionContext: ActionContext,
     exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { dialog, ui, tmc, userData, temporaryWebviewProvider } = actionContext;
+    const { dialog, tmc, userData, temporaryWebviewProvider } = actionContext;
 
     const course = userData.getCourseByName(exercise.courseSlug);
     const exerciseId = course.exercises.find((x) => x.name === exercise.exerciseSlug)?.id;
@@ -103,15 +103,10 @@ export async function testExercise(
                 }
             },
         });
-        ui.setStatusBar(`Running tests for ${exerciseName}`);
         Logger.log(`Running local tests for ${exerciseName}`);
 
         const testResult = await testRunner;
         if (testResult.err) {
-            ui.setStatusBar(
-                `Running tests for ${exerciseName} ${aborted ? "aborted" : "failed"}`,
-                5000,
-            );
             if (aborted) {
                 temp.dispose();
                 return Ok.EMPTY;
@@ -128,7 +123,6 @@ export async function testExercise(
             temporaryWebviewProvider.addToRecycables(temp);
             return testResult;
         }
-        ui.setStatusBar(`Tests finished for ${exerciseName}`, 5000);
         Logger.log(`Tests finished for ${exerciseName}`);
         data = {
             testResult: testResult.val,
