@@ -492,7 +492,7 @@
         "terser-webpack-plugin": "^5.3.9",
         "ts-loader": "^9.4.4",
         "ts-node": "^10.9.1",
-        "ttypescript": "^1.5.15",
+        "ts-patch": "^3.0.1",
         "typemoq": "^2.1.0",
         "typescript": "^5.1.6",
         "webpack": "^5.88.1",

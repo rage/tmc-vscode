@@ -114,7 +114,7 @@ const config = () => {
                         {
                             loader: "ts-loader",
                             options: {
-                                compiler: "ttypescript",
+                                compiler: "ts-patch/compiler",
                                 configFile: "tsconfig.json",
                             },
                         },
