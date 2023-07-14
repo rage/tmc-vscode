@@ -54,6 +54,7 @@ const download = async (url: string, fileName: string): Promise<void> => {
         throw "Failed to download from " + url;
     }
     fs.writeFileSync(langs, await res.buffer());
+    fs.chmodSync(langs, 0o755);
     console.log(fileName, "downloaded!");
 };
 
