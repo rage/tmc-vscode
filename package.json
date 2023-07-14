@@ -37,7 +37,7 @@
         "setup-ultimate": "git clean -X -d -f && git submodule update --init && npm run ci:all && cd backend && npm run setup",
         "pretest": "cross-env NODE_ENV=development BACKEND=mockBackend npm run webpack",
         "test": "node ./bin/runTests.js",
-        "test-integration": "npm pretest && node ./bin/runIntegration.js",
+        "test-integration": "npm run pretest && node ./bin/runIntegration.js",
         "test-integration-only": "node ./bin/runIntegration.js",
         "update-submodules": "git submodule foreach git pull origin master",
         "vscode:prepublish": "cross-env NODE_ENV=production npm run webpack",
@@ -415,6 +415,11 @@
     "activationEvents": [
         "workspaceContains:**/TMC-Readme.md"
     ],
+    "capabilities": {
+        "untrustedWorkspaces": {
+            "supported": true
+        }
+    },
     "husky": {
         "hooks": {
             "pre-commit": "lint-staged"
