@@ -4,8 +4,8 @@
     "description": "Mock backend for tmc-vscode",
     "main": "index.ts",
     "scripts": {
-        "setup": "ts-node-dev --no-notify setup.ts",
-        "start": "ts-node-dev --no-notify index.ts",
+        "setup": "tsx setup.ts",
+        "start": "tsx index.ts",
         "test": "echo \"Error: no test specified\" && exit 1",
         "tsc": "tsc"
     },
@@ -17,7 +17,7 @@
         "@types/ncp": "^2.0.5",
         "archiver": "^5.3.1",
         "ncp": "^2.0.0",
-        "ts-node-dev": "^2.0.0",
+        "tsx": "^3.12.7",
         "typescript": "^5.1.6"
     },
     "dependencies": {
