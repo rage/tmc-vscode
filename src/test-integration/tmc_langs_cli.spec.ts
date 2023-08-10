@@ -125,7 +125,7 @@ suite("tmc langs cli spec", function () {
             expect(data.exercises.length).to.be.equal(2);
             expect(data.settings.name).to.be.equal("python-course");
 
-            const details = (await tmc.getCourseDetails(0)).unwrap().course;
+            const details = (await tmc.getCourseDetails(0)).unwrap();
             expect(details.id).to.be.equal(0);
             expect(details.name).to.be.equal("python-course");
 

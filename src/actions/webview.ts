@@ -6,7 +6,7 @@
 
 import du = require("du");
 
-import { Exercise } from "../api/types";
+import { Exercise } from "../api/langsSchema";
 import { ExerciseStatus } from "../api/workspaceManager";
 import * as UITypes from "../ui/types";
 import { WebviewMessage } from "../ui/types";
@@ -54,7 +54,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
     courses.forEach(async (course) => {
         const courseId = course.id;
         const exercises: Exercise[] = (await tmc.getCourseDetails(courseId))
-            .map((x) => x.course.exercises)
+            .map((x) => x.exercises)
             .unwrapOr([]);
 
         const deadline = parseNextDeadlineAfter(
@@ -103,7 +103,7 @@ export async function displayLocalCourseDetails(
     Logger.log(`Display course view for ${course.name}`);
 
     const exerciseData = new Map<string, UITypes.CourseDetailsExerciseGroup>();
-    const apiCourse = (await tmc.getCourseDetails(courseId)).mapErr(() => undefined).val?.course;
+    const apiCourse = (await tmc.getCourseDetails(courseId)).mapErr(() => undefined).val;
     const currentDate = new Date();
 
     const initialState: UITypes.WebviewMessage[] = [

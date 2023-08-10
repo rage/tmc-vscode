@@ -1,7 +1,6 @@
 import archiver from "archiver";
 import fs from "fs";
 import { ncp } from "ncp";
-import fetch from "node-fetch";
 import path from "path";
 
 import * as config from "../config";
@@ -53,7 +52,9 @@ const download = async (url: string, fileName: string): Promise<void> => {
     if (!res.ok) {
         throw "Failed to download from " + url;
     }
-    fs.writeFileSync(langs, await res.buffer());
+    const data = await res.blob();
+    const buf = Buffer.from(new Uint8Array(await data.arrayBuffer()));
+    fs.writeFileSync(langs, buf);
     fs.chmodSync(langs, 0o755);
     console.log(fileName, "downloaded!");
 };

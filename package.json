@@ -42,7 +42,8 @@
         "update-submodules": "git submodule foreach git pull origin master",
         "vscode:prepublish": "cross-env NODE_ENV=production npm run webpack",
         "webpack": "webpack",
-        "webpack:watch": "webpack --watch"
+        "webpack:watch": "webpack --watch",
+        "tsc": "tsc"
     },
     "contributes": {
         "commands": [

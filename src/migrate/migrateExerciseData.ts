@@ -89,9 +89,8 @@ async function exerciseDataFromV0toV1(
         dataPath: string;
     }
 
-    const dataPath = memento.get<ExtensionSettingsPartial>(
-        UNSTABLE_EXTENSION_SETTINGS_KEY,
-    )?.dataPath;
+    const dataPath = memento.get<ExtensionSettingsPartial>(UNSTABLE_EXTENSION_SETTINGS_KEY)
+        ?.dataPath;
     const closedExercises: { [key: string]: string[] } = {};
 
     const exercisesToMigrate: Array<[LocalExerciseDataV0, string]> = [];

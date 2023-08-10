@@ -4,7 +4,7 @@ import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 
 import { FeedbackQuestion } from "../actions/types";
-import { SubmissionFeedbackQuestion } from "../api/types";
+import { SubmissionFeedbackQuestion } from "../api/langsSchema";
 import { ConnectionError } from "../errors";
 
 import { Logger } from "./logger";
@@ -115,20 +115,19 @@ export function getProgressBar(percentDone: number): string {
 export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): FeedbackQuestion[] {
     const feedbackQuestions: FeedbackQuestion[] = [];
     questions.forEach((x) => {
-        const kindRangeMatch = x.kind.match("intrange\\[(-?[0-9]+)..(-?[0-9]+)\\]");
-        if (kindRangeMatch && kindRangeMatch[0] === x.kind) {
-            feedbackQuestions.push({
-                id: x.id,
-                kind: "intrange",
-                lower: parseInt(kindRangeMatch[1], 10),
-                question: x.question,
-                upper: parseInt(kindRangeMatch[2], 10),
-            });
-        } else if (x.kind === "text") {
+        if (x.kind === "Text") {
             feedbackQuestions.push({
                 id: x.id,
                 kind: "text",
                 question: x.question,
+            });
+        } else if (x.kind.IntRange) {
+            feedbackQuestions.push({
+                id: x.id,
+                kind: "intrange",
+                lower: x.kind.IntRange.lower,
+                question: x.question,
+                upper: x.kind.IntRange.upper,
             });
         } else {
             Logger.log("Unexpected feedback question type:", x.kind);
