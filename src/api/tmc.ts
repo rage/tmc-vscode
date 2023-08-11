@@ -176,7 +176,7 @@ export default class TMC {
                 args: this._tmcCmd("logged-in"),
                 processTimeout: options?.timeout,
             },
-            "token",
+            null,
         );
         return res.andThen<boolean, Error>((x) => {
             switch (x.result) {
@@ -894,11 +894,13 @@ export default class TMC {
      * @param validator Validator used to check that the result corresponds to the expected type.
      * @param cacheConfig Cache options.
      */
-    private async _executeLangsCommand<T extends DataKind["output-data-kind"]>(
+    private async _executeLangsCommand<T extends DataKind["output-data-kind"] | null>(
         langsArgs: LangsProcessArgs,
-        outputDataKind: T | null,
+        outputDataKind: T,
         cacheConfig?: CacheConfig,
-    ): Promise<Result<OutputData & { data: { "output-data-kind": T } }, Error>> {
+    ): Promise<
+        Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, Error>
+    > {
         const cacheKey = cacheConfig?.key;
         const currentTime = Date.now();
         if (!cacheConfig?.forceRefresh && cacheKey) {
@@ -935,18 +937,19 @@ export default class TMC {
     /**
      * Checks langs response for generic errors.
      */
-    private _checkLangsResponse<T extends DataKind["output-data-kind"]>(
+    private _checkLangsResponse<T extends DataKind["output-data-kind"] | null>(
         langsResponse: OutputData,
-        outputDataKind: T | null,
-    ): Result<OutputData & { data: { "output-data-kind": T } }, Error> {
+        outputDataKind: T,
+    ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, Error> {
         if (langsResponse.status === "crashed") {
             Logger.error(`Langs process crashed: ${langsResponse.message}`, langsResponse.data);
             return Err(new RuntimeError("Langs process crashed."));
         }
-        if (outputDataKind !== null && dataMatchesKind(langsResponse, outputDataKind)) {
+        if (dataMatchesKind(langsResponse, outputDataKind)) {
             return Ok(langsResponse);
         }
 
+        // after this point, we either have error data, or completely unexpected data
         const data = langsResponse.data;
         if (data === null || data["output-data-kind"] !== "error") {
             Logger.debug(`Unexpected TMC-langs response. ${langsResponse.data}`);
@@ -1112,7 +1115,6 @@ export default class TMC {
                 kill(cprocess.pid as number);
             }
         };
-
         return { interrupt, result };
     }
 }
@@ -1121,12 +1123,12 @@ export default class TMC {
  * Type guard for OutputData with the data matching the given `output-data-kind`.
  *
  * @param data The `OutputData` with unknown result data.
- * @param kind The expected `output-data-kind`.
+ * @param kind The expected `output-data-kind`. If `null`, doesn't check `output-data`.
  * @returns
  */
-function dataMatchesKind<T extends DataKind["output-data-kind"]>(
+function dataMatchesKind<T extends DataKind["output-data-kind"] | null>(
     data: OutputData, // this can be changed to unknown later if needed
-    kind: T | null,
-): data is OutputData & { data: { "output-data-kind": T } } {
-    return kind !== null && is<OutputData>(data) && data.data?.["output-data-kind"] === kind;
+    kind: T,
+): data is OutputData & { data: T extends null ? null : { "output-data-kind": T } } {
+    return kind === null || data.data?.["output-data-kind"] === kind;
 }

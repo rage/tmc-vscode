@@ -1,7 +1,7 @@
 import * as fs from "fs-extra";
-import * as fetch from "node-fetch";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
+import { fetch, Response } from "undici";
 
 import { FeedbackQuestion } from "../actions/types";
 import { SubmissionFeedbackQuestion } from "../api/langsSchema";
@@ -25,23 +25,10 @@ export async function downloadFile(
 ): Promise<Result<void, Error>> {
     fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
 
-    let response: fetch.Response;
+    let response: Response;
     try {
         const request = { url, method: "get", headers };
-        response = await fetch.default(request.url, request);
-        const sizeString = response.headers.get("content-length");
-        if (sizeString && progressCallback) {
-            let downloaded = 0;
-            const size = parseInt(sizeString, 10);
-            // Typing change from update
-            (response.body as NonNullable<typeof response.body>).on("data", (chunk: Buffer) => {
-                downloaded += chunk.length;
-                progressCallback(
-                    Math.round((downloaded / size) * 100),
-                    (100 * chunk.length) / size,
-                );
-            });
-        }
+        response = await fetch(request.url, request);
     } catch (error) {
         Logger.error(error);
         // Typing change from update
@@ -53,11 +40,24 @@ export async function downloadFile(
     }
 
     try {
-        await new Promise<void>((resolve, reject) =>
-            response.buffer().then((buffer) => {
-                fs.writeFile(filePath, buffer, (err) => (err ? reject(err) : resolve()));
-            }),
-        );
+        const file = await fs.createWriteStream(filePath);
+        if (response.body) {
+            let downloaded = 0;
+            const sizeString = response.headers.get("content-length");
+            const size = sizeString ? parseInt(sizeString, 10) : 0;
+            for await (const chunk of response.body) {
+                if (sizeString && progressCallback) {
+                    downloaded += chunk.length;
+                    progressCallback(
+                        Math.round((downloaded / size) * 100),
+                        (100 * chunk.length) / size,
+                    );
+                }
+                await file.write(chunk);
+            }
+        } else {
+            throw new Error("Unexpected null response body");
+        }
     } catch (error) {
         Logger.error(error);
         return new Err(new Error("Writing to file failed: " + error));
