@@ -151,7 +151,7 @@ export default class TMC {
         const res = await this._executeLangsCommand(
             {
                 args: this._tmcCmd("login", "--base64", "--email", username, "--stdin"),
-                obfuscate: [4],
+                obfuscate: [8],
                 stdin: Buffer.from(password).toString("base64"),
             },
             null,

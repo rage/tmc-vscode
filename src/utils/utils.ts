@@ -55,6 +55,7 @@ export async function downloadFile(
                 }
                 await file.write(chunk);
             }
+            await file.close();
         } else {
             throw new Error("Unexpected null response body");
         }
