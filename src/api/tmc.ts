@@ -1,7 +1,7 @@
 import * as cp from "child_process";
 import * as kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
-import { is } from "typia";
+import { validate } from "typia";
 
 import {
     API_CACHE_LIFETIME,
@@ -1059,24 +1059,32 @@ export default class TMC {
                             continue;
                         }
                         const json = JSON.parse(trimmed);
-                        if (!is<CliOutput>(json)) {
-                            Logger.error("TMC-langs response didn't match expected type");
-                            Logger.debug(part);
+                        const validation = validate<CliOutput>(json);
+                        if (!validation.success) {
+                            Logger.error(
+                                "TMC-langs response didn't match expected type:",
+                                validation.errors,
+                            );
+                            Logger.debug(json);
                             continue;
                         }
+                        const data = validation.data;
 
-                        switch (json["output-kind"]) {
+                        switch (data["output-kind"]) {
                             case "output-data":
-                                theResult = json;
+                                theResult = data;
                                 break;
                             case "status-update":
-                                onStdout?.(json);
+                                onStdout?.(data);
                                 break;
                             case "notification":
                                 break;
                             default:
-                                Logger.error("TMC-langs response didn't match expected type");
-                                Logger.debug(part);
+                                Logger.error(
+                                    "TMC-langs returned invalid `output-kind`:",
+                                    data["output-kind"],
+                                );
+                                Logger.debug(data);
                         }
                     } catch (e) {
                         Logger.warn("Failed to parse TMC-langs output");

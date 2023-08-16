@@ -42,7 +42,7 @@ export interface StatusUpdate<T> {
     finished: boolean;
     message: string;
     "percent-done": number;
-    time: bigint;
+    time: number;
     data: T | null;
 }
 
@@ -190,7 +190,7 @@ export interface TmcProjectYml {
     extra_student_files: Array<string>;
     extra_exercise_files: Array<string>;
     force_update: Array<string>;
-    tests_timeout_ms?: bigint;
+    tests_timeout_ms?: number;
     fail_on_valgrind_error?: boolean;
     minimum_python_version?: PythonVer;
     sandbox_image?: string;
