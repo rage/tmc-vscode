@@ -11,6 +11,7 @@ export async function cleanExercise(
     resource: vscode.Uri | undefined,
 ): Promise<void> {
     const { dialog, tmc, workspaceManager } = actionContext;
+    Logger.info("Cleaning exercise");
 
     if (resource && !workspaceManager.uriIsExercise(resource)) {
         dialog.errorNotification("Currently open editor is not part of a TMC exercise.");

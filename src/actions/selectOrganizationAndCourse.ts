@@ -12,6 +12,7 @@ export async function selectOrganizationAndCourse(
     actionContext: ActionContext,
 ): Promise<Result<{ organization: string; course: number }, Error>> {
     const { resources, ui } = actionContext;
+    Logger.info("Selecting organization and course");
 
     const tempView = new TemporaryWebview(resources, ui);
 

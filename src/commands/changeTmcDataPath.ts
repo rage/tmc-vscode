@@ -10,6 +10,7 @@ import { formatSizeInBytes, Logger } from "../utils";
  */
 export async function changeTmcDataPath(actionContext: ActionContext): Promise<void> {
     const { dialog, resources, ui } = actionContext;
+    Logger.info("Changing TMC data path");
 
     const old = resources.projectsDirectory;
     const options: vscode.OpenDialogOptions = {

@@ -1,8 +1,10 @@
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
+import { Logger } from "../utils";
 
 export async function downloadNewExercises(actionContext: ActionContext): Promise<void> {
     const { dialog, userData } = actionContext;
+    Logger.info("Downloading new exercises");
 
     const courses = userData.getCourses();
     const courseId = await dialog.selectItem(

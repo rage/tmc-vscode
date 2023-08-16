@@ -31,6 +31,7 @@ export async function login(
     password: string,
 ): Promise<Result<void, Error>> {
     const { tmc } = actionContext;
+    Logger.info("Logging in");
 
     if (!username || !password) {
         return new Err(new Error("Username and password may not be empty."));

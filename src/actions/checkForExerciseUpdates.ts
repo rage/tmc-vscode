@@ -25,8 +25,8 @@ export async function checkForExerciseUpdates(
 ): Promise<Result<OutdatedExercise[], Error>> {
     const { tmc, userData } = actionContext;
     const forceRefresh = options?.forceRefresh ?? false;
-
     Logger.info(`Checking for exercise updates, forced update: ${forceRefresh}`);
+
     const checkUpdatesResult = await tmc.checkExerciseUpdates({ forceRefresh });
     if (checkUpdatesResult.err) {
         return checkUpdatesResult;

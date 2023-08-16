@@ -3,9 +3,12 @@ import * as vscode from "vscode";
 
 import { ActionContext } from "../actions/types";
 import { WebviewMessage } from "../ui/types";
+import { Logger } from "../utils";
 
 export async function showWelcome(actionContext: ActionContext): Promise<void> {
     const { resources, settings, ui } = actionContext;
+    Logger.info("Showing welcome");
+
     const insiderStatus: WebviewMessage = {
         command: "setBooleanSetting",
         setting: "insider",

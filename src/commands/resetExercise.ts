@@ -14,6 +14,7 @@ export async function resetExercise(
     resource: vscode.Uri | undefined,
 ): Promise<void> {
     const { dialog, tmc, userData, workspaceManager } = actionContext;
+    Logger.info("Resetting exercise");
 
     const exercise = resource
         ? workspaceManager.getExerciseByPath(resource)

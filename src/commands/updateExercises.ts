@@ -7,8 +7,8 @@ import { WebviewMessage } from "../ui/types";
 import { Logger } from "../utils";
 
 export async function updateExercises(actionContext: ActionContext, silent: string): Promise<void> {
-    Logger.info("Checking for exercise updates");
     const { dialog, settings, ui, userData } = actionContext;
+    Logger.info("Checking for exercise updates");
 
     const updateablesResult = await actions.checkForExerciseUpdates(actionContext);
     if (updateablesResult.err) {

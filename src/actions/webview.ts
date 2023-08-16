@@ -83,6 +83,8 @@ export async function displayLocalCourseDetails(
     courseId: number,
 ): Promise<void> {
     const { ui, tmc, userData, workspaceManager } = actionContext;
+    const course = userData.getCourse(courseId);
+    Logger.info(`Display course view for ${course.name}`);
 
     const mapStatus = (
         exerciseId: number,
@@ -98,9 +100,6 @@ export async function displayLocalCourseDetails(
                 return expired ? "expired" : "new";
         }
     };
-
-    const course = userData.getCourse(courseId);
-    Logger.info(`Display course view for ${course.name}`);
 
     const exerciseData = new Map<string, UITypes.CourseDetailsExerciseGroup>();
     const apiCourse = (await tmc.getCourseDetails(courseId)).mapErr(() => undefined).val;
