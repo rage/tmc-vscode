@@ -26,7 +26,7 @@ export async function downloadNewExercisesForCourse(
         });
 
     const course = userData.getCourse(courseId);
-    Logger.log(`Downloading new exercises for course: ${course.title}`);
+    Logger.info(`Downloading new exercises for course: ${course.title}`);
     postNewExercises([]);
 
     const downloadResult = await downloadOrUpdateExercises(actionContext, course.newExercises);

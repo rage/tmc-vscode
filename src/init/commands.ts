@@ -13,7 +13,7 @@ export function registerCommands(
     actionContext: ActionContext,
 ): void {
     const { dialog, ui, userData } = actionContext;
-    Logger.log("Registering TMC VSCode commands");
+    Logger.info("Registering TMC VSCode commands");
 
     // Commands not shown to user in Command Palette / TMC Action menu
     context.subscriptions.push(

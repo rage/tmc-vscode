@@ -17,7 +17,7 @@ export async function addNewCourse(
     course: number,
 ): Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
-    Logger.log("Adding new course");
+    Logger.info("Adding new course");
 
     const courseDataResult = await tmc.getCourseData(course);
     if (courseDataResult.err) {

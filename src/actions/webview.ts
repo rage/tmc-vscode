@@ -26,7 +26,7 @@ import { ActionContext } from "./types";
  */
 export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
     const { userData, tmc, ui, resources } = actionContext;
-    Logger.log("Displaying My Courses view");
+    Logger.info("Displaying My Courses view");
 
     const courses = userData.getCourses();
     const newExercisesCourses: WebviewMessage[] = courses.map((c) => ({
@@ -100,7 +100,7 @@ export async function displayLocalCourseDetails(
     };
 
     const course = userData.getCourse(courseId);
-    Logger.log(`Display course view for ${course.name}`);
+    Logger.info(`Display course view for ${course.name}`);
 
     const exerciseData = new Map<string, UITypes.CourseDetailsExerciseGroup>();
     const apiCourse = (await tmc.getCourseDetails(courseId)).mapErr(() => undefined).val;

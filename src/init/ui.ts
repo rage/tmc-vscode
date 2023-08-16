@@ -26,7 +26,7 @@ import { Logger } from "../utils/";
  */
 export function registerUiActions(actionContext: ActionContext): void {
     const { dialog, ui, settings, userData, visibilityGroups } = actionContext;
-    Logger.log("Initializing UI Actions");
+    Logger.info("Initializing UI Actions");
 
     // Register UI actions
     ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.loggedIn.not], {

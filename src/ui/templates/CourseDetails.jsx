@@ -698,7 +698,7 @@ function script() {
                     break;
                 }
                 default:
-                    console.log("Unsupported command", message.command);
+                    console.trace("Unsupported command for CourseDetails", message.command);
             }
         }
         refreshCards();

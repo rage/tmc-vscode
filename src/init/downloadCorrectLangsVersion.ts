@@ -17,9 +17,9 @@ async function downloadCorrectLangsVersion(
     cliFolder: string,
     dialog: Dialog,
 ): Promise<Result<string, Error>> {
-    Logger.log("Platform " + process.platform + " Arch " + process.arch);
+    Logger.info("Platform " + process.platform + " Arch " + process.arch);
     const executable = getLangsCLIForPlatform(getPlatform(), TMC_LANGS_VERSION);
-    Logger.log("TMC-Langs version: " + executable);
+    Logger.info("TMC-Langs version: " + executable);
 
     const cliPath = path.join(cliFolder, executable);
     if (fs.existsSync(cliPath)) {
@@ -29,7 +29,7 @@ async function downloadCorrectLangsVersion(
     deleteSync(cliFolder, { force: true });
 
     const cliUrl = TMC_LANGS_DL_URL + executable;
-    Logger.log(`Downloading TMC-langs from ${cliUrl} to ${cliPath}`);
+    Logger.info(`Downloading TMC-langs from ${cliUrl} to ${cliPath}`);
     const message = `Downloading TMC-langs ${TMC_LANGS_VERSION}...`;
     const langsDownloadResult = await dialog.progressNotification(
         message,

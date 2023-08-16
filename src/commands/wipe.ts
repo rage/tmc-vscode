@@ -88,6 +88,6 @@ Please close the workspace and any related files before running this command aga
         }
     }
 
-    Logger.log("Extension wipe completed.");
+    Logger.info("Extension wipe completed.");
     await vscode.commands.executeCommand("workbench.action.reloadWindow");
 }

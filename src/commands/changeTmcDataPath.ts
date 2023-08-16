@@ -29,7 +29,7 @@ export async function changeTmcDataPath(actionContext: ActionContext): Promise<v
             },
         );
         if (res.ok) {
-            Logger.log(`Moved workspace folder from ${old} to ${newPath.fsPath}`);
+            Logger.info(`Moved workspace folder from ${old} to ${newPath.fsPath}`);
             dialog.notification(`TMC Data was successfully moved to ${newPath.fsPath}`, [
                 "OK",
                 (): void => {},

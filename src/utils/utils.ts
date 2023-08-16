@@ -131,7 +131,7 @@ export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): 
                 upper: x.kind.IntRange.upper,
             });
         } else {
-            Logger.log("Unexpected feedback question type:", x.kind);
+            Logger.info("Unexpected feedback question type:", x.kind);
         }
     });
     return feedbackQuestions;

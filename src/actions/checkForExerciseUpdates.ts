@@ -26,7 +26,7 @@ export async function checkForExerciseUpdates(
     const { tmc, userData } = actionContext;
     const forceRefresh = options?.forceRefresh ?? false;
 
-    Logger.log(`Checking for exercise updates, forced update: ${forceRefresh}`);
+    Logger.info(`Checking for exercise updates, forced update: ${forceRefresh}`);
     const checkUpdatesResult = await tmc.checkExerciseUpdates({ forceRefresh });
     if (checkUpdatesResult.err) {
         return checkUpdatesResult;
@@ -42,6 +42,6 @@ export async function checkForExerciseUpdates(
         }));
     });
     const outdatedExercises = flatten(outdatedExercisesByCourse);
-    Logger.log(`Update check found ${outdatedExercises.length} outdated exercises`);
+    Logger.info(`Update check found ${outdatedExercises.length} outdated exercises`);
     return Ok(outdatedExercises);
 }

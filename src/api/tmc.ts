@@ -267,7 +267,7 @@ export default class TMC {
         const { interrupt, result } = this._spawnLangsProcess({
             args: ["run-tests", "--exercise-path", exercisePath],
             env,
-            onStderr: (data) => Logger.log("Rust Langs", data),
+            onStderr: (data) => Logger.info("Rust Langs", data),
             processTimeout: CLI_PROCESS_TIMEOUT,
         });
         const postResult = result.then((res) =>
@@ -910,7 +910,7 @@ export default class TMC {
                 const cachedDataLifeLeft = timestamp + API_CACHE_LIFETIME - currentTime;
                 if (cachedDataLifeLeft > 0 && dataMatchesKind(response, outputDataKind)) {
                     const prettySecondsLeft = Math.ceil(cachedDataLifeLeft / 1000);
-                    Logger.log(
+                    Logger.info(
                         `Using cached data for key: ${cacheKey}. Still valid for ${prettySecondsLeft}s`,
                     );
                     return Ok(response);
@@ -998,11 +998,11 @@ export default class TMC {
         let stdoutBuffer = "";
 
         const obfuscatedArgs = args.map((x, i) => (obfuscate?.includes(i) ? "***" : x));
-        const logableCommand = [this.cliPath]
+        const loggableCommand = [this.cliPath]
             .concat(obfuscatedArgs)
             .map((x) => JSON.stringify(x))
             .join(" ");
-        Logger.log(`Run: ${logableCommand}`);
+        Logger.info(`Running ${loggableCommand}`);
 
         let active = true;
         let interrupted = false;
