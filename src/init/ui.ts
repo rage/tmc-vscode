@@ -1,3 +1,4 @@
+import { compact } from "lodash";
 import { Result } from "ts-results";
 import * as vscode from "vscode";
 
@@ -16,6 +17,7 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext } from "../actions/types";
+import UI from "../ui/ui";
 import { Logger } from "../utils/";
 
 /**
@@ -136,56 +138,7 @@ export function registerUiActions(actionContext: ActionContext): void {
             ) {
                 return;
             }
-            const exerciseDownloads = msg.ids.map((x) => ({
-                courseId: msg.courseId as number,
-                exerciseId: x,
-                organization: msg.organizationSlug as string,
-            }));
-            if (msg.mode === "update") {
-                ui.webview.postMessage({
-                    command: "setUpdateables",
-                    exerciseIds: [],
-                    courseId: msg.courseId,
-                });
-                const downloadResult = await downloadOrUpdateExercises(
-                    actionContext,
-                    exerciseDownloads.map((x) => x.exerciseId),
-                );
-                if (downloadResult.ok) {
-                    ui.webview.postMessage({
-                        command: "setUpdateables",
-                        exerciseIds: downloadResult.val.failed,
-                        courseId: msg.courseId,
-                    });
-                }
-                return;
-            }
-
-            ui.webview.postMessage({
-                command: "setNewExercises",
-                courseId: msg.courseId,
-                exerciseIds: [],
-            });
-
-            const downloadResult = await downloadOrUpdateExercises(actionContext, msg.ids);
-            if (downloadResult.err) {
-                dialog.errorNotification("Failed to download new exercises.", downloadResult.val);
-                return;
-            }
-
-            const refreshResult = Result.all(
-                await userData.clearFromNewExercises(msg.courseId, downloadResult.val.successful),
-                await refreshLocalExercises(actionContext),
-            );
-            if (refreshResult.err) {
-                dialog.errorNotification("Failed to refresh local exercises.", refreshResult.val);
-            }
-
-            ui.webview.postMessage({
-                command: "setNewExercises",
-                courseId: msg.courseId,
-                exerciseIds: userData.getCourse(msg.courseId).newExercises,
-            });
+            await uiDownloadExercises(ui, actionContext, msg.mode, msg.courseId, msg.ids);
         },
     );
     ui.webview.registerHandler("addCourse", async () => {
@@ -260,10 +213,46 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (!(msg.type && msg.ids && msg.courseName)) {
                 return;
             }
+
+            // download exercises that don't exist locally
+            const course = userData.getCourseByName(msg.courseName);
+            const courseExercises = new Map(course.exercises.map((x) => [x.id, x]));
+            const exercisesToOpen = compact(msg.ids.map((x) => courseExercises.get(x)));
+            const localCourseExercises = await actionContext.tmc.listLocalCourseExercises(
+                msg.courseName,
+            );
+            if (localCourseExercises.err) {
+                dialog.errorNotification(
+                    `Error trying to list local exercises while opening selected exercises. ${localCourseExercises.val}`,
+                );
+                return;
+            }
+            const localCourseExerciseSlugs = localCourseExercises.val.map(
+                (lce) => lce["exercise-slug"],
+            );
+            const exercisesToDownload = exercisesToOpen.filter(
+                (eto) => !localCourseExerciseSlugs.includes(eto.name),
+            );
+            if (exercisesToDownload.length !== 0) {
+                await uiDownloadExercises(
+                    ui,
+                    actionContext,
+                    "",
+                    course.id,
+                    exercisesToDownload.map((etd) => etd.id),
+                );
+            }
+
+            // now, actually open the exercises
             const result = await openExercises(actionContext, msg.ids, msg.courseName);
             if (result.err) {
                 dialog.errorNotification("Errored while opening selected exercises.", result.val);
             }
+            ui.webview.postMessage({
+                command: "setNewExercises",
+                courseId: course.id,
+                exerciseIds: userData.getCourse(course.id).newExercises,
+            });
         },
     );
     ui.webview.registerHandler(
@@ -301,5 +290,65 @@ export function registerUiActions(actionContext: ActionContext): void {
             return;
         }
         vscode.commands.executeCommand("workbench.action.openExtensionLogsFolder");
+    });
+}
+
+/**
+ * Helper function that downloads exercises and creates the appropriate changes in the UI.
+ */
+async function uiDownloadExercises(
+    ui: UI,
+    actionContext: ActionContext,
+    mode: string,
+    courseId: number,
+    exerciseIds: number[],
+): Promise<void> {
+    if (mode === "update") {
+        ui.webview.postMessage({
+            command: "setUpdateables",
+            exerciseIds: [],
+            courseId: courseId,
+        });
+        const downloadResult = await downloadOrUpdateExercises(actionContext, exerciseIds);
+        if (downloadResult.ok) {
+            ui.webview.postMessage({
+                command: "setUpdateables",
+                exerciseIds: downloadResult.val.failed,
+                courseId: courseId,
+            });
+        }
+        return;
+    }
+
+    ui.webview.postMessage({
+        command: "setNewExercises",
+        courseId: courseId,
+        exerciseIds: [],
+    });
+
+    const downloadResult = await downloadOrUpdateExercises(actionContext, exerciseIds);
+    if (downloadResult.err) {
+        actionContext.dialog.errorNotification(
+            "Failed to download new exercises.",
+            downloadResult.val,
+        );
+        return;
+    }
+
+    const refreshResult = Result.all(
+        await actionContext.userData.clearFromNewExercises(courseId, downloadResult.val.successful),
+        await refreshLocalExercises(actionContext),
+    );
+    if (refreshResult.err) {
+        actionContext.dialog.errorNotification(
+            "Failed to refresh local exercises.",
+            refreshResult.val,
+        );
+    }
+
+    ui.webview.postMessage({
+        command: "setNewExercises",
+        courseId: courseId,
+        exerciseIds: actionContext.userData.getCourse(courseId).newExercises,
     });
 }

@@ -252,17 +252,8 @@ function component(data) {
                             </button>
                         </div>
                         <div class="col-md-3">
-                            <button
-                                class="btn btn-primary m-1 w-100"
-                                id="download-selected"
-                                disabled
-                            >
-                                Download
-                            </button>
-                        </div>
-                        <div class="col-md-3">
                             <button class="btn btn-primary m-1 w-100" id="clear-all-selections">
-                                Clear selections
+                                Clear selection
                             </button>
                         </div>
                     </div>
@@ -377,7 +368,7 @@ function script() {
     }
 
     function setCourseDisabledStatus(courseId, disabled) {
-        const contextMenuDownloadSelected = document.getElementById("download-selected");
+        const contextMenuDownloadSelected = document.getElementById("open-selected");
         const notification = document.getElementById("course-disabled-notification");
         if (disabled) {
             contextMenuDownloadSelected.disabled = true;
@@ -671,9 +662,6 @@ function script() {
 
         document.getElementById("close-selected").addEventListener("click", function () {
             handleSelected("closeSelected");
-        });
-        document.getElementById("download-selected").addEventListener("click", function () {
-            handleSelected("downloadExercises");
         });
     });
 
