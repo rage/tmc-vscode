@@ -1037,7 +1037,9 @@ export default class TMC {
                 reject(error);
             });
             cprocess.stderr.on("data", (chunk) => {
-                onStderr?.(chunk.toString());
+                const data = chunk.toString();
+                Logger.debug("stderr", data);
+                onStderr?.(data);
             });
             cprocess.stdout.on("end", () => {
                 stdoutEnded = true;
@@ -1054,7 +1056,8 @@ export default class TMC {
                 }
             });
             cprocess.stdout.on("data", (chunk) => {
-                const parts = (stdoutBuffer + chunk.toString()).split("\n");
+                const data = chunk.toString();
+                const parts = (stdoutBuffer + data).split("\n");
                 stdoutBuffer = parts.pop() || "";
                 for (const part of parts) {
                     try {

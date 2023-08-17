@@ -9,7 +9,6 @@ export enum LogLevel {
 }
 
 enum ConsoleLogLevel {
-    Trace = "TRACE",
     Debug = "DEBUG",
     Info = "INFO",
     Warn = "WARN",
@@ -39,10 +38,6 @@ export class Logger {
         } else {
             this.output = this.output || window.createOutputChannel(OUTPUT_CHANNEL_NAME);
         }
-    }
-
-    static trace(...params: unknown[]): void {
-        this._log(ConsoleLogLevel.Trace, ...params);
     }
 
     static debug(...params: unknown[]): void {
@@ -94,10 +89,6 @@ export class Logger {
         if (DEBUG_MODE) {
             // in debug mode, we log to console with the appropriate level
             switch (level) {
-                case "TRACE": {
-                    console.trace(this._timestamp, channel, ...params);
-                    break;
-                }
                 case "DEBUG": {
                     console.debug(this._timestamp, channel, ...params);
                     break;

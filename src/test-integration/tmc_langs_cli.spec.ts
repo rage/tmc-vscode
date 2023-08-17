@@ -524,9 +524,10 @@ async function unwrapResult<T>(result: Promise<Result<T, Error>>): Promise<T> {
 
 async function startServer(): Promise<cp.ChildProcess> {
     let ready = false;
-    console.log(path.join(__dirname, "..", "backend"));
+    const backendPath = path.join(__dirname, "..", "backend");
+    console.log("Running npm start at", backendPath);
     const server = cp.spawn("npm", ["start"], {
-        cwd: path.join(__dirname, "..", "backend"),
+        cwd: backendPath,
         shell: "bash",
     });
     server.stdout.on("data", (chunk) => {
