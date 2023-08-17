@@ -16,14 +16,5 @@
     "html.validate.scripts": false,
     "html.validate.styles": false,
     "spellright.language": ["en"],
-    "spellright.documentTypes": ["markdown", "latex", "plaintext", "typescript"],
-    "terminal.integrated.profiles.linux": {
-        "nu": {
-            "id": "nu",
-            "title": "nu",
-            "extensionIdentifier": "nu",
-            "args": ["--env-config", "/home/sasami-san/.config/nushell/env.nu"]
-        }
-    },
-    "terminal.integrated.defaultProfile.linux": "nu"
+    "spellright.documentTypes": ["markdown", "latex", "plaintext", "typescript"]
 }
