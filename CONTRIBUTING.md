@@ -48,6 +48,10 @@ This project uses [prettier](https://prettier.io/) for code formatting. You can 
 
 This project uses [ESLint](https://eslint.org/) for code linting. You can run ESLint across the code by calling `npm run eslint` from a terminal.
 
+### Testing
+
+Integration tests can be ran with `npm run test`.
+
 ### Bundling
 
 To generate a VSIX (installation package) run the following from a terminal:

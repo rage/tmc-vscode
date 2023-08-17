@@ -469,7 +469,7 @@
         "@types/mock-fs": "^4.13.1",
         "@types/node": "^20.4.2",
         "@types/unzipper": "^0.10.6",
-        "@types/vscode": "^1.80.0",
+        "@types/vscode": "^1.71.0",
         "@typescript-eslint/eslint-plugin": "^6.0.0",
         "@typescript-eslint/parser": "^6.0.0",
         "@vscode/test-electron": "^2.3.3",
@@ -500,7 +500,7 @@
         "webpack-merge": "^5.9.0"
     },
     "engines": {
-        "vscode": "^1.52.0"
+        "vscode": "^1.71.0"
     },
     "icon": "media/TMC.png",
     "galleryBanner": {

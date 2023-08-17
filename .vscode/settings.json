@@ -22,9 +22,7 @@
             "id": "nu",
             "title": "nu",
             "extensionIdentifier": "nu",
-            "args": [
-                "--env-config", "/home/sasami-san/.config/nushell/env.nu"
-            ]
+            "args": ["--env-config", "/home/sasami-san/.config/nushell/env.nu"]
         }
     },
     "terminal.integrated.defaultProfile.linux": "nu"

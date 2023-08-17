@@ -11,7 +11,7 @@ on:
 jobs:
     build_and_upload:
         name: Build and Upload
-        runs-on: [ubuntu-latest]
+        runs-on: ubuntu-latest
         strategy:
             matrix:
                 node-version: [18.x]
@@ -27,7 +27,7 @@ jobs:
             - name: Package extension
               run: |
                   npm run ci:all
-                  npm install -g vsce
+                  npm install -g @vscode/vsce
                   vsce package
                   # move packaged extension from project root to own release folder
                   mkdir extension && mv *.vsix extension
