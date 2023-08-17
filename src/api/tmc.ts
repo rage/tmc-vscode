@@ -1006,6 +1006,7 @@ export default class TMC {
             .map((x) => JSON.stringify(x))
             .join(" ");
         Logger.info(`Running ${loggableCommand}`);
+        Logger.debug(`Backend at ${TMC_BACKEND_URL}`);
 
         let active = true;
         let interrupted = false;
@@ -1013,8 +1014,8 @@ export default class TMC {
             env: {
                 ...process.env,
                 ...env,
-                RUST_LOG: "debug",
-                TMC_LANGS_ROOT_URL: TMC_BACKEND_URL,
+                RUST_LOG: "debug,rustls=warn,reqwest=warn",
+                TMC_LANGS_TMC_ROOT_URL: TMC_BACKEND_URL,
                 TMC_LANGS_CONFIG_DIR: this._options.cliConfigDir,
             },
         });
