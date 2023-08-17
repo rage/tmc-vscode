@@ -941,21 +941,24 @@ export default class TMC {
         langsResponse: OutputData,
         outputDataKind: T,
     ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, Error> {
-        if (langsResponse.status === "crashed") {
-            Logger.error(`Langs process crashed: ${langsResponse.message}`, langsResponse.data);
-            return Err(new RuntimeError("Langs process crashed."));
-        }
-        if (dataMatchesKind(langsResponse, outputDataKind)) {
-            return Ok(langsResponse);
-        }
-
-        // after this point, we either have error data, or completely unexpected data
-        const data = langsResponse.data;
-        if (data === null || data["output-data-kind"] !== "error") {
-            Logger.debug(`Unexpected TMC-langs response. ${langsResponse.data}`);
+        if (!dataMatchesKind(langsResponse, outputDataKind)) {
+            Logger.error("Unexpected TMC-langs response.", langsResponse);
             return Err(new Error("Unexpected TMC-langs response."));
         }
+        if (langsResponse.status === "crashed") {
+            Logger.error("Langs process crashed.", langsResponse.message, langsResponse.data);
+            return Err(new RuntimeError("Langs process crashed."));
+        }
+        if (langsResponse.result !== "error") {
+            return Ok(langsResponse);
+        }
+        if (langsResponse.data?.["output-data-kind"] !== "error") {
+            Logger.error("Unexpected data in error response.", langsResponse);
+            return Err(new Error("Unexpected data in error response"));
+        }
 
+        // after this point, we know we have an error
+        const data = langsResponse.data;
         const message = langsResponse.message;
         const traceString = data["output-data"].trace.join("\n");
         const errorKind = data["output-data"].kind;
@@ -1138,5 +1141,9 @@ function dataMatchesKind<T extends DataKind["output-data-kind"] | null>(
     data: OutputData, // this can be changed to unknown later if needed
     kind: T,
 ): data is OutputData & { data: T extends null ? null : { "output-data-kind": T } } {
-    return kind === null || data.data?.["output-data-kind"] === kind;
+    return (
+        kind === null ||
+        data.data?.["output-data-kind"] === kind ||
+        data.data?.["output-data-kind"] === "error"
+    );
 }
