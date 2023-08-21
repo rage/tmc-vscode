@@ -4,6 +4,7 @@ import { ConnectionError, ForbiddenError } from "../errors";
 import { Logger } from "../utils";
 import { combineApiExerciseData } from "../utils/apiData";
 
+import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
 
 /**
@@ -18,6 +19,8 @@ export async function updateCourse(
     courseId: number,
 ): Promise<Result<boolean, Error>> {
     const { exerciseDecorationProvider, tmc, ui, userData, workspaceManager } = actionContext;
+    Logger.info("Updating course");
+
     const postMessage = (courseId: number, disabled: boolean, exerciseIds: number[]): void => {
         ui.webview.postMessage(
             {
@@ -87,6 +90,9 @@ export async function updateCourse(
             ...workspaceManager.getExercisesByCourseSlug(courseData.name),
         );
     }
+
+    // refresh local exercises to ensure deleted exercises don't appear open etc.
+    await refreshLocalExercises(actionContext);
 
     const course = userData.getCourse(courseId);
     postMessage(course.id, course.disabled, course.newExercises);

@@ -14,6 +14,7 @@ export async function refreshLocalExercises(
     actionContext: ActionContext,
 ): Promise<Result<void, Error>> {
     const { tmc, userData, workspaceManager } = actionContext;
+    Logger.info("Refreshing local exercises");
 
     const workspaceExercises: WorkspaceExercise[] = [];
     for (const course of userData.getCourses()) {

@@ -4,24 +4,24 @@
     "description": "Mock backend for tmc-vscode",
     "main": "index.ts",
     "scripts": {
-        "setup": "ts-node-dev --no-notify setup.ts",
-        "start": "ts-node-dev --no-notify index.ts",
+        "setup": "tsx setup.ts",
+        "start": "tsx index.ts",
         "test": "echo \"Error: no test specified\" && exit 1",
         "tsc": "tsc"
     },
     "author": "",
     "license": "MIT",
     "devDependencies": {
-        "@types/archiver": "^5.3.1",
-        "@types/express": "^4.17.15",
+        "@types/archiver": "^5.3.2",
+        "@types/express": "^4.17.17",
         "@types/ncp": "^2.0.5",
         "archiver": "^5.3.1",
         "ncp": "^2.0.0",
-        "ts-node-dev": "^2.0.0",
-        "typescript": "^4.9.4"
+        "tsx": "^3.12.7",
+        "typescript": "^5.1.6"
     },
     "dependencies": {
-        "body-parser": "^1.19.1",
+        "body-parser": "^1.20.2",
         "express": "^4.18.2"
     }
 }

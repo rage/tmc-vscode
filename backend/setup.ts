@@ -1,7 +1,6 @@
 import archiver from "archiver";
 import fs from "fs";
 import { ncp } from "ncp";
-import fetch from "node-fetch";
 import path from "path";
 
 import * as config from "../config";
@@ -11,7 +10,15 @@ const TMC_LANGS_DL_URL = config.productionApi.__TMC_LANGS_DL_URL__.replace(/"/g,
 const TMC_LANGS_VERSION = config.productionApi.__TMC_LANGS_VERSION__.replace(/"/g, "");
 
 const copyTMCPythonModules = async (): Promise<void> => {
-    const module = path.join(__dirname, "..", "submodules", "tmc-python-tester", "tmc");
+    const tmcPythonTester = path.join(__dirname, "..", "submodules", "tmc-python-tester");
+    const testerDir = fs.readdirSync(tmcPythonTester);
+    if (testerDir.length === 0) {
+        throw new Error(
+            "tmc-python-tester submodule is missing, you can initialise it with `git submodule init && git submodule update`",
+        );
+    }
+
+    const module = path.join(tmcPythonTester, "tmc");
     const courseDirectory = path.join(path.join(__dirname, "resources", "test-python-course"));
     const pythonExercises = fs
         .readdirSync(courseDirectory, { withFileTypes: true })
@@ -19,7 +26,7 @@ const copyTMCPythonModules = async (): Promise<void> => {
         .map((x) => path.join(courseDirectory, x.name));
     pythonExercises.forEach((exercise) => {
         const target = path.join(exercise, "tmc");
-        console.log(`Copying tmc module to ${target}`);
+        console.log(`Copying tmc module from ${module} to ${target}`);
         ncp(module, target, () => {});
     });
     console.log("Modules copied!");
@@ -53,7 +60,10 @@ const download = async (url: string, fileName: string): Promise<void> => {
     if (!res.ok) {
         throw "Failed to download from " + url;
     }
-    fs.writeFileSync(langs, await res.buffer());
+    const data = await res.blob();
+    const buf = Buffer.from(new Uint8Array(await data.arrayBuffer()));
+    fs.writeFileSync(langs, buf);
+    fs.chmodSync(langs, 0o755);
     console.log(fileName, "downloaded!");
 };
 
@@ -66,7 +76,7 @@ const download = async (url: string, fileName: string): Promise<void> => {
         await download(TMC_LANGS_DL_URL + langsVersion, langsVersion);
         console.log("Setup complete!");
     } catch (err) {
-        console.error("Failed to download langs files.");
+        console.error("Failed to download langs files.", err);
         process.exit(1);
     }
 })();

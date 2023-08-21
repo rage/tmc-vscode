@@ -92,7 +92,7 @@ const script = () => {
                     break;
                 }
                 default:
-                    console.log("Unsupported command", message.command);
+                    console.trace("Unsupported command for Login", message.command);
             }
         }
     });

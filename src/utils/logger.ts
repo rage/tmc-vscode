@@ -8,6 +8,13 @@ export enum LogLevel {
     Verbose = "verbose",
 }
 
+enum ConsoleLogLevel {
+    Debug = "DEBUG",
+    Info = "INFO",
+    Warn = "WARN",
+    Error = "ERROR",
+}
+
 const channel = `[${OUTPUT_CHANNEL_NAME}]`;
 
 export class Logger {
@@ -34,50 +41,19 @@ export class Logger {
     }
 
     static debug(...params: unknown[]): void {
-        if (DEBUG_MODE && this.output !== undefined) {
-            console.log(this._timestamp, "[DEBUG]", ...params);
-            this.output.appendLine(`${this._timestamp} [DEBUG] ${this._toLoggableParams(params)}`);
-        }
+        this._log(ConsoleLogLevel.Debug, ...params);
     }
 
-    static error(...params: unknown[]): void {
-        if (this.level === LogLevel.None && !DEBUG_MODE) return;
-
-        if (DEBUG_MODE) {
-            console.error(this._timestamp, channel, ...params);
-        }
-
-        if (this.output !== undefined && this.level !== LogLevel.None) {
-            this.output.appendLine(`${this._timestamp} [ERROR] ${this._toLoggableParams(params)}`);
-        }
-    }
-
-    static log(...params: unknown[]): void {
-        if (this.level !== LogLevel.Verbose && !DEBUG_MODE) {
-            return;
-        }
-
-        if (DEBUG_MODE) {
-            console.log(this._timestamp, channel, ...params);
-        }
-
-        if (this.output !== undefined && (this.level === LogLevel.Verbose || DEBUG_MODE)) {
-            this.output.appendLine(`${this._timestamp} [INFO] ${this._toLoggableParams(params)}`);
-        }
+    static info(...params: unknown[]): void {
+        this._log(ConsoleLogLevel.Info, ...params);
     }
 
     static warn(...params: unknown[]): void {
-        if (this.level === LogLevel.None && !DEBUG_MODE) return;
+        this._log(ConsoleLogLevel.Warn, ...params);
+    }
 
-        if (DEBUG_MODE) {
-            console.warn(this._timestamp, channel, ...params);
-        }
-
-        if (this.output !== undefined && this.level !== LogLevel.None) {
-            this.output.appendLine(
-                `${this._timestamp} [WARNING] ${this._toLoggableParams(params)}`,
-            );
-        }
+    static error(...params: unknown[]): void {
+        this._log(ConsoleLogLevel.Error, ...params);
     }
 
     static show(): void {
@@ -102,6 +78,71 @@ export class Logger {
     }
 
     private static _level: LogLevel = LogLevel.None;
+
+    /**
+     * Logs the params if the extension has been configured to log with this level.
+     *
+     * @param level The logging level.
+     * @param params The things that should be logged.
+     */
+    private static _log(level: ConsoleLogLevel, ...params: unknown[]): void {
+        if (DEBUG_MODE) {
+            // in debug mode, we log to console with the appropriate level
+            switch (level) {
+                case "DEBUG": {
+                    console.debug(this._timestamp, channel, ...params);
+                    break;
+                }
+                case "INFO": {
+                    console.info(this._timestamp, channel, ...params);
+                    break;
+                }
+                case "WARN": {
+                    console.warn(this._timestamp, channel, ...params);
+                    break;
+                }
+                case "ERROR": {
+                    console.error(this._timestamp, channel, ...params);
+                    break;
+                }
+            }
+        }
+        if (this.output !== undefined) {
+            switch (this._level) {
+                case LogLevel.None: {
+                    // do not log anything
+                    break;
+                }
+                case LogLevel.Errors: {
+                    // only log warnings and errors
+                    if (level === "WARN" || level === "ERROR") {
+                        this._logToOutput(this.output, level, ...params);
+                    }
+                    break;
+                }
+                case LogLevel.Verbose: {
+                    // log everything
+                    this._logToOutput(this.output, level, ...params);
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Logs the output channel with the
+     *
+     * @param output Output channel to log to.
+     * @param level The logging level. Doesn't check the logging config.
+     * @param params The parameters to be logged.
+     */
+    private static _logToOutput(
+        output: OutputChannel,
+        level: ConsoleLogLevel,
+        ...params: unknown[]
+    ): void {
+        output.appendLine(`${this._timestamp} [${level}] ${this._toLoggableParams(params)}`);
+    }
 
     private static get _timestamp(): string {
         const now = new Date();

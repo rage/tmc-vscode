@@ -15,6 +15,7 @@ export async function downloadOldSubmission(
     resource: vscode.Uri | undefined,
 ): Promise<void> {
     const { dialog, tmc, userData, workspaceManager } = actionContext;
+    Logger.info("Downloading old submission");
 
     const exercise = resource
         ? workspaceManager.getExerciseByPath(resource)

@@ -201,7 +201,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         const tmcWorkspaceFilePath = this._resources.getWorkspaceFilePath(courseName);
         if (!fs.existsSync(tmcWorkspaceFilePath)) {
             fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
-            Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
+            Logger.info(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
         }
     }
 
@@ -229,7 +229,7 @@ export default class WorkspaceManager implements vscode.Disposable {
 
     public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
         if (this.activeCourse) {
-            Logger.log("TMC Workspace open, verifying workspace settings integrity.");
+            Logger.info("TMC Workspace open, verifying workspace settings integrity.");
             const hideMetaFiles = this.getWorkspaceSettings("testMyCode").get<boolean>(
                 "hideMetaFiles",
                 true,
@@ -298,7 +298,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         const rootFilePath = this._resources.workspaceRootFolder.fsPath;
         Logger.debug("Target path deleted", targetPath);
         if (path.relative(rootFilePath, targetPath) === "") {
-            Logger.log(`Root file deleted ${targetPath}, fixing issue.`);
+            Logger.info(`Root file deleted ${targetPath}, fixing issue.`);
             if (!fs.existsSync(path.join(basedir, WORKSPACE_ROOT_FILE_NAME))) {
                 fs.mkdirSync(path.join(basedir, WORKSPACE_ROOT_FILE_NAME), { recursive: true });
             }
@@ -344,7 +344,7 @@ export default class WorkspaceManager implements vscode.Disposable {
             return Ok.EMPTY;
         }
 
-        Logger.log("Refreshing workspace structure in the current workspace");
+        Logger.info("Refreshing workspace structure in the current workspace");
         if (workspaceFolders[0]?.name !== WORKSPACE_ROOT_FOLDER_NAME) {
             Logger.warn("Fixing incorrect root folder. This may restart the extension.");
         }

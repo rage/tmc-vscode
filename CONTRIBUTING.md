@@ -28,7 +28,7 @@ npm ci
 Repeat the same for the testing backend:
 
 ```
-cd backend && npm ci
+cd backend && npm ci && npm run setup
 ```
 
 ### Build
@@ -47,6 +47,14 @@ This project uses [prettier](https://prettier.io/) for code formatting. You can 
 ### Linting
 
 This project uses [ESLint](https://eslint.org/) for code linting. You can run ESLint across the code by calling `npm run eslint` from a terminal.
+
+### Testing
+
+The repository contains https://github.com/testmycode/tmc-python-tester as a submodule, and it is required for running the integration tests. To initialize the submodule, run `git submodule init && git submodule update`.
+
+The integration tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so.
+
+Integration tests can be ran with `npm run test`.
 
 ### Bundling
 

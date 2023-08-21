@@ -67,7 +67,7 @@ export class UserData {
         if (this._courses.has(data.id)) {
             throw new Error("Trying to add an already existing course");
         }
-        Logger.log(`Adding course ${data.name} to My Courses`);
+        Logger.info(`Adding course ${data.name} to My Courses`);
         this._courses.set(data.id, data);
         this._updatePersistentData();
     }
@@ -103,7 +103,7 @@ export class UserData {
                 ),
             );
         courseData.newExercises.length > 0
-            ? Logger.log(
+            ? Logger.info(
                   `Found ${courseData.newExercises.length} new exercises for ${courseData.name}`,
               )
             : {};
@@ -152,7 +152,7 @@ export class UserData {
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
-        Logger.log(`Clearing new exercises for ${courseData.name}`);
+        Logger.info(`Clearing new exercises for ${courseData.name}`);
         if (exercisesToClear !== undefined) {
             const unSuccessfullyDownloaded = _.difference(
                 courseData.newExercises,
@@ -184,7 +184,7 @@ export class UserData {
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
-        Logger.log(
+        Logger.info(
             `Notifying user for course ${courseData.name} again at ${new Date(
                 dateInMillis,
             ).toString()}`,

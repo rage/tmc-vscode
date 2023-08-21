@@ -1,8 +1,11 @@
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
+import { Logger } from "../utils";
 
 export async function addNewCourse(actionContext: ActionContext): Promise<void> {
     const { dialog, tmc } = actionContext;
+    Logger.info("Adding new course");
+
     const organizationsResult = await tmc.getOrganizations();
     if (organizationsResult.err) {
         dialog.errorNotification("Failed to fetch organizations.", organizationsResult.val);
