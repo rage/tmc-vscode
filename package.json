@@ -431,7 +431,7 @@
             "prettier --check"
         ],
         "*.{js,ts}": [
-            "eslint --cache --max-warnings 0"
+            "eslint src --cache --max-warnings 0"
         ]
     },
     "prettier": {
