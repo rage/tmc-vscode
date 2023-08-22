@@ -62,7 +62,7 @@ async function selectOrganization(
         temp.setContent({
             title: "Select organization",
             template: { templateName: "organization", ...data },
-            messageHandler: (msg: { type?: string; slug?: string }) => {
+            messageHandler: (msg) => {
                 if (msg.type !== "setOrganization") {
                     return;
                 }
@@ -102,7 +102,7 @@ async function selectCourse(
         temp.setContent({
             title: "Select course",
             template: { templateName: "course", ...data },
-            messageHandler: (msg: { type?: string; id?: number }) => {
+            messageHandler: (msg) => {
                 if (msg.type === "setCourse") {
                     course = msg.id;
                 } else if (msg.type === "changeOrg") {

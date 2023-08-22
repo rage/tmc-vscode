@@ -1,20 +1,37 @@
 import * as vscode from "vscode";
 
+import { SubmissionFeedback } from "../api/types";
 import { EMPTY_HTML_DOCUMENT } from "../config/constants";
 import Resources from "../config/resources";
 
 import { TemplateData } from "./types";
 import UI from "./ui";
 
-interface MessageHandler {
-    (msg: { [key: string]: unknown }): void;
-}
+export type Message =
+    | {
+          type: "setOrganization";
+          slug: string;
+      }
+    | { type: "setCourse"; id: number }
+    | { type: "changeOrg" }
+    | { type: "closeWindow" }
+    | { type: "abortTests" }
+    | { type: "submitToServer" }
+    | { type: "sendToPaste"; data: { courseSlug: string; exerciseName: string } }
+    | { type: "feedback"; data: { url: string; feedback: SubmissionFeedback } }
+    | { type: "showSubmissionInBrowserStatus"; data: { submissionUrl: string } }
+    | { type: "showSubmissionInBrowserResult"; data: { submissionUrl: string } }
+    | { type: "showSolutionInBrowser"; data: { solutionUrl: string } };
 
-interface TemporaryWebviewContent {
+export type MessageHandler = {
+    (msg: Message): void;
+};
+
+type TemporaryWebviewContent = {
     template: TemplateData;
     title: string;
     messageHandler: MessageHandler;
-}
+};
 
 /**
  * A class for temporary webviews

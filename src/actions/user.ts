@@ -14,6 +14,7 @@ import { SubmissionFeedback } from "../api/types";
 import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { BottleneckError } from "../errors";
+import { MessageHandler } from "../ui/temporaryWebview";
 import { TestResultData } from "../ui/types";
 import { Logger, parseFeedbackQuestion } from "../utils/";
 import { getActiveEditorExecutablePath } from "../window";
@@ -95,7 +96,7 @@ export async function testExercise(
         temp.setContent({
             title: "TMC Running tests",
             template: { templateName: "running-tests", exerciseName },
-            messageHandler: async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
+            messageHandler: async (msg) => {
                 if (msg.type === "closeWindow") {
                     temp.dispose();
                 } else if (msg.type === "abortTests") {
@@ -115,7 +116,7 @@ export async function testExercise(
             temp.setContent({
                 title: "TMC",
                 template: { templateName: "error", error: testResult.val },
-                messageHandler: (msg: { type?: string }) => {
+                messageHandler: (msg) => {
                     if (msg.type === "closeWindow") {
                         temp.dispose();
                     }
@@ -139,14 +140,14 @@ export async function testExercise(
     temp.setContent({
         title: "TMC Test Results",
         template: { templateName: "test-result", ...data, pasteLink: "" },
-        messageHandler: async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
+        messageHandler: async (msg) => {
             if (msg.type === "submitToServer") {
                 submitExercise(actionContext, exercise);
             } else if (msg.type === "sendToPaste" && msg.data) {
                 const pasteResult = await pasteExercise(
                     actionContext,
-                    msg.data.courseSlug as string,
-                    msg.data.exerciseName as string,
+                    msg.data.courseSlug,
+                    msg.data.exerciseName,
                 );
                 if (pasteResult.err) {
                     dialog.errorNotification(
@@ -194,19 +195,16 @@ export async function submitExercise(
 
     const temp = temporaryWebviewProvider.getTemporaryWebview();
 
-    const messageHandler = async (msg: {
-        data?: { [key: string]: unknown };
-        type?: string;
-    }): Promise<void> => {
+    const messageHandler: MessageHandler = async (msg): Promise<void> => {
         if (msg.type === "feedback" && msg.data) {
             await tmc.submitSubmissionFeedback(
                 msg.data.url as string,
                 msg.data.feedback as SubmissionFeedback,
             );
         } else if (msg.type === "showSubmissionInBrowserStatus" && msg.data) {
-            vscode.env.openExternal(vscode.Uri.parse(msg.data.submissionUrl as string));
+            vscode.env.openExternal(vscode.Uri.parse(msg.data.submissionUrl));
         } else if (msg.type === "showSubmissionInBrowserResult" && msg.data) {
-            vscode.env.openExternal(vscode.Uri.parse(msg.data.submissionUrl as string));
+            vscode.env.openExternal(vscode.Uri.parse(msg.data.submissionUrl));
         } else if (msg.type === "showSolutionInBrowser" && msg.data) {
             vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
         } else if (msg.type === "closeWindow") {
@@ -269,7 +267,7 @@ export async function submitExercise(
         temp.setContent({
             title: "TMC Server Submission",
             template: { templateName: "error", error: submissionResult.val },
-            messageHandler: async (msg: { type?: string }): Promise<void> => {
+            messageHandler: (msg) => {
                 if (msg.type === "closeWindow") {
                     temp.dispose();
                 }
