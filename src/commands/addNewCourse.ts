@@ -1,6 +1,6 @@
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 export async function addNewCourse(actionContext: ActionContext): Promise<void> {
     const { dialog, tmc } = actionContext;

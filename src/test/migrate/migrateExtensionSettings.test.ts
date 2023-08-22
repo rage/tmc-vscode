@@ -7,7 +7,7 @@ import migrateExtensionSettings, {
     LogLevelV0,
     LogLevelV1,
 } from "../../migrate/migrateExtensionSettings";
-import { LogLevel } from "../../utils";
+import { LogLevel } from "../../utilities";
 import * as extensionSettings from "../fixtures/extensionSettings";
 import { createMockMemento, createMockWorkspaceConfiguration } from "../mocks/vscode";
 

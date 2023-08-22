@@ -66,9 +66,15 @@ export class Logger {
     }
 
     static toLoggable(p: unknown): string {
-        if (p instanceof Error) return `${p.name} \u2014 ${p.message} \u2014 ${p.stack}`;
-        if (typeof p !== "object") return String(p);
-        if (p instanceof Uri) return `Uri(${p.toString(true)})`;
+        if (p instanceof Error) {
+            return `${p.name} \u2014 ${p.message} \u2014 ${p.stack}`;
+        }
+        if (typeof p !== "object") {
+            return String(p);
+        }
+        if (p instanceof Uri) {
+            return `Uri(${p.toString(true)})`;
+        }
 
         try {
             return JSON.stringify(p);

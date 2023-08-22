@@ -10,7 +10,7 @@ import * as vscode from "vscode";
 import { SubmissionResultReport, TestResult } from "../api/types";
 import { TMC_BACKEND_URL } from "../config/constants";
 import Resources from "../config/resources";
-import { getProgressBar, parseTestResultsText } from "../utils/";
+import { getProgressBar, parseTestResultsText } from "../utilities/";
 
 import { CourseDetails, Login, MyCourses, Webview, Welcome } from "./templates";
 import { TemplateData } from "./types";

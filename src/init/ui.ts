@@ -18,7 +18,7 @@ import {
 } from "../actions";
 import { ActionContext } from "../actions/types";
 import UI from "../ui/ui";
-import { Logger } from "../utils/";
+import { Logger } from "../utilities/";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.

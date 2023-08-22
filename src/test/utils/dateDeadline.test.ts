@@ -1,6 +1,10 @@
 import { strictEqual } from "assert";
 
-import { dateToString, findNextDateAfter, parseNextDeadlineAfter } from "../../utils/dateDeadline";
+import {
+    dateToString,
+    findNextDateAfter,
+    parseNextDeadlineAfter,
+} from "../../utilities/dateDeadline";
 
 suite("Date utils", () => {
     const CURRENT_TIME = new Date(2020, 3, 1);

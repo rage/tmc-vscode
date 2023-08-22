@@ -1,7 +1,7 @@
 import { createIs } from "typia";
 import * as vscode from "vscode";
 
-import { semVerCompare } from "../utils";
+import { semVerCompare } from "../utilities";
 
 import { MigratedData } from "./types";
 import validateData from "./validateData";

@@ -4,7 +4,7 @@ import Storage, { LocalCourseData } from "../api/storage";
 import TMC from "../api/tmc";
 import { Course, Organization } from "../api/types";
 import { ExtensionSettings } from "../config/settings";
-import { LogLevel } from "../utils/logger";
+import { LogLevel } from "../utilities/logger";
 
 import { MyCoursesProps } from "./templates/MyCourses";
 import { WelcomeProps } from "./templates/Welcome";

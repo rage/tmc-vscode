@@ -6,7 +6,7 @@ import { ActionContext } from "../actions/types";
 import * as commands from "../commands";
 import { TmcTreeNode } from "../ui/treeview/treenode";
 import { TemplateData } from "../ui/types";
-import { Logger } from "../utils/";
+import { Logger } from "../utilities/";
 
 export function registerCommands(
     context: vscode.ExtensionContext,

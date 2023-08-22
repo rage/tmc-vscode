@@ -3,7 +3,7 @@ import { Ok, Result } from "ts-results";
 
 import { ExerciseStatus, WebviewMessage } from "../ui/types";
 import TmcWebview from "../ui/webview";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 import { ActionContext } from "./types";
 

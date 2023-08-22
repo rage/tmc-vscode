@@ -1,8 +1,8 @@
 import { Ok, Result } from "ts-results";
 
 import { ConnectionError, ForbiddenError } from "../errors";
-import { Logger } from "../utils";
-import { combineApiExerciseData } from "../utils/apiData";
+import { Logger } from "../utilities";
+import { combineApiExerciseData } from "../utilities/apiData";
 
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";

@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 
 import { ActionContext } from "../actions/types";
 import { WebviewMessage } from "../ui/types";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 export async function showWelcome(actionContext: ActionContext): Promise<void> {
     const { resources, settings, ui } = actionContext;

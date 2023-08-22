@@ -23,7 +23,7 @@ import * as init from "./init";
 import { migrateExtensionDataFromPreviousVersions } from "./migrate";
 import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
 import UI from "./ui/ui";
-import { Logger, LogLevel, semVerCompare } from "./utils";
+import { Logger, LogLevel, semVerCompare } from "./utilities";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 

@@ -1,7 +1,7 @@
 import { Err, Ok, Result } from "ts-results";
 
 import TemporaryWebview from "../ui/temporaryWebview";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 import { ActionContext } from "./types";
 

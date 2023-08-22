@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 
 import { moveExtensionDataPath } from "../actions";
 import { ActionContext } from "../actions/types";
-import { formatSizeInBytes, Logger } from "../utils";
+import { formatSizeInBytes, Logger } from "../utilities";
 
 /**
  * Removes language specific meta files from exercise directory.

@@ -4,7 +4,7 @@ import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import { WebviewMessage } from "../ui/types";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 export async function updateExercises(actionContext: ActionContext, silent: string): Promise<void> {
     const { dialog, settings, ui, userData } = actionContext;

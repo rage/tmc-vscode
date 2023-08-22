@@ -3,7 +3,7 @@ import * as path from "path";
 import { Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";

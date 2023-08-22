@@ -2,7 +2,7 @@ import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 
 import Storage, { LocalCourseData, LocalCourseExercise } from "../api/storage";
-import { Logger } from "../utils/logger";
+import { Logger } from "../utilities/logger";
 
 export class UserData {
     private _courses: Map<number, LocalCourseData>;

@@ -1,6 +1,6 @@
 import { Ok, Result } from "ts-results";
 
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises";
 import { refreshLocalExercises } from "./refreshLocalExercises";

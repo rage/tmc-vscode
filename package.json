@@ -500,7 +500,7 @@
         "webpack-merge": "^5.9.0"
     },
     "engines": {
-        "vscode": "^1.71.0"
+        "vscode": "^1.75.0"
     },
     "icon": "media/TMC.png",
     "galleryBanner": {

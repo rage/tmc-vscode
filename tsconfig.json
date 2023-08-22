@@ -4,7 +4,7 @@
         "module": "commonjs",
         "target": "es6",
         "outDir": "out",
-        "lib": ["es6"],
+        "lib": ["es6", "dom"],
         "plugins": [
             {
                 "transform": "typia/lib/transform"
@@ -19,5 +19,12 @@
         // "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
         // "noUnusedParameters": true,  /* Report errors on unused parameters. */
     },
-    "exclude": [".vscode-test", "backend", "node_modules", "test-resources", "typings"]
+    "exclude": [
+        ".vscode-test",
+        "backend",
+        "node_modules",
+        "test-resources",
+        "typings",
+        "webview-ui"
+    ]
 }

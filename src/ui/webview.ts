@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 
 import { EMPTY_HTML_DOCUMENT } from "../config/constants";
 import Resources from "../config/resources";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 import TemplateEngine from "./templateEngine";
 import { TemplateData, WebviewMessage } from "./types";

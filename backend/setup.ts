@@ -4,7 +4,7 @@ import { ncp } from "ncp";
 import path from "path";
 
 import * as config from "../config";
-import { getLangsCLIForPlatform, getPlatform } from "../src/utils/env";
+import { getLangsCLIForPlatform, getPlatform } from "../src/utilities/env";
 
 const TMC_LANGS_DL_URL = config.productionApi.__TMC_LANGS_DL_URL__.replace(/"/g, "");
 const TMC_LANGS_VERSION = config.productionApi.__TMC_LANGS_VERSION__.replace(/"/g, "");
@@ -58,7 +58,7 @@ const download = async (url: string, fileName: string): Promise<void> => {
     console.log("Downloading", fileName, "from", url);
     const res = await fetch(url);
     if (!res.ok) {
-        throw "Failed to download from " + url;
+        throw new Error("Failed to download from " + url);
     }
     const data = await res.blob();
     const buf = Buffer.from(new Uint8Array(await data.arrayBuffer()));

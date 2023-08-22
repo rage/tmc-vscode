@@ -14,7 +14,7 @@ import {
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Resources, { EditorKind } from "../config/resources";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 export enum ExerciseStatus {
     Closed = "closed",

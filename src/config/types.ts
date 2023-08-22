@@ -1,4 +1,4 @@
-import { LogLevel } from "../utils/";
+import { LogLevel } from "../utilities/";
 
 export type ExtensionSettingsData =
     | { setting: "downloadOldSubmission"; value: boolean }

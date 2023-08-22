@@ -16,7 +16,7 @@ import {
     Logger,
     parseDate,
     parseNextDeadlineAfter,
-} from "../utils/";
+} from "../utilities/";
 
 import { checkForExerciseUpdates } from "./checkForExerciseUpdates";
 import { ActionContext } from "./types";

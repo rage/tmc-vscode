@@ -11,7 +11,7 @@ import TMC from "../api/tmc";
 import { SubmissionFeedback } from "../api/types";
 import { CLIENT_NAME, TMC_LANGS_VERSION } from "../config/constants";
 import { AuthenticationError, AuthorizationError, BottleneckError, RuntimeError } from "../errors";
-import { getLangsCLIForPlatform, getPlatform } from "../utils/";
+import { getLangsCLIForPlatform, getPlatform } from "../utilities/";
 
 // __dirname is the dist folder when built.
 const PROJECT_ROOT = path.join(__dirname, "..");
@@ -42,7 +42,9 @@ suite("tmc langs cli spec", function () {
 
     setup(function () {
         let testDirName = this.currentTest?.fullTitle().replace(/\s/g, "_");
-        if (!testDirName) throw new Error("Illegal function call.");
+        if (!testDirName) {
+            throw new Error("Illegal function call.");
+        }
         if (testDirName?.length > 72) {
             testDirName =
                 testDirName.substring(0, 40) +
@@ -518,7 +520,9 @@ function setupProjectsDir(configDir: string, projectsDir: string): string {
 
 async function unwrapResult<T>(result: Promise<Result<T, Error>>): Promise<T> {
     const res = await result;
-    if (res.err) expect.fail(`TMC-langs execution failed: ${res.val.message}`);
+    if (res.err) {
+        expect.fail(`TMC-langs execution failed: ${res.val.message}`);
+    }
     return res.val;
 }
 

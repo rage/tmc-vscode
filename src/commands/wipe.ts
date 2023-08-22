@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 
 import { ActionContext } from "../actions/types";
 import { deactivate } from "../extension";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 export async function wipe(
     actionContext: ActionContext,
@@ -56,13 +56,17 @@ Please close the workspace and any related files before running this command aga
 
         // Reset Langs settings
         const result2 = await tmc.resetSettings();
-        if (result2.err) return result2;
+        if (result2.err) {
+            return result2;
+        }
         progress.report({ message, percent: 0.5 });
 
         // Maybe logout should have setting to disable events?
         tmc.on("logout", () => {});
         const result3 = await tmc.deauthenticate();
-        if (result3.err) return result3;
+        if (result3.err) {
+            return result3;
+        }
         progress.report({ message, percent: 0.75 });
 
         // Clear storage

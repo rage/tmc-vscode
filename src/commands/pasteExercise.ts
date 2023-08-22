@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
 import { BottleneckError } from "../errors";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 export async function pasteExercise(
     actionContext: ActionContext,

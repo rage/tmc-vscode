@@ -16,7 +16,7 @@ import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { BottleneckError } from "../errors";
 import { MessageHandler } from "../ui/temporaryWebview";
 import { TestResultData } from "../ui/types";
-import { Logger, parseFeedbackQuestion } from "../utils/";
+import { Logger, parseFeedbackQuestion } from "../utilities/";
 import { getActiveEditorExecutablePath } from "../window";
 
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";

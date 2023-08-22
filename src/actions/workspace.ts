@@ -9,7 +9,7 @@ import { Ok, Result } from "ts-results";
 
 import { ExerciseStatus } from "../api/workspaceManager";
 import * as UITypes from "../ui/types";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 import { ActionContext } from "./types";
 

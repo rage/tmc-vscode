@@ -20,7 +20,7 @@ import {
     ObsoleteClientError,
     RuntimeError,
 } from "../errors";
-import { Logger } from "../utils/logger";
+import { Logger } from "../utilities/logger";
 
 import {
     CliOutput,
@@ -539,7 +539,9 @@ export default class TMC {
         options?: CacheOptions,
     ): Promise<Result<CombinedCourseData, Error>> {
         const remapper: CacheConfig["remapper"] = (response) => {
-            if (response.data?.["output-data-kind"] !== "combined-course-data") return [];
+            if (response.data?.["output-data-kind"] !== "combined-course-data") {
+                return [];
+            }
             const { details, exercises, settings } = response.data["output-data"];
             return [
                 [
