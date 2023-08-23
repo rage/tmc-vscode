@@ -43,12 +43,12 @@ jobs:
                   name: packaged-extension
                   path: extension/
             - name: Publish to Visual Studio Marketplace
-              if: success() && ${{ github.event_name == 'release' }}
+              if: success() && github.event_name == 'release'
               run: |
                   chmod +x bin/validateRelease.sh
                   bin/validateRelease.sh ${{ github.ref }}
                   vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} ${{ env.PRERELEASE }} --packagePath extension/*.vsix
             - name: Publish to Open VSX Marketplace
-              if: success() && ${{ github.event_name == 'release' }}
+              if: success() && github.event_name == 'release'
               run: |
                   npx ovsx publish extension/*.vsix -p ${{ secrets.OVSX_PUBLISHER_TOKEN }} ${{ env.PRERELEASE }}
