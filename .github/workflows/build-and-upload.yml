@@ -47,8 +47,8 @@ jobs:
               run: |
                   chmod +x bin/validateRelease.sh
                   bin/validateRelease.sh ${{ github.ref }}
-                  vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} ${{ PRERELEASE }} --packagePath extension/*.vsix
+                  vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} ${{ env.PRERELEASE }} --packagePath extension/*.vsix
             - name: Publish to Open VSX Marketplace
               if: success() && ${{ github.event_name == 'release' }}
               run: |
-                  npx ovsx publish extension/*.vsix -p ${{ secrets.OVSX_PUBLISHER_TOKEN }} ${{ PRERELEASE }}
+                  npx ovsx publish extension/*.vsix -p ${{ secrets.OVSX_PUBLISHER_TOKEN }} ${{ env.PRERELEASE }}
