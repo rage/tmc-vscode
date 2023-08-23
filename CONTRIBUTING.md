@@ -75,3 +75,12 @@ vsce package
 ## Submitting a Pull Request
 
 Submit a pull request, and if it fixes problems that have an existing issues on GitHub, tag the issues in the body using "Resolves #issue_id" or "Fixes #issue_id".
+
+## Releasing
+
+To release, tag a commit with a version in the format `vMAJOR.MINOR.PATCH`, for example `v1.2.3`.
+
+A script is ran during the release process to ensure that
+
+- the `CHANGELOG.md` has an entry for the tagged version
+- the `package.json` has the same version number as the tagged version
