@@ -3,10 +3,11 @@ name: Build and Upload
 on:
     push:
         branches: [master]
-        tags:
-            - v[0-9]+.[0-9]+.[0-9]+
     pull_request:
         branches: [master]
+    release:
+        types:
+            - created
 
 jobs:
     build_and_upload:
@@ -15,6 +16,8 @@ jobs:
         strategy:
             matrix:
                 node-version: [18.x]
+        env:
+            PRERELEASE: ${{ endsWith ( github.ref, '-prerelease' ) && '--pre-release' || '' }}
         steps:
             - name: Checkout repository
               uses: actions/checkout@v2.3.1
@@ -40,12 +43,12 @@ jobs:
                   name: packaged-extension
                   path: extension/
             - name: Publish to Visual Studio Marketplace
-              if: success() && startsWith( github.ref, 'refs/tags/v' )
+              if: success() && github.event_name == 'release'
               run: |
                   chmod +x bin/validateRelease.sh
                   bin/validateRelease.sh ${{ github.ref }}
-                  vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} --packagePath extension/*.vsix
+                  vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} ${{ env.PRERELEASE }} --packagePath extension/*.vsix
             - name: Publish to Open VSX Marketplace
-              if: success() && startsWith( github.ref, 'refs/tags/v' )
+              if: success() && github.event_name == 'release'
               run: |
-                  npx ovsx publish extension/*.vsix -p ${{ secrets.OVSX_PUBLISHER_TOKEN }}
+                  npx ovsx publish extension/*.vsix -p ${{ secrets.OVSX_PUBLISHER_TOKEN }} ${{ env.PRERELEASE }}

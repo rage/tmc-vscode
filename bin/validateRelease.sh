@@ -4,21 +4,14 @@ exitCode=0
 
 # Tag must match the tag scheme, GH uses refs/tags/vX.Y.Z as param, thus cut
 tag=$(echo "$1" | cut -d'/' -f 3)
-if [[ ! $tag =~ ^[v][0-9]+\.[0-9]+\.[0-9]+$ ]]
+if [[ ! $tag =~ ^[v]([0-9]+\.[0-9]+\.[0-9]+)(-prerelease)?$ ]]
 then
-    echo "Error: Github Tag must match the format vX.Y.Z"
-    exitCode=1
-fi
-
-# Version must match the version scheme
-tagVersion=$(echo "$1" | cut -d'v' -f 2)
-if [[ ! $tagVersion =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-then
-    echo "Error: Version must match the format X.Y.Z"
+    echo "Error: Github Tag must match the format vX.Y.Z[-prerelease]"
     exitCode=1
 fi
 
 # Version in package.json must match with tag version
+tagVersion=${BASH_REMATCH[1]}
 packageVersion=$(grep -Eo '"version":.+$' package.json)
 if [[ ! $packageVersion =~ '"version": "'$tagVersion'",' ]]
 then
