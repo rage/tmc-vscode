@@ -1,13 +1,10 @@
-const fetch = require("node-fetch");
-
 const config = require("../config");
 const getAllLangsCLIs = require("../src/utils/env").getAllLangsCLIs;
 
 const TMC_LANGS_DL_URL = config.productionApi.__TMC_LANGS_DL_URL__.replace(/"/g, "");
 const TMC_LANGS_VERSION = config.productionApi.__TMC_LANGS_VERSION__.replace(/"/g, "");
 
-const langsBuildExists = (url) =>
-    fetch.default(url, { method: "head" }).then((res) => res.status === 200);
+const langsBuildExists = (url) => fetch(url, { method: "head" }).then((res) => res.status === 200);
 
 async function main() {
     console.log("Verifying that all target TMC-langs builds exist...");
