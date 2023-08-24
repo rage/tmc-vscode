@@ -45,6 +45,7 @@ jobs:
             - name: Publish to Visual Studio Marketplace
               if: success() && github.event_name == 'release'
               run: |
+                  npm install node-fetch
                   chmod +x bin/validateRelease.sh
                   bin/validateRelease.sh ${{ github.ref }}
                   vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} ${{ env.PRERELEASE }} --packagePath extension/*.vsix
