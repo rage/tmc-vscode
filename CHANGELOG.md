@@ -2,7 +2,9 @@
 
 ## Unreleased changes
 
--   Bumped TMC-langs version to 0.33.0.
+## [2.2.0] - 2023-08-23
+
+-   Bumped TMC-langs version to 0.35.0.
 -   The `Open` button in the course exercise list will now download the exercises if they don't exist locally.
 -   Removed the `Download` button in the course exercise list.
 -   Added more logging.
