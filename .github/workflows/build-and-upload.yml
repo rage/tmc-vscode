@@ -31,7 +31,7 @@ jobs:
               run: |
                   npm run ci:all
                   npm install -g @vscode/vsce
-                  vsce package
+                  vsce package ${{ env.PRERELEASE }}
                   # move packaged extension from project root to own release folder
                   mkdir extension && mv *.vsix extension
               env:
