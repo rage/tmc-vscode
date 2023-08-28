@@ -25,6 +25,7 @@
         "node_modules",
         "test-resources",
         "typings",
-        "webview-ui"
+        "webview-ui",
+        "shared"
     ]
 }

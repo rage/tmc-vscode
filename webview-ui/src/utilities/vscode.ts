@@ -1,4 +1,5 @@
 import type { WebviewApi } from "vscode-webview";
+import { MessageFromWebview, State } from "../shared";
 
 /**
  * A utility wrapper around the acquireVsCodeApi() function, which enables
@@ -10,7 +11,7 @@ import type { WebviewApi } from "vscode-webview";
  * enabled by acquireVsCodeApi.
  */
 class VSCodeAPIWrapper {
-    private readonly vsCodeApi: WebviewApi<unknown> | undefined;
+    private readonly vsCodeApi: WebviewApi<State> | undefined;
 
     constructor() {
         // Check if the acquireVsCodeApi function exists in the current development
@@ -28,7 +29,7 @@ class VSCodeAPIWrapper {
      *
      * @param message Abitrary data (must be JSON serializable) to send to the extension context.
      */
-    public postMessage(message: unknown) {
+    public postMessage(message: MessageFromWebview) {
         if (this.vsCodeApi) {
             this.vsCodeApi.postMessage(message);
         } else {
@@ -44,7 +45,7 @@ class VSCodeAPIWrapper {
      *
      * @return The current state or `undefined` if no state has been set.
      */
-    public getState(): unknown | undefined {
+    public getState(): State | undefined {
         if (this.vsCodeApi) {
             return this.vsCodeApi.getState();
         } else {
@@ -64,7 +65,7 @@ class VSCodeAPIWrapper {
      *
      * @return The new state.
      */
-    public setState<T extends unknown | undefined>(newState: T): T {
+    public setState<T extends State | undefined>(newState: T): T {
         if (this.vsCodeApi) {
             return this.vsCodeApi.setState(newState);
         } else {

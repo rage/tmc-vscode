@@ -2,5 +2,9 @@
     "extends": "@tsconfig/svelte/tsconfig.json",
 
     "include": ["src/**/*"],
-    "exclude": ["node_modules/*", "__sapper__/*", "public/*"]
+    "exclude": ["node_modules/*", "__sapper__/*", "public/*"],
+    "compilerOptions": {
+        // workaround for https://github.com/sveltejs/svelte-preprocess/issues/206
+        "importsNotUsedAsValues": "remove"
+    }
 }

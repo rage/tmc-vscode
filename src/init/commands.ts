@@ -4,6 +4,7 @@ import * as actions from "../actions";
 import { checkForCourseUpdates, displayUserCourses, removeCourse } from "../actions";
 import { ActionContext } from "../actions/types";
 import * as commands from "../commands";
+import { TmcPanel } from "../panels/TmcPanel";
 import { TmcTreeNode } from "../ui/treeview/treenode";
 import { TemplateData } from "../ui/types";
 import { Logger } from "../utilities/";
@@ -76,7 +77,11 @@ export function registerCommands(
                     ...courses.map<[string, number]>((c) => [c.title, c.id]),
                 ));
             if (courseId) {
-                actions.displayLocalCourseDetails(actionContext, courseId);
+                // actions.displayLocalCourseDetails(actionContext, courseId);
+                TmcPanel.render(context.extensionUri, actionContext, {
+                    type: "CourseDetails",
+                    args: { courseId },
+                });
             }
         }),
 
@@ -125,7 +130,7 @@ export function registerCommands(
         }),
 
         vscode.commands.registerCommand("tmc.myCourses", async () => {
-            actions.displayUserCourses(actionContext);
+            TmcPanel.render(context.extensionUri, actionContext, { type: "MyCourses" });
         }),
 
         vscode.commands.registerCommand("tmc.openSettings", async () => {
@@ -159,9 +164,13 @@ export function registerCommands(
             );
         }),
 
-        vscode.commands.registerCommand("tmc.showWelcome", async () =>
-            commands.showWelcome(actionContext),
-        ),
+        vscode.commands.registerCommand("tmc.showWelcome", async () => {
+            TmcPanel.render(context.extensionUri, actionContext, { type: "Welcome" });
+        }),
+
+        vscode.commands.registerCommand("tmc.showLogin", async () => {
+            TmcPanel.render(context.extensionUri, actionContext, { type: "Login" });
+        }),
 
         vscode.commands.registerCommand(
             "tmc.submitExercise",

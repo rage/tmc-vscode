@@ -1,45 +1,47 @@
 <script lang="ts">
-	import { provideVSCodeDesignSystem, vsCodeButton } from "@vscode/webview-ui-toolkit";
-	import { vscode } from "./utilities/vscode";
+    import { readable } from "svelte/store";
+    import MyCourses from "./MyCourses.svelte";
+    import Welcome from "./Welcome.svelte";
+    import { vscode } from "./utilities/vscode";
+    import { State, MessageToWebview } from "./shared";
+    import Login from "./Login.svelte";
+    import { PanelTab } from "@vscode/webview-ui-toolkit";
+    import CourseDetails from "./CourseDetails.svelte";
 
-	// In order to use the Webview UI Toolkit web components they
-	// must be registered with the browser (i.e. webview) using the
-	// syntax below.
-	provideVSCodeDesignSystem().register(vsCodeButton());
+    const initialState: State = {
+        panel: { type: "Initial" },
+    };
 
-	// To register more toolkit components, simply import the component
-	// registration function and call it from within the register
-	// function, like so:
-	//
-	// provideVSCodeDesignSystem().register(
-	//   vsCodeButton(),
-	//   vsCodeCheckbox()
-	// );
-	//
-	// Finally, if you would like to register all of the toolkit
-	// components at once, there's a handy convenience function:
-	//
-	// provideVSCodeDesignSystem().register(allComponents);
-
-	function handleHowdyClick() {
-		vscode.postMessage({
-			command: "hello",
-			text: "Hey there partner! 🤠",
-		});
-	}
+    export let state = readable<State>(vscode.getState() || initialState, (set) => {
+        window.addEventListener("message", (event) => {
+            const message = event.data as MessageToWebview;
+            console.log("Received", message);
+            switch (message.type) {
+                case "setPanel": {
+                    const newState = vscode.setState({ panel: message.panel });
+                    set(newState);
+                    break;
+                }
+                default:
+                    console.error("Unhandled message type from extension host", message.type);
+            }
+        });
+    });
+    state.subscribe((state) => {
+        console.log("New state", state);
+    });
 </script>
 
 <main>
-	<h1>Hello world!</h1>
-	<vscode-button on:click={handleHowdyClick}>Howdy!</vscode-button>
+    {#if $state.panel.type === "Welcome"}
+        <Welcome {...$state.panel.data} />
+    {:else if $state.panel.type === "Login"}
+        <Login />
+    {:else if $state.panel.type === "MyCourses"}
+        <MyCourses {...$state.panel.data} />
+    {:else if $state.panel.type === "CourseDetails"}
+        <CourseDetails {...$state.panel.data} />
+    {:else if $state.panel.type === "Initial"}
+        <!-- waiting for message -->
+    {/if}
 </main>
-
-<style>
-	main {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: flex-start;
-		height: 100%;
-	}
-</style>

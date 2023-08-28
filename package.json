@@ -189,6 +189,11 @@
                 "command": "tmc.wipe",
                 "category": "TMC-WipeMyCode",
                 "title": "Wipe all extension data"
+            },
+            {
+                "command": "tmc.showLogin",
+                "title": "Show login menu",
+                "category": "TestMyCode"
             }
         ],
         "configuration": {
@@ -332,6 +337,12 @@
                     "title": "Submit Solution",
                     "category": "TestMyCode",
                     "when": "test-my-code:LoggedIn"
+                },
+                {
+                    "command": "tmc.showLogin",
+                    "title": "Show login menu",
+                    "category": "TestMyCode",
+                    "when": "true"
                 }
             ],
             "editor/title": [

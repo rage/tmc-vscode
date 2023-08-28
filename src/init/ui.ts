@@ -32,9 +32,9 @@ export function registerUiActions(actionContext: ActionContext): void {
 
     // Register UI actions
     ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.loggedIn.not], {
-        command: "tmcTreeView.setContentFromTemplate",
+        command: "tmc.showLogin",
         title: "",
-        arguments: [{ templateName: "login" }],
+        arguments: [],
     });
 
     const userCourses = actionContext.userData.getCourses();
