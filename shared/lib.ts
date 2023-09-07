@@ -12,48 +12,20 @@ export type State = {
 export type Panel =
     | {
           type: "Welcome";
-          data: { version: string; exerciseDecorations: string };
       }
     | {
           type: "Login";
       }
     | {
           type: "MyCourses";
-          data: {
-              courses: Array<CourseData>;
-              tmcDataPath: string;
-              tmcDataSize: string;
-          };
       }
     | {
           type: "CourseDetails";
-          args: {
-              courseId: number;
-          };
-          data: {
-              data: any;
-          };
+          courseId: number;
       }
     | {
           type: "Initial";
       };
-
-export type CourseData = {
-    id: number;
-    name: string;
-    title: string;
-    description: string;
-    organization: string;
-    awardedPoints: number;
-    availablePoints: number;
-    exercises: Array<NewExercise>;
-    newExercises: Array<number>;
-    disabled: boolean;
-};
-
-export type NewExercise = {
-    id: number;
-};
 
 /**
  * For use with `webview.postMessage` in `TmcPanel`.
@@ -65,8 +37,49 @@ export type MessageToWebview =
           panel: Panel;
       }
     | {
+          type: "setWelcomeData";
+          version: string;
+          exerciseDecorations: string;
+      }
+    | {
+          type: "setCourses";
+          courses: Array<CourseData>;
+      }
+    | {
+          type: "setTmcDataPath";
+          tmcDataPath: string;
+      }
+    | {
+          type: "setTmcDataSize";
+          tmcDataSize: string;
+      }
+    | {
           type: "loginError";
           error: string;
+      }
+    | {
+          type: "setCourseData";
+          courseData: CourseData;
+      }
+    | {
+          type: "setCourseGroups";
+          offlineMode: boolean;
+          exerciseGroups: Array<ExerciseGroup>;
+      }
+    | {
+          type: "setCourseDisabledStatus";
+          courseId: number;
+          disabled: boolean;
+      }
+    | {
+          type: "exerciseStatusChange";
+          exerciseId: number;
+          status: ExerciseStatus;
+      }
+    | {
+          type: "setUpdateables";
+          courseId: number;
+          exerciseIds: Array<number>;
       };
 
 /**
@@ -88,7 +101,7 @@ export type MessageFromWebview =
       }
     | {
           type: "openCourseWorkspace";
-          name: string;
+          courseName: string;
       }
     | {
           type: "downloadExercises";
@@ -96,7 +109,7 @@ export type MessageFromWebview =
           courseName: string;
           organizationSlug: string;
           courseId: number;
-          mode: "download";
+          mode: "download" | "update";
       }
     | {
           type: "clearNewExercises";
@@ -108,4 +121,65 @@ export type MessageFromWebview =
     | {
           type: "openCourseDetails";
           courseId: number;
+      }
+    | {
+          type: "openMyCourses";
+      }
+    | {
+          type: "refreshCourseDetails";
+          id: number;
+          useCache: boolean;
+      }
+    | {
+          type: "openSelected";
+          ids: Array<number>;
+          courseName: string;
+      }
+    | {
+          type: "closeSelected";
+          ids: Array<number>;
+          courseName: string;
       };
+
+export type CourseData = {
+    id: number;
+    name: string;
+    title: string;
+    description: string;
+    organization: string;
+    awardedPoints: number;
+    availablePoints: number;
+    exercises: Array<NewExercise>;
+    newExercises: Array<number>;
+    disabled: boolean;
+    materialUrl: string | null;
+    perhapsExamMode: boolean;
+};
+
+export type NewExercise = {
+    id: number;
+};
+
+export type ExerciseGroup = {
+    name: string;
+    exercises: Array<Exercise>;
+    nextDeadlineString: string;
+};
+
+export type Exercise = {
+    id: number;
+    name: string;
+    isHard: boolean;
+    hardDeadlineString: string;
+    softDeadlineString: string;
+    passed: boolean;
+};
+
+export type ExerciseStatus =
+    | "closed"
+    | "downloading"
+    | "downloadFailed"
+    | "expired"
+    | "missing"
+    | "new"
+    | "opened";

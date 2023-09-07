@@ -1,117 +1,118 @@
 <script lang="ts">
     import { provideVSCodeDesignSystem, vsCodeButton } from "@vscode/webview-ui-toolkit";
-    import { CourseData, MessageFromWebview } from "./shared";
+    import { CourseData } from "./shared";
     import { vscode } from "./utilities/vscode";
+    import { addMessageListener, loadable } from "./utilities/script";
 
     provideVSCodeDesignSystem().register(vsCodeButton());
 
-    export let courses: Array<CourseData>;
-    export let tmcDataPath: string;
-    export let tmcDataSize: string;
+    const courses = loadable<Array<CourseData>>();
+    const tmcDataPath = loadable<string>();
+    const tmcDataSize = loadable<string>();
 
-    const addNewCourse = () => {
-        const message: MessageFromWebview = {
+    addMessageListener((message) => {
+        switch (message.type) {
+            case "setCourses": {
+                courses.set(message.courses);
+                break;
+            }
+            case "setTmcDataPath": {
+                tmcDataPath.set(message.tmcDataPath);
+                break;
+            }
+            case "setTmcDataSize": {
+                tmcDataSize.set(message.tmcDataSize);
+                break;
+            }
+            default:
+                console.trace("Unsupported command for MyCourses", message.type);
+        }
+    });
+
+    function addNewCourse() {
+        vscode.postMessage({
             type: "addCourse",
-        };
-        vscode.postMessage(message);
-    };
+        });
+    }
 
-    const changeTmcDataPath = () => {
-        const message: MessageFromWebview = {
+    function changeTmcDataPath() {
+        vscode.postMessage({
             type: "changeTmcDataPath",
-        };
-        vscode.postMessage(message);
-    };
+        });
+    }
 
-    const openCourseDetails = (courseId: number) => {
-        const message: MessageFromWebview = {
+    function openCourseDetails(courseId: number) {
+        vscode.postMessage({
             type: "openCourseDetails",
             courseId,
-        };
-        vscode.postMessage(message);
-    };
+        });
+    }
 
-    const removeCourse = (id: number) => {
-        const message: MessageFromWebview = {
+    function removeCourse(id: number) {
+        vscode.postMessage({
             type: "removeCourse",
             id,
-        };
-        vscode.postMessage(message);
-    };
+        });
+    }
 
-    const openWorkspace = (name: string) => {
-        const message: MessageFromWebview = {
+    function openWorkspace(name: string) {
+        vscode.postMessage({
             type: "openCourseWorkspace",
-            name,
-        };
-        vscode.postMessage(message);
-    };
+            courseName: name,
+        });
+    }
 
-    const downloadExercises = (
+    function downloadExercises(
         ids: Array<number>,
         courseName: string,
         organizationSlug: string,
         courseId: number,
-    ) => {
-        const message: MessageFromWebview = {
+    ) {
+        vscode.postMessage({
             type: "downloadExercises",
             ids,
             courseName,
             organizationSlug,
             courseId,
             mode: "download",
-        };
-        vscode.postMessage(message);
-    };
+        });
+    }
 
-    const clearNewExercises = (courseId: number) => {
-        const message: MessageFromWebview = {
+    function clearNewExercises(courseId: number) {
+        vscode.postMessage({
             type: "clearNewExercises",
             courseId,
-        };
-        vscode.postMessage(message);
-    };
+        });
+    }
 </script>
 
 <div class="container">
-    <div class="row pb-3">
-        <div class="col-md-7">
+    <div>
+        <div>
             <h1>My Courses</h1>
             <div>
-                <vscode-button
-                    type="button"
-                    class="btn btn-primary mb-4 mt-2"
-                    id="add-new-course"
-                    on:click={addNewCourse}
-                    on:keypress={addNewCourse}
-                >
+                <vscode-button type="button" on:click={addNewCourse} on:keypress={addNewCourse}>
                     Add new course
                 </vscode-button>
             </div>
         </div>
     </div>
 
-    <div class="col-md-5">
+    <div>
         <h5>TMC Exercises Location</h5>
         <div>
-            Currently your exercises ({tmcDataSize}) are located at:
+            Currently your exercises ({$tmcDataSize}) are located at:
         </div>
-        <pre>{tmcDataPath}</pre>
-        <vscode-button
-            class="btn btn-secondary btn-sm"
-            id="change-tmc-datapath-btn"
-            on:click={changeTmcDataPath}
-            on:keypress={changeTmcDataPath}
-        >
+        <pre>{$tmcDataPath}</pre>
+        <vscode-button on:click={changeTmcDataPath} on:keypress={changeTmcDataPath}>
             Change path
         </vscode-button>
     </div>
 
-    {#each courses as course}
+    {#each $courses ?? [] as course}
         {@const completedPrc = (course.awardedPoints / course.availablePoints) * 100}
         <div
-            class="row org-row border-current-color course-card"
-            id={`course-${course.id}`}
+            class="org-row border-current-color"
             on:click={() => {
                 openCourseDetails(course.id);
             }}
@@ -119,13 +120,13 @@
                 openCourseDetails(course.id);
             }}
         >
-            <div class="col-md">
+            <div>
                 <vscode-button
                     type="button"
-                    class="close remove-course-btn"
+                    class="close"
                     aria-label="remove course"
-                    on:click={() => removeCourse(course.id)}
-                    on:keypress={() => removeCourse(course.id)}
+                    on:click|stopPropagation={() => removeCourse(course.id)}
+                    on:keypress|stopPropagation={() => removeCourse(course.id)}
                 >
                     <span aria-hidden="true">&times;</span>
                 </vscode-button>
@@ -133,21 +134,16 @@
                     {course.title} <small class="text-muted">{course.name}</small>
                 </h3>
                 <p>{course.description}</p>
-                <div class="row">
-                    <div class="col-md" id={`course-${course.id}-next-deadline`}>
-                        <span
-                            class="spinner-border spinner-border-sm"
-                            role="status"
-                            aria-hidden="true"
-                        />
+                <div>
+                    <div>
+                        <!-- todo: spinner -->
                     </div>
-                    <div class="col-sm">
+                    <div>
                         <vscode-button
                             type="button"
-                            class="btn btn-primary open-workspace-btn"
                             aria-label="Open workspace"
-                            on:click={() => openWorkspace(course.name)}
-                            on:keypress={() => openWorkspace(course.name)}
+                            on:click|stopPropagation={() => openWorkspace(course.name)}
+                            on:keypress|stopPropagation={() => openWorkspace(course.name)}
                         >
                             Open workspace
                         </vscode-button>
@@ -157,7 +153,6 @@
                     Programming exercise progress:
                     <div class="progress">
                         <div
-                            class="progress-bar bg-success"
                             role="progressbar"
                             aria-valuenow={completedPrc}
                             aria-valuemin={0}
@@ -168,19 +163,14 @@
                     </div>
                 </div>
                 {#if course.disabled}
-                    <div role="alert" class="alert alert-info course-disabled-notification my-1">
+                    <div role="alert">
                         This course has been disabled. Exercises cannot be downloaded or submitted.
                     </div>
                 {:else if course.newExercises.length > 0}
-                    <div
-                        class="alert alert-info alert-dismissible mt-2 new-exercises-notification"
-                        role="alert"
-                    >
-                        <span class="new-exercises-count">{course.newExercises.length}</span> new
-                        exercises found for this course.
+                    <div role="alert">
+                        {course.newExercises.length} new exercises found for this course.
                         <vscode-button
                             type="button"
-                            class="btn btn-success ml-1 download-new-exercises-btn"
                             on:click={() => {
                                 downloadExercises(
                                     course.newExercises,
@@ -202,21 +192,21 @@
                         </vscode-button>
                         <vscode-button
                             type="button"
-                            class="close clear-new-exercises-btn"
+                            class="close"
                             aria-label="Close"
                             on:click={() => clearNewExercises(course.id)}
                             on:keypress={() => clearNewExercises(course.id)}
                         >
-                            &times;
+                            ×
                         </vscode-button>
                     </div>
                 {/if}
             </div>
         </div>
     {/each}
-    {#if courses.length === 0}
-        <div class="row">
-            <div class="col-md">Add courses to start completing exercises.</div>
+    {#if $courses?.length === 0}
+        <div>
+            <div>Add courses to start completing exercises.</div>
         </div>
     {/if}
 </div>

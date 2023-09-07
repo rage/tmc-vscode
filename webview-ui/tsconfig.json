@@ -4,6 +4,7 @@
     "include": ["src/**/*"],
     "exclude": ["node_modules/*", "__sapper__/*", "public/*"],
     "compilerOptions": {
+        "strict": true,
         // workaround for https://github.com/sveltejs/svelte-preprocess/issues/206
         "importsNotUsedAsValues": "remove"
     }

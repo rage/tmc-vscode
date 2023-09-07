@@ -296,7 +296,7 @@ export function registerUiActions(actionContext: ActionContext): void {
 /**
  * Helper function that downloads exercises and creates the appropriate changes in the UI.
  */
-async function uiDownloadExercises(
+export async function uiDownloadExercises(
     ui: UI,
     actionContext: ActionContext,
     mode: string,

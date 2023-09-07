@@ -1,249 +1,424 @@
 <script lang="ts">
+    import { writable } from "svelte/store";
+    import { CourseData, ExerciseGroup, ExerciseStatus, MessageFromWebview } from "./shared";
     import { vscode } from "./utilities/vscode";
     import { provideVSCodeDesignSystem, vsCodeButton } from "@vscode/webview-ui-toolkit";
+    import { addMessageListener, loadable } from "./utilities/script";
 
     provideVSCodeDesignSystem().register(vsCodeButton());
 
-    export let data: any;
+    export let courseId: number;
 
-    const getHardDeadlineInformation = (deadline) =>
+    const course = loadable<CourseData>();
+    const offlineMode = loadable<boolean>();
+    const exerciseGroups = loadable<Array<ExerciseGroup>>();
+    const updateableExercises = loadable<Array<number>>();
+    const disabled = loadable<boolean>();
+    const exerciseStatuses = writable<Map<number, ExerciseStatus>>(new Map());
+
+    addMessageListener((message) => {
+        switch (message.type) {
+            case "setCourseData": {
+                course.set(message.courseData);
+                disabled.update((d) => {
+                    if (d === undefined) {
+                        return message.courseData.disabled;
+                    } else {
+                        return d;
+                    }
+                });
+                break;
+            }
+            case "setCourseGroups": {
+                offlineMode.set(message.offlineMode);
+                exerciseGroups.set(message.exerciseGroups);
+                break;
+            }
+            case "setCourseDisabledStatus": {
+                if (message.courseId === courseId) {
+                    disabled.set(message.disabled);
+                }
+                break;
+            }
+            case "exerciseStatusChange": {
+                exerciseStatuses.update((es) => {
+                    es.set(message.exerciseId, message.status);
+                    return es;
+                });
+                break;
+            }
+            case "setUpdateables": {
+                break;
+            }
+            default:
+                console.trace("Unsupported command for CourseDetails", message.type);
+        }
+    });
+
+    const totalDownloading = writable<number>(0);
+    const refreshing = writable<boolean>(false);
+    const expandedParts = writable<Record<string, boolean>>(
+        {}, //exerciseData.reduce((acc, ed) => ((acc[ed.name] = false), acc)),
+    );
+    const checkedExercises = writable<Record<number, boolean>>(
+        {}, //exerciseData.flatMap((ed) => ed.exercises).reduce((acc, e) => ((acc[e.id] = false), acc)),
+    );
+    const checkedExercisesCount = writable<number>(0);
+
+    const getHardDeadlineInformation = (deadline: string) =>
         "This is a soft deadline and it can be exceeded." +
         "&#013Exercises can be submitted after the soft deadline has passed, " +
         "but you receive only 75% of the exercise points." +
         `&#013;Hard deadline for this exercise is: ${deadline}.` +
         "&#013;Hard deadline can not be exceeded.";
 
-    const course = document.getElementById("course").dataset as any;
-    function openExercises(ids) {
-        vscode.postMessage({ type: "openSelected", ids, courseName: course.courseName } as any);
+    function openMyCourses() {
+        vscode.postMessage({
+            type: "openMyCourses",
+        });
     }
 
-    function closeExercises(ids) {
-        vscode.postMessage({ type: "closeSelected", ids, courseName: course.courseName } as any);
+    function refresh(id: number) {
+        refreshing.set(true);
+        vscode.postMessage({
+            type: "refreshCourseDetails",
+            id,
+        });
+    }
+
+    function openWorkspace(courseName: string) {
+        vscode.postMessage({
+            type: "openCourseWorkspace",
+            courseName,
+        });
+    }
+
+    function openExercises(courseName: string, ids: Array<number>) {
+        vscode.postMessage({
+            type: "openSelected",
+            ids,
+            courseName,
+        });
+    }
+
+    function closeExercises(courseName: string, ids: Array<number>) {
+        vscode.postMessage({
+            type: "closeSelected",
+            ids,
+            courseName,
+        });
+    }
+
+    function clearSelectedExercises() {
+        //
+    }
+
+    function updateExercises(course: CourseData) {
+        vscode.postMessage({
+            type: "downloadExercises",
+            ids: $updateableExercises ?? [],
+            courseName: course.name,
+            organizationSlug: course.organization,
+            courseId: course.id,
+            mode: "update",
+        });
     }
 </script>
 
-<div>
-    <div class="w-100">
-        <div class="container pt-0">
-            <div class="row py-1">
-                <div class="col-md">
-                    <nav aria-label="breadcrumb">
-                        <ol class="breadcrumb">
-                            <li class="breadcrumb-item">
-                                <a id="back-to-my-courses" href="#"> My Courses </a>
-                            </li>
-                            <li class="breadcrumb-item" aria-current="page">
-                                {data.course.title}
-                            </li>
-                        </ol>
-                    </nav>
-                </div>
-            </div>
-            <div
-                class="row py-1"
-                id="course"
-                data-course-id={data.course.id}
-                data-course-name={data.course.name}
-                data-course-org={data.course.organization}
-                data-course-disabled={data.course.disabled}
-            >
-                <div class="col-md-10">
-                    <h2>{data.course.title}</h2>
-                    <span>{data.course.description}</span>
-                </div>
-                <div class="col-md-2">
-                    <vscode-button class="btn btn-primary" id="refresh-button" aria-label="Refresh">
-                        Refresh
-                    </vscode-button>
-                </div>
-            </div>
-            <div class="row py-1">
-                <div class="col-md">
-                    <span>
-                        Points gained: {data.course.awardedPoints} / {data.course.availablePoints}
-                    </span>
-                </div>
-            </div>
-            {#if data.course.materialUrl}
-                <div class="row py-1">
-                    <div class="col-md">
-                        Material: <a href={data.course.materialUrl}>{data.course.materialUrl}</a>
-                    </div>
-                </div>
-            {/if}
-            <div class="row py-1">
-                <div class="col-md">
-                    <vscode-button
-                        class="btn btn-primary"
-                        id="open-workspace"
-                        aria-label="Open workspace"
+<div class="container">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li>
+                    <a
+                        id="back-to-my-courses"
+                        role="button"
+                        tabindex="0"
+                        on:click={() => openMyCourses()}
+                        on:keypress={() => openMyCourses()}
                     >
-                        Open workspace
-                    </vscode-button>
-                </div>
+                        My Courses
+                    </a>
+                </li>
+                <li aria-current="page">
+                    {$course?.title ?? ""}
+                </li>
+            </ol>
+        </nav>
+    </div>
+    <div>
+        <div>
+            <h2>{$course?.title ?? ""}</h2>
+            <span>{$course?.description ?? ""}</span>
+        </div>
+        <div>
+            <vscode-button
+                aria-label="Refresh"
+                on:click={() => $course !== undefined && refresh($course.id)}
+                on:keypress={() => $course !== undefined && refresh($course.id)}
+                disabled={$refreshing || $totalDownloading > 0}
+            >
+                {#if $refreshing}
+                    <!-- todo: spinner -->
+                    Refreshing
+                {:else}
+                    Refresh
+                {/if}
+            </vscode-button>
+        </div>
+    </div>
+    <div>
+        Points gained: {$course?.awardedPoints} / {$course?.availablePoints}
+    </div>
+    {#if $course?.materialUrl}
+        <div>
+            Material: <a href={$course.materialUrl}>{$course.materialUrl}</a>
+        </div>
+    {/if}
+    <div>
+        <vscode-button
+            aria-label="Open workspace"
+            on:click={() => $course !== undefined && openWorkspace($course.name)}
+            on:keypress={() => $course !== undefined && openWorkspace($course.name)}
+        >
+            Open workspace
+        </vscode-button>
+    </div>
+    <div>
+        <div
+            role="alert"
+            hidden={$updateableExercises === undefined || $updateableExercises.length > 0}
+        >
+            Updates found for exercises
+            <vscode-button
+                on:click={() => $course !== undefined && updateExercises($course)}
+                on:keypress={() => $course !== undefined && updateExercises($course)}
+            >
+                Update exercises
+            </vscode-button>
+        </div>
+        {#if offlineMode}
+            <div role="alert">
+                Unable to fetch exercise data from server. Displaying local exercises.
             </div>
-            <div class="row py-1">
-                <div class="col-md">
-                    <div class="alert alert-warning update-notification" role="alert">
-                        <span class="mr-2">Updates found for exercises</span>
-                        <vscode-button class="btn btn-danger update-button"
-                            >Update exercises</vscode-button
-                        >
-                    </div>
-                    {#if data.offlineMode}
-                        <div class="alert alert-warning" role="alert">
-                            <span>
-                                Unable to fetch exercise data from server. Displaying local
-                                exercises.
-                            </span>
-                        </div>
+        {/if}
+        {#if $course?.perhapsExamMode}
+            <div role="alert">This is an exam. Exercise submission results will not be shown.</div>
+        {/if}
+        {#if $disabled}
+            <div role="alert">
+                This course has been disabled. Exercises cannot be downloaded or submitted.
+            </div>
+        {/if}
+    </div>
+</div>
+
+{#each $exerciseGroups ?? [] as exerciseGroup}
+    <div class="container border-current-color">
+        <div>
+            <div>
+                <h2>{exerciseGroup.name}</h2>
+            </div>
+            <div>
+                <vscode-button>
+                    Download ({exerciseGroup.exercises.filter((e) => {
+                        const status = $exerciseStatuses.get(e.id);
+                        return status !== "opened" && status !== "closed";
+                    }).length})
+                </vscode-button>
+            </div>
+            <div>
+                <vscode-button
+                    on:click={() =>
+                        $course !== undefined &&
+                        openExercises(
+                            $course.name,
+                            exerciseGroup.exercises.map((e) => e.id),
+                        )}
+                    on:keypress={() =>
+                        $course !== undefined &&
+                        openExercises(
+                            $course.name,
+                            exerciseGroup.exercises.map((e) => e.id),
+                        )}
+                >
+                    Open all
+                </vscode-button>
+            </div>
+            <div>
+                <vscode-button
+                    on:click={() =>
+                        $course !== undefined &&
+                        closeExercises(
+                            $course.name,
+                            exerciseGroup.exercises.map((e) => e.id),
+                        )}
+                    on:keypress={() =>
+                        $course !== undefined &&
+                        closeExercises(
+                            $course.name,
+                            exerciseGroup.exercises.map((e) => e.id),
+                        )}
+                >
+                    Close all
+                </vscode-button>
+            </div>
+        </div>
+        <div>
+            <div>
+                Completed {exerciseGroup.exercises.filter((e) => e.passed).length} / {exerciseGroup
+                    .exercises.length}
+            </div>
+            <div>
+                Downloaded {exerciseGroup.exercises.filter((e) => {
+                    const status = $exerciseStatuses.get(e.id);
+                    return status === "opened" || status === "closed";
+                }).length} / {exerciseGroup.exercises.length}
+            </div>
+            <div>
+                Opened {exerciseGroup.exercises.filter(
+                    (e) => $exerciseStatuses.get(e.id) === "opened",
+                ).length} / {exerciseGroup.exercises.length}
+            </div>
+        </div>
+        <div>
+            <div>{exerciseGroup.nextDeadlineString}</div>
+            <div>
+                <vscode-button
+                    on:click={() =>
+                        ($expandedParts[exerciseGroup.name] = !$expandedParts[exerciseGroup.name])}
+                    on:keypress={() =>
+                        ($expandedParts[exerciseGroup.name] = !$expandedParts[exerciseGroup.name])}
+                >
+                    {#if $expandedParts[exerciseGroup.name]}
+                        Hide exercises
+                    {:else}
+                        Show exercises
                     {/if}
-                    {#if data.course.perhapsExamMode}
-                        <div class="alert alert-info" role="alert">
-                            <span>
-                                This is an exam. Exercise submission results will not be shown.
-                            </span>
-                        </div>
-                    {/if}
-                    <div role="alert" class="alert alert-info" id="course-disabled-notification">
-                        This course has been disabled. Exercises cannot be downloaded or submitted.
-                    </div>
+                </vscode-button>
+            </div>
+        </div>
+        <div>
+            <div hidden={!$expandedParts[exerciseGroup.name]}>
+                <hr />
+                <div>
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th class="min-w-5">
+                                    <input
+                                        class="checkbox-xl"
+                                        type="checkbox"
+                                        on:change={(ev) => {
+                                            const checked = ev.currentTarget.checked;
+                                            const newCheckedExercises = $checkedExercises;
+                                            for (const exerciseId of exerciseGroup.exercises.map(
+                                                (e) => e.id,
+                                            )) {
+                                                newCheckedExercises[exerciseId] = checked;
+                                            }
+                                            $checkedExercises = newCheckedExercises;
+                                        }}
+                                    />
+                                </th>
+                                <th class="min-w-40">Exercise</th>
+                                <th class="min-w-30">Deadline</th>
+                                <th class="min-w-10">Completed</th>
+                                <th class="min-w-15">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#each exerciseGroup.exercises as exercise}
+                                <tr id={exercise.id.toString()}>
+                                    <td class="min-w-5">
+                                        <input
+                                            class="checkbox-xl"
+                                            type="checkbox"
+                                            value={exercise.id}
+                                            on:change={(ev) => {
+                                                if (ev.currentTarget.checked) {
+                                                    checkedExercisesCount.update((val) => val + 1);
+                                                } else {
+                                                    checkedExercisesCount.update((val) => val - 1);
+                                                }
+                                            }}
+                                            bind:checked={$checkedExercises[exercise.id]}
+                                        />
+                                    </td>
+                                    <td class="min-w-40">{exercise.name}</td>
+                                    <td class="min-w-30">
+                                        {#if exercise.isHard}
+                                            {exercise.hardDeadlineString}
+                                        {:else}
+                                            <div>
+                                                {exercise.softDeadlineString}
+                                                <span
+                                                    title={getHardDeadlineInformation(
+                                                        exercise.hardDeadlineString,
+                                                    )}
+                                                >
+                                                    &#9432;
+                                                </span>
+                                            </div>
+                                        {/if}
+                                    </td>
+                                    <td class="min-w-10">
+                                        {exercise.passed ? "✔" : "❌"}
+                                    </td>
+                                    <td class="min-w-15">
+                                        {$exerciseStatuses.get(exercise.id) ?? "Loading..."}
+                                    </td>
+                                </tr>
+                            {/each}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
+{/each}
 
-    {#each data.exerciseData as exerciseGroup}
-        <div class="container container-fluid border-current-color my-3 exercise-card">
-            <div class="row">
-                <div class="col-md">
-                    <h2>{exerciseGroup.name}</h2>
-                </div>
-                <div class="col-md-2 my-1">
-                    <vscode-button class="btn btn-success w-100 download-all">
-                        Download (<span>0</span>)
-                    </vscode-button>
-                </div>
-                <div class="col-md-2 my-1">
-                    <vscode-button
-                        class="btn btn-primary w-100 open-all"
-                        data-exercises={exerciseGroup.exercises.map((e) => e.id)}
-                    >
-                        Open all
-                    </vscode-button>
-                </div>
-                <div class="col-md-2 my-1">
-                    <vscode-button
-                        class="btn btn-primary w-100 close-all"
-                        data-exercises={exerciseGroup.exercises.map((e) => e.id)}
-                    >
-                        Close all
-                    </vscode-button>
-                </div>
+<div class="container">
+    <div class="border-current-color">
+        Select action for {Object.values($checkedExercises).filter((v) => v).length} selected items
+        <div>
+            <div>
+                <vscode-button
+                    on:click={() =>
+                        $course !== undefined &&
+                        openExercises(
+                            $course.name,
+                            Object.entries($checkedExercises)
+                                .filter(([_, v]) => v)
+                                .map(([k, _]) => Number(k)),
+                        )}
+                    on:keypress={() =>
+                        $course !== undefined &&
+                        openExercises(
+                            $course.name,
+                            Object.entries($checkedExercises)
+                                .filter(([_, v]) => v)
+                                .map(([k, _]) => Number(k)),
+                        )}
+                >
+                    Open
+                </vscode-button>
             </div>
-            <div class="row py-1">
-                <div class="col-md group-info" data-group-name={exerciseGroup.name}>
-                    <div id={`completed-${exerciseGroup.name}`}>Completed 0/0</div>
-                    <div id={`downloaded-${exerciseGroup.name}`}>Downloaded 0/0</div>
-                    <div id={`opened-${exerciseGroup.name}`}>Opened 0/0</div>
-                </div>
+            <div>
+                <vscode-button
+                    on:click={() => $course !== undefined && closeExercises($course.name, [])}
+                    on:keypress={() => $course !== undefined && closeExercises($course.name, [])}
+                >
+                    Close
+                </vscode-button>
             </div>
-            <div class="row pt-2">
-                <div class="col-md-5">{exerciseGroup.nextDeadlineString}</div>
-                <div class="col-md-2 text-center">
-                    <vscode-button class="show-all-button" data-group-name={exerciseGroup.name}>
-                        Show exercises
-                    </vscode-button>
-                </div>
-            </div>
-            <div class="row">
-                <div class="col-md" id={`${exerciseGroup.name}-exercises`}>
-                    <hr />
-                    <div class="table-responsive-md">
-                        <table class="table table-striped table-borderless exercise-table">
-                            <thead id={`${exerciseGroup.name}-table-headers`}>
-                                <tr>
-                                    <th class="min-w-5 text-center">
-                                        <input class="checkbox-xl" type="checkbox" />
-                                    </th>
-                                    <th class="min-w-40">Exercise</th>
-                                    <th class="min-w-30">Deadline</th>
-                                    <th class="min-w-10">Completed</th>
-                                    <th class="min-w-15">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody class="exercise-tbody">
-                                {#each exerciseGroup.exercises as exercise}
-                                    <tr class="exercise-table-row" id={exercise.id}>
-                                        <td class="min-w-5 text-center exercise-selector">
-                                            <input
-                                                class="checkbox-xl"
-                                                type="checkbox"
-                                                value={exercise.id}
-                                            />
-                                        </td>
-                                        <td class="min-w-40 text-break">{exercise.name}</td>
-                                        <td class="min-w-30">
-                                            {#if exercise.isHard}
-                                                {exercise.hardDeadlineString}
-                                            {:else}
-                                                <div>
-                                                    {exercise.softDeadlineString}
-                                                    <span
-                                                        class="font-weight-bold"
-                                                        title={getHardDeadlineInformation(
-                                                            exercise.hardDeadlineString,
-                                                        )}
-                                                    >
-                                                        &#9432;
-                                                    </span>
-                                                </div>
-                                            {/if}
-                                        </td>
-                                        <td
-                                            class="min-w-10 exercise-completed"
-                                            data-exercise-completed={exercise.passed}
-                                        >
-                                            {exercise.passed ? "&#10004;" : "&#10060;"}
-                                        </td>
-                                        <td
-                                            class="min-w-15 exercise-status"
-                                            id={`exercise-${exercise.id}-status`}
-                                            data-exercise-id={exercise.id}
-                                        >
-                                            loading...
-                                        </td>
-                                    </tr>
-                                {/each}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    {/each}
-    <div id="context-menu" class="container fixed-bottom">
-        <div class="card border-current-color">
-            <div class="card-body">
-                Select action for <span id="selected-count">0</span> selected items
-                <div class="row mt-2">
-                    <div class="col-md-3">
-                        <vscode-button class="btn btn-primary m-1 w-100" id="open-selected">
-                            Open
-                        </vscode-button>
-                    </div>
-                    <div class="col-md-3">
-                        <vscode-button class="btn btn-primary m-1 w-100" id="close-selected">
-                            Close
-                        </vscode-button>
-                    </div>
-                    <div class="col-md-3">
-                        <vscode-button class="btn btn-primary m-1 w-100" id="clear-all-selections">
-                            Clear selection
-                        </vscode-button>
-                    </div>
-                </div>
+            <div>
+                <vscode-button
+                    on:click={() => clearSelectedExercises()}
+                    on:keypress={() => clearSelectedExercises()}
+                >
+                    Clear selection
+                </vscode-button>
             </div>
         </div>
     </div>

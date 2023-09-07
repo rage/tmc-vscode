@@ -80,7 +80,7 @@ export function registerCommands(
                 // actions.displayLocalCourseDetails(actionContext, courseId);
                 TmcPanel.render(context.extensionUri, actionContext, {
                     type: "CourseDetails",
-                    args: { courseId },
+                    courseId,
                 });
             }
         }),

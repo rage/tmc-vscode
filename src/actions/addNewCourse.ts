@@ -6,7 +6,6 @@ import { combineApiExerciseData } from "../utilities/apiData";
 
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
-import { displayUserCourses } from "./webview";
 
 /**
  * Adds a new course to user's courses.
@@ -54,6 +53,6 @@ export async function addNewCourse(
         arguments: [localData.id],
     });
     workspaceManager.createWorkspaceFile(courseData.details.name);
-    await displayUserCourses(actionContext);
+    //await displayUserCourses(actionContext);
     return refreshLocalExercises(actionContext);
 }

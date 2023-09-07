@@ -1,27 +1,25 @@
 <script lang="ts">
     import { writable } from "svelte/store";
     import { vscode } from "./utilities/vscode";
-    import { MessageToWebview } from "./shared";
     import {
         provideVSCodeDesignSystem,
         vsCodeButton,
         vsCodeTextField,
     } from "@vscode/webview-ui-toolkit";
+    import { addMessageListener } from "./utilities/script";
 
     provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeTextField());
 
     let usernameField: HTMLInputElement;
     let passwordField: HTMLInputElement;
-    const error = writable<string>("");
-    const buttonDisabled = writable(false);
+    const errorMessage = writable<string | null>(null);
+    const loggingIn = writable(false);
 
-    function onSubmit(event) {
+    function onSubmit(event: Event) {
         event.preventDefault();
-
-        console.log(event);
+        loggingIn.set(true);
         const username = usernameField.value;
         const password = passwordField.value;
-        buttonDisabled.set(true);
         vscode.postMessage({
             type: "login",
             username,
@@ -29,33 +27,30 @@
         });
     }
 
-    window.addEventListener("message", function (event) {
-        for (let i = 0; i < event.data.length; i++) {
-            const message = event.data[i] as MessageToWebview;
-            switch (message.type) {
-                case "loginError": {
-                    buttonDisabled.set(false);
-                    error.set(message.error);
-                    setTimeout(() => {
-                        error.set(null);
-                    }, 7500);
-                    break;
-                }
-                default:
-                    console.trace("Unsupported command for Login", message.type);
+    addMessageListener((message) => {
+        switch (message.type) {
+            case "loginError": {
+                loggingIn.set(false);
+                errorMessage.set(message.error);
+                setTimeout(() => {
+                    errorMessage.set(null);
+                }, 7500);
+                break;
             }
+            default:
+                console.trace("Unsupported command for Login", message.type);
         }
     });
 </script>
 
-<div class="container fluid">
-    <div class="row">
-        <div class="col-md-6">
+<div class="container">
+    <div>
+        <div>
             <h1>Login to TMC</h1>
-            {#if $error}
+            {#if $errorMessage}
                 <div>
                     <div role="alert">
-                        {$error}
+                        {$errorMessage}
                     </div>
                 </div>
             {/if}
@@ -78,7 +73,7 @@
                         Password:
                     </vscode-text-field>
                 </div>
-                <vscode-button type="submit" name="submit" id="submit" disabled={$buttonDisabled}>
+                <vscode-button type="submit" name="submit" id="submit" disabled={$loggingIn}>
                     Submit
                 </vscode-button>
             </form>
