@@ -1,13 +1,16 @@
 # Changelog
 
-## Unreleased changes
-
-## [2.2.0] - 2023-08-23
+## [2.2.1] - 2023-09-11
 
 -   Bumped TMC-langs version to 0.35.0.
 -   The `Open` button in the course exercise list will now download the exercises if they don't exist locally.
 -   Removed the `Download` button in the course exercise list.
 -   Added more logging.
+-   Fixed an issue that caused the extension to not work on ARM64 MacOS with ARM64 Java.
+
+## [2.2.0] - 2023-08-23
+
+Pre-release testing version.
 
 ## [2.1.5] - 2022-08-29
 

@@ -4,7 +4,7 @@ exitCode=0
 
 # Tag must match the tag scheme, GH uses refs/tags/vX.Y.Z as param, thus cut
 tag=$(echo "$1" | cut -d'/' -f 3)
-if [[ ! $tag =~ ^[v]([0-9]+\.[0-9]+\.[0-9]+)(-prerelease)?$ ]]
+if [[ ! $tag =~ ^[v]([0-9]+\.[0-9]+\.[0-9]+(-prerelease)?)$ ]]
 then
     echo "Error: Github Tag must match the format vX.Y.Z[-prerelease]"
     exitCode=1
