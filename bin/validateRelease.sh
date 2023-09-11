@@ -6,7 +6,7 @@ exitCode=0
 tag=$(echo "$1" | cut -d'/' -f 3)
 if [[ ! $tag =~ ^[v]([0-9]+\.[0-9]+\.[0-9]+(-prerelease)?)$ ]]
 then
-    echo "Error: Github Tag must match the format vX.Y.Z[-prerelease]"
+    echo "Error: Github Tag '${tag}' did not match the format 'vX.Y.Z[-prerelease]'"
     exitCode=1
 fi
 
@@ -15,7 +15,7 @@ tagVersion=${BASH_REMATCH[1]}
 packageVersion=$(grep -Eo '"version":.+$' package.json)
 if [[ ! $packageVersion =~ '"version": "'$tagVersion'",' ]]
 then
-    echo "Error: The version in package.json doesn't match with the tag."
+    echo "Error: The version in package.json '${packageVersion}' doesn't match with the tag '${tagVersion}."
     exitCode=1
 fi
 
@@ -23,7 +23,7 @@ fi
 packageLockVersion=$(grep -Eo '"version":.+$' package-lock.json)
 if [[ ! $packageLockVersion =~ '"version": "'$tagVersion'",' ]]
 then
-    echo "Error: The version in package-lock.json doesn't match with the tag."
+    echo "Error: The version in package-lock.json '${packageVersion}' doesn't match with the tag '${tagVersion}."
     exitCode=1
 fi
 
@@ -32,7 +32,7 @@ fi
 changelogEntry=$(grep -Ec "\[""$tagVersion""\] - [0-9]{4}(-[0-9]{2}){2}$" CHANGELOG.md)
 if [[ $changelogEntry != 1 ]]
 then
-    echo "Error: Version entry in CHANGELOG.md either missing or not formated properly."
+    echo "Error: Version entry for '${tagVersion}' in CHANGELOG.md is either missing or not formatted properly."
     exitCode=1
 fi
 
