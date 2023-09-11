@@ -4,7 +4,7 @@ exitCode=0
 
 if [[ ! $1 =~ ^[v]([0-9]+\.[0-9]+\.[0-9]+(-prerelease)?)$ ]]
 then
-    echo "Error: Github Tag '${tag}' did not match the format 'vX.Y.Z[-prerelease]'"
+    echo "Error: Input '${1}' did not match the format 'vX.Y.Z[-prerelease]'"
     exitCode=1
 fi
 
