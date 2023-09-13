@@ -1,7 +1,7 @@
 {
     "name": "test-my-code",
     "displayName": "TestMyCode",
-    "version": "2.2.1",
+    "version": "2.2.2",
     "description": "TestMyCode extension for Visual Studio Code",
     "categories": [
         "Other"

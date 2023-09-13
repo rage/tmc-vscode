@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.2.2] - 2023-09-13
+
+- Fixed an "Empty Langs Response Error" that would sometimes occur after submitting an exercise.
+
 ## [2.2.1] - 2023-09-11
 
 -   Bumped TMC-langs version to 0.35.0.

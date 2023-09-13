@@ -25,7 +25,7 @@ async function main() {
         console.error("Verification resulted in error:", e.message);
         process.exit(1);
     }
-    console.log("Looks good!");
+    console.log("Found all langs builds!");
 }
 
 main();
