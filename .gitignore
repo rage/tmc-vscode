@@ -17,3 +17,6 @@ backend/cli/
 dist/
 out/
 *.vsix
+/test-results/
+/playwright-report/
+/playwright/.cache/
