@@ -1,4 +1,4 @@
-import { LocalCourseData } from "../../config/types";
+import { LocalCourseData } from "../../api/storage";
 
 interface MyCoursesProps {
     courses: LocalCourseData[];

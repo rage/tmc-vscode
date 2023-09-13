@@ -2,27 +2,18 @@
 
 exitCode=0
 
-# Tag must match the tag scheme, GH uses refs/tags/vX.Y.Z as param, thus cut
-tag=$(echo "$1" | cut -d'/' -f 3)
-if [[ ! $tag =~ ^[v][0-9]+\.[0-9]+\.[0-9]+$ ]]
+if [[ ! $1 =~ ^[v]([0-9]+\.[0-9]+\.[0-9]+(-prerelease)?)$ ]]
 then
-    echo "Error: Github Tag must match the format vX.Y.Z"
-    exitCode=1
-fi
-
-# Version must match the version scheme
-tagVersion=$(echo "$1" | cut -d'v' -f 2)
-if [[ ! $tagVersion =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-then
-    echo "Error: Version must match the format X.Y.Z"
+    echo "Error: Input '${1}' did not match the format 'vX.Y.Z[-prerelease]'"
     exitCode=1
 fi
 
 # Version in package.json must match with tag version
-packageVersion=$(grep -Eo '"version":.+$' package.json)
-if [[ ! $packageVersion =~ '"version": "'$tagVersion'",' ]]
+tagVersion=${BASH_REMATCH[1]}
+packageVersion=$(grep -Eo '^    "version": ".+$' package.json | cut -d\" -f4)
+if [[ ! $packageVersion =~ $tagVersion ]]
 then
-    echo "Error: The version in package.json doesn't match with the tag."
+    echo "Error: The version in package.json '${packageVersion}' doesn't match with the tag '${tagVersion}."
     exitCode=1
 fi
 
@@ -30,7 +21,7 @@ fi
 packageLockVersion=$(grep -Eo '"version":.+$' package-lock.json)
 if [[ ! $packageLockVersion =~ '"version": "'$tagVersion'",' ]]
 then
-    echo "Error: The version in package-lock.json doesn't match with the tag."
+    echo "Error: The version in package-lock.json '${packageVersion}' doesn't match with the tag '${tagVersion}."
     exitCode=1
 fi
 
@@ -39,7 +30,7 @@ fi
 changelogEntry=$(grep -Ec "\[""$tagVersion""\] - [0-9]{4}(-[0-9]{2}){2}$" CHANGELOG.md)
 if [[ $changelogEntry != 1 ]]
 then
-    echo "Error: Version entry in CHANGELOG.md either missing or not formated properly."
+    echo "Error: Version entry for '${tagVersion}' in CHANGELOG.md is either missing or not formatted properly."
     exitCode=1
 fi
 
@@ -49,6 +40,13 @@ if [ $? != 0 ]
 then
     echo "Error: Failed to verify that all Langs builds exist."
     exitCode=1
+fi
+
+if [ $exitCode = 0 ]
+then
+    echo "Validated release successfully"
+else
+    echo "Failed to validate release"
 fi
 
 exit $exitCode

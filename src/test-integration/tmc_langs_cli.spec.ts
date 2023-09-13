@@ -125,7 +125,7 @@ suite("tmc langs cli spec", function () {
             expect(data.exercises.length).to.be.equal(2);
             expect(data.settings.name).to.be.equal("python-course");
 
-            const details = (await tmc.getCourseDetails(0)).unwrap().course;
+            const details = (await tmc.getCourseDetails(0)).unwrap();
             expect(details.id).to.be.equal(0);
             expect(details.name).to.be.equal("python-course");
 
@@ -524,9 +524,10 @@ async function unwrapResult<T>(result: Promise<Result<T, Error>>): Promise<T> {
 
 async function startServer(): Promise<cp.ChildProcess> {
     let ready = false;
-    console.log(path.join(__dirname, "..", "backend"));
+    const backendPath = path.join(__dirname, "..", "backend");
+    console.log("Running npm start at", backendPath);
     const server = cp.spawn("npm", ["start"], {
-        cwd: path.join(__dirname, "..", "backend"),
+        cwd: backendPath,
         shell: "bash",
     });
     server.stdout.on("data", (chunk) => {

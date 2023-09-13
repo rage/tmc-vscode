@@ -3,7 +3,7 @@
 
 const path = require("path");
 
-const TMC_LANGS_RUST_VERSION = "0.31.1";
+const TMC_LANGS_RUST_VERSION = "0.35.0";
 
 const localTMCServer = {
     __TMC_BACKEND__URL__: JSON.stringify("http://localhost:3000"),

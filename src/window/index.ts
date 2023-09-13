@@ -13,7 +13,7 @@ export function getActiveEditorExecutablePath(actionContext: ActionContext): str
     if (!resource) {
         return undefined;
     }
-    Logger.log("Active text document language: " + resource.document.languageId);
+    Logger.info("Active text document language: " + resource.document.languageId);
     switch (resource.document.languageId) {
         case "python":
             return getPythonPath(actionContext, resource.document);
@@ -38,7 +38,7 @@ function getPythonPath(
             extension.packageJSON?.featureFlags?.usingNewInterpreterStorage;
         if (usingNewInterpreterStorage) {
             if (!extension.isActive) {
-                Logger.log("Python extension not active.");
+                Logger.info("Python extension not active.");
                 return undefined;
             }
             // Support old and new python extension versions. vscode-python issue #11294

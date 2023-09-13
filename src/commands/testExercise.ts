@@ -2,12 +2,14 @@ import * as vscode from "vscode";
 
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
+import { Logger } from "../utils";
 
 export async function testExercise(
     actionContext: ActionContext,
     resource: vscode.Uri | undefined,
 ): Promise<void> {
     const { dialog, workspaceManager } = actionContext;
+    Logger.info("Testing exercise");
 
     const exercise = resource
         ? workspaceManager.getExerciseByPath(resource)

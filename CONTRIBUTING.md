@@ -28,7 +28,7 @@ npm ci
 Repeat the same for the testing backend:
 
 ```
-cd backend && npm ci
+cd backend && npm ci && npm run setup
 ```
 
 ### Build
@@ -47,6 +47,14 @@ This project uses [prettier](https://prettier.io/) for code formatting. You can 
 ### Linting
 
 This project uses [ESLint](https://eslint.org/) for code linting. You can run ESLint across the code by calling `npm run eslint` from a terminal.
+
+### Testing
+
+The repository contains https://github.com/testmycode/tmc-python-tester as a submodule, and it is required for running the integration tests. To initialize the submodule, run `git submodule init && git submodule update`.
+
+The integration tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so.
+
+Integration tests can be ran with `npm run test`.
 
 ### Bundling
 
@@ -67,3 +75,12 @@ vsce package
 ## Submitting a Pull Request
 
 Submit a pull request, and if it fixes problems that have an existing issues on GitHub, tag the issues in the body using "Resolves #issue_id" or "Fixes #issue_id".
+
+## Releasing
+
+To release, create a release with the tag in the format `vMAJOR.MINOR.PATCH`, for example `v1.2.3`. For a pre-release version, append `-prerelease` to the tag, for example `v1.2.3-prerelease`.
+
+A script is ran during the release process to ensure that
+
+- the `CHANGELOG.md` has an entry for the tagged version
+- the `package.json` and `package-lock.json` has the same version number as the tagged version

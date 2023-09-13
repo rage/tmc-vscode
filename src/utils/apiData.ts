@@ -1,5 +1,5 @@
+import { CourseExercise, Exercise } from "../api/langsSchema";
 import { LocalCourseExercise } from "../api/storage";
-import { CourseExercise, Exercise } from "../api/types";
 import {
     LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,

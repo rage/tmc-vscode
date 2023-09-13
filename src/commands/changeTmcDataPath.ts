@@ -10,6 +10,7 @@ import { formatSizeInBytes, Logger } from "../utils";
  */
 export async function changeTmcDataPath(actionContext: ActionContext): Promise<void> {
     const { dialog, resources, ui } = actionContext;
+    Logger.info("Changing TMC data path");
 
     const old = resources.projectsDirectory;
     const options: vscode.OpenDialogOptions = {
@@ -17,6 +18,7 @@ export async function changeTmcDataPath(actionContext: ActionContext): Promise<v
         canSelectFolders: true,
         canSelectMany: false,
         openLabel: "Select folder",
+        defaultUri: vscode.Uri.parse(old),
     };
     const newPath = (await vscode.window.showOpenDialog(options))?.[0];
     if (newPath && old) {
@@ -29,7 +31,7 @@ export async function changeTmcDataPath(actionContext: ActionContext): Promise<v
             },
         );
         if (res.ok) {
-            Logger.log(`Moved workspace folder from ${old} to ${newPath.fsPath}`);
+            Logger.info(`Moved workspace folder from ${old} to ${newPath.fsPath}`);
             dialog.notification(`TMC Data was successfully moved to ${newPath.fsPath}`, [
                 "OK",
                 (): void => {},

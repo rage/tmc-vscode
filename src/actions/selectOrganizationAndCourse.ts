@@ -12,6 +12,7 @@ export async function selectOrganizationAndCourse(
     actionContext: ActionContext,
 ): Promise<Result<{ organization: string; course: number }, Error>> {
     const { resources, ui } = actionContext;
+    Logger.info("Selecting organization and course");
 
     const tempView = new TemporaryWebview(resources, ui);
 
@@ -24,7 +25,7 @@ export async function selectOrganizationAndCourse(
             tempView.dispose();
             return orgResult;
         }
-        Logger.log(`Organization slug ${orgResult.val} selected`);
+        Logger.info(`Organization slug ${orgResult.val} selected`);
         organizationSlug = orgResult.val;
         const courseResult = await selectCourse(actionContext, organizationSlug, tempView);
         if (courseResult.err) {
@@ -36,7 +37,7 @@ export async function selectOrganizationAndCourse(
         }
         courseId = courseResult.val.course;
     }
-    Logger.log(`Course with id ${courseId} selected`);
+    Logger.info(`Course with id ${courseId} selected`);
     tempView.dispose();
     return new Ok({ organization: organizationSlug, course: courseId });
 }

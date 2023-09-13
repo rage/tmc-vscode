@@ -10,6 +10,7 @@ export async function pasteExercise(
     resource: vscode.Uri | undefined,
 ): Promise<void> {
     const { dialog, workspaceManager } = actionContext;
+    Logger.info("Pasting exercise");
 
     const exercise = resource
         ? workspaceManager.getExerciseByPath(resource)

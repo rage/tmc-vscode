@@ -11,6 +11,8 @@ export async function wipe(
     context: vscode.ExtensionContext,
 ): Promise<void> {
     const { dialog, resources, tmc, userData, workspaceManager } = actionContext;
+    Logger.info("Wiping");
+
     if (workspaceManager.activeCourse) {
         dialog.warningNotification(
             "Extension data can't be wiped now because a TMC Workspace is open. \
@@ -88,6 +90,6 @@ Please close the workspace and any related files before running this command aga
         }
     }
 
-    Logger.log("Extension wipe completed.");
+    Logger.info("Extension wipe completed.");
     await vscode.commands.executeCommand("workbench.action.reloadWindow");
 }

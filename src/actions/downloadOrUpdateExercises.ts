@@ -26,6 +26,8 @@ export async function downloadOrUpdateExercises(
     exerciseIds: number[],
 ): Promise<Result<DownloadResults, Error>> {
     const { dialog, settings, tmc, ui } = actionContext;
+    Logger.info("Downloading exercises", exerciseIds);
+
     if (exerciseIds.length === 0) {
         return Ok({ successful: [], failed: [] });
     }

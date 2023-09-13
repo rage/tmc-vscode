@@ -9,25 +9,31 @@ import { Ok, Result } from "ts-results";
 
 import { ExerciseStatus } from "../api/workspaceManager";
 import * as UITypes from "../ui/types";
+import { Logger } from "../utils";
 
 import { ActionContext } from "./types";
 
 /**
  * Opens given exercises, showing them in TMC workspace.
- * @param ids Array of exercise IDs
+ * @param exerciseIdsToOpen Array of exercise IDs
  */
 export async function openExercises(
     actionContext: ActionContext,
-    ids: number[],
+    exerciseIdsToOpen: number[],
     courseName: string,
 ): Promise<Result<number[], Error>> {
+    Logger.info("Opening exercises", exerciseIdsToOpen);
+
     const { workspaceManager, ui, userData, tmc } = actionContext;
 
     const course = userData.getCourseByName(courseName);
-    const exercises = new Map(course.exercises.map((x) => [x.id, x]));
-    const exerciseSlugs = compact(ids.map((x) => exercises.get(x)?.name));
+    const courseExercises = new Map(course.exercises.map((x) => [x.id, x]));
+    const exercisesToOpen = compact(exerciseIdsToOpen.map((x) => courseExercises.get(x)));
 
-    const openResult = await workspaceManager.openCourseExercises(courseName, exerciseSlugs);
+    const openResult = await workspaceManager.openCourseExercises(
+        courseName,
+        exercisesToOpen.map((e) => e.name),
+    );
     if (openResult.err) {
         return openResult;
     }
@@ -45,14 +51,14 @@ export async function openExercises(
     }
 
     ui.webview.postMessage(
-        ...ids.map<UITypes.WebviewMessage>((id) => ({
+        ...exerciseIdsToOpen.map<UITypes.WebviewMessage>((id) => ({
             command: "exerciseStatusChange",
             exerciseId: id,
             status: "opened",
         })),
     );
 
-    return new Ok(ids);
+    return new Ok(exerciseIdsToOpen);
 }
 
 /**

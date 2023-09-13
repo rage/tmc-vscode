@@ -3,6 +3,8 @@ import * as path from "path";
 import { Result } from "ts-results";
 import * as vscode from "vscode";
 
+import { Logger } from "../utils";
+
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
 
@@ -18,6 +20,7 @@ export async function moveExtensionDataPath(
     onUpdate?: (value: { percent: number; message?: string }) => void,
 ): Promise<Result<void, Error>> {
     const { resources, tmc } = actionContext;
+    Logger.info("Moving extension data path");
 
     // This appears to be unnecessary with current VS Code version
     /*

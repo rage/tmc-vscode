@@ -31,6 +31,7 @@ export async function login(
     password: string,
 ): Promise<Result<void, Error>> {
     const { tmc } = actionContext;
+    Logger.info("Logging in");
 
     if (!username || !password) {
         return new Err(new Error("Username and password may not be empty."));
@@ -103,7 +104,7 @@ export async function testExercise(
                 }
             },
         });
-        Logger.log(`Running local tests for ${exerciseName}`);
+        Logger.info(`Running local tests for ${exerciseName}`);
 
         const testResult = await testRunner;
         if (testResult.err) {
@@ -123,7 +124,7 @@ export async function testExercise(
             temporaryWebviewProvider.addToRecycables(temp);
             return testResult;
         }
-        Logger.log(`Tests finished for ${exerciseName}`);
+        Logger.info(`Tests finished for ${exerciseName}`);
         data = {
             testResult: testResult.val,
             id: exerciseId,
@@ -179,7 +180,7 @@ export async function submitExercise(
 ): Promise<Result<void, Error>> {
     const { dialog, exerciseDecorationProvider, temporaryWebviewProvider, tmc, userData } =
         actionContext;
-    Logger.log(`Submitting exercise ${exercise.exerciseSlug} to server`);
+    Logger.info(`Submitting exercise ${exercise.exerciseSlug} to server`);
 
     const course = userData.getCourseByName(exercise.courseSlug);
     const exerciseId = course.exercises.find((x) => x.name === exercise.exerciseSlug)?.id;
@@ -351,7 +352,7 @@ export async function checkForCourseUpdates(
     const { dialog, userData } = actionContext;
     const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
-    Logger.log(`Checking for course updates for courses ${filteredCourses.map((c) => c.name)}`);
+    Logger.info(`Checking for course updates for courses ${filteredCourses.map((c) => c.name)}`);
     const updatedCourses: LocalCourseData[] = [];
     for (const course of filteredCourses) {
         await updateCourse(actionContext, course.id);
@@ -398,8 +399,8 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
     const tmcWorkspaceFile = resources.getWorkspaceFilePath(name);
     const workspaceAsUri = vscode.Uri.file(tmcWorkspaceFile);
-    Logger.log(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
-    Logger.log(`TMC workspace: ${tmcWorkspaceFile}`);
+    Logger.info(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
+    Logger.info(`TMC workspace: ${tmcWorkspaceFile}`);
 
     if (!(currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString())) {
         if (
@@ -429,7 +430,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
             );
         }
     } else if (currentWorkspaceFile?.fsPath === tmcWorkspaceFile) {
-        Logger.log("Workspace already open, changing focus to this workspace.");
+        Logger.info("Workspace already open, changing focus to this workspace.");
         await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri);
         await vscode.commands.executeCommand("workbench.files.action.focusFilesExplorer");
     }
@@ -444,7 +445,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
 export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
     const course = userData.getCourse(id);
-    Logger.log(`Closing exercises for ${course.name} and removing course data from userData`);
+    Logger.info(`Closing exercises for ${course.name} and removing course data from userData`);
 
     const unsetResult = await tmc.unsetSetting(`closed-exercises-for:${course.name}`);
     if (unsetResult.err) {
@@ -455,7 +456,7 @@ export async function removeCourse(actionContext: ActionContext, id: number): Pr
     ui.treeDP.removeChildWithId("myCourses", id.toString());
 
     if (workspaceManager.activeCourse === course.name) {
-        Logger.log("Closing course workspace because it was removed.");
+        Logger.info("Closing course workspace because it was removed.");
         await vscode.commands.executeCommand("workbench.action.closeFolder");
     }
 }

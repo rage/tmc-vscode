@@ -46,10 +46,10 @@ function throwFatalError(error: Error, cliFolder: string): never {
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
     Logger.configure(LogLevel.Verbose);
-    Logger.log(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`);
-    Logger.log(`${vscode.env.appName} version: ${vscode.version}`);
-    Logger.log(`${EXTENSION_ID} version: ${extensionVersion}`);
-    Logger.log(`Currently open workspace: ${vscode.workspace.name}`);
+    Logger.info(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`);
+    Logger.info(`${vscode.env.appName} version: ${vscode.version}`);
+    Logger.info(`${EXTENSION_ID} version: ${extensionVersion}`);
+    Logger.info(`Currently open workspace: ${vscode.workspace.name}`);
 
     const dialog = new Dialog();
     const cliFolder = path.join(context.globalStorageUri.fsPath, "cli");

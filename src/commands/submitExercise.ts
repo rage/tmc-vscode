@@ -10,6 +10,8 @@ export async function submitExercise(
     resource: vscode.Uri | undefined,
 ): Promise<void> {
     const { dialog, workspaceManager } = actionContext;
+    Logger.info("Submitting exercise");
+
     const exercise = resource
         ? workspaceManager.getExerciseByPath(resource)
         : workspaceManager.activeExercise;

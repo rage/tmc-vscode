@@ -26,7 +26,7 @@ export async function resourceInitialization(
 
     if (!fs.existsSync(tmcDataPath)) {
         fs.mkdirSync(tmcDataPath, { recursive: true });
-        Logger.log(`Created tmc data directory at ${tmcDataPath}`);
+        Logger.info(`Created tmc data directory at ${tmcDataPath}`);
     }
 
     const resources = new Resources(
@@ -48,7 +48,7 @@ export async function resourceInitialization(
         );
         if (!fs.existsSync(tmcWorkspaceFilePath)) {
             fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
-            Logger.log(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
+            Logger.info(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
         }
     });
 

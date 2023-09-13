@@ -6,7 +6,7 @@
 
 import du = require("du");
 
-import { Exercise } from "../api/types";
+import { Exercise } from "../api/langsSchema";
 import { ExerciseStatus } from "../api/workspaceManager";
 import * as UITypes from "../ui/types";
 import { WebviewMessage } from "../ui/types";
@@ -26,7 +26,7 @@ import { ActionContext } from "./types";
  */
 export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
     const { userData, tmc, ui, resources } = actionContext;
-    Logger.log("Displaying My Courses view");
+    Logger.info("Displaying My Courses view");
 
     const courses = userData.getCourses();
     const newExercisesCourses: WebviewMessage[] = courses.map((c) => ({
@@ -54,7 +54,7 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
     courses.forEach(async (course) => {
         const courseId = course.id;
         const exercises: Exercise[] = (await tmc.getCourseDetails(courseId))
-            .map((x) => x.course.exercises)
+            .map((x) => x.exercises)
             .unwrapOr([]);
 
         const deadline = parseNextDeadlineAfter(
@@ -83,6 +83,8 @@ export async function displayLocalCourseDetails(
     courseId: number,
 ): Promise<void> {
     const { ui, tmc, userData, workspaceManager } = actionContext;
+    const course = userData.getCourse(courseId);
+    Logger.info(`Display course view for ${course.name}`);
 
     const mapStatus = (
         exerciseId: number,
@@ -99,11 +101,8 @@ export async function displayLocalCourseDetails(
         }
     };
 
-    const course = userData.getCourse(courseId);
-    Logger.log(`Display course view for ${course.name}`);
-
     const exerciseData = new Map<string, UITypes.CourseDetailsExerciseGroup>();
-    const apiCourse = (await tmc.getCourseDetails(courseId)).mapErr(() => undefined).val?.course;
+    const apiCourse = (await tmc.getCourseDetails(courseId)).mapErr(() => undefined).val;
     const currentDate = new Date();
 
     const initialState: UITypes.WebviewMessage[] = [

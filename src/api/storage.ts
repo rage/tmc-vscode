@@ -28,6 +28,7 @@ export interface LocalCourseExercise {
     id: number;
     availablePoints: number;
     awardedPoints: number;
+    /// Equivalent to exercise slug
     name: string;
     deadline: string | null;
     passed: boolean;

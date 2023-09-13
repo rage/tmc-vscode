@@ -1,7 +1,8 @@
 import { FeedbackQuestion } from "../actions/types";
+import { SubmissionFinished } from "../api/langsSchema";
 import Storage, { LocalCourseData } from "../api/storage";
 import TMC from "../api/tmc";
-import { Course, Organization, SubmissionStatusReport } from "../api/types";
+import { Course, Organization } from "../api/types";
 import { ExtensionSettings } from "../config/settings";
 import { LogLevel } from "../utils/logger";
 
@@ -95,7 +96,7 @@ export type SettingsData = {
 };
 
 export type SubmissionResultData = {
-    statusData: SubmissionStatusReport;
+    statusData: SubmissionFinished;
     feedbackQuestions: FeedbackQuestion[];
     submissionUrl: string | undefined;
 };

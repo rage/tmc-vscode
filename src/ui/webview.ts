@@ -75,6 +75,7 @@ export default class TmcWebview {
      * @param messages Pairs of keys and messages to send to webview.
      */
     public postMessage(...messages: WebviewMessage[]): void {
+        Logger.debug("Posting messages", messages);
         messages.forEach((message) => this._storeMessageInCache(message));
         this._panel?.webview.postMessage(messages);
     }
@@ -91,7 +92,10 @@ export default class TmcWebview {
         if (this._messageHandlers.get(messageId) !== undefined) {
             return;
         }
-        this._messageHandlers.set(messageId, handler);
+        this._messageHandlers.set(messageId, (msg) => {
+            Logger.debug("Received message", msg);
+            handler(msg);
+        });
     }
 
     /**
@@ -164,7 +168,7 @@ export default class TmcWebview {
                     if (handler) {
                         handler(msg);
                     } else {
-                        Logger.error("Unhandled message type: " + msg.type);
+                        Logger.error("Unhandled message", msg);
                     }
                 },
                 this,

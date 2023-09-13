@@ -17,6 +17,8 @@ export async function downloadNewExercisesForCourse(
     courseId: number,
 ): Promise<Result<void, Error>> {
     const { ui, userData } = actionContext;
+    const course = userData.getCourse(courseId);
+    Logger.info(`Downloading new exercises for course: ${course.title}`);
 
     const postNewExercises = (exerciseIds: number[]): void =>
         ui.webview.postMessage({
@@ -25,8 +27,6 @@ export async function downloadNewExercisesForCourse(
             exerciseIds,
         });
 
-    const course = userData.getCourse(courseId);
-    Logger.log(`Downloading new exercises for course: ${course.title}`);
     postNewExercises([]);
 
     const downloadResult = await downloadOrUpdateExercises(actionContext, course.newExercises);

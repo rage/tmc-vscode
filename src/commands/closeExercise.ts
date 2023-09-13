@@ -2,12 +2,15 @@ import * as vscode from "vscode";
 
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
+import { Logger } from "../utils";
 
 export async function closeExercise(
     actionContext: ActionContext,
     resource: vscode.Uri | undefined,
 ): Promise<void> {
     const { dialog, userData, workspaceManager } = actionContext;
+    Logger.info("Closing exercise");
+
     const exercise = resource
         ? workspaceManager.getExerciseByPath(resource)
         : workspaceManager.activeExercise;
