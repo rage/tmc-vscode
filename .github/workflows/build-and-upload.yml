@@ -17,7 +17,7 @@ jobs:
             matrix:
                 node-version: [18.x]
         env:
-            PRERELEASE: ${{ endsWith ( github.ref_name, '-prerelease' ) && '--pre-release' || '' }}
+            PRERELEASE: ${{ endsWith ( github.event.release.tag_name, '-prerelease' ) && '--pre-release' || '' }}
         steps:
             - name: Checkout repository
               uses: actions/checkout@v3
@@ -46,7 +46,7 @@ jobs:
               if: success() && github.event_name == 'release'
               run: |
                   chmod +x bin/validateRelease.sh
-                  bin/validateRelease.sh ${{ github.ref_name }}
+                  bin/validateRelease.sh ${{ github.event.release.tag_name }}
                   vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} ${{ env.PRERELEASE }} --packagePath extension/*.vsix
             - name: Publish to Open VSX Marketplace
               if: success() && github.event_name == 'release'
