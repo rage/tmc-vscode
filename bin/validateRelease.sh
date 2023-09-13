@@ -10,8 +10,8 @@ fi
 
 # Version in package.json must match with tag version
 tagVersion=${BASH_REMATCH[1]}
-packageVersion=$(grep -Eo '"version":.+$' package.json)
-if [[ ! $packageVersion =~ '"version": "'$tagVersion'",' ]]
+packageVersion=$(grep -Eo '^    "version": ".+$' package.json | cut -d\" -f4)
+if [[ ! $packageVersion =~ $tagVersion ]]
 then
     echo "Error: The version in package.json '${packageVersion}' doesn't match with the tag '${tagVersion}."
     exitCode=1
@@ -40,6 +40,13 @@ if [ $? != 0 ]
 then
     echo "Error: Failed to verify that all Langs builds exist."
     exitCode=1
+fi
+
+if [ $exitCode = 0 ]
+then
+    echo "Validated release successfully"
+else
+    echo "Failed to validate release"
 fi
 
 exit $exitCode
