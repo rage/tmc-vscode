@@ -43,7 +43,9 @@
         "vscode:prepublish": "cross-env NODE_ENV=production npm run webpack",
         "webpack": "webpack",
         "webpack:watch": "webpack --watch",
-        "tsc": "tsc"
+        "tsc": "tsc",
+        "playwright-test": "playwright test",
+        "playwright-test-debug": "playwright test --debug"
     },
     "contributes": {
         "commands": [
@@ -459,6 +461,7 @@
         "@babel/plugin-transform-modules-commonjs": "^7.22.5",
         "@babel/plugin-transform-react-jsx": "^7.22.5",
         "@babel/preset-env": "^7.22.9",
+        "@playwright/test": "^1.37.1",
         "@types/chai": "^4.3.5",
         "@types/chai-as-promised": "^7.1.5",
         "@types/du": "^1.0.1",
