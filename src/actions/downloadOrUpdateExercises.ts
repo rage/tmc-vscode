@@ -1,5 +1,5 @@
 import pLimit from "p-limit";
-import { Ok, Result } from "ts-results";
+import { Err, Ok, Result } from "ts-results";
 
 import { ExerciseStatus, WebviewMessage } from "../ui/types";
 import TmcWebview from "../ui/webview";

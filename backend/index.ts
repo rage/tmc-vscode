@@ -332,13 +332,13 @@ for (const { organization, courses } of organizationCourses) {
 }
 
 // If submission exists, return arbitrary archive
-for (const submission of submissions) {
-    app.get(`/api/v8/core/submissions/${submission.id}/download`, (req, res) => {
-        console.log(JSON.stringify(submissions, null, 2));
-        console.log(JSON.stringify(submission, null, 2));
-        return respondWithFile(res, submission.file);
-    });
-}
+app.get("/api/v8/core/submissions/:id/download", (req, res, next) => {
+    const submission = submissions.find((s) => s.id.toString() === req.params.id);
+    if (!submission) {
+        return next();
+    }
+    return respondWithFile(res, submission.file);
+});
 
 // submitSubmissionFeedback(...)
 app.post("/feedback", (req, res: Response<SubmissionFeedbackResponse>) =>
