@@ -532,6 +532,7 @@ async function startServer(): Promise<cp.ChildProcess> {
         cwd: backendPath,
         shell: "bash",
     });
+    console.info("[server] starting...");
     server.stdout.on("data", (chunk) => {
         console.info(`[server] ${chunk.toString()}`);
         if (chunk.toString().startsWith("Server listening to")) {
