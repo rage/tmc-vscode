@@ -44,8 +44,8 @@
         "webpack": "webpack",
         "webpack:watch": "webpack --watch",
         "tsc": "tsc",
-        "playwright-test": "playwright test",
-        "playwright-test-debug": "playwright test --debug",
+        "playwright-test": "xvfb-maybe playwright test",
+        "playwright-test-debug": "xvfb-maybe playwright test --debug",
         "backend:start": "cd backend && npm run start"
     },
     "contributes": {
@@ -501,7 +501,8 @@
         "typescript": "^5.1.6",
         "webpack": "^5.88.1",
         "webpack-cli": "^5.1.4",
-        "webpack-merge": "^5.9.0"
+        "webpack-merge": "^5.9.0",
+        "xvfb-maybe": "^0.2.1"
     },
     "engines": {
         "vscode": "^1.71.0"
