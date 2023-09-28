@@ -11,6 +11,10 @@ export default defineConfig({
     workers: 1,
     reporter: "html",
 
+    expect: {
+        timeout: 10 * 60 * 1000,
+    },
+
     use: {
         trace: "on-first-retry",
     },

@@ -56,13 +56,19 @@ export async function downloadOrUpdateExercises(
     skipped.length > 0 && Logger.warn(`${skipped.length} downloads were skipped.`);
     downloaded.forEach((x) => statuses.set(x.id, "opened"));
     skipped.forEach((x) => statuses.set(x.id, "closed"));
+    let failures = false;
     failed?.forEach(([exercise, reason]) => {
         Logger.error(`Failed to download exercise ${exercise["exercise-slug"]}: ${reason}`);
         statuses.set(exercise.id, "downloadFailed");
+        failures = true;
     });
     postMessages(ui.webview, statuses);
 
-    return Ok(sortResults(statuses));
+    if (failures) {
+        return Err(new Error("Failed to download exercises"));
+    } else {
+        return Ok(sortResults(statuses));
+    }
 }
 
 function postMessages(webview: TmcWebview, statuses: Map<number, ExerciseStatus>): void {

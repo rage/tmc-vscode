@@ -45,7 +45,8 @@
         "webpack:watch": "webpack --watch",
         "tsc": "tsc",
         "playwright-test": "playwright test",
-        "playwright-test-debug": "playwright test --debug"
+        "playwright-test-debug": "playwright test --debug",
+        "backend:start": "cd backend && npm run start"
     },
     "contributes": {
         "commands": [

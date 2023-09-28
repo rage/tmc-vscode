@@ -42,3 +42,6 @@ jobs:
               uses: GabrielBB/xvfb-action@v1.0
               with:
                   run: npm run test-integration-only integration
+            - name: Playwright tests
+              run: npm run backend:start &
+                  npm run playwright-test
