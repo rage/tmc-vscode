@@ -47,3 +47,17 @@ jobs:
                   killall node || true # The backend from the integration tests may still be running (even though it shouldn't)
                   npm run backend:start &
                   npm run playwright-test
+
+            - uses: actions/upload-artifact@v2
+              if: failure()
+              with:
+                  name: test-results
+                  path: ./test-results/
+                  if-no-files-found: ignore
+
+            - uses: actions/upload-artifact@v2
+              if: failure()
+              with:
+                  name: playwright-html-report
+                  path: ./playwright-report/index.html
+                  if-no-files-found: ignore
