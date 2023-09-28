@@ -42,9 +42,12 @@ jobs:
               uses: GabrielBB/xvfb-action@v1.0
               with:
                   run: npm run test-integration-only integration
+
+            - name: Kill node just in case
+              if: matrix.os != 'windows-latest'
+              run: killall node || true # The backend from the integration tests may still be running (even though it shouldn't)
             - name: Playwright tests
               run: |
-                  killall node || true # The backend from the integration tests may still be running (even though it shouldn't)
                   npm run backend:start &
                   npm run playwright-test
 
