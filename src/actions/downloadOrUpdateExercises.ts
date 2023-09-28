@@ -1,5 +1,5 @@
 import pLimit from "p-limit";
-import { Err, Ok, Result } from "ts-results";
+import { Ok, Result } from "ts-results";
 
 import { ExerciseStatus, WebviewMessage } from "../ui/types";
 import TmcWebview from "../ui/webview";
@@ -56,19 +56,20 @@ export async function downloadOrUpdateExercises(
     skipped.length > 0 && Logger.warn(`${skipped.length} downloads were skipped.`);
     downloaded.forEach((x) => statuses.set(x.id, "opened"));
     skipped.forEach((x) => statuses.set(x.id, "closed"));
-    let failures = false;
     failed?.forEach(([exercise, reason]) => {
         Logger.error(`Failed to download exercise ${exercise["exercise-slug"]}: ${reason}`);
         statuses.set(exercise.id, "downloadFailed");
-        failures = true;
     });
     postMessages(ui.webview, statuses);
-
-    if (failures) {
-        return Err(new Error("Failed to download exercises"));
-    } else {
-        return Ok(sortResults(statuses));
+    if (failed && failed.length > 0) {
+        const failedDownloads = failed.map(([f]) => f["exercise-slug"]);
+        dialog.errorNotification(
+            "Failed to update exercises.",
+            new Error(failedDownloads.join(", ")),
+        );
     }
+
+    return Ok(sortResults(statuses));
 }
 
 function postMessages(webview: TmcWebview, statuses: Map<number, ExerciseStatus>): void {

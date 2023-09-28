@@ -491,6 +491,8 @@ suite("tmc langs cli spec", function () {
 
     suiteTeardown(function () {
         server && kill(server.pid as number);
+        // the command above didn't seem to work reliably, so the call below was added
+        server?.kill();
     });
 });
 
@@ -538,7 +540,6 @@ async function startServer(): Promise<cp.ChildProcess> {
     });
 
     const timeout = setTimeout(() => {
-        server.kill();
         throw new Error("Failed to start server");
     }, 20000);
 
