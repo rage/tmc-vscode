@@ -43,5 +43,7 @@ jobs:
               with:
                   run: npm run test-integration-only integration
             - name: Playwright tests
-              run: npm run backend:start &
+              run: |
+                  killall node || true # The backend from the integration tests may still be running (even though it shouldn't)
+                  npm run backend:start &
                   npm run playwright-test
