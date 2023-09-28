@@ -12,7 +12,7 @@ export default defineConfig({
     reporter: "html",
 
     expect: {
-        timeout: 10 * 60 * 1000,
+        timeout: 5 * 1000,
     },
 
     use: {
