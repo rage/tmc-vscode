@@ -16,7 +16,7 @@ export default defineConfig({
     },
 
     use: {
-        trace: "on-first-retry",
+        trace: "retain-on-failure",
     },
 
     /* Configure projects for major browsers */
