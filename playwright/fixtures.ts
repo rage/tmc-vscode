@@ -55,9 +55,9 @@ export const customTestFixtures: Fixtures<CustomTestFixtures> = {
         await run(electronApp);
         await electronApp.close();
     },
-    page: async ({ vsCode, context }, run) => {
-        await context.tracing.start({ screenshots: true, snapshots: true });
+    page: async ({ vsCode }, run) => {
         const page = await vsCode.firstWindow();
+        page.context().tracing.start({ screenshots: true, snapshots: true });
         page.on("console", console.log);
 
         await run(page);
