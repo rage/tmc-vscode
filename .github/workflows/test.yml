@@ -60,7 +60,7 @@ jobs:
 
             - name: Start backend (win)
               if: matrix.os == 'windows-latest'
-              run: start npm run backend:start
+              run: START /B "mandatory program title parameter" npm run backend:start
 
             - name: Playwright tests
               run: npm run playwright-test
