@@ -52,12 +52,14 @@ export const customTestFixtures: Fixtures<CustomTestFixtures> = {
                 TMC_LANGS_DEFAULT_PROJECTS_DIR: projectsDir,
             },
         });
+        const window = await electronApp.firstWindow();
+        await window.context().tracing.start({ screenshots: true, snapshots: true });
         await run(electronApp);
+        await window.context().tracing.stop({ path: "trace.zip" });
         await electronApp.close();
     },
     page: async ({ vsCode }, run) => {
         const page = await vsCode.firstWindow();
-        page.context().tracing.start({ screenshots: true, snapshots: true });
         page.on("console", console.log);
 
         await run(page);
