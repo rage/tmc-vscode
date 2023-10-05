@@ -4,41 +4,95 @@ on: push
 
 jobs:
     extension_tests:
-        name: Extensions tests
+        name: Extension tests
         env:
             CI: true
         strategy:
             matrix:
                 node-version: [18.x]
-                os: [macos-latest, ubuntu-latest, windows-latest]
+                os: [ubuntu-latest, macos-latest, windows-latest]
         runs-on: ${{ matrix.os }}
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v2.3.1
+              uses: actions/checkout@v4.1.0
               with:
                   submodules: "true"
+
             - name: Use Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v1
+              uses: actions/setup-node@v3.8.1
               with:
                   node-version: ${{ matrix.node-version }}
+
             - name: Lint source
               run: |
                   npm run ci:all
                   npm run eslint-check
+
             - name: Run prettier if not Windows
               if: matrix.os != 'windows-latest'
               run: npm run prettier-check
+
             - name: Setup backend
               run: |
                   cd backend
                   npm run setup
                   chmod -R +x cli
                   cd ..
+
             - name: Unit tests
-              uses: GabrielBB/xvfb-action@v1.0
+              uses: GabrielBB/setup-xvfb@v1.0.1
               with:
                   run: npm test
+
             - name: Integration tests
-              uses: GabrielBB/xvfb-action@v1.0
+              uses: GabrielBB/setup-xvfb@v1.0.1
               with:
                   run: npm run test-integration-only integration
+
+    playwright_tests:
+        name: Playwright tests
+        env:
+            CI: true
+        strategy:
+            matrix:
+                node-version: [18.x]
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4.1.0
+              with:
+                  submodules: "true"
+
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v3.8.1
+              with:
+                  node-version: ${{ matrix.node-version }}
+
+            - name: Setup
+              run: |
+                  npm run ci:all
+                  cd backend
+                  npm run setup
+                  chmod -R +x cli
+                  cd ..
+                  npm run pretest
+
+            - name: Start backend
+              run: npm run backend:start &
+
+            - name: Playwright tests
+              run: npm run playwright-test
+
+            - uses: actions/upload-artifact@v3.1.3
+              if: failure()
+              with:
+                  name: test-results
+                  path: ./test-results/
+                  if-no-files-found: ignore
+
+            - uses: actions/upload-artifact@v3.1.3
+              if: failure()
+              with:
+                  name: playwright-html-report
+                  path: ./playwright-report/index.html
+                  if-no-files-found: ignore

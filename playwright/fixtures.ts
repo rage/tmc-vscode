@@ -1,11 +1,21 @@
 import { test as base, _electron as electron } from "@playwright/test";
-import type { BrowserContext, ElectronApplication, Fixtures, Page } from "@playwright/test";
+import type {
+    BrowserContext,
+    ElectronApplication,
+    Fixtures,
+    FrameLocator,
+    Page,
+} from "@playwright/test";
 import { downloadAndUnzipVSCode } from "@vscode/test-electron";
-import { resolve } from "node:path";
+import * as fs from "fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 const rootPath = resolve(__dirname, "..");
 
 console.log("Loading extension from", rootPath);
+
+const userDataDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-user"));
 
 const args = [
     "--disable-gpu-sandbox",
@@ -16,22 +26,35 @@ const args = [
     "--profile-temp",
     "--skip-release-notes",
     "--skip-welcome",
+    "--user-data-dir=" + userDataDir,
 ];
 
 type CustomTestFixtures = {
     vsCode: ElectronApplication;
     page: Page;
     context: BrowserContext;
+    webview: FrameLocator;
 };
 
 export const customTestFixtures: Fixtures<CustomTestFixtures> = {
     // eslint-disable-next-line no-empty-pattern
     vsCode: async ({}, run) => {
+        const configDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-config"));
+        const projectsDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-projects"));
         const electronApp = await electron.launch({
             executablePath: await downloadAndUnzipVSCode(),
             args,
+            env: {
+                ...process.env,
+                RUST_LOG: "TRACE",
+                TMC_LANGS_TMC_ROOT_URL: "http://localhost:4001",
+                TMC_LANGS_CONFIG_DIR: configDir,
+                TMC_LANGS_DEFAULT_PROJECTS_DIR: projectsDir,
+            },
         });
+        await electronApp.context().tracing.start({ screenshots: true, snapshots: true });
         await run(electronApp);
+        await electronApp.context().tracing.stop({ path: "trace.zip" });
         await electronApp.close();
     },
     page: async ({ vsCode }, run) => {
@@ -44,6 +67,11 @@ export const customTestFixtures: Fixtures<CustomTestFixtures> = {
         const context = vsCode.context();
 
         await run(context);
+    },
+    webview: async ({ page }, run) => {
+        const webviewFrame = await page.frameLocator("iframe.webview.ready").last();
+        const tmcFrame = await webviewFrame.frameLocator('iframe#active-frame[title="TestMyCode"]');
+        await run(tmcFrame);
     },
 };
 

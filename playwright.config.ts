@@ -11,8 +11,13 @@ export default defineConfig({
     workers: 1,
     reporter: "html",
 
+    timeout: 60 * 1000,
+    expect: {
+        timeout: 10 * 1000,
+    },
+
     use: {
-        trace: "on-first-retry",
+        trace: "retain-on-failure",
     },
 
     /* Configure projects for major browsers */

@@ -1005,8 +1005,14 @@ export default class TMC {
             .concat(obfuscatedArgs)
             .map((x) => JSON.stringify(x))
             .join(" ");
+
+        // override settings with environment variables, mainly for testing
+        const tmcLangsBackendUrl = process.env.TMC_LANGS_TMC_ROOT_URL ?? TMC_BACKEND_URL;
+        const tmcLangsConfigDir = process.env.TMC_LANGS_CONFIG_DIR ?? this._options.cliConfigDir;
+
         Logger.info(`Running ${loggableCommand}`);
-        Logger.debug(`Backend at ${TMC_BACKEND_URL}`);
+        Logger.debug(`Backend at ${tmcLangsBackendUrl}`);
+        Logger.debug(`Config dir at ${tmcLangsConfigDir}`);
 
         let active = true;
         let interrupted = false;
@@ -1015,8 +1021,8 @@ export default class TMC {
                 ...process.env,
                 ...env,
                 RUST_LOG: "debug,rustls=warn,reqwest=warn",
-                TMC_LANGS_TMC_ROOT_URL: TMC_BACKEND_URL,
-                TMC_LANGS_CONFIG_DIR: this._options.cliConfigDir,
+                TMC_LANGS_TMC_ROOT_URL: tmcLangsBackendUrl,
+                TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
             },
         });
         stdin && cprocess.stdin.write(stdin + "\n");

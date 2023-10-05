@@ -4,11 +4,7 @@
 
 You can start by looking through the issues marked with label [`good first issue`](https://github.com/rage/tmc-vscode/labels/good%20first%20issue).
 
-### Getting the code
-
-```
-git clone https://github.com/rage/tmc-vscode.git
-```
+## Setup
 
 ### Prerequisites
 
@@ -16,61 +12,86 @@ git clone https://github.com/rage/tmc-vscode.git
 -   [NodeJS / npm](https://nodejs.org/)
 -   [VSCode](https://code.visualstudio.com/)
 -   [vsce](https://www.npmjs.com/package/vsce)
+-   Chromium based browser for Playwright (`npx playwright install chromium`)
 
-### Dependencies
+### Getting the code
+
+```bash
+git clone https://github.com/rage/tmc-vscode.git
+```
+
+### Preparing the repository
 
 From a terminal, where you have cloned the repository, execute the following command to install the required dependencies:
 
-```
+```bash
 npm ci
 ```
 
 Repeat the same for the testing backend:
 
-```
+```bash
 cd backend && npm ci && npm run setup
 ```
 
-### Build
+You will need to rerun the setup when langs is updated, as this step will download the appropriate version of the CLI for the integration tests.
+
+Update the `tmc-python-tester` submodule
+
+```bash
+git submodule init && git submodule update
+```
+
+## Formatting
+
+This project uses [prettier](https://prettier.io/) for code formatting. You can run prettier across the code by calling `npm run prettier` from a terminal.
+
+## Linting
+
+This project uses [ESLint](https://eslint.org/) for code linting. You can run ESLint across the code by calling `npm run eslint` from a terminal.
+
+## Developing the extension
 
 From VSCode, the extension can be launched with `F5` by default.
 Automatic build task starts the first time that the extension is launched from VSCode.
+
+You can also build the extension by running `npm run webpack` or `npm run webpack:watch`.
 
 **NOTE!** If editing type definitions
 
 You need to kill the webpackBuild task by going to terminal tab and pressing the recycle bin or <kbd>CTRL + C</kbd> and then start the extension again by pressing `F5`
 
-### Formatting
+**NOTE!** Running multiple instances of VSCode can interfere with this process. If you experience strange behaviour when running the extension, make sure there are no other instances of VSCode running.
 
-This project uses [prettier](https://prettier.io/) for code formatting. You can run prettier across the code by calling `npm run prettier` from a terminal.
+## Testing
 
-### Linting
+### Unit tests
 
-This project uses [ESLint](https://eslint.org/) for code linting. You can run ESLint across the code by calling `npm run eslint` from a terminal.
+#### Integration
 
-### Testing
+The integration tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so. The integration tests can be run with `npm run test`. If you get a `Connection error: TypeError`, make sure the backend is running.
 
-The repository contains https://github.com/testmycode/tmc-python-tester as a submodule, and it is required for running the integration tests. To initialize the submodule, run `git submodule init && git submodule update`.
+#### Playwright
 
-The integration tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so.
+1. `npm run webpack:watch` to keep building the extension while writing code while VSCode is closed.
 
-Integration tests can be ran with `npm run test`.
+2. `npm run backend:start` to start the mock backend used by the tests.
 
-### Bundling
+3. `npm run playwright-test` to run the tests, `npm run playwright-test-debug` to debug the tests.
+
+Playwright integration tests can be written in the `./playwright` directory.
+
+The Playwright tests start a new instance of VSCode, meaning if you have VSCode open already the tests will fail due to multiple instances of VSCode. For this reason it's best to use another editor when working on the Playwright tests.
+
+You can set the environment variable `PW_TEST_REPORT_OPEN` to `never` to prevent constantly opening the HTML test report when working on the tests.
+
+## Bundling
 
 To generate a VSIX (installation package) run the following from a terminal:
 
 ```
 vsce package
 ```
-
-### Debugging
-
-#### Using VSCode
-
-1. Open the `tmc-vscode` folder
-2. Ensure the required [dependencies](#dependencies) are installed
-3. In the Debug view, choose the `Run Extension` launch configuration from the launch dropdown and press `F5`.
 
 ## Submitting a Pull Request
 
