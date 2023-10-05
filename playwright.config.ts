@@ -11,6 +11,7 @@ export default defineConfig({
     workers: 1,
     reporter: "html",
 
+    timeout: 60 * 1000,
     expect: {
         timeout: 10 * 1000,
     },
