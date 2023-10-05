@@ -105,3 +105,5 @@ A script is ran during the release process to ensure that
 
 - the `CHANGELOG.md` has an entry for the tagged version
 - the `package.json` and `package-lock.json` has the same version number as the tagged version
+
+You can update the `package-lock.json` version with `npm i --package-lock-only`.
