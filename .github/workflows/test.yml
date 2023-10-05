@@ -68,12 +68,13 @@ jobs:
               with:
                   node-version: ${{ matrix.node-version }}
 
-            - name: Setup backend
+            - name: Setup
               run: |
                   cd backend
                   npm run setup
                   chmod -R +x cli
                   cd ..
+                  npm run ci:all
 
             - name: Start backend
               run: npm run backend:start &
