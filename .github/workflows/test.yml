@@ -4,14 +4,13 @@ on: push
 
 jobs:
     extension_tests:
-        name: Extensions tests
+        name: Extension tests
         env:
             CI: true
         strategy:
-            fail-fast: false
             matrix:
                 node-version: [18.x]
-                os: [ubuntu-latest] # macos-latest, windows-latest] for now, only run the tests on linux
+                os: [ubuntu-latest, macos-latest, windows-latest]
         runs-on: ${{ matrix.os }}
         steps:
             - name: Checkout repository
@@ -50,17 +49,34 @@ jobs:
               with:
                   run: npm run test-integration-only integration
 
-            - name: Kill node just in case
-              if: matrix.os != 'windows-latest' # no killall on windows
-              run: killall node || true # The backend from the integration tests may still be running (even though it shouldn't)
+    playwright_tests:
+        name: Playwright tests
+        env:
+            CI: true
+        strategy:
+            matrix:
+                node-version: [18.x]
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4.1.0
+              with:
+                  submodules: "true"
 
-            - name: Start backend (unix)
-              if: matrix.os != 'windows-latest'
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v3.8.1
+              with:
+                  node-version: ${{ matrix.node-version }}
+
+            - name: Setup backend
+              run: |
+                  cd backend
+                  npm run setup
+                  chmod -R +x cli
+                  cd ..
+
+            - name: Start backend
               run: npm run backend:start &
-
-            - name: Start backend (win)
-              if: matrix.os == 'windows-latest'
-              run: start "mandatory program title parameter" /b npm run backend:start
 
             - name: Playwright tests
               run: npm run playwright-test
