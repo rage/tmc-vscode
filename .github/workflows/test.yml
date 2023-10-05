@@ -75,6 +75,7 @@ jobs:
                   npm run setup
                   chmod -R +x cli
                   cd ..
+                  npm run pretest
 
             - name: Start backend
               run: npm run backend:start &
