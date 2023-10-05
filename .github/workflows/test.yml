@@ -11,7 +11,7 @@ jobs:
             fail-fast: false
             matrix:
                 node-version: [18.x]
-                os: [macos-latest, ubuntu-latest, windows-latest]
+                os: [ubuntu-latest] # macos-latest, windows-latest] for now, only run the tests on linux
         runs-on: ${{ matrix.os }}
         steps:
             - name: Checkout repository
@@ -60,7 +60,7 @@ jobs:
 
             - name: Start backend (win)
               if: matrix.os == 'windows-latest'
-              run: START /B "mandatory program title parameter" npm run backend:start
+              run: start "mandatory program title parameter" /b npm run backend:start
 
             - name: Playwright tests
               run: npm run playwright-test

@@ -65,13 +65,11 @@ You need to kill the webpackBuild task by going to terminal tab and pressing the
 
 ## Testing
 
-**NOTE!** Running multiple instances of VSCode can interfere with the tests. If you experience strange issues during testing, make sure there are no other instances of VSCode running.
-
 ### Unit tests
 
 #### Integration
 
-The integration tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so. The integration tests can be run with `npm run test`.
+The integration tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so. The integration tests can be run with `npm run test`. If you get a `Connection error: TypeError`, make sure the backend is running.
 
 #### Playwright
 
