@@ -29,7 +29,7 @@ export class ExplorerPage {
             .getByText(filename)
             .click();
 
-        // we should get prompted for trust
+        // we may get prompted for trust
         // when untrusted and opening a file
         if (!this._trusted) {
             const isDir = await this.page
@@ -38,8 +38,15 @@ export class ExplorerPage {
                 .getByText(filename)
                 .isVisible();
             if (!isDir) {
-                await this.page.getByText("Yes, I trust the authors").click();
-                this._trusted = true;
+                this.page
+                    .getByText("Yes, I trust the authors")
+                    .click()
+                    .then(() => {
+                        this._trusted = true;
+                    })
+                    .catch(() => {
+                        console.warn("was not asked for trust for some reason");
+                    });
             }
         }
     }
