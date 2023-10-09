@@ -16,10 +16,6 @@ export default defineConfig({
         timeout: 10 * 1000,
     },
 
-    use: {
-        trace: "retain-on-failure",
-    },
-
     /* Configure projects for major browsers */
     projects: [
         {

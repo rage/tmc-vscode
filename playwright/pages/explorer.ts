@@ -1,6 +1,8 @@
 import { Page } from "@playwright/test";
 
 export class ExplorerPage {
+    private _trusted: boolean = false;
+
     constructor(public readonly page: Page) {}
 
     async openFile(filename: string): Promise<void> {
@@ -20,11 +22,31 @@ export class ExplorerPage {
         }
 
         // otherwise, click it
-        this.page
+        await this.page
             // selects the file explorer sidebar
             .locator(".explorer-folders-view")
             // selects the actual file
             .getByText(filename)
             .click();
+
+        // we should get prompted for trust
+        // when untrusted and opening a file
+        if (!this._trusted) {
+            const isDir = await this.page
+                .locator(".explorer-folders-view")
+                .locator("div.collapsible")
+                .getByText(filename)
+                .isVisible();
+            if (!isDir) {
+                await this.page.getByText("Yes, I trust the authors").click();
+                this._trusted = true;
+            }
+        }
+    }
+
+    async openPath(path: string[]): Promise<void> {
+        for (const file of path) {
+            await this.openFile(file);
+        }
     }
 }

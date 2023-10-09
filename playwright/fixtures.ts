@@ -38,7 +38,7 @@ type CustomTestFixtures = {
 
 export const customTestFixtures: Fixtures<CustomTestFixtures> = {
     // eslint-disable-next-line no-empty-pattern
-    vsCode: async ({}, run) => {
+    vsCode: async ({}, run, testInfo) => {
         const configDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-config"));
         const projectsDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-projects"));
         const electronApp = await electron.launch({
@@ -53,8 +53,17 @@ export const customTestFixtures: Fixtures<CustomTestFixtures> = {
             },
         });
         await electronApp.context().tracing.start({ screenshots: true, snapshots: true });
+
         await run(electronApp);
-        await electronApp.context().tracing.stop({ path: "trace.zip" });
+
+        let tracePath = undefined;
+        if (testInfo.status !== "passed") {
+            // a non-undefined tracepath causes the trace to be saved
+            // we'll do this only when the test hasn't passed
+            tracePath = `./test-results/${testInfo.title.split(" ").join("-")}_trace.zip`;
+        }
+        await electronApp.context().tracing.stop({ path: tracePath });
+
         await electronApp.close();
     },
     page: async ({ vsCode }, run) => {
