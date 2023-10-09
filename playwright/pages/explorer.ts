@@ -34,7 +34,7 @@ export class ExplorerPage {
         if (!this._trusted) {
             const isDir = await this.page
                 .locator(".explorer-folders-view")
-                .locator("div.collapsible")
+                .locator("div.collapsible + div")
                 .getByText(filename)
                 .isVisible();
             if (!isDir) {
