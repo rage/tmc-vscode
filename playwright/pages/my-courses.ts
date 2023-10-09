@@ -26,10 +26,10 @@ export class MyCoursesPage extends TmcPage {
             .getByRole("heading", { name: "Test Organization (test)" })
             .click();
 
-        await this.getFrame("Select course").getByRole("heading", { name }).click();
         // this wait lets the next frame load properly
         // interacting with it too quickly causes it to get stuck for an unknown reason
-        await this.page.waitForTimeout(500);
+        await this.page.waitForTimeout(1000);
+        await this.getFrame("Select course").getByRole("heading", { name }).click();
     }
 
     async selectCourse(name: string): Promise<void> {
