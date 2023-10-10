@@ -35,15 +35,20 @@ function throwFatalError(error: Error, cliFolder: string): never {
             cliFolder,
         );
     }
-
-    vscode.window.showErrorMessage(
-        "TestMyCode initialization failed. Please see logs for details.",
-    );
-    Logger.show();
     throw error;
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    try {
+        await activateInner(context);
+    } catch (e) {
+        Logger.error(`Error during initialization: ${e}`);
+        vscode.window.showErrorMessage(`TestMyCode initialization failed: ${e}`);
+        Logger.show();
+    }
+}
+
+async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
     Logger.configure(LogLevel.Verbose);
     Logger.info(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`);
