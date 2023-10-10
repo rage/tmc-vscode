@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.2.4] - 2023-10-10
+
+- Improved error reporting when fetching and updating exercises
+- Improved extension update procedure to be more robust against interrupted updates
+
 ## [2.2.3] - 2023-10-05
 
 - Fixed another "Empty Langs Response Error" that would sometimes occur after submitting an exercise.
