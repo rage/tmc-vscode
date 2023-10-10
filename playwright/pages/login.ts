@@ -12,7 +12,12 @@ export class LoginPage extends TmcPage {
 
     async goto(): Promise<void> {
         await this.openMenu();
-        await this.page.getByRole("treeitem", { name: "Log in" }).locator("a").click();
+        const loginLocator = this.page.getByRole("treeitem", { name: "Log in" }).locator("a");
+        await loginLocator.waitFor();
+        // sometimes the menu is visible before it has fully loaded and
+        // clicking it causes an error
+        await this.page.waitForTimeout(100);
+        await loginLocator.click();
     }
 
     async login(user: string): Promise<void> {

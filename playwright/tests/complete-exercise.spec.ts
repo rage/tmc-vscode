@@ -60,9 +60,7 @@ for (const exercise of exercises) {
         await vsCodeTest.step("open exercise file", async () => {
             const contents = page.getByText(exercise.file_contents);
             await expect(contents).not.toBeVisible();
-            for (const file of exercise.file_path) {
-                await explorerPage.openFile(file);
-            }
+            await explorerPage.openPath(exercise.file_path);
             await expect(contents).toBeVisible();
         });
 
