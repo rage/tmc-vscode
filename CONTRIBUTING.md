@@ -28,6 +28,12 @@ From a terminal, where you have cloned the repository, execute the following com
 npm ci
 ```
 
+Update the `tmc-python-tester` submodule
+
+```bash
+git submodule init && git submodule update
+```
+
 Repeat the same for the testing backend:
 
 ```bash
@@ -35,12 +41,6 @@ cd backend && npm ci && npm run setup
 ```
 
 You will need to rerun the setup when langs is updated, as this step will download the appropriate version of the CLI for the integration tests.
-
-Update the `tmc-python-tester` submodule
-
-```bash
-git submodule init && git submodule update
-```
 
 ## Formatting
 
