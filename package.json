@@ -454,7 +454,7 @@
         "tree-kill": "^1.2.2",
         "ts-results": "^3.3.0",
         "typia": "^4.1.6",
-        "undici": "^5.23.0"
+        "undici": "^5.26.2"
     },
     "devDependencies": {
         "@babel/cli": "^7.22.9",
