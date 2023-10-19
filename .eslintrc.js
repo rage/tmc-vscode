@@ -25,13 +25,7 @@ module.exports = {
         ecmaVersion: 6,
         sourceType: "module",
     },
-    plugins: [
-        "@typescript-eslint",
-        "import",
-        "prettier",
-        "sort-class-members",
-        "eslint-custom-rules",
-    ],
+    plugins: ["@typescript-eslint", "import", "prettier", "sort-class-members"],
     settings: {
         "import/core-modules": ["vscode"],
     },
@@ -49,9 +43,9 @@ module.exports = {
             },
         ],
 
-        "eslint-custom-rules/ban-ts-ignore-without-comment": "error",
         "@typescript-eslint/ban-ts-comment": "off",
         "import/no-named-as-default": "off",
+        "ts-ignore": "allow-with-description",
         curly: "error",
         // == enabled default configs from svelte template ==
         "sort-imports": [

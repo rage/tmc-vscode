@@ -20,6 +20,7 @@
             type: "login",
             username,
             password,
+            sourcePanel: panel,
         });
     }
 
