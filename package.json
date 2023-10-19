@@ -25,8 +25,8 @@
     "main": "./dist/extension",
     "scripts": {
         "install:all": "npm install && cd webview-ui && npm install",
-        "start:webview": "cd webview-ui && npm run dev",
-        "build:webview": "cd webview-ui && npm run build",
+        "webview:start": "cd webview-ui && npm run dev",
+        "webview:build": "cd webview-ui && npm run build",
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
         "lint": "eslint src --ext ts",

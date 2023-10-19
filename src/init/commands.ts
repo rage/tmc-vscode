@@ -4,7 +4,7 @@ import * as actions from "../actions";
 import { checkForCourseUpdates, displayUserCourses, removeCourse } from "../actions";
 import { ActionContext } from "../actions/types";
 import * as commands from "../commands";
-import { TmcPanel } from "../panels/TmcPanel";
+import { TmcPanel, randomPanelId } from "../panels/TmcPanel";
 import { TmcTreeNode } from "../ui/treeview/treenode";
 import { TemplateData } from "../ui/types";
 import { Logger } from "../utilities/";
@@ -77,8 +77,8 @@ export function registerCommands(
                     ...courses.map<[string, number]>((c) => [c.title, c.id]),
                 ));
             if (courseId) {
-                // actions.displayLocalCourseDetails(actionContext, courseId);
-                TmcPanel.render(context.extensionUri, actionContext, {
+                TmcPanel.renderMain(context.extensionUri, actionContext, {
+                    id: randomPanelId(),
                     type: "CourseDetails",
                     courseId,
                 });
@@ -130,7 +130,10 @@ export function registerCommands(
         }),
 
         vscode.commands.registerCommand("tmc.myCourses", async () => {
-            TmcPanel.render(context.extensionUri, actionContext, { type: "MyCourses" });
+            TmcPanel.renderMain(context.extensionUri, actionContext, {
+                id: randomPanelId(),
+                type: "MyCourses",
+            });
         }),
 
         vscode.commands.registerCommand("tmc.openSettings", async () => {
@@ -165,11 +168,17 @@ export function registerCommands(
         }),
 
         vscode.commands.registerCommand("tmc.showWelcome", async () => {
-            TmcPanel.render(context.extensionUri, actionContext, { type: "Welcome" });
+            TmcPanel.renderMain(context.extensionUri, actionContext, {
+                id: randomPanelId(),
+                type: "Welcome",
+            });
         }),
 
         vscode.commands.registerCommand("tmc.showLogin", async () => {
-            TmcPanel.render(context.extensionUri, actionContext, { type: "Login" });
+            TmcPanel.renderMain(context.extensionUri, actionContext, {
+                id: randomPanelId(),
+                type: "Login",
+            });
         }),
 
         vscode.commands.registerCommand(

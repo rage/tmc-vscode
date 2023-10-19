@@ -3,9 +3,20 @@
 
     "include": ["src/**/*"],
     "exclude": ["node_modules/*", "__sapper__/*", "public/*"],
+
+    // sync with rollup.config.js
     "compilerOptions": {
         "strict": true,
         // workaround for https://github.com/sveltejs/svelte-preprocess/issues/206
-        "importsNotUsedAsValues": "remove"
+        "importsNotUsedAsValues": "remove",
+
+        // copied from svelte's tsconfig.json
+        "moduleResolution": "node",
+        "target": "es2017",
+        "isolatedModules": true,
+        "sourceMap": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true
     }
 }

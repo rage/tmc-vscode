@@ -1,16 +1,20 @@
 <script lang="ts">
-    import { provideVSCodeDesignSystem, vsCodeButton } from "@vscode/webview-ui-toolkit";
-    import { CourseData } from "./shared";
+    import { CourseData, MyCoursesPanel, assertUnreachable } from "./shared";
     import { vscode } from "./utilities/vscode";
-    import { addMessageListener, loadable } from "./utilities/script";
+    import {
+        addExtensionMessageListener,
+        addWebviewMessageListener,
+        loadable,
+    } from "./utilities/script";
 
-    provideVSCodeDesignSystem().register(vsCodeButton());
+    export let panel: MyCoursesPanel;
 
     const courses = loadable<Array<CourseData>>();
     const tmcDataPath = loadable<string>();
     const tmcDataSize = loadable<string>();
+    const selectedOrganizationSlug = loadable<string>();
 
-    addMessageListener((message) => {
+    addExtensionMessageListener(panel, (message) => {
         switch (message.type) {
             case "setCourses": {
                 courses.set(message.courses);
@@ -25,13 +29,42 @@
                 break;
             }
             default:
-                console.trace("Unsupported command for MyCourses", message.type);
+                assertUnreachable(message);
+        }
+    });
+
+    addWebviewMessageListener(panel, (message) => {
+        switch (message.type) {
+            case "selectedOrganization": {
+                selectedOrganizationSlug.set(message.slug);
+                vscode.postMessage({
+                    type: "selectCourse",
+                    sourcePanel: panel,
+                    slug: message.slug,
+                });
+                break;
+            }
+            case "selectedCourse": {
+                vscode.postMessage({
+                    type: "addCourse",
+                    organizationSlug: message.organizationSlug,
+                    courseId: message.courseId,
+                });
+                // todo: only close side panel on success
+                vscode.postMessage({
+                    type: "closeSidePanel",
+                });
+                break;
+            }
+            default:
+                assertUnreachable(message);
         }
     });
 
     function addNewCourse() {
         vscode.postMessage({
-            type: "addCourse",
+            type: "selectOrganization",
+            sourcePanel: panel,
         });
     }
 
@@ -91,7 +124,12 @@
         <div>
             <h1>My Courses</h1>
             <div>
-                <vscode-button type="button" on:click={addNewCourse} on:keypress={addNewCourse}>
+                <vscode-button
+                    appearance="secondary"
+                    type="button"
+                    on:click={addNewCourse}
+                    on:keypress={addNewCourse}
+                >
                     Add new course
                 </vscode-button>
             </div>
@@ -104,7 +142,11 @@
             Currently your exercises ({$tmcDataSize}) are located at:
         </div>
         <pre>{$tmcDataPath}</pre>
-        <vscode-button on:click={changeTmcDataPath} on:keypress={changeTmcDataPath}>
+        <vscode-button
+            appearance="secondary"
+            on:click={changeTmcDataPath}
+            on:keypress={changeTmcDataPath}
+        >
             Change path
         </vscode-button>
     </div>
@@ -122,6 +164,7 @@
         >
             <div>
                 <vscode-button
+                    appearance="secondary"
                     type="button"
                     class="close"
                     aria-label="remove course"
@@ -140,6 +183,7 @@
                     </div>
                     <div>
                         <vscode-button
+                            appearance="primary"
                             type="button"
                             aria-label="Open workspace"
                             on:click|stopPropagation={() => openWorkspace(course.name)}

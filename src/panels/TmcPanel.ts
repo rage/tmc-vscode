@@ -10,51 +10,116 @@ import {
     openExercises,
     openWorkspace,
     removeCourse,
-    selectOrganizationAndCourse,
     updateCourse,
 } from "../actions";
 import { ActionContext } from "../actions/types";
 import { uiDownloadExercises } from "../init";
-import { MessageFromWebview, MessageToWebview, Panel } from "../shared";
+import { WebviewToExtension, ExtensionToWebview, Panel } from "../shared";
 import { getNonce } from "../utilities/getNonce";
 import { getUri } from "../utilities/getUri";
-import { renderPanel } from "../utilities/renderPanel";
+import { postMessageToWebview, renderPanel } from "../utilities/panel";
 
+/**
+ * Manages the rendering of the extension webview panels.
+ */
 export class TmcPanel {
-    public static currentPanel: TmcPanel | undefined;
-    public static async render(
+    // primary panel that most data is displayed in
+    public static mainPanel: TmcPanel | undefined;
+
+    // extra panel for situations where we want to render another view beside the main one
+    public static sidePanel: TmcPanel | undefined;
+
+    private readonly _panel: WebviewPanel;
+
+    // if true, this is the main panel, otherwise this is the side panel
+    private readonly _isMain: boolean;
+
+    private _disposables: Disposable[] = [];
+
+    // renders the `panel` in the main panel
+    public static async renderMain(
         extensionUri: Uri,
         actionContext: ActionContext,
         panel: Panel,
     ): Promise<void> {
-        if (TmcPanel.currentPanel) {
+        const column = ViewColumn.One;
+        if (TmcPanel.mainPanel !== undefined) {
             await renderPanel(
                 panel,
                 extensionUri,
                 actionContext,
-                TmcPanel.currentPanel._panel.webview,
+                TmcPanel.mainPanel._panel.webview,
             );
-            TmcPanel.currentPanel._panel.reveal(ViewColumn.One);
+            TmcPanel.mainPanel._panel.reveal(column);
         } else {
-            const webviewPanel = window.createWebviewPanel("showPanel", "Panel", ViewColumn.One, {
-                enableScripts: true,
-                localResourceRoots: [
-                    Uri.joinPath(extensionUri, "out"),
-                    Uri.joinPath(extensionUri, "webview-ui/public/build"),
-                    Uri.joinPath(extensionUri, "media"),
-                    Uri.joinPath(extensionUri, "resources"),
-                ],
-            });
-            const currentPanel = new TmcPanel(webviewPanel, extensionUri, actionContext);
-            await renderPanel(panel, extensionUri, actionContext, currentPanel._panel.webview);
-            TmcPanel.currentPanel = currentPanel;
+            const currentPanel = await TmcPanel.renderNew(extensionUri, actionContext, panel, true);
+            TmcPanel.mainPanel = currentPanel;
         }
     }
 
-    private readonly _panel: WebviewPanel;
-    private _disposables: Disposable[] = [];
+    // renders the `panel` in the side panel
+    static async renderSide(
+        extensionUri: Uri,
+        actionContext: ActionContext,
+        panel: Panel,
+    ): Promise<void> {
+        const column = ViewColumn.Two;
+        if (TmcPanel.sidePanel !== undefined) {
+            await renderPanel(
+                panel,
+                extensionUri,
+                actionContext,
+                TmcPanel.sidePanel._panel.webview,
+            );
+            TmcPanel.sidePanel._panel.reveal(column);
+        } else {
+            const currentPanel = await TmcPanel.renderNew(
+                extensionUri,
+                actionContext,
+                panel,
+                false,
+            );
+            TmcPanel.sidePanel = currentPanel;
+        }
+    }
 
-    private constructor(panel: WebviewPanel, extensionUri: Uri, actionContext: ActionContext) {
+    // convenience function for rendering a main/side panel when no main/side panel exists yet
+    // otherwise the panel can simply be "revealed" with `panel.reveal`
+    static async renderNew(
+        extensionUri: Uri,
+        actionContext: ActionContext,
+        panel: Panel,
+        isMain: boolean,
+    ): Promise<TmcPanel> {
+        let panelViewType;
+        let column;
+        if (isMain) {
+            panelViewType = "mainPanel";
+            column = ViewColumn.One;
+        } else {
+            panelViewType = "sidePanel";
+            column = ViewColumn.Two;
+        }
+        const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", column, {
+            enableScripts: true,
+            localResourceRoots: [
+                Uri.joinPath(extensionUri, "out"),
+                Uri.joinPath(extensionUri, "webview-ui/public/build"),
+                Uri.joinPath(extensionUri, "media"),
+                Uri.joinPath(extensionUri, "resources"),
+            ],
+        });
+        const currentPanel = new TmcPanel(webviewPanel, extensionUri, actionContext, isMain);
+        await renderPanel(panel, extensionUri, actionContext, currentPanel._panel.webview);
+        return currentPanel;
+    }
+
+    private constructor(
+        panel: WebviewPanel,
+        extensionUri: Uri,
+        actionContext: ActionContext,
+        isMain: boolean,
+    ) {
         this._panel = panel;
 
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
@@ -62,12 +127,20 @@ export class TmcPanel {
         this._panel.webview.html = this._getWebviewContent(this._panel.webview, extensionUri);
 
         this._setWebviewMessageListener(this._panel.webview, extensionUri, actionContext);
+
+        this._isMain = isMain;
     }
 
+    // disposes the side panel when disposing the main panel as well
     public dispose(): void {
-        TmcPanel.currentPanel = undefined;
-
         this._panel.dispose();
+
+        if (this._isMain) {
+            TmcPanel.mainPanel = undefined;
+            // if we're disposing the main panel, we'll dispose the side panel as well
+            TmcPanel.sidePanel?.dispose();
+        }
+        TmcPanel.sidePanel = undefined;
 
         while (this._disposables.length) {
             const disposable = this._disposables.pop();
@@ -113,13 +186,14 @@ export class TmcPanel {
       `;
     }
 
+    // receives messages from the webview
     private _setWebviewMessageListener(
         webview: Webview,
         extensionUri: Uri,
         actionContext: ActionContext,
     ): void {
         webview.onDidReceiveMessage(
-            async (message: MessageFromWebview) => {
+            async (message: WebviewToExtension) => {
                 switch (message.type) {
                     case "login": {
                         const result = await login(
@@ -128,14 +202,23 @@ export class TmcPanel {
                             message.password,
                         );
                         if (result.err) {
-                            const message: MessageToWebview = {
-                                type: "loginError",
-                                error: result.val.message,
-                            };
-                            webview.postMessage(message);
+                            postMessageToWebview(
+                                webview,
+                                {
+                                    id: message.sourcePanel.id,
+                                    type: "Login",
+                                },
+                                {
+                                    type: "loginError",
+                                    error: result.val.message,
+                                },
+                            );
                         } else {
-                            await await renderPanel(
-                                { type: "MyCourses" },
+                            await renderPanel(
+                                {
+                                    id: randomPanelId(),
+                                    type: "MyCourses",
+                                },
                                 extensionUri,
                                 actionContext,
                                 webview,
@@ -144,36 +227,24 @@ export class TmcPanel {
                         break;
                     }
                     case "openCourseDetails": {
-                        await await renderPanel(
-                            { type: "CourseDetails", courseId: message.courseId },
+                        await renderPanel(
+                            {
+                                id: randomPanelId(),
+                                type: "CourseDetails",
+                                courseId: message.courseId,
+                            },
                             extensionUri,
                             actionContext,
                             webview,
                         );
                         break;
                     }
-                    case "addCourse": {
-                        const orgAndCourse = await selectOrganizationAndCourse(actionContext);
-                        if (orgAndCourse.err) {
-                            return actionContext.dialog.errorNotification(
-                                `Failed to add new course: ${orgAndCourse.val.message}`,
-                            );
-                        }
-                        const organization = orgAndCourse.val.organization;
-                        const course = orgAndCourse.val.course;
-                        const result = await addNewCourse(actionContext, organization, course);
-                        if (result.err) {
-                            actionContext.dialog.errorNotification(
-                                `Failed to add new course: ${result.val.message}`,
-                            );
-                        } else {
-                            await await renderPanel(
-                                { type: "MyCourses" },
-                                extensionUri,
-                                actionContext,
-                                webview,
-                            );
-                        }
+                    case "selectOrganization": {
+                        await TmcPanel.renderSide(extensionUri, actionContext, {
+                            id: randomPanelId(),
+                            type: "SelectOrganization",
+                            requestingPanel: message.sourcePanel,
+                        });
                         break;
                     }
                     case "removeCourse": {
@@ -185,8 +256,11 @@ export class TmcPanel {
                             )
                         ) {
                             await removeCourse(actionContext, message.id);
-                            await await renderPanel(
-                                { type: "MyCourses" },
+                            await renderPanel(
+                                {
+                                    id: randomPanelId(),
+                                    type: "MyCourses",
+                                },
                                 extensionUri,
                                 actionContext,
                                 webview,
@@ -206,8 +280,11 @@ export class TmcPanel {
                         break;
                     }
                     case "openMyCourses": {
-                        await await renderPanel(
-                            { type: "MyCourses" },
+                        await renderPanel(
+                            {
+                                id: randomPanelId(),
+                                type: "MyCourses",
+                            },
                             extensionUri,
                             actionContext,
                             webview,
@@ -314,6 +391,49 @@ export class TmcPanel {
                         }
                         break;
                     }
+                    case "selectCourse": {
+                        await TmcPanel.renderSide(extensionUri, actionContext, {
+                            id: randomPanelId(),
+                            type: "SelectCourse",
+                            organizationSlug: message.slug,
+                            requestingPanel: message.sourcePanel,
+                        });
+                        break;
+                    }
+                    case "addCourse": {
+                        const result = await addNewCourse(
+                            actionContext,
+                            message.organizationSlug,
+                            message.courseId,
+                        );
+                        if (result.err) {
+                            actionContext.dialog.errorNotification(
+                                `Failed to add new course: ${result.val.message}`,
+                            );
+                        }
+                        break;
+                    }
+                    case "relayToWebview": {
+                        if (this._isMain) {
+                            // relay msg from main panel to side panel
+                            if (TmcPanel.sidePanel) {
+                                TmcPanel.sidePanel._panel.webview.postMessage(message.message);
+                            }
+                        } else {
+                            // relay msg from side panel to main panel
+                            if (TmcPanel.mainPanel)
+                                TmcPanel.mainPanel._panel.webview.postMessage(message.message);
+                        }
+                    }
+                    case "closeSidePanel": {
+                        if (TmcPanel.sidePanel) {
+                            TmcPanel.sidePanel.dispose();
+                        }
+                    }
+                    case "ready": {
+                        // no-op
+                        break;
+                    }
                     default:
                         assertUnreachable(message);
                 }
@@ -324,6 +444,12 @@ export class TmcPanel {
     }
 }
 
+// helper to make an exhaustive switch statement
 function assertUnreachable(x: never): never {
     throw new Error(`unreachable ${x}`);
+}
+
+// helper to generate a random ids when creating panels
+export function randomPanelId(): number {
+    return Math.floor(Math.random() * 100_000_000);
 }

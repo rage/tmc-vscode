@@ -1,13 +1,16 @@
 <script lang="ts">
     import { writable } from "svelte/store";
-    import { CourseData, ExerciseGroup, ExerciseStatus, MessageFromWebview } from "./shared";
+    import {
+        CourseData,
+        CourseDetailsPanel,
+        ExerciseGroup,
+        ExerciseStatus,
+        assertUnreachable,
+    } from "./shared";
     import { vscode } from "./utilities/vscode";
-    import { provideVSCodeDesignSystem, vsCodeButton } from "@vscode/webview-ui-toolkit";
-    import { addMessageListener, loadable } from "./utilities/script";
+    import { addExtensionMessageListener, loadable } from "./utilities/script";
 
-    provideVSCodeDesignSystem().register(vsCodeButton());
-
-    export let courseId: number;
+    export let panel: CourseDetailsPanel;
 
     const course = loadable<CourseData>();
     const offlineMode = loadable<boolean>();
@@ -16,7 +19,7 @@
     const disabled = loadable<boolean>();
     const exerciseStatuses = writable<Map<number, ExerciseStatus>>(new Map());
 
-    addMessageListener((message) => {
+    addExtensionMessageListener(panel, (message) => {
         switch (message.type) {
             case "setCourseData": {
                 course.set(message.courseData);
@@ -35,7 +38,7 @@
                 break;
             }
             case "setCourseDisabledStatus": {
-                if (message.courseId === courseId) {
+                if (message.courseId === panel.courseId) {
                     disabled.set(message.disabled);
                 }
                 break;
@@ -48,10 +51,26 @@
                 break;
             }
             case "setUpdateables": {
+                updateableExercises.set(message.exerciseIds);
+                break;
+            }
+            case "setCourseDisabledStatus": {
+                disabled.set(message.disabled);
+                break;
+            }
+            case "exerciseStatusChange": {
+                exerciseStatuses.update((s) => {
+                    s.set(message.exerciseId, message.status);
+                    return s;
+                });
+                break;
+            }
+            case "setCourseGroups": {
+                exerciseGroups.set(message.exerciseGroups);
                 break;
             }
             default:
-                console.trace("Unsupported command for CourseDetails", message.type);
+                assertUnreachable(message);
         }
     });
 
@@ -83,6 +102,7 @@
         vscode.postMessage({
             type: "refreshCourseDetails",
             id,
+            useCache: false,
         });
     }
 
@@ -141,7 +161,7 @@
                     </a>
                 </li>
                 <li aria-current="page">
-                    {$course?.title ?? ""}
+                    {$course?.title ?? "asd"}
                 </li>
             </ol>
         </nav>

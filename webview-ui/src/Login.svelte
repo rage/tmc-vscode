@@ -1,14 +1,10 @@
 <script lang="ts">
     import { writable } from "svelte/store";
     import { vscode } from "./utilities/vscode";
-    import {
-        provideVSCodeDesignSystem,
-        vsCodeButton,
-        vsCodeTextField,
-    } from "@vscode/webview-ui-toolkit";
-    import { addMessageListener } from "./utilities/script";
+    import { addExtensionMessageListener } from "./utilities/script";
+    import { LoginPanel, assertUnreachable } from "./shared";
 
-    provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeTextField());
+    export let panel: LoginPanel;
 
     let usernameField: HTMLInputElement;
     let passwordField: HTMLInputElement;
@@ -27,7 +23,7 @@
         });
     }
 
-    addMessageListener((message) => {
+    addExtensionMessageListener(panel, (message) => {
         switch (message.type) {
             case "loginError": {
                 loggingIn.set(false);
@@ -38,7 +34,7 @@
                 break;
             }
             default:
-                console.trace("Unsupported command for Login", message.type);
+                assertUnreachable(message);
         }
     });
 </script>
@@ -73,10 +69,22 @@
                         Password:
                     </vscode-text-field>
                 </div>
-                <vscode-button type="submit" name="submit" id="submit" disabled={$loggingIn}>
+                <vscode-button
+                    style="color: pink"
+                    type="submit"
+                    name="submit"
+                    id="submit"
+                    disabled={$loggingIn}
+                >
                     Submit
                 </vscode-button>
             </form>
         </div>
     </div>
 </div>
+
+<style>
+    div {
+        color: red;
+    }
+</style>

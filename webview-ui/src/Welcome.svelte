@@ -1,10 +1,13 @@
 <script lang="ts">
-    import { addMessageListener, loadable } from "./utilities/script";
+    import { WelcomePanel, assertUnreachable } from "./shared";
+    import { addExtensionMessageListener, loadable } from "./utilities/script";
+
+    export let panel: WelcomePanel;
 
     const version = loadable<string>();
     const exerciseDecorations = loadable<string>();
 
-    addMessageListener((message) => {
+    addExtensionMessageListener(panel, (message) => {
         switch (message.type) {
             case "setWelcomeData": {
                 version.set(message.version);
@@ -12,7 +15,7 @@
                 break;
             }
             default:
-                console.trace("Unsupported command for Welcome", message.type);
+                assertUnreachable(message);
         }
     });
 </script>
