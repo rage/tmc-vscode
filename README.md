@@ -1,6 +1,6 @@
-![Extension tests](https://github.com/rage/tmc-vscode/workflows/Extension%20tests/badge.svg)
-![Build and Upload](https://github.com/rage/tmc-vscode/workflows/Build%20and%20Upload/badge.svg)
-![Code scanning](https://github.com/rage/tmc-vscode/workflows/Code%20scanning/badge.svg)
+[![Extension tests](https://github.com/rage/tmc-vscode/actions/workflows/test.yml/badge.svg)](https://github.com/rage/tmc-vscode/actions/workflows/test.yml)
+[![Build and Upload](https://github.com/rage/tmc-vscode/actions/workflows/build-and-upload.yml/badge.svg)](https://github.com/rage/tmc-vscode/actions/workflows/build-and-upload.yml)
+[![Code scanning](https://github.com/rage/tmc-vscode/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/rage/tmc-vscode/actions/workflows/codeql-analysis.yml)
 
 # TestMyCode for Visual Studio Code
 

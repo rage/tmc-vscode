@@ -17,6 +17,8 @@ Steps to reproduce the behavior:
 3. Scroll down to '....'
 4. See error
 
+If the reproduction includes opening a course or exercise, please include which course and/or exercise the issue can be reproduced with.
+
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 

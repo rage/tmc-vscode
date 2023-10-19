@@ -1,7 +1,7 @@
 {
     "name": "test-my-code",
     "displayName": "TestMyCode",
-    "version": "2.2.0",
+    "version": "2.2.4",
     "description": "TestMyCode extension for Visual Studio Code",
     "categories": [
         "Other"
@@ -49,7 +49,10 @@
         "vscode:prepublish": "cross-env NODE_ENV=production npm run compile",
         "webpack": "webpack",
         "webpack:watch": "webpack --watch",
-        "tsc": "tsc"
+        "tsc": "tsc",
+        "playwright-test": "xvfb-maybe playwright test",
+        "playwright-test-debug": "xvfb-maybe playwright test --debug",
+        "backend:start": "cd backend && npm run start"
     },
     "contributes": {
         "commands": [
@@ -476,6 +479,7 @@
         "@babel/plugin-transform-modules-commonjs": "^7.22.5",
         "@babel/plugin-transform-react-jsx": "^7.22.5",
         "@babel/preset-env": "^7.22.9",
+        "@playwright/test": "^1.37.1",
         "@types/chai": "^4.3.5",
         "@types/chai-as-promised": "^7.1.5",
         "@types/du": "^1.0.1",
@@ -496,6 +500,7 @@
         "cross-env": "^7.0.3",
         "eslint": "^8.44.0",
         "eslint-config-prettier": "^8.8.0",
+        "eslint-plugin-eslint-custom-rules": "file:eslint-custom-rules",
         "eslint-plugin-import": "^2.26.0",
         "eslint-plugin-prettier": "^5.0.0",
         "eslint-plugin-sort-class-members": "^1.18.0",
@@ -514,7 +519,8 @@
         "typescript": "^5.1.6",
         "webpack": "^5.88.1",
         "webpack-cli": "^5.1.4",
-        "webpack-merge": "^5.9.0"
+        "webpack-merge": "^5.9.0",
+        "xvfb-maybe": "^0.2.1"
     },
     "engines": {
         "vscode": "^1.75.0"

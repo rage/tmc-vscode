@@ -26,6 +26,8 @@
         "test-resources",
         "typings",
         "webview-ui",
-        "shared"
+        "shared",
+        "playwright",
+        "playwright.config.ts"
     ]
 }

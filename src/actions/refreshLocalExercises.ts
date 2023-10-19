@@ -20,7 +20,10 @@ export async function refreshLocalExercises(
     for (const course of userData.getCourses()) {
         const exercisesResult = await tmc.listLocalCourseExercises(course.name);
         if (exercisesResult.err) {
-            Logger.warn(`Failed to get exercises for course: ${course}`, exercisesResult.val);
+            Logger.warn(
+                `Failed to get exercises for course: ${JSON.stringify(course, null, 2)}`,
+                exercisesResult.val,
+            );
             continue;
         }
 

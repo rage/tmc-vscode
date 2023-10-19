@@ -50,7 +50,6 @@ module.exports = {
         ],
 
         "eslint-custom-rules/ban-ts-ignore-without-comment": "error",
-        "eslint-custom-rules/no-material-ui-grid-component": "error",
         "@typescript-eslint/ban-ts-comment": "off",
         "import/no-named-as-default": "off",
         curly: "error",

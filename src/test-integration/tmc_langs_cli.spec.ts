@@ -122,23 +122,23 @@ suite("tmc langs cli spec", function () {
         });
 
         test("should get existing api data", async function () {
-            const data = (await tmc.getCourseData(0)).unwrap();
+            const data = (await tmc.getCourseData(1)).unwrap();
             expect(data.details.name).to.be.equal("python-course");
             expect(data.exercises.length).to.be.equal(2);
             expect(data.settings.name).to.be.equal("python-course");
 
-            const details = (await tmc.getCourseDetails(0)).unwrap();
-            expect(details.id).to.be.equal(0);
+            const details = (await tmc.getCourseDetails(1)).unwrap();
+            expect(details.id).to.be.equal(1);
             expect(details.name).to.be.equal("python-course");
 
-            const exercises = (await tmc.getCourseExercises(0)).unwrap();
+            const exercises = (await tmc.getCourseExercises(1)).unwrap();
             expect(exercises.length).to.be.equal(2);
 
-            const settings = (await tmc.getCourseSettings(0)).unwrap();
+            const settings = (await tmc.getCourseSettings(1)).unwrap();
             expect(settings.name).to.be.equal("python-course");
 
             const courses = (await tmc.getCourses("test")).unwrap();
-            expect(courses.length).to.be.equal(1);
+            expect(courses.length).to.be.equal(2);
             expect(courses.some((x) => x.name === "python-course")).to.be.true;
 
             const exercise = (await tmc.getExerciseDetails(1)).unwrap();
@@ -237,7 +237,7 @@ suite("tmc langs cli spec", function () {
 
             test("should be able to save the exercise state and revert it to an old submission", async function () {
                 const submissions = await unwrapResult(tmc.getOldSubmissions(1));
-                await unwrapResult(tmc.downloadOldSubmission(1, exercisePath, 0, true));
+                await unwrapResult(tmc.downloadOldSubmission(1, exercisePath, 1, true));
 
                 // State saving check is based on a side effect of making a new submission.
                 const newSubmissions = await unwrapResult(tmc.getOldSubmissions(1));
@@ -246,7 +246,7 @@ suite("tmc langs cli spec", function () {
 
             test("should be able to download an old submission without saving the current state", async function () {
                 const submissions = await unwrapResult(tmc.getOldSubmissions(1));
-                await unwrapResult(tmc.downloadOldSubmission(1, exercisePath, 0, false));
+                await unwrapResult(tmc.downloadOldSubmission(1, exercisePath, 1, false));
 
                 // State saving check is based on a side effect of making a new submission.
                 const newSubmissions = await unwrapResult(tmc.getOldSubmissions(1));
@@ -326,7 +326,7 @@ suite("tmc langs cli spec", function () {
 
             // Downloads exercise on Langs 0.18
             test.skip("should encounter an error when attempting to revert to an older submission", async function () {
-                const result = await tmc.downloadOldSubmission(1, missingExercisePath, 0, false);
+                const result = await tmc.downloadOldSubmission(1, missingExercisePath, 1, false);
                 expect(result.val).to.be.instanceOf(RuntimeError);
             });
 
@@ -469,7 +469,7 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should not be able to load old submission", async function () {
-                const result = await tmc.downloadOldSubmission(1, exercisePath, 0, true);
+                const result = await tmc.downloadOldSubmission(1, exercisePath, 1, true);
                 expect(result.val).to.be.instanceOf(RuntimeError);
             });
 
@@ -493,6 +493,8 @@ suite("tmc langs cli spec", function () {
 
     suiteTeardown(function () {
         server && kill(server.pid as number);
+        // the command above didn't seem to work reliably, so the call below was added
+        server?.kill();
     });
 });
 
@@ -534,6 +536,7 @@ async function startServer(): Promise<cp.ChildProcess> {
         cwd: backendPath,
         shell: "bash",
     });
+    console.info("[server] starting...");
     server.stdout.on("data", (chunk) => {
         console.info(`[server] ${chunk.toString()}`);
         if (chunk.toString().startsWith("Server listening to")) {

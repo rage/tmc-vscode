@@ -61,6 +61,13 @@ export async function downloadOrUpdateExercises(
         statuses.set(exercise.id, "downloadFailed");
     });
     postMessages(ui.webview, statuses);
+    if (failed && failed.length > 0) {
+        const failedDownloads = failed.map(([f]) => f["exercise-slug"]);
+        dialog.errorNotification(
+            "Failed to update exercises.",
+            new Error(failedDownloads.join(", ")),
+        );
+    }
 
     return Ok(sortResults(statuses));
 }

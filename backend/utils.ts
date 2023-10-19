@@ -1,4 +1,5 @@
 import { Response } from "express";
+import path from "path";
 
 import {
     Course,
@@ -33,7 +34,7 @@ interface CreateCourseParams {
     title: string;
 }
 
-type BackendCourse = Omit<Course & CourseDetails["course"] & CourseSettings, "exercises">;
+export type BackendCourse = Omit<Course & CourseDetails["course"] & CourseSettings, "exercises">;
 
 const createCourse = (params: CreateCourseParams): BackendCourse => ({
     certificate_downloadable: false,
@@ -51,6 +52,7 @@ const createCourse = (params: CreateCourseParams): BackendCourse => ({
     title: params.title,
     unlock_url: "",
     unlockables: [],
+    disabled_status: "enabled",
 });
 
 interface CreateExerciseParams {
@@ -58,50 +60,59 @@ interface CreateExerciseParams {
     checksum: string;
     name: string;
     points: Array<{ id: number; name: string }>;
+    path: Array<string>;
 }
 
-type BackendExercise = Omit<
+export type ExerciseWithFile = {
+    exercise: BackendExercise;
+    file: string;
+};
+export type BackendExercise = Omit<
     CourseExercise & Exercise & ExerciseDetails,
     "course_id" | "course_name"
 >;
 
-const createExercise = (params: CreateExerciseParams): BackendExercise => ({
-    all_review_points_given: false,
-    available_points: params.points.map((x) => ({
-        ...x,
+const createExercise = (params: CreateExerciseParams): ExerciseWithFile => {
+    const exercise = {
+        all_review_points_given: false,
+        available_points: params.points.map((x) => ({
+            ...x,
+            exercise_id: params.id,
+            requires_review: false,
+        })),
+        awarded_points: [],
+        attempted: false,
+        checksum: params.checksum,
+        code_review_requests_enabled: false,
+        completed: false,
+        deadline: "",
+        deadline_description: "",
+        disabled: false,
         exercise_id: params.id,
+        exercise_name: params.name,
+        id: params.id,
+        locked: false,
+        memory_limit: 200,
+        name: params.name,
+        publish_time: "",
         requires_review: false,
-    })),
-    awarded_points: [],
-    attempted: false,
-    checksum: params.checksum,
-    code_review_requests_enabled: false,
-    completed: false,
-    deadline: "",
-    deadline_description: "",
-    disabled: false,
-    exercise_id: params.id,
-    exercise_name: params.name,
-    id: params.id,
-    locked: false,
-    memory_limit: 200,
-    name: params.name,
-    publish_time: "",
-    requires_review: false,
-    returnable: true,
-    return_url: "",
-    reviewed: false,
-    run_tests_locally_action_enabled: true,
-    runtime_params: [],
-    soft_deadline: "",
-    soft_deadline_description: "",
-    solution_visible_after: "",
-    submissions: [],
-    unlocked: true,
-    unlocked_at: "",
-    valgrind_strategy: "",
-    zip_url: "",
-});
+        returnable: true,
+        return_url: "",
+        reviewed: false,
+        run_tests_locally_action_enabled: true,
+        runtime_params: [],
+        soft_deadline: "",
+        soft_deadline_description: "",
+        solution_visible_after: "",
+        submissions: [],
+        unlocked: true,
+        unlocked_at: "",
+        valgrind_strategy: "",
+        zip_url: "",
+    };
+    const file = path.resolve(__dirname, "resources", ...params.path);
+    return { exercise, file };
+};
 
 interface CreateFinishedSubmissionParams {
     courseName: string;
@@ -133,7 +144,7 @@ const createFinishedSubmission = (
         processing_time: 1000,
         requests_review: false,
         reviewed: false,
-        solution_url: "",
+        solution_url: "fake-url",
         status: allPassed ? "ok" : "fail",
         submission_url: "",
         submitted_at: "",
