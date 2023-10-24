@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { writable } from "svelte/store";
+    import { derived, writable } from "svelte/store";
     import MyCourses from "./MyCourses.svelte";
     import Welcome from "./Welcome.svelte";
     import { vscode } from "./utilities/vscode";
@@ -13,6 +13,8 @@
         provideVSCodeDesignSystem,
         vsCodeButton,
         vsCodeTextField,
+        vsCodeCheckbox,
+        vsCodeProgressRing,
     } from "@vscode/webview-ui-toolkit";
 
     window.addEventListener("error", (ev) => {
@@ -22,7 +24,12 @@
     });
 
     // here, we register all of the components from VSCode's toolkit that we use
-    provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeTextField());
+    provideVSCodeDesignSystem().register(
+        vsCodeButton(),
+        vsCodeTextField(),
+        vsCodeCheckbox(),
+        vsCodeProgressRing(),
+    );
 
     const appPanel: Panel = {
         id: 0,
@@ -54,10 +61,6 @@
     });
 </script>
 
-<head>
-    <title>TestMyCode</title>
-</head>
-
 <main>
     {#key $state.panel.id}
         {#if $state.panel.type === "Welcome"}
@@ -73,7 +76,7 @@
         {:else if $state.panel.type === "SelectCourse"}
             <SelectCourse panel={$state.panel} />
         {:else if $state.panel.type === "App"}
-            <div>Loading...</div>
+            <div>Loading TestMyCode...</div>
         {/if}
     {/key}
 </main>

@@ -300,6 +300,7 @@ export type WebviewToExtension =
           type: "addCourse";
           organizationSlug: string;
           courseId: number;
+          requestingPanel: Panel;
       }
     | {
           type: "relayToWebview";

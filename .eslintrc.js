@@ -43,9 +43,8 @@ module.exports = {
             },
         ],
 
-        "@typescript-eslint/ban-ts-comment": "off",
+        "@typescript-eslint/ban-ts-comment": ["error", { "ts-ignore": "allow-with-description" }],
         "import/no-named-as-default": "off",
-        "ts-ignore": "allow-with-description",
         curly: "error",
         // == enabled default configs from svelte template ==
         "sort-imports": [

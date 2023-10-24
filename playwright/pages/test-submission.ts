@@ -11,6 +11,6 @@ export class TestSubmissionPage extends TmcPage {
     }
 
     getWebview(): FrameLocator {
-        return this.getFrame("TMC Server Submission");
+        return this.getSidePanel();
     }
 }

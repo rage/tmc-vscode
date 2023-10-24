@@ -15,6 +15,6 @@ export class TestResultsPage extends TmcPage {
     }
 
     getWebview(): FrameLocator {
-        return this.getFrame("TMC Test Results");
+        return this.getSidePanel();
     }
 }

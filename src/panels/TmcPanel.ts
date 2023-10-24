@@ -14,7 +14,7 @@ import {
 } from "../actions";
 import { ActionContext } from "../actions/types";
 import { uiDownloadExercises } from "../init";
-import { WebviewToExtension, ExtensionToWebview, Panel } from "../shared";
+import { Panel, WebviewToExtension } from "../shared";
 import { getNonce } from "../utilities/getNonce";
 import { getUri } from "../utilities/getUri";
 import { postMessageToWebview, renderPanel } from "../utilities/panel";
@@ -151,7 +151,12 @@ export class TmcPanel {
     }
 
     private _getWebviewContent(webview: Webview, extensionUri: Uri): string {
-        const stylesUri = getUri(webview, extensionUri, ["resources", "styles", "style.css"]);
+        const stylesUri = getUri(webview, extensionUri, [
+            "webview-ui",
+            "public",
+            "build",
+            "bundle.css",
+        ]);
         const scriptUri = getUri(webview, extensionUri, [
             "webview-ui",
             "public",
@@ -172,17 +177,23 @@ export class TmcPanel {
                     http-equiv="Content-Security-Policy"
                     content="
                         default-src 'none';
-                        img-src ${webview.cspSource};
-                        style-src ${webview.cspSource};
+                        img-src ${webview.cspSource} https:;;
+                        style-src 'nonce-${nonce}';
                         script-src 'nonce-${nonce}';"
                 >
-                <link rel="stylesheet" type="text/css" href="${stylesUri}">
-                <link rel="stylesheet" type="text/css" href="${stylesUri}">
-                <script defer nonce="${nonce}" src="${scriptUri}"></script>
+                <link nonce="${nonce}" rel="stylesheet" type="text/css" href="${stylesUri}" />
+                <script defer nonce="${nonce}" src="${scriptUri}" />
             </head>
-            <body>
-            </body>
+                <body>
+                </body>
             </html>
+
+            <style>
+                body {
+                    /* ensures no layout shift during loading */
+                    scrollbar-gutter: stable;
+                }
+            </style>
       `;
     }
 
@@ -386,7 +397,16 @@ export class TmcPanel {
                                 );
                             }
                             if (uiState === actionContext.ui.webview.getStateId()) {
-                                displayLocalCourseDetails(actionContext, courseId);
+                                await renderPanel(
+                                    {
+                                        id: randomPanelId(),
+                                        type: "CourseDetails",
+                                        courseId: courseId,
+                                    },
+                                    extensionUri,
+                                    actionContext,
+                                    webview,
+                                );
                             }
                         }
                         break;
@@ -411,6 +431,10 @@ export class TmcPanel {
                                 `Failed to add new course: ${result.val.message}`,
                             );
                         }
+                        postMessageToWebview(webview, message.requestingPanel, {
+                            type: "setCourses",
+                            courses: actionContext.userData.getCourses(),
+                        });
                         break;
                     }
                     case "relayToWebview": {
@@ -421,14 +445,17 @@ export class TmcPanel {
                             }
                         } else {
                             // relay msg from side panel to main panel
-                            if (TmcPanel.mainPanel)
+                            if (TmcPanel.mainPanel) {
                                 TmcPanel.mainPanel._panel.webview.postMessage(message.message);
+                            }
                         }
+                        break;
                     }
                     case "closeSidePanel": {
                         if (TmcPanel.sidePanel) {
                             TmcPanel.sidePanel.dispose();
                         }
+                        break;
                     }
                     case "ready": {
                         // no-op

@@ -28,7 +28,7 @@
     }
 
     function filterOrganizations(query: string) {
-        filter.set(query);
+        filter.set(query.toUpperCase());
     }
 
     addExtensionMessageListener(panel, (message) => {
@@ -49,75 +49,118 @@
     });
 </script>
 
-<div>
-    <div class="org">
-        <div>
-            <h1 class="org-header">Frequently used organizations</h1>
-            {#if $pinned && $tmcBackendUrl}
-                {#each $pinned as pinned}
-                    <div
-                        class="org-row border-current-color"
-                        on:click={() => selectOrganization(pinned.slug)}
-                        on:keypress={() => selectOrganization(pinned.slug)}
-                    >
-                        <div>
-                            <img
-                                class="org-img"
-                                src={resolveLogoPath($tmcBackendUrl, pinned.logo_path)}
-                                alt={`Logo for ${pinned.name}`}
-                            />
-                        </div>
-                        <div>
-                            <h3>{pinned.name} <small class="text-muted">({pinned.slug})</small></h3>
-                            <p>{pinned.information}</p>
-                        </div>
-                    </div>
-                {/each}
-            {/if}
-        </div>
-    </div>
-
-    <div>
-        <div>
-            <h1>All organizations</h1>
-            <div>
-                <input
-                    type="text"
-                    placeholder="Search organizations"
-                    on:keyup={(ev) => filterOrganizations(ev.currentTarget.value)}
+<h1>Frequently used organizations</h1>
+{#if $pinned !== undefined && $tmcBackendUrl !== undefined}
+    {#each $pinned as pinned}
+        <div
+            class="org-row"
+            on:click={() => selectOrganization(pinned.slug)}
+            on:keypress={() => selectOrganization(pinned.slug)}
+        >
+            <div class="org-img-container">
+                <img
+                    class="org-img"
+                    src={resolveLogoPath($tmcBackendUrl, pinned.logo_path)}
+                    alt={`Logo for ${pinned.name}`}
                 />
             </div>
+            <div class="org-content">
+                <h3>{pinned.name} <small class="muted">({pinned.slug})</small></h3>
+                <p>{pinned.information}</p>
+            </div>
         </div>
-    </div>
+    {/each}
+{:else}
+    <vscode-progress-ring />
+{/if}
 
-    <div class="row">
-        <div class="col">
-            {#if $organizations && $tmcBackendUrl}
-                {#each $organizations as organization}
-                    <div
-                        class="org-row organization"
-                        on:click={() => selectOrganization(organization.slug)}
-                        on:keypress={() => selectOrganization(organization.slug)}
-                        hidden={$filter.length > 0 &&
-                            !organization.name.toUpperCase().includes($filter.toUpperCase())}
-                    >
-                        <div>
-                            <img
-                                class="org-img"
-                                src={resolveLogoPath($tmcBackendUrl, organization.logo_path)}
-                                alt={`Logo for ${organization.name}`}
-                            />
-                        </div>
-                        <div>
-                            <h4>
-                                {organization.name}
-                                <small>({organization.slug})</small>
-                            </h4>
-                            <p>{organization.information}</p>
-                        </div>
-                    </div>
-                {/each}
-            {/if}
-        </div>
-    </div>
+<h1>All organizations</h1>
+<div>
+    <input
+        type="text"
+        placeholder="Search organizations"
+        on:keyup={(ev) => filterOrganizations(ev.currentTarget.value)}
+    />
 </div>
+
+{#if $organizations !== undefined && $tmcBackendUrl !== undefined}
+    {#each $organizations ?? [] as organization}
+        <div
+            class="org-row"
+            on:click={() => selectOrganization(organization.slug)}
+            on:keypress={() => selectOrganization(organization.slug)}
+            hidden={$filter.length > 0 &&
+                !organization.slug.toUpperCase().includes($filter) &&
+                !organization.name.toUpperCase().includes($filter)}
+        >
+            <div class="org-img-container">
+                <img
+                    class="org-img"
+                    src={resolveLogoPath($tmcBackendUrl, organization.logo_path)}
+                    alt={`Logo for ${organization.name}`}
+                />
+            </div>
+            <div class="org-content">
+                <h4>
+                    {organization.name} <small class="muted">({organization.slug})</small>
+                </h4>
+                <p>{organization.information}</p>
+            </div>
+        </div>
+    {/each}
+{:else}
+    <vscode-progress-ring />
+{/if}
+
+<style>
+    .org-row {
+        cursor: pointer;
+        border: 1px;
+        border-style: inset;
+        margin: 0.4rem;
+        display: flex;
+        flex-direction: column;
+        padding: 10px;
+        margin-bottom: 10px;
+        min-height: 125px;
+    }
+    .org-img-container {
+        width: 100%;
+        background-color: white;
+        display: flex;
+        align-items: center;
+    }
+    .org-img {
+        max-width: 100px;
+        max-height: 100px;
+        margin: 0 auto;
+        display: block;
+        width: 100%;
+        padding: 0.4rem;
+    }
+    .org-content {
+        flex-grow: 1;
+    }
+    .muted {
+        opacity: 80%;
+    }
+
+    @media (orientation: landscape) {
+        .org-row {
+            flex-direction: row;
+        }
+        .org-img-container {
+            width: auto;
+        }
+        .org-img {
+            width: auto;
+        }
+        .org-content {
+            margin-left: 0.4rem;
+        }
+    }
+
+    [hidden] {
+        display: none;
+    }
+</style>

@@ -21,8 +21,8 @@ export class LoginPage extends TmcPage {
     }
 
     async login(user: string): Promise<void> {
-        await this.webview.getByLabel("Email or username:").fill(user);
-        await this.webview.getByLabel("Password:").fill(user);
+        await this.webview.getByRole("textbox", { name: "Email or username:" }).fill(user);
+        await this.webview.getByRole("textbox", { name: "Password:" }).first().fill(user);
         await this.webview.getByRole("button", { name: "Submit" }).click();
     }
 }

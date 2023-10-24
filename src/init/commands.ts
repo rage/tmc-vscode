@@ -4,7 +4,7 @@ import * as actions from "../actions";
 import { checkForCourseUpdates, displayUserCourses, removeCourse } from "../actions";
 import { ActionContext } from "../actions/types";
 import * as commands from "../commands";
-import { TmcPanel, randomPanelId } from "../panels/TmcPanel";
+import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { TmcTreeNode } from "../ui/treeview/treenode";
 import { TemplateData } from "../ui/types";
 import { Logger } from "../utilities/";

@@ -3,27 +3,27 @@ import { Uri, Webview } from "vscode";
 
 import { ActionContext } from "../actions/types";
 import { ExerciseStatus } from "../api/workspaceManager";
+import { TMC_BACKEND_URL } from "../config/constants";
 import {
+    assertUnreachable,
     CourseDetailsPanel,
-    WebviewToExtension,
     ExtensionToWebview,
     MyCoursesPanel,
     Panel,
     PanelType,
+    SelectCoursePanel,
     SelectOrganizationPanel,
     SpecificPanel,
     TargetedExtensionToWebview,
+    WebviewToExtension,
     WelcomePanel,
-    assertUnreachable,
-    SelectCoursePanel,
 } from "../shared";
 import * as UITypes from "../ui/types";
 
 import { dateToString, parseDate, parseNextDeadlineAfter } from "./dateDeadline";
 import { getUri } from "./getUri";
-import { formatSizeInBytes } from "./utils";
 import { Logger } from "./logger";
-import { TMC_BACKEND_URL } from "../config/constants";
+import { formatSizeInBytes } from "./utils";
 
 /**
  * Helper function for the extension panel to render a webview panel.
@@ -147,7 +147,7 @@ async function initializeWelcome(
     actionContext: ActionContext,
     webview: Webview,
     waitForPanelToRender: Promise<boolean>,
-) {
+): Promise<void> {
     const version = actionContext.resources.extensionVersion;
     const exerciseDecorations = getUri(webview, extensionUri, [
         "media",
@@ -172,7 +172,7 @@ async function initializeMyCourses(
     actionContext: ActionContext,
     webview: Webview,
     waitForPanelToRender: Promise<boolean>,
-) {
+): Promise<void> {
     postMessageToWebview(
         webview,
         panel,
@@ -210,7 +210,7 @@ async function initializeCourseDetails(
     actionContext: ActionContext,
     webview: Webview,
     waitForPanelToRender: Promise<boolean>,
-) {
+): Promise<void> {
     const { tmc, userData, workspaceManager } = actionContext;
 
     const course = userData.getCourse(panel.courseId);
@@ -323,7 +323,7 @@ async function initializeSelectOrganization(
     actionContext: ActionContext,
     webview: Webview,
     waitForPanelToRender: Promise<boolean>,
-) {
+): Promise<void> {
     postMessageToWebview(
         webview,
         panel,
@@ -350,7 +350,7 @@ async function initializeSelectCourse(
     actionContext: ActionContext,
     webview: Webview,
     waitForPanelToRender: Promise<boolean>,
-) {
+): Promise<void> {
     postMessageToWebview(
         webview,
         panel,

@@ -16,10 +16,11 @@ export class TmcPage {
         await this.page.getByRole("heading", { name: "TestMyCode: Menu" }).waitFor();
     }
 
-    getFrame(title: string): FrameLocator {
+    getSidePanel(): FrameLocator {
         return this.page
             .frameLocator("iframe.webview.ready")
             .last()
-            .frameLocator(`iframe#active-frame[title="${title}"]`);
+            .frameLocator(`iframe#active-frame[title="TestMyCode"]`)
+            .last();
     }
 }

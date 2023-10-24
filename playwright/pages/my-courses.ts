@@ -22,14 +22,14 @@ export class MyCoursesPage extends TmcPage {
         // interacting with it too quickly causes it to get stuck for an unknown reason
         // we should be able to fix it with the new svelte implementation
         await this.page.waitForTimeout(1000);
-        await this.getFrame("Select organization")
+        await this.getSidePanel()
             .getByRole("heading", { name: "Test Organization (test)" })
             .click();
 
         // this wait lets the next frame load properly
         // interacting with it too quickly causes it to get stuck for an unknown reason
         await this.page.waitForTimeout(1000);
-        await this.getFrame("Select course").getByRole("heading", { name }).click();
+        await this.getSidePanel().getByRole("heading", { name }).click();
     }
 
     async selectCourse(name: string): Promise<void> {
