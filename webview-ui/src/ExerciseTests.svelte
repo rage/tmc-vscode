@@ -1,0 +1,146 @@
+<script lang="ts">
+    import { derived } from "svelte/store";
+    import { ExerciseTestsPanel, TestResultData, assertUnreachable } from "./shared/shared";
+    import { addMessageListener, loadable } from "./utilities/script";
+    import { vscode } from "./utilities/vscode";
+    import PasteHelpBox from "./components/PasteHelpBox.svelte";
+    import TestResults from "./components/TestResults.svelte";
+
+    export let panel: ExerciseTestsPanel;
+
+    const pasteResult = loadable<string>();
+    const pasteError = loadable<string>();
+    const testResults = loadable<TestResultData>();
+    const successPoints = derived(testResults, ($testResults) => {
+        return ($testResults?.testResult.testResults ?? [])
+            .filter((tr) => tr.successful)
+            .map((tr) => tr.points.length)
+            .reduce((prev, curr) => prev + curr, 0);
+    });
+    const totalPoints = derived(testResults, ($testResults) => {
+        return ($testResults?.testResult.testResults ?? [])
+            .map((tr) => tr.points.length)
+            .reduce((prev, curr) => prev + curr, 0);
+    });
+    const allSuccessful = derived(testResults, ($testResults) => {
+        return (
+            $testResults &&
+            $testResults.testResult.testResults.find((tr) => !tr.successful) === undefined
+        );
+    });
+
+    function closePanel() {
+        vscode.postMessage({ type: "closeSidePanel" });
+    }
+    function cancelTests() {
+        vscode.postMessage({ type: "cancelTests" });
+    }
+    function submit() {
+        vscode.postMessage({
+            type: "submitExercise",
+            course: panel.course,
+            exercise: panel.exercise,
+        });
+    }
+
+    addMessageListener(panel, (message) => {
+        switch (message.type) {
+            case "testResults": {
+                testResults.set(message.testResults);
+                const allSuccessful =
+                    message.testResults.testResult.testResults.find((tr) => !tr.successful) ===
+                    undefined;
+                break;
+            }
+            case "pasteResult": {
+                pasteResult.set(message.pasteLink);
+                break;
+            }
+            case "pasteError": {
+                pasteError.set(message.error);
+                break;
+            }
+            default:
+                assertUnreachable(message);
+        }
+    });
+</script>
+
+{#if $testResults === undefined}
+    <h1>{panel.exercise.name}: Running tests</h1>
+{:else if $testResults.testResult.status === "PASSED"}
+    <h1>{panel.exercise.name}: Tests passed</h1>
+{:else if $testResults.testResult.status === "TESTS_FAILED"}
+    <h1>{panel.exercise.name}: Tests failed</h1>
+{:else if $testResults.testResult.status === "COMPILE_FAILED"}
+    <h1>{panel.exercise.name}: Compilation failed</h1>
+{:else if $testResults.testResult.status === "TESTRUN_INTERRUPTED"}
+    <h1>{panel.exercise.name}: The test run was interrupted</h1>
+{:else if $testResults.testResult.status === "GENERIC_ERROR"}
+    <h1>{panel.exercise.name}: An error occurred during the test run</h1>
+{:else}
+    {assertUnreachable($testResults.testResult.status)}
+{/if}
+
+<vscode-button
+    class="close-button"
+    appearance="secondary"
+    on:click={closePanel}
+    on:keypress={closePanel}
+>
+    ×
+</vscode-button>
+
+{#if $testResults === undefined}
+    <div class="button-container">
+        <vscode-button appearance="secondary" on:click={closePanel} on:keypress={closePanel}>
+            Run in background
+        </vscode-button>
+        <vscode-button appearance="secondary" on:click={cancelTests} on:keypress={cancelTests}>
+            Cancel
+        </vscode-button>
+    </div>
+    <vscode-progress-ring />
+{:else}
+    {#if panel.course.disabled}
+        <div>
+            Sending the solution or pasting to the TMC server is not available for this exercise,
+            because the course is disabled.
+        </div>
+    {:else}
+        <vscode-button on:click={submit} on:keypress={submit}>
+            Send solution to server
+        </vscode-button>
+        <div class="help-box-container">
+            <PasteHelpBox
+                hidden={$allSuccessful ?? true}
+                course={panel.course}
+                exercise={panel.exercise}
+                sourcePanel={panel}
+                pasteUrl={$pasteResult}
+                pasteError={$pasteError}
+            />
+        </div>
+    {/if}
+
+    <TestResults
+        totalPoints={$totalPoints}
+        successPoints={$successPoints}
+        testResults={$testResults.testResult.testResults}
+    />
+{/if}
+
+<style>
+    .close-button {
+        position: absolute;
+        top: 0.4rem;
+        right: 0.4rem;
+    }
+    .button-container {
+        margin-bottom: 0.4rem;
+    }
+    .help-box-container {
+        margin-top: 0.4rem;
+        margin-bottom: 0.4rem;
+    }
+</style>

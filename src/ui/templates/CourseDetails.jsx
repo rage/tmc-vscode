@@ -289,12 +289,12 @@ function script() {
 
     /**@param {number[]} ids*/
     function openExercises(ids) {
-        vscode.postMessage({ type: "openSelected", ids, courseName: course.courseName });
+        vscode.postMessage({ type: "openExercises", ids, courseName: course.courseName });
     }
 
     /**@param {number[]} ids*/
     function closeExercises(ids) {
-        vscode.postMessage({ type: "closeSelected", ids, courseName: course.courseName });
+        vscode.postMessage({ type: "closeExercises", ids, courseName: course.courseName });
     }
 
     /**
@@ -657,11 +657,11 @@ function script() {
         });
 
         document.getElementById("open-selected").addEventListener("click", function () {
-            handleSelected("openSelected");
+            handleSelected("openExercises");
         });
 
         document.getElementById("close-selected").addEventListener("click", function () {
-            handleSelected("closeSelected");
+            handleSelected("closeExercises");
         });
     });
 

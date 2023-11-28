@@ -1,12 +1,9 @@
 <script lang="ts">
     import { writable } from "svelte/store";
-    import { Course, Organization, SelectCoursePanel, assertUnreachable } from "./shared";
-    import {
-        addExtensionMessageListener,
-        loadable,
-        postMessageToWebview,
-    } from "./utilities/script";
+    import { SelectCoursePanel, assertUnreachable } from "./shared/shared";
+    import { addMessageListener, loadable, postMessageToWebview } from "./utilities/script";
     import { vscode } from "./utilities/vscode";
+    import { Course, Organization } from "./shared/langsSchema";
 
     export let panel: SelectCoursePanel;
 
@@ -33,20 +30,21 @@
     }
 
     function selectCourse(courseId: number) {
-        postMessageToWebview(panel.requestingPanel, {
+        postMessageToWebview({
             type: "selectedCourse",
+            target: panel.requestingPanel,
             organizationSlug: panel.organizationSlug,
             courseId,
         });
     }
 
-    addExtensionMessageListener(panel, (message) => {
+    addMessageListener(panel, (message) => {
         switch (message.type) {
             case "setOrganization": {
                 organization.set(message.organization);
                 break;
             }
-            case "setCourses": {
+            case "setSelectableCourses": {
                 courses.set(message.courses);
                 break;
             }

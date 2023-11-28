@@ -15,7 +15,7 @@ vsCodeTest("can add new course", async ({ page, webview }) => {
 
     await vsCodeTest.step("add new course", async () => {
         const newCourseHeader = await webview.getByRole("heading", {
-            name: "Python Course python-course",
+            name: "Python Course (python-course)",
         });
         await expect(newCourseHeader).not.toBeVisible();
         await myCoursesPage.addNewCourse("Python Course");

@@ -17,6 +17,8 @@ import {
     updateCourse,
 } from "../actions";
 import { ActionContext } from "../actions/types";
+import { TmcPanel } from "../panels/TmcPanel";
+import { ExtensionToWebview } from "../shared/shared";
 import UI from "../ui/ui";
 import { Logger } from "../utilities/";
 
@@ -208,8 +210,8 @@ export function registerUiActions(actionContext: ActionContext): void {
         },
     );
     ui.webview.registerHandler(
-        "openSelected",
-        async (msg: { type?: "openSelected"; ids?: number[]; courseName?: string }) => {
+        "openExercises",
+        async (msg: { type?: "openExercises"; ids?: number[]; courseName?: string }) => {
             if (!(msg.type && msg.ids && msg.courseName)) {
                 return;
             }
@@ -256,8 +258,8 @@ export function registerUiActions(actionContext: ActionContext): void {
         },
     );
     ui.webview.registerHandler(
-        "closeSelected",
-        async (msg: { type?: "closeSelected"; ids?: number[]; courseName?: string }) => {
+        "closeExercises",
+        async (msg: { type?: "closeExercises"; ids?: number[]; courseName?: string }) => {
             if (!(msg.type && msg.ids && msg.courseName)) {
                 return;
             }
@@ -265,6 +267,17 @@ export function registerUiActions(actionContext: ActionContext): void {
             if (result.err) {
                 dialog.errorNotification("Errored while closing selected exercises.", result.val);
             }
+            const messages: Array<ExtensionToWebview> = msg.ids.map((id) => {
+                return {
+                    type: "exerciseStatusChange",
+                    exerciseId: id,
+                    status: "closed",
+                    target: {
+                        type: "CourseDetails",
+                    },
+                };
+            });
+            TmcPanel.postMessage(...messages);
         },
     );
 
@@ -351,4 +364,16 @@ export async function uiDownloadExercises(
         courseId: courseId,
         exerciseIds: actionContext.userData.getCourse(courseId).newExercises,
     });
+    const exerciseStatusChangeMessages = exerciseIds.map((id) => {
+        const message: ExtensionToWebview = {
+            type: "exerciseStatusChange",
+            target: {
+                type: "CourseDetails",
+            },
+            exerciseId: id,
+            status: "closed",
+        };
+        return message;
+    });
+    TmcPanel.postMessage(...exerciseStatusChangeMessages);
 }

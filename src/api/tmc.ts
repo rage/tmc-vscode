@@ -20,8 +20,6 @@ import {
     ObsoleteClientError,
     RuntimeError,
 } from "../errors";
-import { Logger } from "../utilities/logger";
-
 import {
     CliOutput,
     CombinedCourseData,
@@ -41,7 +39,9 @@ import {
     SubmissionFeedbackResponse,
     SubmissionFinished,
     UpdatedExercise,
-} from "./langsSchema";
+} from "../shared/langsSchema";
+import { Logger } from "../utilities/logger";
+
 import { SubmissionFeedback } from "./types";
 
 interface Options {

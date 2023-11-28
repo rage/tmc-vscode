@@ -7,42 +7,34 @@ import {
     ExtensionToWebview,
     MyCoursesPanel,
     Panel,
-    PanelType,
-    SpecificPanel,
-    TargetedExtensionToWebview,
+    TargetPanel,
+    Targeted,
     WebviewToExtension,
-} from "../shared";
+} from "../shared/shared";
 import { vscode } from "./vscode";
 
 /**
  * Message from the extension host or a webview.
  */
-type MessageToWebview = ExtensionToWebview | WebviewToWebview;
+type Message = ExtensionToWebview | WebviewToWebview;
 
 /**
  * Message from webview to webview.
  */
-type WebviewToWebview = {
-    source: "webview";
-    panelId: number;
-    panelType: MyCoursesPanel["type"];
-    message: WebviewToMyCourses;
-};
-
-type WebviewToMyCourses =
+type WebviewToWebview =
     | {
           type: "selectedOrganization";
+          target: TargetPanel<MyCoursesPanel>;
           slug: string;
       }
     | {
           type: "selectedCourse";
+          target: TargetPanel<MyCoursesPanel>;
           organizationSlug: string;
           courseId: number;
       };
 
-export type TargetedWebviewToWebview<T extends PanelType> = (WebviewToWebview & {
-    panelType: T;
-})["message"];
+type TargetedMessage<T extends Panel> = Targeted<Message, T["type"]>;
 
 /**
  * Convenience function for writable Svelte stores with an `undefined` starting value. The actual value is "loaded" later.
@@ -55,63 +47,33 @@ export function loadable<T>(): Writable<T | undefined> {
  * Convenience function for listening to messages from the extension host to the webview.
  * Sends a "ready" message after adding the event listener to indicate that it's ready to receive messages.
  */
-// the generics make this look a little convoluted, but the idea is that
-// the callback takes a message targeted at the panel argument
-export function addExtensionMessageListener<T extends Panel["type"]>(
-    panel: SpecificPanel<T>,
-    callback: (message: TargetedExtensionToWebview<T>) => void,
+export function addMessageListener<T extends Panel>(
+    listeningPanel: T,
+    callback: (message: TargetedMessage<T>) => void,
 ) {
     window.addEventListener("message", (event) => {
-        const message: MessageToWebview = event.data;
-        if (message.source === "extensionHost") {
-            if (message.panelId === panel.id) {
-                // TS does not recognise this as a valid "TargetedExtensionToWebview<T>" without the override
-                callback(message.message as TargetedExtensionToWebview<T>);
-            }
+        const message: Message = event.data;
+        // if no target id is given, accept all messages
+        // if a target id is given, only accept messages with the correct id
+        const correctType = message.target.type === listeningPanel.type;
+        if (correctType && (!("id" in message.target) || message.target.id === listeningPanel.id)) {
+            callback(message as TargetedMessage<T>);
         }
     });
     vscode.postMessage({
         type: "ready",
-        panel,
-    });
-}
-
-/**
- * Convenience function for listening to messages from the webview to the webview.
- */
-export function addWebviewMessageListener<T extends Panel["type"]>(
-    panel: SpecificPanel<T>,
-    callback: (message: TargetedWebviewToWebview<T>) => void,
-) {
-    window.addEventListener("message", (event) => {
-        console.log("got some msg", JSON.stringify(event, null, 2));
-        const message: MessageToWebview = event.data;
-        if (message.source === "webview") {
-            if (message.panelId === panel.id) {
-                callback(message.message);
-            }
-        }
+        panel: listeningPanel,
     });
 }
 
 /**
  * Posts a message to another webview.
  */
-export function postMessageToWebview<T extends Panel["type"]>(
-    panel: SpecificPanel<T>,
-    message: TargetedWebviewToWebview<T>,
-) {
-    // TS does not recognise this as a valid "WebviewToWebview" without the override
-    const messageToWebview: WebviewToWebview = {
-        source: "webview",
-        panelId: panel.id,
-        panelType: panel.type,
-        message,
-    } as WebviewToWebview;
+export function postMessageToWebview(message: WebviewToWebview) {
     // relay the message through the extension host
     const webviewToExtension: WebviewToExtension = {
         type: "relayToWebview",
-        message: messageToWebview,
+        message,
     };
     vscode.postMessage(webviewToExtension);
 }

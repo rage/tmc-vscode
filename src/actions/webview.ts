@@ -6,8 +6,8 @@
 
 import du = require("du");
 
-import { Exercise } from "../api/langsSchema";
 import { ExerciseStatus } from "../api/workspaceManager";
+import { Exercise } from "../shared/langsSchema";
 import * as UITypes from "../ui/types";
 import { WebviewMessage } from "../ui/types";
 import {

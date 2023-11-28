@@ -77,7 +77,7 @@ export function registerCommands(
                     ...courses.map<[string, number]>((c) => [c.title, c.id]),
                 ));
             if (courseId) {
-                TmcPanel.renderMain(context.extensionUri, actionContext, {
+                TmcPanel.renderMain(context.extensionUri, context, actionContext, {
                     id: randomPanelId(),
                     type: "CourseDetails",
                     courseId,
@@ -130,7 +130,7 @@ export function registerCommands(
         }),
 
         vscode.commands.registerCommand("tmc.myCourses", async () => {
-            TmcPanel.renderMain(context.extensionUri, actionContext, {
+            TmcPanel.renderMain(context.extensionUri, context, actionContext, {
                 id: randomPanelId(),
                 type: "MyCourses",
             });
@@ -168,14 +168,14 @@ export function registerCommands(
         }),
 
         vscode.commands.registerCommand("tmc.showWelcome", async () => {
-            TmcPanel.renderMain(context.extensionUri, actionContext, {
+            TmcPanel.renderMain(context.extensionUri, context, actionContext, {
                 id: randomPanelId(),
                 type: "Welcome",
             });
         }),
 
         vscode.commands.registerCommand("tmc.showLogin", async () => {
-            TmcPanel.renderMain(context.extensionUri, actionContext, {
+            TmcPanel.renderMain(context.extensionUri, context, actionContext, {
                 id: randomPanelId(),
                 type: "Login",
             });
@@ -183,8 +183,9 @@ export function registerCommands(
 
         vscode.commands.registerCommand(
             "tmc.submitExercise",
-            async (resource: vscode.Uri | undefined) =>
-                commands.submitExercise(actionContext, resource),
+            async (resource: vscode.Uri | undefined) => {
+                commands.submitExercise(context, actionContext, resource);
+            },
         ),
 
         vscode.commands.registerCommand("tmc.switchWorkspace", async () =>
@@ -193,8 +194,9 @@ export function registerCommands(
 
         vscode.commands.registerCommand(
             "tmc.testExercise",
-            async (resource: vscode.Uri | undefined) =>
-                commands.testExercise(actionContext, resource),
+            async (resource: vscode.Uri | undefined) => {
+                commands.testExercise(context, actionContext, resource);
+            },
         ),
 
         vscode.commands.registerCommand("tmc.updateExercises", async (silent: string) =>

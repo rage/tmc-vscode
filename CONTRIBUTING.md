@@ -57,12 +57,6 @@ Automatic build task starts the first time that the extension is launched from V
 
 You can also build the extension by running `npm run webpack` or `npm run webpack:watch`.
 
-**NOTE!** If editing type definitions
-
-You need to kill the webpackBuild task by going to terminal tab and pressing the recycle bin or <kbd>CTRL + C</kbd> and then start the extension again by pressing `F5`
-
-**NOTE!** Running multiple instances of VSCode can interfere with this process. If you experience strange behaviour when running the extension, make sure there are no other instances of VSCode running.
-
 ## Testing
 
 ### Unit tests

@@ -8,6 +8,8 @@ import { compact } from "lodash";
 import { Ok, Result } from "ts-results";
 
 import { ExerciseStatus } from "../api/workspaceManager";
+import { TmcPanel } from "../panels/TmcPanel";
+import { CourseDetailsPanel, ExtensionToWebview, TargetPanel } from "../shared/shared";
 import * as UITypes from "../ui/types";
 import { Logger } from "../utilities";
 
@@ -81,6 +83,9 @@ export async function closeExercises(
         return closeResult;
     }
 
+    const slugToId = new Map(Array.from(exercises.entries(), ([key, val]) => [val.name, key]));
+    const closedIds = closeResult.val.map((exercise) => slugToId.get(exercise.exerciseSlug) || 0);
+
     const closedExerciseNames = workspaceManager
         .getExercisesByCourseSlug(courseName)
         .filter((x) => x.status === ExerciseStatus.Closed)
@@ -94,12 +99,21 @@ export async function closeExercises(
     }
 
     ui.webview.postMessage(
-        ...ids.map<UITypes.WebviewMessage>((id) => ({
+        ...closedIds.map<UITypes.WebviewMessage>((id) => ({
             command: "exerciseStatusChange",
             exerciseId: id,
             status: "closed",
         })),
     );
+    const exerciseStatusChangeMessages = closedIds.map<ExtensionToWebview>((id) => ({
+        type: "exerciseStatusChange",
+        target: {
+            type: "CourseDetails",
+        },
+        exerciseId: id,
+        status: "closed",
+    }));
+    TmcPanel.postMessage(...exerciseStatusChangeMessages);
 
-    return new Ok(ids);
+    return new Ok(closedIds);
 }

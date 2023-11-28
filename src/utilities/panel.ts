@@ -7,17 +7,15 @@ import { TMC_BACKEND_URL } from "../config/constants";
 import {
     assertUnreachable,
     CourseDetailsPanel,
-    ExtensionToWebview,
     MyCoursesPanel,
     Panel,
     PanelType,
     SelectCoursePanel,
     SelectOrganizationPanel,
-    SpecificPanel,
     TargetedExtensionToWebview,
     WebviewToExtension,
     WelcomePanel,
-} from "../shared";
+} from "../shared/shared";
 import * as UITypes from "../ui/types";
 
 import { dateToString, parseDate, parseNextDeadlineAfter } from "./dateDeadline";
@@ -47,14 +45,11 @@ export async function renderPanel(
     });
 
     // we render the panel immediately
-    postMessageToWebview(
-        webview,
-        { id: 0, type: "App" },
-        {
-            type: "setPanel",
-            panel,
-        },
-    );
+    postMessageToWebview(webview, {
+        type: "setPanel",
+        target: { id: 0, type: "App" },
+        panel,
+    });
 
     // and then send other needed data (after receiving "ready")
     switch (panel.type) {
@@ -100,6 +95,12 @@ export async function renderPanel(
             );
             break;
         }
+        case "ExerciseTests": {
+            break;
+        }
+        case "ExerciseSubmission": {
+            break;
+        }
         case "App": {
             break;
         }
@@ -107,17 +108,18 @@ export async function renderPanel(
             assertUnreachable(panel);
         }
     }
+    // wait for the panel to be ready
+    await waitForPanelToRender;
 }
 
 // note: this function should not be awaited
 export async function postMessageToWebview<T extends PanelType>(
     webview: Webview,
-    targetPanel: SpecificPanel<T>,
     message: TargetedExtensionToWebview<T>,
     // this callback is awaited before sending the message
     waitForPanelToRender?: Promise<boolean>,
 ): Promise<void> {
-    Logger.info("Message to webview", message);
+    Logger.info("Posting a message to webview", JSON.stringify(message, null, 2));
     if (waitForPanelToRender !== undefined) {
         const fiveSeconds = 5000;
         const timeout: Promise<boolean> = new Promise((resolve) => {
@@ -131,14 +133,7 @@ export async function postMessageToWebview<T extends PanelType>(
             return;
         }
     }
-    // TS does not recognise this as a valid "MessageToWebview" without the override
-    const messageToWebview: ExtensionToWebview = {
-        source: "extensionHost",
-        panelId: targetPanel.id,
-        panelType: targetPanel.type,
-        message,
-    } as ExtensionToWebview;
-    webview.postMessage(messageToWebview);
+    webview.postMessage(message);
 }
 
 async function initializeWelcome(
@@ -156,9 +151,9 @@ async function initializeWelcome(
     Logger.info("initwelcome;");
     postMessageToWebview(
         webview,
-        panel,
         {
             type: "setWelcomeData",
+            target: panel,
             version,
             exerciseDecorations,
         },
@@ -175,18 +170,18 @@ async function initializeMyCourses(
 ): Promise<void> {
     postMessageToWebview(
         webview,
-        panel,
         {
-            type: "setCourses",
+            type: "setMyCourses",
+            target: panel,
             courses: actionContext.userData.getCourses(),
         },
         waitForPanelToRender,
     );
     postMessageToWebview(
         webview,
-        panel,
         {
             type: "setTmcDataPath",
+            target: panel,
             tmcDataPath: actionContext.resources.projectsDirectory,
         },
         waitForPanelToRender,
@@ -194,9 +189,9 @@ async function initializeMyCourses(
     du(actionContext.resources.projectsDirectory).then((size) =>
         postMessageToWebview(
             webview,
-            panel,
             {
                 type: "setTmcDataSize",
+                target: panel,
                 tmcDataSize: formatSizeInBytes(size),
             },
             waitForPanelToRender,
@@ -216,9 +211,9 @@ async function initializeCourseDetails(
     const course = userData.getCourse(panel.courseId);
     postMessageToWebview(
         webview,
-        panel,
         {
             type: "setCourseData",
+            target: panel,
             courseData: course,
         },
         waitForPanelToRender,
@@ -241,9 +236,9 @@ async function initializeCourseDetails(
         const currentDate = new Date();
         postMessageToWebview(
             webview,
-            panel,
             {
                 type: "setCourseDisabledStatus",
+                target: panel,
                 courseId: course.id,
                 disabled: course.disabled,
             },
@@ -259,9 +254,9 @@ async function initializeCourseDetails(
             const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
             postMessageToWebview(
                 webview,
-                panel,
                 {
                     type: "exerciseStatusChange",
+                    target: panel,
                     exerciseId: ex.id,
                     status: mapStatus(
                         exData?.status ?? ExerciseStatus.Missing,
@@ -306,9 +301,9 @@ async function initializeCourseDetails(
             });
         postMessageToWebview(
             webview,
-            panel,
             {
                 type: "setCourseGroups",
+                target: panel,
                 offlineMode,
                 exerciseGroups,
             },
@@ -326,8 +321,11 @@ async function initializeSelectOrganization(
 ): Promise<void> {
     postMessageToWebview(
         webview,
-        panel,
-        { type: "setTmcBackendUrl", tmcBackendUrl: TMC_BACKEND_URL },
+        {
+            type: "setTmcBackendUrl",
+            target: panel,
+            tmcBackendUrl: TMC_BACKEND_URL,
+        },
         waitForPanelToRender,
     );
 
@@ -338,8 +336,11 @@ async function initializeSelectOrganization(
     }
     postMessageToWebview(
         webview,
-        panel,
-        { type: "setOrganizations", organizations: organizations.val },
+        {
+            type: "setOrganizations",
+            target: panel,
+            organizations: organizations.val,
+        },
         waitForPanelToRender,
     );
 }
@@ -353,8 +354,11 @@ async function initializeSelectCourse(
 ): Promise<void> {
     postMessageToWebview(
         webview,
-        panel,
-        { type: "setTmcBackendUrl", tmcBackendUrl: TMC_BACKEND_URL },
+        {
+            type: "setTmcBackendUrl",
+            target: panel,
+            tmcBackendUrl: TMC_BACKEND_URL,
+        },
         waitForPanelToRender,
     );
 
@@ -372,8 +376,11 @@ async function initializeSelectCourse(
     }
     postMessageToWebview(
         webview,
-        panel,
-        { type: "setOrganization", organization },
+        {
+            type: "setOrganization",
+            target: panel,
+            organization,
+        },
         waitForPanelToRender,
     );
 
@@ -384,8 +391,11 @@ async function initializeSelectCourse(
     }
     postMessageToWebview(
         webview,
-        panel,
-        { type: "setCourses", courses: courses.val },
+        {
+            type: "setSelectableCourses",
+            target: panel,
+            courses: courses.val,
+        },
         waitForPanelToRender,
     );
 }

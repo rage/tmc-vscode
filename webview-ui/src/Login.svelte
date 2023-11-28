@@ -1,8 +1,8 @@
 <script lang="ts">
     import { writable } from "svelte/store";
     import { vscode } from "./utilities/vscode";
-    import { addExtensionMessageListener } from "./utilities/script";
-    import { LoginPanel, assertUnreachable } from "./shared";
+    import { addMessageListener } from "./utilities/script";
+    import { LoginPanel, assertUnreachable } from "./shared/shared";
 
     export let panel: LoginPanel;
 
@@ -24,7 +24,7 @@
         });
     }
 
-    addExtensionMessageListener(panel, (message) => {
+    addMessageListener(panel, (message) => {
         switch (message.type) {
             case "loginError": {
                 loggingIn.set(false);
@@ -35,57 +35,49 @@
                 break;
             }
             default:
-                assertUnreachable(message);
+                assertUnreachable(message.type);
         }
     });
 </script>
 
-<div class="container">
-    <div>
-        <div>
-            <h1>Login to TMC</h1>
-            {#if $errorMessage}
-                <div>
-                    <div role="alert">
-                        {$errorMessage}
-                    </div>
-                </div>
-            {/if}
-            <form on:submit={onSubmit}>
-                <div>
-                    <vscode-text-field
-                        type="text"
-                        id="username"
-                        name="username"
-                        bind:this={usernameField}
-                    >
-                        Email or username:
-                    </vscode-text-field>
-                    <vscode-text-field
-                        type="password"
-                        id="password"
-                        name="password"
-                        bind:this={passwordField}
-                    >
-                        Password:
-                    </vscode-text-field>
-                </div>
-                <vscode-button
-                    style="color: pink"
-                    type="submit"
-                    name="submit"
-                    id="submit"
-                    disabled={$loggingIn}
-                >
-                    Submit
-                </vscode-button>
-            </form>
-        </div>
-    </div>
+<h1>Log in</h1>
+
+<div>
+    This extension uses mooc.fi accounts. If you have previously done mooc.fi -courses, you can log
+    in with your existing account.
 </div>
+<br />
+
+{#if $errorMessage}
+    <div class="error" role="alert">
+        {$errorMessage}
+    </div>
+    <br />
+{/if}
+
+<form on:submit={onSubmit}>
+    <div>
+        <vscode-text-field type="text" id="username" name="username" bind:this={usernameField}>
+            Email or username:
+        </vscode-text-field>
+        <br />
+        <vscode-text-field type="password" id="password" name="password" bind:this={passwordField}>
+            Password:
+        </vscode-text-field>
+    </div>
+    <vscode-button
+        style="color: pink"
+        type="submit"
+        name="submit"
+        id="submit"
+        disabled={$loggingIn}
+    >
+        Log in
+    </vscode-button>
+</form>
 
 <style>
-    div {
-        color: red;
+    .error {
+        color: var(--vscode-notebookStatusErrorIcon-foreground);
     }
 </style>

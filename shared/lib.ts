@@ -2,6 +2,13 @@
  * ======== state ========
  */
 
+import { Uri } from "vscode";
+
+import { Course, Organization, RunResult, SubmissionFinished } from "./langsSchema";
+
+/**
+ * Contains the state of the webview.
+ */
 export type State = {
     panel: Panel;
 };
@@ -11,7 +18,9 @@ export type State = {
  */
 
 /**
- * Type representing a panel that is rendered by the webview.
+ * Represents a panel that is rendered by the webview.
+ *
+ * `id`: used to make sure messages are delivered to the correct panels
  */
 export type Panel =
     | AppPanel
@@ -20,11 +29,20 @@ export type Panel =
     | MyCoursesPanel
     | CourseDetailsPanel
     | SelectOrganizationPanel
-    | SelectCoursePanel;
+    | SelectCoursePanel
+    | ExerciseTestsPanel
+    | ExerciseSubmissionPanel;
 
 export type PanelType = Panel["type"];
 
-export type SpecificPanel<T extends PanelType> = Panel & { type: T };
+// used to define messages that should only be sent to a specific instance of a panel
+// for example, the course selected by the user on the SelectCoursePanel should only be sent
+// to the panel which initiated the course selection
+export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "id" | "type">;
+
+// used to define messages that should be sent to any instance of a given panel type
+// for example, a change in an exercise's status should be sent to all panels that display the status
+export type BroadcastPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "type">;
 
 export type AppPanel = {
     id: number;
@@ -55,168 +73,170 @@ export type CourseDetailsPanel = {
 export type SelectOrganizationPanel = {
     id: number;
     type: "SelectOrganization";
-    requestingPanel: Panel;
+    // the result of the selection is sent back to this panel
+    requestingPanel: MyCoursesPanel;
 };
 
 export type SelectCoursePanel = {
     id: number;
     type: "SelectCourse";
     organizationSlug: string;
-    requestingPanel: Panel;
+    // the result of the selection is sent back to this panel
+    requestingPanel: MyCoursesPanel;
+};
+
+export type ExerciseTestsPanel = {
+    id: number;
+    type: "ExerciseTests";
+    course: TestCourse;
+    exercise: TestExercise;
+};
+
+export type ExerciseSubmissionPanel = {
+    id: number;
+    type: "ExerciseSubmission";
+    course: TestCourse;
+    exercise: TestExercise;
 };
 
 /*
- * ======== to webview ========
+ * ======== messages to webview ========
  */
 
 /**
  * For use with `webview.postMessage` in `TmcPanel`.
  * Handled by the Svelte app.
- * The `source` is used to differentiate between different kinds of message events.
  */
 export type ExtensionToWebview =
     | {
-          source: "extensionHost";
-          panelId: number;
-          panelType: AppPanel["type"];
-          message: ExtensionToApp;
-      }
-    | {
-          source: "extensionHost";
-          panelId: number;
-          panelType: WelcomePanel["type"];
-          message: ExtensionToWelcome;
-      }
-    | {
-          source: "extensionHost";
-          panelId: number;
-          panelType: LoginPanel["type"];
-          message: ExtensionToLogin;
-      }
-    | {
-          source: "extensionHost";
-          panelId: number;
-          panelType: MyCoursesPanel["type"];
-          message: ExtensionToMyCourses;
-      }
-    | {
-          source: "extensionHost";
-          panelId: number;
-          panelType: CourseDetailsPanel["type"];
-          message: ExtensionToCourseDetails;
-      }
-    | {
-          source: "extensionHost";
-          panelId: number;
-          panelType: SelectOrganizationPanel["type"];
-          message: ExtensionToSelectOrganization;
-      }
-    | {
-          source: "extensionHost";
-          panelId: number;
-          panelType: SelectCoursePanel["type"];
-          message: ExtensionToSelectCourse;
-      };
-
-export type TargetedExtensionToWebview<T extends PanelType> = (ExtensionToWebview & {
-    panelType: T;
-})["message"];
-
-export type ExtensionToApp =
-    | {
           type: "setPanel";
+          target: TargetPanel<AppPanel>;
           panel: Panel;
       }
     | {
-          // unused variant to enable use of assertUnreachable,
-          // which cannot be used with a non-union type
-          type: never;
-      };
-export type ExtensionToWelcome =
-    | {
           type: "setWelcomeData";
+          target: TargetPanel<WelcomePanel>;
           version: string;
           exerciseDecorations: string;
       }
     | {
-          // unused variant to enable use of assertUnreachable,
-          // which cannot be used with a non-union type
-          type: never;
-      };
-
-export type ExtensionToLogin =
-    | {
-          type: "loginError";
-          error: string;
-      }
-    | {
-          // unused variant to enable use of assertUnreachable,
-          // which cannot be used with a non-union type
-          type: never;
-      };
-
-export type ExtensionToMyCourses =
-    | {
-          type: "setCourses";
+          type: "setMyCourses";
+          target: TargetPanel<MyCoursesPanel>;
           courses: Array<CourseData>;
       }
     | {
           type: "setTmcDataPath";
+          target: BroadcastPanel<MyCoursesPanel>;
           tmcDataPath: string;
       }
     | {
           type: "setTmcDataSize";
+          target: TargetPanel<MyCoursesPanel>;
           tmcDataSize: string;
-      };
-
-export type ExtensionToCourseDetails =
+      }
+    | {
+          type: "loginError";
+          target: TargetPanel<LoginPanel>;
+          error: string;
+      }
     | {
           type: "setCourseData";
+          target: TargetPanel<CourseDetailsPanel>;
           courseData: CourseData;
       }
     | {
           type: "setCourseGroups";
+          target: TargetPanel<CourseDetailsPanel>;
           offlineMode: boolean;
           exerciseGroups: Array<ExerciseGroup>;
       }
     | {
           type: "setCourseDisabledStatus";
+          target: BroadcastPanel<CourseDetailsPanel>;
           courseId: number;
           disabled: boolean;
       }
     | {
           type: "exerciseStatusChange";
+          target: BroadcastPanel<CourseDetailsPanel>;
           exerciseId: number;
           status: ExerciseStatus;
       }
     | {
           type: "setUpdateables";
+          target: BroadcastPanel<CourseDetailsPanel>;
           exerciseIds: Array<number>;
-      };
-
-export type ExtensionToSelectOrganization =
+      }
     | {
           type: "setOrganizations";
+          target: TargetPanel<SelectOrganizationPanel>;
           organizations: Array<Organization>;
       }
     | {
           type: "setTmcBackendUrl";
+          target: TargetPanel<SelectOrganizationPanel | SelectCoursePanel>;
           tmcBackendUrl: string;
-      };
-
-export type ExtensionToSelectCourse =
+      }
     | {
           type: "setOrganization";
+          target: TargetPanel<SelectCoursePanel>;
           organization: Organization;
       }
     | {
-          type: "setCourses";
+          type: "setSelectableCourses";
+          target: TargetPanel<SelectCoursePanel>;
           courses: Array<Course>;
       }
     | {
-          type: "setTmcBackendUrl";
-          tmcBackendUrl: string;
+          type: "testResults";
+          target: TargetPanel<ExerciseTestsPanel>;
+          testResults: TestResultData;
+      }
+    | {
+          type: "pasteResult";
+          target: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
+          pasteLink: string;
+      }
+    | {
+          type: "pasteError";
+          target: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
+          error: string;
+      }
+    | {
+          type: "submissionStatusUrl";
+          target: TargetPanel<ExerciseSubmissionPanel>;
+          url: string;
+      }
+    | {
+          type: "submissionStatusUpdate";
+          target: TargetPanel<ExerciseSubmissionPanel>;
+          progressPercent: number;
+          message?: string;
+      }
+    | {
+          type: "submissionResult";
+          target: TargetPanel<ExerciseSubmissionPanel>;
+          result: SubmissionFinished;
+          questions: Array<FeedbackQuestion>;
+      }
+    | {
+          type: "submissionStatusError";
+          target: TargetPanel<ExerciseSubmissionPanel>;
+          error: Error;
+      }
+    // the last variant exists just to make TypeScript think that every panel type has
+    // at least two different message types, which makes TS treat them differently than if
+    // they only had one...
+    | {
+          type: never;
+          target: TargetPanel<never>;
       };
+
+// helper type for messages from the extension to a specific panel
+export type TargetedExtensionToWebview<T extends PanelType> = Targeted<ExtensionToWebview, T>;
+
+// helper type for messages from the extension to a specific panel type
+export type BroadcastExtensionToWebview<T extends PanelType> = Targeted<ExtensionToWebview, T>;
 
 /*
  * ======== from webview ========
@@ -239,7 +259,7 @@ export type WebviewToExtension =
       }
     | {
           type: "selectOrganization";
-          sourcePanel: Panel;
+          sourcePanel: TargetPanel<MyCoursesPanel>;
       }
     | {
           type: "removeCourse";
@@ -277,12 +297,12 @@ export type WebviewToExtension =
           useCache: boolean;
       }
     | {
-          type: "openSelected";
+          type: "openExercises";
           ids: Array<number>;
           courseName: string;
       }
     | {
-          type: "closeSelected";
+          type: "closeExercises";
           ids: Array<number>;
           courseName: string;
       }
@@ -293,14 +313,14 @@ export type WebviewToExtension =
       }
     | {
           type: "selectCourse";
-          sourcePanel: Panel;
+          sourcePanel: TargetPanel<MyCoursesPanel>;
           slug: string;
       }
     | {
           type: "addCourse";
           organizationSlug: string;
           courseId: number;
-          requestingPanel: Panel;
+          requestingPanel: TargetPanel<MyCoursesPanel>;
       }
     | {
           type: "relayToWebview";
@@ -309,23 +329,30 @@ export type WebviewToExtension =
       }
     | {
           type: "closeSidePanel";
+      }
+    | {
+          type: "cancelTests";
+      }
+    | {
+          type: "submitExercise";
+          course: TestCourse;
+          exercise: TestExercise;
+          exerciseUri: Uri;
+      }
+    | {
+          type: "pasteExercise";
+          course: TestCourse;
+          exercise: TestExercise;
+          requestingPanel: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
+      }
+    | {
+          type: "openLinkInBrowser";
+          url: string;
       };
 
 /*
  * ======== additional types ========
  */
-
-export type Course = {
-    id: number;
-    name: string;
-    title: string;
-    description: string | null;
-    details_url: string;
-    unlock_url: string;
-    reviews_url: string;
-    comet_url: string;
-    spyware_urls: string[];
-};
 
 export type CourseData = {
     id: number;
@@ -370,17 +397,66 @@ export type ExerciseStatus =
     | "new"
     | "opened";
 
-export type Organization = {
-    slug: string;
+export type TestExercise = {
+    id: number;
+    availablePoints: number;
+    awardedPoints: number;
+    /// Equivalent to exercise slug
     name: string;
-    information: string;
-    logo_path: string;
-    pinned: boolean;
+    deadline: string | null;
+    passed: boolean;
+    softDeadline: string | null;
+};
+
+export type TestResultData = {
+    testResult: RunResult;
+    id: number;
+    courseSlug: string;
+    exerciseName: string;
+    tmcLogs: {
+        stdout?: string;
+        stderr?: string;
+    };
+    pasteLink?: string;
+    disabled?: boolean;
+};
+
+export type TestCourse = {
+    id: number;
+    name: string;
+    title: string;
+    description: string;
+    organization: string;
+    availablePoints: number;
+    awardedPoints: number;
+    perhapsExamMode: boolean;
+    newExercises: number[];
+    notifyAfter: number;
+    disabled: boolean;
+    materialUrl: string | null;
+};
+
+export type FeedbackQuestion = {
+    id: number;
+    kind: string;
+    lower?: number;
+    upper?: number;
+    question: string;
 };
 
 /*
  * ======== helpers ========
  */
+
+// excludes from the message union all variants where the
+// target type doesn't have the panel type
+// works...somehow
+export type Targeted<M, T extends PanelType> = Exclude<
+    M,
+    { target: { type: Exclude<PanelType, T> } }
+>;
+
+export type Broadcast<M, T extends PanelType> = Omit<Targeted<M, T>, "target">;
 
 export function assertUnreachable(x: never): never {
     throw new Error(`Unreachable ${JSON.stringify(x, null, 2)}`);

@@ -1,6 +1,8 @@
 import pLimit from "p-limit";
 import { Ok, Result } from "ts-results";
 
+import { TmcPanel } from "../panels/TmcPanel";
+import { ExtensionToWebview } from "../shared/shared";
 import { ExerciseStatus, WebviewMessage } from "../ui/types";
 import TmcWebview from "../ui/webview";
 import { Logger } from "../utilities";
@@ -54,7 +56,7 @@ export async function downloadOrUpdateExercises(
 
     const { downloaded, failed, skipped } = downloadResult.val;
     skipped.length > 0 && Logger.warn(`${skipped.length} downloads were skipped.`);
-    downloaded.forEach((x) => statuses.set(x.id, "opened"));
+    downloaded.forEach((x) => statuses.set(x.id, "closed"));
     skipped.forEach((x) => statuses.set(x.id, "closed"));
     failed?.forEach(([exercise, reason]) => {
         Logger.error(`Failed to download exercise ${exercise["exercise-slug"]}: ${reason}`);
@@ -74,6 +76,19 @@ export async function downloadOrUpdateExercises(
 
 function postMessages(webview: TmcWebview, statuses: Map<number, ExerciseStatus>): void {
     webview.postMessage(...Array.from(statuses.entries()).map(([id, s]) => wrapToMessage(id, s)));
+    TmcPanel.postMessage(
+        ...Array.from(statuses.entries()).map(([id, s]) => {
+            const message: ExtensionToWebview = {
+                type: "exerciseStatusChange",
+                exerciseId: id,
+                status: s,
+                target: {
+                    type: "CourseDetails",
+                },
+            };
+            return message;
+        }),
+    );
 }
 
 function wrapToMessage(exerciseId: number, status: ExerciseStatus): WebviewMessage {

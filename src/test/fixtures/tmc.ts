@@ -1,4 +1,4 @@
-import { LocalExercise } from "../../api/langsSchema";
+import { LocalExercise } from "../../shared/langsSchema";
 
 const checkExerciseUpdates: Array<{ id: number }> = [{ id: 2 }];
 

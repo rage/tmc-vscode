@@ -1,8 +1,8 @@
 import { Err, Ok, Result } from "ts-results";
 import { IMock, It, Mock } from "typemoq";
 
-import { DownloadOrUpdateCourseExercisesResult, LocalExercise } from "../../api/langsSchema";
 import TMC from "../../api/tmc";
+import { DownloadOrUpdateCourseExercisesResult, LocalExercise } from "../../shared/langsSchema";
 import {
     checkExerciseUpdates,
     closedExercisesPythonCourse,

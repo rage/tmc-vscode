@@ -20,3 +20,7 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# shared
+/src/shared
+/webview-ui/src/shared

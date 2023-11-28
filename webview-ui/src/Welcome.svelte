@@ -1,13 +1,13 @@
 <script lang="ts">
-    import { WelcomePanel, assertUnreachable } from "./shared";
-    import { addExtensionMessageListener, loadable } from "./utilities/script";
+    import { WelcomePanel, assertUnreachable } from "./shared/shared";
+    import { addMessageListener, loadable } from "./utilities/script";
 
     export let panel: WelcomePanel;
 
     const version = loadable<string>();
     const exerciseDecorations = loadable<string>();
 
-    addExtensionMessageListener(panel, (message) => {
+    addMessageListener(panel, (message) => {
         switch (message.type) {
             case "setWelcomeData": {
                 version.set(message.version);
@@ -15,7 +15,7 @@
                 break;
             }
             default:
-                assertUnreachable(message);
+                assertUnreachable(message.type);
         }
     });
 </script>

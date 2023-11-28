@@ -1,5 +1,5 @@
 import type { WebviewApi } from "vscode-webview";
-import { WebviewToExtension, State } from "../shared";
+import { WebviewToExtension, State } from "../shared/shared";
 
 /**
  * A utility wrapper around the acquireVsCodeApi() function, which enables
@@ -34,6 +34,7 @@ class VSCodeAPIWrapper {
         if (this.vsCodeApi) {
             this.vsCodeApi.postMessage(message);
         } else {
+            console.error("No vsCodeApi");
         }
     }
 

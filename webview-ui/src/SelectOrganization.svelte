@@ -1,11 +1,8 @@
 <script lang="ts">
     import { writable } from "svelte/store";
-    import { Organization, SelectOrganizationPanel, assertUnreachable } from "./shared";
-    import {
-        addExtensionMessageListener,
-        loadable,
-        postMessageToWebview,
-    } from "./utilities/script";
+    import { SelectOrganizationPanel, assertUnreachable } from "./shared/shared";
+    import { addMessageListener, loadable, postMessageToWebview } from "./utilities/script";
+    import { Organization } from "./shared/langsSchema";
 
     export let panel: SelectOrganizationPanel;
 
@@ -21,8 +18,9 @@
     }
 
     function selectOrganization(slug: string) {
-        postMessageToWebview(panel.requestingPanel, {
+        postMessageToWebview({
             type: "selectedOrganization",
+            target: panel.requestingPanel,
             slug,
         });
     }
@@ -31,7 +29,7 @@
         filter.set(query.toUpperCase());
     }
 
-    addExtensionMessageListener(panel, (message) => {
+    addMessageListener(panel, (message) => {
         switch (message.type) {
             case "setOrganizations": {
                 message.organizations.sort((l, r) => l.name.localeCompare(r.name));

@@ -9,12 +9,15 @@ import {
     login,
     openExercises,
     openWorkspace,
+    pasteExercise,
     removeCourse,
     updateCourse,
 } from "../actions";
 import { ActionContext } from "../actions/types";
+import * as commands from "../commands";
 import { uiDownloadExercises } from "../init";
-import { Panel, WebviewToExtension } from "../shared";
+import { ExtensionToWebview, Panel, WebviewToExtension } from "../shared/shared";
+import { Logger } from "../utilities";
 import { getNonce } from "../utilities/getNonce";
 import { getUri } from "../utilities/getUri";
 import { postMessageToWebview, renderPanel } from "../utilities/panel";
@@ -36,9 +39,25 @@ export class TmcPanel {
 
     private _disposables: Disposable[] = [];
 
+    // sends a message to the main and side panels
+    public static async postMessage(...messages: Array<ExtensionToWebview>): Promise<void> {
+        Logger.info("Posting message(s) to webview", JSON.stringify(messages, null, 2));
+        const mainWebview = TmcPanel.mainPanel?._panel.webview;
+        const sideWebview = TmcPanel.sidePanel?._panel.webview;
+        for (const message of messages) {
+            if (mainWebview) {
+                mainWebview.postMessage(message);
+            }
+            if (sideWebview) {
+                sideWebview.postMessage(message);
+            }
+        }
+    }
+
     // renders the `panel` in the main panel
     public static async renderMain(
         extensionUri: Uri,
+        extensionContext: vscode.ExtensionContext,
         actionContext: ActionContext,
         panel: Panel,
     ): Promise<void> {
@@ -52,7 +71,13 @@ export class TmcPanel {
             );
             TmcPanel.mainPanel._panel.reveal(column);
         } else {
-            const currentPanel = await TmcPanel.renderNew(extensionUri, actionContext, panel, true);
+            const currentPanel = await TmcPanel.renderNew(
+                extensionUri,
+                extensionContext,
+                actionContext,
+                panel,
+                true,
+            );
             TmcPanel.mainPanel = currentPanel;
         }
     }
@@ -60,6 +85,7 @@ export class TmcPanel {
     // renders the `panel` in the side panel
     static async renderSide(
         extensionUri: Uri,
+        extensionContext: vscode.ExtensionContext,
         actionContext: ActionContext,
         panel: Panel,
     ): Promise<void> {
@@ -75,6 +101,7 @@ export class TmcPanel {
         } else {
             const currentPanel = await TmcPanel.renderNew(
                 extensionUri,
+                extensionContext,
                 actionContext,
                 panel,
                 false,
@@ -87,6 +114,7 @@ export class TmcPanel {
     // otherwise the panel can simply be "revealed" with `panel.reveal`
     static async renderNew(
         extensionUri: Uri,
+        extensionContext: vscode.ExtensionContext,
         actionContext: ActionContext,
         panel: Panel,
         isMain: boolean,
@@ -109,13 +137,20 @@ export class TmcPanel {
                 Uri.joinPath(extensionUri, "resources"),
             ],
         });
-        const currentPanel = new TmcPanel(webviewPanel, extensionUri, actionContext, isMain);
+        const currentPanel = new TmcPanel(
+            webviewPanel,
+            extensionContext,
+            extensionUri,
+            actionContext,
+            isMain,
+        );
         await renderPanel(panel, extensionUri, actionContext, currentPanel._panel.webview);
         return currentPanel;
     }
 
     private constructor(
         panel: WebviewPanel,
+        extensionContext: vscode.ExtensionContext,
         extensionUri: Uri,
         actionContext: ActionContext,
         isMain: boolean,
@@ -126,7 +161,12 @@ export class TmcPanel {
 
         this._panel.webview.html = this._getWebviewContent(this._panel.webview, extensionUri);
 
-        this._setWebviewMessageListener(this._panel.webview, extensionUri, actionContext);
+        this._setWebviewMessageListener(
+            this._panel.webview,
+            extensionContext,
+            extensionUri,
+            actionContext,
+        );
 
         this._isMain = isMain;
     }
@@ -200,6 +240,7 @@ export class TmcPanel {
     // receives messages from the webview
     private _setWebviewMessageListener(
         webview: Webview,
+        extensionContext: vscode.ExtensionContext,
         extensionUri: Uri,
         actionContext: ActionContext,
     ): void {
@@ -213,17 +254,11 @@ export class TmcPanel {
                             message.password,
                         );
                         if (result.err) {
-                            postMessageToWebview(
-                                webview,
-                                {
-                                    id: message.sourcePanel.id,
-                                    type: "Login",
-                                },
-                                {
-                                    type: "loginError",
-                                    error: result.val.message,
-                                },
-                            );
+                            postMessageToWebview(webview, {
+                                type: "loginError",
+                                target: message.sourcePanel,
+                                error: result.val.message,
+                            });
                         } else {
                             await renderPanel(
                                 {
@@ -251,7 +286,7 @@ export class TmcPanel {
                         break;
                     }
                     case "selectOrganization": {
-                        await TmcPanel.renderSide(extensionUri, actionContext, {
+                        await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
                             id: randomPanelId(),
                             type: "SelectOrganization",
                             requestingPanel: message.sourcePanel,
@@ -302,7 +337,7 @@ export class TmcPanel {
                         );
                         break;
                     }
-                    case "closeSelected": {
+                    case "closeExercises": {
                         const result = await closeExercises(
                             actionContext,
                             message.ids,
@@ -330,7 +365,7 @@ export class TmcPanel {
                         );
                         break;
                     }
-                    case "openSelected": {
+                    case "openExercises": {
                         // todo: move to actions
                         // download exercises that don't exist locally
                         const course = actionContext.userData.getCourseByName(message.courseName);
@@ -380,6 +415,19 @@ export class TmcPanel {
                             courseId: course.id,
                             exerciseIds: actionContext.userData.getCourse(course.id).newExercises,
                         });
+                        const exerciseStatusChangeMessages: Array<ExtensionToWebview> =
+                            message.ids.map((id) => {
+                                const message: ExtensionToWebview = {
+                                    type: "exerciseStatusChange",
+                                    exerciseId: id,
+                                    status: "opened",
+                                    target: {
+                                        type: "CourseDetails",
+                                    },
+                                };
+                                return message;
+                            });
+                        TmcPanel.postMessage(...exerciseStatusChangeMessages);
                         break;
                     }
                     case "refreshCourseDetails": {
@@ -412,7 +460,7 @@ export class TmcPanel {
                         break;
                     }
                     case "selectCourse": {
-                        await TmcPanel.renderSide(extensionUri, actionContext, {
+                        await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
                             id: randomPanelId(),
                             type: "SelectCourse",
                             organizationSlug: message.slug,
@@ -431,8 +479,9 @@ export class TmcPanel {
                                 `Failed to add new course: ${result.val.message}`,
                             );
                         }
-                        postMessageToWebview(webview, message.requestingPanel, {
-                            type: "setCourses",
+                        postMessageToWebview(webview, {
+                            type: "setMyCourses",
+                            target: message.requestingPanel,
                             courses: actionContext.userData.getCourses(),
                         });
                         break;
@@ -455,6 +504,54 @@ export class TmcPanel {
                         if (TmcPanel.sidePanel) {
                             TmcPanel.sidePanel.dispose();
                         }
+                        break;
+                    }
+                    case "cancelTests": {
+                        break;
+                    }
+                    case "submitExercise": {
+                        await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
+                            id: randomPanelId(),
+                            type: "ExerciseSubmission",
+                            course: message.course,
+                            exercise: message.exercise,
+                        });
+                        commands.submitExercise(
+                            extensionContext,
+                            actionContext,
+                            message.exerciseUri,
+                        );
+
+                        break;
+                    }
+                    case "pasteExercise": {
+                        const pasteResult = await pasteExercise(
+                            actionContext,
+                            message.course.name,
+                            message.exercise.name,
+                        );
+                        if (pasteResult.err) {
+                            actionContext.dialog.errorNotification(
+                                `Failed to send to TMC Paste: ${pasteResult.val.message}.`,
+                                pasteResult.val,
+                            );
+                            TmcPanel.postMessage({
+                                type: "pasteError",
+                                target: message.requestingPanel,
+                                error: pasteResult.val.message,
+                            });
+                        } else {
+                            const value = pasteResult.val || "Link not provided by server.";
+                            TmcPanel.postMessage({
+                                type: "pasteResult",
+                                target: message.requestingPanel,
+                                pasteLink: value,
+                            });
+                        }
+                        break;
+                    }
+                    case "openLinkInBrowser": {
+                        vscode.env.openExternal(vscode.Uri.parse(message.url));
                         break;
                     }
                     case "ready": {

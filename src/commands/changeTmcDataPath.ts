@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 
 import { moveExtensionDataPath } from "../actions";
 import { ActionContext } from "../actions/types";
+import { TmcPanel } from "../panels/TmcPanel";
 import { formatSizeInBytes, Logger } from "../utilities";
 
 /**
@@ -43,6 +44,13 @@ export async function changeTmcDataPath(actionContext: ActionContext): Promise<v
             command: "setTmcDataFolder",
             diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
             path: resources.projectsDirectory,
+        });
+        TmcPanel.postMessage({
+            type: "setTmcDataPath",
+            tmcDataPath: resources.projectsDirectory,
+            target: {
+                type: "MyCourses",
+            },
         });
     }
 }

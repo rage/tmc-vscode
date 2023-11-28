@@ -1,4 +1,4 @@
-import { CourseExercise, Exercise } from "../api/langsSchema";
+import { CourseExercise, Exercise } from "../shared/langsSchema";
 import { LocalCourseExercise } from "../api/storage";
 import {
     LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
