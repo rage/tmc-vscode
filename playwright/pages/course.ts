@@ -11,7 +11,7 @@ export class CoursePage extends TmcPage {
     }
 
     async openWorkspace(): Promise<void> {
-        await this.webview.getByLabel("Open workspace").click();
+        await this.webview.getByRole("button", { name: "Open workspace" }).click();
         const yesButton = this.page.getByRole("button", { name: "Yes" });
         try {
             // click yes if prompted

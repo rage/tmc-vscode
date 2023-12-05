@@ -6,7 +6,6 @@ import { ActionContext } from "../actions/types";
 import * as commands from "../commands";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { TmcTreeNode } from "../ui/treeview/treenode";
-import { TemplateData } from "../ui/types";
 import { Logger } from "../utilities/";
 
 export function registerCommands(
@@ -126,6 +125,7 @@ export function registerCommands(
             TmcPanel.renderMain(context.extensionUri, context, actionContext, {
                 id: randomPanelId(),
                 type: "MyCourses",
+                courseDeadlines: {},
             });
         }),
 

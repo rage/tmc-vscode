@@ -17,8 +17,6 @@ export class TmcPage {
     }
 
     getSidePanel(): FrameLocator {
-        return this.page
-            .frameLocator(`iframe.webview.ready#active-frame[title="TestMyCode"]`)
-            .last();
+        return this.page.frameLocator(`.webview.ready`).last().frameLocator("iframe#active-frame");
     }
 }

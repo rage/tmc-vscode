@@ -483,6 +483,7 @@ export class TmcPanel {
                                 {
                                     id: randomPanelId(),
                                     type: "MyCourses",
+                                    courseDeadlines: {},
                                 },
                                 webview,
                             );
@@ -522,6 +523,7 @@ export class TmcPanel {
                                 {
                                     id: randomPanelId(),
                                     type: "MyCourses",
+                                    courseDeadlines: {},
                                 },
                                 webview,
                             );
@@ -544,6 +546,7 @@ export class TmcPanel {
                             {
                                 id: randomPanelId(),
                                 type: "MyCourses",
+                                courseDeadlines: {},
                             },
                             webview,
                         );

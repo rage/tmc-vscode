@@ -86,7 +86,7 @@ export type SelectOrganizationPanel = {
     id: number;
     type: "SelectOrganization";
     // the result of the selection is sent back to this panel
-    requestingPanel: MyCoursesPanel;
+    requestingPanel: TargetPanel<MyCoursesPanel>;
 };
 
 export type SelectCoursePanel = {
@@ -94,7 +94,7 @@ export type SelectCoursePanel = {
     type: "SelectCourse";
     organizationSlug: string;
     // the result of the selection is sent back to this panel
-    requestingPanel: MyCoursesPanel;
+    requestingPanel: TargetPanel<MyCoursesPanel>;
 };
 
 export type ExerciseTestsPanel = {
@@ -267,7 +267,7 @@ export type ExtensionToWebview =
 export type TargetedExtensionToWebview<T extends PanelType> = Targeted<ExtensionToWebview, T>;
 
 // helper type for messages from the extension to a specific panel type
-export type BroadcastExtensionToWebview<T extends PanelType> = Targeted<ExtensionToWebview, T>;
+export type BroadcastExtensionToWebview<T extends PanelType> = Broadcast<ExtensionToWebview, T>;
 
 /*
  * ======== from webview ========

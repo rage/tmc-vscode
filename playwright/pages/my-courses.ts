@@ -18,17 +18,10 @@ export class MyCoursesPage extends TmcPage {
     async addNewCourse(name: string): Promise<void> {
         await this.webview.getByRole("button", { name: "Add new course" }).click();
 
-        // this wait lets the next frame load properly
-        // interacting with it too quickly causes it to get stuck for an unknown reason
-        // we should be able to fix it with the new svelte implementation
-        await this.page.waitForTimeout(1000);
         await this.getSidePanel()
             .getByRole("heading", { name: "Test Organization (test)" })
             .click();
 
-        // this wait lets the next frame load properly
-        // interacting with it too quickly causes it to get stuck for an unknown reason
-        await this.page.waitForTimeout(1000);
         await this.getSidePanel().getByRole("heading", { name }).click();
     }
 

@@ -29,6 +29,7 @@ export async function displayUserCourses(
     const panel: MyCoursesPanel = {
         type: "MyCourses",
         id: randomPanelId(),
+        courseDeadlines: {},
     };
 
     const courses = userData.getCourses();
@@ -70,7 +71,12 @@ export async function displayUserCourses(
             }) || [],
         );
 
-        TmcPanel.postMessage({ type: "setNextCourseDeadline", target: panel, deadline });
+        TmcPanel.postMessage({
+            type: "setNextCourseDeadline",
+            target: panel,
+            courseId: course.id,
+            deadline,
+        });
     });
 }
 

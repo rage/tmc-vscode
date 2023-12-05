@@ -55,7 +55,12 @@
                 break;
             }
             case "setNewExercises": {
-                // todo
+                const courses = panel.courses ?? [];
+                const course = courses.find((c) => c.id === message.courseId);
+                if (course) {
+                    course.newExercises = message.exerciseIds;
+                    savePanelState(panel);
+                }
                 break;
             }
             case "setCourseDisabledStatus": {

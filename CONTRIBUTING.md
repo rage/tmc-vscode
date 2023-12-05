@@ -67,13 +67,7 @@ You can also build the extension by running `npm run webpack` or `npm run webpac
 
 ## Testing
 
-### Unit tests
-
-#### Integration
-
-The integration tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so. The integration tests can be run with `npm run test`. If you get a `Connection error: TypeError`, make sure the backend is running.
-
-#### Playwright
+The tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so. The tests can be run with `npm run test`. If you get a `Connection error: TypeError`, make sure the backend is running.
 
 1. `npm run webpack:watch` to keep building the extension while writing code while VSCode is closed.
 

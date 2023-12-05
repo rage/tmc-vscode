@@ -11,7 +11,7 @@ export class TestResultsPage extends TmcPage {
     }
 
     async submit(): Promise<void> {
-        await this.getWebview().getByRole("button", { name: "Submit to server" }).click();
+        await this.getWebview().getByRole("button", { name: "Send solution to server" }).click();
     }
 
     getWebview(): FrameLocator {
