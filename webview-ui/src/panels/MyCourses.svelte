@@ -189,7 +189,7 @@
                             on:click|stopPropagation={() => removeCourse(course.id)}
                             on:keypress|stopPropagation={() => removeCourse(course.id)}
                         >
-                            <span aria-hidden="true">&times;</span>
+                            ×
                         </vscode-button>
                     </div>
                     <p>{course.description}</p>

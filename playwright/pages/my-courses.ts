@@ -1,5 +1,7 @@
 import { FrameLocator, Page } from "@playwright/test";
 
+import { SelectCourse } from "./select-course";
+import { SelectOrganization } from "./select-organization";
 import { TmcPage } from "./tmc";
 
 export class MyCoursesPage extends TmcPage {
@@ -18,11 +20,11 @@ export class MyCoursesPage extends TmcPage {
     async addNewCourse(name: string): Promise<void> {
         await this.webview.getByRole("button", { name: "Add new course" }).click();
 
-        await this.getSidePanel()
-            .getByRole("heading", { name: "Test Organization (test)" })
-            .click();
+        const selectOrganization = new SelectOrganization(this.page, this.webview);
+        await selectOrganization.select("Test Organization (test)");
 
-        await this.getSidePanel().getByRole("heading", { name }).click();
+        const selectCourse = new SelectCourse(this.page, this.webview);
+        await selectCourse.select(name);
     }
 
     async selectCourse(name: string): Promise<void> {

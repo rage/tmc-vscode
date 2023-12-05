@@ -113,19 +113,28 @@
 {/if}
 
 {#if $submissionResult === undefined}
-    <vscode-button appearance="secondary" on:click={runInBackground} on:keypress={runInBackground}>
-        Run in background
-    </vscode-button>
-    <vscode-button
-        appearance="secondary"
-        on:click={() => $submissionStatusUrl && showInBrowser($submissionStatusUrl)}
-        on:keypress={() => $submissionStatusUrl && showInBrowser($submissionStatusUrl)}
-        enabled={$submissionStatusUrl !== undefined}
-    >
-        Show submission in browser
-    </vscode-button>
+    <div>
+        <vscode-button
+            appearance="secondary"
+            on:click={runInBackground}
+            on:keypress={runInBackground}
+        >
+            Run in background
+        </vscode-button>
+        <vscode-button
+            appearance="secondary"
+            on:click={() => $submissionStatusUrl && showInBrowser($submissionStatusUrl)}
+            on:keypress={() => $submissionStatusUrl && showInBrowser($submissionStatusUrl)}
+            enabled={$submissionStatusUrl !== undefined}
+        >
+            Show submission in browser
+        </vscode-button>
+    </div>
 
-    <progress value={$progressPercent} max={100} />
+    <div>
+        <progress value={$progressPercent} max={100} />
+    </div>
+
     <div>
         {#each $progressMessages as message, idx}
             {#if idx < $progressMessages.length - 1}

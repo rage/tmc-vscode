@@ -9,4 +9,8 @@ export class SelectOrganization extends TmcPage {
     ) {
         super(page, webview);
     }
+
+    async select(org: string): Promise<void> {
+        await this.getSidePanel().getByRole("heading", { name: org }).click();
+    }
 }
