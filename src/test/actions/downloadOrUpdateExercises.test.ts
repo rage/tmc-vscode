@@ -11,13 +11,10 @@ import Settings from "../../config/settings";
 import { DownloadOrUpdateCourseExercisesResult, ExerciseDownload } from "../../shared/langsSchema";
 import { ExerciseStatus, WebviewMessage } from "../../ui/types";
 import UI from "../../ui/ui";
-import TmcWebview from "../../ui/webview";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createDialogMock } from "../mocks/dialog";
 import { createSettingsMock, SettingsMockValues } from "../mocks/settings";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
-import { createUIMock, UIMockValues } from "../mocks/ui";
-import { createWebviewMock, WebviewMockValues } from "../mocks/webview";
 
 const helloWorld: ExerciseDownload = {
     "course-slug": "python-course",
@@ -42,10 +39,7 @@ suite("downloadOrUpdateExercises action", function () {
     let tmcMock: IMock<TMC>;
     let tmcMockValues: TMCMockValues;
     let uiMock: IMock<UI>;
-    let uiMockValues: UIMockValues;
     let webviewMessages: WebviewMessage[];
-    let webviewMock: IMock<TmcWebview>;
-    let webviewMockValues: WebviewMockValues;
 
     const actionContext = (): ActionContext => ({
         ...stubContext,
@@ -71,11 +65,7 @@ suite("downloadOrUpdateExercises action", function () {
         [dialogMock] = createDialogMock();
         [settingsMock, settingsMockValues] = createSettingsMock();
         [tmcMock, tmcMockValues] = createTMCMock();
-        [uiMock, uiMockValues] = createUIMock();
         webviewMessages = [];
-        [webviewMock, webviewMockValues] = createWebviewMock();
-        webviewMockValues.postMessage = (...x): number => webviewMessages.push(...x);
-        uiMockValues.webview = webviewMock.object;
     });
 
     test("should return empty results if no exercises are given", async function () {

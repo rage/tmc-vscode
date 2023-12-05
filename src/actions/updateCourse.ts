@@ -1,6 +1,7 @@
 import { Ok, Result } from "ts-results";
 
 import { ConnectionError, ForbiddenError } from "../errors";
+import { TmcPanel } from "../panels/TmcPanel";
 import { Logger } from "../utilities";
 import { combineApiExerciseData } from "../utilities/apiData";
 
@@ -18,18 +19,24 @@ export async function updateCourse(
     actionContext: ActionContext,
     courseId: number,
 ): Promise<Result<boolean, Error>> {
-    const { exerciseDecorationProvider, tmc, ui, userData, workspaceManager } = actionContext;
+    const { exerciseDecorationProvider, tmc, userData, workspaceManager } = actionContext;
     Logger.info("Updating course");
 
     const postMessage = (courseId: number, disabled: boolean, exerciseIds: number[]): void => {
-        ui.webview.postMessage(
+        TmcPanel.postMessage(
             {
-                command: "setNewExercises",
+                type: "setNewExercises",
+                target: {
+                    type: "MyCourses",
+                },
                 courseId,
                 exerciseIds,
             },
             {
-                command: "setCourseDisabledStatus",
+                type: "setCourseDisabledStatus",
+                target: {
+                    type: "CourseDetails",
+                },
                 courseId,
                 disabled,
             },

@@ -1,82 +1,70 @@
 <script lang="ts">
     import { derived, writable } from "svelte/store";
-    import {
-        CourseData,
-        CourseDetailsPanel,
-        ExerciseGroup,
-        ExerciseStatus,
-        assertUnreachable,
-    } from "./shared/shared";
-    import { vscode } from "./utilities/vscode";
-    import { addMessageListener, loadable } from "./utilities/script";
-    import ExercisePart from "./components/ExercisePart.svelte";
+    import { CourseData, CourseDetailsPanel, assertUnreachable } from "../shared/shared";
+    import { vscode } from "../utilities/vscode";
+    import { addMessageListener, savePanelState } from "../utilities/script";
+    import ExercisePart from "../components/ExercisePart.svelte";
+    import { onMount } from "svelte";
 
     export let panel: CourseDetailsPanel;
 
-    const course = loadable<CourseData>();
-    const offlineMode = loadable<boolean>();
-    const exerciseGroups = loadable<Array<ExerciseGroup>>();
-    const updateableExercises = loadable<Array<number>>();
-    const disabled = loadable<boolean>();
-    const exerciseStatuses = writable<Record<number, ExerciseStatus>>({});
     const totalDownloading = writable<number>(0);
     const refreshing = writable<boolean>(false);
     const checkedExercises = writable<Record<number, boolean>>({});
     const checkedExercisesCount = derived(checkedExercises, ($checkedExercises) => {
         return Object.values($checkedExercises).filter((checked) => checked).length;
     });
-    const pointsGained = derived(course, ($course) => {
-        return $course ? `${$course.awardedPoints} / ${$course.availablePoints}` : undefined;
-    });
 
+    onMount(() => {
+        vscode.postMessage({
+            type: "requestCourseDetailsData",
+            sourcePanel: panel,
+        });
+    });
     addMessageListener(panel, (message) => {
         switch (message.type) {
             case "setCourseData": {
-                course.set(message.courseData);
-                disabled.update((d) => {
-                    if (d === undefined) {
-                        return message.courseData.disabled;
-                    } else {
-                        return d;
-                    }
-                });
+                panel.course = message.courseData;
+                panel.disabled = message.courseData.disabled;
+                savePanelState(panel);
                 break;
             }
             case "setCourseGroups": {
-                offlineMode.set(message.offlineMode);
-                exerciseGroups.set(message.exerciseGroups);
+                panel.offlineMode = message.offlineMode;
+                panel.exerciseGroups = message.exerciseGroups;
+                savePanelState(panel);
                 break;
             }
             case "setCourseDisabledStatus": {
                 if (message.courseId === panel.courseId) {
-                    disabled.set(message.disabled);
+                    panel.disabled = message.disabled;
+                    savePanelState(panel);
                 }
                 break;
             }
             case "exerciseStatusChange": {
-                exerciseStatuses.update((es) => {
-                    es[message.exerciseId] = message.status;
-                    return es;
-                });
+                panel.exerciseStatuses[message.exerciseId] = message.status;
+                savePanelState(panel);
                 break;
             }
             case "setUpdateables": {
-                updateableExercises.set(message.exerciseIds);
+                panel.updateableExercises = message.exerciseIds;
+                savePanelState(panel);
                 break;
             }
             case "setCourseDisabledStatus": {
-                disabled.set(message.disabled);
+                panel.disabled = message.disabled;
+                savePanelState(panel);
                 break;
             }
             case "exerciseStatusChange": {
-                exerciseStatuses.update((s) => {
-                    s[message.exerciseId] = message.status;
-                    return s;
-                });
+                panel.exerciseStatuses[message.exerciseId] = message.status;
+                savePanelState(panel);
                 break;
             }
             case "setCourseGroups": {
-                exerciseGroups.set(message.exerciseGroups);
+                panel.exerciseGroups = message.exerciseGroups;
+                savePanelState(panel);
                 break;
             }
             default:
@@ -133,7 +121,7 @@
     function updateExercises(course: CourseData) {
         vscode.postMessage({
             type: "downloadExercises",
-            ids: $updateableExercises ?? [],
+            ids: panel.updateableExercises ?? [],
             courseName: course.name,
             organizationSlug: course.organization,
             courseId: course.id,
@@ -158,25 +146,25 @@
         My Courses
     </a>
     /
-    {$course?.title ?? "Loading course..."}
+    {panel.course?.title ?? "Loading course..."}
 </nav>
 <div class="header">
-    {#if $course === undefined}
+    {#if panel.course === undefined}
         <h2>Loading course...</h2>
     {:else}
-        <h2>{$course.title} <small class="muted">({$course.name})</small></h2>
+        <h2>{panel.course.title} <small class="muted">({panel.course.name})</small></h2>
     {/if}
 
     <div>
-        {$course?.description ?? "Loading description..."}
+        {panel.course?.description ?? "Loading description..."}
     </div>
 
     <div>
         <vscode-button
             class="refresh"
             aria-label="Refresh"
-            on:click={() => $course !== undefined && refresh($course.id)}
-            on:keypress={() => $course !== undefined && refresh($course.id)}
+            on:click={() => panel.course !== undefined && refresh(panel.course.id)}
+            on:keypress={() => panel.course !== undefined && refresh(panel.course.id)}
             disabled={$refreshing || $totalDownloading > 0}
             appearance="secondary"
         >
@@ -189,20 +177,22 @@
     </div>
 
     <div>
-        Points gained: {$pointsGained ?? "Loading points..."}
+        Points gained: {panel.course
+            ? `${panel.course.awardedPoints} / ${panel.course.availablePoints}`
+            : "Loading points..."}
     </div>
 
-    {#if $course?.materialUrl}
+    {#if panel.course?.materialUrl}
         <div>
-            Material: <a href={$course.materialUrl}>{$course.materialUrl}</a>
+            Material: <a href={panel.course.materialUrl}>{panel.course.materialUrl}</a>
         </div>
     {/if}
 
     <div class="open-workspace-button">
         <vscode-button
             aria-label="Open workspace"
-            on:click={() => $course !== undefined && openWorkspace($course.name)}
-            on:keypress={() => $course !== undefined && openWorkspace($course.name)}
+            on:click={() => panel.course !== undefined && openWorkspace(panel.course.name)}
+            on:keypress={() => panel.course !== undefined && openWorkspace(panel.course.name)}
         >
             Open workspace
         </vscode-button>
@@ -212,40 +202,41 @@
 <div>
     <div
         role="alert"
-        hidden={$updateableExercises === undefined || $updateableExercises.length > 0}
+        hidden={panel.updateableExercises === undefined || panel.updateableExercises.length > 0}
     >
         Updates found for exercises
         <vscode-button
-            on:click={() => $course !== undefined && updateExercises($course)}
-            on:keypress={() => $course !== undefined && updateExercises($course)}
+            on:click={() => panel.course !== undefined && updateExercises(panel.course)}
+            on:keypress={() => panel.course !== undefined && updateExercises(panel.course)}
         >
             Update exercises
         </vscode-button>
     </div>
-    {#if $offlineMode}
+    {#if panel.offlineMode}
         <div role="alert">
             Unable to fetch exercise data from server. Displaying local exercises.
         </div>
     {/if}
-    {#if $course?.perhapsExamMode}
+    {#if panel.course?.perhapsExamMode}
         <div role="alert">This is an exam. Exercise submission results will not be shown.</div>
     {/if}
-    {#if $disabled}
+    {#if panel.disabled}
         <div role="alert">
             This course has been disabled. Exercises cannot be downloaded or submitted.
         </div>
     {/if}
 </div>
 
-{#if $exerciseGroups !== undefined}
-    {#each $exerciseGroups as exerciseGroup}
+{#if panel.exerciseGroups !== undefined}
+    {#each panel.exerciseGroups as exerciseGroup}
         <ExercisePart
             {exerciseGroup}
-            exerciseStatuses={$exerciseStatuses}
+            exerciseStatuses={panel.exerciseStatuses}
             bind:checkedExercises={$checkedExercises}
-            onDownloadAll={(exercises) => $course && downloadExercises($course, exercises)}
-            onOpenAll={(exercises) => $course && openExercises($course.name, exercises)}
-            onCloseAll={(exercises) => $course && closeExercises($course.name, exercises)}
+            onDownloadAll={(exercises) =>
+                panel.course && downloadExercises(panel.course, exercises)}
+            onOpenAll={(exercises) => panel.course && openExercises(panel.course.name, exercises)}
+            onCloseAll={(exercises) => panel.course && closeExercises(panel.course.name, exercises)}
         />
     {/each}
 {:else}
@@ -262,29 +253,33 @@
                 <vscode-button
                     class="action-bar-button"
                     on:click={() =>
-                        $course !== undefined && downloadExercises($course, getCheckedExercises())}
+                        panel.course !== undefined &&
+                        downloadExercises(panel.course, getCheckedExercises())}
                     on:keypress={() =>
-                        $course !== undefined && downloadExercises($course, getCheckedExercises())}
+                        panel.course !== undefined &&
+                        downloadExercises(panel.course, getCheckedExercises())}
                 >
                     Download
                 </vscode-button>
                 <vscode-button
                     class="action-bar-button"
                     on:click={() =>
-                        $course !== undefined && openExercises($course.name, getCheckedExercises())}
+                        panel.course !== undefined &&
+                        openExercises(panel.course.name, getCheckedExercises())}
                     on:keypress={() =>
-                        $course !== undefined && openExercises($course.name, getCheckedExercises())}
+                        panel.course !== undefined &&
+                        openExercises(panel.course.name, getCheckedExercises())}
                 >
                     Open
                 </vscode-button>
                 <vscode-button
                     class="action-bar-button"
                     on:click={() =>
-                        $course !== undefined &&
-                        closeExercises($course.name, getCheckedExercises())}
+                        panel.course !== undefined &&
+                        closeExercises(panel.course.name, getCheckedExercises())}
                     on:keypress={() =>
-                        $course !== undefined &&
-                        closeExercises($course.name, getCheckedExercises())}
+                        panel.course !== undefined &&
+                        closeExercises(panel.course.name, getCheckedExercises())}
                 >
                     Close
                 </vscode-button>

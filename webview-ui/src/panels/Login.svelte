@@ -1,8 +1,9 @@
 <script lang="ts">
     import { writable } from "svelte/store";
-    import { vscode } from "./utilities/vscode";
-    import { addMessageListener } from "./utilities/script";
-    import { LoginPanel, assertUnreachable } from "./shared/shared";
+    import { vscode } from "../utilities/vscode";
+    import { addMessageListener } from "../utilities/script";
+    import { LoginPanel, assertUnreachable } from "../shared/shared";
+    import { onMount } from "svelte";
 
     export let panel: LoginPanel;
 
@@ -11,19 +12,12 @@
     const errorMessage = writable<string | null>(null);
     const loggingIn = writable(false);
 
-    function onSubmit(event: Event) {
-        event.preventDefault();
-        loggingIn.set(true);
-        const username = usernameField.value;
-        const password = passwordField.value;
+    onMount(() => {
         vscode.postMessage({
-            type: "login",
-            username,
-            password,
+            type: "requestLoginData",
             sourcePanel: panel,
         });
-    }
-
+    });
     addMessageListener(panel, (message) => {
         switch (message.type) {
             case "loginError": {
@@ -38,6 +32,19 @@
                 assertUnreachable(message.type);
         }
     });
+
+    function onSubmit(event: Event) {
+        event.preventDefault();
+        loggingIn.set(true);
+        const username = usernameField.value;
+        const password = passwordField.value;
+        vscode.postMessage({
+            type: "login",
+            username,
+            password,
+            sourcePanel: panel,
+        });
+    }
 </script>
 
 <h1>Log in</h1>

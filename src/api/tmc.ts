@@ -259,6 +259,7 @@ export default class TMC {
     public runTests(
         exercisePath: string,
         pythonExecutablePath?: string,
+        progressCallback?: (progressPct: number, message?: string) => void,
     ): [Promise<Result<RunResult, Error>>, () => void] {
         const env: { [key: string]: string } = {};
         if (pythonExecutablePath) {
@@ -267,6 +268,8 @@ export default class TMC {
         const { interrupt, result } = this._spawnLangsProcess({
             args: ["run-tests", "--exercise-path", exercisePath],
             env,
+            onStdout: (data) =>
+                progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
             onStderr: (data) => Logger.info("Rust Langs", data),
             processTimeout: CLI_PROCESS_TIMEOUT,
         });

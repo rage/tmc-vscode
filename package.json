@@ -62,11 +62,6 @@
                 "category": "TMC"
             },
             {
-                "command": "tmcTreeView.setContentFromTemplate",
-                "title": "Set Content From Template",
-                "category": "TMC"
-            },
-            {
                 "command": "tmcTreeView.removeCourse",
                 "title": "Remove Course",
                 "category": "TMC"
@@ -261,10 +256,6 @@
             "commandPalette": [
                 {
                     "command": "tmcView.activateEntry",
-                    "when": "false"
-                },
-                {
-                    "command": "tmcTreeView.setContentFromTemplate",
                     "when": "false"
                 },
                 {

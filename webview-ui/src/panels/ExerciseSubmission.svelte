@@ -1,11 +1,12 @@
 <script lang="ts">
     import { writable } from "svelte/store";
-    import { ExerciseSubmissionPanel, FeedbackQuestion, assertUnreachable } from "./shared/shared";
-    import { addMessageListener, loadable } from "./utilities/script";
-    import { vscode } from "./utilities/vscode";
-    import { SubmissionFinished } from "./shared/langsSchema";
-    import PasteHelpBox from "./components/PasteHelpBox.svelte";
-    import TestResults from "./components/TestResults.svelte";
+    import { ExerciseSubmissionPanel, FeedbackQuestion, assertUnreachable } from "../shared/shared";
+    import { addMessageListener, loadable } from "../utilities/script";
+    import { vscode } from "../utilities/vscode";
+    import { SubmissionFinished } from "../shared/langsSchema";
+    import PasteHelpBox from "../components/PasteHelpBox.svelte";
+    import TestResults from "../components/TestResults.svelte";
+    import { onMount } from "svelte";
 
     export let panel: ExerciseSubmissionPanel;
 
@@ -18,6 +19,12 @@
     const pasteResult = loadable<string>();
     const pasteError = loadable<string>();
 
+    onMount(() => {
+        vscode.postMessage({
+            type: "requestExerciseSubmissionData",
+            sourcePanel: panel,
+        });
+    });
     addMessageListener(panel, (message) => {
         switch (message.type) {
             case "submissionStatusUrl": {

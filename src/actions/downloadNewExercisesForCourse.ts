@@ -1,5 +1,6 @@
 import { Ok, Result } from "ts-results";
 
+import { TmcPanel } from "../panels/TmcPanel";
 import { Logger } from "../utilities";
 
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises";
@@ -16,13 +17,16 @@ export async function downloadNewExercisesForCourse(
     actionContext: ActionContext,
     courseId: number,
 ): Promise<Result<void, Error>> {
-    const { ui, userData } = actionContext;
+    const { userData } = actionContext;
     const course = userData.getCourse(courseId);
     Logger.info(`Downloading new exercises for course: ${course.title}`);
 
-    const postNewExercises = (exerciseIds: number[]): void =>
-        ui.webview.postMessage({
-            command: "setNewExercises",
+    const postNewExercises = async (exerciseIds: number[]): Promise<void> =>
+        await TmcPanel.postMessage({
+            type: "setNewExercises",
+            target: {
+                type: "MyCourses",
+            },
             courseId,
             exerciseIds,
         });

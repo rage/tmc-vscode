@@ -1,9 +1,11 @@
 <script lang="ts">
     import { writable } from "svelte/store";
-    import { SelectCoursePanel, assertUnreachable } from "./shared/shared";
-    import { addMessageListener, loadable, postMessageToWebview } from "./utilities/script";
-    import { vscode } from "./utilities/vscode";
-    import { Course, Organization } from "./shared/langsSchema";
+    import { SelectCoursePanel, assertUnreachable } from "../shared/shared";
+    import { addMessageListener, loadable, postMessageToWebview } from "../utilities/script";
+    import { vscode } from "../utilities/vscode";
+    import { Course, Organization } from "../shared/langsSchema";
+    import TextField from "../components/TextField.svelte";
+    import { onMount } from "svelte";
 
     export let panel: SelectCoursePanel;
 
@@ -12,32 +14,12 @@
     const tmcBackendUrl = loadable<string>();
     const filter = writable<string>("");
 
-    function resolveLogoPath(tmcBackendUrl: string, path: string): string {
-        return !path.endsWith("missing.png")
-            ? `${tmcBackendUrl}${path}`
-            : `${tmcBackendUrl}/logos/small_logo/missing.png`;
-    }
-
-    function changeOrganization() {
+    onMount(() => {
         vscode.postMessage({
-            type: "selectOrganization",
-            sourcePanel: panel.requestingPanel,
+            type: "requestSelectCourseData",
+            sourcePanel: panel,
         });
-    }
-
-    function filterCourses(query: string) {
-        filter.set(query.toUpperCase());
-    }
-
-    function selectCourse(courseId: number) {
-        postMessageToWebview({
-            type: "selectedCourse",
-            target: panel.requestingPanel,
-            organizationSlug: panel.organizationSlug,
-            courseId,
-        });
-    }
-
+    });
     addMessageListener(panel, (message) => {
         switch (message.type) {
             case "setOrganization": {
@@ -56,6 +38,29 @@
                 assertUnreachable(message);
         }
     });
+
+    function resolveLogoPath(tmcBackendUrl: string, path: string): string {
+        return !path.endsWith("missing.png")
+            ? `${tmcBackendUrl}${path}`
+            : `${tmcBackendUrl}/logos/small_logo/missing.png`;
+    }
+    function changeOrganization() {
+        vscode.postMessage({
+            type: "selectOrganization",
+            sourcePanel: panel.requestingPanel,
+        });
+    }
+    function filterCourses(query: string) {
+        filter.set(query.toUpperCase());
+    }
+    function selectCourse(courseId: number) {
+        postMessageToWebview({
+            type: "selectedCourse",
+            target: panel.requestingPanel,
+            organizationSlug: panel.organizationSlug,
+            courseId,
+        });
+    }
 </script>
 
 {#if $organization && $tmcBackendUrl}
@@ -92,12 +97,8 @@
 <div>
     <div>
         <h1>Courses</h1>
-        <div>
-            <input
-                type="text"
-                placeholder="Search courses"
-                on:keyup={(ev) => filterCourses(ev.currentTarget.value)}
-            />
+        <div class="search-container">
+            <TextField placeholder="Search courses" onChange={(val) => filterCourses(val)} />
         </div>
     </div>
 </div>
@@ -115,7 +116,7 @@
             >
                 <div>
                     <h3>
-                        {course.title} <small class="muted">({course.name})</small>
+                        {course.title} <small class="course-slug">({course.name})</small>
                     </h3>
                     <p>{course.description}</p>
                 </div>
@@ -141,8 +142,12 @@
         margin-top: 0.4rem;
         margin-bottom: 0.4rem;
     }
-    .muted {
+    .course-slug {
         opacity: 80%;
+        word-wrap: break-word;
+    }
+    .search-container {
+        padding: 0.4rem;
     }
 
     [hidden] {

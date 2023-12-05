@@ -4,6 +4,14 @@
 
 You can start by looking through the issues marked with label [`good first issue`](https://github.com/rage/tmc-vscode/labels/good%20first%20issue).
 
+## Project structure
+
+- `./src`: contains the "backend" of the extension
+  - `./src/actions`: Contains composable actions used by the VSCode commands and other actions
+  - `./src/commands`: Contains a source file for each VSCode command contributed by the extension
+- `./webview-ui`: contains the "frontend" of the extension
+- `./shared`: contains types that are shared between the backend and frontend
+
 ## Setup
 
 ### Prerequisites

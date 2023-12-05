@@ -20,12 +20,6 @@ export function registerCommands(
     context.subscriptions.push(
         vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
         vscode.commands.registerCommand(
-            "tmcTreeView.setContentFromTemplate",
-            (template: TemplateData) => {
-                ui.webview.setContentFromTemplate(template);
-            },
-        ),
-        vscode.commands.registerCommand(
             "tmcTreeView.removeCourse",
             async (treeNode: TmcTreeNode) => {
                 const confirmed = await dialog.confirmation(
@@ -33,7 +27,7 @@ export function registerCommands(
                 );
                 if (confirmed) {
                     await removeCourse(actionContext, Number(treeNode.id));
-                    await displayUserCourses(actionContext);
+                    await displayUserCourses(context, actionContext);
                 }
             },
         ),
@@ -81,6 +75,7 @@ export function registerCommands(
                     id: randomPanelId(),
                     type: "CourseDetails",
                     courseId,
+                    exerciseStatuses: {},
                 });
             }
         }),
@@ -115,7 +110,6 @@ export function registerCommands(
 
         vscode.commands.registerCommand("tmc.logout", async () => {
             if (await dialog.confirmation("Are you sure you want to log out?")) {
-                const { ui } = actionContext;
                 const deauth = await actions.logout(actionContext);
                 if (deauth.err) {
                     dialog.errorNotification(
@@ -124,7 +118,6 @@ export function registerCommands(
                     );
                     return;
                 }
-                ui.webview.dispose();
                 dialog.notification("Logged out from TestMyCode.");
             }
         }),

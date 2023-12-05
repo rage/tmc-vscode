@@ -9,7 +9,6 @@ out/**
 src/**
 submodules/**
 test-resources/**
-types/**
 
 **/.dockerignore
 **/.eslintcache

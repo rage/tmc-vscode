@@ -4,7 +4,6 @@ export * from "./downloadNewExercisesForCourse";
 export * from "./downloadOrUpdateExercises";
 export * from "./moveExtensionDataPath";
 export * from "./refreshLocalExercises";
-export * from "./selectOrganizationAndCourse";
 export * from "./user";
 export * from "./updateCourse";
 export * from "./webview";

@@ -21,7 +21,7 @@
         totalPoints > 0 ? ((successPoints / totalPoints) * 100.0).toFixed(2) : 0.0;
 </script>
 
-<div>
+<div class="points-display">
     <label>
         Points: {pointsPercent}%
         <meter min={0} value={successPoints} max={totalPoints} />
@@ -53,7 +53,8 @@
         border: 1px dashed;
         border-left: 0.4rem solid;
         padding: 0.4rem;
-        margin: 0.4rem;
+        margin-top: 0.4rem;
+        margin-bottom: 0.4rem;
     }
     .passed {
         color: var(--vscode-notebookStatusSuccessIcon-foreground);
@@ -69,5 +70,9 @@
     }
     .test-message {
         white-space: break-spaces;
+    }
+    .points-display {
+        margin-top: 0.4rem;
+        margin-bottom: 0.4rem;
     }
 </style>

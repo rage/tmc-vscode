@@ -45,7 +45,6 @@ export function loadable<T>(): Writable<T | undefined> {
 
 /**
  * Convenience function for listening to messages from the extension host to the webview.
- * Sends a "ready" message after adding the event listener to indicate that it's ready to receive messages.
  */
 export function addMessageListener<T extends Panel>(
     listeningPanel: T,
@@ -60,10 +59,6 @@ export function addMessageListener<T extends Panel>(
             callback(message as TargetedMessage<T>);
         }
     });
-    vscode.postMessage({
-        type: "ready",
-        panel: listeningPanel,
-    });
 }
 
 /**
@@ -76,4 +71,8 @@ export function postMessageToWebview(message: WebviewToWebview) {
         message,
     };
     vscode.postMessage(webviewToExtension);
+}
+
+export function savePanelState(panel: Panel) {
+    vscode.setState({ panel });
 }

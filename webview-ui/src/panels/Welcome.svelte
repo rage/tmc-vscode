@@ -1,17 +1,23 @@
 <script lang="ts">
-    import { WelcomePanel, assertUnreachable } from "./shared/shared";
-    import { addMessageListener, loadable } from "./utilities/script";
+    import { onMount } from "svelte";
+    import { WelcomePanel, assertUnreachable } from "../shared/shared";
+    import { addMessageListener, loadable, savePanelState } from "../utilities/script";
+    import { vscode } from "../utilities/vscode";
 
     export let panel: WelcomePanel;
 
-    const version = loadable<string>();
-    const exerciseDecorations = loadable<string>();
-
+    onMount(() => {
+        vscode.postMessage({
+            type: "requestWelcomeData",
+            sourcePanel: panel,
+        });
+    });
     addMessageListener(panel, (message) => {
         switch (message.type) {
             case "setWelcomeData": {
-                version.set(message.version);
-                exerciseDecorations.set(message.exerciseDecorations);
+                panel.version = message.version;
+                panel.exerciseDecorations = message.exerciseDecorations;
+                savePanelState(panel);
                 break;
             }
             default:
@@ -22,7 +28,7 @@
 
 <div class="container welcome-container">
     <header>
-        <h1>Welcome to TestMyCode {$version}!</h1>
+        <h1>Welcome to TestMyCode {panel.version}!</h1>
     </header>
 
     <div class="info_area">
@@ -55,7 +61,7 @@
         <h2>What's new in 2.1?</h2>
         <div class="content_section">
             <p>
-                Here is a short overview of latest features. To see all the changes for version {$version},
+                Here is a short overview of latest features. To see all the changes for version {panel.version},
                 please refer to the{" "}
                 <a href="https://github.com/rage/tmc-vscode/blob/master/CHANGELOG.md">
                     CHANGELOG
@@ -76,7 +82,7 @@
             <img
                 alt="Example showing a decoration for an exercise showing it has been completed"
                 class="rounded mx-auto d-block"
-                src={$exerciseDecorations}
+                src={panel.exerciseDecorations}
             />
         </div>
         <div class="content_section">

@@ -3,8 +3,7 @@ import { Ok, Result } from "ts-results";
 
 import { TmcPanel } from "../panels/TmcPanel";
 import { ExtensionToWebview } from "../shared/shared";
-import { ExerciseStatus, WebviewMessage } from "../ui/types";
-import TmcWebview from "../ui/webview";
+import { ExerciseStatus } from "../ui/types";
 import { Logger } from "../utilities";
 
 import { ActionContext } from "./types";
@@ -27,14 +26,14 @@ export async function downloadOrUpdateExercises(
     actionContext: ActionContext,
     exerciseIds: number[],
 ): Promise<Result<DownloadResults, Error>> {
-    const { dialog, settings, tmc, ui } = actionContext;
+    const { dialog, settings, tmc } = actionContext;
     Logger.info("Downloading exercises", exerciseIds);
 
     if (exerciseIds.length === 0) {
         return Ok({ successful: [], failed: [] });
     }
 
-    ui.webview.postMessage(...exerciseIds.map((x) => wrapToMessage(x, "downloading")));
+    TmcPanel.postMessage(...exerciseIds.map((x) => wrapToMessage(x, "downloading")));
     const statuses = new Map<number, ExerciseStatus>(exerciseIds.map((x) => [x, "downloadFailed"]));
 
     const downloadTemplate = !settings.getDownloadOldSubmission();
@@ -45,12 +44,12 @@ export async function downloadOrUpdateExercises(
                 tmc.downloadExercises(exerciseIds, downloadTemplate, (download) => {
                     progress.report(download);
                     statuses.set(download.id, "closed");
-                    ui.webview.postMessage(wrapToMessage(download.id, "closed"));
+                    TmcPanel.postMessage(wrapToMessage(download.id, "closed"));
                 }),
             ),
     );
     if (downloadResult.err) {
-        postMessages(ui.webview, statuses);
+        postMessages(statuses);
         return downloadResult;
     }
 
@@ -62,7 +61,7 @@ export async function downloadOrUpdateExercises(
         Logger.error(`Failed to download exercise ${exercise["exercise-slug"]}: ${reason}`);
         statuses.set(exercise.id, "downloadFailed");
     });
-    postMessages(ui.webview, statuses);
+    postMessages(statuses);
     if (failed && failed.length > 0) {
         const failedDownloads = failed.map(([f]) => f["exercise-slug"]);
         dialog.errorNotification(
@@ -74,26 +73,16 @@ export async function downloadOrUpdateExercises(
     return Ok(sortResults(statuses));
 }
 
-function postMessages(webview: TmcWebview, statuses: Map<number, ExerciseStatus>): void {
-    webview.postMessage(...Array.from(statuses.entries()).map(([id, s]) => wrapToMessage(id, s)));
-    TmcPanel.postMessage(
-        ...Array.from(statuses.entries()).map(([id, s]) => {
-            const message: ExtensionToWebview = {
-                type: "exerciseStatusChange",
-                exerciseId: id,
-                status: s,
-                target: {
-                    type: "CourseDetails",
-                },
-            };
-            return message;
-        }),
-    );
+function postMessages(statuses: Map<number, ExerciseStatus>): void {
+    TmcPanel.postMessage(...Array.from(statuses.entries()).map(([id, s]) => wrapToMessage(id, s)));
 }
 
-function wrapToMessage(exerciseId: number, status: ExerciseStatus): WebviewMessage {
+function wrapToMessage(exerciseId: number, status: ExerciseStatus): ExtensionToWebview {
     return {
-        command: "exerciseStatusChange",
+        type: "exerciseStatusChange",
+        target: {
+            type: "CourseDetails",
+        },
         exerciseId,
         status,
     };

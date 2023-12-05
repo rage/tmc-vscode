@@ -1,28 +1,35 @@
 <script lang="ts">
-    import { CourseData, MyCoursesPanel, assertUnreachable } from "./shared/shared";
-    import { vscode } from "./utilities/vscode";
-    import { addMessageListener, loadable } from "./utilities/script";
-    import Bordered from "./components/Bordered.svelte";
+    import { MyCoursesPanel, assertUnreachable } from "../shared/shared";
+    import { vscode } from "../utilities/vscode";
+    import { addMessageListener, loadable, savePanelState } from "../utilities/script";
+    import Bordered from "../components/Bordered.svelte";
+    import { onMount } from "svelte";
 
     export let panel: MyCoursesPanel;
 
-    const courses = loadable<Array<CourseData>>();
-    const tmcDataPath = loadable<string>();
-    const tmcDataSize = loadable<string>();
     const selectedOrganizationSlug = loadable<string>();
 
+    onMount(() => {
+        vscode.postMessage({
+            type: "requestMyCoursesData",
+            sourcePanel: panel,
+        });
+    });
     addMessageListener(panel, (message) => {
         switch (message.type) {
             case "setMyCourses": {
-                courses.set(message.courses);
+                panel.courses = message.courses;
+                savePanelState(panel);
                 break;
             }
             case "setTmcDataPath": {
-                tmcDataPath.set(message.tmcDataPath);
+                panel.tmcDataPath = message.tmcDataPath;
+                savePanelState(panel);
                 break;
             }
             case "setTmcDataSize": {
-                tmcDataSize.set(message.tmcDataSize);
+                panel.tmcDataSize = message.tmcDataSize;
+                savePanelState(panel);
                 break;
             }
             case "selectedOrganization": {
@@ -47,6 +54,24 @@
                 });
                 break;
             }
+            case "setNewExercises": {
+                // todo
+                break;
+            }
+            case "setCourseDisabledStatus": {
+                const courses = panel.courses ?? [];
+                const course = courses.find((c) => c.id === message.courseId);
+                if (course) {
+                    course.disabled = message.disabled;
+                    savePanelState(panel);
+                }
+                break;
+            }
+            case "setNextCourseDeadline": {
+                panel.courseDeadlines[message.courseId] = message.deadline;
+                savePanelState(panel);
+                break;
+            }
             default:
                 assertUnreachable(message);
         }
@@ -58,34 +83,29 @@
             sourcePanel: panel,
         });
     }
-
     function changeTmcDataPath() {
         vscode.postMessage({
             type: "changeTmcDataPath",
         });
     }
-
     function openCourseDetails(courseId: number) {
         vscode.postMessage({
             type: "openCourseDetails",
             courseId,
         });
     }
-
     function removeCourse(id: number) {
         vscode.postMessage({
             type: "removeCourse",
             id,
         });
     }
-
     function openWorkspace(name: string) {
         vscode.postMessage({
             type: "openCourseWorkspace",
             courseName: name,
         });
     }
-
     function downloadExercises(
         ids: Array<number>,
         courseName: string,
@@ -101,7 +121,6 @@
             mode: "download",
         });
     }
-
     function clearNewExercises(courseId: number) {
         vscode.postMessage({
             type: "clearNewExercises",
@@ -127,8 +146,8 @@
 
         <div>
             <div>
-                Currently your exercises ({$tmcDataSize ?? "loading size..."}) are located at:
-                <pre class="data-path">{$tmcDataPath ?? "loading path..."}</pre>
+                Currently your exercises ({panel.tmcDataSize ?? "loading size..."}) are located at:
+                <pre class="data-path">{panel.tmcDataPath ?? "loading path..."}</pre>
             </div>
             <vscode-button
                 appearance="secondary"
@@ -140,8 +159,8 @@
         </div>
     </div>
 
-    {#if $courses !== undefined}
-        {#each $courses as course}
+    {#if panel.courses !== undefined}
+        {#each panel.courses as course}
             {@const completed = ((course.awardedPoints / course.availablePoints) * 100).toFixed(2)}
             <div
                 class="course"
@@ -235,7 +254,7 @@
                 </Bordered>
             </div>
         {/each}
-        {#if $courses.length === 0}
+        {#if panel.courses.length === 0}
             <div>Add courses to start completing exercises.</div>
         {/if}
     {:else}

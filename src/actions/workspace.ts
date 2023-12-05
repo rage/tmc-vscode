@@ -52,11 +52,14 @@ export async function openExercises(
         return settingsResult;
     }
 
-    ui.webview.postMessage(
-        ...exerciseIdsToOpen.map<UITypes.WebviewMessage>((id) => ({
-            command: "exerciseStatusChange",
+    TmcPanel.postMessage(
+        ...exerciseIdsToOpen.map<ExtensionToWebview>((id) => ({
+            type: "exerciseStatusChange",
             exerciseId: id,
             status: "opened",
+            target: {
+                type: "CourseDetails",
+            },
         })),
     );
 
@@ -98,11 +101,14 @@ export async function closeExercises(
         return settingsResult;
     }
 
-    ui.webview.postMessage(
-        ...closedIds.map<UITypes.WebviewMessage>((id) => ({
-            command: "exerciseStatusChange",
+    TmcPanel.postMessage(
+        ...closedIds.map<ExtensionToWebview>((id) => ({
+            type: "exerciseStatusChange",
             exerciseId: id,
             status: "closed",
+            target: {
+                type: "CourseDetails",
+            },
         })),
     );
     const exerciseStatusChangeMessages = closedIds.map<ExtensionToWebview>((id) => ({

@@ -1,13 +1,13 @@
 <script lang="ts">
     import { writable } from "svelte/store";
-    import MyCourses from "./MyCourses.svelte";
-    import Welcome from "./Welcome.svelte";
+    import MyCourses from "./panels/MyCourses.svelte";
+    import Welcome from "./panels/Welcome.svelte";
     import { vscode } from "./utilities/vscode";
-    import { State, assertUnreachable, AppPanel } from "./shared/shared";
-    import Login from "./Login.svelte";
-    import CourseDetails from "./CourseDetails.svelte";
-    import SelectOrganization from "./SelectOrganization.svelte";
-    import SelectCourse from "./SelectCourse.svelte";
+    import { State, assertUnreachable, AppPanel, Panel } from "./shared/shared";
+    import Login from "./panels/Login.svelte";
+    import CourseDetails from "./panels/CourseDetails.svelte";
+    import SelectOrganization from "./panels/SelectOrganization.svelte";
+    import SelectCourse from "./panels/SelectCourse.svelte";
     import { addMessageListener } from "./utilities/script";
     import {
         provideVSCodeDesignSystem,
@@ -17,8 +17,8 @@
         vsCodeProgressRing,
         vsCodeTag,
     } from "@vscode/webview-ui-toolkit";
-    import ExerciseTests from "./ExerciseTests.svelte";
-    import ExerciseSubmission from "./ExerciseSubmission.svelte";
+    import ExerciseTests from "./panels/ExerciseTests.svelte";
+    import ExerciseSubmission from "./panels/ExerciseSubmission.svelte";
     import { onMount } from "svelte";
 
     onMount(() => {
@@ -69,9 +69,10 @@ ${ev.reason.stack}
         addMessageListener(appPanel, (message) => {
             switch (message.type) {
                 case "setPanel": {
-                    console.log("new state, setting in vscode");
-                    const newState = vscode.setState({ panel: message.panel });
-                    console.log("new state, setting");
+                    const newState = { panel: message.panel };
+                    if (!isTransient(newState.panel)) {
+                        vscode.setState(newState);
+                    }
                     set(newState);
                     break;
                 }
@@ -85,6 +86,16 @@ ${ev.reason.stack}
     state.subscribe((ev) => {
         console.log(ev);
     });
+
+    // "transient" panels which shouldn't be saved/loaded
+    function isTransient(panel: Panel) {
+        return (
+            panel.type === "SelectCourse" ||
+            panel.type === "SelectOrganization" ||
+            panel.type === "ExerciseTests" ||
+            panel.type === "ExerciseSubmission"
+        );
+    }
 </script>
 
 <main>

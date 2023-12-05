@@ -1,13 +1,15 @@
 <script lang="ts">
     import { derived } from "svelte/store";
-    import { ExerciseTestsPanel, TestResultData, assertUnreachable } from "./shared/shared";
-    import { addMessageListener, loadable } from "./utilities/script";
-    import { vscode } from "./utilities/vscode";
-    import PasteHelpBox from "./components/PasteHelpBox.svelte";
-    import TestResults from "./components/TestResults.svelte";
+    import { ExerciseTestsPanel, TestResultData, assertUnreachable } from "../shared/shared";
+    import { addMessageListener, loadable } from "../utilities/script";
+    import { vscode } from "../utilities/vscode";
+    import PasteHelpBox from "../components/PasteHelpBox.svelte";
+    import TestResults from "../components/TestResults.svelte";
+    import { onMount } from "svelte";
 
     export let panel: ExerciseTestsPanel;
 
+    const testError = loadable<Error>();
     const pasteResult = loadable<string>();
     const pasteError = loadable<string>();
     const testResults = loadable<TestResultData>();
@@ -29,20 +31,12 @@
         );
     });
 
-    function closePanel() {
-        vscode.postMessage({ type: "closeSidePanel" });
-    }
-    function cancelTests() {
-        vscode.postMessage({ type: "cancelTests" });
-    }
-    function submit() {
+    onMount(() => {
         vscode.postMessage({
-            type: "submitExercise",
-            course: panel.course,
-            exercise: panel.exercise,
+            type: "requestExerciseTestsData",
+            sourcePanel: panel,
         });
-    }
-
+    });
     addMessageListener(panel, (message) => {
         switch (message.type) {
             case "testResults": {
@@ -60,10 +54,32 @@
                 pasteError.set(message.error);
                 break;
             }
+            case "testError": {
+                testError.set(message.error);
+                break;
+            }
             default:
                 assertUnreachable(message);
         }
     });
+
+    function closePanel() {
+        vscode.postMessage({ type: "closeSidePanel" });
+    }
+    function cancelTests() {
+        vscode.postMessage({ type: "cancelTests", testRunId: panel.testRunId });
+        vscode.postMessage({
+            type: "closeSidePanel",
+        });
+    }
+    function submit() {
+        vscode.postMessage({
+            type: "submitExercise",
+            course: panel.course,
+            exercise: panel.exercise,
+            exerciseUri: panel.exerciseUri,
+        });
+    }
 </script>
 
 {#if $testResults === undefined}

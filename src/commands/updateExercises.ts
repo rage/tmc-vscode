@@ -3,11 +3,12 @@ import { uniq } from "lodash";
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
 import { NOTIFICATION_DELAY } from "../config/constants";
-import { WebviewMessage } from "../ui/types";
+import { TmcPanel } from "../panels/TmcPanel";
+import { ExtensionToWebview } from "../shared/shared";
 import { Logger } from "../utilities";
 
 export async function updateExercises(actionContext: ActionContext, silent: string): Promise<void> {
-    const { dialog, settings, ui, userData } = actionContext;
+    const { dialog, settings, userData } = actionContext;
     Logger.info("Checking for exercise updates");
 
     const updateablesResult = await actions.checkForExerciseUpdates(actionContext);
@@ -29,9 +30,10 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
     }
 
     const downloadHandler = async (): Promise<void> => {
-        ui.webview.postMessage(
-            ...userData.getCourses().map<WebviewMessage>((x) => ({
-                command: "setUpdateables",
+        TmcPanel.postMessage(
+            ...userData.getCourses().map<ExtensionToWebview>((x) => ({
+                type: "setUpdateables",
+                target: { type: "CourseDetails" },
                 courseId: x.id,
                 exerciseIds: [],
             })),
@@ -45,9 +47,10 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
             return;
         }
 
-        ui.webview.postMessage(
-            ...userData.getCourses().map<WebviewMessage>((x) => ({
-                command: "setUpdateables",
+        TmcPanel.postMessage(
+            ...userData.getCourses().map<ExtensionToWebview>((x) => ({
+                type: "setUpdateables",
+                target: { type: "CourseDetails" },
                 courseId: x.id,
                 exerciseIds: downloadResult.val.failed,
             })),

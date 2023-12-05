@@ -52,6 +52,8 @@ export type AppPanel = {
 export type WelcomePanel = {
     id: number;
     type: "Welcome";
+    version?: string;
+    exerciseDecorations?: string;
 };
 
 export type LoginPanel = {
@@ -62,12 +64,22 @@ export type LoginPanel = {
 export type MyCoursesPanel = {
     id: number;
     type: "MyCourses";
+    courses?: Array<CourseData>;
+    tmcDataPath?: string;
+    tmcDataSize?: string;
+    courseDeadlines: Record<number, string>;
 };
 
 export type CourseDetailsPanel = {
     id: number;
     type: "CourseDetails";
     courseId: number;
+    course?: CourseData;
+    offlineMode?: boolean;
+    exerciseGroups?: Array<ExerciseGroup>;
+    updateableExercises?: Array<number>;
+    disabled?: boolean;
+    exerciseStatuses: Record<number, ExerciseStatus>;
 };
 
 export type SelectOrganizationPanel = {
@@ -90,6 +102,8 @@ export type ExerciseTestsPanel = {
     type: "ExerciseTests";
     course: TestCourse;
     exercise: TestExercise;
+    exerciseUri: Uri;
+    testRunId: number;
 };
 
 export type ExerciseSubmissionPanel = {
@@ -130,6 +144,12 @@ export type ExtensionToWebview =
           tmcDataPath: string;
       }
     | {
+          type: "setNextCourseDeadline";
+          target: TargetPanel<MyCoursesPanel>;
+          courseId: number;
+          deadline: string;
+      }
+    | {
           type: "setTmcDataSize";
           target: TargetPanel<MyCoursesPanel>;
           tmcDataSize: string;
@@ -152,7 +172,7 @@ export type ExtensionToWebview =
       }
     | {
           type: "setCourseDisabledStatus";
-          target: BroadcastPanel<CourseDetailsPanel>;
+          target: BroadcastPanel<MyCoursesPanel | CourseDetailsPanel>;
           courseId: number;
           disabled: boolean;
       }
@@ -193,6 +213,11 @@ export type ExtensionToWebview =
           testResults: TestResultData;
       }
     | {
+          type: "testError";
+          target: TargetPanel<ExerciseTestsPanel>;
+          error: Error;
+      }
+    | {
           type: "pasteResult";
           target: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
           pasteLink: string;
@@ -224,6 +249,12 @@ export type ExtensionToWebview =
           target: TargetPanel<ExerciseSubmissionPanel>;
           error: Error;
       }
+    | {
+          type: "setNewExercises";
+          target: BroadcastPanel<MyCoursesPanel>;
+          courseId: number;
+          exerciseIds: Array<number>;
+      }
     // the last variant exists just to make TypeScript think that every panel type has
     // at least two different message types, which makes TS treat them differently than if
     // they only had one...
@@ -248,8 +279,36 @@ export type BroadcastExtensionToWebview<T extends PanelType> = Targeted<Extensio
  */
 export type WebviewToExtension =
     | {
-          type: "ready";
-          panel: Panel;
+          type: "requestCourseDetailsData";
+          sourcePanel: CourseDetailsPanel;
+      }
+    | {
+          type: "requestExerciseSubmissionData";
+          sourcePanel: ExerciseSubmissionPanel;
+      }
+    | {
+          type: "requestExerciseTestsData";
+          sourcePanel: ExerciseTestsPanel;
+      }
+    | {
+          type: "requestLoginData";
+          sourcePanel: LoginPanel;
+      }
+    | {
+          type: "requestMyCoursesData";
+          sourcePanel: MyCoursesPanel;
+      }
+    | {
+          type: "requestSelectCourseData";
+          sourcePanel: SelectCoursePanel;
+      }
+    | {
+          type: "requestSelectOrganizationData";
+          sourcePanel: SelectOrganizationPanel;
+      }
+    | {
+          type: "requestWelcomeData";
+          sourcePanel: WelcomePanel;
       }
     | {
           type: "login";
@@ -332,6 +391,7 @@ export type WebviewToExtension =
       }
     | {
           type: "cancelTests";
+          testRunId: number;
       }
     | {
           type: "submitExercise";

@@ -1,8 +1,11 @@
 <script lang="ts">
     import { writable } from "svelte/store";
-    import { SelectOrganizationPanel, assertUnreachable } from "./shared/shared";
-    import { addMessageListener, loadable, postMessageToWebview } from "./utilities/script";
-    import { Organization } from "./shared/langsSchema";
+    import { SelectOrganizationPanel, assertUnreachable } from "../shared/shared";
+    import { addMessageListener, loadable, postMessageToWebview } from "../utilities/script";
+    import { Organization } from "../shared/langsSchema";
+    import TextField from "../components/TextField.svelte";
+    import { onMount } from "svelte";
+    import { vscode } from "../utilities/vscode";
 
     export let panel: SelectOrganizationPanel;
 
@@ -11,24 +14,12 @@
     const tmcBackendUrl = loadable<string>();
     const filter = writable<string>("");
 
-    function resolveLogoPath(tmcBackendUrl: string, path: string): string {
-        return !path.endsWith("missing.png")
-            ? `${tmcBackendUrl}${path}`
-            : `${tmcBackendUrl}/logos/small_logo/missing.png`;
-    }
-
-    function selectOrganization(slug: string) {
-        postMessageToWebview({
-            type: "selectedOrganization",
-            target: panel.requestingPanel,
-            slug,
+    onMount(() => {
+        vscode.postMessage({
+            type: "requestSelectOrganizationData",
+            sourcePanel: panel,
         });
-    }
-
-    function filterOrganizations(query: string) {
-        filter.set(query.toUpperCase());
-    }
-
+    });
     addMessageListener(panel, (message) => {
         switch (message.type) {
             case "setOrganizations": {
@@ -45,6 +36,22 @@
                 assertUnreachable(message);
         }
     });
+
+    function resolveLogoPath(tmcBackendUrl: string, path: string): string {
+        return !path.endsWith("missing.png")
+            ? `${tmcBackendUrl}${path}`
+            : `${tmcBackendUrl}/logos/small_logo/missing.png`;
+    }
+    function selectOrganization(slug: string) {
+        postMessageToWebview({
+            type: "selectedOrganization",
+            target: panel.requestingPanel,
+            slug,
+        });
+    }
+    function filterOrganizations(query: string) {
+        filter.set(query.toUpperCase());
+    }
 </script>
 
 <h1>Frequently used organizations</h1>
@@ -63,7 +70,7 @@
                 />
             </div>
             <div class="org-content">
-                <h3>{pinned.name} <small class="muted">({pinned.slug})</small></h3>
+                <h3>{pinned.name} <small class="org-slug">({pinned.slug})</small></h3>
                 <p>{pinned.information}</p>
             </div>
         </div>
@@ -73,12 +80,8 @@
 {/if}
 
 <h1>All organizations</h1>
-<div>
-    <input
-        type="text"
-        placeholder="Search organizations"
-        on:keyup={(ev) => filterOrganizations(ev.currentTarget.value)}
-    />
+<div class="search-container">
+    <TextField placeholder="Search organizations" onChange={(val) => filterOrganizations(val)} />
 </div>
 
 {#if $organizations !== undefined && $tmcBackendUrl !== undefined}
@@ -100,7 +103,7 @@
             </div>
             <div class="org-content">
                 <h4>
-                    {organization.name} <small class="muted">({organization.slug})</small>
+                    {organization.name} <small class="org-slug">({organization.slug})</small>
                 </h4>
                 <p>{organization.information}</p>
             </div>
@@ -118,7 +121,6 @@
         margin: 0.4rem;
         display: flex;
         flex-direction: column;
-        padding: 10px;
         margin-bottom: 10px;
         min-height: 125px;
     }
@@ -130,20 +132,25 @@
     }
     .org-img {
         max-width: 100px;
-        max-height: 100px;
+        height: 100px;
         margin: 0 auto;
         display: block;
         width: 100%;
         padding: 0.4rem;
     }
     .org-content {
+        padding: 10px;
         flex-grow: 1;
     }
-    .muted {
+    .org-slug {
         opacity: 80%;
+        word-wrap: break-word;
+    }
+    .search-container {
+        padding: 0.4rem;
     }
 
-    @media (orientation: landscape) {
+    @media (min-width: 25rem) {
         .org-row {
             flex-direction: row;
         }

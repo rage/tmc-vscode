@@ -10,19 +10,19 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { LocalCourseData } from "../api/storage";
-import { SubmissionFeedback } from "../api/types";
 import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { BottleneckError } from "../errors";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../shared/shared";
-import { MessageHandler } from "../ui/temporaryWebview";
 import { Logger, parseFeedbackQuestion } from "../utilities/";
 import { getActiveEditorExecutablePath } from "../window";
 
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
 import { ActionContext } from "./types";
 import { updateCourse } from "./updateCourse";
+
+export const testInterrupts: Map<number, () => void> = new Map();
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -81,12 +81,15 @@ export async function testExercise(
         );
     }
 
+    const testRunId = randomPanelId();
     // render panel
     const panel: ExerciseTestsPanel = {
         id: randomPanelId(),
         type: "ExerciseTests",
         course: course,
         exercise: courseExercise,
+        exerciseUri: exercise.uri,
+        testRunId,
     };
     await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
 
@@ -99,8 +102,8 @@ export async function testExercise(
 
     if (!course.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext);
-        // todo interrupt
-        const [testRunner, _interrupt] = tmc.runTests(exercise.uri.fsPath, executablePath);
+        const [testRunner, interrupt] = tmc.runTests(exercise.uri.fsPath, executablePath);
+        testInterrupts.set(testRunId, interrupt);
         const exerciseName = exercise.exerciseSlug;
 
         Logger.info(`Running local tests for ${exerciseName}`);
@@ -108,7 +111,12 @@ export async function testExercise(
         Logger.info(`Tests finished for ${exerciseName}`);
 
         if (testResults.err) {
-            return Err(new Error(`Error running tests: ${testResults.err}`));
+            TmcPanel.postMessage({
+                type: "testError",
+                target: panel,
+                error: testResults.val,
+            });
+            return Ok.EMPTY;
         }
 
         data = {
@@ -163,21 +171,6 @@ export async function submitExercise(
         exercise: courseExercise,
     };
     await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
-
-    const _messageHandler: MessageHandler = async (msg): Promise<void> => {
-        if (msg.type === "feedback" && msg.data) {
-            await tmc.submitSubmissionFeedback(
-                msg.data.url as string,
-                msg.data.feedback as SubmissionFeedback,
-            );
-        } else if (msg.type === "showSubmissionInBrowserStatus" && msg.data) {
-            vscode.env.openExternal(vscode.Uri.parse(msg.data.submissionUrl));
-        } else if (msg.type === "showSubmissionInBrowserResult" && msg.data) {
-            vscode.env.openExternal(vscode.Uri.parse(msg.data.submissionUrl));
-        } else if (msg.type === "showSolutionInBrowser" && msg.data) {
-            vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
-        }
-    };
 
     const submissionResult = await tmc.submitExerciseAndWaitForResults(
         courseExercise.id,

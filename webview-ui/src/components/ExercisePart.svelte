@@ -210,15 +210,19 @@
     }
     .exercise-table-cell {
         padding: 0.8rem;
+        word-wrap: break-word;
+        overflow: hidden;
     }
     .exercise-table-header {
         padding: 0.8rem;
+        overflow: hidden;
     }
     .exercise-table {
         width: 100%;
+        table-layout: fixed;
     }
 
-    @media (orientation: landscape) {
+    @media (min-width: 30rem) {
         .part-header {
             flex-direction: row;
         }
