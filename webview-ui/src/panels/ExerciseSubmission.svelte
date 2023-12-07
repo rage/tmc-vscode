@@ -102,14 +102,16 @@
 </vscode-button>
 
 {#if $submissionResult && !$submissionResult.all_tests_passed}
-    <PasteHelpBox
-        hidden={false}
-        course={panel.course}
-        exercise={panel.exercise}
-        sourcePanel={panel}
-        pasteUrl={$pasteResult}
-        pasteError={$pasteError}
-    />
+    <div class="help-box-container">
+        <PasteHelpBox
+            hidden={false}
+            course={panel.course}
+            exercise={panel.exercise}
+            sourcePanel={panel}
+            pasteUrl={$pasteResult}
+            pasteError={$pasteError}
+        />
+    </div>
 {/if}
 
 {#if $submissionResult === undefined}
@@ -158,5 +160,8 @@
         position: absolute;
         top: 0.4rem;
         right: 0.4rem;
+    }
+    .help-box-container {
+        margin-top: 0.4rem;
     }
 </style>

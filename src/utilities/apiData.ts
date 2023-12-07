@@ -1,10 +1,10 @@
-import { CourseExercise, Exercise } from "../shared/langsSchema";
 import { LocalCourseExercise } from "../api/storage";
 import {
     LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../config/constants";
+import { CourseExercise, Exercise } from "../shared/langsSchema";
 
 /**
  * Takes exercise arrays from two different endpoints and attempts to resolve them into

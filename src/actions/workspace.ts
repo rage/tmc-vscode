@@ -9,8 +9,7 @@ import { Ok, Result } from "ts-results";
 
 import { ExerciseStatus } from "../api/workspaceManager";
 import { TmcPanel } from "../panels/TmcPanel";
-import { CourseDetailsPanel, ExtensionToWebview, TargetPanel } from "../shared/shared";
-import * as UITypes from "../ui/types";
+import { ExtensionToWebview } from "../shared/shared";
 import { Logger } from "../utilities";
 
 import { ActionContext } from "./types";
@@ -26,7 +25,7 @@ export async function openExercises(
 ): Promise<Result<number[], Error>> {
     Logger.info("Opening exercises", exerciseIdsToOpen);
 
-    const { workspaceManager, ui, userData, tmc } = actionContext;
+    const { workspaceManager, userData, tmc } = actionContext;
 
     const course = userData.getCourseByName(courseName);
     const courseExercises = new Map(course.exercises.map((x) => [x.id, x]));
@@ -75,7 +74,7 @@ export async function closeExercises(
     ids: number[],
     courseName: string,
 ): Promise<Result<number[], Error>> {
-    const { workspaceManager, ui, userData, tmc } = actionContext;
+    const { workspaceManager, userData, tmc } = actionContext;
 
     const course = userData.getCourseByName(courseName);
     const exercises = new Map(course.exercises.map((x) => [x.id, x]));

@@ -1,20 +1,7 @@
-import { compact } from "lodash";
 import { Result } from "ts-results";
 import * as vscode from "vscode";
 
-import {
-    addNewCourse,
-    closeExercises,
-    displayLocalCourseDetails,
-    displayUserCourses,
-    downloadOrUpdateExercises,
-    login,
-    openExercises,
-    openWorkspace,
-    refreshLocalExercises,
-    removeCourse,
-    updateCourse,
-} from "../actions";
+import { downloadOrUpdateExercises, refreshLocalExercises } from "../actions";
 import { ActionContext } from "../actions/types";
 import { TmcPanel } from "../panels/TmcPanel";
 import { ExtensionToWebview } from "../shared/shared";
@@ -28,7 +15,7 @@ import { Logger } from "../utilities/";
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { dialog, ui, settings, userData, visibilityGroups } = actionContext;
+    const { ui, visibilityGroups } = actionContext;
     Logger.info("Initializing UI Actions");
 
     // Register UI actions

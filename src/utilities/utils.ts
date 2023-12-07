@@ -4,8 +4,8 @@ import { Err, Ok, Result } from "ts-results";
 import { fetch, Response } from "undici";
 
 import { FeedbackQuestion } from "../actions/types";
-import { SubmissionFeedbackQuestion } from "../shared/langsSchema";
 import { ConnectionError } from "../errors";
+import { SubmissionFeedbackQuestion } from "../shared/langsSchema";
 
 import { Logger } from "./logger";
 

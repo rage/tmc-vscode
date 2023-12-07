@@ -197,9 +197,7 @@
             Open workspace
         </vscode-button>
     </div>
-</div>
 
-<div>
     <div
         role="alert"
         hidden={panel.updateableExercises === undefined || panel.updateableExercises.length > 0}
@@ -299,6 +297,7 @@
 <style>
     .header {
         position: relative;
+        margin-bottom: 0.8rem;
     }
     .refresh {
         position: absolute;

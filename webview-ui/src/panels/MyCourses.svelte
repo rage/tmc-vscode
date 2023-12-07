@@ -303,6 +303,7 @@
         display: grid;
         grid-auto-flow: row;
         grid-auto-columns: 1fr;
+        margin-bottom: 0.8rem;
     }
     .add-new-course-container {
         align-self: end;

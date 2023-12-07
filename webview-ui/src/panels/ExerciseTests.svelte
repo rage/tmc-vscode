@@ -138,7 +138,6 @@
             />
         </div>
     {/if}
-
     <TestResults
         totalPoints={$totalPoints}
         successPoints={$successPoints}

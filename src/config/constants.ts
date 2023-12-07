@@ -9,6 +9,7 @@ declare const __TMC_LANGS_CONFIG_DIR__: string | null;
 declare const __TMC_LANGS_DL_URL__: string;
 declare const __TMC_LANGS_VERSION__: string;
 
+// @ts-ignore "No module found" error even though the file exists
 import FAQ from "../../docs/FAQ.md";
 import { TestResultData } from "../shared/shared";
 

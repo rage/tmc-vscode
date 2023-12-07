@@ -77,10 +77,9 @@
     .help {
         border: 1px solid;
         padding: 0.4rem;
-        margin: 0.4rem;
+        margin-top: 0.4rem;
     }
     .paste-button-container {
-        margin-top: 0.4rem;
-        margin-bottom: 0.4rem;
+        margin-top: 0.8rem;
     }
 </style>

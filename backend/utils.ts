@@ -170,8 +170,13 @@ interface CreateOldSubmissionParams {
     userId: number;
 }
 
+export const passingExerciseId = 1;
+
+export const failingExerciseId = 2;
+
 const createOldSubmission = (params: CreateOldSubmissionParams): OldSubmission => {
     const timestamp = params.timestamp.toISOString();
+    const points = params.id === passingExerciseId ? "part01-01_passing_exercise" : "";
     return {
         all_tests_passed: params.passed,
         course_id: params.courseId,
@@ -184,7 +189,7 @@ const createOldSubmission = (params: CreateOldSubmissionParams): OldSubmission =
         params_json: "",
         paste_available: false,
         paste_key: "",
-        points: "",
+        points,
         pretest_error: "",
         processed: true,
         processing_attempts_started_at: timestamp,
