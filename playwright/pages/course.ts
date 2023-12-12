@@ -25,12 +25,12 @@ export class CoursePage extends TmcPage {
     async showExercises(): Promise<void> {
         await this.webview.getByRole("button", { name: "Show exercises" }).click();
         // the exercises may take a moment to appear...
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(200);
     }
 
     async openExercises(names: string[]): Promise<void> {
         for (const name of names) {
-            await this.webview.getByRole("row", { name }).getByRole("checkbox").check();
+            await this.webview.getByRole("row", { name }).getByRole("checkbox").click();
         }
         await this.webview.getByRole("button", { name: "Open", exact: true }).click();
     }
