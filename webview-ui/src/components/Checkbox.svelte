@@ -23,7 +23,7 @@
     on:click|capture|stopPropagation={onClickWrapper}
     on:keypress|capture|stopPropagation={onClickWrapper}
 >
-    <vscode-checkbox class="test" {checked}>
+    <vscode-checkbox {checked}>
         <slot />
     </vscode-checkbox>
 </span>
