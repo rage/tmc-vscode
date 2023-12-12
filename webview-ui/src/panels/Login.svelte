@@ -64,15 +64,28 @@
 
 <form on:submit={onSubmit}>
     <div>
-        <vscode-text-field type="text" id="username" name="username" bind:this={usernameField}>
+        <vscode-text-field
+            class="input"
+            type="text"
+            id="username"
+            name="username"
+            bind:this={usernameField}
+        >
             Email or username:
         </vscode-text-field>
         <br />
-        <vscode-text-field type="password" id="password" name="password" bind:this={passwordField}>
+        <vscode-text-field
+            class="input"
+            type="password"
+            id="password"
+            name="password"
+            bind:this={passwordField}
+        >
             Password:
         </vscode-text-field>
     </div>
     <vscode-button
+        class="button"
         style="color: pink"
         type="submit"
         name="submit"
@@ -85,6 +98,13 @@
 
 <style>
     .error {
-        color: var(--vscode-notebookStatusErrorIcon-foreground);
+        color: var(--vscode-notebookStatusErrorIcon-foreground, #f85149);
+    }
+    .input {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+    .button {
+        margin-top: 0.5rem;
     }
 </style>

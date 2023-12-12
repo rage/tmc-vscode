@@ -2,6 +2,7 @@
     import { derived, writable } from "svelte/store";
     import { TestCase, TestResult } from "../shared/langsSchema";
     import Checkbox from "./Checkbox.svelte";
+    import ProgressBar from "./ProgressBar.svelte";
 
     export let totalPoints: number;
     export let successPoints: number;
@@ -22,10 +23,7 @@
 </script>
 
 <div class="points-display">
-    <label>
-        Points: {pointsPercent}%
-        <meter min={0} value={successPoints} max={totalPoints} />
-    </label>
+    <ProgressBar label={`Points: ${pointsPercent}%`} value={successPoints} max={totalPoints} />
 </div>
 <div>
     <Checkbox hidden={alwaysShowPassedTests} bind:checked={$showPassedTestsChecked}>
@@ -57,22 +55,22 @@
         margin-bottom: 0.4rem;
     }
     .passed {
-        color: var(--vscode-notebookStatusSuccessIcon-foreground);
+        color: var(--vscode-notebookStatusSuccessIcon-foreground, #89d185);
     }
     .passed-container {
-        border-color: var(--vscode-notebookStatusSuccessIcon-foreground);
+        border-color: var(--vscode-notebookStatusSuccessIcon-foreground, #89d185);
     }
     .failed {
-        color: var(--vscode-notebookStatusErrorIcon-foreground);
+        color: var(--vscode-notebookStatusErrorIcon-foreground, #f85149);
     }
     .failed-container {
-        border-color: var(--vscode-notebookStatusErrorIcon-foreground);
+        border-color: var(--vscode-notebookStatusErrorIcon-foreground, #f85149);
     }
     .test-message {
         white-space: break-spaces;
     }
     .points-display {
-        margin-top: 0.4rem;
-        margin-bottom: 0.4rem;
+        margin-top: 1rem;
+        margin-bottom: 1rem;
     }
 </style>

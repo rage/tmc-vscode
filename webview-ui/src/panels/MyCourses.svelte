@@ -2,8 +2,9 @@
     import { MyCoursesPanel, assertUnreachable } from "../shared/shared";
     import { vscode } from "../utilities/vscode";
     import { addMessageListener, loadable, savePanelState } from "../utilities/script";
-    import Bordered from "../components/Bordered.svelte";
     import { onMount } from "svelte";
+    import ProgressBar from "../components/ProgressBar.svelte";
+    import Card from "../components/Card.svelte";
 
     export let panel: MyCoursesPanel;
 
@@ -138,23 +139,13 @@
     <h1>My Courses</h1>
 
     <div class="top-container">
-        <div class="add-new-course-container">
-            <vscode-button
-                class="add-new-course"
-                type="button"
-                on:click={addNewCourse}
-                on:keypress={addNewCourse}
-            >
-                Add new course
-            </vscode-button>
-        </div>
-
         <div>
             <div>
                 Currently your exercises ({panel.tmcDataSize ?? "loading size..."}) are located at:
-                <pre class="data-path">{panel.tmcDataPath ?? "loading path..."}</pre>
+                <span class="data-path">{panel.tmcDataPath ?? "loading path..."}</span>
             </div>
             <vscode-button
+                class="change-path-button"
                 appearance="secondary"
                 on:click={changeTmcDataPath}
                 on:keypress={changeTmcDataPath}
@@ -167,16 +158,15 @@
     {#if panel.courses !== undefined}
         {#each panel.courses as course}
             {@const completed = ((course.awardedPoints / course.availablePoints) * 100).toFixed(2)}
-            <div
-                class="course"
-                on:click={() => {
-                    openCourseDetails(course.id);
-                }}
-                on:keypress={() => {
-                    openCourseDetails(course.id);
-                }}
-            >
-                <Bordered>
+            <Card>
+                <div
+                    on:click={() => {
+                        openCourseDetails(course.id);
+                    }}
+                    on:keypress={() => {
+                        openCourseDetails(course.id);
+                    }}
+                >
                     <div class="course-header">
                         <h3 class="course-title">
                             {course.title} <small class="muted">({course.name})</small>
@@ -192,9 +182,17 @@
                             ×
                         </vscode-button>
                     </div>
-                    <p>{course.description}</p>
+                    {#if course.description}
+                        <p class="course-description">{course.description}</p>
+                    {/if}
+                    <div class="progress-bar-container">
+                        <ProgressBar
+                            label={`Programming exercise progress: ${completed}%`}
+                            value={course.awardedPoints}
+                            max={course.availablePoints}
+                        />
+                    </div>
                     <vscode-button
-                        class="open-workspace"
                         appearance="primary"
                         type="button"
                         aria-label="Open workspace"
@@ -203,19 +201,6 @@
                     >
                         Open workspace
                     </vscode-button>
-                    <div>
-                        <label class="progress-meter-label">
-                            {`Programming exercise progress: ${completed}%`}
-                            <div>
-                                <meter
-                                    class="progress-meter"
-                                    value={course.awardedPoints}
-                                    min={0}
-                                    max={course.availablePoints}
-                                />
-                            </div>
-                        </label>
-                    </div>
 
                     {#if course.disabled}
                         <div role="alert">
@@ -256,8 +241,8 @@
                             </vscode-button>
                         </div>
                     {/if}
-                </Bordered>
-            </div>
+                </div>
+            </Card>
         {/each}
         {#if panel.courses.length === 0}
             <div>Add courses to start completing exercises.</div>
@@ -267,6 +252,17 @@
     {/if}
 </div>
 
+<div class="add-new-course-container">
+    <vscode-button
+        class="add-new-course"
+        type="button"
+        on:click={addNewCourse}
+        on:keypress={addNewCourse}
+    >
+        Add new course
+    </vscode-button>
+</div>
+
 <style>
     .muted {
         opacity: 90%;
@@ -274,30 +270,23 @@
     .add-new-course {
         margin-bottom: 0.4rem;
     }
-    .open-workspace {
-        margin-bottom: 0.4rem;
-    }
-    .course {
-        margin-top: 0.4rem;
-        margin-bottom: 0.4rem;
-        cursor: pointer;
-    }
     .course-header {
         display: flex;
     }
     .course-title {
+        margin-top: 0.2rem;
         flex-grow: 1;
     }
     .data-path {
         white-space: normal;
+        font-family: monospace;
+    }
+    .change-path-button {
+        margin-top: 0.4rem;
     }
     .remove-button {
         align-self: start;
         margin: 0.4rem;
-    }
-    .progress-meter {
-        width: 100%;
-        height: 1.4rem;
     }
     .top-container {
         display: grid;
@@ -308,8 +297,11 @@
     .add-new-course-container {
         align-self: end;
     }
-    .progress-meter-label {
-        cursor: pointer;
+    .progress-bar-container {
+        margin-bottom: 0.8rem;
+    }
+    .course-description {
+        margin-top: 0rem;
     }
 
     @media (orientation: landscape) {

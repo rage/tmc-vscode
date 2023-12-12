@@ -126,7 +126,7 @@
     }
     .org-img-container {
         width: 100%;
-        background-color: white;
+        background-color: #d3d3d3;
         display: flex;
         align-items: center;
     }

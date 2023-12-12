@@ -132,15 +132,14 @@
         padding: 0.4rem;
         width: 100%;
         text-align: center;
-        background-color: white;
+        background-color: #d3d3d3;
     }
     .course-row {
         border: 1px;
         border-style: inset;
         cursor: pointer;
         padding: 0.4rem;
-        margin-top: 0.4rem;
-        margin-bottom: 0.4rem;
+        margin-bottom: 1rem;
     }
     .course-slug {
         opacity: 80%;
@@ -148,6 +147,7 @@
     }
     .search-container {
         padding: 0.4rem;
+        margin-bottom: 0.4rem;
     }
 
     [hidden] {

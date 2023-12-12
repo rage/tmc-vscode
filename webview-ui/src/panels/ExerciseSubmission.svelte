@@ -7,6 +7,7 @@
     import PasteHelpBox from "../components/PasteHelpBox.svelte";
     import TestResults from "../components/TestResults.svelte";
     import { onMount } from "svelte";
+    import ProgressBar from "../components/ProgressBar.svelte";
 
     export let panel: ExerciseSubmissionPanel;
 
@@ -133,8 +134,8 @@
         </vscode-button>
     </div>
 
-    <div>
-        <progress value={$progressPercent} max={100} />
+    <div class="progress-bar">
+        <ProgressBar label={"Running tests on the server"} value={$progressPercent} max={100} />
     </div>
 
     <div>
@@ -142,7 +143,7 @@
             {#if idx < $progressMessages.length - 1}
                 <div>✓ {message}</div>
             {:else}
-                <div>{message}</div>
+                <div class="current-message">{message}</div>
                 <vscode-progress-ring />
             {/if}
         {/each}
@@ -163,5 +164,12 @@
     }
     .help-box-container {
         margin-top: 0.4rem;
+    }
+    .progress-bar {
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+    }
+    .current-message {
+        margin-bottom: 1rem;
     }
 </style>

@@ -227,15 +227,19 @@
 
 {#if panel.exerciseGroups !== undefined}
     {#each panel.exerciseGroups as exerciseGroup}
-        <ExercisePart
-            {exerciseGroup}
-            exerciseStatuses={panel.exerciseStatuses}
-            bind:checkedExercises={$checkedExercises}
-            onDownloadAll={(exercises) =>
-                panel.course && downloadExercises(panel.course, exercises)}
-            onOpenAll={(exercises) => panel.course && openExercises(panel.course.name, exercises)}
-            onCloseAll={(exercises) => panel.course && closeExercises(panel.course.name, exercises)}
-        />
+        <div class="exercise-part">
+            <ExercisePart
+                {exerciseGroup}
+                exerciseStatuses={panel.exerciseStatuses}
+                bind:checkedExercises={$checkedExercises}
+                onDownloadAll={(exercises) =>
+                    panel.course && downloadExercises(panel.course, exercises)}
+                onOpenAll={(exercises) =>
+                    panel.course && openExercises(panel.course.name, exercises)}
+                onCloseAll={(exercises) =>
+                    panel.course && closeExercises(panel.course.name, exercises)}
+            />
+        </div>
     {/each}
 {:else}
     <vscode-progress-ring />
@@ -306,7 +310,7 @@
     }
     .action-bar-container {
         position: fixed;
-        bottom: 0rem;
+        bottom: 0.8rem;
         left: 50%;
         right: 50%;
         justify-content: center;
@@ -315,8 +319,8 @@
     .action-bar {
         display: flex;
         flex-direction: column;
-        background-color: var(--vscode-editor-background);
-        padding: 1rem;
+        background-color: var(--vscode-editor-background, #1f1f1f);
+        padding: 0.4rem;
         border: 1px;
         border-style: inset;
     }
@@ -336,5 +340,8 @@
     }
     .muted {
         opacity: 90%;
+    }
+    .exercise-part {
+        margin-bottom: 1rem;
     }
 </style>

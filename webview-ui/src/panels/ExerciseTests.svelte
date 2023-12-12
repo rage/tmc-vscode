@@ -124,18 +124,20 @@
             because the course is disabled.
         </div>
     {:else}
-        <vscode-button on:click={submit} on:keypress={submit}>
-            Send solution to server
-        </vscode-button>
-        <div class="help-box-container">
-            <PasteHelpBox
-                hidden={$allSuccessful ?? true}
-                course={panel.course}
-                exercise={panel.exercise}
-                sourcePanel={panel}
-                pasteUrl={$pasteResult}
-                pasteError={$pasteError}
-            />
+        <div class="header-container">
+            <vscode-button on:click={submit} on:keypress={submit}>
+                Send solution to server
+            </vscode-button>
+            <span class="help-box-container">
+                <PasteHelpBox
+                    hidden={$allSuccessful ?? true}
+                    course={panel.course}
+                    exercise={panel.exercise}
+                    sourcePanel={panel}
+                    pasteUrl={$pasteResult}
+                    pasteError={$pasteError}
+                />
+            </span>
         </div>
     {/if}
     <TestResults
@@ -157,5 +159,8 @@
     .help-box-container {
         margin-top: 0.4rem;
         margin-bottom: 0.4rem;
+    }
+    .header-container {
+        display: flex;
     }
 </style>

@@ -16,6 +16,7 @@
         vsCodeCheckbox,
         vsCodeProgressRing,
         vsCodeTag,
+        vsCodeDivider,
     } from "@vscode/webview-ui-toolkit";
     import ExerciseTests from "./panels/ExerciseTests.svelte";
     import ExerciseSubmission from "./panels/ExerciseSubmission.svelte";
@@ -55,6 +56,7 @@ ${ev.reason.stack}
         vsCodeCheckbox(),
         vsCodeProgressRing(),
         vsCodeTag(),
+        vsCodeDivider(),
     );
 
     const appPanel: AppPanel = {

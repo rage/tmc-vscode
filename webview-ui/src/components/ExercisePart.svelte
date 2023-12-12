@@ -2,6 +2,7 @@
     import { writable } from "svelte/store";
     import { ExerciseGroup, ExerciseStatus } from "../shared/shared";
     import Checkbox from "./Checkbox.svelte";
+    import Card from "./Card.svelte";
 
     export let exerciseGroup: ExerciseGroup;
     export let onDownloadAll: (exerciseIds: Array<number>) => void;
@@ -46,7 +47,7 @@
     }
 </script>
 
-<div class="part">
+<Card>
     <div class="part-header">
         <h2 class="part-title">
             {exerciseGroup.name}
@@ -80,13 +81,13 @@
     </div>
     <div>
         <div>
-            Completed {completedExercises} / {totalExercises}
+            Completed: {completedExercises} / {totalExercises}
         </div>
         <div>
-            Downloaded {downloadedExercises} / {totalExercises}
+            Downloaded: {downloadedExercises} / {totalExercises}
         </div>
         <div>
-            Opened {openedExercises} / {totalExercises}
+            Opened: {openedExercises} / {totalExercises}
         </div>
     </div>
     <br />
@@ -106,12 +107,12 @@
     </div>
     <div>
         <div hidden={!$expanded}>
-            <hr />
+            <vscode-divider />
             <div>
                 <table class="exercise-table">
                     <thead>
                         <tr>
-                            <th class="exercise-table-header">
+                            <th class="exercise-table-header checkbox-header">
                                 <Checkbox
                                     checked={allExercisesAreChecked(checkedExercises)}
                                     onClick={(checked) => {
@@ -120,9 +121,9 @@
                                 />
                             </th>
                             <th class="exercise-table-header">Exercise</th>
-                            <th class="exercise-table-header">Deadline</th>
-                            <th class="exercise-table-header">Completed</th>
-                            <th class="exercise-table-header">Status</th>
+                            <th class="exercise-table-header deadline-header">Deadline</th>
+                            <th class="exercise-table-header completed-header">Completed</th>
+                            <th class="exercise-table-header status-header">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -143,16 +144,18 @@
                                                     exercise.hardDeadlineString,
                                                 )}
                                             >
-                                                &#9432;
+                                                ⓘ
                                             </span>
                                             <span class="codicon codicon-add" />
                                         </div>
                                     {/if}
                                 </td>
-                                <td class="centered-cell large-font exercise-table-cell">
-                                    {exercise.passed ? "✔" : "❌"}
-                                </td>
-                                <td class="centered-cell exercise-table-cell">
+                                {#if exercise.passed}
+                                    <td class="success-icon exercise-table-cell"> ✔ </td>
+                                {:else}
+                                    <td class="cross-icon exercise-table-cell"> ❌ </td>
+                                {/if}
+                                <td class="exercise-table-cell">
                                     <vscode-tag>
                                         {exerciseStatuses[exercise.id] ?? "Loading..."}
                                     </vscode-tag>
@@ -164,18 +167,9 @@
             </div>
         </div>
     </div>
-</div>
+</Card>
 
 <style>
-    .part {
-        border: 1px;
-        border-style: inset;
-        padding: 0.6rem;
-        padding-top: 0rem;
-        margin-top: 0.4rem;
-        margin-bottom: 0.4rem;
-        border-radius: 0.6rem;
-    }
     .part-header {
         display: flex;
         flex-direction: column;
@@ -199,27 +193,43 @@
         display: flex;
         justify-content: center;
     }
-    .centered-cell {
-        text-align: center;
+    .success-icon {
+        font-size: 1.3rem;
     }
-    .large-font {
-        font-size: large;
+    .cross-icon {
+        font-size: 0.7rem;
     }
     .exercise-row:nth-child(odd) {
-        background-color: var(--vscode-tree-tableOddRowsBackground);
+        background-color: var(--vscode-editor-background, #1f1f1f);
+        border-radius: 0.4rem;
+        overflow: hidden;
+    }
+    .exercise-table-header {
+        padding: 0.8rem;
+        overflow: hidden;
+        text-align: left;
     }
     .exercise-table-cell {
         padding: 0.8rem;
         word-wrap: break-word;
         overflow: hidden;
     }
-    .exercise-table-header {
-        padding: 0.8rem;
-        overflow: hidden;
-    }
     .exercise-table {
         width: 100%;
         table-layout: fixed;
+        border-collapse: collapse;
+    }
+    .checkbox-header {
+        width: 1rem;
+    }
+    .deadline-header {
+        width: 20%;
+    }
+    .completed-header {
+        width: 4rem;
+    }
+    .status-header {
+        width: 4rem;
     }
 
     @media (min-width: 30rem) {
