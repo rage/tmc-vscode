@@ -36,7 +36,7 @@
         "postinstall": "babel node_modules/ts-results --out-dir node_modules/ts-results --plugins=@babel/plugin-transform-modules-commonjs",
         "lint-check": "npm run eslint-check && npm run prettier-check",
         "prepare": "husky install",
-        "prettier": "prettier --write --ignore-path \"./src/shared\" --ignore-path \"./webview-ui/src/shared\" --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
+        "prettier": "prettier --write --ignore-path \"./src/shared/*\" --ignore-path \"./webview-ui/src/shared/*\" --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
         "prettier-check": "prettier --check --ignore-path \"./src/shared/*\" --ignore-path \"./webview-ui/src/shared/*\" --ignore-path \"./.eslintignore\" \"./**/*.{html,js,json,jsx,ts,yml}\"",
         "release": "./bin/publishRelease.sh",
         "setup-ultimate": "git clean -X -d -f && git submodule update --init && npm run ci:all && cd backend && npm run setup",
