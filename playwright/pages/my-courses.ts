@@ -23,7 +23,7 @@ export class MyCoursesPage extends TmcPage {
         const selectOrganization = new SelectOrganization(this.page, this.webview);
         await selectOrganization.select("Test Organization (test)");
         // wait for the organization selection page to close
-        await this.page.waitForTimeout(100);
+        await this.page.waitForTimeout(200);
 
         const selectCourse = new SelectCourse(this.page, this.webview);
         await selectCourse.select(name);
