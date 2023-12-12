@@ -65,6 +65,7 @@ jobs:
 
             - name: Setup
               run: |
+                  npm install --global rollup
                   npm run ci:all
                   cd backend
                   npm run setup
