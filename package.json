@@ -47,8 +47,8 @@
         "webpack": "webpack",
         "webpack:watch": "webpack --watch",
         "tsc": "tsc",
-        "playwright-test": "npm run webpack && xvfb-maybe playwright test",
-        "playwright-test-debug": "npm run webpack && xvfb-maybe playwright test --debug",
+        "playwright-test": "npm run webview:build && npm run webpack && xvfb-maybe playwright test",
+        "playwright-test-debug": "npm run webview:build && npm run webpack && xvfb-maybe playwright test --debug",
         "backend:start": "cd backend && npm run start"
     },
     "contributes": {
