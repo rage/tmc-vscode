@@ -1,4 +1,3 @@
-import pLimit from "p-limit";
 import { Ok, Result } from "ts-results";
 
 import { TmcPanel } from "../panels/TmcPanel";
@@ -7,9 +6,6 @@ import { ExerciseStatus } from "../ui/types";
 import { Logger } from "../utilities";
 
 import { ActionContext } from "./types";
-
-// Use this until using Langs version with file locks
-const limit = pLimit(1);
 
 interface DownloadResults {
     successful: number[];
@@ -39,14 +35,13 @@ export async function downloadOrUpdateExercises(
     const downloadTemplate = !settings.getDownloadOldSubmission();
     const downloadResult = await dialog.progressNotification(
         "Downloading exercises...",
-        (progress) =>
-            limit(() =>
-                tmc.downloadExercises(exerciseIds, downloadTemplate, (download) => {
-                    progress.report(download);
-                    statuses.set(download.id, "closed");
-                    TmcPanel.postMessage(wrapToMessage(download.id, "closed"));
-                }),
-            ),
+        (progress) => {
+            return tmc.downloadExercises(exerciseIds, downloadTemplate, (download) => {
+                progress.report(download);
+                statuses.set(download.id, "closed");
+                TmcPanel.postMessage(wrapToMessage(download.id, "closed"));
+            });
+        },
     );
     if (downloadResult.err) {
         postMessages(statuses);

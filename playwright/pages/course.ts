@@ -11,8 +11,8 @@ export class CoursePage extends TmcPage {
     }
 
     async openWorkspace(): Promise<void> {
-        await this.webview.getByRole("button", { name: "Open workspace" }).click();
-        const yesButton = this.page.getByRole("button", { name: "Yes" });
+        await this.webview.getByRole("button", { name: "Open workspace" }).first().click();
+        const yesButton = this.page.getByRole("button", { name: "Yes" }).first();
         try {
             // click yes if prompted
             await yesButton.waitFor({ timeout: 1000 });
@@ -23,13 +23,13 @@ export class CoursePage extends TmcPage {
     }
 
     async showExercises(): Promise<void> {
-        await this.webview.getByRole("button", { name: "Show exercises" }).click();
+        await this.webview.getByRole("button", { name: "Show exercises" }).first().click();
     }
 
     async openExercises(names: string[]): Promise<void> {
         for (const name of names) {
             await this.webview.getByRole("row", { name }).getByRole("checkbox").click();
         }
-        await this.webview.getByRole("button", { name: "Open", exact: true }).click();
+        await this.webview.getByRole("button", { name: "Open", exact: true }).first().click();
     }
 }

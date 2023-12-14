@@ -139,6 +139,7 @@
     <a
         id="back-to-my-courses"
         role="button"
+        class="my-courses-link"
         tabindex="0"
         on:click={() => openMyCourses()}
         on:keypress={() => openMyCourses()}
@@ -357,5 +358,8 @@
     }
     .exercise-part {
         margin-bottom: 1rem;
+    }
+    .my-courses-link {
+        cursor: pointer;
     }
 </style>

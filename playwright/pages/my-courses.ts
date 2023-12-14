@@ -18,7 +18,7 @@ export class MyCoursesPage extends TmcPage {
     }
 
     async addNewCourse(name: string): Promise<void> {
-        await this.webview.getByRole("button", { name: "Add new course" }).click();
+        await this.webview.getByRole("button", { name: "Add new course" }).first().click();
 
         const selectOrganization = new SelectOrganization(this.page, this.webview);
         await selectOrganization.select("Test Organization (test)");

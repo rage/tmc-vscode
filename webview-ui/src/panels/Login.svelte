@@ -64,36 +64,15 @@
 
 <form on:submit={onSubmit}>
     <div>
-        <vscode-text-field
-            class="input"
-            type="text"
-            id="username"
-            name="username"
-            bind:this={usernameField}
-        >
+        <vscode-text-field class="input" type="text" bind:this={usernameField}>
             Email or username:
         </vscode-text-field>
         <br />
-        <vscode-text-field
-            class="input"
-            type="password"
-            id="password"
-            name="password"
-            bind:this={passwordField}
-        >
+        <vscode-text-field class="input" type="password" bind:this={passwordField}>
             Password:
         </vscode-text-field>
     </div>
-    <vscode-button
-        role="button"
-        tabindex="0"
-        class="button"
-        style="color: pink"
-        type="submit"
-        name="submit"
-        id="submit"
-        disabled={$loggingIn}
-    >
+    <vscode-button role="button" tabindex="0" class="button" type="submit" disabled={$loggingIn}>
         Log in
     </vscode-button>
 </form>
