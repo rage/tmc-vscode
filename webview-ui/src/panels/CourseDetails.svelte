@@ -161,6 +161,8 @@
 
     <div>
         <vscode-button
+            role="button"
+            tabindex="0"
             class="refresh"
             aria-label="Refresh"
             on:click={() => panel.course !== undefined && refresh(panel.course.id)}
@@ -190,6 +192,8 @@
 
     <div class="open-workspace-button">
         <vscode-button
+            role="button"
+            tabindex="0"
             aria-label="Open workspace"
             on:click={() => panel.course !== undefined && openWorkspace(panel.course.name)}
             on:keypress={() => panel.course !== undefined && openWorkspace(panel.course.name)}
@@ -204,6 +208,8 @@
     >
         Updates found for exercises
         <vscode-button
+            role="button"
+            tabindex="0"
             on:click={() => panel.course !== undefined && updateExercises(panel.course)}
             on:keypress={() => panel.course !== undefined && updateExercises(panel.course)}
         >
@@ -253,6 +259,8 @@
             </div>
             <div class="action-bar-buttons">
                 <vscode-button
+                    role="button"
+                    tabindex="0"
                     class="action-bar-button"
                     on:click={() =>
                         panel.course !== undefined &&
@@ -264,6 +272,8 @@
                     Download
                 </vscode-button>
                 <vscode-button
+                    role="button"
+                    tabindex="0"
                     class="action-bar-button"
                     on:click={() =>
                         panel.course !== undefined &&
@@ -275,6 +285,8 @@
                     Open
                 </vscode-button>
                 <vscode-button
+                    role="button"
+                    tabindex="0"
                     class="action-bar-button"
                     on:click={() =>
                         panel.course !== undefined &&
@@ -286,6 +298,8 @@
                     Close
                 </vscode-button>
                 <vscode-button
+                    role="button"
+                    tabindex="0"
                     class="action-bar-button"
                     appearance="secondary"
                     on:click={() => clearSelectedExercises()}

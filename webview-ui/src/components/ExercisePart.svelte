@@ -54,6 +54,8 @@
         </h2>
         <div class="part-buttons">
             <vscode-button
+                role="button"
+                tabindex="0"
                 class="part-button"
                 appearance="secondary"
                 on:click={() => onDownloadAll(exerciseGroup.exercises.map((e) => e.id))}
@@ -62,6 +64,8 @@
                 Download all
             </vscode-button>
             <vscode-button
+                role="button"
+                tabindex="0"
                 class="part-button"
                 appearance="secondary"
                 on:click={() => onOpenAll(exerciseGroup.exercises.map((e) => e.id))}
@@ -70,6 +74,8 @@
                 Open all
             </vscode-button>
             <vscode-button
+                role="button"
+                tabindex="0"
                 class="part-button"
                 appearance="secondary"
                 on:click={() => onCloseAll(exerciseGroup.exercises.map((e) => e.id))}
@@ -94,6 +100,8 @@
     <div>{exerciseGroup.nextDeadlineString}</div>
     <div class="show-exercises-container">
         <vscode-button
+            role="button"
+            tabindex="0"
             on:click={() => expanded.update((e) => !e)}
             on:keypress={() => expanded.update((e) => !e)}
             appearance="secondary"

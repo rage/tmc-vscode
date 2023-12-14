@@ -85,6 +85,8 @@
         </vscode-text-field>
     </div>
     <vscode-button
+        role="button"
+        tabindex="0"
         class="button"
         style="color: pink"
         type="submit"

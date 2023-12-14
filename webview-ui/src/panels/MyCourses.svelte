@@ -145,6 +145,8 @@
                 <span class="data-path">{panel.tmcDataPath ?? "loading path..."}</span>
             </div>
             <vscode-button
+                role="button"
+                tabindex="0"
                 class="change-path-button"
                 appearance="secondary"
                 on:click={changeTmcDataPath}
@@ -160,6 +162,8 @@
             {@const completed = ((course.awardedPoints / course.availablePoints) * 100).toFixed(2)}
             <Card>
                 <div
+                    role="button"
+                    tabindex="0"
                     on:click={() => {
                         openCourseDetails(course.id);
                     }}
@@ -172,6 +176,8 @@
                             {course.title} <small class="muted">({course.name})</small>
                         </h3>
                         <vscode-button
+                            role="button"
+                            tabindex="0"
                             class="remove-button"
                             appearance="secondary"
                             type="button"
@@ -193,6 +199,8 @@
                         />
                     </div>
                     <vscode-button
+                        role="button"
+                        tabindex="0"
                         appearance="primary"
                         type="button"
                         aria-label="Open workspace"
@@ -211,6 +219,8 @@
                         <div role="alert">
                             {course.newExercises.length} new exercises found for this course.
                             <vscode-button
+                                role="button"
+                                tabindex="0"
                                 type="button"
                                 on:click={() => {
                                     downloadExercises(
@@ -232,6 +242,8 @@
                                 Download them!
                             </vscode-button>
                             <vscode-button
+                                role="button"
+                                tabindex="0"
                                 type="button"
                                 aria-label="Close"
                                 on:click={() => clearNewExercises(course.id)}
@@ -254,6 +266,8 @@
 
 <div class="add-new-course-container">
     <vscode-button
+        role="button"
+        tabindex="0"
         class="add-new-course"
         type="button"
         on:click={addNewCourse}

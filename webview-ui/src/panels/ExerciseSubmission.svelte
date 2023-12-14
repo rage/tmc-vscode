@@ -94,6 +94,8 @@
 {/if}
 
 <vscode-button
+    role="button"
+    tabindex="0"
     class="close-button"
     appearance="secondary"
     on:click={closePanel}
@@ -118,6 +120,8 @@
 {#if $submissionResult === undefined}
     <div>
         <vscode-button
+            role="button"
+            tabindex="0"
             appearance="secondary"
             on:click={runInBackground}
             on:keypress={runInBackground}
@@ -125,6 +129,8 @@
             Run in background
         </vscode-button>
         <vscode-button
+            role="button"
+            tabindex="0"
             appearance="secondary"
             on:click={() => $submissionStatusUrl && showInBrowser($submissionStatusUrl)}
             on:keypress={() => $submissionStatusUrl && showInBrowser($submissionStatusUrl)}

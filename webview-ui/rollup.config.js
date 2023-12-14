@@ -64,6 +64,7 @@ module.exports = {
         typescript({
             sourceMap: !production,
             inlineSources: !production,
+            verbatimModuleSyntax: false,
         }),
 
         // In dev mode, call `npm run start` once

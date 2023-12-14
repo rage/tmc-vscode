@@ -58,6 +58,8 @@
 {#if $pinned !== undefined && $tmcBackendUrl !== undefined}
     {#each $pinned as pinned}
         <div
+            role="button"
+            tabindex="0"
             class="org-row"
             on:click={() => selectOrganization(pinned.slug)}
             on:keypress={() => selectOrganization(pinned.slug)}
@@ -87,6 +89,8 @@
 {#if $organizations !== undefined && $tmcBackendUrl !== undefined}
     {#each $organizations ?? [] as organization}
         <div
+            role="button"
+            tabindex="0"
             class="org-row"
             on:click={() => selectOrganization(organization.slug)}
             on:keypress={() => selectOrganization(organization.slug)}
