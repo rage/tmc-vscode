@@ -54,6 +54,9 @@ const config = () => {
             // using the incorrect import paths for .d.ts files:
             // https://github.com/TypeStrong/ts-loader/issues/1501
             preferRelative: true,
+            fallback: {
+                async_hooks: false,
+            },
         },
         node: {
             __dirname: false,

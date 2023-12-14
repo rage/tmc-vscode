@@ -450,16 +450,16 @@
         "trailingComma": "all"
     },
     "dependencies": {
-        "del": "^7.0.0",
+        "del": "^7.1.0",
         "du": "^1.0.0",
-        "fs-extra": "^11.1.1",
-        "handlebars": "^4.7.7",
+        "fs-extra": "^11.2.0",
+        "handlebars": "^4.7.8",
         "lodash": "^4.17.21",
-        "p-limit": "^4.0.0",
+        "p-limit": "^5.0.0",
         "tree-kill": "^1.2.2",
         "ts-results": "^3.3.0",
-        "typia": "^4.1.6",
-        "undici": "^5.23.0"
+        "typia": "^5.3.5",
+        "undici": "^6.0.1"
     },
     "devDependencies": {
         "@babel/cli": "^7.22.9",
