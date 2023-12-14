@@ -1,11 +1,11 @@
-import svelte from "rollup-plugin-svelte";
-import commonjs from "@rollup/plugin-commonjs";
-import resolve from "@rollup/plugin-node-resolve";
-import livereload from "rollup-plugin-livereload";
-import { terser } from "rollup-plugin-terser";
-import sveltePreprocess from "svelte-preprocess";
-import typescript from "@rollup/plugin-typescript";
-import css from "rollup-plugin-css-only";
+const svelte = require("rollup-plugin-svelte");
+const commonjs = require("@rollup/plugin-commonjs");
+const resolve = require("@rollup/plugin-node-resolve");
+const livereload = require("rollup-plugin-livereload");
+const terser = require("@rollup/plugin-terser");
+const sveltePreprocess = require("svelte-preprocess");
+const typescript = require("@rollup/plugin-typescript");
+const css = require("rollup-plugin-css-only");
 
 const production = !process.env.ROLLUP_WATCH;
 
@@ -30,7 +30,7 @@ function serve() {
     };
 }
 
-export default {
+module.exports = {
     input: "src/main.ts",
     output: {
         sourcemap: !production,

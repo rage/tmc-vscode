@@ -24,7 +24,7 @@
     "publisher": "moocfi",
     "main": "./dist/extension",
     "scripts": {
-        "install:all": "npm install && cd backend && npm ci && cd ../webview-ui && npm install",
+        "install:all": "npm install && cd backend && npm install && cd ../webview-ui && npm install",
         "webview:start": "cd webview-ui && npm run dev",
         "webview:build": "cd webview-ui && npm run build",
         "watch": "tsc -watch -p ./",
