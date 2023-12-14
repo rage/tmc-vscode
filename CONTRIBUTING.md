@@ -4,6 +4,14 @@
 
 You can start by looking through the issues marked with label [`good first issue`](https://github.com/rage/tmc-vscode/labels/good%20first%20issue).
 
+## Project structure
+
+- `./src`: contains the "backend" of the extension
+  - `./src/actions`: Contains composable actions used by the VSCode commands and other actions
+  - `./src/commands`: Contains a source file for each VSCode command contributed by the extension
+- `./webview-ui`: contains the "frontend" of the extension
+- `./shared`: contains types that are shared between the backend and frontend
+
 ## Setup
 
 ### Prerequisites
@@ -57,21 +65,9 @@ Automatic build task starts the first time that the extension is launched from V
 
 You can also build the extension by running `npm run webpack` or `npm run webpack:watch`.
 
-**NOTE!** If editing type definitions
-
-You need to kill the webpackBuild task by going to terminal tab and pressing the recycle bin or <kbd>CTRL + C</kbd> and then start the extension again by pressing `F5`
-
-**NOTE!** Running multiple instances of VSCode can interfere with this process. If you experience strange behaviour when running the extension, make sure there are no other instances of VSCode running.
-
 ## Testing
 
-### Unit tests
-
-#### Integration
-
-The integration tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so. The integration tests can be run with `npm run test`. If you get a `Connection error: TypeError`, make sure the backend is running.
-
-#### Playwright
+The tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so. The tests can be run with `npm run test`. If you get a `Connection error: TypeError`, make sure the backend is running.
 
 1. `npm run webpack:watch` to keep building the extension while writing code while VSCode is closed.
 

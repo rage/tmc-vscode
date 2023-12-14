@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import Storage, { SessionState } from "../api/storage";
-import { Logger, LogLevel } from "../utils/logger";
+import { Logger, LogLevel } from "../utilities/logger";
 
 /**
  * @deprecated Default values are now implemented in package.json / VSCode settings.

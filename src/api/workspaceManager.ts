@@ -14,7 +14,7 @@ import {
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Resources, { EditorKind } from "../config/resources";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 export enum ExerciseStatus {
     Closed = "closed",
@@ -162,17 +162,23 @@ export default class WorkspaceManager implements vscode.Disposable {
         return this._refreshActiveCourseWorkspace();
     }
 
-    public closeCourseExercises(
+    public async closeCourseExercises(
         courseSlug: string,
         exerciseSlugs: string[],
-    ): Promise<Result<void, Error>> {
+    ): Promise<Result<Array<WorkspaceExercise>, Error>> {
+        const closedExercises: Array<WorkspaceExercise> = [];
         this._exercises.forEach((x) => {
             if (x.courseSlug === courseSlug && exerciseSlugs.includes(x.exerciseSlug)) {
                 x.status = ExerciseStatus.Closed;
+                closedExercises.push(x);
             }
         });
 
-        return this._refreshActiveCourseWorkspace();
+        const result = await this._refreshActiveCourseWorkspace();
+        if (result.err) {
+            return result;
+        }
+        return Ok(closedExercises);
     }
 
     /**

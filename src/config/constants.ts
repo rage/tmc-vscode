@@ -9,7 +9,9 @@ declare const __TMC_LANGS_CONFIG_DIR__: string | null;
 declare const __TMC_LANGS_DL_URL__: string;
 declare const __TMC_LANGS_VERSION__: string;
 
+// @ts-ignore "No module found" error even though the file exists
 import FAQ from "../../docs/FAQ.md";
+import { TestResultData } from "../shared/shared";
 
 export const DEBUG_MODE = __DEBUG_MODE__;
 export const TMC_BACKEND_URL = __TMC_BACKEND__URL__;
@@ -91,7 +93,7 @@ export const WORKSPACE_ROOT_FILE_NAME = "TMC-Readme.md";
 export const WORKSPACE_ROOT_FILE_TEXT = FAQ;
 export const WORKSPACE_ROOT_FOLDER_NAME = ".tmc";
 
-export const EXAM_TEST_RESULT = {
+export const EXAM_TEST_RESULT: TestResultData = {
     testResult: {
         status: "PASSED",
         testResults: [
@@ -99,13 +101,14 @@ export const EXAM_TEST_RESULT = {
                 name: "Hidden Exam Test: hidden_test",
                 successful: true,
                 message: "Remember to submit your solution to the server for evaluation.",
-                valgrindFailed: false,
                 points: [],
                 exception: [],
             },
         ],
         logs: {},
     },
+    id: 0,
+    courseSlug: "",
     exerciseName: "part01-exam01",
     tmcLogs: {
         stdout: "",

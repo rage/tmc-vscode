@@ -40,14 +40,9 @@ jobs:
                   cd ..
 
             - name: Unit tests
-              uses: GabrielBB/setup-xvfb@v1.0.1
+              uses: coactions/setup-xvfb@v1
               with:
                   run: npm test
-
-            - name: Integration tests
-              uses: GabrielBB/setup-xvfb@v1.0.1
-              with:
-                  run: npm run test-integration-only integration
 
     playwright_tests:
         name: Playwright tests

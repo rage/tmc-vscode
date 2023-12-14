@@ -4,9 +4,9 @@ import * as actions from "../actions";
 import { checkForCourseUpdates, displayUserCourses, removeCourse } from "../actions";
 import { ActionContext } from "../actions/types";
 import * as commands from "../commands";
+import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { TmcTreeNode } from "../ui/treeview/treenode";
-import { TemplateData } from "../ui/types";
-import { Logger } from "../utils/";
+import { Logger } from "../utilities/";
 
 export function registerCommands(
     context: vscode.ExtensionContext,
@@ -19,12 +19,6 @@ export function registerCommands(
     context.subscriptions.push(
         vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
         vscode.commands.registerCommand(
-            "tmcTreeView.setContentFromTemplate",
-            (template: TemplateData) => {
-                ui.webview.setContentFromTemplate(template);
-            },
-        ),
-        vscode.commands.registerCommand(
             "tmcTreeView.removeCourse",
             async (treeNode: TmcTreeNode) => {
                 const confirmed = await dialog.confirmation(
@@ -32,7 +26,7 @@ export function registerCommands(
                 );
                 if (confirmed) {
                     await removeCourse(actionContext, Number(treeNode.id));
-                    await displayUserCourses(actionContext);
+                    await displayUserCourses(context, actionContext);
                 }
             },
         ),
@@ -76,7 +70,12 @@ export function registerCommands(
                     ...courses.map<[string, number]>((c) => [c.title, c.id]),
                 ));
             if (courseId) {
-                actions.displayLocalCourseDetails(actionContext, courseId);
+                TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+                    id: randomPanelId(),
+                    type: "CourseDetails",
+                    courseId,
+                    exerciseStatuses: {},
+                });
             }
         }),
 
@@ -110,7 +109,6 @@ export function registerCommands(
 
         vscode.commands.registerCommand("tmc.logout", async () => {
             if (await dialog.confirmation("Are you sure you want to log out?")) {
-                const { ui } = actionContext;
                 const deauth = await actions.logout(actionContext);
                 if (deauth.err) {
                     dialog.errorNotification(
@@ -119,13 +117,16 @@ export function registerCommands(
                     );
                     return;
                 }
-                ui.webview.dispose();
                 dialog.notification("Logged out from TestMyCode.");
             }
         }),
 
         vscode.commands.registerCommand("tmc.myCourses", async () => {
-            actions.displayUserCourses(actionContext);
+            TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+                id: randomPanelId(),
+                type: "MyCourses",
+                courseDeadlines: {},
+            });
         }),
 
         vscode.commands.registerCommand("tmc.openSettings", async () => {
@@ -159,14 +160,25 @@ export function registerCommands(
             );
         }),
 
-        vscode.commands.registerCommand("tmc.showWelcome", async () =>
-            commands.showWelcome(actionContext),
-        ),
+        vscode.commands.registerCommand("tmc.showWelcome", async () => {
+            TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+                id: randomPanelId(),
+                type: "Welcome",
+            });
+        }),
+
+        vscode.commands.registerCommand("tmc.showLogin", async () => {
+            TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+                id: randomPanelId(),
+                type: "Login",
+            });
+        }),
 
         vscode.commands.registerCommand(
             "tmc.submitExercise",
-            async (resource: vscode.Uri | undefined) =>
-                commands.submitExercise(actionContext, resource),
+            async (resource: vscode.Uri | undefined) => {
+                commands.submitExercise(context, actionContext, resource);
+            },
         ),
 
         vscode.commands.registerCommand("tmc.switchWorkspace", async () =>
@@ -175,8 +187,9 @@ export function registerCommands(
 
         vscode.commands.registerCommand(
             "tmc.testExercise",
-            async (resource: vscode.Uri | undefined) =>
-                commands.testExercise(actionContext, resource),
+            async (resource: vscode.Uri | undefined) => {
+                commands.testExercise(context, actionContext, resource);
+            },
         ),
 
         vscode.commands.registerCommand("tmc.updateExercises", async (silent: string) =>

@@ -23,6 +23,8 @@ import {
     createOldSubmission,
     createOrganization,
     ExerciseWithFile,
+    failingExerciseId,
+    passingExerciseId,
     respondWithFile,
 } from "./utils";
 
@@ -77,11 +79,9 @@ const organizationCourses = [
 
 // ==== exercises ====
 
-let exerciseId = 1;
-
 const pythonExercisePassing = createExercise({
     checksum: "abc123",
-    id: exerciseId++,
+    id: passingExerciseId,
     name: "part01-01_passing_exercise",
     points: [{ id: 0, name: "1.passing_exercise" }],
     path: ["test-python-course", "part01-01_passing_exercise.zip"],
@@ -89,7 +89,7 @@ const pythonExercisePassing = createExercise({
 
 const pythonExerciseFailing = createExercise({
     checksum: "bcd234",
-    id: exerciseId++,
+    id: failingExerciseId,
     name: "part01-02_failing_exercise",
     points: [{ id: 1, name: "2.failing_exercise" }],
     path: ["test-python-course", "part01-02_failing_exercise.zip"],
@@ -99,7 +99,7 @@ const pythonExercises = [pythonExercisePassing, pythonExerciseFailing];
 
 const javaExercisePassing = createExercise({
     checksum: "abc123",
-    id: exerciseId++,
+    id: 12345,
     name: "part01-01_passing_exercise",
     points: [{ id: 0, name: "1.passing_exercise" }],
     path: ["test-java-course", "part01-01_passing_exercise.zip"],

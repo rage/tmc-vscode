@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import { ActionContext } from "../actions/types";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 /**
  * Removes language specific meta files from exercise directory.

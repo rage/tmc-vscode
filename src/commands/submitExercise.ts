@@ -3,9 +3,10 @@ import * as vscode from "vscode";
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
 import { BottleneckError } from "../errors";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 export async function submitExercise(
+    context: vscode.ExtensionContext,
     actionContext: ActionContext,
     resource: vscode.Uri | undefined,
 ): Promise<void> {
@@ -20,7 +21,7 @@ export async function submitExercise(
         return;
     }
 
-    const result = await actions.submitExercise(actionContext, exercise);
+    const result = await actions.submitExercise(context, actionContext, exercise);
     if (result.err) {
         if (result.val instanceof BottleneckError) {
             Logger.warn(`Submission was cancelled: ${result.val.message}.`);

@@ -1,15 +1,15 @@
-import du = require("du");
 import * as vscode from "vscode";
 
 import { moveExtensionDataPath } from "../actions";
 import { ActionContext } from "../actions/types";
-import { formatSizeInBytes, Logger } from "../utils";
+import { TmcPanel } from "../panels/TmcPanel";
+import { Logger } from "../utilities";
 
 /**
  * Removes language specific meta files from exercise directory.
  */
 export async function changeTmcDataPath(actionContext: ActionContext): Promise<void> {
-    const { dialog, resources, ui } = actionContext;
+    const { dialog, resources } = actionContext;
     Logger.info("Changing TMC data path");
 
     const old = resources.projectsDirectory;
@@ -39,10 +39,12 @@ export async function changeTmcDataPath(actionContext: ActionContext): Promise<v
         } else {
             dialog.errorNotification(res.val.message, res.val);
         }
-        ui.webview.postMessage({
-            command: "setTmcDataFolder",
-            diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
-            path: resources.projectsDirectory,
+        TmcPanel.postMessage({
+            type: "setTmcDataPath",
+            tmcDataPath: resources.projectsDirectory,
+            target: {
+                type: "MyCourses",
+            },
         });
     }
 }

@@ -8,7 +8,7 @@ vsCodeTest("can interact with the login page", async ({ page, webview }) => {
 
     await vsCodeTest.step("navigate to login page", async () => {
         await loginPage.goto();
-        const loginPageHeader = webview.getByText("Login to TMC");
+        const loginPageHeader = webview.getByRole("heading", { name: "Log in" });
         await expect(loginPageHeader).toBeVisible();
     });
 

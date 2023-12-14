@@ -7,7 +7,7 @@ import { workspaceExercises } from "../fixtures/workspaceManager";
 export interface WorkspaceManagerMockValues {
     activeCourse?: string;
     activeExercise?: Readonly<WorkspaceExercise>;
-    closeExercises: Result<void, Error>;
+    closeExercises: Result<Array<WorkspaceExercise>, Error>;
     getExerciseByPath: Readonly<WorkspaceExercise> | undefined;
     getExercisesByCoursePythonCourse: ReadonlyArray<WorkspaceExercise>;
     setExercises: Result<void, Error>;
@@ -18,7 +18,7 @@ export function createWorkspaceMangerMock(): [IMock<WorkspaceManager>, Workspace
     const values: WorkspaceManagerMockValues = {
         activeCourse: undefined,
         activeExercise: undefined,
-        closeExercises: Ok.EMPTY,
+        closeExercises: Ok(workspaceExercises),
         getExerciseByPath: undefined,
         getExercisesByCoursePythonCourse: workspaceExercises,
         setExercises: Ok.EMPTY,

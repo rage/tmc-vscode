@@ -1,0 +1,1 @@
+../../../shared/langsSchema.ts

@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 
 import Dialog from "../api/dialog";
 import TMC from "../api/tmc";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 import { MigratedData } from "./types";
 import validateData from "./validateData";

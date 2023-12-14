@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 import Storage from "../api/storage";
 import { EXTENSION_ID, WORKSPACE_ROOT_FILE_TEXT, WORKSPACE_SETTINGS } from "../config/constants";
 import Resources from "../config/resources";
-import { Logger } from "../utils/logger";
+import { Logger } from "../utilities/logger";
 
 /**
  * Performs resource initialization on extension activation

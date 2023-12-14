@@ -2,9 +2,10 @@ import * as vscode from "vscode";
 
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 export async function testExercise(
+    context: vscode.ExtensionContext,
     actionContext: ActionContext,
     resource: vscode.Uri | undefined,
 ): Promise<void> {
@@ -19,7 +20,7 @@ export async function testExercise(
         return;
     }
 
-    const result = await actions.testExercise(actionContext, exercise);
+    const result = await actions.testExercise(context, actionContext, exercise);
     if (result.err) {
         dialog.errorNotification("Exercise test run failed.", result.val);
         return;

@@ -8,7 +8,6 @@ import WorkspaceManager from "../../api/workspaceManager";
 import Resouces from "../../config/resources";
 import Settings from "../../config/settings";
 import { UserData } from "../../config/userdata";
-import TemporaryWebviewProvider from "../../ui/temporaryWebviewProvider";
 import { VisibilityGroups } from "../../ui/types";
 import UI from "../../ui/ui";
 
@@ -18,7 +17,6 @@ export function createMockActionContext(): ActionContext {
         exerciseDecorationProvider: Mock.ofType<ExerciseDecorationProvider>().object,
         resources: Mock.ofType<Resouces>().object,
         settings: Mock.ofType<Settings>().object,
-        temporaryWebviewProvider: Mock.ofType<TemporaryWebviewProvider>().object,
         tmc: Mock.ofType<TMC>().object,
         ui: Mock.ofType<UI>().object,
         userData: Mock.ofType<UserData>().object,

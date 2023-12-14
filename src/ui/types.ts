@@ -1,13 +1,11 @@
 import { FeedbackQuestion } from "../actions/types";
-import { SubmissionFinished } from "../api/langsSchema";
 import Storage, { LocalCourseData } from "../api/storage";
 import TMC from "../api/tmc";
 import { Course, Organization } from "../api/types";
 import { ExtensionSettings } from "../config/settings";
-import { LogLevel } from "../utils/logger";
+import { SubmissionFinished } from "../shared/langsSchema";
+import { LogLevel } from "../utilities/logger";
 
-import { MyCoursesProps } from "./templates/MyCourses";
-import { WelcomeProps } from "./templates/Welcome";
 import UI from "./ui";
 
 export type HandlerContext = {
@@ -29,20 +27,6 @@ export type VisibilityGroup = {
 export type VisibilityGroupNegated = {
     id: string;
 };
-
-export type TemplateData =
-    | ({ templateName: "course-details" } & CourseDetailsData)
-    | ({ templateName: "course" } & CourseData)
-    | ({ templateName: "error" } & ErrorData)
-    | { templateName: "login" }
-    | ({ templateName: "my-courses" } & MyCoursesProps)
-    | ({ templateName: "organization" } & OrganizationData)
-    | ({ templateName: "running-tests" } & RunningTestsData)
-    | { templateName: "settings" }
-    | ({ templateName: "submission-result" } & SubmissionResultData)
-    | ({ templateName: "submission-status" } & SubmissionStatusData)
-    | ({ templateName: "test-result" } & TestResultData)
-    | ({ templateName: "welcome" } & WelcomeProps);
 
 export type CourseDetailsData = {
     course: LocalCourseData;

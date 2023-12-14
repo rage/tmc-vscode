@@ -10,17 +10,19 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { LocalCourseData } from "../api/storage";
-import { SubmissionFeedback } from "../api/types";
 import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { BottleneckError } from "../errors";
-import { TestResultData } from "../ui/types";
-import { Logger, parseFeedbackQuestion } from "../utils/";
+import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
+import { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../shared/shared";
+import { Logger, parseFeedbackQuestion } from "../utilities/";
 import { getActiveEditorExecutablePath } from "../window";
 
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
-import { ActionContext, FeedbackQuestion } from "./types";
+import { ActionContext } from "./types";
 import { updateCourse } from "./updateCourse";
+
+export const testInterrupts: Map<number, () => void> = new Map();
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -63,14 +65,15 @@ export async function logout(actionContext: ActionContext): Promise<Result<void,
  * Tests an exercise while keeping the user informed
  */
 export async function testExercise(
+    context: vscode.ExtensionContext,
     actionContext: ActionContext,
     exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { dialog, tmc, userData, temporaryWebviewProvider } = actionContext;
+    const { tmc, userData } = actionContext;
 
     const course = userData.getCourseByName(exercise.courseSlug);
-    const exerciseId = course.exercises.find((x) => x.name === exercise.exerciseSlug)?.id;
-    if (!exerciseId) {
+    const courseExercise = course.exercises.find((x) => x.name === exercise.exerciseSlug);
+    if (!courseExercise) {
         return Err(
             new Error(
                 `ID for exercise ${exercise.courseSlug}/${exercise.exerciseSlug} was not found.`,
@@ -78,95 +81,64 @@ export async function testExercise(
         );
     }
 
+    const testRunId = randomPanelId();
+    // render panel
+    const panel: ExerciseTestsPanel = {
+        id: randomPanelId(),
+        type: "ExerciseTests",
+        course: course,
+        exercise: courseExercise,
+        exerciseUri: exercise.uri,
+        testRunId,
+    };
+    await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
+
     let data: TestResultData = {
         ...EXAM_TEST_RESULT,
-        id: exerciseId,
+        id: courseExercise.id,
         disabled: course.disabled,
         courseSlug: course.name,
     };
-    const temp = temporaryWebviewProvider.getTemporaryWebview();
 
     if (!course.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext);
         const [testRunner, interrupt] = tmc.runTests(exercise.uri.fsPath, executablePath);
-        let aborted = false;
+        testInterrupts.set(testRunId, interrupt);
         const exerciseName = exercise.exerciseSlug;
 
-        temp.setContent({
-            title: "TMC Running tests",
-            template: { templateName: "running-tests", exerciseName },
-            messageHandler: async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
-                if (msg.type === "closeWindow") {
-                    temp.dispose();
-                } else if (msg.type === "abortTests") {
-                    interrupt();
-                    aborted = true;
-                }
-            },
-        });
         Logger.info(`Running local tests for ${exerciseName}`);
-
-        const testResult = await testRunner;
-        if (testResult.err) {
-            if (aborted) {
-                temp.dispose();
-                return Ok.EMPTY;
-            }
-            temp.setContent({
-                title: "TMC",
-                template: { templateName: "error", error: testResult.val },
-                messageHandler: (msg: { type?: string }) => {
-                    if (msg.type === "closeWindow") {
-                        temp.dispose();
-                    }
-                },
-            });
-            temporaryWebviewProvider.addToRecycables(temp);
-            return testResult;
-        }
+        const testResults = await testRunner;
         Logger.info(`Tests finished for ${exerciseName}`);
+
+        if (testResults.err) {
+            TmcPanel.postMessage({
+                type: "testError",
+                target: panel,
+                error: testResults.val,
+            });
+            return Ok.EMPTY;
+        }
+
         data = {
-            testResult: testResult.val,
-            id: exerciseId,
+            testResult: testResults.val,
+            id: courseExercise.id,
             courseSlug: course.name,
             exerciseName,
-            tmcLogs: {},
+            tmcLogs: testResults.val.logs,
             disabled: course.disabled,
         };
+
+        if (TmcPanel.sidePanel === undefined) {
+            // user closed panel, re-render
+            await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
+        }
+        TmcPanel.postMessage({
+            type: "testResults",
+            target: panel,
+            testResults: data,
+        });
     }
 
-    // Set test-result handlers.
-    temp.setContent({
-        title: "TMC Test Results",
-        template: { templateName: "test-result", ...data, pasteLink: "" },
-        messageHandler: async (msg: { type?: string; data?: { [key: string]: unknown } }) => {
-            if (msg.type === "submitToServer") {
-                submitExercise(actionContext, exercise);
-            } else if (msg.type === "sendToPaste" && msg.data) {
-                const pasteResult = await pasteExercise(
-                    actionContext,
-                    msg.data.courseSlug as string,
-                    msg.data.exerciseName as string,
-                );
-                if (pasteResult.err) {
-                    dialog.errorNotification(
-                        `Failed to send to TMC Paste: ${pasteResult.val.message}.`,
-                        pasteResult.val,
-                    );
-                    temp.postMessage({
-                        command: "showPasteLink",
-                        pasteLink: `${pasteResult.val.message}`,
-                    });
-                } else {
-                    const value = pasteResult.val || "Link not provided by server.";
-                    temp.postMessage({ command: "showPasteLink", pasteLink: value });
-                }
-            } else if (msg.type === "closeWindow") {
-                temp.dispose();
-            }
-        },
-    });
-    temporaryWebviewProvider.addToRecycables(temp);
     return Ok.EMPTY;
 }
 
@@ -175,16 +147,16 @@ export async function testExercise(
  * @param tempView Existing TemporaryWebview to use if any
  */
 export async function submitExercise(
+    context: vscode.ExtensionContext,
     actionContext: ActionContext,
     exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { dialog, exerciseDecorationProvider, temporaryWebviewProvider, tmc, userData } =
-        actionContext;
+    const { exerciseDecorationProvider, tmc, userData } = actionContext;
     Logger.info(`Submitting exercise ${exercise.exerciseSlug} to server`);
 
     const course = userData.getCourseByName(exercise.courseSlug);
-    const exerciseId = course.exercises.find((x) => x.name === exercise.exerciseSlug)?.id;
-    if (!exerciseId) {
+    const courseExercise = course.exercises.find((x) => x.name === exercise.exerciseSlug);
+    if (!courseExercise) {
         return Err(
             new Error(
                 `ID for exercise ${exercise.exerciseSlug}/${exercise.exerciseSlug} was not found.`,
@@ -192,71 +164,31 @@ export async function submitExercise(
         );
     }
 
-    const temp = temporaryWebviewProvider.getTemporaryWebview();
-
-    const messageHandler = async (msg: {
-        data?: { [key: string]: unknown };
-        type?: string;
-    }): Promise<void> => {
-        if (msg.type === "feedback" && msg.data) {
-            await tmc.submitSubmissionFeedback(
-                msg.data.url as string,
-                msg.data.feedback as SubmissionFeedback,
-            );
-        } else if (msg.type === "showSubmissionInBrowserStatus" && msg.data) {
-            vscode.env.openExternal(vscode.Uri.parse(msg.data.submissionUrl as string));
-        } else if (msg.type === "showSubmissionInBrowserResult" && msg.data) {
-            vscode.env.openExternal(vscode.Uri.parse(msg.data.submissionUrl as string));
-        } else if (msg.type === "showSolutionInBrowser" && msg.data) {
-            vscode.env.openExternal(vscode.Uri.parse(msg.data.solutionUrl as string));
-        } else if (msg.type === "closeWindow") {
-            temp.dispose();
-        } else if (msg.type === "sendToPaste" && msg.data) {
-            const pasteResult = await pasteExercise(
-                actionContext,
-                msg.data.courseSlug as string,
-                msg.data.exerciseName as string,
-            );
-            if (pasteResult.err) {
-                dialog.errorNotification(
-                    `Failed to send to TMC Paste: ${pasteResult.val.message}.`,
-                    pasteResult.val,
-                );
-                temp.postMessage({
-                    command: "showPasteLink",
-                    pasteLink: `${pasteResult.val.message}`,
-                });
-            } else {
-                const value = pasteResult.val || "Link not provided by server.";
-                temp.postMessage({ command: "showPasteLink", pasteLink: value });
-            }
-        }
+    const panel: ExerciseSubmissionPanel = {
+        id: randomPanelId(),
+        type: "ExerciseSubmission",
+        course,
+        exercise: courseExercise,
     };
+    await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
 
-    const messages: string[] = [];
-    let submissionUrl = "";
     const submissionResult = await tmc.submitExerciseAndWaitForResults(
-        exerciseId,
+        courseExercise.id,
         exercise.uri.fsPath,
-        (progressPct, message) => {
-            if (message && message !== _.last(messages)) {
-                messages.push(message);
-            }
-            if (!temp.disposed) {
-                temp.setContent({
-                    title: "TMC Server Submission",
-                    template: {
-                        templateName: "submission-status",
-                        messages,
-                        progressPct,
-                        submissionUrl,
-                    },
-                    messageHandler,
-                });
-            }
+        (progressPercent, message) => {
+            TmcPanel.postMessage({
+                type: "submissionStatusUpdate",
+                target: panel,
+                progressPercent,
+                message,
+            });
         },
         (url) => {
-            submissionUrl = url;
+            TmcPanel.postMessage({
+                type: "submissionStatusUrl",
+                target: panel,
+                url,
+            });
         },
     );
 
@@ -265,42 +197,32 @@ export async function submitExercise(
             Logger.warn(`Submission was cancelled: ${submissionResult.val.message}.`);
             return Ok.EMPTY;
         }
-
-        temp.setContent({
-            title: "TMC Server Submission",
-            template: { templateName: "error", error: submissionResult.val },
-            messageHandler: async (msg: { type?: string }): Promise<void> => {
-                if (msg.type === "closeWindow") {
-                    temp.dispose();
-                }
-            },
+        TmcPanel.postMessage({
+            type: "submissionStatusError",
+            target: panel,
+            error: submissionResult.val,
         });
-        temporaryWebviewProvider.addToRecycables(temp);
         return submissionResult;
     }
 
     const statusData = submissionResult.val;
-    let feedbackQuestions: FeedbackQuestion[] = [];
-
     if (statusData.status === "ok" && statusData.all_tests_passed) {
         userData.setExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug).then(() => {
             exerciseDecorationProvider.updateDecorationsForExercises(exercise);
         });
-        if (statusData.feedback_questions) {
-            feedbackQuestions = parseFeedbackQuestion(statusData.feedback_questions);
-        }
     }
-    temp.setContent({
-        title: "TMC Server Submission",
-        template: {
-            templateName: "submission-result",
-            statusData,
-            feedbackQuestions,
-            submissionUrl,
-        },
-        messageHandler,
+    const questions = statusData.feedback_questions
+        ? parseFeedbackQuestion(statusData.feedback_questions)
+        : [];
+    if (TmcPanel.sidePanel === undefined) {
+        await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
+    }
+    TmcPanel.postMessage({
+        type: "submissionResult",
+        target: panel,
+        result: statusData,
+        questions,
     });
-    temporaryWebviewProvider.addToRecycables(temp);
 
     const courseData = userData.getCourseByName(exercise.courseSlug) as Readonly<LocalCourseData>;
     await checkForCourseUpdates(actionContext, courseData.id);

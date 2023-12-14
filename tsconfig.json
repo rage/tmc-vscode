@@ -4,7 +4,7 @@
         "module": "commonjs",
         "target": "es6",
         "outDir": "out",
-        "lib": ["es6"],
+        "lib": ["es6", "dom"],
         "plugins": [
             {
                 "transform": "typia/lib/transform"
@@ -25,6 +25,8 @@
         "node_modules",
         "test-resources",
         "typings",
+        "webview-ui",
+        "shared",
         "playwright",
         "playwright.config.ts"
     ]

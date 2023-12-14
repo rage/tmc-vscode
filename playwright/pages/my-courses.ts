@@ -1,5 +1,7 @@
 import { FrameLocator, Page } from "@playwright/test";
 
+import { SelectCourse } from "./select-course";
+import { SelectOrganization } from "./select-organization";
 import { TmcPage } from "./tmc";
 
 export class MyCoursesPage extends TmcPage {
@@ -18,18 +20,13 @@ export class MyCoursesPage extends TmcPage {
     async addNewCourse(name: string): Promise<void> {
         await this.webview.getByRole("button", { name: "Add new course" }).click();
 
-        // this wait lets the next frame load properly
-        // interacting with it too quickly causes it to get stuck for an unknown reason
-        // we should be able to fix it with the new svelte implementation
-        await this.page.waitForTimeout(1000);
-        await this.getFrame("Select organization")
-            .getByRole("heading", { name: "Test Organization (test)" })
-            .click();
+        const selectOrganization = new SelectOrganization(this.page, this.webview);
+        await selectOrganization.select("Test Organization (test)");
+        // wait for the organization selection page to close
+        await this.page.waitForTimeout(200);
 
-        // this wait lets the next frame load properly
-        // interacting with it too quickly causes it to get stuck for an unknown reason
-        await this.page.waitForTimeout(1000);
-        await this.getFrame("Select course").getByRole("heading", { name }).click();
+        const selectCourse = new SelectCourse(this.page, this.webview);
+        await selectCourse.select(name);
     }
 
     async selectCourse(name: string): Promise<void> {

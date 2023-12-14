@@ -5,7 +5,6 @@ import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import Settings from "../config/settings";
 import { UserData } from "../config/userdata";
-import TemporaryWebviewProvider from "../ui/temporaryWebviewProvider";
 import { VisibilityGroups } from "../ui/types";
 import UI from "../ui/ui";
 
@@ -14,7 +13,6 @@ export type ActionContext = {
     exerciseDecorationProvider: ExerciseDecorationProvider;
     resources: Resources;
     settings: Settings;
-    temporaryWebviewProvider: TemporaryWebviewProvider;
     tmc: TMC;
     ui: UI;
     userData: UserData;

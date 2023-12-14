@@ -5,7 +5,7 @@ import { Err, Ok, Result } from "ts-results";
 
 import Dialog from "../api/dialog";
 import { TMC_LANGS_DL_URL, TMC_LANGS_VERSION } from "../config/constants";
-import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger } from "../utils";
+import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger } from "../utilities";
 
 /**
  * Downloads correct langs version for the current extension version, unless already present. Will

@@ -1,7 +1,7 @@
 import { flatten } from "lodash";
 import { Ok, Result } from "ts-results";
 
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 import { ActionContext } from "./types";
 

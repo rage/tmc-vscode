@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import { ActionContext } from "../actions/types";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 /**
  * Resets an exercise to its initial state. Optionally submits the exercise beforehand.

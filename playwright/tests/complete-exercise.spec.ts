@@ -13,7 +13,7 @@ type Exercise = {
     name: string;
     file_path: Array<string>;
     file_contents: string;
-    expected_result: "PASSED" | "FAILED";
+    expected_result: "pass" | "fail";
 };
 
 const exercises: Array<Exercise> = [
@@ -22,7 +22,7 @@ const exercises: Array<Exercise> = [
         name: "01_passing_exercise",
         file_path: ["src", "passing_exercise.py"],
         file_contents: "def hello()",
-        expected_result: "PASSED",
+        expected_result: "pass",
     },
 ];
 
@@ -46,7 +46,7 @@ for (const exercise of exercises) {
         });
 
         await vsCodeTest.step("open exercise", async () => {
-            const openedStatus = webview.getByText("opened");
+            const openedStatus = webview.getByRole("cell", { name: "opened" });
             await expect(openedStatus).not.toBeVisible();
             await coursePage.showExercises();
             await coursePage.openExercises([exercise.name]);
@@ -65,10 +65,11 @@ for (const exercise of exercises) {
         });
 
         await vsCodeTest.step("run tests", async () => {
+            const expectedString = expectedResultInTestView(exercise.expected_result);
             await page.getByText(exercise.file_contents).click();
             const successMessage = testResultsPage
                 .getWebview()
-                .getByRole("heading", { name: exercise.expected_result });
+                .getByRole("heading", { name: expectedString });
             await expect(successMessage).not.toBeVisible();
             // wait for the extension to recognise that we have opened an exercise
             await page.waitForTimeout(500);
@@ -77,17 +78,30 @@ for (const exercise of exercises) {
         });
 
         await vsCodeTest.step("submit exercise", async () => {
+            const expectedString = expectedResultInSubmissionView(exercise.expected_result);
             await expect(
-                testSubmissionPage
-                    .getWebview()
-                    .getByRole("heading", { name: exercise.expected_result }),
+                testSubmissionPage.getWebview().getByRole("heading", { name: expectedString }),
             ).not.toBeVisible();
             await testResultsPage.submit();
             await expect(
-                testSubmissionPage
-                    .getWebview()
-                    .getByRole("heading", { name: exercise.expected_result }),
+                testSubmissionPage.getWebview().getByRole("heading", { name: expectedString }),
             ).toBeVisible();
         });
     });
+}
+
+function expectedResultInTestView(expectedResult: "pass" | "fail"): string {
+    if (expectedResult === "pass") {
+        return "Tests passed";
+    } else {
+        return "Tests failed";
+    }
+}
+
+function expectedResultInSubmissionView(expectedResult: "pass" | "fail"): string {
+    if (expectedResult === "pass") {
+        return "All tests passed on the server";
+    } else {
+        return "Some tests failed on the server";
+    }
 }

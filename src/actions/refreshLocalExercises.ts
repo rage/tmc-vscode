@@ -3,7 +3,7 @@ import { createIs } from "typia";
 import * as vscode from "vscode";
 
 import { ExerciseStatus, WorkspaceExercise } from "../api/workspaceManager";
-import { Logger } from "../utils";
+import { Logger } from "../utilities";
 
 import { ActionContext } from "./types";
 

@@ -4,19 +4,14 @@
  * -------------------------------------------------------------------------------------------------
  */
 
-import du = require("du");
+import { ExtensionContext } from "vscode";
 
-import { Exercise } from "../api/langsSchema";
 import { ExerciseStatus } from "../api/workspaceManager";
+import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
+import { Exercise } from "../shared/langsSchema";
+import { ExtensionToWebview, MyCoursesPanel, Panel } from "../shared/shared";
 import * as UITypes from "../ui/types";
-import { WebviewMessage } from "../ui/types";
-import {
-    dateToString,
-    formatSizeInBytes,
-    Logger,
-    parseDate,
-    parseNextDeadlineAfter,
-} from "../utils/";
+import { dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utilities/";
 
 import { checkForExerciseUpdates } from "./checkForExerciseUpdates";
 import { ActionContext } from "./types";
@@ -24,31 +19,36 @@ import { ActionContext } from "./types";
 /**
  * Displays a summary page of user's courses.
  */
-export async function displayUserCourses(actionContext: ActionContext): Promise<void> {
-    const { userData, tmc, ui, resources } = actionContext;
+export async function displayUserCourses(
+    context: ExtensionContext,
+    actionContext: ActionContext,
+): Promise<void> {
+    const { userData, tmc } = actionContext;
     Logger.info("Displaying My Courses view");
 
+    const panel: MyCoursesPanel = {
+        type: "MyCourses",
+        id: randomPanelId(),
+        courseDeadlines: {},
+    };
+
     const courses = userData.getCourses();
-    const newExercisesCourses: WebviewMessage[] = courses.map((c) => ({
-        command: "setNewExercises",
+    const newExercisesCourses: ExtensionToWebview[] = courses.map((c) => ({
+        type: "setNewExercises",
+        target: panel,
         courseId: c.id,
         exerciseIds: c.disabled ? [] : c.newExercises,
     }));
-    const disabledStatusCourses: WebviewMessage[] = courses.map((c) => ({
-        command: "setCourseDisabledStatus",
+    const disabledStatusCourses: ExtensionToWebview[] = courses.map((c) => ({
+        type: "setCourseDisabledStatus",
+        target: panel,
         courseId: c.id,
         disabled: c.disabled,
     }));
 
-    ui.webview.setContentFromTemplate({ templateName: "my-courses", courses }, false, [
-        ...newExercisesCourses,
-        ...disabledStatusCourses,
-        {
-            command: "setTmcDataFolder",
-            diskSize: formatSizeInBytes(await du(resources.projectsDirectory)),
-            path: resources.projectsDirectory,
-        },
-    ]);
+    TmcPanel.renderMain(context.extensionUri, context, actionContext, panel);
+
+    TmcPanel.postMessage(...newExercisesCourses, ...disabledStatusCourses);
 
     const now = new Date();
     courses.forEach(async (course) => {
@@ -71,7 +71,12 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
             }) || [],
         );
 
-        ui.webview.postMessage({ command: "setNextCourseDeadline", courseId, deadline });
+        TmcPanel.postMessage({
+            type: "setNextCourseDeadline",
+            target: panel,
+            courseId: course.id,
+            deadline,
+        });
     });
 }
 
@@ -79,10 +84,11 @@ export async function displayUserCourses(actionContext: ActionContext): Promise<
  * Displays details view for a local course.
  */
 export async function displayLocalCourseDetails(
+    context: ExtensionContext,
     actionContext: ActionContext,
     courseId: number,
 ): Promise<void> {
-    const { ui, tmc, userData, workspaceManager } = actionContext;
+    const { userData, workspaceManager } = actionContext;
     const course = userData.getCourse(courseId);
     Logger.info(`Display course view for ${course.name}`);
 
@@ -102,7 +108,6 @@ export async function displayLocalCourseDetails(
     };
 
     const exerciseData = new Map<string, UITypes.CourseDetailsExerciseGroup>();
-    const apiCourse = (await tmc.getCourseDetails(courseId)).mapErr(() => undefined).val;
     const currentDate = new Date();
 
     const initialState: UITypes.WebviewMessage[] = [
@@ -147,43 +152,20 @@ export async function displayLocalCourseDetails(
         });
     });
 
-    const offlineMode = apiCourse === undefined;
-    const courseGroups = Array.from(exerciseData.values())
-        .sort((a, b) => (a.name > b.name ? 1 : -1))
-        .map((e) => {
-            return {
-                ...e,
-                exercises: e.exercises.sort((a, b) => (a.name > b.name ? 1 : -1)),
-                nextDeadlineString: offlineMode
-                    ? "Next deadline: Not available"
-                    : parseNextDeadlineAfter(
-                          currentDate,
-                          e.exercises.map((ex) => ({
-                              date: ex.isHard ? ex.hardDeadline : ex.softDeadline,
-                              active: !ex.passed,
-                          })),
-                      ),
-            };
-        });
-
-    await ui.webview.setContentFromTemplate(
-        {
-            templateName: "course-details",
-            exerciseData: courseGroups,
-            course,
-            courseId: course.id,
-            offlineMode,
-        },
-        true,
-        initialState,
-    );
+    const panel: Panel = {
+        type: "CourseDetails",
+        id: randomPanelId(),
+        courseId: course.id,
+        exerciseStatuses: {},
+    };
+    TmcPanel.renderMain(context.extensionUri, context, actionContext, panel);
 
     const updateablesResult = await checkForExerciseUpdates(actionContext);
     if (updateablesResult.ok) {
-        ui.webview.postMessage({
-            command: "setUpdateables",
+        TmcPanel.postMessage({
+            type: "setUpdateables",
+            target: panel,
             exerciseIds: updateablesResult.val.map((x) => x.exerciseId),
-            courseId,
         });
     } else {
         Logger.warn("Failed to check for exercise updates");

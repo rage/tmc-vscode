@@ -21,9 +21,9 @@ import { UserData } from "./config/userdata";
 import { EmptyLangsResponseError, HaltForReloadError } from "./errors";
 import * as init from "./init";
 import { migrateExtensionDataFromPreviousVersions } from "./migrate";
-import TemporaryWebviewProvider from "./ui/temporaryWebviewProvider";
+import { randomPanelId, TmcPanel } from "./panels/TmcPanel";
 import UI from "./ui/ui";
-import { Logger, LogLevel, semVerCompare } from "./utils";
+import { Logger, LogLevel, semVerCompare } from "./utilities";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 
@@ -122,7 +122,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 
     Logger.configure(settings.getLogLevel());
 
-    const ui = new UI(context, resources);
+    const ui = new UI();
     const loggedIn = ui.treeDP.createVisibilityGroup(authenticated);
     const visibilityGroups = {
         loggedIn,
@@ -135,7 +135,10 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
         dialog.warningNotification("Your TMC session has expired, please log in.");
         await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
         ui.treeDP.updateVisibility([visibilityGroups.loggedIn.not]);
-        ui.webview.setContentFromTemplate({ templateName: "login" });
+        TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+            type: "Login",
+            id: randomPanelId(),
+        });
     });
 
     const currentVersion = resources.extensionVersion;
@@ -153,14 +156,12 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
         await workspaceManager.verifyWorkspaceSettingsIntegrity();
     }
 
-    const temporaryWebviewProvider = new TemporaryWebviewProvider(resources, ui);
     const exerciseDecorationProvider = new ExerciseDecorationProvider(userData, workspaceManager);
     const actionContext: ActionContext = {
         dialog,
         exerciseDecorationProvider,
         resources,
         settings,
-        temporaryWebviewProvider,
         tmc,
         ui,
         userData,
