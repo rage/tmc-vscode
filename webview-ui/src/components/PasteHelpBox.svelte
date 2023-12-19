@@ -40,6 +40,8 @@
 </script>
 
 <vscode-button
+    role="button"
+    tabindex="0"
     {hidden}
     appearance="secondary"
     on:click={toggleShowHelp}
@@ -55,7 +57,9 @@
         and ask for help.
     </div>
     <div class="paste-button-container">
-        <vscode-button on:click={paste} on:keypress={paste}> Submit to TMC Paste </vscode-button>
+        <vscode-button role="button" tabindex="0" on:click={paste} on:keypress={paste}>
+            Submit to TMC Paste
+        </vscode-button>
     </div>
     <div class="paste-results-container">
         {#if pasteUrl !== undefined}

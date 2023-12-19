@@ -84,6 +84,8 @@
 <div>
     <div>
         <vscode-button
+            role="button"
+            tabindex="0"
             appearance="secondary"
             type="button"
             on:click={changeOrganization}
@@ -107,6 +109,8 @@
     <div>
         {#each $courses as course}
             <div
+                role="button"
+                tabindex="0"
                 class="course-row"
                 on:click={() => selectCourse(course.id)}
                 on:keypress={() => selectCourse(course.id)}

@@ -19,6 +19,8 @@
     instead we use the span's event handlers to check/uncheck
 -->
 <span
+    role="button"
+    tabindex="0"
     {hidden}
     on:click|capture|stopPropagation={onClickWrapper}
     on:keypress|capture|stopPropagation={onClickWrapper}

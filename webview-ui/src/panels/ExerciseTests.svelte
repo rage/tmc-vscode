@@ -99,6 +99,8 @@
 {/if}
 
 <vscode-button
+    role="button"
+    tabindex="0"
     class="close-button"
     appearance="secondary"
     on:click={closePanel}
@@ -109,10 +111,22 @@
 
 {#if $testResults === undefined}
     <div class="button-container">
-        <vscode-button appearance="secondary" on:click={closePanel} on:keypress={closePanel}>
+        <vscode-button
+            role="button"
+            tabindex="0"
+            appearance="secondary"
+            on:click={closePanel}
+            on:keypress={closePanel}
+        >
             Run in background
         </vscode-button>
-        <vscode-button appearance="secondary" on:click={cancelTests} on:keypress={cancelTests}>
+        <vscode-button
+            role="button"
+            tabindex="0"
+            appearance="secondary"
+            on:click={cancelTests}
+            on:keypress={cancelTests}
+        >
             Cancel
         </vscode-button>
     </div>
@@ -125,7 +139,7 @@
         </div>
     {:else}
         <div class="header-container">
-            <vscode-button on:click={submit} on:keypress={submit}>
+            <vscode-button role="button" tabindex="0" on:click={submit} on:keypress={submit}>
                 Send solution to server
             </vscode-button>
             <span class="help-box-container">
