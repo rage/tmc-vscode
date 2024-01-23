@@ -217,7 +217,8 @@ export class TmcPanel {
                         img-src ${webview.cspSource} https:;;
                         style-src 'nonce-${nonce}';
                         script-src 'nonce-${nonce}';"
-                >
+                />
+                <meta property="csp-nonce" content="${nonce}" />
                 <link nonce="${nonce}" rel="stylesheet" type="text/css" href="${stylesUri}" />
                 <script defer nonce="${nonce}" src="${scriptUri}" />
             </head>
