@@ -42,10 +42,16 @@ Update the `tmc-python-tester` submodule
 git submodule init && git submodule update
 ```
 
-Repeat the same for the testing backend:
+Then prepare the backend:
 
 ```bash
 cd backend && npm ci && npm run setup
+```
+
+As well as the webview:
+
+```bash
+cd webview && npm ci
 ```
 
 You will need to rerun the setup when langs is updated, as this step will download the appropriate version of the CLI for the integration tests.

@@ -18,8 +18,9 @@ export async function changeTmcDataPath(actionContext: ActionContext): Promise<v
         canSelectFolders: true,
         canSelectMany: false,
         openLabel: "Select folder",
-        defaultUri: vscode.Uri.parse(old),
+        defaultUri: vscode.Uri.file(old),
     };
+
     const newPath = (await vscode.window.showOpenDialog(options))?.[0];
     if (newPath && old) {
         const res = await dialog.progressNotification(
