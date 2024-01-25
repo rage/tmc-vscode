@@ -53,7 +53,6 @@ export type WelcomePanel = {
     id: number;
     type: "Welcome";
     version?: string;
-    exerciseDecorations?: string;
 };
 
 export type LoginPanel = {
@@ -131,7 +130,6 @@ export type ExtensionToWebview =
           type: "setWelcomeData";
           target: TargetPanel<WelcomePanel>;
           version: string;
-          exerciseDecorations: string;
       }
     | {
           type: "setMyCourses";

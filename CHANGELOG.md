@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.0.0]
+
+- Redesigned the user interface
+- Fixed a bug when changing the exercise directory on Windows
+- Bumped TMC-langs version to 0.36.0
+
 ## [2.2.4] - 2023-10-10
 
 - Improved error reporting when fetching and updating exercises

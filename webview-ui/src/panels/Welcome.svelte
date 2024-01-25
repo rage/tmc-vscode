@@ -16,7 +16,6 @@
         switch (message.type) {
             case "setWelcomeData": {
                 panel.version = message.version;
-                panel.exerciseDecorations = message.exerciseDecorations;
                 savePanelState(panel);
                 break;
             }
@@ -58,7 +57,7 @@
     </div>
 
     <div class="content_area">
-        <h2>What's new in 2.1?</h2>
+        <h2>What's new in 3.0.0?</h2>
         <div class="content_section">
             <p>
                 Here is a short overview of latest features. To see all the changes for version {panel.version},
@@ -70,42 +69,10 @@
             </p>
         </div>
         <div class="content_section">
-            <h3>Exercise Decorations</h3>
+            <h3>New user interface</h3>
             <p>
-                You can now see completed and partially completed (i.e. received some points)
-                exercises with an icon on the course workspace.
-                <br />
-                You can also see if the deadline has been exceeded and if the exercise has been removed
-                or renamed in the course. By hovering on an exercise with an icon, you should see an
-                information message explaining the statussss.
-            </p>
-            <img
-                alt="Example showing a decoration for an exercise showing it has been completed"
-                class="rounded mx-auto d-block"
-                src={panel.exerciseDecorations}
-            />
-        </div>
-        <div class="content_section">
-            <h3>Migrated to VSCode Settings</h3>
-            <p>
-                Old custom settings view has been removed in favor of VS Code's native settings
-                page. <br />
-                With this change, users can now specify course specific settings when having the course
-                workspace open in VSCode by going to Settings and selecting the Workspace tab.
-                <br />
-                Settings defined in the Workspace tab are of higher priority than those defined in the
-                User scope. When adding a new course, it will copy the settings defined in the User scope
-                to the Workspace.
-            </p>
-        </div>
-        <div class="content_section">
-            <h3>Automatically download old submissions</h3>
-            <p>
-                Prior to version 2.0.0, downloaded exercises were restored to the state of their
-                latest submission.
-                <br />
-                This feature has been re-enabled and the extension automatically downloads your latest
-                submission if enabled in settings.
+                The extension's appearance has been updated. The extension's functionality remains
+                the same, with only minor changes to the user experience.
             </p>
         </div>
     </div>
