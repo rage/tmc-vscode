@@ -103,3 +103,9 @@ A script is ran during the release process to ensure that
 - the `package.json` and `package-lock.json` has the same version number as the tagged version
 
 You can update the `package-lock.json` version with `npm i --package-lock-only`.
+
+## Other notes
+
+Running the extension produces the following superfluous warnings:
+- `An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.`: https://github.com/microsoft/vscode/issues/192853
+- `[Violation] Avoid using document.write(). <URL>`: https://github.com/microsoft/vscode/issues/156147
