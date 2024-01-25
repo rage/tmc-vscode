@@ -455,15 +455,10 @@ export class TmcPanel {
                     }
                     case "requestWelcomeData": {
                         const version = actionContext.resources.extensionVersion;
-                        const exerciseDecorations = getUri(webview, extensionUri, [
-                            "media",
-                            "welcome_exercise_decorations.png",
-                        ]).toString();
                         postMessageToWebview(webview, {
                             type: "setWelcomeData",
                             target: message.sourcePanel,
                             version,
-                            exerciseDecorations,
                         });
                         break;
                     }
