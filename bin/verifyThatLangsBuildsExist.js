@@ -1,5 +1,5 @@
 const config = require("../config");
-const getAllLangsCLIs = require("../src/utils/env").getAllLangsCLIs;
+const getAllLangsCLIs = require("../src/utilities/env").getAllLangsCLIs;
 
 const TMC_LANGS_DL_URL = config.productionApi.__TMC_LANGS_DL_URL__.replace(/"/g, "");
 const TMC_LANGS_VERSION = config.productionApi.__TMC_LANGS_VERSION__.replace(/"/g, "");
