@@ -30,28 +30,22 @@ git clone https://github.com/rage/tmc-vscode.git
 
 ### Preparing the repository
 
-From a terminal, where you have cloned the repository, execute the following command to install the required dependencies:
-
-```bash
-npm ci
-```
-
-Update the `tmc-python-tester` submodule
+From a terminal, where you have cloned the repository, update the `tmc-python-tester` submodule
 
 ```bash
 git submodule init && git submodule update
 ```
 
+Then execute the following command to install the required dependencies:
+
+```bash
+npm run ci:all
+```
+
 Then prepare the backend:
 
 ```bash
-cd backend && npm ci && npm run setup
-```
-
-As well as the webview:
-
-```bash
-cd webview && npm ci
+cd backend && npm run setup
 ```
 
 You will need to rerun the setup when langs is updated, as this step will download the appropriate version of the CLI for the integration tests.
@@ -111,6 +105,8 @@ A script, `./bin/validateRelease.sh`, is ran during the release process to ensur
 You can update the `package-lock.json` version with `npm i --package-lock-only`.
 
 You can run the script manually by giving the GitHub release tag you're going to use as an argument. For example `./bin/validateRelease.sh v3.0.0-prerelease`.
+
+The extension is packaged using the script `./bin/package.bash`. Like the validation script, you should install and test the resulting package manually to ensure there's no problems with the packaging. (You can install the extension from the package by selecting `Extensions: Install from VSIX` from the command palette) (TODO: automatically test the actual package somehow?)
 
 ## Other notes
 

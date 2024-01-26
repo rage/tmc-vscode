@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.0.0] - 2024-01-25
+## [3.0.1] - 2024-01-25
 
 - Redesigned the user interface
 - Fixed a bug when changing the exercise directory on Windows
