@@ -30,28 +30,22 @@ git clone https://github.com/rage/tmc-vscode.git
 
 ### Preparing the repository
 
-From a terminal, where you have cloned the repository, execute the following command to install the required dependencies:
-
-```bash
-npm ci
-```
-
-Update the `tmc-python-tester` submodule
+From a terminal, where you have cloned the repository, update the `tmc-python-tester` submodule
 
 ```bash
 git submodule init && git submodule update
 ```
 
+Then execute the following command to install the required dependencies:
+
+```bash
+npm run ci:all
+```
+
 Then prepare the backend:
 
 ```bash
-cd backend && npm ci && npm run setup
-```
-
-As well as the webview:
-
-```bash
-cd webview && npm ci
+cd backend && npm run setup
 ```
 
 You will need to rerun the setup when langs is updated, as this step will download the appropriate version of the CLI for the integration tests.
