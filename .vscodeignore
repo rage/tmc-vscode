@@ -55,3 +55,7 @@ webview-ui/package.json
 webview-ui/package-lock.json
 webview-ui/rollup.config.js
 webview-ui/node_modules/**
+
+# Other files
+.*
+.*/
