@@ -106,6 +106,8 @@ You can update the `package-lock.json` version with `npm i --package-lock-only`.
 
 You can run the script manually by giving the GitHub release tag you're going to use as an argument. For example `./bin/validateRelease.sh v3.0.0-prerelease`.
 
+The extension is packaged using the script `./bin/package.bash`. Like the validation script, you should install and test the resulting package manually to ensure there's no problems with the packaging. (You can install the extension from the package by selecting `Extensions: Install from VSIX` from the command palette) (TODO: automatically test the actual package somehow?)
+
 ## Other notes
 
 Running the extension produces the following superfluous warnings:
