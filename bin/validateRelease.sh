@@ -2,7 +2,7 @@
 
 exitCode=0
 
-if [[ ! $1 =~ ^[v]([0-9]+\.[0-9]+\.[0-9]+(-prerelease)?)$ ]]
+if [[ ! $1 =~ ^[v]([0-9]+\.[0-9]+\.[0-9])+(-prerelease)?$ ]]
 then
     echo "Error: Input '${1}' did not match the format 'vX.Y.Z[-prerelease]'"
     exitCode=1
@@ -13,7 +13,7 @@ tagVersion=${BASH_REMATCH[1]}
 packageVersion=$(grep -Eo '^    "version": ".+$' package.json | cut -d\" -f4)
 if [[ ! $packageVersion =~ $tagVersion ]]
 then
-    echo "Error: The version in package.json '${packageVersion}' doesn't match with the tag '${tagVersion}."
+    echo "Error: The version in package.json '${packageVersion}' doesn't match with the tag '${tagVersion}'."
     exitCode=1
 fi
 
@@ -21,11 +21,11 @@ fi
 packageLockVersion=$(grep -Eo '"version":.+$' package-lock.json)
 if [[ ! $packageLockVersion =~ '"version": "'$tagVersion'",' ]]
 then
-    echo "Error: The version in package-lock.json '${packageVersion}' doesn't match with the tag '${tagVersion}."
+    echo "Error: The version in package-lock.json '${packageVersion}' doesn't match with the tag '${tagVersion}'."
     exitCode=1
 fi
 
-# Changelog must have entry matching [X.Y.Z] - YYY-MM-DD
+# Changelog must have entry matching [X.Y.Z] - YYYY-MM-DD
 # Count the number of matches
 changelogEntry=$(grep -Ec "\[""$tagVersion""\] - [0-9]{4}(-[0-9]{2}){2}$" CHANGELOG.md)
 if [[ $changelogEntry != 1 ]]

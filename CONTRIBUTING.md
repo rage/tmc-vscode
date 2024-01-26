@@ -103,12 +103,14 @@ Submit a pull request, and if it fixes problems that have an existing issues on 
 
 To release, create a release with the tag in the format `vMAJOR.MINOR.PATCH`, for example `v1.2.3`. For a pre-release version, append `-prerelease` to the tag, for example `v1.2.3-prerelease`.
 
-A script is ran during the release process to ensure that
+A script, `./bin/validateRelease.sh`, is ran during the release process to ensure that
 
 - the `CHANGELOG.md` has an entry for the tagged version
 - the `package.json` and `package-lock.json` has the same version number as the tagged version
 
 You can update the `package-lock.json` version with `npm i --package-lock-only`.
+
+You can run the script manually by giving the GitHub release tag you're going to use as an argument. For example `./bin/validateRelease.sh v3.0.0-prerelease`.
 
 ## Other notes
 
