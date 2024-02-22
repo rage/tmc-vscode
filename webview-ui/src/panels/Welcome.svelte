@@ -57,10 +57,10 @@
     </div>
 
     <div class="content_area">
-        <h2>What's new in 3.0.0?</h2>
+        <h2>What's new in 3.0.2?</h2>
         <div class="content_section">
             <p>
-                Here is a short overview of latest features. To see all the changes for version {panel.version},
+                Here is a short overview of latest features. To see the full change history,
                 please refer to the{" "}
                 <a href="https://github.com/rage/tmc-vscode/blob/master/CHANGELOG.md">
                     CHANGELOG
@@ -69,11 +69,16 @@
             </p>
         </div>
         <div class="content_section">
-            <h3>New user interface</h3>
-            <p>
-                The extension's appearance has been updated. The extension's functionality remains
-                the same, with only minor changes to the user experience.
-            </p>
+            <h3>Added new privacy notice</h3>
+            <h3>Updated tmc-langs-rust to 0.36.1</h3>
+        </div>
+
+        <h2>Data collected by the extension</h2>
+        <div class="content_section">
+            <p>The extension does not have trackers or telemetry. It’s open source, and anyone can verify what it does. See: <a href="https://github.com/rage/tmc-vscode">https://github.com/rage/tmc-vscode</a>.</p>
+            <p>If you choose to submit your answer to a programming exercise to be graded to our server, the extension will send us the folder of that specific exercise. This folder contains only your solution to the exercise, and no other files are sent. This information will also include the language the server should use for error messages. The error message language is currently your computer’s locale. We may check the answers you submit for plagiarism, and we may use the IP address of the computer that submitted the exercise for blocking spam and preventing abuse.</p>
+            <p>The same applies if you choose to submit your answer to the TMC pastebin for sharing your solution to other students.</p>
+            <p>When you interact with our server, e.g. log in, download, or submit exercises, we will send the version of this plugin in the requests. This is used for blocking outdated and potentially misbehaving plugin versions.</p>
         </div>
     </div>
 
