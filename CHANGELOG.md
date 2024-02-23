@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.0.2] - 2024-02-22
+
+- Bumped TMC-langs version to 0.36.1
+- Added a notice about the data collected by the extension
+
 ## [3.0.1] - 2024-01-25
 
 - Redesigned the user interface

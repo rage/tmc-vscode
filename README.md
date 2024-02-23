@@ -4,8 +4,10 @@
 
 # TestMyCode for Visual Studio Code
 
-This extension provides [TestMyCode](https://tmc.mooc.fi/) integration for Visual Studio Code.
-Students of its various organizations can download, complete and return course exercises directly from the editor.
+This extension provides [TestMyCode](https://tmc.mooc.fi/) integration for Visual Studio Code. Students can download, complete and submit course exercises directly from the editor.
+
+The source code for the extension is available at https://github.com/rage/tmc-vscode. The extension also utilises an additional command line tool, `tmc-langs-rust`, the source code of which is available at https://github.com/rage/tmc-langs-rust.
+
 
 ## Prerequisites
 
@@ -20,6 +22,16 @@ Instructions on how to install and use the extension in Visual Studio Code can b
 ### Commands
 
 A list of all available commands can be found under the `TMC Commands Menu` button located at the top right for an active editor.
+
+## Data collected by the extension
+The extension does not have trackers or telemetry. It’s open source, and anyone can verify what it does. See: https://github.com/rage/tmc-vscode.
+
+If you choose to submit your answer to a programming exercise to be graded to our server, the extension will send us the folder of that specific exercise. This folder contains only your solution to the exercise, and no other files are sent. This information will also include the language the server should use for error messages. The error message language is currently your computer’s locale. We may check the answers you submit for plagiarism, and we may use the IP address of the computer that submitted the exercise for blocking spam and preventing abuse.
+
+The same applies if you choose to submit your answer to the TMC pastebin for sharing your solution to other students.
+
+When you interact with our server, e.g. log in, download, or submit exercises, we will send the version of this plugin in the requests. This is used for blocking outdated and potentially misbehaving plugin versions.
+
 
 ## Contributing
 
