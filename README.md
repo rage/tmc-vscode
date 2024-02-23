@@ -4,8 +4,10 @@
 
 # TestMyCode for Visual Studio Code
 
-This extension provides [TestMyCode](https://tmc.mooc.fi/) integration for Visual Studio Code.
-Students of its various organizations can download, complete and return course exercises directly from the editor.
+This extension provides [TestMyCode](https://tmc.mooc.fi/) integration for Visual Studio Code. Students can download, complete and submit course exercises directly from the editor.
+
+The source code for the extension is available at https://github.com/rage/tmc-vscode. The extension also utilises an additional command line tool, `tmc-langs-rust`, the source code of which is available at https://github.com/rage/tmc-langs-rust.
+
 
 ## Prerequisites
 
