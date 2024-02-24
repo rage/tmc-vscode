@@ -3,10 +3,12 @@
     import { TestCase, TestResult } from "../shared/langsSchema";
     import Checkbox from "./Checkbox.svelte";
     import ProgressBar from "./ProgressBar.svelte";
+    import { vscode } from "../utilities/vscode";
 
     export let totalPoints: number;
     export let successPoints: number;
     export let testResults: Array<TestResult | TestCase>;
+    export let solutionUrl: string | null;
 
     const allTestsFailed = testResults.find((tr) => tr.successful) === undefined;
     const allTestsPassed = testResults.find((tr) => !tr.successful) === undefined;
@@ -20,6 +22,13 @@
 
     const pointsPercent =
         totalPoints > 0 ? ((successPoints / totalPoints) * 100.0).toFixed(2) : 0.0;
+
+    function showInBrowser(submissionUrl: string) {
+        vscode.postMessage({
+            type: "openLinkInBrowser",
+            url: submissionUrl,
+        });
+    }
 </script>
 
 <div class="points-display">
@@ -31,20 +40,34 @@
     </Checkbox>
 </div>
 
-{#each testResults as testResult}
-    {#if testResult.successful}
-        <div class="test passed-container" hidden={!$showPassedTests}>
-            <h2 class="passed">PASS:</h2>
-            <h3>{testResult.name}</h3>
-        </div>
-    {:else}
-        <div class="test failed-container">
-            <h2 class="failed">FAIL:</h2>
-            <h3>{testResult.name}</h3>
-            <pre class="test-message">{testResult.message}</pre>
-        </div>
-    {/if}
-{/each}
+<div class="solution-button-container" hidden={solutionUrl === null}>
+    <vscode-button
+        role="button"
+        tabindex="0"
+        appearance="primary"
+        on:click={() => solutionUrl && showInBrowser(solutionUrl)}
+        on:keypress={() => solutionUrl && showInBrowser(solutionUrl)}
+    >
+        Show model solution in browser
+    </vscode-button>
+</div>
+
+<div class="test-results-container">
+    {#each testResults as testResult}
+        {#if testResult.successful}
+            <div class="test passed-container" hidden={!$showPassedTests}>
+                <h2 class="passed">PASS:</h2>
+                <h3>{testResult.name}</h3>
+            </div>
+        {:else}
+            <div class="test failed-container">
+                <h2 class="failed">FAIL:</h2>
+                <h3>{testResult.name}</h3>
+                <pre class="test-message">{testResult.message}</pre>
+            </div>
+        {/if}
+    {/each}
+</div>
 
 <style>
     .test {
@@ -70,6 +93,14 @@
         white-space: break-spaces;
     }
     .points-display {
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+    }
+    .solution-button-container {
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+    }
+    .test-results-container {
         margin-top: 1rem;
         margin-bottom: 1rem;
     }
