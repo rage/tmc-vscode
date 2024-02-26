@@ -137,6 +137,12 @@ export async function testExercise(
             target: panel,
             testResults: data,
         });
+    } else {
+        // exam
+        TmcPanel.postMessage({
+            type: "willNotRunTestsForExam",
+            target: panel,
+        });
     }
 
     return Ok.EMPTY;

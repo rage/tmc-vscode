@@ -159,6 +159,7 @@
         totalPoints={panel.exercise.availablePoints}
         successPoints={$submissionResult.points.length}
         testResults={$submissionResult.test_cases ?? []}
+        solutionUrl={$submissionResult.solution_url}
     />
 {/if}
 

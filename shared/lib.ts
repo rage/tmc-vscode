@@ -253,6 +253,10 @@ export type ExtensionToWebview =
           courseId: number;
           exerciseIds: Array<number>;
       }
+    | {
+          type: "willNotRunTestsForExam";
+          target: TargetPanel<ExerciseTestsPanel>;
+      }
     // the last variant exists just to make TypeScript think that every panel type has
     // at least two different message types, which makes TS treat them differently than if
     // they only had one...
