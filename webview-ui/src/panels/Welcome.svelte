@@ -70,6 +70,14 @@
         </div>
 
         <div class="content_section">
+            <h3>3.0.3</h3>
+            <h4>Fixed missing "Send solution to server" button when tests are ran successfully</h4>
+            <p>This button existed in the old UI but was accidentally omitted from the new one.</p>
+            <h4>Fixed running tests for exam exercises not working correctly</h4>
+            <p>Previously, trying to run tests for an exam exercise would show an endless loading spinner.</p>
+        </div>
+
+        <div class="content_section">
             <h3>3.0.2</h3>
             <h4>Added new privacy notice</h4>
             <p>Added a new notice about the data collected by the extension.</p>

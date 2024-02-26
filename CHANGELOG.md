@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.0.3] - 2024-02-26
+
+- Fixed missing "Send solution to server" button when tests are ran successfully
+- Fixed running tests for exam exercises not working correctly
+
 ## [3.0.2] - 2024-02-22
 
 - Bumped TMC-langs version to 0.36.1
