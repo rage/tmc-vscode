@@ -50,7 +50,7 @@ async function downloadCorrectLangsVersion(
 
     try {
         const fd = await fs.open(tempPath, "r+");
-        await fs.fchmod(fd, 0o111);
+        await fs.fchmod(fd, 0o755);
         await fs.close(fd);
     } catch (e) {
         // not sure what the best way to handle errors here is
