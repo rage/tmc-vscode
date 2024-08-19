@@ -1,3 +1,4 @@
+import { env } from "process";
 import { OutputChannel, Uri, window } from "vscode";
 
 import { DEBUG_MODE, OUTPUT_CHANNEL_NAME } from "../config/constants";
@@ -19,6 +20,7 @@ const channel = `[${OUTPUT_CHANNEL_NAME}]`;
 
 export class Logger {
     static output: OutputChannel | undefined;
+    static testmode: boolean = !!env["TMC_VSCODE_TESTMODE"];
 
     static configure(level?: LogLevel): void {
         this.level = level ?? LogLevel.Errors;
@@ -112,6 +114,8 @@ export class Logger {
                     break;
                 }
             }
+        } else if (this.testmode) {
+            console.log(this._timestamp, channel, ...params);
         }
         if (this.output !== undefined) {
             switch (this._level) {

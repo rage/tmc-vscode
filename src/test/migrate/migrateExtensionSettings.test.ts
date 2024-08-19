@@ -1,9 +1,11 @@
 import { expect, use } from "chai";
 import * as chaiAsPromised from "chai-as-promised";
+import * as tmp from "tmp";
 import { IMock, It, Times } from "typemoq";
 import * as vscode from "vscode";
 
 import migrateExtensionSettings, {
+    ExtensionSettingsV0,
     LogLevelV0,
     LogLevelV1,
 } from "../../migrate/migrateExtensionSettings";
@@ -21,10 +23,12 @@ const SESSION_STATE_KEY_V1 = "session-state-v1";
 suite("Extension settings migration", function () {
     let memento: vscode.Memento;
     let settingsMock: IMock<vscode.WorkspaceConfiguration>;
+    let root: string;
 
     setup(function () {
         memento = createMockMemento();
         settingsMock = createMockWorkspaceConfiguration();
+        root = tmp.dirSync().name;
     });
 
     suite("to vscode settings API", function () {
@@ -34,7 +38,7 @@ suite("Extension settings migration", function () {
         });
 
         test("should happen when no version is defined", async function () {
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_5_0);
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_5_0(root));
             await migrateExtensionSettings(memento, settingsMock.object);
             settingsMock.verify(
                 (x) => x.update(It.isAny(), It.isAny(), It.isAny()),
@@ -43,7 +47,7 @@ suite("Extension settings migration", function () {
         });
 
         test("should happen when old version is lower than 1.1.0", async function () {
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_5_0);
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_5_0(root));
             await memento.update(UNSTABLE_EXTENSION_VERSION_KEY, "0.1.0");
             await migrateExtensionSettings(memento, settingsMock.object);
             settingsMock.verify(
@@ -128,26 +132,26 @@ suite("Extension settings migration", function () {
         });
 
         test("should succeed with version 0.5.0 data", async function () {
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_5_0);
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_5_0(root));
             const migrated = (await migrateExtensionSettings(memento, settingsMock.object)).data;
             expect(migrated?.logLevel).to.be.equal("verbose");
             expect(migrated?.hideMetaFiles).to.be.true;
         });
 
         test("should succeed with version 0.9.0 data", async function () {
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_9_0);
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_9_0(root));
             const migrated = (await migrateExtensionSettings(memento, settingsMock.object)).data;
             expect(migrated?.insiderVersion).to.be.true;
         });
 
         test("should succeed with version 1.0.0 data", async function () {
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v1_0_0);
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v1_0_0(root));
             const migrated = (await migrateExtensionSettings(memento, settingsMock.object)).data;
             expect(migrated?.downloadOldSubmission).to.be.false;
         });
 
         test("should succeed with version 1.2.0 data", async function () {
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v1_2_0);
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v1_2_0(root));
             const migrated = (await migrateExtensionSettings(memento, settingsMock.object)).data;
             expect(migrated?.updateExercisesAutomatically).to.be.false;
         });
@@ -167,17 +171,15 @@ suite("Extension settings migration", function () {
     });
 
     suite("with unstable data", function () {
-        const dataPath = extensionSettings.v0_3_0.dataPath;
-
         test("should fail if data is garbage", async function () {
             await memento.update(EXTENSION_SETTINGS_KEY_V0, { superman: "Clark Kent" });
             expect(migrateExtensionSettings(memento, settingsMock.object)).to.be.rejectedWith(
-                /missmatch/,
+                /mismatch/,
             );
         });
 
         test("should set valid placeholders with minimal data", async function () {
-            await memento.update(EXTENSION_SETTINGS_KEY_V0, { dataPath });
+            await memento.update(EXTENSION_SETTINGS_KEY_V0, { dataPath: root });
             const migrated = (await migrateExtensionSettings(memento, settingsMock.object)).data;
             expect(migrated?.downloadOldSubmission).to.be.true;
             expect(migrated?.hideMetaFiles).to.be.true;
@@ -194,7 +196,8 @@ suite("Extension settings migration", function () {
                 [LogLevelV0.Verbose, "verbose"],
             ];
             for (const [oldLevel, expectedLevel] of expectedRemappings) {
-                await memento.update(EXTENSION_SETTINGS_KEY_V0, { dataPath, logLevel: oldLevel });
+                const oldSettings: ExtensionSettingsV0 = { dataPath: root, logLevel: oldLevel };
+                await memento.update(EXTENSION_SETTINGS_KEY_V0, oldSettings);
                 const migrated = (await migrateExtensionSettings(memento, settingsMock.object))
                     .data;
                 expect(migrated?.logLevel).to.be.equal(expectedLevel);
@@ -206,7 +209,7 @@ suite("Extension settings migration", function () {
         test("should fail with garbage version 1 data", async function () {
             await memento.update(EXTENSION_SETTINGS_KEY_V1, { superman: "Clark Kent" });
             expect(migrateExtensionSettings(memento, settingsMock.object)).to.be.rejectedWith(
-                /missmatch/,
+                /mismatch/,
             );
         });
     });
