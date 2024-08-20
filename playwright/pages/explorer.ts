@@ -4,25 +4,10 @@ export class ExplorerPage {
     constructor(public readonly page: Page) {
         // continuously check for the trust dialogues which
         // appears at unpredictable times
-        page.on("domcontentloaded", async () => {
-            // eslint-disable-next-line
-            while (true) {
-                try {
-                    // covers both "trust [...] in this folder" and "trust [...] in this workspace"
-                    // without conflicting with the "details" text...
-                    const askingForTrust = await this.page
-                        .locator(".dialog-message-text")
-                        .getByText("Do you trust")
-                        .isVisible();
-                    if (askingForTrust) {
-                        await this.page.getByRole("button", { name: "Yes" }).click();
-                    }
-                    await page.waitForTimeout(200);
-                } catch {
-                    // ignore errors
-                }
-            }
-        });
+        page.addLocatorHandler(
+            page.locator(".dialog-message-text").getByText("Do you trust"),
+            async () => await this.page.getByRole("button", { name: "Yes" }).click(),
+        );
     }
 
     async openFile(filename: string): Promise<void> {

@@ -466,7 +466,7 @@
         "@babel/plugin-transform-modules-commonjs": "^7.23.3",
         "@babel/plugin-transform-react-jsx": "^7.23.4",
         "@babel/preset-env": "^7.23.6",
-        "@playwright/test": "^1.40.1",
+        "@playwright/test": "1.46.1",
         "@types/chai": "^4.3.11",
         "@types/chai-as-promised": "^7.1.8",
         "@types/du": "^1.0.3",
