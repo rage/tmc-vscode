@@ -20,8 +20,17 @@ async function main() {
         // Passed to --extensionTestsPath
         const extensionTestsPath = path.resolve(__dirname, "testLoader");
 
+        const extensionTestsEnv = {
+            TMC_VSCODE_TESTMODE: "1",
+        };
+
         // Download VS Code, unzip it and run the integration test
-        await runTests({ extensionDevelopmentPath, extensionTestsPath, platform });
+        await runTests({
+            extensionDevelopmentPath,
+            extensionTestsPath,
+            extensionTestsEnv,
+            platform,
+        });
     } catch (err) {
         console.error("Failed to run tests");
         exitCode = 1;

@@ -1,9 +1,14 @@
 import { Page } from "@playwright/test";
 
 export class ExplorerPage {
-    private _trusted: boolean = false;
-
-    constructor(public readonly page: Page) {}
+    constructor(public readonly page: Page) {
+        // continuously check for the trust dialogues which
+        // appears at unpredictable times
+        page.addLocatorHandler(
+            page.locator(".dialog-message-text").getByText("Do you trust"),
+            async () => await this.page.getByRole("button", { name: "Yes" }).click(),
+        );
+    }
 
     async openFile(filename: string): Promise<void> {
         // first, let's make sure that the target isn't a directory that's already open,
@@ -28,27 +33,6 @@ export class ExplorerPage {
             // selects the actual file
             .getByText(filename)
             .click();
-
-        // we may get prompted for trust
-        // when untrusted and opening a file
-        if (!this._trusted) {
-            const isDir = await this.page
-                .locator(".explorer-folders-view")
-                .locator("div.collapsible + div")
-                .getByText(filename)
-                .isVisible();
-            if (!isDir) {
-                this.page
-                    .getByText("Yes, I trust the authors")
-                    .click()
-                    .then(() => {
-                        this._trusted = true;
-                    })
-                    .catch(() => {
-                        console.warn("was not asked for trust for some reason");
-                    });
-            }
-        }
     }
 
     async openPath(path: string[]): Promise<void> {

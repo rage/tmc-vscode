@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import * as tmp from "tmp";
 import * as vscode from "vscode";
 
 import {
@@ -17,9 +18,11 @@ const USER_DATA_KEY_V1 = "user-data-v1";
 
 suite("User data migration", function () {
     let memento: vscode.Memento;
+    let root: string;
 
     setup(function () {
         memento = createMockMemento();
+        root = tmp.dirSync().name;
     });
 
     suite("between versions", function () {
@@ -125,11 +128,11 @@ suite("User data migration", function () {
     suite("with unstable data", function () {
         test("should fail if data is garbage", async function () {
             await memento.update(USER_DATA_KEY_V0, { batman: "Bruce Wayne" });
-            expect(() => migrateUserData(memento)).to.throw(/missmatch/);
+            expect(() => migrateUserData(memento)).to.throw(/mismatch/);
         });
 
         test("should find more exercise info from old exerciseData", async function () {
-            await memento.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_1_0);
+            await memento.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_1_0(root));
             await memento.update(USER_DATA_KEY_V0, userData.v0_1_0);
             const migratedCourse = migrateUserData(memento).data?.courses[0];
 
@@ -178,7 +181,7 @@ suite("User data migration", function () {
     suite("with stable data", function () {
         test("should fail with garbage version 1 data", async function () {
             await memento.update(USER_DATA_KEY_V1, { batman: "Bruce Wayne" });
-            expect(() => migrateUserData(memento)).to.throw(/missmatch/);
+            expect(() => migrateUserData(memento)).to.throw(/mismatch/);
         });
     });
 });

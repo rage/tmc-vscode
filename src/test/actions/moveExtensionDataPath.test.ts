@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import * as mockFs from "mock-fs";
 import * as path from "path";
 import { Err, Ok } from "ts-results";
 import { IMock, It, Times } from "typemoq";
@@ -15,6 +14,7 @@ import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
 import { createUserDataMock } from "../mocks/userdata";
 import { createWorkspaceMangerMock, WorkspaceManagerMockValues } from "../mocks/workspaceManager";
+import { makeTmpDirs } from "../utils";
 
 suite("moveExtensionDataPath action", function () {
     const virtualFileSystem = {
@@ -27,11 +27,13 @@ suite("moveExtensionDataPath action", function () {
     };
 
     const courseName = "test-python-course";
-    const emptyFolder = vscode.Uri.file("/new/path/empty");
-    const nonEmptyFolder = vscode.Uri.file("/new/path/nonempty");
+    const emptyFolder = (root: string): vscode.Uri => vscode.Uri.file(root + "/new/path/empty");
+    const nonEmptyFolder = (root: string): vscode.Uri =>
+        vscode.Uri.file(root + "/new/path/nonempty");
     const openExercises = workspaceExercises.filter((x) => x.status === ExerciseStatus.Open);
     const openExerciseSlugs = openExercises.map((x) => x.exerciseSlug);
     const stubContext = createMockActionContext();
+    let root: string;
 
     let tmcMock: IMock<TMC>;
     let tmcMockValues: TMCMockValues;
@@ -47,7 +49,7 @@ suite("moveExtensionDataPath action", function () {
     });
 
     setup(function () {
-        mockFs(virtualFileSystem);
+        root = makeTmpDirs(virtualFileSystem);
         [tmcMock, tmcMockValues] = createTMCMock();
         [userDataMock] = createUserDataMock();
         [workspaceManagerMock, workspaceManagerMockValues] = createWorkspaceMangerMock();
@@ -55,18 +57,18 @@ suite("moveExtensionDataPath action", function () {
     });
 
     test("should change extension data path", async function () {
-        const result = await moveExtensionDataPath(actionContext(), emptyFolder);
+        const result = await moveExtensionDataPath(actionContext(), emptyFolder(root));
         expect(result).to.be.equal(Ok.EMPTY);
         tmcMock.verify(
-            (x) => x.moveProjectsDirectory(It.isValue(emptyFolder.fsPath), It.isAny()),
+            (x) => x.moveProjectsDirectory(It.isValue(emptyFolder(root).fsPath), It.isAny()),
             Times.once(),
         );
     });
 
     test("should append tmcdata to path if target is not empty", async function () {
-        const result = await moveExtensionDataPath(actionContext(), nonEmptyFolder);
+        const result = await moveExtensionDataPath(actionContext(), nonEmptyFolder(root));
         expect(result).to.be.equal(Ok.EMPTY);
-        const expected = path.join(nonEmptyFolder.fsPath, "tmcdata");
+        const expected = path.join(nonEmptyFolder(root).fsPath, "tmcdata");
         tmcMock.verify(
             (x) => x.moveProjectsDirectory(It.isValue(expected), It.isAny()),
             Times.once(),
@@ -74,7 +76,7 @@ suite("moveExtensionDataPath action", function () {
     });
 
     test.skip("should close current workspace's exercises", async function () {
-        await moveExtensionDataPath(actionContext(), emptyFolder);
+        await moveExtensionDataPath(actionContext(), emptyFolder(root));
         workspaceManagerMock.verify(
             (x) => x.closeCourseExercises(It.isValue(courseName), It.isValue(openExerciseSlugs)),
             Times.once(),
@@ -82,14 +84,14 @@ suite("moveExtensionDataPath action", function () {
     });
 
     test("should set exercises again after moving", async function () {
-        await moveExtensionDataPath(actionContext(), emptyFolder);
+        await moveExtensionDataPath(actionContext(), emptyFolder(root));
         // Due to usage of path.sep, exact matching not consistent between platforms
         workspaceManagerMock.verify((x) => x.setExercises(It.isAny()), Times.once());
     });
 
     test.skip("should not close anything if no course workspace is active", async function () {
         workspaceManagerMockValues.activeCourse = undefined;
-        await moveExtensionDataPath(actionContext(), emptyFolder);
+        await moveExtensionDataPath(actionContext(), emptyFolder(root));
         workspaceManagerMock.verify(
             (x) => x.closeCourseExercises(It.isValue(courseName), It.isValue(openExerciseSlugs)),
             Times.never(),
@@ -98,11 +100,7 @@ suite("moveExtensionDataPath action", function () {
 
     test("should result in error if TMC operation fails", async function () {
         tmcMockValues.moveProjectsDirectory = Err(new Error());
-        const result = await moveExtensionDataPath(actionContext(), emptyFolder);
+        const result = await moveExtensionDataPath(actionContext(), emptyFolder(root));
         expect(result.val).to.be.instanceOf(Error);
-    });
-
-    teardown(function () {
-        mockFs.restore();
     });
 });

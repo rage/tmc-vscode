@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import * as mockFs from "mock-fs";
 import { Ok } from "ts-results";
 import { IMock } from "typemoq";
 import * as vscode from "vscode";
@@ -8,6 +7,7 @@ import Dialog from "../../api/dialog";
 import Storage from "../../api/storage";
 import TMC from "../../api/tmc";
 import { migrateExtensionDataFromPreviousVersions } from "../../migrate";
+import { Logger, LogLevel } from "../../utilities";
 import * as exerciseData from "../fixtures/exerciseData";
 import * as extensionSettings from "../fixtures/extensionSettings";
 import * as sessionState from "../fixtures/sessionState";
@@ -15,6 +15,7 @@ import * as userData from "../fixtures/userData";
 import { createDialogMock } from "../mocks/dialog";
 import { createFailingTMCMock, createTMCMock } from "../mocks/tmc";
 import { createMockContext, createMockWorkspaceConfiguration } from "../mocks/vscode";
+import { makeTmpDirs } from "../utils";
 
 const UNSTABLE_EXERCISE_DATA_KEY = "exerciseData";
 const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";
@@ -26,7 +27,7 @@ const USER_DATA_KEY_V1 = "user-data-v1";
 
 suite("Extension data migration", function () {
     const virtualFileSystem = {
-        "/tmcdata/TMC workspace/": {
+        "/TMC workspace/": {
             Exercises: { test: { "test-python-course": { hello_world: {} } } },
             "closed-exercises": { "2": {} },
         },
@@ -37,9 +38,11 @@ suite("Extension data migration", function () {
     let storage: Storage;
     let tmcMock: IMock<TMC>;
     let settingsMock: IMock<vscode.WorkspaceConfiguration>;
+    let root: string;
 
     setup(function () {
-        mockFs(virtualFileSystem);
+        Logger.configure(LogLevel.Verbose);
+        root = makeTmpDirs(virtualFileSystem);
         context = createMockContext();
         [dialogMock] = createDialogMock();
         settingsMock = createMockWorkspaceConfiguration();
@@ -62,7 +65,7 @@ suite("Extension data migration", function () {
 
     suite("from version 0.1.0", function () {
         test("should succeed with valid data", async function () {
-            await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_1_0);
+            await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_1_0(root));
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_1_0);
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
@@ -78,7 +81,7 @@ suite("Extension data migration", function () {
 
         test("should not change anything if Langs fails", async function () {
             [tmcMock] = createFailingTMCMock();
-            await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_1_0);
+            await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_1_0(root));
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_1_0);
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
@@ -89,16 +92,20 @@ suite("Extension data migration", function () {
             );
             expect(result.val).to.be.instanceOf(Error);
             expect(storage.getUserData()).to.be.undefined;
-            expect(context.globalState.get(UNSTABLE_EXERCISE_DATA_KEY)).to.be.equal(
-                exerciseData.v0_1_0,
+            console.log("a", context.globalState.get(UNSTABLE_EXERCISE_DATA_KEY));
+            console.log("b", exerciseData.v0_1_0(root));
+            expect(context.globalState.get(UNSTABLE_EXERCISE_DATA_KEY)).to.be.deep.equal(
+                exerciseData.v0_1_0(root),
             );
-            expect(context.globalState.get(UNSTABLE_USER_DATA_KEY)).to.be.equal(userData.v0_1_0);
+            expect(context.globalState.get(UNSTABLE_USER_DATA_KEY)).to.be.deep.equal(
+                userData.v0_1_0,
+            );
         });
     });
 
     suite("from version 0.2.0", function () {
         test("should succeed with valid data", async function () {
-            await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_2_0);
+            await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_2_0(root));
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_2_0);
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
@@ -114,7 +121,7 @@ suite("Extension data migration", function () {
 
         test("should not modify data if Langs fails", async function () {
             [tmcMock] = createFailingTMCMock();
-            await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_2_0);
+            await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_2_0(root));
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_2_0);
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
@@ -125,10 +132,12 @@ suite("Extension data migration", function () {
             );
             expect(result.val).to.be.instanceOf(Error);
             expect(storage.getUserData()).to.be.undefined;
-            expect(context.globalState.get(UNSTABLE_EXERCISE_DATA_KEY)).to.be.equal(
-                exerciseData.v0_2_0,
+            expect(context.globalState.get(UNSTABLE_EXERCISE_DATA_KEY)).to.be.deep.equal(
+                exerciseData.v0_2_0(root),
             );
-            expect(context.globalState.get(UNSTABLE_USER_DATA_KEY)).to.be.equal(userData.v0_2_0);
+            expect(context.globalState.get(UNSTABLE_USER_DATA_KEY)).to.be.deep.equal(
+                userData.v0_2_0,
+            );
         });
     });
 
@@ -138,7 +147,7 @@ suite("Extension data migration", function () {
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_3_0);
             await context.globalState.update(
                 UNSTABLE_EXTENSION_SETTINGS_KEY,
-                extensionSettings.v0_3_0,
+                extensionSettings.v0_3_0(root),
             );
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
@@ -161,7 +170,7 @@ suite("Extension data migration", function () {
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_3_0);
             await context.globalState.update(
                 UNSTABLE_EXTENSION_SETTINGS_KEY,
-                extensionSettings.v0_3_0,
+                extensionSettings.v0_3_0(root),
             );
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
@@ -173,13 +182,15 @@ suite("Extension data migration", function () {
             expect(result.val).to.be.instanceOf(Error);
             expect(storage.getUserData()).to.be.undefined;
             expect(storage.getExtensionSettings()).to.be.undefined;
-            expect(context.globalState.get(UNSTABLE_EXERCISE_DATA_KEY)).to.be.equal(
+            expect(context.globalState.get(UNSTABLE_EXERCISE_DATA_KEY)).to.be.deep.equal(
                 exerciseData.v0_3_0,
             );
-            expect(context.globalState.get(UNSTABLE_EXTENSION_SETTINGS_KEY)).to.be.equal(
-                extensionSettings.v0_3_0,
+            expect(context.globalState.get(UNSTABLE_EXTENSION_SETTINGS_KEY)).to.be.deep.equal(
+                extensionSettings.v0_3_0(root),
             );
-            expect(context.globalState.get(UNSTABLE_USER_DATA_KEY)).to.be.equal(userData.v0_3_0);
+            expect(context.globalState.get(UNSTABLE_USER_DATA_KEY)).to.be.deep.equal(
+                userData.v0_3_0,
+            );
         });
     });
 
@@ -189,7 +200,7 @@ suite("Extension data migration", function () {
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_9_0);
             await context.globalState.update(
                 UNSTABLE_EXTENSION_SETTINGS_KEY,
-                extensionSettings.v0_9_0,
+                extensionSettings.v0_9_0(root),
             );
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
@@ -212,7 +223,7 @@ suite("Extension data migration", function () {
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_9_0);
             await context.globalState.update(
                 UNSTABLE_EXTENSION_SETTINGS_KEY,
-                extensionSettings.v0_9_0,
+                extensionSettings.v0_9_0(root),
             );
             const result = await migrateExtensionDataFromPreviousVersions(
                 context,
@@ -224,13 +235,15 @@ suite("Extension data migration", function () {
             expect(result.val).to.be.instanceOf(Error);
             expect(storage.getUserData()).to.be.undefined;
             expect(storage.getExtensionSettings()).to.be.undefined;
-            expect(context.globalState.get(UNSTABLE_EXERCISE_DATA_KEY)).to.be.equal(
+            expect(context.globalState.get(UNSTABLE_EXERCISE_DATA_KEY)).to.be.deep.equal(
                 exerciseData.v0_9_0,
             );
-            expect(context.globalState.get(UNSTABLE_EXTENSION_SETTINGS_KEY)).to.be.equal(
-                extensionSettings.v0_9_0,
+            expect(context.globalState.get(UNSTABLE_EXTENSION_SETTINGS_KEY)).to.be.deep.equal(
+                extensionSettings.v0_9_0(root),
             );
-            expect(context.globalState.get(UNSTABLE_USER_DATA_KEY)).to.be.equal(userData.v0_9_0);
+            expect(context.globalState.get(UNSTABLE_USER_DATA_KEY)).to.be.deep.equal(
+                userData.v0_9_0,
+            );
         });
     });
 
@@ -251,9 +264,5 @@ suite("Extension data migration", function () {
             expect(storage.getExtensionSettings()).to.not.be.undefined;
             expect(storage.getSessionState()).to.not.be.undefined;
         });
-    });
-
-    teardown(function () {
-        mockFs.restore();
     });
 });

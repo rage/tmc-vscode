@@ -40,7 +40,7 @@ suite("Session state migration", function () {
     suite("with unstable data", function () {
         test("fails with garbage data", async function () {
             await memento.update(EXTENSION_VERSION_KEY, { wonderwoman: "Diana Prince" });
-            expect(() => migrateSessionState(memento)).to.throw(/missmatch/);
+            expect(() => migrateSessionState(memento)).to.throw(/mismatch/);
         });
 
         test("finds extension version", async function () {
@@ -53,7 +53,7 @@ suite("Session state migration", function () {
     suite("with stable data", function () {
         test("fails with garbage version 1 data", async function () {
             await memento.update(SESSION_STATE_KEY_V1, { extensionVersion: 1 });
-            expect(() => migrateSessionState(memento)).to.throw(/missmatch/);
+            expect(() => migrateSessionState(memento)).to.throw(/mismatch/);
         });
     });
 });

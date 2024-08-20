@@ -68,13 +68,15 @@ function resolveExercisePathV0(
         if (candidate && fs.existsSync(candidate)) {
             return Ok(candidate);
         } else {
-            Logger.debug(candidate);
+            Logger.debug("Invalid candidate", candidate);
         }
     }
 
     return Err(
         new Error(
-            `Failed to resolve new exercise path for exercise ${name} with paths ${candidates}`,
+            `Failed to resolve new exercise path for exercise ${name} with paths ${candidates.join(
+                ", ",
+            )}`,
         ),
     );
 }
