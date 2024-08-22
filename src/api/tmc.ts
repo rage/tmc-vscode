@@ -7,6 +7,7 @@ import {
     API_CACHE_LIFETIME,
     CLI_PROCESS_TIMEOUT,
     MINIMUM_SUBMISSION_INTERVAL,
+    MOOC_BACKEND_URL,
     TMC_BACKEND_URL,
 } from "../config/constants";
 import {
@@ -1012,11 +1013,13 @@ export default class TMC {
             .join(" ");
 
         // override settings with environment variables, mainly for testing
-        const tmcLangsBackendUrl = process.env.TMC_LANGS_TMC_ROOT_URL ?? TMC_BACKEND_URL;
+        const tmcBackendUrl = process.env.TMC_LANGS_TMC_ROOT_URL ?? TMC_BACKEND_URL;
+        const moocBackendUrl = process.env.TMC_LANGS_MOOC_ROOT_URL ?? MOOC_BACKEND_URL;
         const tmcLangsConfigDir = process.env.TMC_LANGS_CONFIG_DIR ?? this._options.cliConfigDir;
 
         Logger.info(`Running ${loggableCommand}`);
-        Logger.debug(`Backend at ${tmcLangsBackendUrl}`);
+        Logger.debug(`TMC backend at ${tmcBackendUrl}`);
+        Logger.debug(`MOOC backend at ${moocBackendUrl}`);
         Logger.debug(`Config dir at ${tmcLangsConfigDir}`);
 
         let active = true;
@@ -1026,7 +1029,8 @@ export default class TMC {
                 ...process.env,
                 ...env,
                 RUST_LOG: "debug,rustls=warn,reqwest=warn",
-                TMC_LANGS_TMC_ROOT_URL: tmcLangsBackendUrl,
+                TMC_LANGS_TMC_ROOT_URL: tmcBackendUrl,
+                TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
                 TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
             },
         });

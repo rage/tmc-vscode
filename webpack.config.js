@@ -8,7 +8,7 @@ const TerserPlugin = require("terser-webpack-plugin");
 const webpack = require("webpack");
 const merge = require("webpack-merge").merge;
 
-const { mockBackend, localTMCServer, productionApi } = require("./config");
+const { mockTmcLocalMooc, mockBackend, productionApi } = require("./config");
 
 /**@type {() => import("webpack").Configuration} */
 const config = () => {
@@ -16,10 +16,10 @@ const config = () => {
 
     const apiConfig = (() => {
         switch (process.env.BACKEND) {
+            case "mockTmcLocalMooc":
+                return mockTmcLocalMooc;
             case "mockBackend":
                 return mockBackend;
-            case "localTMCServer":
-                return localTMCServer;
             default:
                 return productionApi;
         }
@@ -162,7 +162,8 @@ const config = () => {
     console.log(
         `Webpack building in ${isDevelopmentMode ? "development" : "production"} configuration.`,
     );
-    console.log(`Configured backend: ${apiConfig.__TMC_BACKEND__URL__}`);
+    console.log(`Configured TMC backend: ${apiConfig.__TMC_BACKEND_URL__}`);
+    console.log(`Configured MOOC backend: ${apiConfig.__MOOC_BACKEND_URL__}`);
 
     return merge(commonConfig, isDevelopmentMode ? devConfig() : prodConfig());
 };
