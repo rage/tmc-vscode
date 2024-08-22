@@ -18,7 +18,7 @@ const oauthRouter = Router();
 
 oauthRouter.post("/token", (req, res: Response<Token>) => {
     const { username, password } = req.body;
-    console.log("Username:" + username, "Password:", password);
+    console.log("Username:", username, "Password:", password);
 
     const isTestUser = username === USER.username && password === USER.password;
     const isStudent = username === "student" && password === "student";

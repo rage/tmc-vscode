@@ -13,7 +13,7 @@ vsCodeTest("can interact with the login page", async ({ page, webview }) => {
     });
 
     await vsCodeTest.step("error with incorrect credentials", async () => {
-        await loginPage.login("nonexistent");
+        await loginPage.login("nonexistent", "wrongpassword");
         const error = webview.getByText("OAuth2 password exchange error");
         await expect(error).toBeVisible();
     });

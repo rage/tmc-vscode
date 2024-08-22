@@ -20,9 +20,12 @@ export class LoginPage extends TmcPage {
         await loginLocator.click();
     }
 
-    async login(user: string): Promise<void> {
-        await this.webview.getByRole("textbox", { name: "Email or username:" }).fill(user);
-        await this.webview.getByRole("textbox", { name: "Password:" }).first().fill(user);
+    async login(username: string, password?: string): Promise<void> {
+        await this.webview.getByRole("textbox", { name: "Email or username:" }).fill(username);
+        await this.webview
+            .getByRole("textbox", { name: "Password:" })
+            .first()
+            .fill(password ?? username);
         await this.webview.getByRole("button", { name: "Log in" }).first().click();
     }
 }

@@ -32,7 +32,7 @@ export async function login(
     username: string,
     password: string,
 ): Promise<Result<void, Error>> {
-    const { tmc } = actionContext;
+    const { tmc, dialog } = actionContext;
     Logger.info("Logging in");
 
     if (!username || !password) {
@@ -41,6 +41,7 @@ export async function login(
 
     const result = await tmc.authenticate(username, password);
     if (result.err) {
+        dialog.errorNotification(`Failed to log in: "${result.val.message}:"`, result.val);
         return result;
     }
 
@@ -51,10 +52,11 @@ export async function login(
  * Logs the user out, updating UI state
  */
 export async function logout(actionContext: ActionContext): Promise<Result<void, Error>> {
-    const { tmc } = actionContext;
+    const { tmc, dialog } = actionContext;
 
     const result = await tmc.deauthenticate();
     if (result.err) {
+        dialog.errorNotification(`Failed to log out: "${result.val.message}:"`, result.val);
         return result;
     }
 
@@ -247,7 +249,7 @@ export async function pasteExercise(
     courseSlug: string,
     exerciseName: string,
 ): Promise<Result<string, Error>> {
-    const { tmc, userData, workspaceManager } = actionContext;
+    const { tmc, userData, workspaceManager, dialog } = actionContext;
 
     const exerciseId = userData.getExerciseByName(courseSlug, exerciseName)?.id;
     const exercisePath = workspaceManager.getExerciseBySlug(courseSlug, exerciseName)?.uri.fsPath;
@@ -257,6 +259,10 @@ export async function pasteExercise(
 
     const pasteResult = await tmc.submitExerciseToPaste(exerciseId, exercisePath);
     if (pasteResult.err) {
+        dialog.errorNotification(
+            `Failed to send exercise to TMC Paste: ${pasteResult.val.message}.`,
+            pasteResult.val,
+        );
         return pasteResult;
     }
 
@@ -371,13 +377,16 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
  * @param id ID of the course to remove
  */
 export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
-    const { tmc, ui, userData, workspaceManager } = actionContext;
+    const { tmc, ui, userData, workspaceManager, dialog } = actionContext;
     const course = userData.getCourse(id);
     Logger.info(`Closing exercises for ${course.name} and removing course data from userData`);
 
     const unsetResult = await tmc.unsetSetting(`closed-exercises-for:${course.name}`);
     if (unsetResult.err) {
-        Logger.warn(`Failed to remove TMC-langs data for "${course.name}:"`, unsetResult.val);
+        dialog.errorNotification(
+            `Failed to remove TMC-langs data for "${course.name}:"`,
+            unsetResult.val,
+        );
     }
 
     userData.deleteCourse(id);
