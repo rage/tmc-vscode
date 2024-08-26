@@ -34,9 +34,18 @@ then
     exitCode=1
 fi
 
+# Welcome panel must have entry matching <h3>[X.Y.Z]</h3>
+# Count the number of matches
+changelogEntry=$(grep -Ec "<h3>$tagVersion</h3>" webview-ui/src/panels/Welcome.svelte)
+if [[ $changelogEntry != 1 ]]
+then
+    echo "Error: Version entry for '${tagVersion}' in the Welcome panel changelog (./webview-ui/src/panels/Welcome.svelte) is either missing or not formatted properly."
+    exitCode=1
+fi
+
 # All configured Langs versions should exist on the download server.
-node ./bin/verifyThatLangsBuildsExist.js
-if [ $? != 0 ]
+
+if ! node ./bin/verifyThatLangsBuildsExist.js;
 then
     echo "Error: Failed to verify that all Langs builds exist."
     exitCode=1
