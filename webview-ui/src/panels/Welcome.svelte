@@ -69,8 +69,10 @@
             </p>
         </div>
 
+        <!-- This list should generally contain only the last couple versions/months worth of updates -->
+
         <div class="content_section">
-            <h3>3.0.4</h3>
+            <h3>[3.0.4] - 2024-08-26</h3>
             <h4>Set the minimum supported VSCode version to 1.86.0</h4>
             <p>As the dependencies of the extension were updated, the minimum supported VSCode version was also updated to a more recent version. 1.86.0 was released in released in January 2024.</p>
             <h4>Fixed the TMC-langs CLI's permissions being set to 111</h4>
@@ -78,29 +80,11 @@
         </div>
 
         <div class="content_section">
-            <h3>3.0.3</h3>
+            <h3>[3.0.3] - 2024-02-26</h3>
             <h4>Fixed missing "Send solution to server" button when tests are ran successfully</h4>
             <p>This button existed in the old UI but was accidentally omitted from the new one.</p>
             <h4>Fixed running tests for exam exercises not working correctly</h4>
             <p>Previously, trying to run tests for an exam exercise would show an endless loading spinner.</p>
-        </div>
-
-        <div class="content_section">
-            <h3>3.0.2</h3>
-            <h4>Added new privacy notice</h4>
-            <p>Added a new notice about the data collected by the extension.</p>
-        </div>
-        
-        <div class="content_section">
-            <h3>3.0.1</h3>
-            <h4>Bug fixes</h4>
-            <p>Fixed an issue on Windows when trying to change the exercise directory</p>
-        </div>
-
-        <div class="content_section">
-            <h3>3.0.0</h3>
-            <h4>New user interface</h4>
-            <p>The extension has an updated look but contains all the same functionality that it used to.</p>
         </div>
     </div>
 

@@ -27,7 +27,7 @@ fi
 
 # Changelog must have entry matching [X.Y.Z] - YYYY-MM-DD
 # Count the number of matches
-changelogEntry=$(grep -Ec "\[""$tagVersion""\] - [0-9]{4}(-[0-9]{2}){2}$" CHANGELOG.md)
+changelogEntry=$(grep -Ec "\[$tagVersion\] - [0-9]{4}(-[0-9]{2}){2}$" CHANGELOG.md)
 if [[ $changelogEntry != 1 ]]
 then
     echo "Error: Version entry for '${tagVersion}' in CHANGELOG.md is either missing or not formatted properly."
@@ -36,7 +36,7 @@ fi
 
 # Welcome panel must have entry matching <h3>[X.Y.Z]</h3>
 # Count the number of matches
-changelogEntry=$(grep -Ec "<h3>$tagVersion</h3>" webview-ui/src/panels/Welcome.svelte)
+changelogEntry=$(grep -Ec "<h3>\[$tagVersion\] - [0-9]{4}(-[0-9]{2}){2}</h3>" webview-ui/src/panels/Welcome.svelte)
 if [[ $changelogEntry != 1 ]]
 then
     echo "Error: Version entry for '${tagVersion}' in the Welcome panel changelog (./webview-ui/src/panels/Welcome.svelte) is either missing or not formatted properly."
