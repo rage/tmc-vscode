@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.0.4] - 2024-08-26
+
+- Set the minimum supported VSCode version to 1.86.0 (released in January 2024)
+- Fixed the TMC-langs CLI's permissions being set to 111
+
 ## [3.0.3] - 2024-02-26
 
 - Fixed missing "Send solution to server" button when tests are ran successfully
