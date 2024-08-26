@@ -70,6 +70,14 @@
         </div>
 
         <div class="content_section">
+            <h3>3.0.4</h3>
+            <h4>Set the minimum supported VSCode version to 1.86.0</h4>
+            <p>As the dependencies of the extension were updated, the minimum supported VSCode version was also updated to a more recent version. 1.86.0 was released in released in January 2024.</p>
+            <h4>Fixed the TMC-langs CLI's permissions being set to 111</h4>
+            <p>Previously, the CLI binary used by the extension had its permissions set to 111 (-rw-rw-rw) when it was downloaded. From now, the permissions are set to 755.</p>
+        </div>
+
+        <div class="content_section">
             <h3>3.0.3</h3>
             <h4>Fixed missing "Send solution to server" button when tests are ran successfully</h4>
             <p>This button existed in the old UI but was accidentally omitted from the new one.</p>
