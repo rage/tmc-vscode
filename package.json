@@ -55,25 +55,6 @@
     "contributes": {
         "commands": [
             {
-                "command": "tmcView.activateEntry",
-                "title": "Activate",
-                "category": "TMC"
-            },
-            {
-                "command": "tmcTreeView.removeCourse",
-                "title": "Remove Course",
-                "category": "TMC"
-            },
-            {
-                "command": "tmcTreeView.refreshCourses",
-                "title": "Fetch Course Updates",
-                "category": "TMC",
-                "icon": {
-                    "light": "resources/light/refresh.svg",
-                    "dark": "resources/dark/refresh.svg"
-                }
-            },
-            {
                 "command": "tmc.addNewCourse",
                 "title": "Add New Course...",
                 "category": "TestMyCode"
@@ -144,15 +125,6 @@
                 "category": "TestMyCode"
             },
             {
-                "command": "tmc.testExercise",
-                "title": "Run Tests",
-                "icon": {
-                    "dark": "resources/dark/test.svg",
-                    "light": "resources/light/test.svg"
-                },
-                "category": "TestMyCode"
-            },
-            {
                 "command": "tmc.selectAction",
                 "title": "Action Menu",
                 "icon": {
@@ -162,18 +134,8 @@
                 "category": "TestMyCode"
             },
             {
-                "command": "tmc.switchWorkspace",
-                "title": "Switch Course Workspace",
-                "category": "TestMyCode"
-            },
-            {
-                "command": "tmc.updateExercises",
-                "title": "Update Exercises",
-                "category": "TestMyCode"
-            },
-            {
-                "command": "tmc.submitExercise",
-                "title": "Submit Solution",
+                "command": "tmc.showLogin",
+                "title": "Show login menu",
                 "category": "TestMyCode"
             },
             {
@@ -182,14 +144,52 @@
                 "category": "TestMyCode"
             },
             {
+                "command": "tmc.submitExercise",
+                "title": "Submit Solution",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.switchWorkspace",
+                "title": "Switch Course Workspace",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.testExercise",
+                "title": "Run Tests",
+                "icon": {
+                    "dark": "resources/dark/test.svg",
+                    "light": "resources/light/test.svg"
+                },
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.updateExercises",
+                "title": "Update Exercises",
+                "category": "TestMyCode"
+            },
+            {
                 "command": "tmc.wipe",
                 "category": "TMC-WipeMyCode",
                 "title": "Wipe all extension data"
             },
             {
-                "command": "tmc.showLogin",
-                "title": "Show login menu",
-                "category": "TestMyCode"
+                "command": "tmcTreeView.refreshCourses",
+                "title": "Fetch Course Updates",
+                "category": "TMC",
+                "icon": {
+                    "light": "resources/light/refresh.svg",
+                    "dark": "resources/dark/refresh.svg"
+                }
+            },
+            {
+                "command": "tmcTreeView.removeCourse",
+                "title": "Remove Course",
+                "category": "TMC"
+            },
+            {
+                "command": "tmcView.activateEntry",
+                "title": "Activate",
+                "category": "TMC"
             }
         ],
         "configuration": {
@@ -240,30 +240,18 @@
                 "when": "test-my-code:WorkspaceActive"
             },
             {
-                "command": "tmc.testExercise",
-                "key": "ctrl+shift+t",
+                "command": "tmc.selectAction",
+                "key": "ctrl+shift+a",
                 "when": "test-my-code:WorkspaceActive"
             },
             {
-                "command": "tmc.selectAction",
-                "key": "ctrl+shift+a",
+                "command": "tmc.testExercise",
+                "key": "ctrl+shift+t",
                 "when": "test-my-code:WorkspaceActive"
             }
         ],
         "menus": {
             "commandPalette": [
-                {
-                    "command": "tmcView.activateEntry",
-                    "when": "false"
-                },
-                {
-                    "command": "tmcTreeView.removeCourse",
-                    "when": "false"
-                },
-                {
-                    "command": "tmcTreeView.refreshCourses",
-                    "when": "false"
-                },
                 {
                     "command": "tmc.addNewCourse",
                     "title": "Add New Course...",
@@ -319,10 +307,10 @@
                     "when": "test-my-code:LoggedIn"
                 },
                 {
-                    "command": "tmc.updateExercises",
-                    "title": "Update Exercises",
+                    "command": "tmc.showLogin",
+                    "title": "Show login menu",
                     "category": "TestMyCode",
-                    "when": "test-my-code:LoggedIn"
+                    "when": "true"
                 },
                 {
                     "command": "tmc.submitExercise",
@@ -331,21 +319,33 @@
                     "when": "test-my-code:LoggedIn"
                 },
                 {
-                    "command": "tmc.showLogin",
-                    "title": "Show login menu",
+                    "command": "tmc.updateExercises",
+                    "title": "Update Exercises",
                     "category": "TestMyCode",
-                    "when": "true"
+                    "when": "test-my-code:LoggedIn"
+                },
+                {
+                    "command": "tmcTreeView.refreshCourses",
+                    "when": "false"
+                },
+                {
+                    "command": "tmcTreeView.removeCourse",
+                    "when": "false"
+                },
+                {
+                    "command": "tmcView.activateEntry",
+                    "when": "false"
                 }
             ],
             "editor/title": [
                 {
-                    "command": "tmc.testExercise",
-                    "group": "navigation@0",
+                    "command": "tmc.selectAction",
+                    "group": "navigation@1",
                     "when": "resourceScheme == file && test-my-code:WorkspaceActive"
                 },
                 {
-                    "command": "tmc.selectAction",
-                    "group": "navigation@1",
+                    "command": "tmc.testExercise",
+                    "group": "navigation@0",
                     "when": "resourceScheme == file && test-my-code:WorkspaceActive"
                 }
             ],
@@ -376,25 +376,25 @@
                     "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
                 },
                 {
-                    "command": "tmc.testExercise",
-                    "group": "TestMyCode@0",
-                    "when": "resourceScheme == file && test-my-code:WorkspaceActive"
-                },
-                {
                     "command": "tmc.submitExercise",
                     "group": "TestMyCode@1",
                     "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+                },
+                {
+                    "command": "tmc.testExercise",
+                    "group": "TestMyCode@0",
+                    "when": "resourceScheme == file && test-my-code:WorkspaceActive"
                 }
             ],
             "view/title": [
                 {
+                    "command": "tmc.addNewCourse",
+                    "when": "view == tmcView && test-my-code:LoggedIn"
+                },
+                {
                     "command": "tmcTreeView.refreshCourses",
                     "when": "view == tmcView && test-my-code:LoggedIn",
                     "group": "navigation"
-                },
-                {
-                    "command": "tmc.addNewCourse",
-                    "when": "view == tmcView && test-my-code:LoggedIn"
                 }
             ],
             "view/item/context": [
