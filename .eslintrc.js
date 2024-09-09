@@ -7,9 +7,6 @@ module.exports = {
     extends: [
         "eslint:recommended",
         "plugin:@typescript-eslint/recommended",
-        "plugin:import/errors",
-        "plugin:import/warnings",
-        "plugin:import/typescript",
         "plugin:prettier/recommended",
     ],
     globals: {
@@ -21,10 +18,7 @@ module.exports = {
         ecmaVersion: 6,
         sourceType: "module",
     },
-    plugins: ["@typescript-eslint", "import", "prettier", "sort-class-members"],
-    settings: {
-        "import/core-modules": ["vscode"],
-    },
+    plugins: ["@typescript-eslint", "prettier", "sort-class-members"],
     rules: {
         "no-unused-vars": "off",
         // unused vars are allowed if they start with an underscore
@@ -39,23 +33,12 @@ module.exports = {
         ],
 
         "@typescript-eslint/ban-ts-comment": ["error", { "ts-ignore": "allow-with-description" }],
-        "import/no-named-as-default": "off",
         curly: "error",
         "sort-imports": [
             "error",
             {
                 ignoreCase: true,
                 ignoreDeclarationSort: true,
-            },
-        ],
-        "import/order": [
-            "error",
-            {
-                alphabetize: {
-                    order: "asc",
-                },
-                groups: [["builtin", "external"], "parent", "sibling", "index"],
-                "newlines-between": "always",
             },
         ],
         "@typescript-eslint/no-var-requires": "off",
