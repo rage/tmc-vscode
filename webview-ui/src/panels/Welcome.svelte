@@ -69,12 +69,24 @@
             </p>
         </div>
 
+        <!-- This list should generally contain only the last couple versions/months worth of updates -->
+
         <div class="content_section">
             <h3>3.0.4</h3>
             <h4>.csproj files are no longer included when submitting C# exercises</h4>
             <p>
                 Previously, it was possible to modify and submit .csproj files which would cause
                 errors during testing on the server.
+            </p>
+            <p>
+                As the dependencies of the extension were updated, the minimum supported VSCode
+                version was also updated to a more recent version. 1.86.0 was released in released
+                in January 2024.
+            </p>
+            <h4>Fixed the TMC-langs CLI's permissions being set to 111</h4>
+            <p>
+                Previously, the CLI binary used by the extension had its permissions set to 111
+                (-rw-rw-rw) when it was downloaded. From now, the permissions are set to 755.
             </p>
         </div>
         <div class="content_section">
@@ -85,27 +97,6 @@
             <p>
                 Previously, trying to run tests for an exam exercise would show an endless loading
                 spinner.
-            </p>
-        </div>
-
-        <div class="content_section">
-            <h3>3.0.2</h3>
-            <h4>Added new privacy notice</h4>
-            <p>Added a new notice about the data collected by the extension.</p>
-        </div>
-
-        <div class="content_section">
-            <h3>3.0.1</h3>
-            <h4>Bug fixes</h4>
-            <p>Fixed an issue on Windows when trying to change the exercise directory</p>
-        </div>
-
-        <div class="content_section">
-            <h3>3.0.0</h3>
-            <h4>New user interface</h4>
-            <p>
-                The extension has an updated look but contains all the same functionality that it
-                used to.
             </p>
         </div>
     </div>
