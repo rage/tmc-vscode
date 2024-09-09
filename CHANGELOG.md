@@ -2,7 +2,7 @@
 
 ## [3.0.4] - 2024-08-29
 
--   Bumped TMC-langs version to 0.36.2
+-   Bumped TMC-langs version to 0.36.3
 -   .csproj files are no longer included when submitting C# exercises
 -   Set the minimum supported VSCode version to 1.86.0 (released in January 2024)
 -   Fixed the TMC-langs CLI's permissions being set to 111
