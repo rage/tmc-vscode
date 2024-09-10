@@ -130,5 +130,11 @@ module.exports = {
                 "@typescript-eslint/no-var-requires": ["error"],
             },
         },
+        {
+            files: ["*.test.ts", "*.spec.ts"],
+            rules: {
+                "@typescript-eslint/no-unused-expressions": "off",
+            },
+        },
     ],
 };
