@@ -160,7 +160,7 @@ export async function removeOldData(oldDataObject: {
     if (oldDataObject.timestamp + 10 * 60 * 1000 > Date.now()) {
         try {
             fs.removeSync(oldDataObject.path);
-        } catch (err) {
+        } catch (_err) {
             return new Err(new Error(`Still failed to remove data from ${oldDataObject.path}`));
         }
         return new Ok(`Removed successfully from ${oldDataObject.path}`);

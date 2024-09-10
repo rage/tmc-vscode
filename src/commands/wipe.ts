@@ -49,7 +49,7 @@ Please close the workspace and any related files before running this command aga
         // Remove exercises
         try {
             fs.removeSync(resources.projectsDirectory);
-        } catch (e) {
+        } catch (_e) {
             return Err(new Error("Failed to remove projects directory."));
         }
         progress.report({ message, percent: 0.25 });

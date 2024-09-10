@@ -213,5 +213,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 }
 
 export function deactivate(): void {
-    maintenanceInterval && clearInterval(maintenanceInterval);
+    if (maintenanceInterval) {
+        clearInterval(maintenanceInterval);
+    }
 }

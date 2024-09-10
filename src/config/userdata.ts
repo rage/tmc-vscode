@@ -102,11 +102,11 @@ export class UserData {
                     (newExerciseId) => !courseData.exercises.find((e) => e.id === newExerciseId),
                 ),
             );
-        courseData.newExercises.length > 0
-            ? Logger.info(
-                  `Found ${courseData.newExercises.length} new exercises for ${courseData.name}`,
-              )
-            : {};
+        if (courseData.newExercises.length > 0) {
+            Logger.info(
+                `Found ${courseData.newExercises.length} new exercises for ${courseData.name}`,
+            );
+        }
         courseData.exercises = exercises;
         courseData.exercises.forEach((x) =>
             x.passed ? this._passedExercises.add(x.id) : this._passedExercises.delete(x.id),

@@ -49,7 +49,9 @@ export async function downloadOrUpdateExercises(
     }
 
     const { downloaded, failed, skipped } = downloadResult.val;
-    skipped.length > 0 && Logger.warn(`${skipped.length} downloads were skipped.`);
+    if (skipped.length > 0) {
+        Logger.warn(`${skipped.length} downloads were skipped.`);
+    }
     downloaded.forEach((x) => statuses.set(x.id, "closed"));
     skipped.forEach((x) => statuses.set(x.id, "closed"));
     failed?.forEach(([exercise, reason]) => {
