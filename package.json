@@ -32,8 +32,6 @@
         "eslint-check": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .js,.ts",
         "postinstall": "babel node_modules/ts-results --out-dir node_modules/ts-results --plugins=@babel/plugin-transform-modules-commonjs",
         "install:all": "npm install && cd backend && npm install && cd ../webview-ui && npm install",
-        "lint": "ESLINT_USE_FLAT_CONFIG=false eslint src --ext ts",
-        "lint-check": "npm run eslint-check && npm run prettier-check",
         "playwright-test": "npm run webview:build && npm run webpack && xvfb-maybe playwright test",
         "playwright-test-debug": "npm run webview:build && npm run webpack && xvfb-maybe playwright test --debug",
         "prepare": "ts-patch install && typia patch && husky",

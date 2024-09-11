@@ -31,7 +31,7 @@ async function main() {
             extensionTestsEnv,
             platform,
         });
-    } catch (err) {
+    } catch (_err) {
         console.error("Failed to run tests");
         exitCode = 1;
     }

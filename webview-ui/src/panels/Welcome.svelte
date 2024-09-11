@@ -72,7 +72,7 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
-            <h3>3.0.4</h3>
+            <h3>3.0.4 - 2024-08-29</h3>
             <h4>.csproj files are no longer included when submitting C# exercises</h4>
             <p>
                 Previously, it was possible to modify and submit .csproj files which would cause
@@ -90,7 +90,7 @@
             </p>
         </div>
         <div class="content_section">
-            <h3>3.0.3</h3>
+            <h3>3.0.3 - 2024-02-26</h3>
             <h4>Fixed missing "Send solution to server" button when tests are ran successfully</h4>
             <p>This button existed in the old UI but was accidentally omitted from the new one.</p>
             <h4>Fixed running tests for exam exercises not working correctly</h4>
