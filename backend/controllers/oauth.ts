@@ -1,13 +1,11 @@
 import { Response, Router } from "express";
 
-/* eslint-disable @typescript-eslint/naming-convention */
 interface Token {
     access_token: string;
     token_type: "bearer";
     scope: "public";
     created_at: number;
 }
-/* eslint-enable @typescript-eslint/naming-convention */
 
 const USER = {
     username: "TestMyExtension",

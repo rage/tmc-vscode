@@ -1,5 +1,5 @@
 import type { WebviewApi } from "vscode-webview";
-import { WebviewToExtension, State } from "../shared/shared";
+import { State, WebviewToExtension } from "../shared/shared";
 
 /**
  * A utility wrapper around the acquireVsCodeApi() function, which enables
@@ -29,7 +29,7 @@ class VSCodeAPIWrapper {
      *
      * @param message Abitrary data (must be JSON serializable) to send to the extension context.
      */
-    public postMessage(message: WebviewToExtension) {
+    public postMessage(message: WebviewToExtension): void {
         console.log("Message from webview", message);
         if (this.vsCodeApi) {
             this.vsCodeApi.postMessage(message);

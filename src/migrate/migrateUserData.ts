@@ -34,7 +34,6 @@ export interface LocalCourseDataV0 {
     perhapsExamMode?: boolean;
     title?: string;
     notifyAfter?: number;
-    // eslint-disable-next-line @typescript-eslint/naming-convention
     material_url?: string | null;
 }
 

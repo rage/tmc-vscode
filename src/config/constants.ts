@@ -1,6 +1,3 @@
-// Some templates on this page are very specific, so this rule is disabled here.
-/* eslint-disable max-len */
-
 // Build time only globals defined in webpack configuration. These values are inlined when
 // compiling.
 declare const __DEBUG_MODE__: boolean;
