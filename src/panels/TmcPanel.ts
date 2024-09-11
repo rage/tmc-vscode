@@ -1,4 +1,4 @@
-import du = require("du");
+import getFolderSize from "get-folder-size";
 import { compact } from "lodash";
 import { Disposable, Uri, ViewColumn, Webview, WebviewPanel, window } from "vscode";
 import * as vscode from "vscode";
@@ -380,13 +380,15 @@ export class TmcPanel {
                             target: message.sourcePanel,
                             tmcDataPath: actionContext.resources.projectsDirectory,
                         });
-                        du(actionContext.resources.projectsDirectory).then((size) =>
-                            postMessageToWebview(webview, {
-                                type: "setTmcDataSize",
-                                target: message.sourcePanel,
-                                tmcDataSize: formatSizeInBytes(size),
-                            }),
-                        );
+                        getFolderSize
+                            .loose(actionContext.resources.projectsDirectory)
+                            .then((size) =>
+                                postMessageToWebview(webview, {
+                                    type: "setTmcDataSize",
+                                    target: message.sourcePanel,
+                                    tmcDataSize: formatSizeInBytes(size),
+                                }),
+                            );
                         break;
                     }
                     case "requestSelectCourseData": {
