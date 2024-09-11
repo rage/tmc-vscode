@@ -27,6 +27,9 @@ const args = [
     "--skip-release-notes",
     "--skip-welcome",
     "--user-data-dir=" + userDataDir,
+    // this makes it so vscode will not overwrite the environment
+    // variables we set below in `electron.launch` with values from `~/.bashrc` etc.
+    "--force-disable-user-env",
 ];
 
 type CustomTestFixtures = {
