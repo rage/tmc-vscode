@@ -69,30 +69,35 @@
             </p>
         </div>
 
+        <!-- This list should generally contain only the last couple versions/months worth of updates -->
+
         <div class="content_section">
-            <h3>3.0.3</h3>
+            <h3>3.0.4 - 2024-08-29</h3>
+            <h4>.csproj files are no longer included when submitting C# exercises</h4>
+            <p>
+                Previously, it was possible to modify and submit .csproj files which would cause
+                errors during testing on the server.
+            </p>
+            <p>
+                As the dependencies of the extension were updated, the minimum supported VSCode
+                version was also updated to a more recent version. 1.86.0 was released in released
+                in January 2024.
+            </p>
+            <h4>Fixed the TMC-langs CLI's permissions being set to 111</h4>
+            <p>
+                Previously, the CLI binary used by the extension had its permissions set to 111
+                (-rw-rw-rw) when it was downloaded. From now, the permissions are set to 755.
+            </p>
+        </div>
+        <div class="content_section">
+            <h3>3.0.3 - 2024-02-26</h3>
             <h4>Fixed missing "Send solution to server" button when tests are ran successfully</h4>
             <p>This button existed in the old UI but was accidentally omitted from the new one.</p>
             <h4>Fixed running tests for exam exercises not working correctly</h4>
-            <p>Previously, trying to run tests for an exam exercise would show an endless loading spinner.</p>
-        </div>
-
-        <div class="content_section">
-            <h3>3.0.2</h3>
-            <h4>Added new privacy notice</h4>
-            <p>Added a new notice about the data collected by the extension.</p>
-        </div>
-        
-        <div class="content_section">
-            <h3>3.0.1</h3>
-            <h4>Bug fixes</h4>
-            <p>Fixed an issue on Windows when trying to change the exercise directory</p>
-        </div>
-
-        <div class="content_section">
-            <h3>3.0.0</h3>
-            <h4>New user interface</h4>
-            <p>The extension has an updated look but contains all the same functionality that it used to.</p>
+            <p>
+                Previously, trying to run tests for an exam exercise would show an endless loading
+                spinner.
+            </p>
         </div>
     </div>
 
@@ -100,28 +105,28 @@
         <h2>Data collected by the extension</h2>
         <div class="content_section">
             <p>
-                The extension does not have trackers or telemetry.
-                It’s open source, and anyone can verify what it does.
-                See: <a href="https://github.com/rage/tmc-vscode">https://github.com/rage/tmc-vscode</a>.
+                The extension does not have trackers or telemetry. It’s open source, and anyone can
+                verify what it does. See: <a href="https://github.com/rage/tmc-vscode"
+                    >https://github.com/rage/tmc-vscode</a
+                >.
             </p>
             <p>
-                If you choose to submit your answer to a programming exercise to be graded to our server,
-                the extension will send us the folder of that specific exercise.
-                This folder contains only your solution to the exercise, and no other files are sent.
-                This information will also include the language the server should use for error messages.
-                The error message language is currently your computer’s locale.
-                We may check the answers you submit for plagiarism,
-                and we may use the IP address of the computer that submitted
-                the exercise for blocking spam and preventing abuse.
+                If you choose to submit your answer to a programming exercise to be graded to our
+                server, the extension will send us the folder of that specific exercise. This folder
+                contains only your solution to the exercise, and no other files are sent. This
+                information will also include the language the server should use for error messages.
+                The error message language is currently your computer’s locale. We may check the
+                answers you submit for plagiarism, and we may use the IP address of the computer
+                that submitted the exercise for blocking spam and preventing abuse.
             </p>
             <p>
-                The same applies if you choose to submit your answer to
-                the TMC pastebin for sharing your solution to other students.
+                The same applies if you choose to submit your answer to the TMC pastebin for sharing
+                your solution to other students.
             </p>
             <p>
-                When you interact with our server, e.g. log in, download, or submit exercises,
-                we will send the version of this plugin in the requests.
-                This is used for blocking outdated and potentially misbehaving plugin versions.
+                When you interact with our server, e.g. log in, download, or submit exercises, we
+                will send the version of this plugin in the requests. This is used for blocking
+                outdated and potentially misbehaving plugin versions.
             </p>
         </div>
     </div>

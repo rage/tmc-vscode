@@ -21,22 +21,31 @@ fi
 packageLockVersion=$(grep -Eo '"version":.+$' package-lock.json)
 if [[ ! $packageLockVersion =~ '"version": "'$tagVersion'",' ]]
 then
-    echo "Error: The version in package-lock.json '${packageVersion}' doesn't match with the tag '${tagVersion}'."
+    echo "Error: The version in package-lock.json '${packageVersion}' doesn't match with the tag '${tagVersion}'. Run 'npm i --package-lock-only'}"
     exitCode=1
 fi
 
 # Changelog must have entry matching [X.Y.Z] - YYYY-MM-DD
 # Count the number of matches
-changelogEntry=$(grep -Ec "\[""$tagVersion""\] - [0-9]{4}(-[0-9]{2}){2}$" CHANGELOG.md)
+changelogEntry=$(grep -Ec "\[$tagVersion\] - [0-9]{4}(-[0-9]{2}){2}$" CHANGELOG.md)
 if [[ $changelogEntry != 1 ]]
 then
     echo "Error: Version entry for '${tagVersion}' in CHANGELOG.md is either missing or not formatted properly."
     exitCode=1
 fi
 
+# Welcome panel must have entry matching <h3>[X.Y.Z]</h3>
+# Count the number of matches
+changelogEntry=$(grep -Ec "<h3>$tagVersion - [0-9]{4}(-[0-9]{2}){2}</h3>" webview-ui/src/panels/Welcome.svelte)
+if [[ $changelogEntry != 1 ]]
+then
+    echo "Error: Version entry for '${tagVersion}' in the Welcome panel changelog (./webview-ui/src/panels/Welcome.svelte) is either missing or not formatted properly."
+    exitCode=1
+fi
+
 # All configured Langs versions should exist on the download server.
-node ./bin/verifyThatLangsBuildsExist.js
-if [ $? != 0 ]
+
+if ! node ./bin/verifyThatLangsBuildsExist.js;
 then
     echo "Error: Failed to verify that all Langs builds exist."
     exitCode=1

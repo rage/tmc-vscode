@@ -1,33 +1,40 @@
 # Changelog
 
+## [3.0.4] - 2024-08-29
+
+-   Bumped TMC-langs version to 0.36.3
+-   .csproj files are no longer included when submitting C# exercises
+-   Set the minimum supported VSCode version to 1.86.0 (released in January 2024)
+-   Fixed the TMC-langs CLI's permissions being set to 111
+
 ## [3.0.3] - 2024-02-26
 
-- Fixed missing "Send solution to server" button when tests are ran successfully
-- Fixed running tests for exam exercises not working correctly
+-   Fixed missing "Send solution to server" button when tests are ran successfully
+-   Fixed running tests for exam exercises not working correctly
 
 ## [3.0.2] - 2024-02-22
 
-- Bumped TMC-langs version to 0.36.1
-- Added a notice about the data collected by the extension
+-   Bumped TMC-langs version to 0.36.1
+-   Added a notice about the data collected by the extension
 
 ## [3.0.1] - 2024-01-25
 
-- Redesigned the user interface
-- Fixed a bug when changing the exercise directory on Windows
-- Bumped TMC-langs version to 0.36.0
+-   Redesigned the user interface
+-   Fixed a bug when changing the exercise directory on Windows
+-   Bumped TMC-langs version to 0.36.0
 
 ## [2.2.4] - 2023-10-10
 
-- Improved error reporting when fetching and updating exercises
-- Improved extension update procedure to be more robust against interrupted updates
+-   Improved error reporting when fetching and updating exercises
+-   Improved extension update procedure to be more robust against interrupted updates
 
 ## [2.2.3] - 2023-10-05
 
-- Fixed another "Empty Langs Response Error" that would sometimes occur after submitting an exercise.
+-   Fixed another "Empty Langs Response Error" that would sometimes occur after submitting an exercise.
 
 ## [2.2.2] - 2023-09-13
 
-- Fixed an "Empty Langs Response Error" that would sometimes occur after submitting an exercise.
+-   Fixed an "Empty Langs Response Error" that would sometimes occur after submitting an exercise.
 
 ## [2.2.1] - 2023-09-11
 

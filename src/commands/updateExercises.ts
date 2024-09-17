@@ -14,7 +14,9 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
     const updateablesResult = await actions.checkForExerciseUpdates(actionContext);
     if (updateablesResult.err) {
         Logger.warn("Failed to check for exercise updates.", updateablesResult.val);
-        silent !== "silent" && dialog.errorNotification("Failed to check for exercise updates.");
+        if (silent !== "silent") {
+            dialog.errorNotification("Failed to check for exercise updates.");
+        }
         return;
     }
 
@@ -25,7 +27,9 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
     });
 
     if (exercisesToUpdate.length === 0) {
-        silent !== "silent" && dialog.notification("All exercises are up to date.");
+        if (silent !== "silent") {
+            dialog.notification("All exercises are up to date.");
+        }
         return;
     }
 

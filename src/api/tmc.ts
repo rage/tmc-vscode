@@ -1034,7 +1034,9 @@ export default class TMC {
                 TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
             },
         });
-        stdin && cprocess.stdin.write(stdin + "\n");
+        if (stdin) {
+            cprocess.stdin.write(stdin + "\n");
+        }
 
         const processResult = new Promise<number | null>((resolve, reject) => {
             let resultCode: number | undefined;
@@ -1048,7 +1050,9 @@ export default class TMC {
                 }, processTimeout);
 
             cprocess.on("error", (error) => {
-                timeout && clearTimeout(timeout);
+                if (timeout) {
+                    clearTimeout(timeout);
+                }
                 reject(error);
             });
             cprocess.stderr.on("data", (chunk) => {
@@ -1059,14 +1063,18 @@ export default class TMC {
             cprocess.stdout.on("end", () => {
                 stdoutEnded = true;
                 if (resultCode !== undefined) {
-                    timeout && clearTimeout(timeout);
+                    if (timeout) {
+                        clearTimeout(timeout);
+                    }
                     resolve(resultCode);
                 }
             });
             cprocess.on("exit", (code) => {
                 resultCode = code ?? 0;
                 if (stdoutEnded) {
-                    timeout && clearTimeout(timeout);
+                    if (timeout) {
+                        clearTimeout(timeout);
+                    }
                     resolve(code);
                 }
             });
@@ -1108,7 +1116,7 @@ export default class TMC {
                                 );
                                 Logger.debug(data);
                         }
-                    } catch (e) {
+                    } catch (_e) {
                         Logger.warn("Failed to parse TMC-langs output");
                         Logger.debug(part);
                     }

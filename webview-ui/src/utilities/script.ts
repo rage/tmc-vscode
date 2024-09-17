@@ -7,8 +7,8 @@ import {
     ExtensionToWebview,
     MyCoursesPanel,
     Panel,
-    TargetPanel,
     Targeted,
+    TargetPanel,
     WebviewToExtension,
 } from "../shared/shared";
 import { vscode } from "./vscode";
@@ -49,7 +49,7 @@ export function loadable<T>(): Writable<T | undefined> {
 export function addMessageListener<T extends Panel>(
     listeningPanel: T,
     callback: (message: TargetedMessage<T>) => void,
-) {
+): void {
     window.addEventListener("message", (event) => {
         const message: Message = event.data;
         // if no target id is given, accept all messages
@@ -64,7 +64,7 @@ export function addMessageListener<T extends Panel>(
 /**
  * Posts a message to another webview.
  */
-export function postMessageToWebview(message: WebviewToWebview) {
+export function postMessageToWebview(message: WebviewToWebview): void {
     // relay the message through the extension host
     const webviewToExtension: WebviewToExtension = {
         type: "relayToWebview",
@@ -73,6 +73,6 @@ export function postMessageToWebview(message: WebviewToWebview) {
     vscode.postMessage(webviewToExtension);
 }
 
-export function savePanelState(panel: Panel) {
+export function savePanelState(panel: Panel): void {
     vscode.setState({ panel });
 }

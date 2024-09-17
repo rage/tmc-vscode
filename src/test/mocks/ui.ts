@@ -2,7 +2,7 @@ import { IMock, Mock } from "typemoq";
 
 import UI from "../../ui/ui";
 
-export interface UIMockValues {}
+export type UIMockValues = unknown;
 
 export function createUIMock(): [IMock<UI>, UIMockValues] {
     const values: UIMockValues = {};
