@@ -40,7 +40,7 @@ jobs:
                   cd ..
 
             - name: Unit tests
-              uses: coactions/setup-xvfb@v1
+              uses: coactions/setup-xvfb@v1.0.1
               with:
                   run: npm test
 
@@ -78,14 +78,14 @@ jobs:
             - name: Playwright tests
               run: npm run playwright-test
 
-            - uses: actions/upload-artifact@v3.1.3
+            - uses: actions/upload-artifact@v4.4.0
               if: failure()
               with:
                   name: test-results
                   path: ./test-results/
                   if-no-files-found: ignore
 
-            - uses: actions/upload-artifact@v3.1.3
+            - uses: actions/upload-artifact@v4.4.0
               if: failure()
               with:
                   name: playwright-html-report
