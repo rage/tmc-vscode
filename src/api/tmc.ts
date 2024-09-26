@@ -1053,6 +1053,15 @@ export default class TMC {
                 if (timeout) {
                     clearTimeout(timeout);
                 }
+                if ("errno" in error) {
+                    // check for macos error code -88
+                    // which indicates an architecture mismatch
+                    if (error.errno === -88) {
+                        error.message = `A compatibility error was detected.
+If you're on macOS: Try installing Rosetta by running \`softwareupdate --install-rosetta\` in the terminal. (See https://support.apple.com/en-us/102527).
+${error.message}`;
+                    }
+                }
                 reject(error);
             });
             cprocess.stderr.on("data", (chunk) => {

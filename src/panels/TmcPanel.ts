@@ -401,7 +401,8 @@ export class TmcPanel {
                         const organizations = await actionContext.tmc.getOrganizations();
                         if (organizations.err) {
                             actionContext.dialog.errorNotification(
-                                `Failed to open panel: ${organizations.err}`,
+                                "Failed to open panel.",
+                                organizations.val,
                             );
                             return;
                         }
@@ -423,7 +424,8 @@ export class TmcPanel {
                         const courses = await actionContext.tmc.getCourses(organization.slug);
                         if (courses.err) {
                             actionContext.dialog.errorNotification(
-                                `Failed to open panel: ${courses.err}`,
+                                "Failed to open panel.",
+                                courses.val,
                             );
                             return;
                         }
@@ -444,7 +446,8 @@ export class TmcPanel {
                         const organizations = await actionContext.tmc.getOrganizations();
                         if (organizations.err) {
                             actionContext.dialog.errorNotification(
-                                `Failed to open panel: ${organizations.err}`,
+                                "Failed to open panel.",
+                                organizations.val,
                             );
                             return;
                         }
@@ -590,8 +593,8 @@ export class TmcPanel {
                             await actionContext.tmc.listLocalCourseExercises(message.courseName);
                         if (localCourseExercises.err) {
                             actionContext.dialog.errorNotification(
-                                `Error trying to list local exercises while opening selected exercises. \
-                                ${localCourseExercises.val}`,
+                                "Error trying to list local exercises while opening selected exercises.",
+                                localCourseExercises.val,
                             );
                             return;
                         }
@@ -643,7 +646,7 @@ export class TmcPanel {
                         const updateResult = await updateCourse(actionContext, courseId);
                         if (updateResult.err) {
                             actionContext.dialog.errorNotification(
-                                `Failed to update course: ${updateResult.val.message}`,
+                                "Failed to update course.",
                                 updateResult.val,
                             );
                         }
@@ -675,7 +678,8 @@ export class TmcPanel {
                         );
                         if (result.err) {
                             actionContext.dialog.errorNotification(
-                                `Failed to add new course: ${result.val.message}`,
+                                "Failed to add new course.",
+                                result.val,
                             );
                         }
                         postMessageToWebview(webview, {
@@ -736,7 +740,7 @@ export class TmcPanel {
                         );
                         if (pasteResult.err) {
                             actionContext.dialog.errorNotification(
-                                `Failed to send to TMC Paste: ${pasteResult.val.message}.`,
+                                "Failed to send to TMC Paste.",
                                 pasteResult.val,
                             );
                             TmcPanel.postMessage({
