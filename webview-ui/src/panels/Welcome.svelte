@@ -73,9 +73,16 @@
 
         <div class="content_section">
             <h3>3.0.5 - 2024-10-29</h3>
+            <h4>Fixed file locking issues</h4>
             <p>
                 Fixed issues relating to file locking on certain platforms that prevented the
                 extension from running.
+            </p>
+            <h4>Fixed the current file not refreshing when resetting an exercise</h4>
+            <p>
+                Previously, the contents of the current file would not refresh properly in the
+                editor when resetting an exercise, showing the old state instead of the actual
+                contents of the file on disk.
             </p>
             <h3>3.0.4 - 2024-08-29</h3>
             <h4>.csproj files are no longer included when submitting C# exercises</h4>

@@ -4,6 +4,7 @@
 
 -   Bumped TMC-langs version to 0.36.4
 -   Fixed issues with file locking on certain platforms
+-   Fixed the current file not refreshing when resetting an exercise
 
 ## [3.0.4] - 2024-08-29
 
