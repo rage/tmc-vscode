@@ -72,6 +72,11 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.0.5 - 2024-10-29</h3>
+            <p>
+                Fixed issues relating to file locking on certain platforms that prevented the
+                extension from running.
+            </p>
             <h3>3.0.4 - 2024-08-29</h3>
             <h4>.csproj files are no longer included when submitting C# exercises</h4>
             <p>

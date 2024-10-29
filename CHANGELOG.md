@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.0.5] - 2024-10-29
+
+-   Bumped TMC-langs version to 0.36.4
+-   Fixed issues with file locking on certain platforms
+
 ## [3.0.4] - 2024-08-29
 
 -   Bumped TMC-langs version to 0.36.3

@@ -6,11 +6,11 @@ You can start by looking through the issues marked with label [`good first issue
 
 ## Project structure
 
-- `./src`: contains the "backend" of the extension
-  - `./src/actions`: Contains composable actions used by the VSCode commands and other actions
-  - `./src/commands`: Contains a source file for each VSCode command contributed by the extension
-- `./webview-ui`: contains the "frontend" of the extension
-- `./shared`: contains types that are shared between the backend and frontend
+-   `./src`: contains the "backend" of the extension
+    -   `./src/actions`: Contains composable actions used by the VSCode commands and other actions
+    -   `./src/commands`: Contains a source file for each VSCode command contributed by the extension
+-   `./webview-ui`: contains the "frontend" of the extension
+-   `./shared`: contains types that are shared between the backend and frontend
 
 ## Setup
 
@@ -99,8 +99,8 @@ To release, create a release with the tag in the format `vMAJOR.MINOR.PATCH`, fo
 
 A script, `./bin/validateRelease.sh`, is ran during the release process to ensure that
 
-- the `CHANGELOG.md` has an entry for the tagged version
-- the `package.json` and `package-lock.json` has the same version number as the tagged version
+-   the `CHANGELOG.md` has an entry for the tagged version
+-   the `package.json` and `package-lock.json` has the same version number as the tagged version
 
 You can update the `package-lock.json` version with `npm i --package-lock-only`.
 
@@ -111,5 +111,8 @@ The extension is packaged using the script `./bin/package.bash`. Like the valida
 ## Other notes
 
 Running the extension produces the following superfluous warnings:
-- `An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.`: https://github.com/microsoft/vscode/issues/192853
-- `[Violation] Avoid using document.write(). <URL>`: https://github.com/microsoft/vscode/issues/156147
+
+-   `An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.`: https://github.com/microsoft/vscode/issues/192853
+-   `[Violation] Avoid using document.write(). <URL>`: https://github.com/microsoft/vscode/issues/156147
+
+Updating langs can be done by changing the version number at `config.js`.
