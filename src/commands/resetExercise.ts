@@ -53,6 +53,6 @@ export async function resetExercise(
 
     if (editor && document) {
         Logger.debug(`Reopening original file "${document.fsPath}"`);
-        await vscode.commands.executeCommand("vscode.open", document, editor.viewColumn);
+        await vscode.commands.executeCommand("workbench.action.files.revert", document);
     }
 }
