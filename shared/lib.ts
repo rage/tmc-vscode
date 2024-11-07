@@ -78,7 +78,7 @@ export type CourseDetailsPanel = {
     exerciseGroups?: Array<ExerciseGroup>;
     updateableExercises?: Array<number>;
     disabled?: boolean;
-    exerciseStatuses: Record<number, ExerciseStatus>;
+    exerciseStatuses?: Record<number, ExerciseStatus>;
 };
 
 export type SelectOrganizationPanel = {

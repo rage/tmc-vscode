@@ -72,6 +72,13 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.0.6 - 2024-11-07</h3>
+            <h4>Added a warning for a large number of open exercises</h4>
+            <p>
+                A high amount of open exercises may cause performance issues. Since it's usually not
+                necessary to have so many exercises open, the warning recommends the user close some
+                of them.
+            </p>
             <h3>3.0.5 - 2024-10-29</h3>
             <h4>Fixed file locking issues</h4>
             <p>

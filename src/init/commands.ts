@@ -74,7 +74,6 @@ export function registerCommands(
                     id: randomPanelId(),
                     type: "CourseDetails",
                     courseId,
-                    exerciseStatuses: {},
                 });
             }
         }),

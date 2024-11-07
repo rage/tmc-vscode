@@ -15,4 +15,4 @@ npm run ci:all
 npm run webview:build
 
 # create package
-npx vsce package ${PRERELEASE_ARG}
+BACKEND=production npx vsce package "${PRERELEASE_ARG}"

@@ -20,7 +20,10 @@ const config = () => {
                 return mockTmcLocalMooc;
             case "mockBackend":
                 return mockBackend;
+            case "production":
+                return productionApi;
             default:
+                console.warn("No backend set, defaulting to `production`");
                 return productionApi;
         }
     })();
@@ -49,6 +52,8 @@ const config = () => {
             extensions: [".ts", ".js"],
             alias: {
                 handlebars: "handlebars/dist/handlebars.min.js",
+                // systeminformation issue https://github.com/sebhildebrandt/systeminformation/issues/701
+                "osx-temperature-sensor": false,
             },
             // solves an issue with ts-loader with ttypescript
             // using the incorrect import paths for .d.ts files:

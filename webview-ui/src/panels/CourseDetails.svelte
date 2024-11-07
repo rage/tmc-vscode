@@ -43,6 +43,9 @@
                 break;
             }
             case "exerciseStatusChange": {
+                if (panel.exerciseStatuses === undefined) {
+                    panel.exerciseStatuses = {};
+                }
                 panel.exerciseStatuses[message.exerciseId] = message.status;
                 savePanelState(panel);
                 break;
@@ -58,6 +61,9 @@
                 break;
             }
             case "exerciseStatusChange": {
+                if (panel.exerciseStatuses === undefined) {
+                    panel.exerciseStatuses = {};
+                }
                 panel.exerciseStatuses[message.exerciseId] = message.status;
                 savePanelState(panel);
                 break;
@@ -237,7 +243,7 @@
         <div class="exercise-part">
             <ExercisePart
                 {exerciseGroup}
-                exerciseStatuses={panel.exerciseStatuses}
+                exerciseStatuses={panel.exerciseStatuses ?? {}}
                 bind:checkedExercises={$checkedExercises}
                 onDownloadAll={(exercises) =>
                     panel.course && downloadExercises(panel.course, exercises)}
