@@ -1,7 +1,7 @@
 {
     "name": "test-my-code",
     "displayName": "TestMyCode",
-    "version": "3.0.5",
+    "version": "3.0.6",
     "description": "TestMyCode extension for Visual Studio Code",
     "categories": [
         "Education",
@@ -444,11 +444,12 @@
         "trailingComma": "all"
     },
     "dependencies": {
-        "del": "^7.1.0",
+        "del": "^8.0.0",
         "fs-extra": "^11.2.0",
         "get-folder-size": "^5.0.0",
         "handlebars": "^4.7.8",
         "lodash": "^4.17.21",
+        "systeminformation": "^5.23.5",
         "tree-kill": "^1.2.2",
         "ts-results": "^3.3.0",
         "typia": "^6.9.0",
@@ -463,8 +464,8 @@
         "@eslint/eslintrc": "^3.1.0",
         "@eslint/js": "^9.10.0",
         "@playwright/test": "1.46.1",
-        "@types/chai": "^4.3.18",
-        "@types/chai-as-promised": "^7.1.2",
+        "@types/chai": "^4.3.3",
+        "@types/chai-as-promised": "^7.1.8",
         "@types/du": "^1.0.3",
         "@types/fs-extra": "^11.0.4",
         "@types/lodash": "^4.17.7",

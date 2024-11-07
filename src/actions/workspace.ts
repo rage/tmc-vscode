@@ -6,12 +6,11 @@
 
 import { compact } from "lodash";
 import { Ok, Result } from "ts-results";
-
 import { ExerciseStatus } from "../api/workspaceManager";
 import { TmcPanel } from "../panels/TmcPanel";
 import { ExtensionToWebview } from "../shared/shared";
 import { Logger } from "../utilities";
-
+import * as systeminformation from "systeminformation";
 import { ActionContext } from "./types";
 
 /**
@@ -25,7 +24,7 @@ export async function openExercises(
 ): Promise<Result<number[], Error>> {
     Logger.info("Opening exercises", exerciseIdsToOpen);
 
-    const { workspaceManager, userData, tmc } = actionContext;
+    const { workspaceManager, userData, tmc, dialog } = actionContext;
 
     const course = userData.getCourseByName(courseName);
     const courseExercises = new Map(course.exercises.map((x) => [x.id, x]));
@@ -49,6 +48,21 @@ export async function openExercises(
     );
     if (settingsResult.err) {
         return settingsResult;
+    }
+
+    // check open exercise count and warn if it's too high
+    const under8GbRam = (await systeminformation.mem()).available < 9_000_000_000;
+    dialog.warningNotification(`${(await systeminformation.mem()).available}`);
+    const weakThreshold = 50;
+    const strongThreshold = 100;
+    const warningThreshold = under8GbRam ? weakThreshold : strongThreshold;
+    const openExercises = workspaceManager
+        .getExercisesByCourseSlug(courseName)
+        .filter((x) => x.status === ExerciseStatus.Open);
+    if (openExercises.length > warningThreshold) {
+        dialog.warningNotification(
+            `You have over ${warningThreshold} exercises open, which may cause performance issues. You can close completed exercises from the TMC extension menu in the sidebar.`,
+        );
     }
 
     TmcPanel.postMessage(
