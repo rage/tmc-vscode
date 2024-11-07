@@ -4,11 +4,13 @@
  * -------------------------------------------------------------------------------------------------
  */
 
+import * as vscode from "vscode";
+
 import { compact } from "lodash";
 import { Ok, Result } from "ts-results";
 import { ExerciseStatus } from "../api/workspaceManager";
-import { TmcPanel } from "../panels/TmcPanel";
-import { ExtensionToWebview } from "../shared/shared";
+import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
+import { CourseDetailsPanel, ExtensionToWebview } from "../shared/shared";
 import { Logger } from "../utilities";
 import * as systeminformation from "systeminformation";
 import { ActionContext } from "./types";
@@ -18,6 +20,7 @@ import { ActionContext } from "./types";
  * @param exerciseIdsToOpen Array of exercise IDs
  */
 export async function openExercises(
+    context: vscode.ExtensionContext,
     actionContext: ActionContext,
     exerciseIdsToOpen: number[],
     courseName: string,
@@ -52,7 +55,6 @@ export async function openExercises(
 
     // check open exercise count and warn if it's too high
     const under8GbRam = (await systeminformation.mem()).available < 9_000_000_000;
-    dialog.warningNotification(`${(await systeminformation.mem()).available}`);
     const weakThreshold = 50;
     const strongThreshold = 100;
     const warningThreshold = under8GbRam ? weakThreshold : strongThreshold;
@@ -62,6 +64,17 @@ export async function openExercises(
     if (openExercises.length > warningThreshold) {
         dialog.warningNotification(
             `You have over ${warningThreshold} exercises open, which may cause performance issues. You can close completed exercises from the TMC extension menu in the sidebar.`,
+            [
+                "Open course details",
+                (): void => {
+                    const panel: CourseDetailsPanel = {
+                        id: randomPanelId(),
+                        type: "CourseDetails",
+                        courseId: course.id,
+                    };
+                    TmcPanel.renderMain(context.extensionUri, context, actionContext, panel);
+                },
+            ],
         );
     }
 

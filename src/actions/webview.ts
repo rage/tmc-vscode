@@ -156,7 +156,6 @@ export async function displayLocalCourseDetails(
         type: "CourseDetails",
         id: randomPanelId(),
         courseId: course.id,
-        exerciseStatuses: {},
     };
     TmcPanel.renderMain(context.extensionUri, context, actionContext, panel);
 

@@ -497,7 +497,6 @@ export class TmcPanel {
                                 id: randomPanelId(),
                                 type: "CourseDetails",
                                 courseId: message.courseId,
-                                exerciseStatuses: {},
                             },
                             webview,
                         );
@@ -616,6 +615,7 @@ export class TmcPanel {
 
                         // now, actually open the exercises
                         const result = await openExercises(
+                            extensionContext,
                             actionContext,
                             message.ids,
                             message.courseName,
@@ -655,7 +655,6 @@ export class TmcPanel {
                                 id: randomPanelId(),
                                 type: "CourseDetails",
                                 courseId: courseId,
-                                exerciseStatuses: {},
                             },
                             webview,
                         );
