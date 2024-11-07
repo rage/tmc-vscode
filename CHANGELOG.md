@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.0.6] - 2024-11-07
+
+-   Added a warning for a large number of open exercises
+
 ## [3.0.5] - 2024-10-29
 
 -   Bumped TMC-langs version to 0.36.4
