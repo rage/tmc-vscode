@@ -23,7 +23,8 @@ const config = () => {
             case "production":
                 return productionApi;
             default:
-                throw `Unknown backend ${process.env.BACKEND}`;
+                console.warn("No backend set, defaulting to `production`");
+                return productionApi;
         }
     })();
 
