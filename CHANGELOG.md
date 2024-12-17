@@ -3,6 +3,7 @@
 ## [3.1.0] - 2024-12-17
 
 -   Fixed downloading old submissions for C# exercises
+-   Fixed error messages not displaying in some cases when running tests
 -   Bumped TMC-langs version to 0.37.0
 
 ## [3.0.6] - 2024-11-07
