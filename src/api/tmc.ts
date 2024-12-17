@@ -44,6 +44,7 @@ import {
 import { Logger } from "../utilities/logger";
 
 import { SubmissionFeedback } from "./types";
+import { BaseError } from "../shared/shared";
 
 interface Options {
     apiCacheLifetime?: string;
@@ -68,7 +69,7 @@ interface LangsProcessArgs {
 
 interface LangsProcessRunner {
     interrupt(): void;
-    result: Promise<Result<OutputData, Error>>;
+    result: Promise<Result<OutputData, BaseError>>;
 }
 
 interface ResponseCacheEntry {
@@ -261,7 +262,7 @@ export default class TMC {
         exercisePath: string,
         pythonExecutablePath?: string,
         progressCallback?: (progressPct: number, message?: string) => void,
-    ): [Promise<Result<RunResult, Error>>, () => void] {
+    ): [Promise<Result<RunResult, BaseError>>, () => void] {
         const env: { [key: string]: string } = {};
         if (pythonExecutablePath) {
             env.TMC_LANGS_PYTHON_EXEC = pythonExecutablePath;
@@ -279,6 +280,7 @@ export default class TMC {
                 .andThen((x) => this._checkLangsResponse(x, "test-result"))
                 .map((x) => x.data["output-data"]),
         );
+
         return [postResult, interrupt];
     }
 
@@ -946,21 +948,21 @@ export default class TMC {
     private _checkLangsResponse<T extends DataKind["output-data-kind"] | null>(
         langsResponse: OutputData,
         outputDataKind: T,
-    ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, Error> {
+    ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, BaseError> {
         if (!dataMatchesKind(langsResponse, outputDataKind)) {
             Logger.error("Unexpected TMC-langs response.", langsResponse);
-            return Err(new Error("Unexpected TMC-langs response."));
+            return Err(new BaseError("Unexpected TMC-langs response."));
         }
         if (langsResponse.status === "crashed") {
             Logger.error("Langs process crashed.", langsResponse.message, langsResponse.data);
-            return Err(new RuntimeError("Langs process crashed."));
+            return Err(new BaseError("Langs process crashed."));
         }
         if (langsResponse.result !== "error") {
             return Ok(langsResponse);
         }
         if (langsResponse.data?.["output-data-kind"] !== "error") {
             Logger.error("Unexpected data in error response.", langsResponse);
-            return Err(new Error("Unexpected data in error response"));
+            return Err(new BaseError("Unexpected data in error response"));
         }
 
         // after this point, we know we have an error

@@ -213,7 +213,7 @@ export type ExtensionToWebview =
     | {
           type: "testError";
           target: TargetPanel<ExerciseTestsPanel>;
-          error: Error;
+          error: BaseError;
       }
     | {
           type: "pasteResult";
@@ -522,4 +522,16 @@ export type Broadcast<M, T extends PanelType> = Omit<Targeted<M, T>, "target">;
 
 export function assertUnreachable(x: never): never {
     throw new Error(`Unreachable ${JSON.stringify(x, null, 2)}`);
+}
+
+/*
+ * ======== errors ========
+ */
+export class BaseError extends Error {
+    public readonly name: string = "Base Error";
+    public details: string;
+    constructor(message?: string, details?: string) {
+        super(message);
+        this.details = details ?? "";
+    }
 }

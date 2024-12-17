@@ -1,6 +1,11 @@
 <script lang="ts">
     import { derived } from "svelte/store";
-    import { ExerciseTestsPanel, TestResultData, assertUnreachable } from "../shared/shared";
+    import {
+        BaseError,
+        ExerciseTestsPanel,
+        TestResultData,
+        assertUnreachable,
+    } from "../shared/shared";
     import { addMessageListener, loadable } from "../utilities/script";
     import { vscode } from "../utilities/vscode";
     import PasteHelpBox from "../components/PasteHelpBox.svelte";
@@ -9,7 +14,7 @@
 
     export let panel: ExerciseTestsPanel;
 
-    const testError = loadable<Error>();
+    const testError = loadable<BaseError>();
     const pasteResult = loadable<string>();
     const pasteError = loadable<string>();
     const testResults = loadable<TestResultData>();
@@ -43,9 +48,6 @@
         switch (message.type) {
             case "testResults": {
                 testResults.set(message.testResults);
-                const allSuccessful =
-                    message.testResults.testResult.testResults.find((tr) => !tr.successful) ===
-                    undefined;
                 break;
             }
             case "pasteResult": {
@@ -88,7 +90,7 @@
     }
 </script>
 
-{#if !$tryingToRunTestsForExam}
+{#if !$tryingToRunTestsForExam && !$testError}
     {#if $testResults === undefined}
         <h1>{panel.exercise.name}: Running tests</h1>
     {:else if $testResults.testResult.status === "PASSED"}
@@ -170,6 +172,14 @@
     {/if}
 {:else}
     <h1>{panel.course.title}: {panel.exercise.name}</h1>
+
+    {#if $testError}
+        <h2>Error while trying to run tests</h2>
+        <code>
+            {$testError.details}
+        </code>
+    {/if}
+
     <div>You can submit your answer with the button below.</div>
     <div class="exam-submission-button-container">
         <vscode-button role="button" tabindex="0" on:click={submit} on:keypress={submit}>
@@ -197,5 +207,8 @@
     .exam-submission-button-container {
         margin-top: 1rem;
         margin-bottom: 1rem;
+    }
+    code {
+        white-space: pre-wrap;
     }
 </style>
