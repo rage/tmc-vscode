@@ -1,11 +1,5 @@
-class BaseError extends Error {
-    public readonly name: string = "Base Error";
-    public details: string;
-    constructor(message?: string, details?: string) {
-        super(message);
-        this.details = details ? details : "";
-    }
-}
+import { BaseError } from "./shared/shared";
+
 export class ApiError extends BaseError {
     public readonly name = "API Error";
 }

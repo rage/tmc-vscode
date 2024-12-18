@@ -65,6 +65,10 @@ Automatic build task starts the first time that the extension is launched from V
 
 You can also build the extension by running `npm run webpack` or `npm run webpack:watch`.
 
+## Updating dependencies
+
+The tmc-langs version can be updated by changing the `TMC_LANGS_RUST_VERSION` variable in `config.js`.
+
 ## Testing
 
 The tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so. The tests can be run with `npm run test`. If you get a `Connection error: TypeError`, make sure the backend is running.

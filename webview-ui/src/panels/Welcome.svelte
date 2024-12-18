@@ -72,6 +72,17 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.1.0 - 2024-12-17</h3>
+            <h4>Fixed downloading old submissions for C# exercises</h4>
+            <p>
+                There was an issue in tmc-langs that caused the extension to fail to detect the
+                project directory within a submission after downloading it.
+            </p>
+            <h4>Fixed error messages not displaying in some cases when running tests</h4>
+            <p>
+                Certain types of errors were not being displayed when they occurred while running
+                tests.
+            </p>
             <h3>3.0.6 - 2024-11-07</h3>
             <h4>Added a warning for a large number of open exercises</h4>
             <p>

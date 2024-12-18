@@ -56,12 +56,28 @@ export async function downloadOldSubmission(
         return;
     }
 
-    const submitFirst = await dialog.confirmation(
+    const submitFirstSelection = await dialog.selectItem(
         "Do you want to save the current state of the exercise by submitting it to TMC Server?",
+        ["Submit to server", "submit"],
+        ["Discard current state", "discard"],
     );
-    if (submitFirst === undefined) {
+    if (submitFirstSelection === undefined) {
         Logger.debug("Answer for submitting first not provided, returning early.");
         return;
+    }
+
+    let submitFirst = submitFirstSelection === "submit";
+    // if we're submitting first, nothing will be lost anyway so it's probably okay to not annoy the user with a double confirm
+    if (!submitFirst) {
+        const confirm = await dialog.selectItem(
+            "Are you sure?",
+            ["No, save the current exercise state", "submit"],
+            ["Yes, discard current state", "discard"],
+        );
+        if (confirm === undefined) {
+            return;
+        }
+        submitFirst = confirm === "submit";
     }
 
     const editor = vscode.window.activeTextEditor;
@@ -78,6 +94,6 @@ export async function downloadOldSubmission(
     }
 
     if (editor && document) {
-        vscode.commands.executeCommand<undefined>("vscode.open", document, editor.viewColumn);
+        await vscode.commands.executeCommand("workbench.action.files.revert", document);
     }
 }
