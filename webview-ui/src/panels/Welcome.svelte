@@ -83,6 +83,11 @@
                 Certain types of errors were not being displayed when they occurred while running
                 tests.
             </p>
+            <h4>Sort dialogue of old submissions by date</h4>
+            <p>
+                Previously, when downloading an old submission, the list of old submissions was not
+                sorted in the dialogue.
+            </p>
             <h3>3.0.6 - 2024-11-07</h3>
             <h4>Added a warning for a large number of open exercises</h4>
             <p>

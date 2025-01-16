@@ -38,6 +38,9 @@ export async function downloadOldSubmission(
         return;
     }
 
+    submissionsResult.val.sort(
+        (a, b) => parseDate(a.created_at).getTime() - parseDate(b.created_at).getTime(),
+    );
     if (submissionsResult.val.length === 0) {
         dialog.notification(`No previous submissions found for exercise ${exerciseId}`);
         return;
@@ -46,7 +49,7 @@ export async function downloadOldSubmission(
     const submission = await dialog.selectItem(
         exercise.exerciseSlug + ": Select a submission",
         ...submissionsResult.val.map<[string, OldSubmission]>((a) => [
-            dateToString(parseDate(a.processing_attempts_started_at)) +
+            dateToString(parseDate(a.created_at)) +
                 "| " +
                 (a.all_tests_passed ? "Passed" : "Not passed"),
             a,
