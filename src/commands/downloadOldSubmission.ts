@@ -38,6 +38,11 @@ export async function downloadOldSubmission(
         return;
     }
 
+    submissionsResult.val.sort(
+        (a, b) =>
+            parseDate(a.processing_attempts_started_at).getTime() -
+            parseDate(b.processing_attempts_started_at).getTime(),
+    );
     if (submissionsResult.val.length === 0) {
         dialog.notification(`No previous submissions found for exercise ${exerciseId}`);
         return;
