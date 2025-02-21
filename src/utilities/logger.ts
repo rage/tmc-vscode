@@ -3,7 +3,6 @@ import { OutputChannel, Uri, window } from "vscode";
 
 import { DEBUG_MODE, OUTPUT_CHANNEL_NAME } from "../config/constants";
 import { BaseError } from "../shared/shared";
-import { Err } from "ts-results";
 
 export enum LogLevel {
     None = "none",
