@@ -2,8 +2,8 @@
     "compilerOptions": {
         "noEmit": true,
         "module": "commonjs",
-        "target": "es6",
-        "lib": ["es6"],
+        "target": "ES2022",
+        "lib": ["ES2022"],
         "sourceMap": true,
         "rootDir": ".",
         "strict": true

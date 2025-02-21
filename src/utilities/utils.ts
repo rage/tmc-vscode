@@ -8,6 +8,7 @@ import { ConnectionError } from "../errors";
 import { SubmissionFeedbackQuestion } from "../shared/langsSchema";
 
 import { Logger } from "./logger";
+import { BaseError } from "../shared/shared";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be
@@ -32,7 +33,7 @@ export async function downloadFile(
     } catch (error) {
         Logger.error(error);
         // Typing change from update
-        return new Err(new ConnectionError("Connection error: " + (error as Error).name));
+        return new Err(new ConnectionError(error));
     }
 
     if (!response.ok) {

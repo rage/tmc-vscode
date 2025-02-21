@@ -12,7 +12,7 @@
 
         // copied from svelte's tsconfig.json
         "moduleResolution": "node",
-        "target": "es2017",
+        "target": "ES2022",
         "isolatedModules": true,
         "sourceMap": true,
         "esModuleInterop": true,

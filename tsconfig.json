@@ -2,9 +2,9 @@
     "compilerOptions": {
         "jsx": "react",
         "module": "commonjs",
-        "target": "es6",
+        "target": "ES2022",
         "outDir": "out",
-        "lib": ["es6", "dom"],
+        "lib": ["ES2022", "dom"],
         "plugins": [
             {
                 "transform": "typia/lib/transform"

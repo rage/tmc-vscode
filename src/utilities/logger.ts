@@ -2,6 +2,8 @@ import { env } from "process";
 import { OutputChannel, Uri, window } from "vscode";
 
 import { DEBUG_MODE, OUTPUT_CHANNEL_NAME } from "../config/constants";
+import { BaseError } from "../shared/shared";
+import { Err } from "ts-results";
 
 export enum LogLevel {
     None = "none",
@@ -69,7 +71,7 @@ export class Logger {
 
     static toLoggable(p: unknown): string {
         if (p instanceof Error) {
-            return `${p.name} \u2014 ${p.message} \u2014 ${p.stack}`;
+            return formatError(p, this._level);
         }
         if (typeof p !== "object") {
             return String(p);
@@ -96,21 +98,22 @@ export class Logger {
     private static _log(level: ConsoleLogLevel, ...params: unknown[]): void {
         if (DEBUG_MODE) {
             // in debug mode, we log to console with the appropriate level
+            const loggableParams = this._toLoggableParams(params);
             switch (level) {
                 case "DEBUG": {
-                    console.debug(this._timestamp, channel, ...params);
+                    console.debug(this._timestamp, channel, loggableParams);
                     break;
                 }
                 case "INFO": {
-                    console.info(this._timestamp, channel, ...params);
+                    console.info(this._timestamp, channel, loggableParams);
                     break;
                 }
                 case "WARN": {
-                    console.warn(this._timestamp, channel, ...params);
+                    console.warn(this._timestamp, channel, loggableParams);
                     break;
                 }
                 case "ERROR": {
-                    console.error(this._timestamp, channel, ...params);
+                    console.error(this._timestamp, channel, loggableParams);
                     break;
                 }
             }
@@ -165,5 +168,48 @@ export class Logger {
     private static _toLoggableParams(params: unknown[]): string {
         const loggableParams = params.map((p) => this.toLoggable(p)).join("\n");
         return loggableParams.length !== 0 ? loggableParams : "";
+    }
+}
+
+function formatError(error: Error, level: LogLevel): string {
+    if (error instanceof BaseError) {
+        let errorMessage = "";
+        if (error.errno) {
+            errorMessage += `[${error.errno}] `;
+        }
+        if (error.code) {
+            errorMessage += `(${error.code}) `;
+        }
+        if (error.syscall) {
+            errorMessage += `\`${error.syscall}\` `;
+        }
+        if (error.path) {
+            errorMessage += `@${error.path} `;
+        }
+        errorMessage += `${error.name}: ${error.message}.`;
+        if (error.details) {
+            errorMessage += ` ${error.details}.`;
+        }
+        if (error.cause) {
+            if (typeof error.cause === "string") {
+                errorMessage += ` ${error.cause}.`;
+            } else {
+                const cause = formatError(error.cause, level);
+                errorMessage += ` Caused by: {${cause}}.`;
+            }
+        }
+        if (error.stack && level === LogLevel.Verbose) {
+            errorMessage += `\n<TRACE>\n${error.stack}\n</TRACE>`;
+        }
+        return errorMessage;
+    } else {
+        let errorMessage = `${error.name}: ${error.message}.`;
+        if (error.cause) {
+            errorMessage += ` ${error.cause}.`;
+        }
+        if (error.stack && level === LogLevel.Verbose) {
+            errorMessage += `\n<TRACE>\n${error.stack}\n</TRACE>`;
+        }
+        return errorMessage;
     }
 }

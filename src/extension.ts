@@ -42,7 +42,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     try {
         await activateInner(context);
     } catch (e) {
-        Logger.error(`Error during initialization: ${e}`);
+        Logger.error("Error during initialization:", e);
         vscode.window.showErrorMessage(`TestMyCode initialization failed: ${e}`);
         Logger.show();
     }

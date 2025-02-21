@@ -3,8 +3,10 @@
  */
 
 import { Uri } from "vscode";
+import * as util from "node:util";
 
 import { Course, Organization, RunResult, SubmissionFinished } from "./langsSchema";
+import { createIs } from "typia";
 
 /**
  * Contains the state of the webview.
@@ -529,9 +531,105 @@ export function assertUnreachable(x: never): never {
  */
 export class BaseError extends Error {
     public readonly name: string = "Base Error";
-    public details: string;
-    constructor(message?: string, details?: string) {
+    public details?: string;
+    public cause?: NodeJS.ErrnoException | string;
+    public stack?: string;
+
+    // possible fields from ErrnoException
+    public errno?: number;
+    public code?: string;
+    public path?: string;
+    public syscall?: string;
+
+    constructor(err: unknown);
+    constructor(err: Error, details?: string);
+    constructor(message?: string, details?: string);
+
+    constructor(err: unknown, details?: string) {
+        let message = "";
+        let stack = "";
+        let cause: NodeJS.ErrnoException | string = "";
+
+        let errno: number | undefined = undefined;
+        let code: string | undefined = undefined;
+        let path: string | undefined = undefined;
+        let syscall: string | undefined = undefined;
+
+        // simple check first...
+        if (typeof err === "string") {
+            message = err;
+        } else if (util.types.isNativeError(err)) {
+            // deal with regular error stuff first
+            message = err.message;
+            if (err.stack) {
+                stack = err.stack;
+            }
+
+            // also check for special NodeJS error
+            if (createIs<NodeJS.ErrnoException>()(err)) {
+                // nodejs error with error code
+                errno = err.errno;
+                code = err.code;
+                path = err.path;
+                syscall = err.syscall;
+            }
+
+            if (err.cause) {
+                // same checks for cause
+                if (
+                    util.types.isNativeError(err.cause) &&
+                    createIs<NodeJS.ErrnoException>()(err.cause)
+                ) {
+                    cause = err.cause;
+                } else {
+                    cause = err.cause.toString();
+                }
+            }
+        } else {
+            // it's expected that this function is only called with
+            // strings or error objects. but since errors are often "unknown"
+            // in catch statements etc., this function accepts unknown types
+            // and thus we'll handle them here just in case
+            message = `Unexpected error ${err} (${typeof err})`;
+        }
+
         super(message);
-        this.details = details ?? "";
+        this.details = details;
+        if (stack) {
+            this.stack = stack;
+        }
+        if (cause) {
+            this.cause = cause;
+        }
+
+        // errno fields
+        this.errno = errno;
+        this.code = code;
+        this.path = path;
+        this.syscall = syscall;
+    }
+
+    public toString(): string {
+        let errorMessage = "";
+        if (this.errno) {
+            errorMessage += `[${this.errno}] `;
+        }
+        if (this.code) {
+            errorMessage += `(${this.code}) `;
+        }
+        if (this.syscall) {
+            errorMessage += `\`${this.syscall}\` `;
+        }
+        if (this.path) {
+            errorMessage += `@${this.path} `;
+        }
+        errorMessage += `${this.name}: ${this.message}.`;
+        if (this.details) {
+            errorMessage += ` ${this.details}.`;
+        }
+        if (this.cause) {
+            errorMessage += ` Caused by: ${this.cause}.`;
+        }
+        return errorMessage;
     }
 }
