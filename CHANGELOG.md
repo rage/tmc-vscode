@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.1.1] - 2025-02-21
+
+-   Improved error messages and logging.
+
 ## [3.1.0] - 2024-12-17
 
 -   Fixed downloading old submissions for C# exercises

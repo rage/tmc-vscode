@@ -72,6 +72,12 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.1.1 - 2025-02-21</h3>
+            <h4>Improved error messages and logging</h4>
+            <p>
+                Various error messages that were previously vague and unhelpful now contain much
+                more detail. The associated logging has also been improved to make debugging easier.
+            </p>
             <h3>3.1.0 - 2024-12-17</h3>
             <h4>Fixed downloading old submissions for C# exercises</h4>
             <p>

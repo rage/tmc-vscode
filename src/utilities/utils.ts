@@ -8,7 +8,6 @@ import { ConnectionError } from "../errors";
 import { SubmissionFeedbackQuestion } from "../shared/langsSchema";
 
 import { Logger } from "./logger";
-import { BaseError } from "../shared/shared";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be
