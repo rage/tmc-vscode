@@ -18,10 +18,10 @@ then
 fi
 
 # Make sure that the package-lock.json version also matches
-packageLockVersion=$(grep -Eo '"version":.+$' package-lock.json)
+packageLockVersion=$(grep -Eom 1 '"version":.+$' package-lock.json)
 if [[ ! $packageLockVersion =~ '"version": "'$tagVersion'",' ]]
 then
-    echo "Error: The version in package-lock.json '${packageVersion}' doesn't match with the tag '${tagVersion}'. Run 'npm i --package-lock-only'}"
+    echo "Error: The version in package-lock.json '${packageLockVersion}' doesn't match with the tag '${tagVersion}'. Run \`npm i --package-lock-only\`."
     exitCode=1
 fi
 

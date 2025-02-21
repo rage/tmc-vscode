@@ -13,7 +13,7 @@ export function getActiveEditorExecutablePath(actionContext: ActionContext): str
     if (!resource) {
         return undefined;
     }
-    Logger.info("Active text document language: " + resource.document.languageId);
+    Logger.info("Active text document language:", resource.document.languageId);
     switch (resource.document.languageId) {
         case "python":
             return getPythonPath(actionContext, resource.document);

@@ -207,7 +207,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         const tmcWorkspaceFilePath = this._resources.getWorkspaceFilePath(courseName);
         if (!fs.existsSync(tmcWorkspaceFilePath)) {
             fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
-            Logger.info(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
+            Logger.info("Created tmc workspace file at", tmcWorkspaceFilePath);
         }
     }
 
@@ -408,7 +408,7 @@ export default class WorkspaceManager implements vscode.Disposable {
 
         // TODO: Check that document is a valid exercise
         const isCode = this._resources.editorKind === EditorKind.Code;
-        Logger.debug("Text document languageId " + e.languageId);
+        Logger.debug("Text document languageId", e.languageId);
         switch (e.languageId) {
             case "c":
             case "cpp":

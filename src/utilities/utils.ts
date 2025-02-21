@@ -32,7 +32,7 @@ export async function downloadFile(
     } catch (error) {
         Logger.error(error);
         // Typing change from update
-        return new Err(new ConnectionError("Connection error: " + (error as Error).name));
+        return new Err(new ConnectionError(error));
     }
 
     if (!response.ok) {

@@ -42,7 +42,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     try {
         await activateInner(context);
     } catch (e) {
-        Logger.error(`Error during initialization: ${e}`);
+        Logger.error("Error during initialization:", e);
         vscode.window.showErrorMessage(`TestMyCode initialization failed: ${e}`);
         Logger.show();
     }
@@ -69,7 +69,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 
     const authenticatedResult = await tmc.isAuthenticated({ timeout: 15000 });
     if (authenticatedResult.err) {
-        Logger.error("Failed to check if authenticated:", authenticatedResult.val.message);
+        Logger.error("Failed to check if authenticated:", authenticatedResult.val);
         throwFatalError(authenticatedResult.val, cliFolder);
     }
 
@@ -86,7 +86,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     );
     if (migrationResult.err) {
         if (migrationResult.val instanceof HaltForReloadError) {
-            Logger.warn("Extension expected to restart");
+            Logger.warn("Extension expected to restart", migrationResult.val);
             return;
         }
 
@@ -111,7 +111,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
         workspaceFileFolder,
     );
     if (resourcesResult.err) {
-        Logger.error("Resource initialization failed: ", resourcesResult.val);
+        Logger.error("Resource initialization failed:", resourcesResult.val);
         throwFatalError(resourcesResult.val, cliFolder);
     }
 
@@ -194,7 +194,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     maintenanceInterval = setInterval(async () => {
         const authenticated = await tmc.isAuthenticated();
         if (authenticated.err) {
-            Logger.error("Failed to check if authenticated", authenticated.val.message);
+            Logger.error("Failed to check if authenticated", authenticated.val);
         } else if (authenticated.val) {
             vscode.commands.executeCommand("tmc.updateExercises", "silent");
             checkForCourseUpdates(actionContext);
