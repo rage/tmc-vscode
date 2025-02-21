@@ -19,7 +19,7 @@ export async function downloadNewExercisesForCourse(
 ): Promise<Result<void, Error>> {
     const { userData } = actionContext;
     const course = userData.getCourse(courseId);
-    Logger.info(`Downloading new exercises for course: ${course.title}`);
+    Logger.info("Downloading new exercises for course:", course.title);
 
     const postNewExercises = async (exerciseIds: number[]): Promise<void> =>
         await TmcPanel.postMessage({

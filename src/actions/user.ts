@@ -202,7 +202,7 @@ export async function submitExercise(
 
     if (submissionResult.err) {
         if (submissionResult.val instanceof BottleneckError) {
-            Logger.warn(`Submission was cancelled: ${submissionResult.val.message}.`);
+            Logger.warn("Submission was cancelled:", submissionResult.val);
             return Ok.EMPTY;
         }
         TmcPanel.postMessage({
