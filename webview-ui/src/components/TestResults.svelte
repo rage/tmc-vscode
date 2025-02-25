@@ -67,14 +67,25 @@
 
 <div class="test-results-container">
     {#each validationErrorsEntries as [path, pathValidationErrors]}
-        <div class="test failed-container">
-            <h2 class="failed">Code quality issue found</h2>
-            <h3>File: {path}</h3>
-            {#each pathValidationErrors as pathValidationError}
-                <pre
-                    class="test-message">Line {pathValidationError.line}, column {pathValidationError.column}: {pathValidationError.message}</pre>
-            {/each}
-        </div>
+        {#if validationStrategy === "FAIL"}
+            <div class="test failed-container">
+                <h2 class="failed">Code quality errors found</h2>
+                <h3>File: {path}</h3>
+                {#each pathValidationErrors as pathValidationError}
+                    <pre
+                        class="test-message">Line {pathValidationError.line}, column {pathValidationError.column}: {pathValidationError.message}</pre>
+                {/each}
+            </div>
+        {:else}
+            <div class="test warning-container">
+                <h2 class="warning">Code quality warnings found</h2>
+                <h3>File: {path}</h3>
+                {#each pathValidationErrors as pathValidationError}
+                    <pre
+                        class="test-message">Line {pathValidationError.line}, column {pathValidationError.column}: {pathValidationError.message}</pre>
+                {/each}
+            </div>
+        {/if}
     {/each}
     {#each testResults as testResult}
         {#if testResult.successful}
@@ -101,16 +112,22 @@
         margin-bottom: 0.4rem;
     }
     .passed {
-        color: var(--vscode-notebookStatusSuccessIcon-foreground, #89d185);
+        color: var(--vscode-testing-iconPassed, #73c991);
     }
     .passed-container {
-        border-color: var(--vscode-notebookStatusSuccessIcon-foreground, #89d185);
+        border-color: var(--vscode-testing-iconPassed, #73c991);
     }
     .failed {
-        color: var(--vscode-notebookStatusErrorIcon-foreground, #f85149);
+        color: var(--vscode-testing-iconFailed, #f14c4c);
     }
     .failed-container {
-        border-color: var(--vscode-notebookStatusErrorIcon-foreground, #f85149);
+        border-color: var(--vscode-testing-iconFailed, #f14c4c);
+    }
+    .warning {
+        color: var(--vscode-testing-iconQueued, #cca700);
+    }
+    .warning-container {
+        color: var(--vscode-testing-iconQueued, #cca700);
     }
     .test-message {
         white-space: break-spaces;
