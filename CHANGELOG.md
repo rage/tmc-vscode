@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.2.0] - 2025-02-25
+
+-   Test results now contain style warnings or errors for applicable exercises.
+
 ## [3.1.1] - 2025-02-21
 
 -   Improved error messages and logging.
