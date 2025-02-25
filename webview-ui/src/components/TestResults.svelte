@@ -1,6 +1,11 @@
 <script lang="ts">
     import { derived, writable } from "svelte/store";
-    import { TestCase, TestResult } from "../shared/langsSchema";
+    import {
+        StyleValidationResult,
+        StyleValidationStrategy,
+        TestCase,
+        TestResult,
+    } from "../shared/langsSchema";
     import Checkbox from "./Checkbox.svelte";
     import ProgressBar from "./ProgressBar.svelte";
     import { vscode } from "../utilities/vscode";
@@ -8,12 +13,20 @@
     export let totalPoints: number;
     export let successPoints: number;
     export let testResults: Array<TestResult | TestCase>;
+    export let validationResult: StyleValidationResult | null;
     export let solutionUrl: string | null;
+
+    const validationStrategy: StyleValidationStrategy = validationResult?.strategy ?? "DISABLED";
+    const validationErrors = validationResult?.validation_errors ?? {};
+    const validationErrorsEntries = Object.entries(validationErrors);
+    // validations pass if strategy is not set to fail, or if there are no validation errors
+    const validationsPassed = validationStrategy !== "FAIL" || validationErrorsEntries.length === 0;
 
     const allTestsFailed = testResults.find((tr) => tr.successful) === undefined;
     const allTestsPassed = testResults.find((tr) => !tr.successful) === undefined;
+    const exercisePassed = allTestsPassed && validationsPassed;
     // if all tests failed or passed, no need to show the checkbox
-    const alwaysShowPassedTests = allTestsFailed || allTestsPassed;
+    const alwaysShowPassedTests = allTestsFailed || exercisePassed;
 
     const showPassedTestsChecked = writable<boolean>(false);
     const showPassedTests = derived(showPassedTestsChecked, ($showPassedTestsChecked) => {
@@ -53,15 +66,25 @@
 </div>
 
 <div class="test-results-container">
+    {#each validationErrorsEntries as [path, pathValidationErrors]}
+        <div class="test failed-container">
+            <h2 class="failed">Code quality issue found</h2>
+            <h3>File: {path}</h3>
+            {#each pathValidationErrors as pathValidationError}
+                <pre
+                    class="test-message">Line {pathValidationError.line}, column {pathValidationError.column}: {pathValidationError.message}</pre>
+            {/each}
+        </div>
+    {/each}
     {#each testResults as testResult}
         {#if testResult.successful}
             <div class="test passed-container" hidden={!$showPassedTests}>
-                <h2 class="passed">PASS:</h2>
+                <h2 class="passed">Test passed!</h2>
                 <h3>{testResult.name}</h3>
             </div>
         {:else}
             <div class="test failed-container">
-                <h2 class="failed">FAIL:</h2>
+                <h2 class="failed">Test failed</h2>
                 <h3>{testResult.name}</h3>
                 <pre class="test-message">{testResult.message}</pre>
             </div>

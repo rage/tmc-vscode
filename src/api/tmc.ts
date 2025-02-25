@@ -36,6 +36,7 @@ import {
     OutputData,
     RunResult,
     StatusUpdateData,
+    StyleValidationResult,
     Submission,
     SubmissionFeedbackResponse,
     SubmissionFinished,
@@ -282,6 +283,25 @@ export default class TMC {
         );
 
         return [postResult, interrupt];
+    }
+
+    public runCheckstyle(
+        exercisePath: string,
+        progressCallback?: (progressPct: number, message?: string) => void,
+    ): [Promise<Result<StyleValidationResult | null, BaseError>>, () => void] {
+        const { interrupt, result } = this._spawnLangsProcess({
+            args: ["checkstyle", "--locale", "en", "--exercise-path", exercisePath],
+            onStdout: (data) =>
+                progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
+            onStderr: (data) => Logger.info("Rust Langs", data),
+            processTimeout: CLI_PROCESS_TIMEOUT,
+        });
+        const checkstyleResult = result.then((res) =>
+            res
+                .andThen((x) => this._checkLangsResponse(x, "validation"))
+                .map((x) => x.data["output-data"]),
+        );
+        return [checkstyleResult, interrupt];
     }
 
     // ---------------------------------------------------------------------------------------------

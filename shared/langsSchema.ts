@@ -9,7 +9,7 @@ export type CliOutput =
 
 export type DataKind =
     | { "output-data-kind": "error"; "output-data": { kind: Kind; trace: Array<string> } }
-    | { "output-data-kind": "validation"; "output-data": StyleValidationResult }
+    | { "output-data-kind": "validation"; "output-data": StyleValidationResult | null }
     | { "output-data-kind": "available-points"; "output-data": Array<string> }
     | { "output-data-kind": "exercises"; "output-data": Array<string> }
     | {
@@ -108,14 +108,14 @@ export type ClientUpdateData =
 
 export type StyleValidationResult = {
     strategy: StyleValidationStrategy;
-    validationErrors: Record<string, Array<StyleValidationError>> | null;
+    validation_errors: Record<string, Array<StyleValidationError>> | null;
 };
 
 export type StyleValidationError = {
     column: number;
     line: number;
     message: string;
-    sourceName: string;
+    source_name: string;
 };
 
 export type StyleValidationStrategy = "FAIL" | "WARN" | "DISABLED";
@@ -517,14 +517,14 @@ export type SubmissionStatus = "processing" | "fail" | "ok" | "error" | "hidden"
 
 export type TmcStyleValidationResult = {
     strategy: TmcStyleValidationStrategy;
-    validation_errors: Record<string, Array<TmcStyleValidationError>> | null;
+    validationErrors: Record<string, Array<TmcStyleValidationError>> | null;
 };
 
 export type TmcStyleValidationError = {
     column: number;
     line: number;
     message: string;
-    source_name: string;
+    sourceName: string;
 };
 
 export type TmcStyleValidationStrategy = "FAIL" | "WARN" | "DISABLED";

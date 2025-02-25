@@ -37,6 +37,13 @@
             $testResults.testResult.testResults.find((tr) => !tr.successful) === undefined
         );
     });
+    const validationsFailed = derived(testResults, ($testResults) => {
+        const validationStrategy = $testResults?.styleValidationResult?.strategy;
+        const validationErrors = Object.entries(
+            $testResults?.styleValidationResult?.validation_errors ?? {},
+        ).length;
+        return validationStrategy === "FAIL" && validationErrors > 0;
+    });
 
     onMount(() => {
         vscode.postMessage({
@@ -91,20 +98,24 @@
 </script>
 
 {#if !$tryingToRunTestsForExam && !$testError}
+    <h1>{panel.exercise.name}</h1>
     {#if $testResults === undefined}
-        <h1>{panel.exercise.name}: Running tests</h1>
+        <h2>Running tests</h2>
     {:else if $testResults.testResult.status === "PASSED"}
-        <h1>{panel.exercise.name}: Tests passed</h1>
+        <h2>Tests passed</h2>
     {:else if $testResults.testResult.status === "TESTS_FAILED"}
-        <h1>{panel.exercise.name}: Tests failed</h1>
+        <h2>Tests failed</h2>
     {:else if $testResults.testResult.status === "COMPILE_FAILED"}
-        <h1>{panel.exercise.name}: Compilation failed</h1>
+        <h2>Compilation failed</h2>
     {:else if $testResults.testResult.status === "TESTRUN_INTERRUPTED"}
-        <h1>{panel.exercise.name}: The test run was interrupted</h1>
+        <h2>The test run was interrupted</h2>
     {:else if $testResults.testResult.status === "GENERIC_ERROR"}
-        <h1>{panel.exercise.name}: An error occurred during the test run</h1>
+        <h2>An error occurred during the test run</h2>
     {:else}
         {assertUnreachable($testResults.testResult.status)}
+    {/if}
+    {#if $validationsFailed}
+        <h2>Code quality checks failed</h2>
     {/if}
 
     <vscode-button
@@ -167,6 +178,7 @@
             totalPoints={$totalPoints}
             successPoints={$successPoints}
             testResults={$testResults.testResult.testResults}
+            validationResult={$testResults.styleValidationResult ?? null}
             solutionUrl={null}
         />
     {/if}

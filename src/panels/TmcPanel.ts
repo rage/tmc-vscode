@@ -709,10 +709,12 @@ export class TmcPanel {
                         break;
                     }
                     case "cancelTests": {
-                        const interrupt = testInterrupts.get(message.testRunId);
-                        if (interrupt) {
-                            interrupt();
-                            testInterrupts.delete(message.testRunId);
+                        const interrupts = testInterrupts.get(message.testRunId);
+                        if (interrupts) {
+                            for (const interrupt of interrupts) {
+                                interrupt();
+                                testInterrupts.delete(message.testRunId);
+                            }
                         }
                         break;
                     }

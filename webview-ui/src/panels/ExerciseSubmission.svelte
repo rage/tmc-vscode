@@ -89,8 +89,12 @@
     {/if}
 {:else if $submissionResult.status === "hidden"}
     <h1>Processing the submission finished</h1>
+{:else if $submissionResult.status === "fail"}
+    <!-- validation failure etc. -->
+    <h1>Some tests failed on the server</h1>
 {:else}
-    <h1>Something went wrong</h1>
+    <h1>Something went wrong...</h1>
+    <div>Submission status: {$submissionResult.status}</div>
 {/if}
 
 <vscode-button
@@ -159,6 +163,7 @@
         totalPoints={panel.exercise.availablePoints}
         successPoints={$submissionResult.points.length}
         testResults={$submissionResult.test_cases ?? []}
+        validationResult={$submissionResult.validations}
         solutionUrl={$submissionResult.solution_url}
     />
 {/if}
