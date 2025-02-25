@@ -72,6 +72,13 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.2.0 - 2025-02-25</h3>
+            <h4>Test results contain style warnings or errors for applicable exercises</h4>
+            <p>
+                Exercises can be configured to warn or fail submissions for style e.g. nonstandard
+                formatting. These issues are now checked by the extension and the errors caused by
+                style issues are displayed.
+            </p>
             <h3>3.1.1 - 2025-02-21</h3>
             <h4>Improved error messages and logging</h4>
             <p>
