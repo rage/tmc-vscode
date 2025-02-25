@@ -1,6 +1,11 @@
 <script lang="ts">
     import { derived, writable } from "svelte/store";
-    import { TestCase, TestResult } from "../shared/langsSchema";
+    import {
+        StyleValidationResult,
+        StyleValidationStrategy,
+        TestCase,
+        TestResult,
+    } from "../shared/langsSchema";
     import Checkbox from "./Checkbox.svelte";
     import ProgressBar from "./ProgressBar.svelte";
     import { vscode } from "../utilities/vscode";
@@ -8,12 +13,20 @@
     export let totalPoints: number;
     export let successPoints: number;
     export let testResults: Array<TestResult | TestCase>;
+    export let validationResult: StyleValidationResult | null;
     export let solutionUrl: string | null;
+
+    const validationStrategy: StyleValidationStrategy = validationResult?.strategy ?? "DISABLED";
+    const validationErrors = validationResult?.validation_errors ?? {};
+    const validationErrorsEntries = Object.entries(validationErrors);
+    // validations pass if strategy is not set to fail, or if there are no validation errors
+    const validationsPassed = validationStrategy !== "FAIL" || validationErrorsEntries.length === 0;
 
     const allTestsFailed = testResults.find((tr) => tr.successful) === undefined;
     const allTestsPassed = testResults.find((tr) => !tr.successful) === undefined;
+    const exercisePassed = allTestsPassed && validationsPassed;
     // if all tests failed or passed, no need to show the checkbox
-    const alwaysShowPassedTests = allTestsFailed || allTestsPassed;
+    const alwaysShowPassedTests = allTestsFailed || exercisePassed;
 
     const showPassedTestsChecked = writable<boolean>(false);
     const showPassedTests = derived(showPassedTestsChecked, ($showPassedTestsChecked) => {
@@ -53,15 +66,36 @@
 </div>
 
 <div class="test-results-container">
+    {#each validationErrorsEntries as [path, pathValidationErrors]}
+        {#if validationStrategy === "FAIL"}
+            <div class="test failed-container">
+                <h2 class="failed">Code quality errors found</h2>
+                <h3>File: {path}</h3>
+                {#each pathValidationErrors as pathValidationError}
+                    <pre
+                        class="test-message">Line {pathValidationError.line}, column {pathValidationError.column}: {pathValidationError.message}</pre>
+                {/each}
+            </div>
+        {:else}
+            <div class="test warning-container">
+                <h2 class="warning">Code quality warnings found</h2>
+                <h3>File: {path}</h3>
+                {#each pathValidationErrors as pathValidationError}
+                    <pre
+                        class="test-message">Line {pathValidationError.line}, column {pathValidationError.column}: {pathValidationError.message}</pre>
+                {/each}
+            </div>
+        {/if}
+    {/each}
     {#each testResults as testResult}
         {#if testResult.successful}
             <div class="test passed-container" hidden={!$showPassedTests}>
-                <h2 class="passed">PASS:</h2>
+                <h2 class="passed">Test passed!</h2>
                 <h3>{testResult.name}</h3>
             </div>
         {:else}
             <div class="test failed-container">
-                <h2 class="failed">FAIL:</h2>
+                <h2 class="failed">Test failed</h2>
                 <h3>{testResult.name}</h3>
                 <pre class="test-message">{testResult.message}</pre>
             </div>
@@ -78,16 +112,22 @@
         margin-bottom: 0.4rem;
     }
     .passed {
-        color: var(--vscode-notebookStatusSuccessIcon-foreground, #89d185);
+        color: var(--vscode-testing-iconPassed, #73c991);
     }
     .passed-container {
-        border-color: var(--vscode-notebookStatusSuccessIcon-foreground, #89d185);
+        border-color: var(--vscode-testing-iconPassed, #73c991);
     }
     .failed {
-        color: var(--vscode-notebookStatusErrorIcon-foreground, #f85149);
+        color: var(--vscode-testing-iconFailed, #f14c4c);
     }
     .failed-container {
-        border-color: var(--vscode-notebookStatusErrorIcon-foreground, #f85149);
+        border-color: var(--vscode-testing-iconFailed, #f14c4c);
+    }
+    .warning {
+        color: var(--vscode-testing-iconQueued, #cca700);
+    }
+    .warning-container {
+        color: var(--vscode-testing-iconQueued, #cca700);
     }
     .test-message {
         white-space: break-spaces;

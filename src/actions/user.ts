@@ -22,7 +22,7 @@ import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
 import { ActionContext } from "./types";
 import { updateCourse } from "./updateCourse";
 
-export const testInterrupts: Map<number, () => void> = new Map();
+export const testInterrupts: Map<number, Array<() => void>> = new Map();
 
 /**
  * Authenticates and logs the user in if credentials are correct.
@@ -104,11 +104,12 @@ export async function testExercise(
 
     if (!course.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext);
-        const [testRunner, interrupt] = tmc.runTests(exercise.uri.fsPath, executablePath);
-        testInterrupts.set(testRunId, interrupt);
+        const [testRunner, testInterrupt] = tmc.runTests(exercise.uri.fsPath, executablePath);
+        const [validationRunner, validationInterrupt] = tmc.runCheckstyle(exercise.uri.fsPath);
+        testInterrupts.set(testRunId, [testInterrupt, validationInterrupt]);
         const exerciseName = exercise.exerciseSlug;
 
-        Logger.info(`Running local tests for ${exerciseName}`);
+        Logger.info(`Running local tests and validations for ${exerciseName}`);
         const testResults = await testRunner;
         Logger.info(`Tests finished for ${exerciseName}`);
 
@@ -121,6 +122,18 @@ export async function testExercise(
             return Ok.EMPTY;
         }
 
+        const validationResults = await validationRunner;
+        Logger.info(`Validations finished for ${exerciseName}`);
+
+        if (validationResults.err) {
+            TmcPanel.postMessage({
+                type: "testError",
+                target: panel,
+                error: validationResults.val,
+            });
+            return Ok.EMPTY;
+        }
+
         data = {
             testResult: testResults.val,
             id: courseExercise.id,
@@ -128,6 +141,7 @@ export async function testExercise(
             exerciseName,
             tmcLogs: testResults.val.logs,
             disabled: course.disabled,
+            styleValidationResult: validationResults.val,
         };
 
         if (TmcPanel.sidePanel === undefined) {

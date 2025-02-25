@@ -5,7 +5,13 @@
 import { Uri } from "vscode";
 import * as util from "node:util";
 
-import { Course, Organization, RunResult, SubmissionFinished } from "./langsSchema";
+import {
+    Course,
+    Organization,
+    RunResult,
+    StyleValidationResult,
+    SubmissionFinished,
+} from "./langsSchema";
 import { createIs } from "typia";
 
 /**
@@ -483,6 +489,7 @@ export type TestResultData = {
     };
     pasteLink?: string;
     disabled?: boolean;
+    styleValidationResult?: StyleValidationResult | null;
 };
 
 export type TestCourse = {
