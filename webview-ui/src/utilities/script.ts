@@ -23,16 +23,31 @@ type Message = ExtensionToWebview | WebviewToWebview;
  */
 type WebviewToWebview =
     | {
-          type: "selectedOrganization";
-          target: TargetPanel<MyCoursesPanel>;
-          slug: string;
-      }
+        type: "selectedOrganization";
+        target: TargetPanel<MyCoursesPanel>;
+        slug: string;
+    }
     | {
-          type: "selectedCourse";
-          target: TargetPanel<MyCoursesPanel>;
-          organizationSlug: string;
-          courseId: number;
-      };
+        type: "selectedCourse";
+        target: TargetPanel<MyCoursesPanel>;
+        organizationSlug: string;
+        courseId: number;
+    }
+    | {
+        type: "selectedMoocCourse";
+        target: TargetPanel<MyCoursesPanel>;
+        courseId: string;
+        instanceId: string;
+        courseName: string;
+        instanceName: string | null;
+    }
+    // the last variant exists just to make TypeScript think that every panel type has
+    // at least two different message types, which makes TS treat them differently than if
+    // they only had one...
+    | {
+        type: never;
+        target: never;
+    };
 
 type TargetedMessage<T extends Panel> = Targeted<Message, T["type"]>;
 

@@ -1,6 +1,6 @@
 import { FeedbackQuestion } from "../actions/types";
 import Storage, { LocalCourseData } from "../api/storage";
-import TMC from "../api/tmc";
+import TMC from "../api/langs";
 import { Course, Organization } from "../api/types";
 import { ExtensionSettings } from "../config/settings";
 import { SubmissionFinished } from "../shared/langsSchema";

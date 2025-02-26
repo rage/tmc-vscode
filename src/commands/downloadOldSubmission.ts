@@ -25,7 +25,7 @@ export async function downloadOldSubmission(
         return;
     }
 
-    const exerciseId = userData.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id;
+    const exerciseId = userData.getTmcExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id;
     if (!exerciseId) {
         dialog.errorNotification("Failed to resolve exercise id.");
         return;
@@ -47,8 +47,8 @@ export async function downloadOldSubmission(
         exercise.exerciseSlug + ": Select a submission",
         ...submissionsResult.val.map<[string, OldSubmission]>((a) => [
             dateToString(parseDate(a.processing_attempts_started_at)) +
-                "| " +
-                (a.all_tests_passed ? "Passed" : "Not passed"),
+            "| " +
+            (a.all_tests_passed ? "Passed" : "Not passed"),
             a,
         ]),
     );

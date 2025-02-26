@@ -1,5 +1,10 @@
 <script lang="ts">
-    import { MyCoursesPanel, assertUnreachable } from "../shared/shared";
+    import {
+        CourseIdentifier,
+        ExerciseIdentifier,
+        MyCoursesPanel,
+        assertUnreachable,
+    } from "../shared/shared";
     import { vscode } from "../utilities/vscode";
     import { addMessageListener, loadable, savePanelState } from "../utilities/script";
     import { onMount } from "svelte";
@@ -55,6 +60,21 @@
                 });
                 break;
             }
+            case "selectedMoocCourse": {
+                vscode.postMessage({
+                    type: "addMoocCourse",
+                    courseId: message.courseId,
+                    instanceId: message.instanceId,
+                    courseName: message.courseName,
+                    instanceName: message.instanceName,
+                    requestingPanel: panel,
+                });
+                // todo: only close side panel on success
+                vscode.postMessage({
+                    type: "closeSidePanel",
+                });
+                break;
+            }
             case "setNewExercises": {
                 const courses = panel.courses ?? [];
                 const course = courses.find((c) => c.id === message.courseId);
@@ -85,7 +105,7 @@
 
     function addNewCourse() {
         vscode.postMessage({
-            type: "selectOrganization",
+            type: "selectPlatform",
             sourcePanel: panel,
         });
     }
@@ -94,7 +114,7 @@
             type: "changeTmcDataPath",
         });
     }
-    function openCourseDetails(courseId: number) {
+    function openCourseDetails(courseId: CourseIdentifier) {
         vscode.postMessage({
             type: "openCourseDetails",
             courseId,
@@ -113,16 +133,14 @@
         });
     }
     function downloadExercises(
-        ids: Array<number>,
+        ids: Array<ExerciseIdentifier>,
         courseName: string,
         organizationSlug: string,
-        courseId: number,
+        courseId: CourseIdentifier,
     ) {
         vscode.postMessage({
             type: "downloadExercises",
             ids,
-            courseName,
-            organizationSlug,
             courseId,
             mode: "download",
         });
@@ -157,7 +175,7 @@
         </div>
     </div>
 
-    {#if panel.courses !== undefined}
+    {#if panel.courses !== undefined && panel.moocCourses !== undefined}
         {#each panel.courses as course}
             {@const completed = ((course.awardedPoints / course.availablePoints) * 100).toFixed(2)}
             <Card>
@@ -255,6 +273,9 @@
                     {/if}
                 </div>
             </Card>
+        {/each}
+        {#each panel.moocCourses as moocCourse}
+            <div>mooc course {moocCourse.instanceId}</div>
         {/each}
         {#if panel.courses.length === 0}
             <div>Add courses to start completing exercises.</div>

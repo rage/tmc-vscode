@@ -4,7 +4,7 @@ import { IMock, It, Times } from "typemoq";
 
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises";
 import { ActionContext } from "../../actions/types";
-import TMC from "../../api/tmc";
+import TMC from "../../api/langs";
 import WorkspaceManager from "../../api/workspaceManager";
 import { UserData } from "../../config/userdata";
 import { createMockActionContext } from "../mocks/actionContext";

@@ -1,9 +1,11 @@
 import { flatten } from "lodash";
 import { Ok, Result } from "ts-results";
 
+import { assertUnreachable } from "../shared/shared";
 import { Logger } from "../utilities";
 
 import { ActionContext } from "./types";
+
 
 interface Options {
     forceRefresh?: boolean;
@@ -17,8 +19,8 @@ interface OutdatedExercise {
 
 /**
  * Checks all user's courses for exercise updates.
- * @param courseId If given, check only updates for that course.
  */
+// todo: mooc
 export async function checkForExerciseUpdates(
     actionContext: ActionContext,
     options?: Options,
@@ -34,12 +36,23 @@ export async function checkForExerciseUpdates(
 
     const updateableExerciseIds = new Set<number>(checkUpdatesResult.val.map((x) => x.id));
     const outdatedExercisesByCourse = userData.getCourses().map<OutdatedExercise[]>((course) => {
-        const outdatedExercises = course.exercises.filter((x) => updateableExerciseIds.has(x.id));
-        return outdatedExercises.map((x) => ({
-            courseId: course.id,
-            exerciseId: x.id,
-            exerciseName: x.name,
-        }));
+        switch (course.kind) {
+            case "tmc": {
+                const tmcCourse = course.data;
+                const outdatedExercises = tmcCourse.exercises.filter((x) => updateableExerciseIds.has(x.id));
+                return outdatedExercises.map((x) => ({
+                    courseId: tmcCourse.id,
+                    exerciseId: x.id,
+                    exerciseName: x.name,
+                }));
+            }
+            case "mooc": {
+                throw new Error("todo")
+            }
+            default: {
+                assertUnreachable(course)
+            }
+        }
     });
     const outdatedExercises = flatten(outdatedExercisesByCourse);
     Logger.info(`Update check found ${outdatedExercises.length} outdated exercises`);

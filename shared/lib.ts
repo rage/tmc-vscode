@@ -4,13 +4,13 @@
 
 import { Uri } from "vscode";
 
-import { Course, Organization, RunResult, SubmissionFinished } from "./langsSchema";
+import { Course, CourseInstance, Organization, RunResult, SubmissionFinished } from "./langsSchema";
 
 /**
  * Contains the state of the webview.
  */
 export type State = {
-    panel: Panel;
+  panel: Panel;
 };
 
 /*
@@ -23,15 +23,17 @@ export type State = {
  * `id`: used to make sure messages are delivered to the correct panels
  */
 export type Panel =
-    | AppPanel
-    | WelcomePanel
-    | LoginPanel
-    | MyCoursesPanel
-    | CourseDetailsPanel
-    | SelectOrganizationPanel
-    | SelectCoursePanel
-    | ExerciseTestsPanel
-    | ExerciseSubmissionPanel;
+  | AppPanel
+  | WelcomePanel
+  | LoginPanel
+  | MyCoursesPanel
+  | CourseDetailsPanel
+  | SelectOrganizationPanel
+  | SelectCoursePanel
+  | ExerciseTestsPanel
+  | ExerciseSubmissionPanel
+  | SelectPlatformPanel
+  | SelectMoocCoursePanel;
 
 export type PanelType = Panel["type"];
 
@@ -45,72 +47,98 @@ export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"]
 export type BroadcastPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "type">;
 
 export type AppPanel = {
-    id: number;
-    type: "App";
+  id: number;
+  type: "App";
 };
 
 export type WelcomePanel = {
-    id: number;
-    type: "Welcome";
-    version?: string;
+  id: number;
+  type: "Welcome";
+  version?: string;
 };
 
 export type LoginPanel = {
-    id: number;
-    type: "Login";
+  id: number;
+  type: "Login";
 };
 
 export type MyCoursesPanel = {
-    id: number;
-    type: "MyCourses";
-    courses?: Array<CourseData>;
-    tmcDataPath?: string;
-    tmcDataSize?: string;
-    courseDeadlines: Record<number, string>;
+  id: number;
+  type: "MyCourses";
+  courses?: Array<CourseData>;
+  moocCourses?: Array<MoocCourseData>;
+  tmcDataPath?: string;
+  tmcDataSize?: string;
+  courseDeadlines: Record<number, string>;
 };
 
 export type CourseDetailsPanel = {
-    id: number;
-    type: "CourseDetails";
-    courseId: number;
-    course?: CourseData;
-    offlineMode?: boolean;
-    exerciseGroups?: Array<ExerciseGroup>;
-    updateableExercises?: Array<number>;
-    disabled?: boolean;
-    exerciseStatuses: Record<number, ExerciseStatus>;
+  id: number;
+  type: "CourseDetails";
+  courseId: CourseIdentifier;
+  course?: {
+    // human readable name e.g. "Introduction to Computer Science"
+    title: string;
+    // e.g. introduction-to-computer-science
+    slug: string;
+    disabled: boolean;
+    courseData: CourseData;
+    awardedPoints: number;
+    availablePoints: number;
+    materialUrl: string | null;
+    perhapsExamMode: boolean;
+  }
+  offlineMode?: boolean;
+  updateableExercises?: Array<ExerciseIdentifier>;
+  exerciseGroups: Array<ExerciseGroup>;
+  exerciseStatuses: {
+    tmc: Record<TmcExerciseId, ExerciseStatus>
+    mooc: Record<MoocExerciseId, ExerciseStatus>
+  }
 };
 
 export type SelectOrganizationPanel = {
-    id: number;
-    type: "SelectOrganization";
-    // the result of the selection is sent back to this panel
-    requestingPanel: TargetPanel<MyCoursesPanel>;
+  id: number;
+  type: "SelectOrganization";
+  // the result of the selection is sent back to this panel
+  requestingPanel: TargetPanel<MyCoursesPanel>;
 };
 
 export type SelectCoursePanel = {
-    id: number;
-    type: "SelectCourse";
-    organizationSlug: string;
-    // the result of the selection is sent back to this panel
-    requestingPanel: TargetPanel<MyCoursesPanel>;
+  id: number;
+  type: "SelectCourse";
+  organizationSlug: string;
+  // the result of the selection is sent back to this panel
+  requestingPanel: TargetPanel<MyCoursesPanel>;
 };
 
 export type ExerciseTestsPanel = {
-    id: number;
-    type: "ExerciseTests";
-    course: TestCourse;
-    exercise: TestExercise;
-    exerciseUri: Uri;
-    testRunId: number;
+  id: number;
+  type: "ExerciseTests";
+  course: TestCourse;
+  exercise: TestExercise;
+  exerciseUri: Uri;
+  testRunId: number;
 };
 
 export type ExerciseSubmissionPanel = {
-    id: number;
-    type: "ExerciseSubmission";
-    course: TestCourse;
-    exercise: TestExercise;
+  id: number;
+  type: "ExerciseSubmission";
+  course: TestCourse;
+  exercise: TestExercise;
 };
+
+export type SelectPlatformPanel = {
+  id: number;
+  type: "SelectPlatform";
+  requestingPanel: TargetPanel<MyCoursesPanel>
+};
+
+export type SelectMoocCoursePanel = {
+  id: number;
+  type: "SelectMoocCourse";
+  requestingPanel: TargetPanel<MyCoursesPanel>
+}
 
 /*
  * ======== messages to webview ========
@@ -121,149 +149,166 @@ export type ExerciseSubmissionPanel = {
  * Handled by the Svelte app.
  */
 export type ExtensionToWebview =
-    | {
-          type: "setPanel";
-          target: TargetPanel<AppPanel>;
-          panel: Panel;
-      }
-    | {
-          type: "setWelcomeData";
-          target: TargetPanel<WelcomePanel>;
-          version: string;
-      }
-    | {
-          type: "setMyCourses";
-          target: TargetPanel<MyCoursesPanel>;
-          courses: Array<CourseData>;
-      }
-    | {
-          type: "setTmcDataPath";
-          target: BroadcastPanel<MyCoursesPanel>;
-          tmcDataPath: string;
-      }
-    | {
-          type: "setNextCourseDeadline";
-          target: TargetPanel<MyCoursesPanel>;
-          courseId: number;
-          deadline: string;
-      }
-    | {
-          type: "setTmcDataSize";
-          target: TargetPanel<MyCoursesPanel>;
-          tmcDataSize: string;
-      }
-    | {
-          type: "loginError";
-          target: TargetPanel<LoginPanel>;
-          error: string;
-      }
-    | {
-          type: "setCourseData";
-          target: TargetPanel<CourseDetailsPanel>;
-          courseData: CourseData;
-      }
-    | {
-          type: "setCourseGroups";
-          target: TargetPanel<CourseDetailsPanel>;
-          offlineMode: boolean;
-          exerciseGroups: Array<ExerciseGroup>;
-      }
-    | {
-          type: "setCourseDisabledStatus";
-          target: BroadcastPanel<MyCoursesPanel | CourseDetailsPanel>;
-          courseId: number;
-          disabled: boolean;
-      }
-    | {
-          type: "exerciseStatusChange";
-          target: BroadcastPanel<CourseDetailsPanel>;
-          exerciseId: number;
-          status: ExerciseStatus;
-      }
-    | {
-          type: "setUpdateables";
-          target: BroadcastPanel<CourseDetailsPanel>;
-          exerciseIds: Array<number>;
-      }
-    | {
-          type: "setOrganizations";
-          target: TargetPanel<SelectOrganizationPanel>;
-          organizations: Array<Organization>;
-      }
-    | {
-          type: "setTmcBackendUrl";
-          target: TargetPanel<SelectOrganizationPanel | SelectCoursePanel>;
-          tmcBackendUrl: string;
-      }
-    | {
-          type: "setOrganization";
-          target: TargetPanel<SelectCoursePanel>;
-          organization: Organization;
-      }
-    | {
-          type: "setSelectableCourses";
-          target: TargetPanel<SelectCoursePanel>;
-          courses: Array<Course>;
-      }
-    | {
-          type: "testResults";
-          target: TargetPanel<ExerciseTestsPanel>;
-          testResults: TestResultData;
-      }
-    | {
-          type: "testError";
-          target: TargetPanel<ExerciseTestsPanel>;
-          error: Error;
-      }
-    | {
-          type: "pasteResult";
-          target: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
-          pasteLink: string;
-      }
-    | {
-          type: "pasteError";
-          target: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
-          error: string;
-      }
-    | {
-          type: "submissionStatusUrl";
-          target: TargetPanel<ExerciseSubmissionPanel>;
-          url: string;
-      }
-    | {
-          type: "submissionStatusUpdate";
-          target: TargetPanel<ExerciseSubmissionPanel>;
-          progressPercent: number;
-          message?: string;
-      }
-    | {
-          type: "submissionResult";
-          target: TargetPanel<ExerciseSubmissionPanel>;
-          result: SubmissionFinished;
-          questions: Array<FeedbackQuestion>;
-      }
-    | {
-          type: "submissionStatusError";
-          target: TargetPanel<ExerciseSubmissionPanel>;
-          error: Error;
-      }
-    | {
-          type: "setNewExercises";
-          target: BroadcastPanel<MyCoursesPanel>;
-          courseId: number;
-          exerciseIds: Array<number>;
-      }
-    | {
-          type: "willNotRunTestsForExam";
-          target: TargetPanel<ExerciseTestsPanel>;
-      }
-    // the last variant exists just to make TypeScript think that every panel type has
-    // at least two different message types, which makes TS treat them differently than if
-    // they only had one...
-    | {
-          type: never;
-          target: TargetPanel<never>;
-      };
+  | {
+    type: "setPanel";
+    target: TargetPanel<AppPanel>;
+    panel: Panel;
+  }
+  | {
+    type: "setWelcomeData";
+    target: TargetPanel<WelcomePanel>;
+    version: string;
+  }
+  | {
+    type: "setMyCourses";
+    target: TargetPanel<MyCoursesPanel>;
+    courses: Array<CourseData>;
+  }
+  | {
+    type: "setTmcDataPath";
+    target: BroadcastPanel<MyCoursesPanel>;
+    tmcDataPath: string;
+  }
+  | {
+    type: "setNextCourseDeadline";
+    target: TargetPanel<MyCoursesPanel>;
+    courseId: number;
+    deadline: string;
+  }
+  | {
+    type: "setTmcDataSize";
+    target: TargetPanel<MyCoursesPanel>;
+    tmcDataSize: string;
+  }
+  | {
+    type: "loginError";
+    target: TargetPanel<LoginPanel>;
+    error: string;
+  }
+  | {
+    type: "setCourseData";
+    target: TargetPanel<CourseDetailsPanel>;
+    courseData: CourseData;
+  }
+  | {
+    type: "setCourseGroups";
+    target: TargetPanel<CourseDetailsPanel>;
+    offlineMode: boolean;
+    exerciseGroups: Array<ExerciseGroup>;
+  }
+  | {
+    type: "setCourseDisabledStatus";
+    target: BroadcastPanel<MyCoursesPanel | CourseDetailsPanel>;
+    courseId: CourseIdentifier;
+    disabled: boolean;
+  }
+  | {
+    type: "exerciseStatusChange";
+    target: BroadcastPanel<CourseDetailsPanel>;
+    exerciseId: ExerciseIdentifier;
+    status: ExerciseStatus;
+  }
+  | {
+    type: "setUpdateables";
+    target: BroadcastPanel<CourseDetailsPanel>;
+    exerciseIds: Array<ExerciseIdentifier>;
+  }
+  | {
+    type: "setOrganizations";
+    target: TargetPanel<SelectOrganizationPanel>;
+    organizations: Array<Organization>;
+  }
+  | {
+    type: "setTmcBackendUrl";
+    target: TargetPanel<SelectOrganizationPanel | SelectCoursePanel>;
+    tmcBackendUrl: string;
+  }
+  | {
+    type: "setOrganization";
+    target: TargetPanel<SelectCoursePanel>;
+    organization: Organization;
+  }
+  | {
+    type: "setSelectableCourses";
+    target: TargetPanel<SelectCoursePanel>;
+    courses: Array<Course>;
+  }
+  | {
+    type: "testResults";
+    target: TargetPanel<ExerciseTestsPanel>;
+    testResults: TestResultData;
+  }
+  | {
+    type: "testError";
+    target: TargetPanel<ExerciseTestsPanel>;
+    error: Error;
+  }
+  | {
+    type: "pasteResult";
+    target: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
+    pasteLink: string;
+  }
+  | {
+    type: "pasteError";
+    target: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
+    error: string;
+  }
+  | {
+    type: "submissionStatusUrl";
+    target: TargetPanel<ExerciseSubmissionPanel>;
+    url: string;
+  }
+  | {
+    type: "submissionStatusUpdate";
+    target: TargetPanel<ExerciseSubmissionPanel>;
+    progressPercent: number;
+    message?: string;
+  }
+  | {
+    type: "submissionResult";
+    target: TargetPanel<ExerciseSubmissionPanel>;
+    result: SubmissionFinished;
+    questions: Array<FeedbackQuestion>;
+  }
+  | {
+    type: "submissionStatusError";
+    target: TargetPanel<ExerciseSubmissionPanel>;
+    error: Error;
+  }
+  | {
+    type: "setNewExercises";
+    target: BroadcastPanel<MyCoursesPanel>;
+    courseId: CourseIdentifier;
+    exerciseIds: Array<ExerciseIdentifier>;
+  }
+  | {
+    type: "willNotRunTestsForExam";
+    target: TargetPanel<ExerciseTestsPanel>;
+  }
+  | {
+    type: "setSelectMoocCourseData";
+    target: BroadcastPanel<SelectMoocCoursePanel>;
+    courseInstances: Array<CourseInstance>
+  } | {
+    type: "requestSelectCourseDataError";
+    target: TargetPanel<SelectCoursePanel>;
+    error: string;
+  } | {
+    type: "requestSelectOrganizationDataError";
+    target: TargetPanel<SelectOrganizationPanel>;
+    error: string;
+  } | {
+    type: "requestSelectMoocCourseDataError";
+    target: TargetPanel<SelectMoocCoursePanel>;
+    error: string;
+  }
+  // the last variant exists just to make TypeScript think that every panel type has
+  // at least two different message types, which makes TS treat them differently than if
+  // they only had one...
+  | {
+    type: never;
+    target: never;
+  };
 
 // helper type for messages from the extension to a specific panel
 export type TargetedExtensionToWebview<T extends PanelType> = Targeted<ExtensionToWebview, T>;
@@ -280,230 +325,261 @@ export type BroadcastExtensionToWebview<T extends PanelType> = Broadcast<Extensi
  * Handled by the extension host in `TmcPanel`.
  */
 export type WebviewToExtension =
-    | {
-          type: "requestCourseDetailsData";
-          sourcePanel: CourseDetailsPanel;
-      }
-    | {
-          type: "requestExerciseSubmissionData";
-          sourcePanel: ExerciseSubmissionPanel;
-      }
-    | {
-          type: "requestExerciseTestsData";
-          sourcePanel: ExerciseTestsPanel;
-      }
-    | {
-          type: "requestLoginData";
-          sourcePanel: LoginPanel;
-      }
-    | {
-          type: "requestMyCoursesData";
-          sourcePanel: MyCoursesPanel;
-      }
-    | {
-          type: "requestSelectCourseData";
-          sourcePanel: SelectCoursePanel;
-      }
-    | {
-          type: "requestSelectOrganizationData";
-          sourcePanel: SelectOrganizationPanel;
-      }
-    | {
-          type: "requestWelcomeData";
-          sourcePanel: WelcomePanel;
-      }
-    | {
-          type: "login";
-          sourcePanel: LoginPanel;
-          username: string;
-          password: string;
-      }
-    | {
-          type: "selectOrganization";
-          sourcePanel: TargetPanel<MyCoursesPanel>;
-      }
-    | {
-          type: "removeCourse";
-          id: number;
-      }
-    | {
-          type: "openCourseWorkspace";
-          courseName: string;
-      }
-    | {
-          type: "downloadExercises";
-          ids: Array<number>;
-          courseName: string;
-          organizationSlug: string;
-          courseId: number;
-          mode: "download" | "update";
-      }
-    | {
-          type: "clearNewExercises";
-          courseId: number;
-      }
-    | {
-          type: "changeTmcDataPath";
-      }
-    | {
-          type: "openCourseDetails";
-          courseId: number;
-      }
-    | {
-          type: "openMyCourses";
-      }
-    | {
-          type: "refreshCourseDetails";
-          id: number;
-          useCache: boolean;
-      }
-    | {
-          type: "openExercises";
-          ids: Array<number>;
-          courseName: string;
-      }
-    | {
-          type: "closeExercises";
-          ids: Array<number>;
-          courseName: string;
-      }
-    | {
-          type: "refreshCourseDetails";
-          id: number;
-          useCache: boolean;
-      }
-    | {
-          type: "selectCourse";
-          sourcePanel: TargetPanel<MyCoursesPanel>;
-          slug: string;
-      }
-    | {
-          type: "addCourse";
-          organizationSlug: string;
-          courseId: number;
-          requestingPanel: TargetPanel<MyCoursesPanel>;
-      }
-    | {
-          type: "relayToWebview";
-          // the message type is handled by the webview
-          message: unknown;
-      }
-    | {
-          type: "closeSidePanel";
-      }
-    | {
-          type: "cancelTests";
-          testRunId: number;
-      }
-    | {
-          type: "submitExercise";
-          course: TestCourse;
-          exercise: TestExercise;
-          exerciseUri: Uri;
-      }
-    | {
-          type: "pasteExercise";
-          course: TestCourse;
-          exercise: TestExercise;
-          requestingPanel: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
-      }
-    | {
-          type: "openLinkInBrowser";
-          url: string;
-      };
+  | {
+    type: "requestCourseDetailsData";
+    sourcePanel: CourseDetailsPanel;
+  }
+  | {
+    type: "requestExerciseSubmissionData";
+    sourcePanel: ExerciseSubmissionPanel;
+  }
+  | {
+    type: "requestExerciseTestsData";
+    sourcePanel: ExerciseTestsPanel;
+  }
+  | {
+    type: "requestLoginData";
+    sourcePanel: LoginPanel;
+  }
+  | {
+    type: "requestMyCoursesData";
+    sourcePanel: MyCoursesPanel;
+  }
+  | {
+    type: "requestSelectCourseData";
+    sourcePanel: SelectCoursePanel;
+  }
+  | {
+    type: "requestSelectOrganizationData";
+    sourcePanel: SelectOrganizationPanel;
+  }
+  | {
+    type: "requestWelcomeData";
+    sourcePanel: WelcomePanel;
+  }
+  | {
+    type: "login";
+    sourcePanel: LoginPanel;
+    username: string;
+    password: string;
+  }
+  | {
+    type: "selectOrganization";
+    sourcePanel: TargetPanel<MyCoursesPanel>;
+  }
+  | {
+    type: "removeCourse";
+    id: number;
+  }
+  | {
+    type: "openCourseWorkspace";
+    courseName: string;
+  }
+  | {
+    type: "downloadExercises";
+    ids: Array<ExerciseIdentifier>;
+    courseId: CourseIdentifier;
+    mode: "download" | "update";
+  }
+  | {
+    type: "clearNewExercises";
+    courseId: number;
+  }
+  | {
+    type: "changeTmcDataPath";
+  }
+  | {
+    type: "openCourseDetails";
+    courseId: CourseIdentifier;
+  }
+  | {
+    type: "openMyCourses";
+  }
+  | {
+    type: "refreshCourseDetails";
+    id: CourseIdentifier;
+    useCache: boolean;
+  }
+  | {
+    type: "openExercises";
+    ids: Array<ExerciseIdentifier>;
+    courseId: CourseIdentifier;
+  }
+  | {
+    type: "closeExercises";
+    ids: Array<ExerciseIdentifier>;
+    courseId: CourseIdentifier;
+  }
+  | {
+    type: "refreshCourseDetails";
+    id: CourseIdentifier;
+    useCache: boolean;
+  }
+  | {
+    type: "selectCourse";
+    sourcePanel: TargetPanel<MyCoursesPanel>;
+    slug: string;
+  }
+  | {
+    type: "addCourse";
+    organizationSlug: string;
+    courseId: number;
+    requestingPanel: TargetPanel<MyCoursesPanel>;
+  }
+  | {
+    type: "relayToWebview";
+    // the message type is handled by the webview
+    message: unknown;
+  }
+  | {
+    type: "closeSidePanel";
+  }
+  | {
+    type: "cancelTests";
+    testRunId: number;
+  }
+  | {
+    type: "submitExercise";
+    course: TestCourse;
+    exercise: TestExercise;
+    exerciseUri: Uri;
+  }
+  | {
+    type: "pasteExercise";
+    course: TestCourse;
+    exercise: TestExercise;
+    requestingPanel: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
+  }
+  | {
+    type: "openLinkInBrowser";
+    url: string;
+  }
+  | {
+    type: "selectPlatform";
+    sourcePanel: TargetPanel<MyCoursesPanel>;
+  }
+  | {
+    type: "selectMoocCourse";
+    sourcePanel: TargetPanel<MyCoursesPanel>;
+  }
+  | {
+    type: "requestSelectMoocCourseData";
+    sourcePanel: TargetPanel<SelectMoocCoursePanel>;
+  }
+  | {
+    type: "addMoocCourse",
+    courseId: string,
+    instanceId: string,
+    courseName: string,
+    instanceName: string | null,
+    requestingPanel: TargetPanel<MyCoursesPanel>;
+  };
 
 /*
  * ======== additional types ========
  */
 
-export type CourseData = {
-    id: number;
-    name: string;
-    title: string;
-    description: string;
-    organization: string;
-    awardedPoints: number;
-    availablePoints: number;
-    exercises: Array<NewExercise>;
-    newExercises: Array<number>;
-    disabled: boolean;
-    materialUrl: string | null;
-    perhapsExamMode: boolean;
+export type CourseData = Enum<TmcCourseData, MoocCourseData>;
+
+export type TmcCourseData = {
+  id: number;
+  name: string;
+  title: string;
+  description: string;
+  organization: string;
+  awardedPoints: number;
+  availablePoints: number;
+  exercises: Array<NewExercise>;
+  newExercises: Array<number>;
+  disabled: boolean;
+  materialUrl: string | null;
+  perhapsExamMode: boolean;
 };
 
+export type MoocCourseData = {
+  courseId: string,
+  instanceId: string,
+  courseName: string;
+  instanceName: string | null;
+  description: string,
+  awardedPoints: number,
+  availablePoints: number,
+  materialUrl: string,
+}
+
 export type NewExercise = {
-    id: number;
+  id: number;
 };
 
 export type ExerciseGroup = {
-    name: string;
-    exercises: Array<Exercise>;
-    nextDeadlineString: string;
+  name: string;
+  exercises: Array<Exercise>;
+  nextDeadlineString: string;
 };
 
 export type Exercise = {
-    id: number;
-    name: string;
-    isHard: boolean;
-    hardDeadlineString: string;
-    softDeadlineString: string;
-    passed: boolean;
+  id: ExerciseIdentifier;
+  name: string;
+  isHard: boolean;
+  hardDeadlineString: string;
+  softDeadlineString: string;
+  passed: boolean;
 };
 
 export type ExerciseStatus =
-    | "closed"
-    | "downloading"
-    | "downloadFailed"
-    | "expired"
-    | "missing"
-    | "new"
-    | "opened";
+  | "closed"
+  | "downloading"
+  | "downloadFailed"
+  | "expired"
+  | "missing"
+  | "new"
+  | "opened";
 
 export type TestExercise = {
-    id: number;
-    availablePoints: number;
-    awardedPoints: number;
-    /// Equivalent to exercise slug
-    name: string;
-    deadline: string | null;
-    passed: boolean;
-    softDeadline: string | null;
+  id: number;
+  availablePoints: number;
+  awardedPoints: number;
+  /// Equivalent to exercise slug
+  name: string;
+  deadline: string | null;
+  passed: boolean;
+  softDeadline: string | null;
 };
 
 export type TestResultData = {
-    testResult: RunResult;
-    id: number;
-    courseSlug: string;
-    exerciseName: string;
-    tmcLogs: {
-        stdout?: string;
-        stderr?: string;
-    };
-    pasteLink?: string;
-    disabled?: boolean;
+  testResult: RunResult;
+  id: number;
+  courseSlug: string;
+  exerciseName: string;
+  tmcLogs: {
+    stdout?: string;
+    stderr?: string;
+  };
+  pasteLink?: string;
+  disabled?: boolean;
 };
 
 export type TestCourse = {
-    id: number;
-    name: string;
-    title: string;
-    description: string;
-    organization: string;
-    availablePoints: number;
-    awardedPoints: number;
-    perhapsExamMode: boolean;
-    newExercises: number[];
-    notifyAfter: number;
-    disabled: boolean;
-    materialUrl: string | null;
+  id: number;
+  name: string;
+  title: string;
+  description: string;
+  organization: string;
+  availablePoints: number;
+  awardedPoints: number;
+  perhapsExamMode: boolean;
+  newExercises: number[];
+  notifyAfter: number;
+  disabled: boolean;
+  materialUrl: string | null;
 };
 
 export type FeedbackQuestion = {
-    id: number;
-    kind: string;
-    lower?: number;
-    upper?: number;
-    question: string;
+  id: number;
+  kind: string;
+  lower?: number;
+  upper?: number;
+  question: string;
 };
 
 /*
@@ -514,12 +590,71 @@ export type FeedbackQuestion = {
 // target type doesn't have the panel type
 // works...somehow
 export type Targeted<M, T extends PanelType> = Exclude<
-    M,
-    { target: { type: Exclude<PanelType, T> } }
+  M,
+  { target: { type: Exclude<PanelType, T> } }
 >;
 
 export type Broadcast<M, T extends PanelType> = Omit<Targeted<M, T>, "target">;
 
 export function assertUnreachable(x: never): never {
-    throw new Error(`Unreachable ${JSON.stringify(x, null, 2)}`);
+  throw new Error(`Unreachable ${JSON.stringify(x, null, 2)}`);
+}
+
+type TmcKind = { kind: "tmc" }
+
+type MoocKind = { kind: "mooc" }
+
+export type Enum<Tmc, Mooc> = TmcKind & Tmc
+  | MoocKind & Mooc
+
+
+export type CourseIdentifier = Enum<{ courseId: number }, { instanceId: string }>
+
+export type TmcExerciseId = number;
+export type MoocExerciseId = string;
+
+export type ExerciseIdentifier = Enum<{ tmcExerciseId: number }, { moocExerciseId: string }>
+
+// helper to simulate Rust's `match`
+export function match<A, B, T extends Enum<A, B>>(data: T, tmc: (x: T & TmcKind) => A, mooc: (x: T & MoocKind) => B): A | B {
+  switch (data.kind) {
+    case "tmc": {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return tmc(data as any)
+    }
+    case "mooc": {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return mooc(data as any)
+    }
+    default: {
+      assertUnreachable(data)
+    }
+  }
+}
+
+export function matchOption<A, B, T extends Enum<A, B> | undefined>(data: T, tmc: (x: T & TmcKind) => A, mooc: (x: T & MoocKind) => B): A | B | undefined {
+  switch (data?.kind) {
+    case "tmc": {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return tmc(data as any)
+    }
+    case "mooc": {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return mooc(data as any)
+    }
+    case undefined: {
+      return undefined;
+    }
+    default: {
+      assertUnreachable(data)
+    }
+  }
+}
+
+export function makeTmcKind<T>(t: T): T & { kind: "tmc" } {
+  return { ...t, kind: "tmc" }
+}
+
+export function makeMoocKind<T>(t: T): T & { kind: "mooc" } {
+  return { ...t, kind: "mooc" }
 }

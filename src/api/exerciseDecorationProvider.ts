@@ -7,8 +7,7 @@ import { UserData } from "../config/userdata";
  * Class that adds decorations like completion icons for exercises.
  */
 export default class ExerciseDecorationProvider
-    implements vscode.Disposable, vscode.FileDecorationProvider
-{
+    implements vscode.Disposable, vscode.FileDecorationProvider {
     public onDidChangeFileDecorations: vscode.Event<vscode.Uri | vscode.Uri[] | undefined>;
 
     private static _passedExercise = new vscode.FileDecoration(
@@ -54,7 +53,7 @@ export default class ExerciseDecorationProvider
             return;
         }
 
-        const apiExercise = this.userData.getExerciseByName(
+        const apiExercise = this.userData.getTmcExerciseByName(
             exercise.courseSlug,
             exercise.exerciseSlug,
         );

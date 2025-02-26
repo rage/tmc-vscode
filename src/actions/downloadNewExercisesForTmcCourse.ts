@@ -3,7 +3,7 @@ import { Ok, Result } from "ts-results";
 import { TmcPanel } from "../panels/TmcPanel";
 import { Logger } from "../utilities";
 
-import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises";
+import { downloadOrUpdateTmcExercises } from "./downloadOrUpdateTmcExercises";
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
 
@@ -13,12 +13,12 @@ import { ActionContext } from "./types";
  *
  * @param courseId Course to update.
  */
-export async function downloadNewExercisesForCourse(
+export async function downloadNewExercisesForTmcCourse(
     actionContext: ActionContext,
     courseId: number,
 ): Promise<Result<void, Error>> {
     const { userData } = actionContext;
-    const course = userData.getCourse(courseId);
+    const course = userData.getTmcCourse(courseId);
     Logger.info(`Downloading new exercises for course: ${course.title}`);
 
     const postNewExercises = async (exerciseIds: number[]): Promise<void> =>
@@ -33,7 +33,7 @@ export async function downloadNewExercisesForCourse(
 
     postNewExercises([]);
 
-    const downloadResult = await downloadOrUpdateExercises(actionContext, course.newExercises);
+    const downloadResult = await downloadOrUpdateTmcExercises(actionContext, course.newExercises);
     if (downloadResult.err) {
         Logger.error("Failed to download new exercises.", downloadResult.val);
         postNewExercises(course.newExercises);

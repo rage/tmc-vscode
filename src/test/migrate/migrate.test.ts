@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 
 import Dialog from "../../api/dialog";
 import Storage from "../../api/storage";
-import TMC from "../../api/tmc";
+import TMC from "../../api/langs";
 import { migrateExtensionDataFromPreviousVersions } from "../../migrate";
 import * as exerciseData from "../fixtures/exerciseData";
 import * as extensionSettings from "../fixtures/extensionSettings";

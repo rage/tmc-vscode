@@ -1,6 +1,6 @@
 import Dialog from "../api/dialog";
 import ExerciseDecorationProvider from "../api/exerciseDecorationProvider";
-import TMC from "../api/tmc";
+import TMC from "../api/langs";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import Settings from "../config/settings";

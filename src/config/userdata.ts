@@ -1,17 +1,21 @@
 import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 
-import Storage, { LocalCourseData, LocalCourseExercise } from "../api/storage";
+import Storage, { LocalCourseData, LocalMoocCourseData, LocalTmcCourseData, LocalTmcCourseExercise } from "../api/storage";
+import { assertUnreachable, CourseIdentifier, makeMoocKind, makeTmcKind } from "../shared/shared";
 import { Logger } from "../utilities/logger";
 
 export class UserData {
-    private _courses: Map<number, LocalCourseData>;
+    private _tmcCourses: Map<number, LocalTmcCourseData>;
+    // maps instance ids to course data
+    private _moocCourses: Map<string, LocalMoocCourseData>;
     private _passedExercises: Set<number> = new Set();
     private _storage: Storage;
     constructor(storage: Storage) {
         const persistentData = storage.getUserData();
         if (persistentData) {
-            this._courses = new Map(persistentData.courses.map((x) => [x.id, x]));
+            this._tmcCourses = new Map(persistentData.courses.map((x) => [x.id, x]));
+            this._moocCourses = new Map(persistentData.moocCourses.map((x) => [x.instanceId, x]));
 
             persistentData.courses.forEach((x) =>
                 x.exercises.forEach((y) => {
@@ -21,29 +25,56 @@ export class UserData {
                 }),
             );
         } else {
-            this._courses = new Map();
+            this._tmcCourses = new Map();
+            this._moocCourses = new Map();
         }
         this._storage = storage;
     }
 
     public getCourses(): LocalCourseData[] {
-        return Array.from(this._courses.values());
+        const tmc = this.getTmcCourses().map<LocalCourseData>(makeTmcKind);
+        const mooc = this.getMoocCourses().map<LocalCourseData>(makeMoocKind);
+        return tmc.concat(mooc);
     }
 
-    public getCourse(id: number): Readonly<LocalCourseData> {
-        const course = this._courses.get(id);
-        return course as LocalCourseData;
+    public getTmcCourses(): LocalTmcCourseData[] {
+        return Array.from(this._tmcCourses.values());
     }
 
-    public getCourseByName(name: string): Readonly<LocalCourseData> {
-        return this.getCourses().filter((x) => x.name === name)[0];
+    public getMoocCourses(): LocalMoocCourseData[] {
+        return Array.from(this._moocCourses.values());
     }
 
-    public getExerciseByName(
+    public getCourse(id: CourseIdentifier): Readonly<LocalCourseData> {
+        switch (id.kind) {
+            case "tmc": {
+                const course = this._tmcCourses.get(id.courseId);
+                return makeTmcKind(course);
+            }
+            case "mooc": {
+                const course = this._moocCourses.get(id.instanceId);
+                return makeMoocKind(course);
+            }
+            default: {
+                assertUnreachable(id)
+            }
+        }
+    }
+
+    public getTmcCourse(id: number): Readonly<LocalTmcCourseData> {
+        const course = this._tmcCourses.get(id);
+        return course as LocalTmcCourseData;
+    }
+
+    public getTmcCourseByName(name: string): Readonly<LocalTmcCourseData> {
+        return this.getTmcCourses().filter((x) => x.name === name)[0];
+    }
+
+    public getTmcExerciseByName(
         courseSlug: string,
         exerciseName: string,
-    ): Readonly<LocalCourseExercise> | undefined {
-        for (const course of this._courses.values()) {
+    ): Readonly<LocalTmcCourseExercise> | undefined {
+        for (const course of this._tmcCourses.values()) {
             if (course.name === courseSlug) {
                 return course.exercises.find((x) => x.name === exerciseName);
             }
@@ -51,7 +82,7 @@ export class UserData {
     }
 
     public async setExerciseAsPassed(courseSlug: string, exerciseName: string): Promise<void> {
-        for (const course of this._courses.values()) {
+        for (const course of this._tmcCourses.values()) {
             if (course.name === courseSlug) {
                 const exercise = course.exercises.find((x) => x.name === exerciseName);
                 if (exercise) {
@@ -64,32 +95,76 @@ export class UserData {
     }
 
     public addCourse(data: LocalCourseData): void {
-        if (this._courses.has(data.id)) {
+        switch (data.kind) {
+            case "tmc": {
+                const course = data.data;
+                if (this._tmcCourses.has(course.id)) {
+                    throw new Error("Trying to add an already existing course");
+                }
+                Logger.info(`Adding course ${course.name} to My Courses`);
+                this._tmcCourses.set(course.id, course);
+                break;
+            }
+            case "mooc": {
+                const course = data.data;
+                if (this._moocCourses.has(course.instanceId)) {
+                    throw new Error("Trying to add an already existing course");
+                }
+                Logger.info(`Adding course ${course.courseName} to My Courses`);
+                this._moocCourses.set(course.instanceId, course);
+                break;
+            }
+            default: {
+                assertUnreachable(data)
+            }
+        }
+        this._updatePersistentData();
+    }
+
+    public addMoocCourse(data: LocalMoocCourseData): void {
+        if (this._moocCourses.has(data.instanceId)) {
             throw new Error("Trying to add an already existing course");
         }
-        Logger.info(`Adding course ${data.name} to My Courses`);
-        this._courses.set(data.id, data);
+        Logger.info(`Adding course ${data.courseName} to My Courses`);
+        this._moocCourses.set(data.instanceId, data);
         this._updatePersistentData();
     }
 
     public deleteCourse(id: number): void {
-        this._courses.delete(id);
+        this._tmcCourses.delete(id);
         this._updatePersistentData();
     }
 
     public async updateCourse(data: LocalCourseData): Promise<void> {
-        if (!this._courses.has(data.id)) {
-            throw new Error("Trying to fetch course that doesn't exist.");
+        switch (data.kind) {
+            case "tmc": {
+                const course = data.data;
+                if (!this._tmcCourses.has(course.id)) {
+                    throw new Error("Trying to fetch course that doesn't exist.");
+                }
+                this._tmcCourses.set(course.id, course);
+                break;
+            }
+            case "mooc": {
+                const course = data.data;
+                if (!this._moocCourses.has(course.instanceId)) {
+                    throw new Error("Trying to fetch course that doesn't exist.");
+                }
+                this._moocCourses.set(course.instanceId, course);
+                break;
+            }
+            default: {
+                assertUnreachable(data)
+            }
         }
-        this._courses.set(data.id, data);
         await this._updatePersistentData();
     }
 
     public async updateExercises(
         courseId: number,
-        exercises: LocalCourseExercise[],
+        exercises: LocalTmcCourseExercise[],
     ): Promise<Result<void, Error>> {
-        const courseData = this._courses.get(courseId);
+        const courseData = this._tmcCourses.get(courseId);
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
@@ -104,14 +179,14 @@ export class UserData {
             );
         courseData.newExercises.length > 0
             ? Logger.info(
-                  `Found ${courseData.newExercises.length} new exercises for ${courseData.name}`,
-              )
+                `Found ${courseData.newExercises.length} new exercises for ${courseData.name}`,
+            )
             : {};
         courseData.exercises = exercises;
         courseData.exercises.forEach((x) =>
             x.passed ? this._passedExercises.add(x.id) : this._passedExercises.delete(x.id),
         );
-        this._courses.set(courseId, courseData);
+        this._tmcCourses.set(courseId, courseData);
         await this._updatePersistentData();
         return Ok.EMPTY;
     }
@@ -121,13 +196,13 @@ export class UserData {
         awardedPoints: number,
         availablePoints: number,
     ): Promise<Result<void, Error>> {
-        const courseData = this._courses.get(courseId);
+        const courseData = this._tmcCourses.get(courseId);
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
         courseData.awardedPoints = awardedPoints;
         courseData.availablePoints = availablePoints;
-        this._courses.set(courseId, courseData);
+        this._tmcCourses.set(courseId, courseData);
         await this._updatePersistentData();
         return Ok.EMPTY;
     }
@@ -148,7 +223,7 @@ export class UserData {
         courseId: number,
         exercisesToClear?: number[],
     ): Promise<Result<void, Error>> {
-        const courseData = this._courses.get(courseId);
+        const courseData = this._tmcCourses.get(courseId);
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
@@ -180,7 +255,7 @@ export class UserData {
         courseId: number,
         dateInMillis: number,
     ): Promise<Result<void, Error>> {
-        const courseData = this._courses.get(courseId);
+        const courseData = this._tmcCourses.get(courseId);
         if (!courseData) {
             return new Err(new Error("Data missing"));
         }
@@ -202,6 +277,9 @@ export class UserData {
     }
 
     private _updatePersistentData(): Promise<void> {
-        return this._storage.updateUserData({ courses: Array.from(this._courses.values()) });
+        return this._storage.updateUserData({
+            courses: Array.from(this._tmcCourses.values()),
+            moocCourses: Array.from(this._moocCourses.values()),
+        });
     }
 }

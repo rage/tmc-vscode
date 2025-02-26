@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 
 import { moveExtensionDataPath } from "../../actions";
 import { ActionContext } from "../../actions/types";
-import TMC from "../../api/tmc";
+import TMC from "../../api/langs";
 import WorkspaceManager, { ExerciseStatus } from "../../api/workspaceManager";
 import { UserData } from "../../config/userdata";
 import { workspaceExercises } from "../fixtures/workspaceManager";

@@ -21,7 +21,7 @@ export async function submitExercise(
         return;
     }
 
-    const result = await actions.submitExercise(context, actionContext, exercise);
+    const result = await actions.submitTmcExercise(context, actionContext, exercise);
     if (result.err) {
         if (result.val instanceof BottleneckError) {
             Logger.warn(`Submission was cancelled: ${result.val.message}.`);

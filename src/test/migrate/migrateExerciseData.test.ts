@@ -4,7 +4,7 @@ import { IMock, It, Times } from "typemoq";
 import * as vscode from "vscode";
 
 import Dialog from "../../api/dialog";
-import TMC from "../../api/tmc";
+import TMC from "../../api/langs";
 import migrateExerciseData from "../../migrate/migrateExerciseData";
 import * as exerciseData from "../fixtures/exerciseData";
 import { createDialogMock } from "../mocks/dialog";

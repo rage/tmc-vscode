@@ -1,6 +1,15 @@
 <script lang="ts">
     import { derived, writable } from "svelte/store";
-    import { CourseData, CourseDetailsPanel, assertUnreachable } from "../shared/shared";
+    import {
+        CourseDetailsPanel,
+        assertUnreachable,
+        match,
+        matchOption,
+        CourseIdentifier,
+        ExerciseIdentifier,
+        TmcExerciseId,
+        MoocExerciseId,
+    } from "../shared/shared";
     import { vscode } from "../utilities/vscode";
     import { addMessageListener, savePanelState } from "../utilities/script";
     import ExercisePart from "../components/ExercisePart.svelte";
@@ -10,7 +19,10 @@
 
     const totalDownloading = writable<number>(0);
     const refreshing = writable<boolean>(false);
-    const checkedExercises = writable<Record<number, boolean>>({});
+    const checkedExercises = writable<{
+        tmc: Record<TmcExerciseId, boolean>;
+        mooc: Record<MoocExerciseId, boolean>;
+    }>({ tmc: {}, mooc: {} });
     const checkedExercisesCount = derived(checkedExercises, ($checkedExercises) => {
         return Object.values($checkedExercises).filter((checked) => checked).length;
     });
@@ -24,52 +36,95 @@
     addMessageListener(panel, (message) => {
         switch (message.type) {
             case "setCourseData": {
-                panel.course = message.courseData;
-                panel.disabled = message.courseData.disabled;
-                savePanelState(panel);
+                const title = match(
+                    message.courseData,
+                    (tmc) => tmc.title,
+                    (mooc) => mooc.instanceId,
+                );
+                const slug = match(
+                    message.courseData,
+                    (tmc) => tmc.name,
+                    (mooc) => mooc.instanceId,
+                );
+                const disabled = match(
+                    message.courseData,
+                    (tmc) => tmc.disabled,
+                    (_) => false,
+                );
+                const awardedPoints = match(
+                    message.courseData,
+                    (tmc) => tmc.awardedPoints,
+                    (mooc) => mooc.awardedPoints,
+                );
+                const availablePoints = match(
+                    message.courseData,
+                    (tmc) => tmc.availablePoints,
+                    (mooc) => mooc.availablePoints,
+                );
+                const materialUrl = match(
+                    message.courseData,
+                    (tmc) => tmc.materialUrl,
+                    (mooc) => mooc.materialUrl,
+                );
+                const perhapsExamMode = match(
+                    message.courseData,
+                    (tmc) => tmc.perhapsExamMode,
+                    // todo: support exams in mooc
+                    (_mooc) => false,
+                );
+                panel.course = {
+                    title,
+                    slug,
+                    disabled,
+                    courseData: message.courseData,
+                    awardedPoints,
+                    availablePoints,
+                    materialUrl,
+                    perhapsExamMode,
+                };
                 break;
             }
             case "setCourseGroups": {
                 panel.offlineMode = message.offlineMode;
                 panel.exerciseGroups = message.exerciseGroups;
-                savePanelState(panel);
                 break;
             }
             case "setCourseDisabledStatus": {
-                if (message.courseId === panel.courseId) {
-                    panel.disabled = message.disabled;
-                    savePanelState(panel);
+                if (message.courseId === panel.courseId && panel.course) {
+                    panel.course.disabled = message.disabled;
                 }
                 break;
             }
             case "exerciseStatusChange": {
-                panel.exerciseStatuses[message.exerciseId] = message.status;
-                savePanelState(panel);
+                match(
+                    message.exerciseId,
+                    (tmc) => {
+                        panel.exerciseStatuses.tmc[tmc.tmcExerciseId] = message.status;
+                    },
+                    (mooc) => {
+                        panel.exerciseStatuses.mooc[mooc.moocExerciseId] = message.status;
+                    },
+                );
                 break;
             }
             case "setUpdateables": {
                 panel.updateableExercises = message.exerciseIds;
-                savePanelState(panel);
                 break;
             }
             case "setCourseDisabledStatus": {
-                panel.disabled = message.disabled;
-                savePanelState(panel);
-                break;
-            }
-            case "exerciseStatusChange": {
-                panel.exerciseStatuses[message.exerciseId] = message.status;
-                savePanelState(panel);
+                if (panel.course) {
+                    panel.course.disabled = message.disabled;
+                }
                 break;
             }
             case "setCourseGroups": {
                 panel.exerciseGroups = message.exerciseGroups;
-                savePanelState(panel);
                 break;
             }
             default:
                 assertUnreachable(message);
         }
+        savePanelState(panel);
     });
 
     function openMyCourses() {
@@ -77,7 +132,7 @@
             type: "openMyCourses",
         });
     }
-    function refresh(id: number) {
+    function refresh(id: CourseIdentifier) {
         refreshing.set(true);
         vscode.postMessage({
             type: "refreshCourseDetails",
@@ -85,53 +140,74 @@
             useCache: false,
         });
     }
-    function openWorkspace(courseName: string) {
-        vscode.postMessage({
-            type: "openCourseWorkspace",
-            courseName,
-        });
+    function openWorkspace(panel: CourseDetailsPanel) {
+        matchOption(
+            panel.course?.courseData,
+            (tmc) => {
+                vscode.postMessage({
+                    type: "openCourseWorkspace",
+                    courseName: tmc.name,
+                });
+            },
+            (mooc) => {
+                throw new Error("todo");
+            },
+        );
     }
-    function downloadExercises(course: CourseData, ids: Array<number>) {
+    function downloadExercises(panel: CourseDetailsPanel, ids: Array<ExerciseIdentifier>) {
         vscode.postMessage({
             type: "downloadExercises",
             ids,
-            courseName: course.name,
-            organizationSlug: course.organization,
-            courseId: course.id,
+            courseId: panel.courseId,
             mode: "download",
         });
     }
-    function openExercises(courseName: string, ids: Array<number>) {
+    function openExercises(panel: CourseDetailsPanel, ids: Array<ExerciseIdentifier>) {
         vscode.postMessage({
             type: "openExercises",
             ids,
-            courseName,
+            courseId: panel.courseId,
         });
     }
-    function closeExercises(courseName: string, ids: Array<number>) {
+    function closeExercises(panel: CourseDetailsPanel, ids: Array<ExerciseIdentifier>) {
         vscode.postMessage({
             type: "closeExercises",
             ids,
-            courseName,
+            courseId: panel.courseId,
         });
     }
     function clearSelectedExercises() {
-        checkedExercises.set({});
+        checkedExercises.set({ tmc: {}, mooc: {} });
     }
-    function updateExercises(course: CourseData) {
-        vscode.postMessage({
-            type: "downloadExercises",
-            ids: panel.updateableExercises ?? [],
-            courseName: course.name,
-            organizationSlug: course.organization,
-            courseId: course.id,
-            mode: "update",
+    function updateExercises(panel: CourseDetailsPanel) {
+        matchOption(
+            panel.course?.courseData,
+            (tmc) => {
+                vscode.postMessage({
+                    type: "downloadExercises",
+                    ids: panel.updateableExercises ?? [],
+                    courseId: { kind: "tmc", courseId: tmc.id },
+                    mode: "update",
+                });
+            },
+            (_mooc) => {
+                throw new Error("todo");
+            },
+        );
+    }
+    function getCheckedExercises(): Array<ExerciseIdentifier> {
+        const onlyCheckedExercises: Array<ExerciseIdentifier> = [];
+        Object.entries($checkedExercises.tmc).forEach(([id, checked]) => {
+            if (checked) {
+                onlyCheckedExercises.push({ kind: "tmc", tmcExerciseId: parseInt(id, 10) });
+            }
         });
-    }
-    function getCheckedExercises(): Array<number> {
-        return Object.entries($checkedExercises)
-            .filter(([_, v]) => v)
-            .map(([k, _]) => Number(k));
+        Object.entries($checkedExercises.mooc).forEach(([id, checked]) => {
+            if (checked) {
+                onlyCheckedExercises.push({ kind: "mooc", moocExerciseId: id });
+            }
+        });
+        return onlyCheckedExercises;
     }
 </script>
 
@@ -147,17 +223,25 @@
         My Courses
     </a>
     /
-    {panel.course?.title ?? "Loading course..."}
+    {matchOption(
+        panel.course?.courseData,
+        (tmc) => tmc.title,
+        (_mooc) => "todo",
+    ) ?? "Loading course..."}
 </nav>
 <div class="header">
     {#if panel.course === undefined}
         <h2>Loading course...</h2>
     {:else}
-        <h2>{panel.course.title} <small class="muted">({panel.course.name})</small></h2>
+        <h2>{panel.course.title} <small class="muted">({panel.course.slug})</small></h2>
     {/if}
 
     <div>
-        {panel.course?.description ?? "Loading description..."}
+        {matchOption(
+            panel.course?.courseData,
+            (tmc) => tmc.description,
+            (mooc) => mooc.description,
+        ) ?? "Loading description..."}
     </div>
 
     <div>
@@ -166,8 +250,8 @@
             tabindex="0"
             class="refresh"
             aria-label="Refresh"
-            on:click={() => panel.course !== undefined && refresh(panel.course.id)}
-            on:keypress={() => panel.course !== undefined && refresh(panel.course.id)}
+            on:click={() => refresh(panel.courseId)}
+            on:keypress={() => refresh(panel.courseId)}
             disabled={$refreshing || $totalDownloading > 0}
             appearance="secondary"
         >
@@ -196,8 +280,8 @@
             role="button"
             tabindex="0"
             aria-label="Open workspace"
-            on:click={() => panel.course !== undefined && openWorkspace(panel.course.name)}
-            on:keypress={() => panel.course !== undefined && openWorkspace(panel.course.name)}
+            on:click={() => openWorkspace(panel)}
+            on:keypress={() => openWorkspace(panel)}
         >
             Open workspace
         </vscode-button>
@@ -211,8 +295,8 @@
         <vscode-button
             role="button"
             tabindex="0"
-            on:click={() => panel.course !== undefined && updateExercises(panel.course)}
-            on:keypress={() => panel.course !== undefined && updateExercises(panel.course)}
+            on:click={() => updateExercises(panel)}
+            on:keypress={() => updateExercises(panel)}
         >
             Update exercises
         </vscode-button>
@@ -225,7 +309,7 @@
     {#if panel.course?.perhapsExamMode}
         <div role="alert">This is an exam. Exercise submission results will not be shown.</div>
     {/if}
-    {#if panel.disabled}
+    {#if panel.course?.disabled}
         <div role="alert">
             This course has been disabled. Exercises cannot be downloaded or submitted.
         </div>
@@ -233,18 +317,15 @@
 </div>
 
 {#if panel.exerciseGroups !== undefined}
-    {#each panel.exerciseGroups as exerciseGroup}
+    {#each Object.values(panel.exerciseGroups.tmc).concat(Object.values(panel.exerciseGroups.mooc)) as exerciseGroup}
         <div class="exercise-part">
             <ExercisePart
                 {exerciseGroup}
                 exerciseStatuses={panel.exerciseStatuses}
                 bind:checkedExercises={$checkedExercises}
-                onDownloadAll={(exercises) =>
-                    panel.course && downloadExercises(panel.course, exercises)}
-                onOpenAll={(exercises) =>
-                    panel.course && openExercises(panel.course.name, exercises)}
-                onCloseAll={(exercises) =>
-                    panel.course && closeExercises(panel.course.name, exercises)}
+                onDownloadAll={(exercises) => downloadExercises(panel, exercises)}
+                onOpenAll={(exercises) => openExercises(panel, exercises)}
+                onCloseAll={(exercises) => closeExercises(panel, exercises)}
             />
         </div>
     {/each}
@@ -263,12 +344,8 @@
                     role="button"
                     tabindex="0"
                     class="action-bar-button"
-                    on:click={() =>
-                        panel.course !== undefined &&
-                        downloadExercises(panel.course, getCheckedExercises())}
-                    on:keypress={() =>
-                        panel.course !== undefined &&
-                        downloadExercises(panel.course, getCheckedExercises())}
+                    on:click={() => downloadExercises(panel, getCheckedExercises())}
+                    on:keypress={() => downloadExercises(panel, getCheckedExercises())}
                 >
                     Download
                 </vscode-button>
@@ -276,12 +353,8 @@
                     role="button"
                     tabindex="0"
                     class="action-bar-button"
-                    on:click={() =>
-                        panel.course !== undefined &&
-                        openExercises(panel.course.name, getCheckedExercises())}
-                    on:keypress={() =>
-                        panel.course !== undefined &&
-                        openExercises(panel.course.name, getCheckedExercises())}
+                    on:click={() => openExercises(panel, getCheckedExercises())}
+                    on:keypress={() => openExercises(panel, getCheckedExercises())}
                 >
                     Open
                 </vscode-button>
@@ -289,12 +362,8 @@
                     role="button"
                     tabindex="0"
                     class="action-bar-button"
-                    on:click={() =>
-                        panel.course !== undefined &&
-                        closeExercises(panel.course.name, getCheckedExercises())}
-                    on:keypress={() =>
-                        panel.course !== undefined &&
-                        closeExercises(panel.course.name, getCheckedExercises())}
+                    on:click={() => closeExercises(panel, getCheckedExercises())}
+                    on:keypress={() => closeExercises(panel, getCheckedExercises())}
                 >
                     Close
                 </vscode-button>

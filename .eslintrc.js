@@ -10,7 +10,7 @@ module.exports = {
         "plugin:import/errors",
         "plugin:import/warnings",
         "plugin:import/typescript",
-        "plugin:prettier/recommended",
+        "prettier",
     ],
     globals: {
         Atomics: "readonly",
@@ -21,7 +21,7 @@ module.exports = {
         ecmaVersion: 6,
         sourceType: "module",
     },
-    plugins: ["@typescript-eslint", "import", "prettier", "sort-class-members"],
+    plugins: ["@typescript-eslint", "import", "sort-class-members"],
     settings: {
         "import/core-modules": ["vscode"],
     },

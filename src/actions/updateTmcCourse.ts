@@ -2,6 +2,7 @@ import { Ok, Result } from "ts-results";
 
 import { ConnectionError, ForbiddenError } from "../errors";
 import { TmcPanel } from "../panels/TmcPanel";
+import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared";
 import { Logger } from "../utilities";
 import { combineApiExerciseData } from "../utilities/apiData";
 
@@ -17,12 +18,12 @@ import { ActionContext } from "./types";
  */
 export async function updateCourse(
     actionContext: ActionContext,
-    courseId: number,
+    courseId: CourseIdentifier,
 ): Promise<Result<boolean, Error>> {
     const { exerciseDecorationProvider, tmc, userData, workspaceManager } = actionContext;
     Logger.info("Updating course");
 
-    const postMessage = (courseId: number, disabled: boolean, exerciseIds: number[]): void => {
+    const postMessage = (courseId: CourseIdentifier, disabled: boolean, exerciseIds: ExerciseIdentifier[]): void => {
         TmcPanel.postMessage(
             {
                 type: "setNewExercises",
@@ -50,8 +51,8 @@ export async function updateCourse(
                 Logger.warn(
                     `Failed to access information for course ${courseData.name}. Marking as disabled.`,
                 );
-                const course = userData.getCourse(courseId);
-                await userData.updateCourse({ ...course, disabled: true });
+                const course = userData.getTmcCourse(courseId);
+                await userData.updateCourse({ kind: "tmc", data: { ...course, disabled: true } });
                 postMessage(course.id, true, []);
             } else {
                 Logger.warn(
@@ -75,13 +76,15 @@ export async function updateCourse(
     );
 
     await userData.updateCourse({
-        ...courseData,
-        availablePoints,
-        awardedPoints,
-        description: details.description || "",
-        disabled: settings.disabled_status !== "enabled",
-        materialUrl: settings.material_url,
-        perhapsExamMode: settings.hide_submission_results,
+        kind: "tmc", data: {
+            ...courseData,
+            availablePoints,
+            awardedPoints,
+            description: details.description || "",
+            disabled: settings.disabled_status !== "enabled",
+            materialUrl: settings.material_url,
+            perhapsExamMode: settings.hide_submission_results,
+        }
     });
 
     const updateExercisesResult = await userData.updateExercises(
@@ -101,7 +104,7 @@ export async function updateCourse(
     // refresh local exercises to ensure deleted exercises don't appear open etc.
     await refreshLocalExercises(actionContext);
 
-    const course = userData.getCourse(courseId);
+    const course = userData.getTmcCourse(courseId);
     postMessage(course.id, course.disabled, course.newExercises);
 
     return Ok(true);

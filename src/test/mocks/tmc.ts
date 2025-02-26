@@ -1,7 +1,7 @@
 import { Err, Ok, Result } from "ts-results";
 import { IMock, It, Mock } from "typemoq";
 
-import TMC from "../../api/tmc";
+import TMC from "../../api/langs";
 import { DownloadOrUpdateCourseExercisesResult, LocalExercise } from "../../shared/langsSchema";
 import {
     checkExerciseUpdates,
@@ -103,7 +103,7 @@ function setupMockValues(values: TMCMockValues): IMock<TMC> {
         async () => values.checkExerciseUpdates,
     );
 
-    mock.setup((x) => x.downloadExercises(It.isAny(), It.isAny(), It.isAny())).returns(
+    mock.setup((x) => x.downloadTmcExercises(It.isAny(), It.isAny(), It.isAny())).returns(
         async () => values.downloadExercises,
     );
 

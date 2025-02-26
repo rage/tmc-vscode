@@ -6,7 +6,7 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
     const { dialog, userData } = actionContext;
     Logger.info("Downloading new exercises");
 
-    const courses = userData.getCourses();
+    const courses = userData.getTmcCourses();
     const courseId = await dialog.selectItem(
         "Download new exercises for course?",
         ...courses.map<[string, number]>((course) => [course.title, course.id]),
@@ -15,16 +15,16 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
         return;
     }
 
-    const course = userData.getCourse(courseId);
+    const course = userData.getTmcCourse(courseId);
     if (course.newExercises.length === 0) {
         dialog.notification(`There are no new exercises for the course ${course.title}.`, [
             "OK",
-            (): void => {},
+            (): void => { },
         ]);
         return;
     }
 
-    const downloadResult = await actions.downloadNewExercisesForCourse(actionContext, courseId);
+    const downloadResult = await actions.downloadNewExercisesForTmcCourse(actionContext, courseId);
     if (downloadResult.err) {
         dialog.errorNotification(
             `Failed to download new exercises for course "${course.title}."`,

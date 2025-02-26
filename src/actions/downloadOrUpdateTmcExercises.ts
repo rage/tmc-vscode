@@ -18,7 +18,7 @@ interface DownloadResults {
  * @param exerciseIds Exercises to download.
  * @returns Exercise ids for successful downloads.
  */
-export async function downloadOrUpdateExercises(
+export async function downloadOrUpdateTmcExercises(
     actionContext: ActionContext,
     exerciseIds: number[],
 ): Promise<Result<DownloadResults, Error>> {
@@ -36,7 +36,7 @@ export async function downloadOrUpdateExercises(
     const downloadResult = await dialog.progressNotification(
         "Downloading exercises...",
         (progress) => {
-            return tmc.downloadExercises(exerciseIds, downloadTemplate, (download) => {
+            return tmc.downloadTmcExercises(exerciseIds, downloadTemplate, (download) => {
                 progress.report(download);
                 statuses.set(download.id, "closed");
                 TmcPanel.postMessage(wrapToMessage(download.id, "closed"));

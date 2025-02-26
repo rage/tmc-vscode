@@ -9,8 +9,8 @@ import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { LocalCourseData } from "../api/storage";
-import { WorkspaceExercise } from "../api/workspaceManager";
+import { LocalTmcCourseData } from "../api/storage";
+import { WorkspaceExercise as WorkspaceTmcExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { BottleneckError } from "../errors";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
@@ -18,9 +18,9 @@ import { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../
 import { Logger, parseFeedbackQuestion } from "../utilities/";
 import { getActiveEditorExecutablePath } from "../window";
 
-import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
+import { downloadNewExercisesForTmcCourse } from "./downloadNewExercisesForTmcCourse";
 import { ActionContext } from "./types";
-import { updateCourse } from "./updateCourse";
+import { updateCourse } from "./updateTmcCourse";
 
 export const testInterrupts: Map<number, () => void> = new Map();
 
@@ -67,11 +67,11 @@ export async function logout(actionContext: ActionContext): Promise<Result<void,
 export async function testExercise(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
-    exercise: WorkspaceExercise,
+    exercise: WorkspaceTmcExercise,
 ): Promise<Result<void, Error>> {
     const { tmc, userData } = actionContext;
 
-    const course = userData.getCourseByName(exercise.courseSlug);
+    const course = userData.getTmcCourseByName(exercise.courseSlug);
     const courseExercise = course.exercises.find((x) => x.name === exercise.exerciseSlug);
     if (!courseExercise) {
         return Err(
@@ -152,15 +152,15 @@ export async function testExercise(
  * Submits an exercise while keeping the user informed
  * @param tempView Existing TemporaryWebview to use if any
  */
-export async function submitExercise(
+export async function submitTmcExercise(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
-    exercise: WorkspaceExercise,
+    exercise: WorkspaceTmcExercise,
 ): Promise<Result<void, Error>> {
     const { exerciseDecorationProvider, tmc, userData } = actionContext;
     Logger.info(`Submitting exercise ${exercise.exerciseSlug} to server`);
 
-    const course = userData.getCourseByName(exercise.courseSlug);
+    const course = userData.getTmcCourseByName(exercise.courseSlug);
     const courseExercise = course.exercises.find((x) => x.name === exercise.exerciseSlug);
     if (!courseExercise) {
         return Err(
@@ -230,8 +230,8 @@ export async function submitExercise(
         questions,
     });
 
-    const courseData = userData.getCourseByName(exercise.courseSlug) as Readonly<LocalCourseData>;
-    await checkForCourseUpdates(actionContext, courseData.id);
+    const courseData = userData.getTmcCourseByName(exercise.courseSlug) as Readonly<LocalTmcCourseData>;
+    await checkForTmcCourseUpdates(actionContext, courseData.id);
     vscode.commands.executeCommand("tmc.updateExercises", "silent");
 
     return Ok.EMPTY;
@@ -249,7 +249,7 @@ export async function pasteExercise(
 ): Promise<Result<string, Error>> {
     const { tmc, userData, workspaceManager } = actionContext;
 
-    const exerciseId = userData.getExerciseByName(courseSlug, exerciseName)?.id;
+    const exerciseId = userData.getTmcExerciseByName(courseSlug, exerciseName)?.id;
     const exercisePath = workspaceManager.getExerciseBySlug(courseSlug, exerciseName)?.uri.fsPath;
     if (!exerciseId || !exercisePath) {
         return Err(new Error("Failed to resolve exercise id"));
@@ -273,22 +273,22 @@ export async function pasteExercise(
  * Check for course updates.
  * @param courseId If given, check only updates for that course.
  */
-export async function checkForCourseUpdates(
+export async function checkForTmcCourseUpdates(
     actionContext: ActionContext,
     courseId?: number,
 ): Promise<void> {
     const { dialog, userData } = actionContext;
-    const courses = courseId ? [userData.getCourse(courseId)] : userData.getCourses();
+    const courses = courseId ? [userData.getTmcCourse(courseId)] : userData.getTmcCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
     Logger.info(`Checking for course updates for courses ${filteredCourses.map((c) => c.name)}`);
-    const updatedCourses: LocalCourseData[] = [];
+    const updatedCourses: LocalTmcCourseData[] = [];
     for (const course of filteredCourses) {
         await updateCourse(actionContext, course.id);
-        updatedCourses.push(userData.getCourse(course.id));
+        updatedCourses.push(userData.getTmcCourse(course.id));
     }
 
-    const handleDownload = async (course: LocalCourseData): Promise<void> => {
-        const downloadResult = await downloadNewExercisesForCourse(actionContext, course.id);
+    const handleDownload = async (course: LocalTmcCourseData): Promise<void> => {
+        const downloadResult = await downloadNewExercisesForTmcCourse(actionContext, course.id);
         if (downloadResult.err) {
             dialog.errorNotification(
                 `Failed to download new exercises for course "${course.title}."`,
@@ -372,7 +372,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
  */
 export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
-    const course = userData.getCourse(id);
+    const course = userData.getTmcCourse(id);
     Logger.info(`Closing exercises for ${course.name} and removing course data from userData`);
 
     const unsetResult = await tmc.unsetSetting(`closed-exercises-for:${course.name}`);

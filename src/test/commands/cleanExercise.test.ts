@@ -3,7 +3,7 @@ import { IMock, It, Times } from "typemoq";
 import * as vscode from "vscode";
 
 import { ActionContext } from "../../actions/types";
-import TMC from "../../api/tmc";
+import TMC from "../../api/langs";
 import WorkspaceManager, { ExerciseStatus } from "../../api/workspaceManager";
 import { cleanExercise } from "../../commands";
 import { createMockActionContext } from "../mocks/actionContext";

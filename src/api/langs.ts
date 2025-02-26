@@ -7,6 +7,7 @@ import {
     API_CACHE_LIFETIME,
     CLI_PROCESS_TIMEOUT,
     MINIMUM_SUBMISSION_INTERVAL,
+    MOOC_BACKEND_URL,
     TMC_BACKEND_URL,
 } from "../config/constants";
 import {
@@ -27,6 +28,7 @@ import {
     CourseData,
     CourseDetails,
     CourseExercise,
+    CourseInstance,
     DataKind,
     DownloadOrUpdateCourseExercisesResult,
     ExerciseDetails,
@@ -40,6 +42,7 @@ import {
     SubmissionFinished,
     UpdatedExercise,
 } from "../shared/langsSchema";
+import { assertUnreachable, CourseIdentifier, Enum } from "../shared/shared";
 import { Logger } from "../utilities/logger";
 
 import { SubmissionFeedback } from "./types";
@@ -232,6 +235,7 @@ export default class TMC {
      * @param courseSlug Course which's exercises should be listed.
      */
     public async listLocalCourseExercises(
+        courseKind: "tmc" | "mooc",
         courseSlug: string,
     ): Promise<Result<LocalExercise[], Error>> {
         const res = await this._executeLangsCommand(
@@ -242,6 +246,8 @@ export default class TMC {
                     this.clientName,
                     "--course-slug",
                     courseSlug,
+                    "--course-type",
+                    courseKind,
                 ],
             },
             "local-exercises",
@@ -437,7 +443,7 @@ export default class TMC {
      * @param ids Ids of the exercises to download.
      * @param downloadTemplate Flag for downloading exercise template instead of latest submission.
      */
-    public async downloadExercises(
+    public async downloadTmcExercises(
         ids: number[],
         downloadTemplate: boolean,
         onDownloaded: (value: { id: number; percent: number; message?: string }) => void,
@@ -538,7 +544,7 @@ export default class TMC {
      * @returns A combination of getCourseDetails, getCourseExercises, getCourseSettings.
      */
     public async getCourseData(
-        courseId: number,
+        courseId: CourseIdentifier,
         options?: CacheOptions,
     ): Promise<Result<CombinedCourseData, Error>> {
         const remapper: CacheConfig["remapper"] = (response) => {
@@ -865,6 +871,26 @@ export default class TMC {
         return res.map((r) => r.data["output-data"]);
     }
 
+    public async getEnrolledMoocCourseInstances(): Promise<Result<Array<CourseInstance>, Error>> {
+        const res = await this._executeLangsCommand({ args: this._moocCmd("course-instances"), }, "mooc-course-instances");
+        return res.map(r => r.data["output-data"])
+    }
+
+    /**
+     * Constructs the base arguments for all `mooc` subcommands.
+     *
+     * @param rest The rest of the arguments.
+     * @returns The complete arguments.
+     */
+    private _moocCmd(...rest: Array<string>): Array<string> {
+        return [
+            "mooc",
+            "--client-name",
+            this.clientName,
+        ].concat(rest);
+    }
+
+
     /**
      * Constructs the base arguments for all `tmc` subcommands.
      *
@@ -955,14 +981,16 @@ export default class TMC {
             return Err(new RuntimeError("Langs process crashed."));
         }
         if (langsResponse.result !== "error") {
+            Logger.debug("langs response", langsResponse.message, JSON.stringify(langsResponse, null, 2));
             return Ok(langsResponse);
         }
         if (langsResponse.data?.["output-data-kind"] !== "error") {
-            Logger.error("Unexpected data in error response.", langsResponse);
+            Logger.error("Unexpected data in error response.", JSON.stringify(langsResponse, null, 2));
             return Err(new Error("Unexpected data in error response"));
         }
 
         // after this point, we know we have an error
+        Logger.error("langs response", JSON.stringify(langsResponse, null, 2));
         const data = langsResponse.data;
         const message = langsResponse.message;
         const traceString = data["output-data"].trace.join("\n");
@@ -977,15 +1005,21 @@ export default class TMC {
                 this._onLogout?.();
                 return Err(new InvalidTokenError(message));
             case "not-logged-in":
-                this._responseCache.clear();
-                this._onLogout?.();
+                // the server has told us that we are not logged in,
+                // likely because of expired credentials,
+                // so we'll logout here
+                this.deauthenticate().then(res => {
+                    if (res.err) {
+                        Logger.error(`Failed to logout properly. ${res.val}`);
+                    }
+                });
                 return Err(new AuthorizationError(message, traceString));
             case "obsolete-client":
                 return Err(
                     new ObsoleteClientError(
                         message +
-                            "\nYour TMC Extension is out of date, please update it." +
-                            "\nhttps://code.visualstudio.com/docs/editor/extension-gallery",
+                        "\nYour TMC Extension is out of date, please update it." +
+                        "\nhttps://code.visualstudio.com/docs/editor/extension-gallery",
                         traceString,
                     ),
                 );
@@ -1012,11 +1046,13 @@ export default class TMC {
             .join(" ");
 
         // override settings with environment variables, mainly for testing
-        const tmcLangsBackendUrl = process.env.TMC_LANGS_TMC_ROOT_URL ?? TMC_BACKEND_URL;
+        const tmcBackendUrl = process.env.TMC_LANGS_TMC_ROOT_URL ?? TMC_BACKEND_URL;
+        const moocBackendUrl = process.env.TMC_LANGS_MOOC_ROOT_URL ?? MOOC_BACKEND_URL;
         const tmcLangsConfigDir = process.env.TMC_LANGS_CONFIG_DIR ?? this._options.cliConfigDir;
 
         Logger.info(`Running ${loggableCommand}`);
-        Logger.debug(`Backend at ${tmcLangsBackendUrl}`);
+        Logger.debug(`TMC backend at ${tmcBackendUrl}`);
+        Logger.debug(`MOOC backend at ${moocBackendUrl}`);
         Logger.debug(`Config dir at ${tmcLangsConfigDir}`);
 
         let active = true;
@@ -1026,7 +1062,8 @@ export default class TMC {
                 ...process.env,
                 ...env,
                 RUST_LOG: "debug,rustls=warn,reqwest=warn",
-                TMC_LANGS_TMC_ROOT_URL: tmcLangsBackendUrl,
+                TMC_LANGS_TMC_ROOT_URL: tmcBackendUrl,
+                TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
                 TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
             },
         });

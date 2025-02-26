@@ -1,6 +1,6 @@
 import { Result } from "ts-results";
 
-import { LocalCourseData } from "../api/storage";
+import { LocalTmcCourseData } from "../api/storage";
 import { Logger } from "../utilities";
 import { combineApiExerciseData } from "../utilities/apiData";
 
@@ -8,9 +8,9 @@ import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
 
 /**
- * Adds a new course to user's courses.
+ * Adds a new TMC course to user's courses.
  */
-export async function addNewCourse(
+export async function addNewTmcCourse(
     actionContext: ActionContext,
     organization: string,
     course: number,
@@ -31,7 +31,7 @@ export async function addNewCourse(
         awardedPoints += x.awarded_points.length;
     });
 
-    const localData: LocalCourseData = {
+    const localData: LocalTmcCourseData = {
         description: courseData.details.description || "",
         exercises: combineApiExerciseData(courseData.details.exercises, courseData.exercises),
         id: courseData.details.id,
@@ -46,7 +46,7 @@ export async function addNewCourse(
         disabled: courseData.settings.disabled_status === "enabled" ? false : true,
         materialUrl: courseData.settings.material_url,
     };
-    userData.addCourse(localData);
+    userData.addCourse({ kind: "tmc", data: localData });
     ui.treeDP.addChildWithId("myCourses", localData.id, localData.title, {
         command: "tmc.courseDetails",
         title: "Go To Course Details",

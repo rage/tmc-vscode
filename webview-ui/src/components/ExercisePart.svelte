@@ -1,15 +1,27 @@
 <script lang="ts">
     import { writable } from "svelte/store";
-    import { ExerciseGroup, ExerciseStatus } from "../shared/shared";
+    import {
+        ExerciseGroup,
+        ExerciseIdentifier,
+        ExerciseStatus,
+        MoocExerciseId,
+        TmcExerciseId,
+    } from "../shared/shared";
     import Checkbox from "./Checkbox.svelte";
     import Card from "./Card.svelte";
 
     export let exerciseGroup: ExerciseGroup;
-    export let onDownloadAll: (exerciseIds: Array<number>) => void;
-    export let onOpenAll: (exerciseIds: Array<number>) => void;
-    export let onCloseAll: (exerciseIds: Array<number>) => void;
-    export let checkedExercises: Record<number, boolean>;
-    export let exerciseStatuses: Record<number, ExerciseStatus>;
+    export let onDownloadAll: (exerciseIds: Array<ExerciseIdentifier>) => void;
+    export let onOpenAll: (exerciseIds: Array<ExerciseIdentifier>) => void;
+    export let onCloseAll: (exerciseIds: Array<ExerciseIdentifier>) => void;
+    export let checkedExercises: {
+        tmc: Record<TmcExerciseId, boolean>;
+        mooc: Record<MoocExerciseId, boolean>;
+    };
+    export let exerciseStatuses: {
+        tmc: Record<TmcExerciseId, ExerciseStatus>;
+        mooc: Record<MoocExerciseId, ExerciseStatus>;
+    };
 
     const expanded = writable<boolean>(false);
 
