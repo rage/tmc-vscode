@@ -50,6 +50,10 @@ cd backend && npm run setup
 
 You will need to rerun the setup when langs is updated, as this step will download the appropriate version of the CLI for the integration tests.
 
+### MOOC backend
+
+To run the MOOC backend locally, see https://github.com/rage/secret-project-331.
+
 ## Formatting
 
 This project uses [prettier](https://prettier.io/) for code formatting. You can run prettier across the code by calling `npm run prettier` from a terminal.

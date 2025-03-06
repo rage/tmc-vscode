@@ -24,7 +24,10 @@ export async function resetExercise(
         return;
     }
 
-    const exerciseDetails = userData.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug);
+    const exerciseDetails = userData.getTmcExerciseByName(
+        exercise.courseSlug,
+        exercise.exerciseSlug,
+    );
     if (!exerciseDetails) {
         dialog.errorNotification(`Missing exercise data for ${exercise.exerciseSlug}.`);
         return;

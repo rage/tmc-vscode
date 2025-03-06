@@ -2,12 +2,12 @@ import * as path from "path";
 import { createIs } from "typia";
 import * as vscode from "vscode";
 
-import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
+import { checkForTmcCourseUpdates, refreshLocalExercises } from "./actions";
 import { ActionContext } from "./actions/types";
 import Dialog from "./api/dialog";
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider";
 import Storage from "./api/storage";
-import TMC from "./api/tmc";
+import TMC from "../api/tmc";
 import WorkspaceManager from "./api/workspaceManager";
 import {
     CLIENT_NAME,
@@ -184,7 +184,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 
     if (authenticated) {
         vscode.commands.executeCommand("tmc.updateExercises", "silent");
-        checkForCourseUpdates(actionContext);
+        checkForTmcCourseUpdates(actionContext);
     }
 
     if (maintenanceInterval) {
@@ -197,7 +197,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
             Logger.error("Failed to check if authenticated", authenticated.val);
         } else if (authenticated.val) {
             vscode.commands.executeCommand("tmc.updateExercises", "silent");
-            checkForCourseUpdates(actionContext);
+            checkForTmcCourseUpdates(actionContext);
         }
         await vscode.commands.executeCommand(
             "setContext",

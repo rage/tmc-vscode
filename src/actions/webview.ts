@@ -32,7 +32,7 @@ export async function displayUserCourses(
         courseDeadlines: {},
     };
 
-    const courses = userData.getCourses();
+    const courses = userData.getTmcCourses();
     const newExercisesCourses: ExtensionToWebview[] = courses.map((c) => ({
         type: "setNewExercises",
         target: panel,
@@ -89,7 +89,7 @@ export async function displayLocalCourseDetails(
     courseId: number,
 ): Promise<void> {
     const { userData, workspaceManager } = actionContext;
-    const course = userData.getCourse(courseId);
+    const course = userData.getTmcCourse(courseId);
     Logger.info(`Display course view for ${course.name}`);
 
     const mapStatus = (
@@ -155,7 +155,11 @@ export async function displayLocalCourseDetails(
     const panel: Panel = {
         type: "CourseDetails",
         id: randomPanelId(),
-        courseId: course.id,
+        course: {
+            kind: "tmc",
+            courseId: course.id,
+            exerciseStatuses: {},
+        },
     };
     TmcPanel.renderMain(context.extensionUri, context, actionContext, panel);
 

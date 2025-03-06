@@ -54,7 +54,7 @@ export default class ExerciseDecorationProvider
             return;
         }
 
-        const apiExercise = this.userData.getExerciseByName(
+        const apiExercise = this.userData.getTmcExerciseByName(
             exercise.courseSlug,
             exercise.exerciseSlug,
         );

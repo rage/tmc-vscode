@@ -4,7 +4,7 @@ import { Disposable, Uri, ViewColumn, Webview, WebviewPanel, window } from "vsco
 import * as vscode from "vscode";
 
 import {
-    addNewCourse,
+    addNewTmcCourse,
     closeExercises,
     login,
     openExercises,
@@ -14,12 +14,23 @@ import {
     testInterrupts,
     updateCourse,
 } from "../actions";
+import { addNewMoocCourse } from "../actions/addNewMoocCourse";
 import { ActionContext } from "../actions/types";
+import { LocalCourseExercise, LocalTmcCourseExercise } from "../api/storage";
 import { ExerciseStatus } from "../api/workspaceManager";
 import * as commands from "../commands";
 import { TMC_BACKEND_URL } from "../config/constants";
 import { uiDownloadExercises } from "../init";
-import { ExtensionToWebview, Panel, WebviewToExtension } from "../shared/shared";
+import {
+    Enum,
+    ExerciseGroup,
+    ExerciseIdentifier,
+    ExtensionToWebview,
+    makeMoocKind,
+    makeTmcKind,
+    Panel,
+    WebviewToExtension,
+} from "../shared/shared";
 import * as UITypes from "../ui/types";
 import {
     dateToString,
@@ -248,116 +259,143 @@ export class TmcPanel {
                     case "requestCourseDetailsData": {
                         const { tmc, userData, workspaceManager } = actionContext;
 
-                        const course = userData.getCourse(message.sourcePanel.courseId);
-                        postMessageToWebview(webview, {
-                            type: "setCourseData",
-                            target: message.sourcePanel,
-                            courseData: course,
-                        });
+                        switch (message.sourcePanel.courseId.kind) {
+                            case "tmc": {
+                                const courseId = message.sourcePanel.courseId.courseId;
 
-                        tmc.getCourseDetails(message.sourcePanel.courseId).then((apiCourse) => {
-                            const offlineMode = apiCourse.err; // failed to get course details = offline mode
-                            const exerciseData = new Map<
-                                string,
-                                UITypes.CourseDetailsExerciseGroup
-                            >();
-
-                            const mapStatus = (
-                                status: ExerciseStatus,
-                                expired: boolean,
-                            ): UITypes.ExerciseStatus => {
-                                switch (status) {
-                                    case ExerciseStatus.Closed:
-                                        return "closed";
-                                    case ExerciseStatus.Open:
-                                        return "opened";
-                                    default:
-                                        return expired ? "expired" : "new";
-                                }
-                            };
-                            const currentDate = new Date();
-                            postMessageToWebview(webview, {
-                                type: "setCourseDisabledStatus",
-                                target: message.sourcePanel,
-                                courseId: course.id,
-                                disabled: course.disabled,
-                            });
-                            course.exercises.forEach((ex) => {
-                                const nameMatch = ex.name.match(/(\w+)-(.+)/);
-                                const groupName = nameMatch?.[1] || "";
-                                const group = exerciseData.get(groupName);
-                                const name = nameMatch?.[2] || "";
-                                const exData = workspaceManager.getExerciseBySlug(
-                                    course.name,
-                                    ex.name,
-                                );
-                                const softDeadline = ex.softDeadline
-                                    ? parseDate(ex.softDeadline)
-                                    : null;
-                                const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
+                                const course = userData.getTmcCourse(courseId);
                                 postMessageToWebview(webview, {
-                                    type: "exerciseStatusChange",
+                                    type: "setCourseData",
                                     target: message.sourcePanel,
-                                    exerciseId: ex.id,
-                                    status: mapStatus(
-                                        exData?.status ?? ExerciseStatus.Missing,
-                                        hardDeadline !== null && currentDate >= hardDeadline,
-                                    ),
+                                    courseData: { kind: "tmc", ...course },
                                 });
-                                const entry: UITypes.CourseDetailsExercise = {
-                                    id: ex.id,
-                                    name,
-                                    passed:
-                                        course.exercises.find((ce) => ce.id === ex.id)?.passed ||
-                                        false,
-                                    softDeadline,
-                                    softDeadlineString: softDeadline
-                                        ? dateToString(softDeadline)
-                                        : "-",
-                                    hardDeadline,
-                                    hardDeadlineString: hardDeadline
-                                        ? dateToString(hardDeadline)
-                                        : "-",
-                                    isHard:
-                                        softDeadline && hardDeadline
-                                            ? hardDeadline <= softDeadline
-                                            : true,
-                                };
 
-                                exerciseData.set(groupName, {
-                                    name: groupName,
-                                    nextDeadlineString: "",
-                                    exercises: group?.exercises.concat(entry) || [entry],
-                                });
-                            });
-                            const exerciseGroups = Array.from(exerciseData.values())
-                                .sort((a, b) => (a.name > b.name ? 1 : -1))
-                                .map((e) => {
-                                    return {
-                                        ...e,
-                                        exercises: e.exercises.sort((a, b) =>
-                                            a.name > b.name ? 1 : -1,
-                                        ),
-                                        nextDeadlineString: offlineMode
-                                            ? "Next deadline: Not available"
-                                            : parseNextDeadlineAfter(
-                                                  currentDate,
-                                                  e.exercises.map((ex) => ({
-                                                      date: ex.isHard
-                                                          ? ex.hardDeadline
-                                                          : ex.softDeadline,
-                                                      active: !ex.passed,
-                                                  })),
-                                              ),
+                                tmc.getCourseDetails(courseId).then((apiCourse) => {
+                                    const offlineMode = apiCourse.err; // failed to get course details = offline mode
+                                    const exerciseGroupData = new Map<
+                                        string,
+                                        UITypes.CourseDetailsExerciseGroup
+                                    >();
+
+                                    const mapStatus = (
+                                        status: ExerciseStatus,
+                                        expired: boolean,
+                                    ): UITypes.ExerciseStatus => {
+                                        switch (status) {
+                                            case ExerciseStatus.Closed:
+                                                return "closed";
+                                            case ExerciseStatus.Open:
+                                                return "opened";
+                                            default:
+                                                return expired ? "expired" : "new";
+                                        }
                                     };
+                                    const currentDate = new Date();
+                                    postMessageToWebview(webview, {
+                                        type: "setCourseDisabledStatus",
+                                        target: message.sourcePanel,
+                                        courseId: { kind: "tmc", courseId: course.id },
+                                        disabled: course.disabled,
+                                    });
+                                    course.exercises.forEach((ex) => {
+                                        const nameMatch = ex.name.match(/(\w+)-(.+)/);
+                                        const groupName = nameMatch?.[1] || "";
+                                        const group = exerciseGroupData.get(groupName);
+                                        const name = nameMatch?.[2] || "";
+                                        const exData = workspaceManager.getExerciseBySlug(
+                                            course.name,
+                                            ex.name,
+                                        );
+                                        const softDeadline = ex.softDeadline
+                                            ? parseDate(ex.softDeadline)
+                                            : null;
+                                        const hardDeadline = ex.deadline
+                                            ? parseDate(ex.deadline)
+                                            : null;
+                                        postMessageToWebview(webview, {
+                                            type: "exerciseStatusChange",
+                                            target: message.sourcePanel,
+                                            exerciseId: { kind: "tmc", tmcExerciseId: ex.id },
+                                            status: mapStatus(
+                                                exData?.status ?? ExerciseStatus.Missing,
+                                                hardDeadline !== null &&
+                                                    currentDate >= hardDeadline,
+                                            ),
+                                        });
+                                        const entry: UITypes.CourseDetailsExercise = {
+                                            id: ex.id,
+                                            name,
+                                            passed:
+                                                course.exercises.find((ce) => ce.id === ex.id)
+                                                    ?.passed || false,
+                                            softDeadline,
+                                            softDeadlineString: softDeadline
+                                                ? dateToString(softDeadline)
+                                                : "-",
+                                            hardDeadline,
+                                            hardDeadlineString: hardDeadline
+                                                ? dateToString(hardDeadline)
+                                                : "-",
+                                            isHard:
+                                                softDeadline && hardDeadline
+                                                    ? hardDeadline <= softDeadline
+                                                    : true,
+                                        };
+
+                                        exerciseGroupData.set(groupName, {
+                                            name: groupName,
+                                            nextDeadlineString: "",
+                                            exercises: group?.exercises.concat(entry) || [entry],
+                                        });
+                                    });
+                                    const exerciseGroups: Array<ExerciseGroup> = Array.from(
+                                        exerciseGroupData.values(),
+                                    )
+                                        .sort((a, b) => (a.name > b.name ? 1 : -1))
+                                        .map((e) => {
+                                            return {
+                                                name: e.name,
+                                                exercises: e.exercises
+                                                    .sort((a, b) => (a.name > b.name ? 1 : -1))
+                                                    .map((e) => {
+                                                        return {
+                                                            ...e,
+                                                            id: {
+                                                                kind: "tmc",
+                                                                tmcExerciseId: e.id,
+                                                            },
+                                                        };
+                                                    }),
+                                                nextDeadlineString: offlineMode
+                                                    ? "Next deadline: Not available"
+                                                    : parseNextDeadlineAfter(
+                                                          currentDate,
+                                                          e.exercises.map((ex) => ({
+                                                              date: ex.isHard
+                                                                  ? ex.hardDeadline
+                                                                  : ex.softDeadline,
+                                                              active: !ex.passed,
+                                                          })),
+                                                      ),
+                                            };
+                                        });
+                                    postMessageToWebview(webview, {
+                                        type: "setCourseGroups",
+                                        target: message.sourcePanel,
+                                        offlineMode,
+                                        exerciseGroups,
+                                    });
                                 });
-                            postMessageToWebview(webview, {
-                                type: "setCourseGroups",
-                                target: message.sourcePanel,
-                                offlineMode,
-                                exerciseGroups,
-                            });
-                        });
+                                break;
+                            }
+                            case "mooc": {
+                                throw new Error("todo");
+                                break;
+                            }
+                            default: {
+                                assertUnreachable(message.sourcePanel.courseId);
+                            }
+                        }
                         break;
                     }
                     case "requestExerciseSubmissionData": {
@@ -373,7 +411,10 @@ export class TmcPanel {
                         postMessageToWebview(webview, {
                             type: "setMyCourses",
                             target: message.sourcePanel,
-                            courses: actionContext.userData.getCourses(),
+                            courses: [
+                                ...actionContext.userData.getTmcCourses().map(makeTmcKind),
+                                ...actionContext.userData.getMoocCourses().map(makeMoocKind),
+                            ],
                         });
                         postMessageToWebview(webview, {
                             type: "setTmcDataPath",
@@ -400,19 +441,29 @@ export class TmcPanel {
 
                         const organizations = await actionContext.tmc.getOrganizations();
                         if (organizations.err) {
+                            const error = `Failed to fetch organizations. ${organizations.val}`;
                             actionContext.dialog.errorNotification(
                                 "Failed to open panel.",
                                 organizations.val,
                             );
+                            postMessageToWebview(webview, {
+                                type: "requestSelectCourseDataError",
+                                target: message.sourcePanel,
+                                error,
+                            });
                             return;
                         }
                         const organization = organizations.val.find(
                             (o) => o.slug === message.sourcePanel.organizationSlug,
                         );
                         if (organization === undefined) {
-                            actionContext.dialog.errorNotification(
-                                `Failed to open panel: could not find organization "${message.sourcePanel.organizationSlug}"`,
-                            );
+                            const error = `Failed to find organization not find organization "${message.sourcePanel.organizationSlug}".`;
+                            actionContext.dialog.errorNotification(error);
+                            postMessageToWebview(webview, {
+                                type: "requestSelectCourseDataError",
+                                target: message.sourcePanel,
+                                error,
+                            });
                             return;
                         }
                         postMessageToWebview(webview, {
@@ -423,10 +474,16 @@ export class TmcPanel {
 
                         const courses = await actionContext.tmc.getCourses(organization.slug);
                         if (courses.err) {
+                            const error = `Failed to fetch organization courses. ${courses.val}`;
                             actionContext.dialog.errorNotification(
                                 "Failed to open panel.",
                                 courses.val,
                             );
+                            postMessageToWebview(webview, {
+                                type: "requestSelectCourseDataError",
+                                target: message.sourcePanel,
+                                error,
+                            });
                             return;
                         }
                         postMessageToWebview(webview, {
@@ -445,10 +502,16 @@ export class TmcPanel {
 
                         const organizations = await actionContext.tmc.getOrganizations();
                         if (organizations.err) {
+                            const error = `Failed fetch organizations. ${organizations.val}`;
                             actionContext.dialog.errorNotification(
                                 "Failed to open panel.",
                                 organizations.val,
                             );
+                            postMessageToWebview(webview, {
+                                type: "requestSelectOrganizationDataError",
+                                target: message.sourcePanel,
+                                error,
+                            });
                             return;
                         }
                         postMessageToWebview(webview, {
@@ -497,9 +560,19 @@ export class TmcPanel {
                                 id: randomPanelId(),
                                 type: "CourseDetails",
                                 courseId: message.courseId,
+                                exerciseGroups: [],
+                                exerciseStatuses: { tmc: {}, mooc: {} },
                             },
                             webview,
                         );
+                        break;
+                    }
+                    case "selectPlatform": {
+                        await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
+                            id: randomPanelId(),
+                            type: "SelectPlatform",
+                            requestingPanel: message.sourcePanel,
+                        });
                         break;
                     }
                     case "selectOrganization": {
@@ -511,7 +584,7 @@ export class TmcPanel {
                         break;
                     }
                     case "removeCourse": {
-                        const course = actionContext.userData.getCourse(message.id);
+                        const course = actionContext.userData.getTmcCourse(message.id);
                         if (
                             await actionContext.dialog.explicitConfirmation(
                                 `Do you want to remove ${course.name} from your courses? \
@@ -556,7 +629,7 @@ export class TmcPanel {
                         const result = await closeExercises(
                             actionContext,
                             message.ids,
-                            message.courseName,
+                            message.courseId,
                         );
                         if (result.err) {
                             actionContext.dialog.errorNotification(
@@ -583,13 +656,47 @@ export class TmcPanel {
                     case "openExercises": {
                         // todo: move to actions
                         // download exercises that don't exist locally
-                        const course = actionContext.userData.getCourseByName(message.courseName);
-                        const courseExercises = new Map(course.exercises.map((x) => [x.id, x]));
-                        const exercisesToOpen = compact(
-                            message.ids.map((x) => courseExercises.get(x)),
-                        );
+                        const course = actionContext.userData.getCourse(message.courseId);
+                        const exercisesToOpen: Array<LocalCourseExercise> = [];
+                        switch (course.kind) {
+                            case "tmc": {
+                                for (const mid of message.ids) {
+                                    const exercise = course.exercises.find((ex) => {
+                                        const id: ExerciseIdentifier = {
+                                            kind: "tmc",
+                                            tmcExerciseId: ex.id,
+                                        };
+                                        return mid === id;
+                                    });
+                                    if (exercise === undefined) {
+                                        continue;
+                                    }
+                                    exercisesToOpen.push(makeTmcKind(exercise));
+                                }
+                                break;
+                            }
+                            case "mooc": {
+                                for (const mid of message.ids) {
+                                    const exercise = course.exercises.find((ex) => {
+                                        const id: ExerciseIdentifier = {
+                                            kind: "mooc",
+                                            moocExerciseId: ex.id,
+                                        };
+                                        return mid === id;
+                                    });
+                                    if (exercise === undefined) {
+                                        continue;
+                                    }
+                                    exercisesToOpen.push(makeMoocKind(exercise));
+                                }
+                                break;
+                            }
+                            default: {
+                                assertUnreachable(course);
+                            }
+                        }
                         const localCourseExercises =
-                            await actionContext.tmc.listLocalCourseExercises(message.courseName);
+                            await actionContext.tmc.listLocalCourseExercises(message.courseId);
                         if (localCourseExercises.err) {
                             actionContext.dialog.errorNotification(
                                 "Error trying to list local exercises while opening selected exercises.",
@@ -618,7 +725,7 @@ export class TmcPanel {
                             extensionContext,
                             actionContext,
                             message.ids,
-                            message.courseName,
+                            message.courseId,
                         );
                         if (result.err) {
                             actionContext.dialog.errorNotification(
@@ -642,7 +749,7 @@ export class TmcPanel {
                         break;
                     }
                     case "refreshCourseDetails": {
-                        const courseId: number = message.id;
+                        const courseId = message.id;
                         const updateResult = await updateCourse(actionContext, courseId);
                         if (updateResult.err) {
                             actionContext.dialog.errorNotification(
@@ -654,7 +761,9 @@ export class TmcPanel {
                             {
                                 id: randomPanelId(),
                                 type: "CourseDetails",
-                                courseId: courseId,
+                                courseId,
+                                exerciseGroups: [],
+                                exerciseStatuses: { tmc: {}, mooc: {} },
                             },
                             webview,
                         );
@@ -670,7 +779,7 @@ export class TmcPanel {
                         break;
                     }
                     case "addCourse": {
-                        const result = await addNewCourse(
+                        const result = await addNewTmcCourse(
                             actionContext,
                             message.organizationSlug,
                             message.courseId,
@@ -761,6 +870,55 @@ export class TmcPanel {
                     }
                     case "openLinkInBrowser": {
                         vscode.env.openExternal(vscode.Uri.parse(message.url));
+                        break;
+                    }
+                    case "selectMoocCourse": {
+                        TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
+                            id: randomPanelId(),
+                            type: "SelectMoocCourse",
+                            requestingPanel: message.sourcePanel,
+                        });
+                        break;
+                    }
+                    case "requestSelectMoocCourseData": {
+                        const courseInstances =
+                            await actionContext.tmc.getEnrolledMoocCourseInstances();
+                        if (courseInstances.err) {
+                            const error = `Failed to fetch enrolled course instances. ${courseInstances.val}`;
+                            actionContext.dialog.errorNotification(error);
+                            TmcPanel.postMessage({
+                                type: "requestSelectMoocCourseDataError",
+                                target: message.sourcePanel,
+                                error,
+                            });
+                            return;
+                        }
+                        TmcPanel.postMessage({
+                            type: "setSelectMoocCourseData",
+                            target: message.sourcePanel,
+                            courseInstances: courseInstances.val,
+                        });
+                        break;
+                    }
+                    case "addMoocCourse": {
+                        const result = await addNewMoocCourse(
+                            actionContext,
+                            message.courseId,
+                            message.instanceId,
+                            message.courseName,
+                            message.instanceName,
+                        );
+                        if (result.err) {
+                            actionContext.dialog.errorNotification(
+                                "Failed to add new course.",
+                                result.val,
+                            );
+                        }
+                        postMessageToWebview(webview, {
+                            type: "setMyCourses",
+                            target: message.requestingPanel,
+                            courses: actionContext.userData.getCourses(),
+                        });
                         break;
                     }
                     default:

@@ -1,4 +1,4 @@
-import { LocalCourseExercise } from "../api/storage";
+import { LocalTmcCourseExercise } from "../api/storage";
 import {
     LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
@@ -14,9 +14,9 @@ import { CourseExercise, Exercise } from "../shared/langsSchema";
 export function combineApiExerciseData(
     exercises: Exercise[],
     courseExercises: CourseExercise[],
-): LocalCourseExercise[] {
+): LocalTmcCourseExercise[] {
     const exercisePointsMap = new Map(courseExercises.map((x) => [x.id, x]));
-    return exercises.map<LocalCourseExercise>((x) => {
+    return exercises.map<LocalTmcCourseExercise>((x) => {
         const match = exercisePointsMap.get(x.id);
         const passed = x.completed;
         const awardedPointsFallback = passed

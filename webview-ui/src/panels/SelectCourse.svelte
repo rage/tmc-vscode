@@ -6,6 +6,7 @@
     import { Course, Organization } from "../shared/langsSchema";
     import TextField from "../components/TextField.svelte";
     import { onMount } from "svelte";
+    import { error } from "console";
 
     export let panel: SelectCoursePanel;
 
@@ -13,6 +14,7 @@
     const courses = loadable<Array<Course>>();
     const tmcBackendUrl = loadable<string>();
     const filter = writable<string>("");
+    const error = loadable<string>();
 
     onMount(() => {
         vscode.postMessage({
@@ -32,6 +34,10 @@
             }
             case "setTmcBackendUrl": {
                 tmcBackendUrl.set(message.tmcBackendUrl);
+                break;
+            }
+            case "requestSelectCourseDataError": {
+                error.set(message.error);
                 break;
             }
             default:
@@ -63,7 +69,7 @@
     }
 </script>
 
-{#if $organization && $tmcBackendUrl}
+{#if $organization !== undefined && $tmcBackendUrl !== undefined}
     <div class="org">
         <div class="org-img-container">
             <img
@@ -105,7 +111,9 @@
     </div>
 </div>
 
-{#if $courses !== undefined}
+{#if $error !== undefined}
+    <div>Error: {$error}</div>
+{:else if $courses !== undefined}
     <div>
         {#each $courses as course}
             <div

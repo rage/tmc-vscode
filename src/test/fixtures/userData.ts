@@ -1,7 +1,7 @@
-import { LocalCourseExercise, UserData } from "../../api/storage";
+import { LocalTmcCourseExercise, UserData } from "../../api/storage";
 import { LocalCourseDataV0, LocalCourseDataV1 } from "../../migrate/migrateUserData";
 
-export const userDataExerciseHelloWorld: LocalCourseExercise = {
+export const userDataExerciseHelloWorld: LocalTmcCourseExercise = {
     id: 1,
     availablePoints: 1,
     awardedPoints: 0,

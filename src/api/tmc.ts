@@ -28,6 +28,7 @@ import {
     CourseData,
     CourseDetails,
     CourseExercise,
+    CourseInstance,
     DataKind,
     DownloadOrUpdateCourseExercisesResult,
     ExerciseDetails,
@@ -235,6 +236,7 @@ export default class TMC {
      * @param courseSlug Course which's exercises should be listed.
      */
     public async listLocalCourseExercises(
+        courseKind: "tmc" | "mooc",
         courseSlug: string,
     ): Promise<Result<LocalExercise[], Error>> {
         const res = await this._executeLangsCommand(
@@ -245,6 +247,8 @@ export default class TMC {
                     this.clientName,
                     "--course-slug",
                     courseSlug,
+                    "--course-type",
+                    courseKind,
                 ],
             },
             "local-exercises",
@@ -888,6 +892,24 @@ export default class TMC {
         return res.map((r) => r.data["output-data"]);
     }
 
+    public async getEnrolledMoocCourseInstances(): Promise<Result<Array<CourseInstance>, Error>> {
+        const res = await this._executeLangsCommand(
+            { args: this._moocCmd("course-instances") },
+            "mooc-course-instances",
+        );
+        return res.map((r) => r.data["output-data"]);
+    }
+
+    /**
+     * Constructs the base arguments for all `mooc` subcommands.
+     *
+     * @param rest The rest of the arguments.
+     * @returns The complete arguments.
+     */
+    private _moocCmd(...rest: Array<string>): Array<string> {
+        return ["mooc", "--client-name", this.clientName].concat(rest);
+    }
+
     /**
      * Constructs the base arguments for all `tmc` subcommands.
      *
@@ -981,7 +1003,10 @@ export default class TMC {
             return Ok(langsResponse);
         }
         if (langsResponse.data?.["output-data-kind"] !== "error") {
-            Logger.error("Unexpected data in error response.", langsResponse);
+            Logger.error(
+                "Unexpected data in error response.",
+                JSON.stringify(langsResponse, null, 2),
+            );
             return Err(new BaseError("Unexpected data in error response"));
         }
 
@@ -1147,8 +1172,8 @@ ${error.message}`;
                                 );
                                 Logger.debug(data);
                         }
-                    } catch (_e) {
-                        Logger.warn("Failed to parse TMC-langs output");
+                    } catch (e) {
+                        Logger.warn(`Failed to parse TMC-langs output`, e);
                         Logger.debug(part);
                     }
                 }

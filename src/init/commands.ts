@@ -1,10 +1,11 @@
 import * as vscode from "vscode";
 
 import * as actions from "../actions";
-import { checkForCourseUpdates, displayUserCourses, removeCourse } from "../actions";
+import { checkForTmcCourseUpdates, displayUserCourses, removeCourse } from "../actions";
 import { ActionContext } from "../actions/types";
 import * as commands from "../commands";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
+import { assertUnreachable, CourseIdentifier } from "../shared/shared";
 import { TmcTreeNode } from "../ui/treeview/treenode";
 import { Logger } from "../utilities/";
 
@@ -31,7 +32,7 @@ export function registerCommands(
             },
         ),
         vscode.commands.registerCommand("tmcTreeView.refreshCourses", async () => {
-            await checkForCourseUpdates(actionContext);
+            await checkForTmcCourseUpdates(actionContext);
             await commands.updateExercises(actionContext, "loud");
         }),
     );
@@ -58,25 +59,95 @@ export function registerCommands(
                 commands.closeExercise(actionContext, resource),
         ),
 
-        vscode.commands.registerCommand("tmc.courseDetails", async (courseId?: number) => {
-            const courses = userData.getCourses();
-            if (courses.length === 0) {
-                return;
-            }
-            courseId =
-                courseId ??
-                (await dialog.selectItem(
-                    "Which course page do you want to open?",
-                    ...courses.map<[string, number]>((c) => [c.title, c.id]),
-                ));
-            if (courseId) {
-                TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-                    id: randomPanelId(),
-                    type: "CourseDetails",
-                    courseId,
-                });
-            }
-        }),
+        vscode.commands.registerCommand(
+            "tmc.courseDetails",
+            async (courseId?: CourseIdentifier) => {
+                const courses = userData.getCourses();
+                if (courses.length === 0) {
+                    return;
+                }
+                let actualId: CourseIdentifier;
+                if (courseId === undefined) {
+                    const selected = await dialog.selectItem(
+                        "Which course page do you want to open?",
+                        ...courses.map<[string, CourseIdentifier]>((c) => {
+                            switch (c.kind) {
+                                case "tmc": {
+                                    return [c.data.title, { kind: "tmc", courseId: c.data.id }];
+                                }
+                                case "mooc": {
+                                    return [
+                                        c.data.courseName,
+                                        { kind: "mooc", instanceId: c.data.instanceId },
+                                    ];
+                                }
+                            }
+                        }),
+                    );
+                    if (selected === undefined) {
+                        // user did not select anything
+                        return;
+                    }
+                    actualId = selected;
+                } else {
+                    actualId = courseId;
+                }
+                switch (actualId.kind) {
+                    case "tmc": {
+                        TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+                            id: randomPanelId(),
+                            type: "CourseDetails",
+                            course: {
+                                kind: "tmc",
+                                courseId: actualId.courseId,
+                                exerciseStatuses: {},
+                            },
+                        });
+                        break;
+                    }
+                    case "mooc": {
+                        TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+                            id: randomPanelId(),
+                            type: "CourseDetails",
+                            course: {
+                                kind: "mooc",
+                                courseInstanceId: actualId.instanceId,
+                            },
+                        });
+                        break;
+                    }
+                    default: {
+                        assertUnreachable(actualId);
+                    }
+                }
+            },
+        ),
+
+        vscode.commands.registerCommand(
+            "tmc.moocCourseDetails",
+            async (courseInstanceId?: string) => {
+                const courses = userData.getMoocCourses();
+                if (courses.length === 0) {
+                    return;
+                }
+                courseInstanceId =
+                    courseInstanceId ??
+                    (await dialog.selectItem(
+                        "Which course page do you want to open?",
+                        ...courses.map<[string, string]>((c) => [c.courseName, c.instanceId]),
+                    ));
+                if (courseInstanceId) {
+                    TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+                        id: randomPanelId(),
+                        type: "CourseDetails",
+                        course: {
+                            kind: "mooc",
+                            courseInstanceId,
+                        },
+                    });
+                }
+            },
+        ),
 
         vscode.commands.registerCommand("tmc.downloadNewExercises", async () =>
             commands.downloadNewExercises(actionContext),

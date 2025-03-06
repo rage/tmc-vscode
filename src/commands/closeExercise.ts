@@ -19,7 +19,10 @@ export async function closeExercise(
         return;
     }
 
-    const exerciseId = userData.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id;
+    const exerciseId = userData.getTmcExerciseByName(
+        exercise.courseSlug,
+        exercise.exerciseSlug,
+    )?.id;
     if (
         exerciseId &&
         (userData.getPassed(exerciseId) ||

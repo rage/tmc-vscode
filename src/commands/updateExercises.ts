@@ -22,7 +22,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
 
     const now = Date.now();
     const exercisesToUpdate = updateablesResult.val.filter((x) => {
-        const course = userData.getCourse(x.courseId);
+        const course = userData.getTmcCourse(x.courseId);
         return course.notifyAfter <= now && !course.disabled;
     });
 
@@ -35,14 +35,14 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
 
     const downloadHandler = async (): Promise<void> => {
         TmcPanel.postMessage(
-            ...userData.getCourses().map<ExtensionToWebview>((x) => ({
+            ...userData.getTmcCourses().map<ExtensionToWebview>((x) => ({
                 type: "setUpdateables",
                 target: { type: "CourseDetails" },
                 courseId: x.id,
                 exerciseIds: [],
             })),
         );
-        const downloadResult = await actions.downloadOrUpdateExercises(
+        const downloadResult = await actions.downloadOrUpdateTmcExercises(
             actionContext,
             exercisesToUpdate.map((x) => x.exerciseId),
         );
@@ -52,7 +52,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
         }
 
         TmcPanel.postMessage(
-            ...userData.getCourses().map<ExtensionToWebview>((x) => ({
+            ...userData.getTmcCourses().map<ExtensionToWebview>((x) => ({
                 type: "setUpdateables",
                 target: { type: "CourseDetails" },
                 courseId: x.id,

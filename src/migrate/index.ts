@@ -5,8 +5,8 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import Dialog from "../api/dialog";
-import Storage from "../api/storage";
 import TMC from "../api/tmc";
+import Storage from "../api/storage";
 import {
     WORKSPACE_ROOT_FILE_NAME,
     WORKSPACE_ROOT_FILE_TEXT,

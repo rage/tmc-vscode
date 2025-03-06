@@ -7,6 +7,7 @@ import * as util from "node:util";
 
 import {
     Course,
+    CourseInstance,
     Organization,
     RunResult,
     StyleValidationResult,
@@ -39,7 +40,9 @@ export type Panel =
     | SelectOrganizationPanel
     | SelectCoursePanel
     | ExerciseTestsPanel
-    | ExerciseSubmissionPanel;
+    | ExerciseSubmissionPanel
+    | SelectPlatformPanel
+    | SelectMoocCoursePanel;
 
 export type PanelType = Panel["type"];
 
@@ -72,6 +75,7 @@ export type MyCoursesPanel = {
     id: number;
     type: "MyCourses";
     courses?: Array<CourseData>;
+    moocCourses?: Array<MoocCourseData>;
     tmcDataPath?: string;
     tmcDataSize?: string;
     courseDeadlines: Record<number, string>;
@@ -80,13 +84,26 @@ export type MyCoursesPanel = {
 export type CourseDetailsPanel = {
     id: number;
     type: "CourseDetails";
-    courseId: number;
-    course?: CourseData;
+    courseId: CourseIdentifier;
+    course?: {
+        // human readable name e.g. "Introduction to Computer Science"
+        title: string;
+        // e.g. introduction-to-computer-science
+        slug: string;
+        disabled: boolean;
+        courseData: CourseData;
+        awardedPoints: number;
+        availablePoints: number;
+        materialUrl: string | null;
+        perhapsExamMode: boolean;
+    };
     offlineMode?: boolean;
-    exerciseGroups?: Array<ExerciseGroup>;
-    updateableExercises?: Array<number>;
-    disabled?: boolean;
-    exerciseStatuses?: Record<number, ExerciseStatus>;
+    updateableExercises?: Array<ExerciseIdentifier>;
+    exerciseGroups: Array<ExerciseGroup>;
+    exerciseStatuses: {
+        tmc: Record<TmcExerciseId, ExerciseStatus>;
+        mooc: Record<MoocExerciseId, ExerciseStatus>;
+    };
 };
 
 export type SelectOrganizationPanel = {
@@ -118,6 +135,18 @@ export type ExerciseSubmissionPanel = {
     type: "ExerciseSubmission";
     course: TestCourse;
     exercise: TestExercise;
+};
+
+export type SelectPlatformPanel = {
+    id: number;
+    type: "SelectPlatform";
+    requestingPanel: TargetPanel<MyCoursesPanel>;
+};
+
+export type SelectMoocCoursePanel = {
+    id: number;
+    type: "SelectMoocCourse";
+    requestingPanel: TargetPanel<MyCoursesPanel>;
 };
 
 /*
@@ -179,19 +208,19 @@ export type ExtensionToWebview =
     | {
           type: "setCourseDisabledStatus";
           target: BroadcastPanel<MyCoursesPanel | CourseDetailsPanel>;
-          courseId: number;
+          courseId: CourseIdentifier;
           disabled: boolean;
       }
     | {
           type: "exerciseStatusChange";
           target: BroadcastPanel<CourseDetailsPanel>;
-          exerciseId: number;
+          exerciseId: ExerciseIdentifier;
           status: ExerciseStatus;
       }
     | {
           type: "setUpdateables";
           target: BroadcastPanel<CourseDetailsPanel>;
-          exerciseIds: Array<number>;
+          exerciseIds: Array<ExerciseIdentifier>;
       }
     | {
           type: "setOrganizations";
@@ -258,19 +287,39 @@ export type ExtensionToWebview =
     | {
           type: "setNewExercises";
           target: BroadcastPanel<MyCoursesPanel>;
-          courseId: number;
-          exerciseIds: Array<number>;
+          courseId: CourseIdentifier;
+          exerciseIds: Array<ExerciseIdentifier>;
       }
     | {
           type: "willNotRunTestsForExam";
           target: TargetPanel<ExerciseTestsPanel>;
+      }
+    | {
+          type: "setSelectMoocCourseData";
+          target: BroadcastPanel<SelectMoocCoursePanel>;
+          courseInstances: Array<CourseInstance>;
+      }
+    | {
+          type: "requestSelectCourseDataError";
+          target: TargetPanel<SelectCoursePanel>;
+          error: string;
+      }
+    | {
+          type: "requestSelectOrganizationDataError";
+          target: TargetPanel<SelectOrganizationPanel>;
+          error: string;
+      }
+    | {
+          type: "requestSelectMoocCourseDataError";
+          target: TargetPanel<SelectMoocCoursePanel>;
+          error: string;
       }
     // the last variant exists just to make TypeScript think that every panel type has
     // at least two different message types, which makes TS treat them differently than if
     // they only had one...
     | {
           type: never;
-          target: TargetPanel<never>;
+          target: never;
       };
 
 // helper type for messages from the extension to a specific panel
@@ -340,10 +389,8 @@ export type WebviewToExtension =
       }
     | {
           type: "downloadExercises";
-          ids: Array<number>;
-          courseName: string;
-          organizationSlug: string;
-          courseId: number;
+          ids: Array<ExerciseIdentifier>;
+          courseId: CourseIdentifier;
           mode: "download" | "update";
       }
     | {
@@ -355,29 +402,29 @@ export type WebviewToExtension =
       }
     | {
           type: "openCourseDetails";
-          courseId: number;
+          courseId: CourseIdentifier;
       }
     | {
           type: "openMyCourses";
       }
     | {
           type: "refreshCourseDetails";
-          id: number;
+          id: CourseIdentifier;
           useCache: boolean;
       }
     | {
           type: "openExercises";
-          ids: Array<number>;
-          courseName: string;
+          ids: Array<ExerciseIdentifier>;
+          courseId: CourseIdentifier;
       }
     | {
           type: "closeExercises";
-          ids: Array<number>;
-          courseName: string;
+          ids: Array<ExerciseIdentifier>;
+          courseId: CourseIdentifier;
       }
     | {
           type: "refreshCourseDetails";
-          id: number;
+          id: CourseIdentifier;
           useCache: boolean;
       }
     | {
@@ -418,13 +465,35 @@ export type WebviewToExtension =
     | {
           type: "openLinkInBrowser";
           url: string;
+      }
+    | {
+          type: "selectPlatform";
+          sourcePanel: TargetPanel<MyCoursesPanel>;
+      }
+    | {
+          type: "selectMoocCourse";
+          sourcePanel: TargetPanel<MyCoursesPanel>;
+      }
+    | {
+          type: "requestSelectMoocCourseData";
+          sourcePanel: TargetPanel<SelectMoocCoursePanel>;
+      }
+    | {
+          type: "addMoocCourse";
+          courseId: string;
+          instanceId: string;
+          courseName: string;
+          instanceName: string | null;
+          requestingPanel: TargetPanel<MyCoursesPanel>;
       };
 
 /*
  * ======== additional types ========
  */
 
-export type CourseData = {
+export type CourseData = Enum<TmcCourseData, MoocCourseData>;
+
+export type TmcCourseData = {
     id: number;
     name: string;
     title: string;
@@ -439,6 +508,17 @@ export type CourseData = {
     perhapsExamMode: boolean;
 };
 
+export type MoocCourseData = {
+    courseId: string;
+    instanceId: string;
+    courseName: string;
+    instanceName: string | null;
+    description: string;
+    awardedPoints: number;
+    availablePoints: number;
+    materialUrl: string;
+};
+
 export type NewExercise = {
     id: number;
 };
@@ -450,7 +530,7 @@ export type ExerciseGroup = {
 };
 
 export type Exercise = {
-    id: number;
+    id: ExerciseIdentifier;
     name: string;
     isHard: boolean;
     hardDeadlineString: string;
@@ -639,4 +719,69 @@ export class BaseError extends Error {
         }
         return errorMessage;
     }
+}
+
+type TmcKind = { kind: "tmc" };
+
+type MoocKind = { kind: "mooc" };
+
+export type Enum<Tmc, Mooc> = (TmcKind & Tmc) | (MoocKind & Mooc);
+
+export type CourseIdentifier = Enum<{ courseId: number }, { instanceId: string }>;
+
+export type TmcExerciseId = number;
+export type MoocExerciseId = string;
+
+export type ExerciseIdentifier = Enum<{ tmcExerciseId: number }, { moocExerciseId: string }>;
+
+// helper to simulate Rust's `match`
+export function match<A, B, T extends Enum<A, B>>(
+    data: T,
+    tmc: (x: T & TmcKind) => A,
+    mooc: (x: T & MoocKind) => B,
+): A | B {
+    switch (data.kind) {
+        case "tmc": {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return tmc(data as any);
+        }
+        case "mooc": {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return mooc(data as any);
+        }
+        default: {
+            assertUnreachable(data);
+        }
+    }
+}
+
+export function matchOption<A, B, T extends Enum<A, B> | undefined>(
+    data: T,
+    tmc: (x: T & TmcKind) => A,
+    mooc: (x: T & MoocKind) => B,
+): A | B | undefined {
+    switch (data?.kind) {
+        case "tmc": {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return tmc(data as any);
+        }
+        case "mooc": {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return mooc(data as any);
+        }
+        case undefined: {
+            return undefined;
+        }
+        default: {
+            assertUnreachable(data);
+        }
+    }
+}
+
+export function makeTmcKind<T>(t: T): T & { kind: "tmc" } {
+    return { ...t, kind: "tmc" };
+}
+
+export function makeMoocKind<T>(t: T): T & { kind: "mooc" } {
+    return { ...t, kind: "mooc" };
 }

@@ -11,7 +11,7 @@ import { Logger } from "../utilities";
 import { MigratedData } from "./types";
 import validateData from "./validateData";
 
-const EXERCISE_DATA_KEY_V0 = "exerciseData";
+export const EXERCISE_DATA_KEY_V0 = "exerciseData";
 const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";
 
 export enum ExerciseStatusV0 {

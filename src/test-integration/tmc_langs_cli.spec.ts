@@ -111,13 +111,13 @@ suite("tmc langs cli spec", function () {
         });
 
         test("should be able to download an existing exercise", async function () {
-            const result = await tmc.downloadExercises([1], true, () => {});
+            const result = await tmc.downloadTmcExercises([1], true, () => {});
             result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
         }).timeout(10000);
 
         // Ids missing from the server are missing from the response.
         test.skip("should not be able to download a non-existent exercise", async function () {
-            const downloads = (await tmc.downloadExercises([404], true, () => {})).unwrap();
+            const downloads = (await tmc.downloadTmcExercises([404], true, () => {})).unwrap();
             expect(downloads.failed?.length).to.be.equal(1);
         });
 
@@ -195,7 +195,7 @@ suite("tmc langs cli spec", function () {
 
             setup(async function () {
                 deleteSync(projectsDir, { force: true });
-                const result = (await tmc.downloadExercises([1], true, () => {})).unwrap();
+                const result = (await tmc.downloadTmcExercises([1], true, () => {})).unwrap();
                 exercisePath = result.downloaded[0].path;
             });
 
@@ -389,7 +389,7 @@ suite("tmc langs cli spec", function () {
         });
 
         test("should not be able to download an exercise", async function () {
-            const result = await tmc.downloadExercises([1], true, () => {});
+            const result = await tmc.downloadTmcExercises([1], true, () => {});
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
 
@@ -447,7 +447,7 @@ suite("tmc langs cli spec", function () {
             setup(async function () {
                 deleteSync(projectsDir, { force: true });
                 writeCredentials(configDir);
-                const result = (await tmc.downloadExercises([1], true, () => {})).unwrap();
+                const result = (await tmc.downloadTmcExercises([1], true, () => {})).unwrap();
                 clearCredentials(configDir);
                 exercisePath = result.downloaded[0].path;
             });

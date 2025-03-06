@@ -10,7 +10,12 @@ import { compact } from "lodash";
 import { Ok, Result } from "ts-results";
 import { ExerciseStatus } from "../api/workspaceManager";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
-import { CourseDetailsPanel, ExtensionToWebview } from "../shared/shared";
+import {
+    CourseDetailsPanel,
+    CourseIdentifier,
+    ExerciseIdentifier,
+    ExtensionToWebview,
+} from "../shared/shared";
 import { Logger } from "../utilities";
 import * as systeminformation from "systeminformation";
 import { ActionContext } from "./types";
@@ -22,14 +27,14 @@ import { ActionContext } from "./types";
 export async function openExercises(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
-    exerciseIdsToOpen: number[],
-    courseName: string,
+    exerciseIdsToOpen: ExerciseIdentifier[],
+    courseId: CourseIdentifier,
 ): Promise<Result<number[], Error>> {
     Logger.info("Opening exercises", exerciseIdsToOpen);
 
     const { workspaceManager, userData, tmc, dialog } = actionContext;
 
-    const course = userData.getCourseByName(courseName);
+    const course = userData.getTmcCourse(courseId);
     const courseExercises = new Map(course.exercises.map((x) => [x.id, x]));
     const exercisesToOpen = compact(exerciseIdsToOpen.map((x) => courseExercises.get(x)));
 
@@ -98,12 +103,12 @@ export async function openExercises(
  */
 export async function closeExercises(
     actionContext: ActionContext,
-    ids: number[],
-    courseName: string,
+    ids: Array<ExerciseIdentifier>,
+    courseId: CourseIdentifier,
 ): Promise<Result<number[], Error>> {
     const { workspaceManager, userData, tmc } = actionContext;
 
-    const course = userData.getCourseByName(courseName);
+    const course = userData.getTmcCourseByName(courseName);
     const exercises = new Map(course.exercises.map((x) => [x.id, x]));
     const exerciseSlugs = compact(ids.map((x) => exercises.get(x)?.name));
 
