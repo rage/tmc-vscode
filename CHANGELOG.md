@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.2.1] - 2025-03-11
+
+-   Improved error reporting when initialising the extension fails.
+
 ## [3.2.0] - 2025-02-25
 
 -   Test results now contain style warnings or errors for applicable exercises.
