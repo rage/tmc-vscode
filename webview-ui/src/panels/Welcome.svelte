@@ -72,6 +72,13 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.2.1 - 2025-03-11</h3>
+            <h4>Improved error reporting when initialising the extension fails</h4>
+            <p>
+                Previously certain issues when initialising the extension would only appear in debug
+                logging. Now, more information is included in the error message and the logging is
+                output at the warn level.
+            </p>
             <h3>3.2.0 - 2025-02-25</h3>
             <h4>Test results contain style warnings or errors for applicable exercises</h4>
             <p>
@@ -100,51 +107,6 @@
             <p>
                 Previously, when downloading an old submission, the list of old submissions was not
                 sorted in the dialogue.
-            </p>
-            <h3>3.0.6 - 2024-11-07</h3>
-            <h4>Added a warning for a large number of open exercises</h4>
-            <p>
-                A high amount of open exercises may cause performance issues. Since it's usually not
-                necessary to have so many exercises open, the warning recommends the user close some
-                of them.
-            </p>
-            <h3>3.0.5 - 2024-10-29</h3>
-            <h4>Fixed file locking issues</h4>
-            <p>
-                Fixed issues relating to file locking on certain platforms that prevented the
-                extension from running.
-            </p>
-            <h4>Fixed the current file not refreshing when resetting an exercise</h4>
-            <p>
-                Previously, the contents of the current file would not refresh properly in the
-                editor when resetting an exercise, showing the old state instead of the actual
-                contents of the file on disk.
-            </p>
-            <h3>3.0.4 - 2024-08-29</h3>
-            <h4>.csproj files are no longer included when submitting C# exercises</h4>
-            <p>
-                Previously, it was possible to modify and submit .csproj files which would cause
-                errors during testing on the server.
-            </p>
-            <p>
-                As the dependencies of the extension were updated, the minimum supported VSCode
-                version was also updated to a more recent version. 1.86.0 was released in released
-                in January 2024.
-            </p>
-            <h4>Fixed the TMC-langs CLI's permissions being set to 111</h4>
-            <p>
-                Previously, the CLI binary used by the extension had its permissions set to 111
-                (-rw-rw-rw) when it was downloaded. From now, the permissions are set to 755.
-            </p>
-        </div>
-        <div class="content_section">
-            <h3>3.0.3 - 2024-02-26</h3>
-            <h4>Fixed missing "Send solution to server" button when tests are ran successfully</h4>
-            <p>This button existed in the old UI but was accidentally omitted from the new one.</p>
-            <h4>Fixed running tests for exam exercises not working correctly</h4>
-            <p>
-                Previously, trying to run tests for an exam exercise would show an endless loading
-                spinner.
             </p>
         </div>
     </div>

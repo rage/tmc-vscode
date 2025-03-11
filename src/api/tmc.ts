@@ -1060,6 +1060,7 @@ export default class TMC {
             cprocess.stdin.write(stdin + "\n");
         }
 
+        const stderr: Array<string> = [];
         const processResult = new Promise<number | null>((resolve, reject) => {
             let resultCode: number | undefined;
             let stdoutEnded = false;
@@ -1088,7 +1089,8 @@ ${error.message}`;
             });
             cprocess.stderr.on("data", (chunk) => {
                 const data = chunk.toString();
-                Logger.debug("stderr", data);
+                Logger.warn("stderr", data);
+                stderr.push(data);
                 onStderr?.(data);
             });
             cprocess.stdout.on("end", () => {
@@ -1172,9 +1174,15 @@ ${error.message}`;
                 Logger.debug(stdoutBuffer);
             }
 
-            return theResult
-                ? Ok(theResult)
-                : Err(new EmptyLangsResponseError("Langs process ended without result data."));
+            if (theResult) {
+                return Ok(theResult);
+            } else {
+                return Err(
+                    new EmptyLangsResponseError(
+                        `Langs process ended without result data. stderr: {${stderr.join("\n")}}`,
+                    ),
+                );
+            }
         })();
 
         const interrupt = (): void => {
