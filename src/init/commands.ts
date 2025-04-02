@@ -128,7 +128,7 @@ export function registerCommands(
             });
         }),
 
-        vscode.commands.registerCommand("tmc.openSettings", async () => {
+        vscode.commands.registerCommand("tmc.settings", async () => {
             vscode.commands.executeCommand("workbench.action.openSettings", "TestMyCode");
         }),
 
@@ -194,6 +194,16 @@ export function registerCommands(
         vscode.commands.registerCommand("tmc.updateExercises", async (silent: string) =>
             commands.updateExercises(actionContext, silent),
         ),
+
+        vscode.commands.registerCommand("tmc.logs", async () => {
+            Logger.show();
+        }),
+
+        vscode.commands.registerCommand("tmc.debug", async () => {
+            vscode.commands.executeCommand("workbench.output.action.clearOutput");
+            Logger.show();
+            vscode.commands.executeCommand("workbench.action.openActiveLogOutputFile");
+        }),
 
         vscode.commands.registerCommand("tmc.wipe", async () =>
             commands.wipe(actionContext, context),
