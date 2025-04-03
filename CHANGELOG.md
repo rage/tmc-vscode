@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.3.0] - 2025-04-03
+
+-   Added command `tmc.logs` for opening the logs with a corresponding option in the extension menu.
+-   Added command `tmc.debug` that resets the logs before opening them in a file.
+
 ## [3.2.1] - 2025-03-11
 
 -   Improved error reporting when initialising the extension fails.
