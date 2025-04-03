@@ -72,6 +72,17 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.3.0 - 2025-04-03</h3>
+            <h4>Added a command for viewing the output logs</h4>
+            <p>
+                Added a new command <code>tmc.logs</code> that opens the TestMyCode logs in the Output
+                view and a corresponding option in the extension menu.
+            </p>
+            <h4>Added a command for debugging the extension</h4>
+            <p>
+                Added a new command <code>tmc.debug</code> that resets the extension logs and opens them
+                in a file so users can replicate an issue and easily view the relevant logs.
+            </p>
             <h3>3.2.1 - 2025-03-11</h3>
             <h4>Improved error reporting when initialising the extension fails</h4>
             <p>
