@@ -49,7 +49,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     );
 
     ui.treeDP.registerAction("Settings", "settings", [], {
-        command: "tmc.openSettings",
+        command: "tmc.settings",
         title: "Go to TMC Settings",
     });
     ui.treeDP.registerAction("Open TMC Exercises Folder", "tmcDataFolder", [], {

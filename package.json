@@ -59,7 +59,7 @@
             },
             {
                 "command": "tmc.changeTmcDataPath",
-                "title": "Change TMC data path",
+                "title": "Change TMC Data Path",
                 "category": "TestMyCode"
             },
             {
@@ -74,12 +74,12 @@
             },
             {
                 "command": "tmc.courseDetails",
-                "title": "Go to Course Details...",
+                "title": "Go To Course Details...",
                 "category": "TestMyCode"
             },
             {
                 "command": "tmc.downloadNewExercises",
-                "title": "Download New Exercises for Course...",
+                "title": "Download New Exercises For Course...",
                 "category": "TestMyCode"
             },
             {
@@ -103,7 +103,7 @@
                 "category": "TestMyCode"
             },
             {
-                "command": "tmc.openSettings",
+                "command": "tmc.settings",
                 "title": "Settings",
                 "category": "TestMyCode"
             },
@@ -114,7 +114,7 @@
             },
             {
                 "command": "tmc.pasteExercise",
-                "title": "Send Exercise to TMC Paste",
+                "title": "Send Exercise To TMC Paste",
                 "category": "TestMyCode"
             },
             {
@@ -133,7 +133,7 @@
             },
             {
                 "command": "tmc.showLogin",
-                "title": "Show login menu",
+                "title": "Show Login Menu",
                 "category": "TestMyCode"
             },
             {
@@ -163,6 +163,16 @@
             {
                 "command": "tmc.updateExercises",
                 "title": "Update Exercises",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.logs",
+                "title": "Show Logs",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.debug",
+                "title": "Show Debug View",
                 "category": "TestMyCode"
             },
             {
