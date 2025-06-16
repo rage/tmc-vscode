@@ -22,6 +22,7 @@ import { uiDownloadExercises } from "../init";
 import { ExtensionToWebview, Panel, WebviewToExtension } from "../shared/shared";
 import * as UITypes from "../ui/types";
 import {
+    cliFolder,
     dateToString,
     formatSizeInBytes,
     Logger,
@@ -31,6 +32,7 @@ import {
 import { getNonce } from "../utilities/getNonce";
 import { getUri } from "../utilities/getUri";
 import { postMessageToWebview, renderPanel } from "../utilities/panel";
+import { Result } from "ts-results";
 
 /**
  * Manages the rendering of the extension webview panels.
@@ -247,15 +249,19 @@ export class TmcPanel {
                 switch (message.type) {
                     case "requestCourseDetailsData": {
                         const { tmc, userData, workspaceManager } = actionContext;
+                        if (!(tmc.ok && userData.ok && workspaceManager.ok)) {
+                            Logger.error("Extension was not initialized properly");
+                            return;
+                        }
 
-                        const course = userData.getCourse(message.sourcePanel.courseId);
+                        const course = userData.val.getCourse(message.sourcePanel.courseId);
                         postMessageToWebview(webview, {
                             type: "setCourseData",
                             target: message.sourcePanel,
                             courseData: course,
                         });
 
-                        tmc.getCourseDetails(message.sourcePanel.courseId).then((apiCourse) => {
+                        tmc.val.getCourseDetails(message.sourcePanel.courseId).then((apiCourse) => {
                             const offlineMode = apiCourse.err; // failed to get course details = offline mode
                             const exerciseData = new Map<
                                 string,
@@ -287,7 +293,7 @@ export class TmcPanel {
                                 const groupName = nameMatch?.[1] || "";
                                 const group = exerciseData.get(groupName);
                                 const name = nameMatch?.[2] || "";
-                                const exData = workspaceManager.getExerciseBySlug(
+                                const exData = workspaceManager.val.getExerciseBySlug(
                                     course.name,
                                     ex.name,
                                 );
@@ -370,35 +376,52 @@ export class TmcPanel {
                         break;
                     }
                     case "requestMyCoursesData": {
+                        const { userData, workspaceManager, resources } = actionContext;
+                        if (
+                            !(
+                                userData.ok &&
+                                workspaceManager.ok &&
+                                resources.ok &&
+                                resources.val.projectsDirectory
+                            )
+                        ) {
+                            Logger.error("Extension was not initialized properly");
+                            return;
+                        }
+
                         postMessageToWebview(webview, {
                             type: "setMyCourses",
                             target: message.sourcePanel,
-                            courses: actionContext.userData.getCourses(),
+                            courses: userData.val.getCourses(),
                         });
                         postMessageToWebview(webview, {
                             type: "setTmcDataPath",
                             target: message.sourcePanel,
-                            tmcDataPath: actionContext.resources.projectsDirectory,
+                            tmcDataPath: resources.val.projectsDirectory,
                         });
-                        getFolderSize
-                            .loose(actionContext.resources.projectsDirectory)
-                            .then((size) =>
-                                postMessageToWebview(webview, {
-                                    type: "setTmcDataSize",
-                                    target: message.sourcePanel,
-                                    tmcDataSize: formatSizeInBytes(size),
-                                }),
-                            );
+                        getFolderSize.loose(resources.val.projectsDirectory).then((size) =>
+                            postMessageToWebview(webview, {
+                                type: "setTmcDataSize",
+                                target: message.sourcePanel,
+                                tmcDataSize: formatSizeInBytes(size),
+                            }),
+                        );
                         break;
                     }
                     case "requestSelectCourseData": {
+                        const { tmc } = actionContext;
+                        if (!tmc.ok) {
+                            Logger.error("Extension was not initialized properly");
+                            return;
+                        }
+
                         postMessageToWebview(webview, {
                             type: "setTmcBackendUrl",
                             target: message.sourcePanel,
                             tmcBackendUrl: TMC_BACKEND_URL,
                         });
 
-                        const organizations = await actionContext.tmc.getOrganizations();
+                        const organizations = await tmc.val.getOrganizations();
                         if (organizations.err) {
                             actionContext.dialog.errorNotification(
                                 "Failed to open panel.",
@@ -421,7 +444,7 @@ export class TmcPanel {
                             organization,
                         });
 
-                        const courses = await actionContext.tmc.getCourses(organization.slug);
+                        const courses = await tmc.val.getCourses(organization.slug);
                         if (courses.err) {
                             actionContext.dialog.errorNotification(
                                 "Failed to open panel.",
@@ -437,13 +460,19 @@ export class TmcPanel {
                         break;
                     }
                     case "requestSelectOrganizationData": {
+                        const { tmc } = actionContext;
+                        if (!tmc.ok) {
+                            Logger.error("Extension was not initialized properly");
+                            return;
+                        }
+
                         postMessageToWebview(webview, {
                             type: "setTmcBackendUrl",
                             target: message.sourcePanel,
                             tmcBackendUrl: TMC_BACKEND_URL,
                         });
 
-                        const organizations = await actionContext.tmc.getOrganizations();
+                        const organizations = await tmc.val.getOrganizations();
                         if (organizations.err) {
                             actionContext.dialog.errorNotification(
                                 "Failed to open panel.",
@@ -459,7 +488,13 @@ export class TmcPanel {
                         break;
                     }
                     case "requestWelcomeData": {
-                        const version = actionContext.resources.extensionVersion;
+                        const { resources } = actionContext;
+                        if (!resources.ok) {
+                            Logger.error("Extension was not initialized properly");
+                            return;
+                        }
+
+                        const version = resources.val.extensionVersion;
                         postMessageToWebview(webview, {
                             type: "setWelcomeData",
                             target: message.sourcePanel,
@@ -511,7 +546,13 @@ export class TmcPanel {
                         break;
                     }
                     case "removeCourse": {
-                        const course = actionContext.userData.getCourse(message.id);
+                        const { userData } = actionContext;
+                        if (!userData.ok) {
+                            Logger.error("Extension was not initialized properly");
+                            return;
+                        }
+
+                        const course = userData.val.getCourse(message.id);
                         if (
                             await actionContext.dialog.explicitConfirmation(
                                 `Do you want to remove ${course.name} from your courses? \
@@ -567,7 +608,13 @@ export class TmcPanel {
                         break;
                     }
                     case "clearNewExercises": {
-                        actionContext.userData.clearFromNewExercises(message.courseId);
+                        const { userData } = actionContext;
+                        if (!userData.ok) {
+                            Logger.error("Extension was not initialized properly");
+                            return;
+                        }
+
+                        userData.val.clearFromNewExercises(message.courseId);
                         break;
                     }
                     case "downloadExercises": {
@@ -581,15 +628,22 @@ export class TmcPanel {
                         break;
                     }
                     case "openExercises": {
+                        const { tmc, userData } = actionContext;
+                        if (!(tmc.ok && userData.ok)) {
+                            Logger.error("Extension was not initialized properly");
+                            return;
+                        }
+
                         // todo: move to actions
                         // download exercises that don't exist locally
-                        const course = actionContext.userData.getCourseByName(message.courseName);
+                        const course = userData.val.getCourseByName(message.courseName);
                         const courseExercises = new Map(course.exercises.map((x) => [x.id, x]));
                         const exercisesToOpen = compact(
                             message.ids.map((x) => courseExercises.get(x)),
                         );
-                        const localCourseExercises =
-                            await actionContext.tmc.listLocalCourseExercises(message.courseName);
+                        const localCourseExercises = await tmc.val.listLocalCourseExercises(
+                            message.courseName,
+                        );
                         if (localCourseExercises.err) {
                             actionContext.dialog.errorNotification(
                                 "Error trying to list local exercises while opening selected exercises.",
@@ -670,6 +724,12 @@ export class TmcPanel {
                         break;
                     }
                     case "addCourse": {
+                        const { userData } = actionContext;
+                        if (!userData.ok) {
+                            Logger.error("Extension was not initialized properly");
+                            return;
+                        }
+
                         const result = await addNewCourse(
                             actionContext,
                             message.organizationSlug,
@@ -684,7 +744,7 @@ export class TmcPanel {
                         postMessageToWebview(webview, {
                             type: "setMyCourses",
                             target: message.requestingPanel,
-                            courses: actionContext.userData.getCourses(),
+                            courses: userData.val.getCourses(),
                         });
                         break;
                     }
@@ -763,6 +823,29 @@ export class TmcPanel {
                         vscode.env.openExternal(vscode.Uri.parse(message.url));
                         break;
                     }
+                    case "requestInitializationErrors": {
+                        const {
+                            exerciseDecorationProvider,
+                            resources,
+                            tmc,
+                            userData,
+                            workspaceManager,
+                        } = actionContext;
+
+                        TmcPanel.postMessage({
+                            type: "initializationErrors",
+                            target: message.sourcePanel,
+                            cliFolder: cliFolder(extensionContext),
+                            initializationErrors: {
+                                tmc: formatError(tmc),
+                                userData: formatError(userData),
+                                workspaceManager: formatError(workspaceManager),
+                                resources: formatError(resources),
+                                exerciseDecorationProvider: formatError(exerciseDecorationProvider),
+                            },
+                        });
+                        break;
+                    }
                     default:
                         assertUnreachable(message);
                 }
@@ -781,4 +864,16 @@ function assertUnreachable(x: never): never {
 // helper to generate a random ids when creating panels
 export function randomPanelId(): number {
     return Math.floor(Math.random() * 100_000_000);
+}
+
+function formatError(res: Result<unknown, Error>): string | null {
+    if (res.err) {
+        if (res.val.cause) {
+            return `${res.val.message}: ${res.val.cause}`;
+        } else {
+            return res.val.message;
+        }
+    } else {
+        return null;
+    }
 }

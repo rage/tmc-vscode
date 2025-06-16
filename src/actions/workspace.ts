@@ -7,7 +7,7 @@
 import * as vscode from "vscode";
 
 import { compact } from "lodash";
-import { Ok, Result } from "ts-results";
+import { Err, Ok, Result } from "ts-results";
 import { ExerciseStatus } from "../api/workspaceManager";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { CourseDetailsPanel, ExtensionToWebview } from "../shared/shared";
@@ -28,12 +28,15 @@ export async function openExercises(
     Logger.info("Opening exercises", exerciseIdsToOpen);
 
     const { workspaceManager, userData, tmc, dialog } = actionContext;
+    if (!(userData.ok && workspaceManager.ok && tmc.ok)) {
+        return Err(new Error("Extension was not initialized properly"));
+    }
 
-    const course = userData.getCourseByName(courseName);
+    const course = userData.val.getCourseByName(courseName);
     const courseExercises = new Map(course.exercises.map((x) => [x.id, x]));
     const exercisesToOpen = compact(exerciseIdsToOpen.map((x) => courseExercises.get(x)));
 
-    const openResult = await workspaceManager.openCourseExercises(
+    const openResult = await workspaceManager.val.openCourseExercises(
         courseName,
         exercisesToOpen.map((e) => e.name),
     );
@@ -41,11 +44,11 @@ export async function openExercises(
         return openResult;
     }
 
-    const closedExerciseNames = workspaceManager
+    const closedExerciseNames = workspaceManager.val
         .getExercisesByCourseSlug(courseName)
         .filter((x) => x.status === ExerciseStatus.Closed)
         .map((x) => x.exerciseSlug);
-    const settingsResult = await tmc.setSetting(
+    const settingsResult = await tmc.val.setSetting(
         `closed-exercises-for:${courseName}`,
         closedExerciseNames,
     );
@@ -58,7 +61,7 @@ export async function openExercises(
     const weakThreshold = 50;
     const strongThreshold = 100;
     const warningThreshold = under8GbRam ? weakThreshold : strongThreshold;
-    const openExercises = workspaceManager
+    const openExercises = workspaceManager.val
         .getExercisesByCourseSlug(courseName)
         .filter((x) => x.status === ExerciseStatus.Open);
     if (openExercises.length > warningThreshold) {
@@ -102,12 +105,15 @@ export async function closeExercises(
     courseName: string,
 ): Promise<Result<number[], Error>> {
     const { workspaceManager, userData, tmc } = actionContext;
+    if (!(userData.ok && workspaceManager.ok && tmc.ok)) {
+        return Err(new Error("Extension was not initialized properly"));
+    }
 
-    const course = userData.getCourseByName(courseName);
+    const course = userData.val.getCourseByName(courseName);
     const exercises = new Map(course.exercises.map((x) => [x.id, x]));
     const exerciseSlugs = compact(ids.map((x) => exercises.get(x)?.name));
 
-    const closeResult = await workspaceManager.closeCourseExercises(courseName, exerciseSlugs);
+    const closeResult = await workspaceManager.val.closeCourseExercises(courseName, exerciseSlugs);
     if (closeResult.err) {
         return closeResult;
     }
@@ -115,11 +121,11 @@ export async function closeExercises(
     const slugToId = new Map(Array.from(exercises.entries(), ([key, val]) => [val.name, key]));
     const closedIds = closeResult.val.map((exercise) => slugToId.get(exercise.exerciseSlug) || 0);
 
-    const closedExerciseNames = workspaceManager
+    const closedExerciseNames = workspaceManager.val
         .getExercisesByCourseSlug(courseName)
         .filter((x) => x.status === ExerciseStatus.Closed)
         .map((x) => x.exerciseSlug);
-    const settingsResult = await tmc.setSetting(
+    const settingsResult = await tmc.val.setSetting(
         `closed-exercises-for:${courseName}`,
         closedExerciseNames,
     );

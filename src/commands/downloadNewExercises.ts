@@ -5,8 +5,12 @@ import { Logger } from "../utilities";
 export async function downloadNewExercises(actionContext: ActionContext): Promise<void> {
     const { dialog, userData } = actionContext;
     Logger.info("Downloading new exercises");
+    if (userData.err) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
-    const courses = userData.getCourses();
+    const courses = userData.val.getCourses();
     const courseId = await dialog.selectItem(
         "Download new exercises for course?",
         ...courses.map<[string, number]>((course) => [course.title, course.id]),
@@ -15,7 +19,7 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
         return;
     }
 
-    const course = userData.getCourse(courseId);
+    const course = userData.val.getCourse(courseId);
     if (course.newExercises.length === 0) {
         dialog.notification(`There are no new exercises for the course ${course.title}.`, [
             "OK",

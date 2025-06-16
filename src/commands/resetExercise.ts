@@ -15,16 +15,23 @@ export async function resetExercise(
 ): Promise<void> {
     const { dialog, tmc, userData, workspaceManager } = actionContext;
     Logger.info("Resetting exercise");
+    if (!(tmc.ok && userData.ok && workspaceManager.ok)) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
     const exercise = resource
-        ? workspaceManager.getExerciseByPath(resource)
-        : workspaceManager.activeExercise;
+        ? workspaceManager.val.getExerciseByPath(resource)
+        : workspaceManager.val.activeExercise;
     if (!exercise) {
         dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
         return;
     }
 
-    const exerciseDetails = userData.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug);
+    const exerciseDetails = userData.val.getExerciseByName(
+        exercise.courseSlug,
+        exercise.exerciseSlug,
+    );
     if (!exerciseDetails) {
         dialog.errorNotification(`Missing exercise data for ${exercise.exerciseSlug}.`);
         return;
@@ -41,7 +48,7 @@ export async function resetExercise(
     const editor = vscode.window.activeTextEditor;
     const document = editor?.document.uri;
 
-    const resetResult = await tmc.resetExercise(
+    const resetResult = await tmc.val.resetExercise(
         exerciseDetails.id,
         exercise.uri.fsPath,
         submitFirst,

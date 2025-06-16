@@ -16,23 +16,30 @@ export async function downloadOldSubmission(
 ): Promise<void> {
     const { dialog, tmc, userData, workspaceManager } = actionContext;
     Logger.info("Downloading old submission");
+    if (!(workspaceManager.ok && userData.ok && tmc.ok)) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
     const exercise = resource
-        ? workspaceManager.getExerciseByPath(resource)
-        : workspaceManager.activeExercise;
+        ? workspaceManager.val.getExerciseByPath(resource)
+        : workspaceManager.val.activeExercise;
     if (!exercise) {
         dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
         return;
     }
 
-    const exerciseId = userData.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id;
+    const exerciseId = userData.val.getExerciseByName(
+        exercise.courseSlug,
+        exercise.exerciseSlug,
+    )?.id;
     if (!exerciseId) {
         dialog.errorNotification("Failed to resolve exercise id.");
         return;
     }
 
     Logger.debug("Fetching old submissions");
-    const submissionsResult = await tmc.getOldSubmissions(exerciseId);
+    const submissionsResult = await tmc.val.getOldSubmissions(exerciseId);
     if (submissionsResult.err) {
         dialog.errorNotification("Failed to fetch old submissions.", submissionsResult.val);
         return;
@@ -86,7 +93,7 @@ export async function downloadOldSubmission(
     const editor = vscode.window.activeTextEditor;
     const document = editor?.document.uri;
 
-    const oldDownloadResult = await tmc.downloadOldSubmission(
+    const oldDownloadResult = await tmc.val.downloadOldSubmission(
         exerciseId,
         exercise.uri.fsPath,
         submission.id,

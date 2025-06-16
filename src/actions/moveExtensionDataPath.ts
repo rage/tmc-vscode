@@ -1,6 +1,6 @@
 import * as fs from "fs-extra";
 import * as path from "path";
-import { Result } from "ts-results";
+import { Err, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import { Logger } from "../utilities";
@@ -20,6 +20,9 @@ export async function moveExtensionDataPath(
     onUpdate?: (value: { percent: number; message?: string }) => void,
 ): Promise<Result<void, Error>> {
     const { resources, tmc } = actionContext;
+    if (!(tmc.ok && resources.ok)) {
+        return new Err(new Error("Extension was not initialized properly"));
+    }
     Logger.info("Moving extension data path");
 
     // This appears to be unnecessary with current VS Code version
@@ -48,11 +51,11 @@ export async function moveExtensionDataPath(
         newFsPath = path.join(newFsPath, "tmcdata");
     }
 
-    const moveResult = await tmc.moveProjectsDirectory(newFsPath, onUpdate);
+    const moveResult = await tmc.val.moveProjectsDirectory(newFsPath, onUpdate);
     if (moveResult.err) {
         return moveResult;
     }
 
-    resources.projectsDirectory = newFsPath;
+    resources.val.projectsDirectory = newFsPath;
     return refreshLocalExercises(actionContext);
 }

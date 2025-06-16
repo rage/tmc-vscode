@@ -12,10 +12,14 @@ export async function submitExercise(
 ): Promise<void> {
     const { dialog, workspaceManager } = actionContext;
     Logger.info("Submitting exercise");
+    if (workspaceManager.err) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
     const exercise = resource
-        ? workspaceManager.getExerciseByPath(resource)
-        : workspaceManager.activeExercise;
+        ? workspaceManager.val.getExerciseByPath(resource)
+        : workspaceManager.val.activeExercise;
     if (!exercise) {
         dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
         return;

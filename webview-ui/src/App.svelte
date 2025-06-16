@@ -21,6 +21,7 @@
     import ExerciseTests from "./panels/ExerciseTests.svelte";
     import ExerciseSubmission from "./panels/ExerciseSubmission.svelte";
     import { onMount } from "svelte";
+    import InitializationErrorHelp from "./panels/InitializationErrorHelp.svelte";
 
     onMount(() => {
         // we shouldn't have any uncaught errors, but if they happen, this will show the user a simple error message
@@ -119,6 +120,8 @@ ${ev.reason.stack}
                 <ExerciseTests panel={$state.panel} />
             {:else if $state.panel.type === "ExerciseSubmission"}
                 <ExerciseSubmission panel={$state.panel} />
+            {:else if $state.panel.type === "InitializationErrorHelp"}
+                <InitializationErrorHelp panel={$state.panel} />
             {:else if $state.panel.type === "App"}
                 <div>Loading TestMyCode...</div>
             {:else}

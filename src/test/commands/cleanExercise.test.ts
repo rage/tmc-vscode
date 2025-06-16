@@ -9,6 +9,7 @@ import { cleanExercise } from "../../commands";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock } from "../mocks/tmc";
 import { createWorkspaceMangerMock, WorkspaceManagerMockValues } from "../mocks/workspaceManager";
+import { Ok } from "ts-results";
 
 suite("Clean exercise command", function () {
     const BACKEND_FOLDER = path.join(__dirname, "..", "backend");
@@ -25,8 +26,8 @@ suite("Clean exercise command", function () {
     function actionContext(): ActionContext {
         return {
             ...stubContext,
-            tmc: tmcMock.object,
-            workspaceManager: workspaceManagerMock.object,
+            tmc: new Ok(tmcMock.object),
+            workspaceManager: new Ok(workspaceManagerMock.object),
         };
     }
 
