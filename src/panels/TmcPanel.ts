@@ -866,12 +866,16 @@ export function randomPanelId(): number {
     return Math.floor(Math.random() * 100_000_000);
 }
 
-function formatError(res: Result<unknown, Error>): string | null {
+function formatError(res: Result<unknown, Error>): { error: string; stack: string } | null {
     if (res.err) {
         if (res.val.cause) {
-            return `${res.val.message}: ${res.val.cause}`;
+            const error = `${res.val.message}: ${res.val.cause}`;
+            const stack = res.val.stack ?? "no stack trace";
+            return { error, stack };
         } else {
-            return res.val.message;
+            const error = res.val.message;
+            const stack = res.val.stack ?? "no stack trace";
+            return { error, stack };
         }
     } else {
         return null;

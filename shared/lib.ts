@@ -276,11 +276,11 @@ export type ExtensionToWebview =
           target: TargetPanel<InitializationErrorHelpPanel>;
           cliFolder: string;
           initializationErrors: {
-              tmc: string | null;
-              userData: string | null;
-              workspaceManager: string | null;
-              exerciseDecorationProvider: string | null;
-              resources: string | null;
+              tmc: { error: string; stack: string } | null;
+              userData: { error: string; stack: string } | null;
+              workspaceManager: { error: string; stack: string } | null;
+              exerciseDecorationProvider: { error: string; stack: string } | null;
+              resources: { error: string; stack: string } | null;
           };
       }
     // the last variant exists just to make TypeScript think that every panel type has

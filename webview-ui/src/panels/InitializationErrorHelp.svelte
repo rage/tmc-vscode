@@ -6,12 +6,15 @@
 
     export let panel: InitializationErrorHelpPanel;
 
-    const cliFolder = loadable<string | null>();
-    const tmcError = loadable<string | null>();
-    const userDataError = loadable<string | null>();
-    const workspaceManagerError = loadable<string | null>();
-    const exerciseDecorationProviderError = loadable<string | null>();
-    const resourcesError = loadable<string | null>();
+    type ErrorData = {
+        cliFolder: string;
+        tmcError: { error: string; stack: string } | null;
+        userDataError: { error: string; stack: string } | null;
+        workspaceManagerError: { error: string; stack: string } | null;
+        exerciseDecorationProviderError: { error: string; stack: string } | null;
+        resourcesError: { error: string; stack: string } | null;
+    };
+    const errorData = loadable<ErrorData>();
 
     onMount(() => {
         vscode.postMessage({
@@ -22,14 +25,15 @@
     addMessageListener(panel, (message) => {
         switch (message.type) {
             case "initializationErrors": {
-                cliFolder.set(message.cliFolder);
-                tmcError.set(message.initializationErrors.tmc);
-                userDataError.set(message.initializationErrors.userData);
-                workspaceManagerError.set(message.initializationErrors.workspaceManager);
-                exerciseDecorationProviderError.set(
-                    message.initializationErrors.exerciseDecorationProvider,
-                );
-                resourcesError.set(message.initializationErrors.resources);
+                errorData.set({
+                    cliFolder: message.cliFolder,
+                    tmcError: message.initializationErrors.tmc,
+                    userDataError: message.initializationErrors.userData,
+                    workspaceManagerError: message.initializationErrors.workspaceManager,
+                    exerciseDecorationProviderError:
+                        message.initializationErrors.exerciseDecorationProvider,
+                    resourcesError: message.initializationErrors.resources,
+                });
                 break;
             }
             default:
@@ -40,32 +44,54 @@
 
 <h1>Initializing the extension failed</h1>
 <div>Something went wrong while initializing the extension.</div>
-<ul>
-    {#if $tmcError}
-        <li>
-            <div>Failed to initialize tmc-langs: {$tmcError}.</div>
-            <div>
-                This error may be caused by a proxy or firewall that is blocking network requests or
-                by an antivirus program. This may also be caused by an antivirus program. You can
-                try to resolve this issue by adding an exception to the directory at '{$cliFolder}'.
-            </div>
-        </li>
-    {/if}
-    {#if $userDataError}
-        <li>Failed to initialize userdata: {$userDataError}.</li>
-    {/if}
-    {#if $workspaceManagerError}
-        <li>Failed to initialize workspace manager: {$workspaceManagerError}.</li>
-    {/if}
-    {#if $exerciseDecorationProviderError}
-        <li>
-            Failed to initialize exercise decoration provider: {$exerciseDecorationProviderError}.
-        </li>
-    {/if}
-    {#if $resourcesError}
-        <li>Failed to initialize resources: {$resourcesError}.</li>
-    {/if}
-</ul>
+{#if $errorData}
+    <ul>
+        {#if $errorData.tmcError}
+            <li>
+                <div>
+                    Failed to initialize tmc-langs: {$errorData.tmcError.error}. Stack trace: {$errorData
+                        .tmcError.stack}
+                </div>
+                <div>
+                    This error may be caused by a proxy or firewall that is blocking network
+                    requests or by an antivirus program. This may also be caused by an antivirus
+                    program. You can try to resolve this issue by adding an exception to the
+                    directory at '{$errorData.cliFolder}'.
+                </div>
+            </li>
+        {/if}
+        {#if $errorData.userDataError}
+            <li>
+                Failed to initialize userdata: {$errorData.userDataError.error}. Stack trace: {$errorData
+                    .userDataError.stack}
+            </li>
+        {/if}
+        {#if $errorData.workspaceManagerError}
+            <li>
+                Failed to initialize workspace manager: {$errorData.workspaceManagerError.error}.
+                Stack trace: {$errorData.workspaceManagerError.stack}
+            </li>
+        {/if}
+        {#if $errorData.exerciseDecorationProviderError}
+            <li>
+                Failed to initialize exercise decoration provider: {$errorData
+                    .exerciseDecorationProviderError.error}. Stack trace: {$errorData
+                    .exerciseDecorationProviderError.stack}
+            </li>
+        {/if}
+        {#if $errorData.resourcesError}
+            <li>
+                Failed to initialize resources: {$errorData.resourcesError.error}. Stack trace: {$errorData
+                    .resourcesError.stack}
+            </li>
+        {/if}
+        {#if !($errorData.tmcError || $errorData.userDataError || $errorData.userDataError || $errorData.userDataError || $errorData.userDataError)}
+            <div>No error data found</div>
+        {/if}
+    </ul>
+{:else}
+    <div>Loading error data...</div>
+{/if}
 <div>
     You can try to reinitialize the extension by pressing "Restart extension host" in the extension
     menu.
