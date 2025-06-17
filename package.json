@@ -1,7 +1,7 @@
 {
     "name": "test-my-code",
     "displayName": "TestMyCode",
-    "version": "3.3.0",
+    "version": "3.4.0",
     "description": "TestMyCode extension for Visual Studio Code",
     "categories": [
         "Education",
@@ -181,6 +181,11 @@
                 "title": "Wipe all extension data"
             },
             {
+                "command": "tmc.viewInitializationErrorHelp",
+                "title": "View initialization error help",
+                "category": "TestMyCode"
+            },
+            {
                 "command": "tmcTreeView.refreshCourses",
                 "title": "Fetch Course Updates",
                 "category": "TMC",
@@ -331,6 +336,12 @@
                     "title": "Update Exercises",
                     "category": "TestMyCode",
                     "when": "test-my-code:LoggedIn"
+                },
+                {
+                    "command": "tmc.viewInitializationErrorHelp",
+                    "title": "View initialization error help",
+                    "category": "TestMyCode",
+                    "when": "false"
                 },
                 {
                     "command": "tmcTreeView.refreshCourses",

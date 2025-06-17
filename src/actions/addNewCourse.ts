@@ -1,4 +1,4 @@
-import { Result } from "ts-results";
+import { Err, Result } from "ts-results";
 
 import { LocalCourseData } from "../api/storage";
 import { Logger } from "../utilities";
@@ -16,9 +16,12 @@ export async function addNewCourse(
     course: number,
 ): Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
+    if (!(tmc.ok && userData.ok && workspaceManager.ok)) {
+        return new Err(new Error("Extension was not initialized properly"));
+    }
     Logger.info("Adding new course");
 
-    const courseDataResult = await tmc.getCourseData(course);
+    const courseDataResult = await tmc.val.getCourseData(course);
     if (courseDataResult.err) {
         return courseDataResult;
     }
@@ -46,13 +49,13 @@ export async function addNewCourse(
         disabled: courseData.settings.disabled_status === "enabled" ? false : true,
         materialUrl: courseData.settings.material_url,
     };
-    userData.addCourse(localData);
+    userData.val.addCourse(localData);
     ui.treeDP.addChildWithId("myCourses", localData.id, localData.title, {
         command: "tmc.courseDetails",
         title: "Go To Course Details",
         arguments: [localData.id],
     });
-    workspaceManager.createWorkspaceFile(courseData.details.name);
+    workspaceManager.val.createWorkspaceFile(courseData.details.name);
     //await displayUserCourses(actionContext);
     return refreshLocalExercises(actionContext);
 }

@@ -1,4 +1,4 @@
-import { Ok, Result } from "ts-results";
+import { Err, Ok, Result } from "ts-results";
 
 import { ConnectionError, ForbiddenError } from "../errors";
 import { TmcPanel } from "../panels/TmcPanel";
@@ -7,6 +7,7 @@ import { combineApiExerciseData } from "../utilities/apiData";
 
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
+import { use } from "chai";
 
 /**
  * Updates the given course by re-fetching all data from the server. Handles authorization and
@@ -20,6 +21,9 @@ export async function updateCourse(
     courseId: number,
 ): Promise<Result<boolean, Error>> {
     const { exerciseDecorationProvider, tmc, userData, workspaceManager } = actionContext;
+    if (!(tmc.ok && userData.ok && workspaceManager.ok && exerciseDecorationProvider.ok)) {
+        return new Err(new Error("Extension was not initialized properly"));
+    }
     Logger.info("Updating course");
 
     const postMessage = (courseId: number, disabled: boolean, exerciseIds: number[]): void => {
@@ -42,16 +46,16 @@ export async function updateCourse(
             },
         );
     };
-    const courseData = userData.getCourse(courseId);
-    const updateResult = await tmc.getCourseData(courseId, { forceRefresh: true });
+    const courseData = userData.val.getCourse(courseId);
+    const updateResult = await tmc.val.getCourseData(courseId, { forceRefresh: true });
     if (updateResult.err) {
         if (updateResult.val instanceof ForbiddenError) {
             if (!courseData.disabled) {
                 Logger.warn(
                     `Failed to access information for course ${courseData.name}. Marking as disabled.`,
                 );
-                const course = userData.getCourse(courseId);
-                await userData.updateCourse({ ...course, disabled: true });
+                const course = userData.val.getCourse(courseId);
+                await userData.val.updateCourse({ ...course, disabled: true });
                 postMessage(course.id, true, []);
             } else {
                 Logger.warn(
@@ -74,7 +78,7 @@ export async function updateCourse(
         [0, 0],
     );
 
-    await userData.updateCourse({
+    await userData.val.updateCourse({
         ...courseData,
         availablePoints,
         awardedPoints,
@@ -84,7 +88,7 @@ export async function updateCourse(
         perhapsExamMode: settings.hide_submission_results,
     });
 
-    const updateExercisesResult = await userData.updateExercises(
+    const updateExercisesResult = await userData.val.updateExercises(
         courseId,
         combineApiExerciseData(details.exercises, exercises),
     );
@@ -92,16 +96,16 @@ export async function updateCourse(
         return updateExercisesResult;
     }
 
-    if (courseData.name === workspaceManager.activeCourse) {
-        exerciseDecorationProvider.updateDecorationsForExercises(
-            ...workspaceManager.getExercisesByCourseSlug(courseData.name),
+    if (courseData.name === workspaceManager.val.activeCourse) {
+        exerciseDecorationProvider.val.updateDecorationsForExercises(
+            ...workspaceManager.val.getExercisesByCourseSlug(courseData.name),
         );
     }
 
     // refresh local exercises to ensure deleted exercises don't appear open etc.
     await refreshLocalExercises(actionContext);
 
-    const course = userData.getCourse(courseId);
+    const course = userData.val.getCourse(courseId);
     postMessage(course.id, course.disabled, course.newExercises);
 
     return Ok(true);

@@ -25,6 +25,10 @@ export async function displayUserCourses(
 ): Promise<void> {
     const { userData, tmc } = actionContext;
     Logger.info("Displaying My Courses view");
+    if (!(userData.ok && tmc.ok)) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
     const panel: MyCoursesPanel = {
         type: "MyCourses",
@@ -32,7 +36,7 @@ export async function displayUserCourses(
         courseDeadlines: {},
     };
 
-    const courses = userData.getCourses();
+    const courses = userData.val.getCourses();
     const newExercisesCourses: ExtensionToWebview[] = courses.map((c) => ({
         type: "setNewExercises",
         target: panel,
@@ -53,7 +57,7 @@ export async function displayUserCourses(
     const now = new Date();
     courses.forEach(async (course) => {
         const courseId = course.id;
-        const exercises: Exercise[] = (await tmc.getCourseDetails(courseId))
+        const exercises: Exercise[] = (await tmc.val.getCourseDetails(courseId))
             .map((x) => x.exercises)
             .unwrapOr([]);
 
@@ -89,7 +93,11 @@ export async function displayLocalCourseDetails(
     courseId: number,
 ): Promise<void> {
     const { userData, workspaceManager } = actionContext;
-    const course = userData.getCourse(courseId);
+    if (!(userData.ok && workspaceManager.ok)) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
+    const course = userData.val.getCourse(courseId);
     Logger.info(`Display course view for ${course.name}`);
 
     const mapStatus = (
@@ -122,7 +130,7 @@ export async function displayLocalCourseDetails(
         const groupName = nameMatch?.[1] || "";
         const group = exerciseData.get(groupName);
         const name = nameMatch?.[2] || "";
-        const exData = workspaceManager.getExerciseBySlug(course.name, ex.name);
+        const exData = workspaceManager.val.getExerciseBySlug(course.name, ex.name);
         const softDeadline = ex.softDeadline ? parseDate(ex.softDeadline) : null;
         const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
         initialState.push({

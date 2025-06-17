@@ -10,19 +10,26 @@ export async function closeExercise(
 ): Promise<void> {
     const { dialog, userData, workspaceManager } = actionContext;
     Logger.info("Closing exercise");
+    if (!(workspaceManager.ok && userData.ok)) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
     const exercise = resource
-        ? workspaceManager.getExerciseByPath(resource)
-        : workspaceManager.activeExercise;
+        ? workspaceManager.val.getExerciseByPath(resource)
+        : workspaceManager.val.activeExercise;
     if (!exercise) {
         dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
         return;
     }
 
-    const exerciseId = userData.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id;
+    const exerciseId = userData.val.getExerciseByName(
+        exercise.courseSlug,
+        exercise.exerciseSlug,
+    )?.id;
     if (
         exerciseId &&
-        (userData.getPassed(exerciseId) ||
+        (userData.val.getPassed(exerciseId) ||
             (await dialog.confirmation(
                 `Are you sure you want to close uncompleted exercise ${exercise.exerciseSlug}?`,
             )))

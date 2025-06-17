@@ -39,7 +39,8 @@ export type Panel =
     | SelectOrganizationPanel
     | SelectCoursePanel
     | ExerciseTestsPanel
-    | ExerciseSubmissionPanel;
+    | ExerciseSubmissionPanel
+    | InitializationErrorHelpPanel;
 
 export type PanelType = Panel["type"];
 
@@ -118,6 +119,11 @@ export type ExerciseSubmissionPanel = {
     type: "ExerciseSubmission";
     course: TestCourse;
     exercise: TestExercise;
+};
+
+export type InitializationErrorHelpPanel = {
+    id: number;
+    type: "InitializationErrorHelp";
 };
 
 /*
@@ -264,6 +270,18 @@ export type ExtensionToWebview =
     | {
           type: "willNotRunTestsForExam";
           target: TargetPanel<ExerciseTestsPanel>;
+      }
+    | {
+          type: "initializationErrors";
+          target: TargetPanel<InitializationErrorHelpPanel>;
+          cliFolder: string;
+          initializationErrors: {
+              tmc: { error: string; stack: string } | null;
+              userData: { error: string; stack: string } | null;
+              workspaceManager: { error: string; stack: string } | null;
+              exerciseDecorationProvider: { error: string; stack: string } | null;
+              resources: { error: string; stack: string } | null;
+          };
       }
     // the last variant exists just to make TypeScript think that every panel type has
     // at least two different message types, which makes TS treat them differently than if
@@ -418,6 +436,10 @@ export type WebviewToExtension =
     | {
           type: "openLinkInBrowser";
           url: string;
+      }
+    | {
+          type: "requestInitializationErrors";
+          sourcePanel: InitializationErrorHelpPanel;
       };
 
 /*

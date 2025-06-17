@@ -24,9 +24,9 @@ suite("refreshLocalExercises action", function () {
 
     const actionContext = (): ActionContext => ({
         ...stubContext,
-        tmc: tmcMock.object,
-        userData: userDataMock.object,
-        workspaceManager: workspaceManagerMock.object,
+        tmc: new Ok(tmcMock.object),
+        userData: new Ok(userDataMock.object),
+        workspaceManager: new Ok(workspaceManagerMock.object),
     });
 
     setup(function () {

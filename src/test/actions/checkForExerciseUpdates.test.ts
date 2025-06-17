@@ -20,8 +20,8 @@ suite("checkForExerciseUpdates action", function () {
 
     const actionContext = (): ActionContext => ({
         ...stubContext,
-        tmc: tmcMock.object,
-        userData: userDataMock.object,
+        tmc: new Ok(tmcMock.object),
+        userData: new Ok(userDataMock.object),
     });
 
     setup(function () {

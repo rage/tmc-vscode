@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.4.0] - 2025-06-16
+
+-   Improved error handling during initialization.
+
 ## [3.3.0] - 2025-04-03
 
 -   Added command `tmc.logs` for opening the logs with a corresponding option in the extension menu.

@@ -46,7 +46,7 @@ suite("downloadOrUpdateExercises action", function () {
         ...stubContext,
         dialog: dialogMock.object,
         settings: settingsMock.object,
-        tmc: tmcMock.object,
+        tmc: new Ok(tmcMock.object),
         ui: uiMock.object,
     });
 

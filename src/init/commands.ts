@@ -12,7 +12,7 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
 ): void {
-    const { dialog, ui, userData } = actionContext;
+    const { dialog, ui, userData, resources } = actionContext;
     Logger.info("Registering TMC VSCode commands");
 
     // Commands not shown to user in Command Palette / TMC Action menu
@@ -59,7 +59,12 @@ export function registerCommands(
         ),
 
         vscode.commands.registerCommand("tmc.courseDetails", async (courseId?: number) => {
-            const courses = userData.getCourses();
+            if (userData.err) {
+                Logger.error("The extension was not initialized properly");
+                return;
+            }
+
+            const courses = userData.val.getCourses();
             if (courses.length === 0) {
                 return;
             }
@@ -133,9 +138,14 @@ export function registerCommands(
         }),
 
         vscode.commands.registerCommand("tmc.openTMCExercisesFolder", async () => {
+            if (!(resources.ok && resources.val.projectsDirectory)) {
+                Logger.error("The extension was not initialized properly");
+                return;
+            }
+
             vscode.commands.executeCommand(
                 "revealFileInOS",
-                vscode.Uri.file(actionContext.resources.projectsDirectory),
+                vscode.Uri.file(resources.val.projectsDirectory),
             );
         }),
 
@@ -208,5 +218,12 @@ export function registerCommands(
         vscode.commands.registerCommand("tmc.wipe", async () =>
             commands.wipe(actionContext, context),
         ),
+
+        vscode.commands.registerCommand("tmc.viewInitializationErrorHelp", async () => {
+            TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+                id: randomPanelId(),
+                type: "InitializationErrorHelp",
+            });
+        }),
     );
 }

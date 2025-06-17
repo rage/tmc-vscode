@@ -1,4 +1,4 @@
-import { Ok, Result } from "ts-results";
+import { Err, Ok, Result } from "ts-results";
 
 import { TmcPanel } from "../panels/TmcPanel";
 import { ExtensionToWebview } from "../shared/shared";
@@ -23,6 +23,9 @@ export async function downloadOrUpdateExercises(
     exerciseIds: number[],
 ): Promise<Result<DownloadResults, Error>> {
     const { dialog, settings, tmc } = actionContext;
+    if (tmc.err) {
+        return new Err(new Error("Extension was not initialized properly"));
+    }
     Logger.info("Downloading exercises", exerciseIds);
 
     if (exerciseIds.length === 0) {
@@ -36,7 +39,7 @@ export async function downloadOrUpdateExercises(
     const downloadResult = await dialog.progressNotification(
         "Downloading exercises...",
         (progress) => {
-            return tmc.downloadExercises(exerciseIds, downloadTemplate, (download) => {
+            return tmc.val.downloadExercises(exerciseIds, downloadTemplate, (download) => {
                 progress.report(download);
                 statuses.set(download.id, "closed");
                 TmcPanel.postMessage(wrapToMessage(download.id, "closed"));

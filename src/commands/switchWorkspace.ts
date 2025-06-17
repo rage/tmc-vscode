@@ -8,8 +8,12 @@ import { Logger } from "../utilities";
 export async function switchWorkspace(actionContext: ActionContext): Promise<void> {
     const { dialog, userData } = actionContext;
     Logger.info("Switching workspace");
+    if (userData.err) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
-    const courses = userData.getCourses();
+    const courses = userData.val.getCourses();
     const currentWorkspace = vscode.workspace.name?.split(" ")[0];
     const courseWorkspace = await dialog.selectItem(
         "Select a course workspace to open",

@@ -5,8 +5,12 @@ import { Logger } from "../utilities";
 export async function addNewCourse(actionContext: ActionContext): Promise<void> {
     const { dialog, tmc } = actionContext;
     Logger.info("Adding new course");
+    if (tmc.err) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
-    const organizationsResult = await tmc.getOrganizations();
+    const organizationsResult = await tmc.val.getOrganizations();
     if (organizationsResult.err) {
         dialog.errorNotification("Failed to fetch organizations.", organizationsResult.val);
         return;
@@ -20,7 +24,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
         return;
     }
 
-    const courses = await tmc.getCourses(chosenOrg);
+    const courses = await tmc.val.getCourses(chosenOrg);
     if (courses.err) {
         dialog.errorNotification(`Failed to fetch organization courses for ${chosenOrg}.`);
         return;

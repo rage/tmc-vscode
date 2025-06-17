@@ -15,38 +15,78 @@ import { Logger } from "../utilities/";
  * @param tmc The TMC API object
  */
 export function registerUiActions(actionContext: ActionContext): void {
-    const { ui, visibilityGroups } = actionContext;
+    const {
+        ui,
+        visibilityGroups,
+        userData,
+        tmc,
+        resources,
+        exerciseDecorationProvider,
+        workspaceManager,
+    } = actionContext;
     Logger.info("Initializing UI Actions");
 
-    // Register UI actions
-    ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.loggedIn.not], {
-        command: "tmc.showLogin",
-        title: "",
-        arguments: [],
-    });
-
-    const userCourses = actionContext.userData.getCourses();
-    ui.treeDP.registerAction(
-        "My Courses",
-        "myCourses",
-        [visibilityGroups.loggedIn],
-        {
-            command: "tmc.myCourses",
-            title: "Go to My Courses",
-        },
-        userCourses.length !== 0
-            ? vscode.TreeItemCollapsibleState.Expanded
-            : vscode.TreeItemCollapsibleState.Collapsed,
-        userCourses.map<{ label: string; id: string; command: vscode.Command }>((course) => ({
-            label: course.title,
-            id: course.id.toString(),
-            command: {
-                command: "tmc.courseDetails",
-                title: "Go to course details",
-                arguments: [course.id],
+    if (
+        !(
+            userData.ok &&
+            tmc.ok &&
+            resources.ok &&
+            exerciseDecorationProvider.ok &&
+            workspaceManager.ok
+        )
+    ) {
+        // something failed
+        ui.treeDP.registerAction(
+            "View initialization error help",
+            "tmc.viewInitializationErrorHelp",
+            [],
+            {
+                command: "tmc.viewInitializationErrorHelp",
+                title: "Open help message for the extension initialization error",
             },
-        })),
-    );
+        );
+        ui.treeDP.registerAction(
+            "Restart extension host",
+            "workbench.action.restartExtensionHost",
+            [],
+            { command: "workbench.action.restartExtensionHost", title: "Restart extension host" },
+        );
+    }
+
+    // Register UI actions
+    if (tmc.ok) {
+        // cannot login without tmc
+        ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.loggedIn.not], {
+            command: "tmc.showLogin",
+            title: "",
+            arguments: [],
+        });
+    }
+
+    if (userData.ok) {
+        const userCourses = userData.val.getCourses();
+        ui.treeDP.registerAction(
+            "My Courses",
+            "myCourses",
+            [visibilityGroups.loggedIn],
+            {
+                command: "tmc.myCourses",
+                title: "Go to My Courses",
+            },
+            userCourses.length !== 0
+                ? vscode.TreeItemCollapsibleState.Expanded
+                : vscode.TreeItemCollapsibleState.Collapsed,
+            userCourses.map<{ label: string; id: string; command: vscode.Command }>((course) => ({
+                label: course.title,
+                id: course.id.toString(),
+                command: {
+                    command: "tmc.courseDetails",
+                    title: "Go to course details",
+                    arguments: [course.id],
+                },
+            })),
+        );
+    }
 
     ui.treeDP.registerAction("Settings", "settings", [], {
         command: "tmc.settings",
@@ -76,6 +116,12 @@ export async function uiDownloadExercises(
     courseId: number,
     exerciseIds: number[],
 ): Promise<void> {
+    const { userData } = actionContext;
+    if (userData.err) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
+
     if (mode === "update") {
         TmcPanel.postMessage({
             type: "setUpdateables",
@@ -112,7 +158,7 @@ export async function uiDownloadExercises(
     }
 
     const refreshResult = Result.all(
-        await actionContext.userData.clearFromNewExercises(courseId, downloadResult.val.successful),
+        await userData.val.clearFromNewExercises(courseId, downloadResult.val.successful),
         await refreshLocalExercises(actionContext),
     );
     if (refreshResult.err) {
@@ -126,7 +172,7 @@ export async function uiDownloadExercises(
         type: "setNewExercises",
         target: { type: "MyCourses" },
         courseId: courseId,
-        exerciseIds: actionContext.userData.getCourse(courseId).newExercises,
+        exerciseIds: userData.val.getCourse(courseId).newExercises,
     });
     const exerciseStatusChangeMessages = exerciseIds.map((id) => {
         const message: ExtensionToWebview = {

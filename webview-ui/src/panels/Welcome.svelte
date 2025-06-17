@@ -72,6 +72,12 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.4.0 - 2025-06-16</h3>
+            <h4>Improved error handling during initialization</h4>
+            <p>
+                Previously, any error during initialization would cause the extension menu to not
+                load at all. Now, a help screen is displayed and the menu is usable.
+            </p>
             <h3>3.3.0 - 2025-04-03</h3>
             <h4>Added a command for viewing the output logs</h4>
             <p>
@@ -102,22 +108,6 @@
             <p>
                 Various error messages that were previously vague and unhelpful now contain much
                 more detail. The associated logging has also been improved to make debugging easier.
-            </p>
-            <h3>3.1.0 - 2024-12-17</h3>
-            <h4>Fixed downloading old submissions for C# exercises</h4>
-            <p>
-                There was an issue in tmc-langs that caused the extension to fail to detect the
-                project directory within a submission after downloading it.
-            </p>
-            <h4>Fixed error messages not displaying in some cases when running tests</h4>
-            <p>
-                Certain types of errors were not being displayed when they occurred while running
-                tests.
-            </p>
-            <h4>Sort dialogue of old submissions by date</h4>
-            <p>
-                Previously, when downloading an old submission, the list of old submissions was not
-                sorted in the dialogue.
             </p>
         </div>
     </div>

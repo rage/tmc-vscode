@@ -11,8 +11,12 @@ import { Logger } from "../utilities";
 export async function changeTmcDataPath(actionContext: ActionContext): Promise<void> {
     const { dialog, resources } = actionContext;
     Logger.info("Changing TMC data path");
+    if (!(resources.ok && resources.val.projectsDirectory)) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
-    const old = resources.projectsDirectory;
+    const old = resources.val.projectsDirectory;
     const options: vscode.OpenDialogOptions = {
         canSelectFiles: false,
         canSelectFolders: true,
@@ -42,7 +46,7 @@ export async function changeTmcDataPath(actionContext: ActionContext): Promise<v
         }
         TmcPanel.postMessage({
             type: "setTmcDataPath",
-            tmcDataPath: resources.projectsDirectory,
+            tmcDataPath: resources.val.projectsDirectory,
             target: {
                 type: "MyCourses",
             },

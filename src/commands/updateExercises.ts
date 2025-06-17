@@ -10,6 +10,10 @@ import { Logger } from "../utilities";
 export async function updateExercises(actionContext: ActionContext, silent: string): Promise<void> {
     const { dialog, settings, userData } = actionContext;
     Logger.info("Checking for exercise updates");
+    if (userData.err) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
     const updateablesResult = await actions.checkForExerciseUpdates(actionContext);
     if (updateablesResult.err) {
@@ -22,7 +26,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
 
     const now = Date.now();
     const exercisesToUpdate = updateablesResult.val.filter((x) => {
-        const course = userData.getCourse(x.courseId);
+        const course = userData.val.getCourse(x.courseId);
         return course.notifyAfter <= now && !course.disabled;
     });
 
@@ -35,7 +39,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
 
     const downloadHandler = async (): Promise<void> => {
         TmcPanel.postMessage(
-            ...userData.getCourses().map<ExtensionToWebview>((x) => ({
+            ...userData.val.getCourses().map<ExtensionToWebview>((x) => ({
                 type: "setUpdateables",
                 target: { type: "CourseDetails" },
                 courseId: x.id,
@@ -52,7 +56,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
         }
 
         TmcPanel.postMessage(
-            ...userData.getCourses().map<ExtensionToWebview>((x) => ({
+            ...userData.val.getCourses().map<ExtensionToWebview>((x) => ({
                 type: "setUpdateables",
                 target: { type: "CourseDetails" },
                 courseId: x.id,
@@ -74,7 +78,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
                 const now2 = Date.now();
                 const uniqueCourseIds = uniq(exercisesToUpdate.map((x) => x.courseId));
                 uniqueCourseIds.forEach((x) =>
-                    userData.setNotifyDate(x, now2 + NOTIFICATION_DELAY),
+                    userData.val.setNotifyDate(x, now2 + NOTIFICATION_DELAY),
                 );
             },
         ],

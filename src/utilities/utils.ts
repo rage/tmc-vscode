@@ -8,6 +8,7 @@ import { ConnectionError } from "../errors";
 import { SubmissionFeedbackQuestion } from "../shared/langsSchema";
 
 import { Logger } from "./logger";
+import { ExtensionContext } from "vscode";
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be
@@ -166,4 +167,8 @@ export async function removeOldData(oldDataObject: {
         return new Ok(`Removed successfully from ${oldDataObject.path}`);
     }
     return new Ok(`Time exceeded, will not remove data from ${oldDataObject.path}`);
+}
+
+export function cliFolder(context: ExtensionContext): string {
+    return path.join(context.globalStorageUri.fsPath, "cli");
 }
