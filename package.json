@@ -465,6 +465,7 @@
         "trailingComma": "all"
     },
     "dependencies": {
+        "@aws-crypto/sha256-js": "^5.2.0",
         "del": "^8.0.0",
         "fs-extra": "^11.2.0",
         "get-folder-size": "^5.0.0",

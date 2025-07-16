@@ -3,7 +3,7 @@
 
 const path = require("path");
 
-const TMC_LANGS_RUST_VERSION = "0.37.1";
+const TMC_LANGS_RUST_VERSION = "0.38.0";
 
 const mockTmcLocalMooc = {
     __TMC_BACKEND_URL__: JSON.stringify("http://localhost:4001"),
