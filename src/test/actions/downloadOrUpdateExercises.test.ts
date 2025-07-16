@@ -8,7 +8,10 @@ import { ActionContext } from "../../actions/types";
 import Dialog from "../../api/dialog";
 import TMC from "../../api/tmc";
 import Settings from "../../config/settings";
-import { DownloadOrUpdateCourseExercisesResult, ExerciseDownload } from "../../shared/langsSchema";
+import {
+    DownloadOrUpdateTmcCourseExercisesResult,
+    TmcExerciseDownload,
+} from "../../shared/langsSchema";
 import { ExerciseStatus, WebviewMessage } from "../../ui/types";
 import UI from "../../ui/ui";
 import { createMockActionContext } from "../mocks/actionContext";
@@ -17,14 +20,14 @@ import { createSettingsMock, SettingsMockValues } from "../mocks/settings";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
 import { createUIMock } from "../mocks/ui";
 
-const helloWorld: ExerciseDownload = {
+const helloWorld: TmcExerciseDownload = {
     "course-slug": "python-course",
     "exercise-slug": "hello_world",
     id: 1,
     path: "/tmc/vscode/test-python-course/hello_world",
 };
 
-const otherWorld: ExerciseDownload = {
+const otherWorld: TmcExerciseDownload = {
     "course-slug": "python-course",
     "exercise-slug": "other_world",
     id: 2,
@@ -51,10 +54,10 @@ suite("downloadOrUpdateExercises action", function () {
     });
 
     const createDownloadResult = (
-        downloaded: ExerciseDownload[],
-        skipped: ExerciseDownload[],
-        failed: Array<[ExerciseDownload, string[]]> | undefined,
-    ): Result<DownloadOrUpdateCourseExercisesResult, Error> => {
+        downloaded: TmcExerciseDownload[],
+        skipped: TmcExerciseDownload[],
+        failed: Array<[TmcExerciseDownload, string[]]> | undefined,
+    ): Result<DownloadOrUpdateTmcCourseExercisesResult, Error> => {
         return Ok({
             downloaded,
             failed,

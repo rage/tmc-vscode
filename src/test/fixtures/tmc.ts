@@ -1,10 +1,10 @@
-import { LocalExercise } from "../../shared/langsSchema";
+import { LocalExercise, LocalTmcExercise } from "../../shared/langsSchema";
 
 const checkExerciseUpdates: Array<{ id: number }> = [{ id: 2 }];
 
 const closedExercisesPythonCourse: string[] = ["other_world"];
 
-const listLocalCourseExercisesPythonCourse: LocalExercise[] = [
+const listLocalCourseExercisesPythonCourse: LocalTmcExercise[] = [
     {
         "exercise-path": "/tmc/vscode/test-python-course/hello_world",
         "exercise-slug": "hello_world",

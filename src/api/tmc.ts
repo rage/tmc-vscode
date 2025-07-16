@@ -29,9 +29,9 @@ import {
     CourseDetails,
     CourseExercise,
     DataKind,
-    DownloadOrUpdateCourseExercisesResult,
+    DownloadOrUpdateTmcCourseExercisesResult,
     ExerciseDetails,
-    LocalExercise,
+    LocalTmcExercise,
     Organization,
     OutputData,
     RunResult,
@@ -229,25 +229,25 @@ export default class TMC {
     }
 
     /**
-     * Lists local exercises for given course. Uses TMC-langs `list-local-course-exercises` command
+     * Lists local exercises for given course. Uses TMC-langs `list-local-tmc-course-exercises` command
      * internally.
      *
      * @param courseSlug Course which's exercises should be listed.
      */
     public async listLocalCourseExercises(
         courseSlug: string,
-    ): Promise<Result<LocalExercise[], Error>> {
+    ): Promise<Result<LocalTmcExercise[], Error>> {
         const res = await this._executeLangsCommand(
             {
                 args: [
-                    "list-local-course-exercises",
+                    "list-local-tmc-course-exercises",
                     "--client-name",
                     this.clientName,
                     "--course-slug",
                     courseSlug,
                 ],
             },
-            "local-exercises",
+            "local-tmc-exercises",
         );
         return res.map((x) => x.data["output-data"]);
     }
@@ -464,7 +464,7 @@ export default class TMC {
         ids: number[],
         downloadTemplate: boolean,
         onDownloaded: (value: { id: number; percent: number; message?: string }) => void,
-    ): Promise<Result<DownloadOrUpdateCourseExercisesResult, Error>> {
+    ): Promise<Result<DownloadOrUpdateTmcCourseExercisesResult, Error>> {
         const onStdout = (res: StatusUpdateData): void => {
             if (
                 res["update-data-kind"] === "client-update-data" &&
@@ -488,7 +488,7 @@ export default class TMC {
                 ),
                 onStdout,
             },
-            "exercise-download",
+            "tmc-exercise-download",
         );
         return res.andThen((x) => {
             // Invalidate exercise update cache

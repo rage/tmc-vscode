@@ -2,7 +2,11 @@ import { Err, Ok, Result } from "ts-results";
 import { IMock, It, Mock } from "typemoq";
 
 import TMC from "../../api/tmc";
-import { DownloadOrUpdateCourseExercisesResult, LocalExercise } from "../../shared/langsSchema";
+import {
+    DownloadOrUpdateTmcCourseExercisesResult,
+    LocalExercise,
+    LocalTmcExercise,
+} from "../../shared/langsSchema";
 import {
     checkExerciseUpdates,
     closedExercisesPythonCourse,
@@ -13,8 +17,8 @@ const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."));
 
 export interface TMCMockValues {
     clean: Result<void, Error>;
-    downloadExercises: Result<DownloadOrUpdateCourseExercisesResult, Error>;
-    listLocalCourseExercisesPythonCourse: Result<LocalExercise[], Error>;
+    downloadExercises: Result<DownloadOrUpdateTmcCourseExercisesResult, Error>;
+    listLocalCourseExercisesPythonCourse: Result<LocalTmcExercise[], Error>;
     getSettingClosedExercises: Result<string[], Error>;
     getSettingProjectsDir: Result<string, Error>;
     migrateExercise: Result<void, Error>;

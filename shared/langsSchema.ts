@@ -1,4 +1,5 @@
-// https://raw.githubusercontent.com/rage/tmc-langs-rust/master/crates/tmc-langs-cli/bindings.d.ts
+// VERSION=0.38.0
+// https://raw.githubusercontent.com/rage/tmc-langs-rust/0.38.0/crates/tmc-langs-cli/bindings.d.ts
 
 export type Locale = string;
 
@@ -16,14 +17,19 @@ export type DataKind =
           "output-data-kind": "exercise-packaging-configuration";
           "output-data": ExercisePackagingConfiguration;
       }
-    | { "output-data-kind": "local-exercises"; "output-data": Array<LocalExercise> }
+    | { "output-data-kind": "local-tmc-exercises"; "output-data": Array<LocalTmcExercise> }
+    | { "output-data-kind": "local-mooc-exercises"; "output-data": Array<LocalMoocExercise> }
     | { "output-data-kind": "refresh-result"; "output-data": RefreshData }
     | { "output-data-kind": "test-result"; "output-data": RunResult }
     | { "output-data-kind": "exercise-desc"; "output-data": ExerciseDesc }
     | { "output-data-kind": "updated-exercises"; "output-data": Array<UpdatedExercise> }
     | {
-          "output-data-kind": "exercise-download";
-          "output-data": DownloadOrUpdateCourseExercisesResult;
+          "output-data-kind": "tmc-exercise-download";
+          "output-data": DownloadOrUpdateTmcCourseExercisesResult;
+      }
+    | {
+          "output-data-kind": "mooc-exercise-download";
+          "output-data": DownloadOrUpdateMoocCourseExercisesResult;
       }
     | { "output-data-kind": "combined-course-data"; "output-data": CombinedCourseData }
     | { "output-data-kind": "course-details"; "output-data": CourseDetails }
@@ -64,9 +70,9 @@ export type Kind =
     | "invalid-token"
     | {
           "failed-exercise-download": {
-              completed: Array<ExerciseDownload>;
-              skipped: Array<ExerciseDownload>;
-              failed: Array<[ExerciseDownload, Array<string>]>;
+              completed: Array<TmcExerciseDownload>;
+              skipped: Array<TmcExerciseDownload>;
+              failed: Array<[TmcExerciseDownload, Array<string>]>;
           };
       };
 
@@ -131,7 +137,11 @@ export type ExercisePackagingConfiguration = {
     exercise_file_paths: Array<string>;
 };
 
-export type LocalExercise = { "exercise-slug": string; "exercise-path": string };
+export type LocalExercise = { tmc: LocalTmcExercise } | { mooc: LocalMoocExercise };
+
+export type LocalTmcExercise = { "exercise-slug": string; "exercise-path": string };
+
+export type LocalMoocExercise = { "exercise-id": string; "exercise-path": string };
 
 export type Compression = "tar" | "zip" | "zstd";
 
@@ -247,18 +257,26 @@ export type TestDesc = {
 
 export type UpdatedExercise = { id: number };
 
-export type DownloadOrUpdateCourseExercisesResult = {
-    downloaded: Array<ExerciseDownload>;
-    skipped: Array<ExerciseDownload>;
-    failed?: Array<[ExerciseDownload, Array<string>]>;
+export type DownloadOrUpdateTmcCourseExercisesResult = {
+    downloaded: Array<TmcExerciseDownload>;
+    skipped: Array<TmcExerciseDownload>;
+    failed?: Array<[TmcExerciseDownload, Array<string>]>;
 };
 
-export type ExerciseDownload = {
+export type DownloadOrUpdateMoocCourseExercisesResult = {
+    downloaded: Array<MoocExerciseDownload>;
+    skipped: Array<MoocExerciseDownload>;
+    failed?: Array<[MoocExerciseDownload, Array<string>]>;
+};
+
+export type TmcExerciseDownload = {
     id: number;
     "course-slug": string;
     "exercise-slug": string;
     path: string;
 };
+
+export type MoocExerciseDownload = { id: string; path: string };
 
 export type CombinedCourseData = {
     details: CourseDetails;
@@ -615,12 +633,12 @@ export type TmcExerciseTask = {
 };
 
 export type PublicSpec =
-    | { type: "browser"; files: Array<ExerciseFile> }
-    | { type: "editor"; archiveName: string; archiveDownloadUrl: string; checksum: string };
+    | { type: "Browser"; files: Array<ExerciseFile> }
+    | { type: "Editor"; archive_name: string; archive_download_url: string; checksum: string };
 
 export type ModelSolutionSpec =
-    | { type: "browser"; solutionFiles: Array<ExerciseFile> }
-    | { type: "editor"; archiveDownloadUrl: string };
+    | { type: "Browser"; solution_files: Array<ExerciseFile> }
+    | { type: "Editor"; download_url: string };
 
 export type ExerciseFile = { filepath: string; contents: string };
 
