@@ -67,7 +67,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 
     const dialog = new Dialog();
     const cliFolderPath = cliFolder(context);
-    const cliPathResult = await init.downloadCorrectLangsVersion(cliFolderPath, dialog);
+    const cliPathResult = await init.ensureLangsUpdated(cliFolderPath, dialog);
 
     // download langs if necessary
     let tmc: Result<TMC, Error>;
