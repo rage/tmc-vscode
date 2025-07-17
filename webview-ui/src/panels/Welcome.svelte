@@ -72,18 +72,17 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
-            <h3>3.5.0 - 2025-07-16</h3>
+            <h3>3.4.0 - 2025-07-17</h3>
+            <h4>Improved error handling during initialization</h4>
+            <p>
+                Previously, any error during initialization would cause the extension menu to not
+                load at all. Now, a help screen is displayed and the menu is usable.
+            </p>
             <h4>Added a checksum check for langs</h4>
             <p>
                 If something goes wrong when downloading langs or it is otherwise corrupted, the
                 extension now automatically detects it with a checksum and redownloads langs on
                 extension launch.
-            </p>
-            <h3>3.4.0 - 2025-06-16</h3>
-            <h4>Improved error handling during initialization</h4>
-            <p>
-                Previously, any error during initialization would cause the extension menu to not
-                load at all. Now, a help screen is displayed and the menu is usable.
             </p>
             <h3>3.3.0 - 2025-04-03</h3>
             <h4>Added a command for viewing the output logs</h4>

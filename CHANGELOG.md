@@ -1,12 +1,9 @@
 # Changelog
 
-## [3.5.0] - 2025-06-16
-
-- Added shasum check for langs CLI executable.
-
-## [3.4.0] - 2025-06-16
+## [3.4.0] - 2025-07-17
 
 - Improved error handling during initialization.
+- Added shasum check for langs CLI executable.
 
 ## [3.3.0] - 2025-04-03
 
