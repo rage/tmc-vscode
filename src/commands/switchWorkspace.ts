@@ -2,23 +2,27 @@ import * as vscode from "vscode";
 
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
-import { LocalCourseData, LocalTmcCourseData } from "../api/storage";
 import { Logger } from "../utilities";
+import { LocalCourseData } from "../shared/shared";
 
 export async function switchWorkspace(actionContext: ActionContext): Promise<void> {
     const { dialog, userData } = actionContext;
     Logger.info("Switching workspace");
+    if (userData.err) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
-    const courses = userData.getTmcCourses();
+    const courses = userData.val.getCourses();
     const currentWorkspace = vscode.workspace.name?.split(" ")[0];
     const courseWorkspace = await dialog.selectItem(
         "Select a course workspace to open",
-        ...courses.map<[string, LocalTmcCourseData]>((c) => [
-            c.name === currentWorkspace ? `${c.name} (Currently open)` : c.name,
-            c,
-        ]),
+        ...courses.map<[string, LocalCourseData]>((c) => {
+            const name = LocalCourseData.getCourseName(c);
+            return [name === currentWorkspace ? `${name} (Currently open)` : name, c];
+        }),
     );
     if (courseWorkspace) {
-        actions.openWorkspace(actionContext, courseWorkspace.name);
+        actions.openWorkspace(actionContext, LocalCourseData.getCourseName(courseWorkspace));
     }
 }

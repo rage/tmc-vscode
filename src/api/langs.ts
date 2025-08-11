@@ -30,9 +30,10 @@ import {
     CourseExercise,
     CourseInstance,
     DataKind,
-    DownloadOrUpdateCourseExercisesResult,
+    DownloadOrUpdateMoocCourseExercisesResult,
+    DownloadOrUpdateTmcCourseExercisesResult,
     ExerciseDetails,
-    LocalExercise,
+    LocalTmcExercise,
     Organization,
     OutputData,
     RunResult,
@@ -41,12 +42,21 @@ import {
     Submission,
     SubmissionFeedbackResponse,
     SubmissionFinished,
+    TmcExerciseSlide,
+    TmcExerciseTask,
     UpdatedExercise,
 } from "../shared/langsSchema";
 import { Logger } from "../utilities/logger";
 
 import { SubmissionFeedback } from "./types";
-import { BaseError } from "../shared/shared";
+import {
+    assertUnreachable,
+    BaseError,
+    CourseIdentifier,
+    ExerciseIdentifier,
+    makeTmcKind,
+    match,
+} from "../shared/shared";
 
 interface Options {
     apiCacheLifetime?: string;
@@ -91,10 +101,11 @@ interface CacheConfig {
 }
 
 /**
- * A Class that provides an interface to all TMC services.
+ * A Class that provides an interface to all langs functionality.
  */
-export default class TMC {
+export default class Langs {
     private static readonly _exerciseUpdatesCacheKey = "exercise-updates";
+    private static readonly _moocExerciseUpdatesCacheKey = "mooc-exercise-updates";
 
     private _nextSubmissionAllowedTimestamp: number;
     private readonly _options: Options;
@@ -230,7 +241,7 @@ export default class TMC {
     }
 
     /**
-     * Lists local exercises for given course. Uses TMC-langs `list-local-course-exercises` command
+     * Lists local exercises for given course. Uses TMC-langs `list-local-tmc-course-exercises` command
      * internally.
      *
      * @param courseSlug Course which's exercises should be listed.
@@ -238,11 +249,11 @@ export default class TMC {
     public async listLocalCourseExercises(
         courseKind: "tmc" | "mooc",
         courseSlug: string,
-    ): Promise<Result<LocalExercise[], Error>> {
+    ): Promise<Result<LocalTmcExercise[], Error>> {
         const res = await this._executeLangsCommand(
             {
                 args: [
-                    "list-local-course-exercises",
+                    "list-local-tmc-course-exercises",
                     "--client-name",
                     this.clientName,
                     "--course-slug",
@@ -251,7 +262,7 @@ export default class TMC {
                     courseKind,
                 ],
             },
-            "local-exercises",
+            "local-tmc-exercises",
         );
         return res.map((x) => x.data["output-data"]);
     }
@@ -444,7 +455,7 @@ export default class TMC {
      * Checks for updates for all exercises in this client's context. Uses TMC-langs
      * `check-exercise-updates` core command internally.
      */
-    public async checkExerciseUpdates(
+    public async checkTmcExerciseUpdates(
         options?: CacheOptions,
     ): Promise<Result<Array<UpdatedExercise>, Error>> {
         const res = await this._executeLangsCommand(
@@ -452,7 +463,20 @@ export default class TMC {
                 args: this._tmcCmd("check-exercise-updates"),
             },
             "updated-exercises",
-            { forceRefresh: options?.forceRefresh, key: TMC._exerciseUpdatesCacheKey },
+            { forceRefresh: options?.forceRefresh, key: Langs._exerciseUpdatesCacheKey },
+        );
+        return res.map((x) => x.data["output-data"]);
+    }
+
+    public async checkMoocExerciseUpdates(
+        options?: CacheOptions,
+    ): Promise<Result<Array<string>, Error>> {
+        const res = await this._executeLangsCommand(
+            {
+                args: this._moocCmd("check-exercise-updates"),
+            },
+            "mooc-updated-exercises",
+            { forceRefresh: options?.forceRefresh, key: Langs._moocExerciseUpdatesCacheKey },
         );
         return res.map((x) => x.data["output-data"]);
     }
@@ -465,40 +489,104 @@ export default class TMC {
      * @param downloadTemplate Flag for downloading exercise template instead of latest submission.
      */
     public async downloadExercises(
-        ids: number[],
+        ids: ExerciseIdentifier[],
         downloadTemplate: boolean,
-        onDownloaded: (value: { id: number; percent: number; message?: string }) => void,
-    ): Promise<Result<DownloadOrUpdateCourseExercisesResult, Error>> {
+        onDownloaded: (value: {
+            id: ExerciseIdentifier;
+            percent: number;
+            message?: string;
+        }) => void,
+    ): Promise<
+        Result<
+            [DownloadOrUpdateTmcCourseExercisesResult, DownloadOrUpdateMoocCourseExercisesResult],
+            Error
+        >
+    > {
         const onStdout = (res: StatusUpdateData): void => {
             if (
                 res["update-data-kind"] === "client-update-data" &&
                 res.data?.["client-update-data-kind"] === "exercise-download"
             ) {
                 onDownloaded({
-                    id: res.data.id,
+                    id: makeTmcKind({ tmcExerciseId: res.data.id }),
                     percent: res["percent-done"],
                     message: res.message ?? undefined,
                 });
             }
         };
         const downloadTemplateArg = downloadTemplate ? ["--download-template"] : [];
-        const res = await this._executeLangsCommand(
-            {
-                args: this._tmcCmd(
-                    "download-or-update-course-exercises",
-                    ...downloadTemplateArg,
-                    "--exercise-id",
-                    ...ids.map((id) => id.toString()),
+        const tmcIds = ids
+            .map((id) =>
+                match(
+                    id,
+                    (tmc) => tmc.tmcExerciseId,
+                    (mooc) => null,
                 ),
-                onStdout,
-            },
-            "exercise-download",
-        );
-        return res.andThen((x) => {
-            // Invalidate exercise update cache
-            this._responseCache.delete(TMC._exerciseUpdatesCacheKey);
-            return Ok(x.data["output-data"]);
-        });
+            )
+            .filter((id) => id !== null);
+        const moocIds = ids
+            .map((id) =>
+                match(
+                    id,
+                    (tmc) => null,
+                    (mooc) => mooc.moocExerciseId,
+                ),
+            )
+            .filter((id) => id !== null);
+
+        let tmcOutputData = null;
+        if (tmcIds.length < 0) {
+            const tmcRes = await this._executeLangsCommand(
+                {
+                    args: this._tmcCmd(
+                        "download-or-update-course-exercises",
+                        ...downloadTemplateArg,
+                        "--exercise-id",
+                        ...tmcIds.map((id) => id.toString()),
+                    ),
+                    onStdout,
+                },
+                "tmc-exercise-download",
+            );
+            const tmcMappedRes = tmcRes.andThen((x) => {
+                // Invalidate exercise update cache
+                this._responseCache.delete(Langs._exerciseUpdatesCacheKey);
+                return Ok(x.data["output-data"]);
+            });
+            if (tmcMappedRes.err) {
+                return Err(tmcMappedRes.val);
+            }
+            tmcOutputData = tmcMappedRes.val;
+        }
+
+        let moocOutputData = null;
+        if (moocIds.length < 0) {
+            const moocRes = await this._executeLangsCommand(
+                {
+                    args: this._moocCmd(
+                        "download-or-update-course-exercises",
+                        ...downloadTemplateArg,
+                        "--exercise-id",
+                        ...moocIds,
+                    ),
+                    onStdout,
+                },
+                "mooc-exercise-download",
+            );
+            const moocMappedRes = moocRes.andThen((x) => {
+                // Invalidate exercise update cache
+                this._responseCache.delete(Langs._exerciseUpdatesCacheKey);
+                return Ok(x.data["output-data"]);
+            });
+            if (moocMappedRes.err) {
+                return Err(moocMappedRes.val);
+            }
+            moocOutputData = moocMappedRes.val;
+        }
+
+        const tmcExercises = tmcOutputData ?? { downloaded: [], skipped: [], failed: [] };
+        const moocExercises = moocOutputData ?? { downloaded: [], skipped: [], failed: [] };
+        return Ok([tmcExercises, moocExercises]);
     }
 
     /**
@@ -510,7 +598,7 @@ export default class TMC {
      * @param submissionId Id of the exercise submission to download.
      * @param saveOldState Whether to submit the current state of the exercise beforehand.
      */
-    public async downloadOldSubmission(
+    public async downloadTmcOldSubmission(
         exerciseId: number,
         exercisePath: string,
         submissionId: number,
@@ -526,6 +614,29 @@ export default class TMC {
             ...saveOldStateArg,
             "--exercise-id",
             exerciseId.toString(),
+            "--output-path",
+            exercisePath,
+        );
+        const res = await this._executeLangsCommand({ args }, null);
+        return res.err ? res : Ok.EMPTY;
+    }
+
+    public async downloadMoocOldSubmission(
+        exerciseId: string,
+        exercisePath: string,
+        submissionId: string,
+        saveOldState: boolean,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        progressCallback?: (downloadedPct: number, increment: number) => void,
+    ): Promise<Result<void, Error>> {
+        const saveOldStateArg = saveOldState ? ["--save-old-state"] : [];
+        const args = this._moocCmd(
+            "download-old-submission",
+            "--submission-id",
+            submissionId,
+            ...saveOldStateArg,
+            "--exercise-id",
+            exerciseId,
             "--output-path",
             exercisePath,
         );
@@ -564,7 +675,7 @@ export default class TMC {
      * @param courseId Id to the course.
      * @returns A combination of getCourseDetails, getCourseExercises, getCourseSettings.
      */
-    public async getCourseData(
+    public async getTmcCourseData(
         courseId: number,
         options?: CacheOptions,
     ): Promise<Result<CombinedCourseData, Error>> {
@@ -607,6 +718,12 @@ export default class TMC {
         return res.map((x) => x.data["output-data"]);
     }
 
+    public async getMoocCourseInstanceData(
+        courseId: string,
+    ): Promise<Result<[CourseInstance, Array<TmcExerciseSlide>], Error>> {
+        throw "asd";
+    }
+
     /**
      * Gets user-specific details of the given course. Uses TMC-langs `get-course-details` core
      * command internally.
@@ -615,17 +732,30 @@ export default class TMC {
      * @returns Details of the course.
      */
     public async getCourseDetails(
-        courseId: number,
+        courseId: CourseIdentifier,
         options?: CacheOptions,
     ): Promise<Result<CourseDetails, Error>> {
-        const res = await this._executeLangsCommand(
-            {
-                args: this._tmcCmd("get-course-details", "--course-id", courseId.toString()),
-            },
-            "course-details",
-            { forceRefresh: options?.forceRefresh, key: `course-${courseId}-details` },
-        );
-        return res.map((x) => x.data["output-data"]);
+        if (courseId.kind === "tmc") {
+            const res = await this._executeLangsCommand(
+                {
+                    args: this._tmcCmd("get-course-details", "--course-id", courseId.toString()),
+                },
+                "course-details",
+                { forceRefresh: options?.forceRefresh, key: `course-${courseId}-details` },
+            );
+            return res.map((x) => x.data["output-data"]);
+        } else if (courseId.kind === "mooc") {
+            const res = await this._executeLangsCommand(
+                {
+                    args: this._moocCmd("get-course-details", "--course-id", courseId.toString()),
+                },
+                "course-details",
+                { forceRefresh: options?.forceRefresh, key: `course-${courseId}-details` },
+            );
+            return res.map((x) => x.data["output-data"]);
+        } else {
+            assertUnreachable(courseId);
+        }
     }
 
     /**
@@ -698,7 +828,7 @@ export default class TMC {
      * @param exerciseId Id of the exercise.
      * @returns Array of old submissions.
      */
-    public async getOldSubmissions(exerciseId: number): Promise<Result<Submission[], Error>> {
+    public async getTmcOldSubmissions(exerciseId: number): Promise<Result<Submission[], Error>> {
         const res = await this._executeLangsCommand(
             {
                 args: this._tmcCmd(
@@ -706,6 +836,16 @@ export default class TMC {
                     "--exercise-id",
                     exerciseId.toString(),
                 ),
+            },
+            "submissions",
+        );
+        return res.map((x) => x.data["output-data"]);
+    }
+
+    public async getMoocOldSubmissions(exerciseId: string): Promise<Result<Submission[], Error>> {
+        const res = await this._executeLangsCommand(
+            {
+                args: this._moocCmd("get-exercise-submissions", "--exercise-id", exerciseId),
             },
             "submissions",
         );
@@ -738,7 +878,9 @@ export default class TMC {
      *
      * @returns A list of organizations.
      */
-    public async getOrganizations(options?: CacheOptions): Promise<Result<Organization[], Error>> {
+    public async getTmcOrganizations(
+        options?: CacheOptions,
+    ): Promise<Result<Organization[], Error>> {
         const remapper: CacheConfig["remapper"] = (res) => {
             if (res.data?.["output-data-kind"] === "organizations") {
                 return res.data["output-data"].map((x) => [
@@ -759,6 +901,29 @@ export default class TMC {
         return res.map((x) => x.data["output-data"]);
     }
 
+    public async getMoocOrganizations(
+        options?: CacheOptions,
+    ): Promise<Result<Organization[], Error>> {
+        const remapper: CacheConfig["remapper"] = (res) => {
+            if (res.data?.["output-data-kind"] === "organizations") {
+                return res.data["output-data"].map((x) => [
+                    `organization-${x.slug}`,
+                    { ...res, data: { "output-data-kind": "organization", "output-data": x } },
+                ]);
+            } else {
+                return [];
+            }
+        };
+        const res = await this._executeLangsCommand(
+            {
+                args: this._moocCmd("get-organizations"),
+            },
+            "organizations",
+            { forceRefresh: options?.forceRefresh, key: "organizations", remapper },
+        );
+        return res.map((x) => x.data["output-data"]);
+    }
+
     /**
      * Reverts given exercise to its original template. Optionally submits the current state
      * of the exercise beforehand. Uses TMC-langs `reset-exercise` core command internally.
@@ -767,7 +932,7 @@ export default class TMC {
      * @param saveOldState Whether to submit current state of the exercise before reseting it.
      */
     public async resetExercise(
-        exerciseId: number,
+        exerciseId: ExerciseIdentifier,
         exercisePath: string,
         saveOldState: boolean,
     ): Promise<Result<void, Error>> {
@@ -776,7 +941,7 @@ export default class TMC {
             "reset-exercise",
             ...saveOldStateArg,
             "--exercise-id",
-            exerciseId.toString(),
+            ExerciseIdentifier.toString(exerciseId),
             "--exercise-path",
             exercisePath,
         );
@@ -795,7 +960,7 @@ export default class TMC {
      * @param progressCallback Optional callback function that can be used to get status reports.
      */
     public async submitExerciseAndWaitForResults(
-        exerciseId: number,
+        exerciseId: ExerciseIdentifier,
         exercisePath: string,
         progressCallback?: (progressPct: number, message?: string) => void,
         onSubmissionUrl?: (url: string) => void,
@@ -824,7 +989,7 @@ export default class TMC {
                     "--submission-path",
                     exercisePath,
                     "--exercise-id",
-                    exerciseId.toString(),
+                    ExerciseIdentifier.toString(exerciseId),
                 ),
                 onStdout,
             },
@@ -843,7 +1008,7 @@ export default class TMC {
      * @param exerciseId Id of the exercise.
      * @returns TMC paste link.
      */
-    public async submitExerciseToPaste(
+    public async submitTmcExerciseToPaste(
         exerciseId: number,
         exercisePath: string,
     ): Promise<Result<string, Error>> {
@@ -856,6 +1021,30 @@ export default class TMC {
         const res = await this._executeLangsCommand(
             {
                 args: this._tmcCmd(
+                    "paste",
+                    "--exercise-id",
+                    exerciseId.toString(),
+                    "--submission-path",
+                    exercisePath,
+                ),
+            },
+            "new-submission",
+        );
+        return res.map((x) => x.data["output-data"].paste_url);
+    }
+    public async submitMoocExerciseToPaste(
+        exerciseId: string,
+        exercisePath: string,
+    ): Promise<Result<string, Error>> {
+        const now = Date.now();
+        if (now < this._nextSubmissionAllowedTimestamp) {
+            return Err(new BottleneckError("This command can't be executed at the moment."));
+        } else {
+            this._nextSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL;
+        }
+        const res = await this._executeLangsCommand(
+            {
+                args: this._moocCmd(
                     "paste",
                     "--exercise-id",
                     exerciseId.toString(),
@@ -1085,6 +1274,7 @@ export default class TMC {
             cprocess.stdin.write(stdin + "\n");
         }
 
+        const stderr: Array<string> = [];
         const processResult = new Promise<number | null>((resolve, reject) => {
             let resultCode: number | undefined;
             let stdoutEnded = false;
@@ -1113,7 +1303,8 @@ ${error.message}`;
             });
             cprocess.stderr.on("data", (chunk) => {
                 const data = chunk.toString();
-                Logger.debug("stderr", data);
+                Logger.warn("stderr", data);
+                stderr.push(data);
                 onStderr?.(data);
             });
             cprocess.stdout.on("end", () => {
@@ -1197,9 +1388,15 @@ ${error.message}`;
                 Logger.debug(stdoutBuffer);
             }
 
-            return theResult
-                ? Ok(theResult)
-                : Err(new EmptyLangsResponseError("Langs process ended without result data."));
+            if (theResult) {
+                return Ok(theResult);
+            } else {
+                return Err(
+                    new EmptyLangsResponseError(
+                        `Langs process ended without result data. stderr: {${stderr.join("\n")}}`,
+                    ),
+                );
+            }
         })();
 
         const interrupt = (): void => {

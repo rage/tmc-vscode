@@ -1,15 +1,15 @@
-import { Ok, Result } from "ts-results";
+import { Err, Ok, Result } from "ts-results";
 
 import { TmcPanel } from "../panels/TmcPanel";
-import { ExtensionToWebview } from "../shared/shared";
+import { ExerciseIdentifier, ExtensionToWebview } from "../shared/shared";
 import { ExerciseStatus } from "../ui/types";
 import { Logger } from "../utilities";
 
 import { ActionContext } from "./types";
 
 interface DownloadResults {
-    successful: number[];
-    failed: number[];
+    successful: ExerciseIdentifier[];
+    failed: ExerciseIdentifier[];
 }
 
 /**
@@ -20,9 +20,12 @@ interface DownloadResults {
  */
 export async function downloadOrUpdateExercises(
     actionContext: ActionContext,
-    exerciseIds: number[],
+    exerciseIds: ExerciseIdentifier[],
 ): Promise<Result<DownloadResults, Error>> {
-    const { dialog, settings, tmc } = actionContext;
+    const { dialog, settings, langs } = actionContext;
+    if (langs.err) {
+        return new Err(new Error("Extension was not initialized properly"));
+    }
     Logger.info("Downloading exercises", exerciseIds);
 
     if (exerciseIds.length === 0) {
@@ -30,15 +33,17 @@ export async function downloadOrUpdateExercises(
     }
 
     TmcPanel.postMessage(...exerciseIds.map((x) => wrapToMessage(x, "downloading")));
-    const statuses = new Map<number, ExerciseStatus>(exerciseIds.map((x) => [x, "downloadFailed"]));
+    const statuses = new Map<number | string, ExerciseStatus>(
+        exerciseIds.map((x) => [ExerciseIdentifier.unwrap(x), "downloadFailed"]),
+    );
 
     const downloadTemplate = !settings.getDownloadOldSubmission();
     const downloadResult = await dialog.progressNotification(
         "Downloading exercises...",
         (progress) => {
-            return tmc.downloadExercises(exerciseIds, downloadTemplate, (download) => {
+            return langs.val.downloadExercises(exerciseIds, downloadTemplate, (download) => {
                 progress.report(download);
-                statuses.set(download.id, "closed");
+                statuses.set(ExerciseIdentifier.unwrap(download.id), "closed");
                 TmcPanel.postMessage(wrapToMessage(download.id, "closed"));
             });
         },
@@ -48,19 +53,38 @@ export async function downloadOrUpdateExercises(
         return downloadResult;
     }
 
-    const { downloaded, failed, skipped } = downloadResult.val;
-    if (skipped.length > 0) {
-        Logger.warn(`${skipped.length} downloads were skipped.`);
+    const [
+        { downloaded: tmcDownloaded, failed: tmcFailed, skipped: tmcSkipped },
+        { downloaded: moocDownloaded, failed: moocFailed, skipped: moocSkipped },
+    ] = downloadResult.val;
+    if (tmcSkipped.length > 0) {
+        Logger.warn(`${tmcSkipped.length} downloads were skipped.`);
     }
-    downloaded.forEach((x) => statuses.set(x.id, "closed"));
-    skipped.forEach((x) => statuses.set(x.id, "closed"));
-    failed?.forEach(([exercise, reason]) => {
+    if (moocSkipped.length > 0) {
+        Logger.warn(`${moocSkipped.length} downloads were skipped.`);
+    }
+    tmcDownloaded.forEach((x) => statuses.set(x.id, "closed"));
+    moocDownloaded.forEach((x) => statuses.set(x["task-id"], "closed"));
+    tmcSkipped.forEach((x) => statuses.set(x.id, "closed"));
+    moocSkipped.forEach((x) => statuses.set(x["task-id"], "closed"));
+    tmcFailed?.forEach(([exercise, reason]) => {
         Logger.error(`Failed to download exercise ${exercise["exercise-slug"]}: ${reason}`);
         statuses.set(exercise.id, "downloadFailed");
     });
+    moocFailed?.forEach(([exercise, reason]) => {
+        Logger.error(`Failed to download exercise ${exercise["task-id"]}: ${reason}`);
+        statuses.set(exercise["task-id"], "downloadFailed");
+    });
     postMessages(statuses);
-    if (failed && failed.length > 0) {
-        const failedDownloads = failed.map(([f]) => f["exercise-slug"]);
+    if (tmcFailed && tmcFailed.length > 0) {
+        const failedDownloads = tmcFailed.map(([f]) => f["exercise-slug"]);
+        dialog.errorNotification(
+            "Failed to update exercises.",
+            new Error(failedDownloads.join(", ")),
+        );
+    }
+    if (moocFailed && moocFailed.length > 0) {
+        const failedDownloads = moocFailed.map(([f]) => f["task-id"]);
         dialog.errorNotification(
             "Failed to update exercises.",
             new Error(failedDownloads.join(", ")),
@@ -70,11 +94,15 @@ export async function downloadOrUpdateExercises(
     return Ok(sortResults(statuses));
 }
 
-function postMessages(statuses: Map<number, ExerciseStatus>): void {
-    TmcPanel.postMessage(...Array.from(statuses.entries()).map(([id, s]) => wrapToMessage(id, s)));
+function postMessages(statuses: Map<number | string, ExerciseStatus>): void {
+    TmcPanel.postMessage(
+        ...Array.from(statuses.entries()).map(([id, s]) =>
+            wrapToMessage(ExerciseIdentifier.from(id), s),
+        ),
+    );
 }
 
-function wrapToMessage(exerciseId: number, status: ExerciseStatus): ExtensionToWebview {
+function wrapToMessage(exerciseId: ExerciseIdentifier, status: ExerciseStatus): ExtensionToWebview {
     return {
         type: "exerciseStatusChange",
         target: {
@@ -85,14 +113,14 @@ function wrapToMessage(exerciseId: number, status: ExerciseStatus): ExtensionToW
     };
 }
 
-function sortResults(statuses: Map<number, ExerciseStatus>): DownloadResults {
-    const successful: number[] = [];
-    const failed: number[] = [];
+function sortResults(statuses: Map<number | string, ExerciseStatus>): DownloadResults {
+    const successful: ExerciseIdentifier[] = [];
+    const failed: ExerciseIdentifier[] = [];
     statuses.forEach((status, id) => {
         if (status !== "downloadFailed") {
-            successful.push(id);
+            successful.push(ExerciseIdentifier.from(id));
         } else {
-            failed.push(id);
+            failed.push(ExerciseIdentifier.from(id));
         }
     });
     return { successful, failed };

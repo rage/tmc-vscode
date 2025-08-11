@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { ActionContext } from "../actions/types";
 import { OldSubmission } from "../api/types";
 import { dateToString, Logger, parseDate } from "../utilities";
+import { ExerciseIdentifier, match } from "../shared/shared";
 
 /**
  * Looks for older submissions of the given exercise and lets user choose which one to download.
@@ -14,28 +15,35 @@ export async function downloadOldSubmission(
     actionContext: ActionContext,
     resource: vscode.Uri | undefined,
 ): Promise<void> {
-    const { dialog, tmc, userData, workspaceManager } = actionContext;
+    const { dialog, langs, userData, workspaceManager } = actionContext;
     Logger.info("Downloading old submission");
+    if (!(workspaceManager.ok && userData.ok && langs.ok)) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
     const exercise = resource
-        ? workspaceManager.getExerciseByPath(resource)
-        : workspaceManager.activeExercise;
+        ? workspaceManager.val.getExerciseByPath(resource)
+        : workspaceManager.val.activeExercise;
     if (!exercise) {
         dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
         return;
     }
 
-    const exerciseId = userData.getTmcExerciseByName(
-        exercise.courseSlug,
-        exercise.exerciseSlug,
-    )?.id;
+    const exerciseId = userData.val.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
+        ?.data?.id;
     if (!exerciseId) {
         dialog.errorNotification("Failed to resolve exercise id.");
         return;
     }
 
+    const id = ExerciseIdentifier.from(exerciseId);
     Logger.debug("Fetching old submissions");
-    const submissionsResult = await tmc.getOldSubmissions(exerciseId);
+    const submissionsResult = await match(
+        id,
+        (tmc) => langs.val.getTmcOldSubmissions(tmc.tmcExerciseId),
+        (mooc) => langs.val.getMoocOldSubmissions(mooc.moocExerciseId),
+    );
     if (submissionsResult.err) {
         dialog.errorNotification("Failed to fetch old submissions.", submissionsResult.val);
         return;
@@ -89,11 +97,22 @@ export async function downloadOldSubmission(
     const editor = vscode.window.activeTextEditor;
     const document = editor?.document.uri;
 
-    const oldDownloadResult = await tmc.downloadOldSubmission(
-        exerciseId,
-        exercise.uri.fsPath,
-        submission.id,
-        submitFirst,
+    const oldDownloadResult = await match(
+        id,
+        (tmc) =>
+            langs.val.downloadTmcOldSubmission(
+                tmc.tmcExerciseId,
+                exercise.uri.fsPath,
+                submission.id,
+                submitFirst,
+            ),
+        (mooc) =>
+            langs.val.downloadMoocOldSubmission(
+                mooc.moocExerciseId,
+                exercise.uri.fsPath,
+                submission.id.toString(),
+                submitFirst,
+            ),
     );
     if (oldDownloadResult.err) {
         dialog.errorNotification("Failed to download old submission.", oldDownloadResult.val);

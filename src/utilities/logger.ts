@@ -3,6 +3,7 @@ import { OutputChannel, Uri, window } from "vscode";
 
 import { DEBUG_MODE, OUTPUT_CHANNEL_NAME } from "../config/constants";
 import { BaseError } from "../shared/shared";
+import Dialog from "../api/dialog";
 
 export enum LogLevel {
     None = "none",
@@ -59,6 +60,12 @@ export class Logger {
         this._log(ConsoleLogLevel.Error, ...params);
     }
 
+    static errorWithDialog(dialog: Dialog, ...params: unknown[]): void {
+        const loggable = this._toLoggableParams(params);
+        dialog.errorNotification(loggable);
+        this._log(ConsoleLogLevel.Error, ...params);
+    }
+
     static show(): void {
         if (this.output === undefined) {
             return;
@@ -75,8 +82,8 @@ export class Logger {
         if (typeof p !== "object") {
             return String(p);
         }
-        if (p instanceof Uri) {
-            return `Uri(${p.toString(true)})`;
+        if (p !== null && p instanceof Uri) {
+            return `Uri(${(p as Uri).toString(true)})`;
         }
 
         try {

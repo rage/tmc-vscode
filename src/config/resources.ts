@@ -10,7 +10,7 @@ export enum EditorKind {
 
 export default class Resources {
     readonly editorKind: EditorKind;
-    private _projectsDirectory: string;
+    private _projectsDirectory: string | undefined;
 
     constructor(
         readonly cssFolder: string,
@@ -18,13 +18,13 @@ export default class Resources {
         readonly htmlFolder: string,
         readonly mediaFolder: string,
         readonly workspaceFileFolder: string,
-        projectsDirectory: string,
+        projectsDirectory: string | undefined,
     ) {
         this.editorKind = vscode.env.appName === "VSCodium" ? EditorKind.VSCodium : EditorKind.Code;
         this._projectsDirectory = projectsDirectory;
     }
 
-    get projectsDirectory(): string {
+    get projectsDirectory(): string | undefined {
         return this._projectsDirectory;
     }
 

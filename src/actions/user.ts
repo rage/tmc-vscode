@@ -9,23 +9,27 @@ import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import { LocalTmcCourseData } from "../api/storage";
-import { WorkspaceExercise as WorkspaceTmcExercise } from "../api/workspaceManager";
+import {
+    WorkspaceExercise,
+    WorkspaceExercise as WorkspaceTmcExercise,
+} from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { BottleneckError } from "../errors";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import {
+    CourseIdentifier,
     ExerciseSubmissionPanel,
     ExerciseTestsPanel,
-    makeTmcKind,
     TestResultData,
+    LocalCourseData,
+    LocalCourseExercise,
 } from "../shared/shared";
 import { Logger, parseFeedbackQuestion } from "../utilities/";
 import { getActiveEditorExecutablePath } from "../window";
 
-import { downloadNewExercisesForTmcCourse } from "./downloadNewExercisesForTmcCourse";
+import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
 import { ActionContext } from "./types";
-import { updateCourse } from "./updateTmcCourse";
+import { updateCourse } from "./updateCourse";
 
 export const testInterrupts: Map<number, Array<() => void>> = new Map();
 
@@ -37,14 +41,17 @@ export async function login(
     username: string,
     password: string,
 ): Promise<Result<void, Error>> {
-    const { tmc, dialog } = actionContext;
+    const { langs, dialog } = actionContext;
+    if (langs.err) {
+        return new Err(new Error("Extension was not initialized properly"));
+    }
     Logger.info("Logging in");
 
     if (!username || !password) {
         return new Err(new Error("Username and password may not be empty."));
     }
 
-    const result = await tmc.authenticate(username, password);
+    const result = await langs.val.authenticate(username, password);
     if (result.err) {
         dialog.errorNotification(`Failed to log in: "${result.val.message}:"`, result.val);
         return result;
@@ -57,9 +64,12 @@ export async function login(
  * Logs the user out, updating UI state
  */
 export async function logout(actionContext: ActionContext): Promise<Result<void, Error>> {
-    const { tmc, dialog } = actionContext;
+    const { langs, dialog } = actionContext;
+    if (langs.err) {
+        return new Err(new Error("Extension was not initialized properly"));
+    }
 
-    const result = await tmc.deauthenticate();
+    const result = await langs.val.deauthenticate();
     if (result.err) {
         dialog.errorNotification(`Failed to log out: "${result.val.message}:"`, result.val);
         return result;
@@ -76,10 +86,15 @@ export async function testExercise(
     actionContext: ActionContext,
     exercise: WorkspaceTmcExercise,
 ): Promise<Result<void, Error>> {
-    const { tmc, userData } = actionContext;
+    const { langs, userData } = actionContext;
+    if (!(langs.ok && userData.ok)) {
+        return new Err(new Error("Extension was not initialized properly"));
+    }
 
-    const course = userData.getTmcCourseByName(exercise.courseSlug);
-    const courseExercise = course.exercises.find((x) => x.name === exercise.exerciseSlug);
+    const course = userData.val.getCourseBySlug(exercise.courseSlug);
+    const courseExercise = LocalCourseData.getExercises(course).find(
+        (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
+    );
     if (!courseExercise) {
         return Err(
             new Error(
@@ -102,15 +117,17 @@ export async function testExercise(
 
     let data: TestResultData = {
         ...EXAM_TEST_RESULT,
-        id: courseExercise.id,
-        disabled: course.disabled,
-        courseSlug: course.name,
+        id: LocalCourseExercise.getId(courseExercise),
+        disabled: course.data.disabled,
+        courseSlug: LocalCourseData.getCourseName(course),
     };
 
-    if (!course.perhapsExamMode) {
+    if (!course.data.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext);
-        const [testRunner, testInterrupt] = tmc.runTests(exercise.uri.fsPath, executablePath);
-        const [validationRunner, validationInterrupt] = tmc.runCheckstyle(exercise.uri.fsPath);
+        const [testRunner, testInterrupt] = langs.val.runTests(exercise.uri.fsPath, executablePath);
+        const [validationRunner, validationInterrupt] = langs.val.runCheckstyle(
+            exercise.uri.fsPath,
+        );
         testInterrupts.set(testRunId, [testInterrupt, validationInterrupt]);
         const exerciseName = exercise.exerciseSlug;
 
@@ -141,11 +158,11 @@ export async function testExercise(
 
         data = {
             testResult: testResults.val,
-            id: courseExercise.id,
-            courseSlug: course.name,
+            id: LocalCourseExercise.getId(courseExercise),
+            courseSlug: LocalCourseData.getCourseName(course),
             exerciseName,
             tmcLogs: testResults.val.logs,
-            disabled: course.disabled,
+            disabled: course.data.disabled,
             styleValidationResult: validationResults.val,
         };
 
@@ -176,13 +193,18 @@ export async function testExercise(
 export async function submitTmcExercise(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
-    exercise: WorkspaceTmcExercise,
+    exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { exerciseDecorationProvider, tmc, userData } = actionContext;
+    const { exerciseDecorationProvider, langs, userData } = actionContext;
+    if (!(langs.ok && userData.ok && exerciseDecorationProvider.ok)) {
+        return new Err(new Error("Extension was not initialized properly"));
+    }
     Logger.info(`Submitting exercise ${exercise.exerciseSlug} to server`);
 
-    const course = userData.getTmcCourseByName(exercise.courseSlug);
-    const courseExercise = course.exercises.find((x) => x.name === exercise.exerciseSlug);
+    const course = userData.val.getCourseBySlug(exercise.courseSlug);
+    const courseExercise = LocalCourseData.getExercises(course).find(
+        (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
+    );
     if (!courseExercise) {
         return Err(
             new Error(
@@ -199,8 +221,8 @@ export async function submitTmcExercise(
     };
     await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
 
-    const submissionResult = await tmc.submitExerciseAndWaitForResults(
-        courseExercise.id,
+    const submissionResult = await langs.val.submitExerciseAndWaitForResults(
+        LocalCourseExercise.getId(courseExercise),
         exercise.uri.fsPath,
         (progressPercent, message) => {
             TmcPanel.postMessage({
@@ -234,8 +256,8 @@ export async function submitTmcExercise(
 
     const statusData = submissionResult.val;
     if (statusData.status === "ok" && statusData.all_tests_passed) {
-        userData.setExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug).then(() => {
-            exerciseDecorationProvider.updateDecorationsForExercises(exercise);
+        userData.val.setExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug).then(() => {
+            exerciseDecorationProvider.val.updateDecorationsForExercises(exercise);
         });
     }
     const questions = statusData.feedback_questions
@@ -251,10 +273,11 @@ export async function submitTmcExercise(
         questions,
     });
 
-    const courseData = userData.getTmcCourseByName(
-        exercise.courseSlug,
-    ) as Readonly<LocalTmcCourseData>;
-    await checkForTmcCourseUpdates(actionContext, courseData.id);
+    const courseData = userData.val.getCourse(
+        LocalCourseData.getCourseId(panel.course),
+    ) as Readonly<LocalCourseData>;
+    const courseId = LocalCourseData.getCourseId(courseData);
+    await checkForCourseUpdates(actionContext, courseId);
     vscode.commands.executeCommand("tmc.updateExercises", "silent");
 
     return Ok.EMPTY;
@@ -265,20 +288,59 @@ export async function submitTmcExercise(
  * @param id Exercise ID
  * @returns TMC Paste link if the action was successful.
  */
-export async function pasteExercise(
+export async function pasteTmcExercise(
     actionContext: ActionContext,
     courseSlug: string,
     exerciseName: string,
 ): Promise<Result<string, Error>> {
-    const { tmc, userData, workspaceManager, dialog } = actionContext;
+    const { langs, userData, workspaceManager, dialog } = actionContext;
+    if (!(langs.ok && userData.ok && workspaceManager.ok)) {
+        return new Err(new Error("Extension was not initialized properly"));
+    }
 
-    const exerciseId = userData.getTmcExerciseByName(courseSlug, exerciseName)?.id;
-    const exercisePath = workspaceManager.getExerciseBySlug(courseSlug, exerciseName)?.uri.fsPath;
+    const exerciseId = userData.val.getTmcExerciseByName(courseSlug, exerciseName)?.id;
+    const exercisePath = workspaceManager.val.getExerciseBySlug("tmc", courseSlug, exerciseName)
+        ?.uri.fsPath;
     if (!exerciseId || !exercisePath) {
         return Err(new Error("Failed to resolve exercise id"));
     }
 
-    const pasteResult = await tmc.submitExerciseToPaste(exerciseId, exercisePath);
+    const pasteResult = await langs.val.submitTmcExerciseToPaste(exerciseId, exercisePath);
+    if (pasteResult.err) {
+        dialog.errorNotification(
+            `Failed to send exercise to TMC Paste: ${pasteResult.val.message}.`,
+            pasteResult.val,
+        );
+        return pasteResult;
+    }
+
+    const pasteLink = pasteResult.val;
+    if (pasteLink === "") {
+        const message = "Didn't receive paste link from server.";
+        return new Err(new Error(`Failed to send exercise to TMC Paste: ${message}`));
+    }
+
+    return new Ok(pasteLink);
+}
+
+export async function pasteMoocExercise(
+    actionContext: ActionContext,
+    courseSlug: string,
+    exerciseName: string,
+): Promise<Result<string, Error>> {
+    const { langs, userData, workspaceManager, dialog } = actionContext;
+    if (!(langs.ok && userData.ok && workspaceManager.ok)) {
+        return new Err(new Error("Extension was not initialized properly"));
+    }
+
+    const exerciseId = userData.val.getMoocExerciseByName(courseSlug, exerciseName)?.id;
+    const exercisePath = workspaceManager.val.getExerciseBySlug("tmc", courseSlug, exerciseName)
+        ?.uri.fsPath;
+    if (!exerciseId || !exercisePath) {
+        return Err(new Error("Failed to resolve exercise id"));
+    }
+
+    const pasteResult = await langs.val.submitMoocExerciseToPaste(exerciseId, exercisePath);
     if (pasteResult.err) {
         dialog.errorNotification(
             `Failed to send exercise to TMC Paste: ${pasteResult.val.message}.`,
@@ -300,45 +362,55 @@ export async function pasteExercise(
  * Check for course updates.
  * @param courseId If given, check only updates for that course.
  */
-export async function checkForTmcCourseUpdates(
+export async function checkForCourseUpdates(
     actionContext: ActionContext,
-    courseId?: number,
+    courseId?: CourseIdentifier,
 ): Promise<void> {
     const { dialog, userData } = actionContext;
-    const courses = courseId ? [userData.getTmcCourse(courseId)] : userData.getTmcCourses();
-    const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
-    Logger.info(`Checking for course updates for courses ${filteredCourses.map((c) => c.name)}`);
-    const updatedCourses: LocalTmcCourseData[] = [];
+    if (userData.err) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
+    const courses = courseId ? [userData.val.getCourse(courseId)] : userData.val.getCourses();
+
+    const filteredCourses = courses.filter((c) => c.data.notifyAfter <= Date.now());
+    Logger.info(`Checking for course updates for courses`);
+    const updatedCourses: LocalCourseData[] = [];
     for (const course of filteredCourses) {
-        await updateCourse(actionContext, makeTmcKind({ courseId: course.id }));
-        updatedCourses.push(userData.getTmcCourse(course.id));
+        const courseId = LocalCourseData.getCourseId(course);
+        await updateCourse(actionContext, courseId);
+        updatedCourses.push(userData.val.getCourse(courseId));
     }
 
-    const handleDownload = async (course: LocalTmcCourseData): Promise<void> => {
-        const downloadResult = await downloadNewExercisesForTmcCourse(actionContext, course.id);
+    const handleDownload = async (course: LocalCourseData): Promise<void> => {
+        const courseId = LocalCourseData.getCourseId(course);
+        const downloadResult = await downloadNewExercisesForCourse(actionContext, courseId);
         if (downloadResult.err) {
             dialog.errorNotification(
-                `Failed to download new exercises for course "${course.title}."`,
+                `Failed to download new exercises for course"`,
                 downloadResult.val,
             );
         }
     };
 
     for (const course of updatedCourses) {
-        if (course.newExercises.length > 0 && !course.disabled) {
+        const newExercises = LocalCourseData.getNewExercises(course);
+        if (newExercises.length > 0 && !course.data.disabled) {
+            const courseId = LocalCourseData.getCourseId(course);
+            const courseName = LocalCourseData.getCourseName(course);
             dialog.notification(
-                `Found ${course.newExercises.length} new exercises for ${course.name}. Do you wish to download them now?`,
+                `Found ${newExercises.length} new exercises for ${courseName}. Do you wish to download them now?`,
                 ["Download", async (): Promise<void> => handleDownload(course)],
                 [
                     "Remind me later",
                     (): void => {
-                        userData.setNotifyDate(course.id, Date.now() + NOTIFICATION_DELAY);
+                        userData.val.setNotifyDate(courseId, Date.now() + NOTIFICATION_DELAY);
                     },
                 ],
                 [
                     "Don't remind about these exercises",
                     (): void => {
-                        userData.clearFromNewExercises(course.id);
+                        userData.val.clearFromNewExercises(courseId);
                     },
                 ],
             );
@@ -351,8 +423,13 @@ export async function checkForTmcCourseUpdates(
  */
 export async function openWorkspace(actionContext: ActionContext, name: string): Promise<void> {
     const { dialog, resources, workspaceManager } = actionContext;
+    if (!(resources.ok && workspaceManager.ok)) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
+
     const currentWorkspaceFile = vscode.workspace.workspaceFile;
-    const tmcWorkspaceFile = resources.getWorkspaceFilePath(name);
+    const tmcWorkspaceFile = resources.val.getWorkspaceFilePath(name);
     const workspaceAsUri = vscode.Uri.file(tmcWorkspaceFile);
     Logger.info(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
     Logger.info(`TMC workspace: ${tmcWorkspaceFile}`);
@@ -365,7 +442,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
             ))
         ) {
             if (!fs.existsSync(tmcWorkspaceFile)) {
-                workspaceManager.createWorkspaceFile(name);
+                workspaceManager.val.createWorkspaceFile(name);
             }
             await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri);
             // Restarts VSCode
@@ -377,7 +454,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
                     choice,
                     async (): Promise<Thenable<unknown>> => {
                         if (!fs.existsSync(tmcWorkspaceFile)) {
-                            workspaceManager.createWorkspaceFile(name);
+                            workspaceManager.val.createWorkspaceFile(name);
                         }
                         return vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri);
                     },
@@ -397,23 +474,32 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
  *
  * @param id ID of the course to remove
  */
-export async function removeCourse(actionContext: ActionContext, id: number): Promise<void> {
-    const { tmc, ui, userData, workspaceManager, dialog } = actionContext;
-    const course = userData.getTmcCourse(id);
-    Logger.info(`Closing exercises for ${course.name} and removing course data from userData`);
+export async function removeCourse(
+    actionContext: ActionContext,
+    id: CourseIdentifier,
+): Promise<void> {
+    const { langs, ui, userData, workspaceManager, dialog } = actionContext;
+    if (!(langs.ok && userData.ok && workspaceManager.ok)) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
-    const unsetResult = await tmc.unsetSetting(`closed-exercises-for:${course.name}`);
+    const course = userData.val.getCourse(id);
+    const courseName = LocalCourseData.getCourseName(course);
+    Logger.info(`Closing exercises for ${courseName} and removing course data from userData`);
+
+    const unsetResult = await langs.val.unsetSetting(`closed-exercises-for:${courseName}`);
     if (unsetResult.err) {
         dialog.errorNotification(
-            `Failed to remove TMC-langs data for "${course.name}:"`,
+            `Failed to remove TMC-langs data for "${courseName}:"`,
             unsetResult.val,
         );
     }
 
-    userData.deleteCourse(id);
+    userData.val.deleteCourse(id);
     ui.treeDP.removeChildWithId("myCourses", id.toString());
 
-    if (workspaceManager.activeCourse === course.name) {
+    if (workspaceManager.val.activeCourse === courseName) {
         Logger.info("Closing course workspace because it was removed.");
         await vscode.commands.executeCommand("workbench.action.closeFolder");
     }

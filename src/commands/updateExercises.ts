@@ -10,6 +10,10 @@ import { Logger } from "../utilities";
 export async function updateExercises(actionContext: ActionContext, silent: string): Promise<void> {
     const { dialog, settings, userData } = actionContext;
     Logger.info("Checking for exercise updates");
+    if (userData.err) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
     const updateablesResult = await actions.checkForExerciseUpdates(actionContext);
     if (updateablesResult.err) {
@@ -22,8 +26,8 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
 
     const now = Date.now();
     const exercisesToUpdate = updateablesResult.val.filter((x) => {
-        const course = userData.getTmcCourse(x.courseId);
-        return course.notifyAfter <= now && !course.disabled;
+        const course = userData.val.getCourse(x.courseId);
+        return course.data.notifyAfter <= now && !course.data.disabled;
     });
 
     if (exercisesToUpdate.length === 0) {
@@ -35,14 +39,13 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
 
     const downloadHandler = async (): Promise<void> => {
         TmcPanel.postMessage(
-            ...userData.getTmcCourses().map<ExtensionToWebview>((x) => ({
+            ...userData.val.getCourses().map<ExtensionToWebview>((x) => ({
                 type: "setUpdateables",
                 target: { type: "CourseDetails" },
-                courseId: x.id,
                 exerciseIds: [],
             })),
         );
-        const downloadResult = await actions.downloadOrUpdateTmcExercises(
+        const downloadResult = await actions.downloadOrUpdateExercises(
             actionContext,
             exercisesToUpdate.map((x) => x.exerciseId),
         );
@@ -52,10 +55,9 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
         }
 
         TmcPanel.postMessage(
-            ...userData.getTmcCourses().map<ExtensionToWebview>((x) => ({
+            ...userData.val.getCourses().map<ExtensionToWebview>((x) => ({
                 type: "setUpdateables",
                 target: { type: "CourseDetails" },
-                courseId: x.id,
                 exerciseIds: downloadResult.val.failed,
             })),
         );
@@ -74,7 +76,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
                 const now2 = Date.now();
                 const uniqueCourseIds = uniq(exercisesToUpdate.map((x) => x.courseId));
                 uniqueCourseIds.forEach((x) =>
-                    userData.setNotifyDate(x, now2 + NOTIFICATION_DELAY),
+                    userData.val.setNotifyDate(x, now2 + NOTIFICATION_DELAY),
                 );
             },
         ],

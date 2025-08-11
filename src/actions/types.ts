@@ -1,6 +1,7 @@
+import { Result } from "ts-results";
 import Dialog from "../api/dialog";
 import ExerciseDecorationProvider from "../api/exerciseDecorationProvider";
-import TMC from "../api/tmc";
+import Langs from "../api/langs";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import Settings from "../config/settings";
@@ -8,15 +9,16 @@ import { UserData } from "../config/userdata";
 import { VisibilityGroups } from "../ui/types";
 import UI from "../ui/ui";
 
+// fields may be undefined if something went wrong during initialization
 export type ActionContext = {
     dialog: Dialog;
-    exerciseDecorationProvider: ExerciseDecorationProvider;
-    resources: Resources;
+    exerciseDecorationProvider: Result<ExerciseDecorationProvider, Error>;
+    resources: Result<Resources, Error>;
     settings: Settings;
-    tmc: TMC;
+    langs: Result<Langs, Error>;
     ui: UI;
-    userData: UserData;
-    workspaceManager: WorkspaceManager;
+    userData: Result<UserData, Error>;
+    workspaceManager: Result<WorkspaceManager, Error>;
     visibilityGroups: VisibilityGroups;
 };
 

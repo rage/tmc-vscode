@@ -4,7 +4,7 @@ import { IMock, It, Times } from "typemoq";
 
 import { checkForExerciseUpdates } from "../../actions";
 import { ActionContext } from "../../actions/types";
-import TMC from "../../api/tmc";
+import Langs from "../../api/langs";
 import { UserData } from "../../config/userdata";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
@@ -14,14 +14,14 @@ suite("checkForExerciseUpdates action", function () {
     const stubContext = createMockActionContext();
     const updateableExercises = [{ courseId: 0, exerciseId: 2, exerciseName: "other_world" }];
 
-    let tmcMock: IMock<TMC>;
+    let tmcMock: IMock<Langs>;
     let tmcMockValues: TMCMockValues;
     let userDataMock: IMock<UserData>;
 
     const actionContext = (): ActionContext => ({
         ...stubContext,
-        tmc: tmcMock.object,
-        userData: userDataMock.object,
+        langs: new Ok(tmcMock.object),
+        userData: new Ok(userDataMock.object),
     });
 
     setup(function () {
@@ -38,7 +38,7 @@ suite("checkForExerciseUpdates action", function () {
         for (const forceRefresh of [true, false]) {
             await checkForExerciseUpdates(actionContext(), { forceRefresh });
             tmcMock.verify(
-                (x) => x.checkExerciseUpdates(It.isObjectWith({ forceRefresh })),
+                (x) => x.checkTmcExerciseUpdates(It.isObjectWith({ forceRefresh })),
                 Times.once(),
             );
         }

@@ -38,6 +38,7 @@
         filter.set(query.toUpperCase());
     }
     function selectCourse(
+        organizationSlug: string,
         courseId: string,
         instanceId: string,
         courseName: string,
@@ -46,6 +47,7 @@
         postMessageToWebview({
             type: "selectedMoocCourse",
             target: panel.requestingPanel,
+            organizationSlug: organizationSlug,
             courseId,
             instanceId,
             courseName,
@@ -72,6 +74,7 @@
                         class="course-row"
                         on:click={() =>
                             selectCourse(
+                                instance.organization_slug,
                                 instance.course_id,
                                 instance.id,
                                 instance.course_name,
@@ -79,6 +82,7 @@
                             )}
                         on:keypress={() =>
                             selectCourse(
+                                instance.organization_slug,
                                 instance.course_id,
                                 instance.id,
                                 instance.course_name,

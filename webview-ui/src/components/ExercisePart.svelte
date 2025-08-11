@@ -1,11 +1,11 @@
 <script lang="ts">
     import { writable } from "svelte/store";
     import {
+        assertUnreachable,
         ExerciseGroup,
         ExerciseIdentifier,
         ExerciseStatus,
-        MoocExerciseId,
-        TmcExerciseId,
+        match,
     } from "../shared/shared";
     import Checkbox from "./Checkbox.svelte";
     import Card from "./Card.svelte";
@@ -14,24 +14,34 @@
     export let onDownloadAll: (exerciseIds: Array<ExerciseIdentifier>) => void;
     export let onOpenAll: (exerciseIds: Array<ExerciseIdentifier>) => void;
     export let onCloseAll: (exerciseIds: Array<ExerciseIdentifier>) => void;
-    export let checkedExercises: {
-        tmc: Record<TmcExerciseId, boolean>;
-        mooc: Record<MoocExerciseId, boolean>;
-    };
-    export let exerciseStatuses: {
-        tmc: Record<TmcExerciseId, ExerciseStatus>;
-        mooc: Record<MoocExerciseId, ExerciseStatus>;
-    };
+    export let checkedExercises: Record<string | number, boolean>;
+    export let exerciseStatuses: Record<string | number, ExerciseStatus>;
 
     const expanded = writable<boolean>(false);
 
+    function unwrap(id: ExerciseIdentifier): number | string {
+        if (id.kind === "tmc") {
+            return id.data.tmcExerciseId;
+        }
+        if (id.kind === "mooc") {
+            return id.data.moocExerciseId;
+        } else {
+            assertUnreachable(id);
+        }
+    }
+
     const completedExercises = exerciseGroup.exercises.filter((e) => e.passed).length;
     const downloadedExercises = exerciseGroup.exercises.filter((e) => {
-        const status = exerciseStatuses[e.id];
+        const status = exerciseStatuses[ExerciseIdentifier.unwrap(e.id)];
         return status === "opened" || status === "closed";
     }).length;
     const openedExercises = exerciseGroup.exercises.filter(
-        (e) => exerciseStatuses[e.id] === "opened",
+        (e) =>
+            match(
+                e.id,
+                (tmc) => exerciseStatuses.tmc[tmc.tmcExerciseId],
+                (mooc) => exerciseStatuses.mooc[mooc.moocExerciseId],
+            ) === "opened",
     ).length;
     const totalExercises = exerciseGroup.exercises.length;
 
@@ -44,7 +54,7 @@
             "&#013;Hard deadline can not be exceeded."
         );
     }
-    function allExercisesAreChecked(checkedExercises: Record<number, boolean>) {
+    function allExercisesAreChecked(checkedExercises: Record<number | string, boolean>) {
         for (const exercise of exerciseGroup.exercises) {
             if (!checkedExercises[exercise.id]) {
                 return false;

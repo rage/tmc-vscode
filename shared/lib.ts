@@ -15,6 +15,138 @@ import {
 } from "./langsSchema";
 import { createIs } from "typia";
 
+
+export interface LocalTmcCourseData {
+    id: number;
+    name: string;
+    title: string;
+    description: string;
+    organization: string;
+    exercises: LocalTmcCourseExercise[];
+    availablePoints: number;
+    awardedPoints: number;
+    perhapsExamMode: boolean;
+    newExercises: number[];
+    notifyAfter: number;
+    disabled: boolean;
+    materialUrl: string | null;
+}
+
+export interface LocalMoocCourseData {
+    courseId: string;
+    instanceId: string;
+    courseName: string;
+    instanceName: string | null;
+    courseDescription: string | null;
+    instanceDescription: string | null;
+    awardedPoints: number;
+    availablePoints: number;
+    disabled: boolean;
+    materialUrl: string | null;
+    exercises: LocalMoocCourseExercise[];
+    newExercises: string[];
+    notifyAfter: number;
+    perhapsExamMode: boolean;
+}
+
+export interface LocalTmcCourseExercise {
+    id: number;
+    availablePoints: number;
+    awardedPoints: number;
+    /// Equivalent to exercise slug
+    name: string;
+    deadline: string | null;
+    passed: boolean;
+    softDeadline: string | null;
+}
+
+export interface LocalMoocCourseExercise {
+    id: string;
+    slug: string;
+    deadline: string | null;
+    passed: boolean;
+    softDeadline: string | null;
+}
+
+export type LocalCourseExercise = Enum<LocalTmcCourseExercise, LocalMoocCourseExercise>;
+
+export namespace LocalCourseExercise {
+    export function getSlug(lce: LocalCourseExercise): string {
+        return match(
+            lce,
+            (tmc) => tmc.name,
+            (mooc) => mooc.slug,
+        );
+    }
+
+    export function unwrap(
+        lce: LocalCourseExercise,
+    ): LocalTmcCourseExercise | LocalMoocCourseExercise {
+        return match(
+            lce,
+            (tmc) => tmc,
+            (mooc) => mooc,
+        );
+    }
+
+    export function getId(lce: LocalCourseExercise): ExerciseIdentifier {
+        const id = match(
+            lce,
+            (tmc) => tmc.id,
+            (mooc) => mooc.id,
+        );
+        return ExerciseIdentifier.from(id);
+    }
+}
+
+export type LocalCourseData = Enum<LocalTmcCourseData, LocalMoocCourseData>;
+
+export namespace LocalCourseData {
+    export function getCourseId(lcd: LocalCourseData): CourseIdentifier {
+        return match(
+            lcd,
+            (tmc) => makeTmcKind({ courseId: tmc.id }),
+            (mooc) => makeMoocKind({ instanceId: mooc.courseId }),
+        );
+    }
+
+    export function getCourseName(lcd: LocalCourseData): string {
+        return match(
+            lcd,
+            (tmc) => tmc.name,
+            (mooc) => mooc.courseName,
+        );
+    }
+
+    export function getNewExercises(lcd: LocalCourseData): Array<ExerciseIdentifier> {
+        return match(
+            lcd,
+            (tmc) => tmc.newExercises.map((neid) => makeTmcKind({ tmcExerciseId: neid })),
+            (mooc) => mooc.newExercises.map((neid) => makeMoocKind({ moocExerciseId: neid })),
+        );
+    }
+
+    export function getExercises(lcd: LocalCourseData): Array<LocalCourseExercise> {
+        return match(
+            lcd,
+            (tmc) => tmc.exercises.map(makeTmcKind),
+            (mooc) => mooc.exercises.map(makeMoocKind),
+        );
+    }
+}
+
+export function getCourseExercises(
+    course: LocalCourseData,
+): Enum<Array<LocalTmcCourseExercise>, Array<LocalMoocCourseExercise>> {
+    // doesn't work without an intermediate variable........
+    const ret = match(
+        course,
+        (tmc) => makeTmcKind(tmc.exercises),
+        (mooc) => makeMoocKind(mooc.exercises),
+    );
+    return ret;
+}
+
 /**
  * Contains the state of the webview.
  */
@@ -42,7 +174,8 @@ export type Panel =
     | ExerciseTestsPanel
     | ExerciseSubmissionPanel
     | SelectPlatformPanel
-    | SelectMoocCoursePanel;
+    | SelectMoocCoursePanel
+    | InitializationErrorHelpPanel;
 
 export type PanelType = Panel["type"];
 
@@ -85,18 +218,7 @@ export type CourseDetailsPanel = {
     id: number;
     type: "CourseDetails";
     courseId: CourseIdentifier;
-    course?: {
-        // human readable name e.g. "Introduction to Computer Science"
-        title: string;
-        // e.g. introduction-to-computer-science
-        slug: string;
-        disabled: boolean;
-        courseData: CourseData;
-        awardedPoints: number;
-        availablePoints: number;
-        materialUrl: string | null;
-        perhapsExamMode: boolean;
-    };
+    course?: LocalCourseData;
     offlineMode?: boolean;
     updateableExercises?: Array<ExerciseIdentifier>;
     exerciseGroups: Array<ExerciseGroup>;
@@ -124,8 +246,8 @@ export type SelectCoursePanel = {
 export type ExerciseTestsPanel = {
     id: number;
     type: "ExerciseTests";
-    course: TestCourse;
-    exercise: TestExercise;
+    course: LocalCourseData;
+    exercise: LocalCourseExercise;
     exerciseUri: Uri;
     testRunId: number;
 };
@@ -133,8 +255,13 @@ export type ExerciseTestsPanel = {
 export type ExerciseSubmissionPanel = {
     id: number;
     type: "ExerciseSubmission";
-    course: TestCourse;
-    exercise: TestExercise;
+    course: LocalCourseData;
+    exercise: LocalCourseExercise;
+};
+
+export type InitializationErrorHelpPanel = {
+    id: number;
+    type: "InitializationErrorHelp";
 };
 
 export type SelectPlatformPanel = {
@@ -171,7 +298,7 @@ export type ExtensionToWebview =
     | {
           type: "setMyCourses";
           target: TargetPanel<MyCoursesPanel>;
-          courses: Array<CourseData>;
+          courses: Array<LocalCourseData>;
       }
     | {
           type: "setTmcDataPath";
@@ -181,7 +308,7 @@ export type ExtensionToWebview =
     | {
           type: "setNextCourseDeadline";
           target: TargetPanel<MyCoursesPanel>;
-          courseId: number;
+          courseId: CourseIdentifier;
           deadline: string;
       }
     | {
@@ -197,7 +324,7 @@ export type ExtensionToWebview =
     | {
           type: "setCourseData";
           target: TargetPanel<CourseDetailsPanel>;
-          courseData: CourseData;
+          courseData: LocalCourseData;
       }
     | {
           type: "setCourseGroups";
@@ -314,6 +441,18 @@ export type ExtensionToWebview =
           target: TargetPanel<SelectMoocCoursePanel>;
           error: string;
       }
+    | {
+          type: "initializationErrors";
+          target: TargetPanel<InitializationErrorHelpPanel>;
+          cliFolder: string;
+          initializationErrors: {
+              tmc: { error: string; stack: string } | null;
+              userData: { error: string; stack: string } | null;
+              workspaceManager: { error: string; stack: string } | null;
+              exerciseDecorationProvider: { error: string; stack: string } | null;
+              resources: { error: string; stack: string } | null;
+          };
+      }
     // the last variant exists just to make TypeScript think that every panel type has
     // at least two different message types, which makes TS treat them differently than if
     // they only had one...
@@ -381,7 +520,7 @@ export type WebviewToExtension =
       }
     | {
           type: "removeCourse";
-          id: number;
+          id: CourseIdentifier;
       }
     | {
           type: "openCourseWorkspace";
@@ -395,7 +534,7 @@ export type WebviewToExtension =
       }
     | {
           type: "clearNewExercises";
-          courseId: number;
+          courseId: CourseIdentifier;
       }
     | {
           type: "changeTmcDataPath";
@@ -435,7 +574,7 @@ export type WebviewToExtension =
     | {
           type: "addCourse";
           organizationSlug: string;
-          courseId: number;
+          courseId: CourseIdentifier;
           requestingPanel: TargetPanel<MyCoursesPanel>;
       }
     | {
@@ -452,19 +591,23 @@ export type WebviewToExtension =
       }
     | {
           type: "submitExercise";
-          course: TestCourse;
-          exercise: TestExercise;
+          course: LocalCourseData;
+          exercise: LocalCourseExercise;
           exerciseUri: Uri;
       }
     | {
           type: "pasteExercise";
-          course: TestCourse;
-          exercise: TestExercise;
+          course: LocalCourseData;
+          exercise: LocalCourseExercise;
           requestingPanel: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
       }
     | {
           type: "openLinkInBrowser";
           url: string;
+      }
+    | {
+          type: "requestInitializationErrors";
+          sourcePanel: InitializationErrorHelpPanel;
       }
     | {
           type: "selectPlatform";
@@ -480,6 +623,7 @@ export type WebviewToExtension =
       }
     | {
           type: "addMoocCourse";
+          organizationSlug: string;
           courseId: string;
           instanceId: string;
           courseName: string;
@@ -560,7 +704,7 @@ export type TestExercise = {
 
 export type TestResultData = {
     testResult: RunResult;
-    id: number;
+    id: ExerciseIdentifier;
     courseSlug: string;
     exerciseName: string;
     tmcLogs: {
@@ -573,7 +717,7 @@ export type TestResultData = {
 };
 
 export type TestCourse = {
-    id: number;
+    id: CourseIdentifier;
     name: string;
     title: string;
     description: string;
@@ -725,32 +869,105 @@ type TmcKind = { kind: "tmc" };
 
 type MoocKind = { kind: "mooc" };
 
-export type Enum<Tmc, Mooc> = (TmcKind & Tmc) | (MoocKind & Mooc);
+export type Enum<Tmc, Mooc> = { kind: "tmc"; data: Tmc } | { kind: "mooc"; data: Mooc };
+
+export namespace Enum {
+    export function unwrap<A, B>(e: Enum<A, B>): A | B {
+        return match(
+            e,
+            (e) => e,
+            (e) => e,
+        );
+    }
+}
 
 export type CourseIdentifier = Enum<{ courseId: number }, { instanceId: string }>;
+
+export namespace CourseIdentifier {
+    export function from(id: number | string): CourseIdentifier {
+        if (typeof id === "number") {
+            return makeTmcKind({ courseId: id });
+        } else if (typeof id === "string") {
+            return makeMoocKind({ instanceId: id });
+        } else {
+            assertUnreachable(id);
+        }
+    }
+
+    export function toString(id: CourseIdentifier): string {
+        return match(
+            id,
+            (tmc) => tmc.courseId.toString(),
+            (mooc) => mooc.instanceId,
+        );
+    }
+}
 
 export type TmcExerciseId = number;
 export type MoocExerciseId = string;
 
 export type ExerciseIdentifier = Enum<{ tmcExerciseId: number }, { moocExerciseId: string }>;
 
+export namespace ExerciseIdentifier {
+    export function from(id: number | string): ExerciseIdentifier {
+        if (typeof id === "number") {
+            return makeTmcKind({ tmcExerciseId: id });
+        } else if (typeof id === "string") {
+            return makeMoocKind({ moocExerciseId: id });
+        } else {
+            assertUnreachable(id);
+        }
+    }
+
+    export function unwrap(id: ExerciseIdentifier): number | string {
+        if (id.kind === "tmc") {
+            return id.data.tmcExerciseId;
+        }
+        if (id.kind === "mooc") {
+            return id.data.moocExerciseId;
+        } else {
+            assertUnreachable(id);
+        }
+    }
+
+    export function toString(id: ExerciseIdentifier): string {
+        return match(
+            id,
+            (tmc) => tmc.tmcExerciseId.toString(),
+            (mooc) => mooc.moocExerciseId,
+        );
+    }
+}
+
 // helper to simulate Rust's `match`
-export function match<A, B, T extends Enum<A, B>>(
-    data: T,
-    tmc: (x: T & TmcKind) => A,
-    mooc: (x: T & MoocKind) => B,
-): A | B {
+export function match<A, B, C, D>(data: Enum<A, B>, tmc: (x: A) => C, mooc: (x: B) => D): C | D {
     switch (data.kind) {
         case "tmc": {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return tmc(data as any);
+            return tmc(data.data);
         }
         case "mooc": {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return mooc(data as any);
+            return mooc(data.data);
         }
         default: {
             assertUnreachable(data);
+        }
+    }
+}
+
+export function matchBackend<A extends { backend: "tmc" | "mooc" }, B, C, D>(
+    data: A,
+    tmc: (x: A) => B,
+    mooc: (x: A) => C,
+): B | C {
+    switch (data.backend) {
+        case "tmc": {
+            return tmc(data);
+        }
+        case "mooc": {
+            return mooc(data);
+        }
+        default: {
+            assertUnreachable(data.backend);
         }
     }
 }
@@ -778,10 +995,18 @@ export function matchOption<A, B, T extends Enum<A, B> | undefined>(
     }
 }
 
-export function makeTmcKind<T>(t: T): T & { kind: "tmc" } {
-    return { ...t, kind: "tmc" };
+export function makeTmcKind<T>(t: T): { kind: "tmc" } & { data: T } {
+    return { kind: "tmc", data: t };
 }
 
-export function makeMoocKind<T>(t: T): T & { kind: "mooc" } {
-    return { ...t, kind: "mooc" };
+export function makeMoocKind<T>(t: T): { kind: "mooc" } & { data: T } {
+    return { kind: "mooc", data: t };
+}
+
+export function unwrap<A, B>(e: Enum<A, B>): A | B {
+    return match(
+        e,
+        (a) => a,
+        (b) => b,
+    );
 }

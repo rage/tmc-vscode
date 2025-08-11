@@ -63,6 +63,7 @@
             case "selectedMoocCourse": {
                 vscode.postMessage({
                     type: "addMoocCourse",
+                    organizationSlug: message.organizationSlug,
                     courseId: message.courseId,
                     instanceId: message.instanceId,
                     courseName: message.courseName,

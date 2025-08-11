@@ -1,4 +1,4 @@
-import { Ok, Result } from "ts-results";
+import { Err, Ok, Result } from "ts-results";
 
 import { TmcPanel } from "../panels/TmcPanel";
 import { Logger } from "../utilities";
@@ -6,6 +6,7 @@ import { Logger } from "../utilities";
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises";
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
+import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../shared/shared";
 
 /**
  * Downloads course's new exercises using relevate data from the context's UserData. Also handles
@@ -15,13 +16,16 @@ import { ActionContext } from "./types";
  */
 export async function downloadNewExercisesForCourse(
     actionContext: ActionContext,
-    courseId: number,
+    courseId: CourseIdentifier,
 ): Promise<Result<void, Error>> {
     const { userData } = actionContext;
-    const course = userData.getCourse(courseId);
-    Logger.info("Downloading new exercises for course:", course.title);
+    if (userData.err) {
+        return new Err(new Error("Extension was not initialized properly"));
+    }
+    const course = userData.val.getCourse(courseId);
+    Logger.info("Downloading new exercises for course");
 
-    const postNewExercises = async (exerciseIds: number[]): Promise<void> =>
+    const postNewExercises = async (exerciseIds: ExerciseIdentifier[]): Promise<void> =>
         await TmcPanel.postMessage({
             type: "setNewExercises",
             target: {
@@ -33,24 +37,25 @@ export async function downloadNewExercisesForCourse(
 
     postNewExercises([]);
 
-    const downloadResult = await downloadOrUpdateExercises(actionContext, course.newExercises);
+    const newExercises = LocalCourseData.getNewExercises(course);
+    const downloadResult = await downloadOrUpdateExercises(actionContext, newExercises);
     if (downloadResult.err) {
         Logger.error("Failed to download new exercises.", downloadResult.val);
-        postNewExercises(course.newExercises);
+        postNewExercises(newExercises);
         return downloadResult;
     }
 
     const refreshResult = Result.all(
-        await userData.clearFromNewExercises(courseId, downloadResult.val.successful),
+        await userData.val.clearFromNewExercises(courseId, downloadResult.val.successful),
         await refreshLocalExercises(actionContext),
     );
     if (refreshResult.err) {
         Logger.error("Failed to refresh workspace.", downloadResult.val);
-        postNewExercises(course.newExercises);
+        postNewExercises(newExercises);
         return refreshResult;
     }
 
-    postNewExercises(course.newExercises);
+    postNewExercises(newExercises);
 
     return Ok.EMPTY;
 }

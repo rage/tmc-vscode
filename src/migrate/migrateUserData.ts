@@ -1,7 +1,7 @@
 import { createIs } from "typia";
 import * as vscode from "vscode";
 
-import { LocalTmcCourseData, UserData } from "../api/storage";
+import { UserData } from "../api/storage";
 import {
     LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
@@ -11,6 +11,7 @@ import {
 import { EXERCISE_DATA_KEY_V0 } from "./migrateExerciseData";
 import { MigratedData } from "./types";
 import validateData from "./validateData";
+import { LocalTmcCourseData } from "../shared/shared";
 
 const USER_DATA_KEY_V0 = "userData";
 const USER_DATA_KEY_V1 = "user-data-v1";
@@ -115,7 +116,7 @@ function coursesFromV0ToV1(
 function localCourseDataFromV1ToV2(old: UserDataV1): UserData {
     const defined = resolveMissingFieldsInV1(old.courses);
     return {
-        courses: defined,
+        tmcCourses: defined,
         moocCourses: [],
     };
 }

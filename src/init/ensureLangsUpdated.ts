@@ -6,6 +6,7 @@ import { Err, Ok, Result } from "ts-results";
 import Dialog from "../api/dialog";
 import { TMC_LANGS_DL_URL, TMC_LANGS_VERSION } from "../config/constants";
 import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger } from "../utilities";
+import { Sha256 } from "@aws-crypto/sha256-js";
 
 /**
  * Downloads correct langs version for the current extension version, unless already present. Will
@@ -13,7 +14,7 @@ import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger } from "../ut
  *
  * @param cliFolder
  */
-async function downloadCorrectLangsVersion(
+async function ensureLangsUpdated(
     cliFolder: string,
     dialog: Dialog,
 ): Promise<Result<string, Error>> {
@@ -21,17 +22,71 @@ async function downloadCorrectLangsVersion(
     const executable = getLangsCLIForPlatform(getPlatform(), TMC_LANGS_VERSION);
     Logger.info("TMC-Langs version: " + executable);
 
+    // download CLI if necessary
     const cliPath = path.join(cliFolder, executable);
-    if (fs.existsSync(cliPath)) {
-        return Ok(cliPath);
+    const shaPath = cliPath + ".sha256";
+    const cliUrl = TMC_LANGS_DL_URL + executable;
+    const shaUrl = cliUrl + ".sha256";
+    if (!fs.existsSync(cliPath)) {
+        const result = await downloadLangs(
+            cliFolder,
+            cliPath,
+            cliUrl,
+            shaPath,
+            shaUrl,
+            executable,
+            dialog,
+        );
+        if (result.err) {
+            return Err(result.val);
+        }
     }
 
+    // check shasum
+    const cliHash = new Sha256();
+    const cliData = fs.readFileSync(cliPath);
+    cliHash.update(cliData);
+    const cliDigest = Buffer.from(cliHash.digestSync()).toString("hex");
+
+    const hashData = fs.readFileSync(shaPath, "utf-8").split(" ")[0];
+    if (cliDigest !== hashData) {
+        Logger.error("Mismatch between CLI and checksum, trying redownload");
+        deleteSync(cliFolder, { force: true });
+        const result = await downloadLangs(
+            cliFolder,
+            cliPath,
+            cliUrl,
+            shaPath,
+            shaUrl,
+            executable,
+            dialog,
+        );
+        if (result.err) {
+            return Err(
+                new Error(
+                    `Mismatch found between CLI (${cliDigest} ${cliPath} from ${cliUrl}) and checksum (${hashData} ${shaPath} from ${shaUrl})`,
+                ),
+            );
+        }
+    }
+
+    return Ok(cliPath);
+}
+
+async function downloadLangs(
+    cliFolder: string,
+    cliPath: string,
+    cliUrl: string,
+    shaPath: string,
+    shaUrl: string,
+    executable: string,
+    dialog: Dialog,
+): Promise<Result<void, Error>> {
     deleteSync(cliFolder, { force: true });
 
     // copy to temp file and rename to prevent partial downloads from causing issues
     const tempPath = path.join(cliFolder, `temp-${executable}`);
 
-    const cliUrl = TMC_LANGS_DL_URL + executable;
     Logger.info(`Downloading TMC-langs from ${cliUrl} to temporary file ${tempPath}`);
     const message = `Downloading TMC-langs ${TMC_LANGS_VERSION}...`;
     const langsDownloadResult = await dialog.progressNotification(
@@ -47,7 +102,6 @@ async function downloadCorrectLangsVersion(
         Logger.error("An error occurred while downloading TMC-langs:", langsDownloadResult.val);
         return langsDownloadResult;
     }
-
     try {
         const fd = await fs.open(tempPath, "r+");
         await fs.fchmod(fd, 0o755);
@@ -66,7 +120,18 @@ async function downloadCorrectLangsVersion(
     }
     await fs.rename(tempPath, cliPath);
 
-    return Ok(cliPath);
+    // download shasum if necessary
+    if (!fs.existsSync(shaPath)) {
+        const result = await downloadFile(shaUrl, shaPath);
+        if (result.err) {
+            Logger.error(
+                "An error occurred while downloading the checksum for TMC-langs:",
+                result.val,
+            );
+            return Err(result.val);
+        }
+    }
+    return Ok.EMPTY;
 }
 
-export { downloadCorrectLangsVersion };
+export { ensureLangsUpdated };

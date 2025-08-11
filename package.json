@@ -1,7 +1,7 @@
 {
     "name": "test-my-code",
     "displayName": "TestMyCode",
-    "version": "3.2.0",
+    "version": "3.4.0",
     "description": "TestMyCode extension for Visual Studio Code",
     "categories": [
         "Education",
@@ -59,7 +59,7 @@
             },
             {
                 "command": "tmc.changeTmcDataPath",
-                "title": "Change TMC data path",
+                "title": "Change TMC Data Path",
                 "category": "TestMyCode"
             },
             {
@@ -74,12 +74,12 @@
             },
             {
                 "command": "tmc.courseDetails",
-                "title": "Go to Course Details...",
+                "title": "Go To Course Details...",
                 "category": "TestMyCode"
             },
             {
                 "command": "tmc.downloadNewExercises",
-                "title": "Download New Exercises for Course...",
+                "title": "Download New Exercises For Course...",
                 "category": "TestMyCode"
             },
             {
@@ -103,7 +103,7 @@
                 "category": "TestMyCode"
             },
             {
-                "command": "tmc.openSettings",
+                "command": "tmc.settings",
                 "title": "Settings",
                 "category": "TestMyCode"
             },
@@ -114,7 +114,7 @@
             },
             {
                 "command": "tmc.pasteExercise",
-                "title": "Send Exercise to TMC Paste",
+                "title": "Send Exercise To TMC Paste",
                 "category": "TestMyCode"
             },
             {
@@ -133,7 +133,7 @@
             },
             {
                 "command": "tmc.showLogin",
-                "title": "Show login menu",
+                "title": "Show Login Menu",
                 "category": "TestMyCode"
             },
             {
@@ -166,9 +166,24 @@
                 "category": "TestMyCode"
             },
             {
+                "command": "tmc.logs",
+                "title": "Show Logs",
+                "category": "TestMyCode"
+            },
+            {
+                "command": "tmc.debug",
+                "title": "Show Debug View",
+                "category": "TestMyCode"
+            },
+            {
                 "command": "tmc.wipe",
                 "category": "TMC-WipeMyCode",
                 "title": "Wipe all extension data"
+            },
+            {
+                "command": "tmc.viewInitializationErrorHelp",
+                "title": "View initialization error help",
+                "category": "TestMyCode"
             },
             {
                 "command": "tmcTreeView.refreshCourses",
@@ -178,11 +193,6 @@
                     "light": "resources/light/refresh.svg",
                     "dark": "resources/dark/refresh.svg"
                 }
-            },
-            {
-                "command": "tmcTreeView.removeCourse",
-                "title": "Remove Course",
-                "category": "TMC"
             },
             {
                 "command": "tmcView.activateEntry",
@@ -323,11 +333,13 @@
                     "when": "test-my-code:LoggedIn"
                 },
                 {
-                    "command": "tmcTreeView.refreshCourses",
+                    "command": "tmc.viewInitializationErrorHelp",
+                    "title": "View initialization error help",
+                    "category": "TestMyCode",
                     "when": "false"
                 },
                 {
-                    "command": "tmcTreeView.removeCourse",
+                    "command": "tmcTreeView.refreshCourses",
                     "when": "false"
                 },
                 {
@@ -394,12 +406,6 @@
                     "when": "view == tmcView && test-my-code:LoggedIn",
                     "group": "navigation"
                 }
-            ],
-            "view/item/context": [
-                {
-                    "command": "tmcTreeView.removeCourse",
-                    "when": "view == tmcView && viewItem == child"
-                }
             ]
         },
         "views": {
@@ -444,6 +450,7 @@
         "trailingComma": "all"
     },
     "dependencies": {
+        "@aws-crypto/sha256-js": "^5.2.0",
         "del": "^8.0.0",
         "fs-extra": "^11.2.0",
         "get-folder-size": "^5.0.0",

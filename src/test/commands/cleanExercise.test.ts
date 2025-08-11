@@ -3,12 +3,13 @@ import { IMock, It, Times } from "typemoq";
 import * as vscode from "vscode";
 
 import { ActionContext } from "../../actions/types";
-import TMC from "../../api/tmc";
+import Langs from "../../api/langs";
 import WorkspaceManager, { ExerciseStatus } from "../../api/workspaceManager";
 import { cleanExercise } from "../../commands";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock } from "../mocks/tmc";
 import { createWorkspaceMangerMock, WorkspaceManagerMockValues } from "../mocks/workspaceManager";
+import { Ok } from "ts-results";
 
 suite("Clean exercise command", function () {
     const BACKEND_FOLDER = path.join(__dirname, "..", "backend");
@@ -18,15 +19,15 @@ suite("Clean exercise command", function () {
     const stubContext = createMockActionContext();
     const uri = vscode.Uri.file(PASSING_EXERCISE_PATH);
 
-    let tmcMock: IMock<TMC>;
+    let tmcMock: IMock<Langs>;
     let workspaceManagerMock: IMock<WorkspaceManager>;
     let workspaceManagerMockValues: WorkspaceManagerMockValues;
 
     function actionContext(): ActionContext {
         return {
             ...stubContext,
-            tmc: tmcMock.object,
-            workspaceManager: workspaceManagerMock.object,
+            langs: new Ok(tmcMock.object),
+            workspaceManager: new Ok(workspaceManagerMock.object),
         };
     }
 
@@ -37,6 +38,7 @@ suite("Clean exercise command", function () {
 
     test("should clean active exercise by default", async function () {
         workspaceManagerMockValues.activeExercise = {
+            backend: "tmc",
             courseSlug: "test-python-course",
             exerciseSlug: "part01-01_passing_exercise",
             status: ExerciseStatus.Open,

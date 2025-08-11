@@ -4,7 +4,7 @@ import { IMock, It, Times } from "typemoq";
 
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises";
 import { ActionContext } from "../../actions/types";
-import TMC from "../../api/tmc";
+import Langs from "../../api/langs";
 import WorkspaceManager from "../../api/workspaceManager";
 import { UserData } from "../../config/userdata";
 import { createMockActionContext } from "../mocks/actionContext";
@@ -15,7 +15,7 @@ import { createWorkspaceMangerMock, WorkspaceManagerMockValues } from "../mocks/
 suite("refreshLocalExercises action", function () {
     const stubContext = createMockActionContext();
 
-    let tmcMock: IMock<TMC>;
+    let tmcMock: IMock<Langs>;
     let tmcMockValues: TMCMockValues;
     let userDataMock: IMock<UserData>;
     let userDataMockValues: UserDataMockValues;
@@ -24,9 +24,9 @@ suite("refreshLocalExercises action", function () {
 
     const actionContext = (): ActionContext => ({
         ...stubContext,
-        tmc: tmcMock.object,
-        userData: userDataMock.object,
-        workspaceManager: workspaceManagerMock.object,
+        langs: new Ok(tmcMock.object),
+        userData: new Ok(userDataMock.object),
+        workspaceManager: new Ok(workspaceManagerMock.object),
     });
 
     setup(function () {

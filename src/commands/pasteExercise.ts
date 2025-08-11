@@ -4,6 +4,7 @@ import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
 import { BottleneckError } from "../errors";
 import { Logger } from "../utilities";
+import { matchBackend } from "../shared/shared";
 
 export async function pasteExercise(
     actionContext: ActionContext,
@@ -11,20 +12,27 @@ export async function pasteExercise(
 ): Promise<void> {
     const { dialog, workspaceManager } = actionContext;
     Logger.info("Pasting exercise");
+    if (workspaceManager.err) {
+        Logger.error("Extension was not initialized properly");
+        return;
+    }
 
     const exercise = resource
-        ? workspaceManager.getExerciseByPath(resource)
-        : workspaceManager.activeExercise;
+        ? workspaceManager.val.getExerciseByPath(resource)
+        : workspaceManager.val.activeExercise;
     if (!exercise) {
         dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
         return;
     }
 
-    const pasteResult = await actions.pasteExercise(
-        actionContext,
-        exercise.courseSlug,
-        exercise.exerciseSlug,
+    const pasteResult = await matchBackend(
+        exercise,
+        (tmc) =>
+            actions.pasteTmcExercise(actionContext, exercise.courseSlug, exercise.exerciseSlug),
+        (mooc) =>
+            actions.pasteMoocExercise(actionContext, exercise.courseSlug, exercise.exerciseSlug),
     );
+    await actions.pasteTmcExercise(actionContext, exercise.courseSlug, exercise.exerciseSlug);
     if (pasteResult.err) {
         if (pasteResult.val instanceof BottleneckError) {
             Logger.warn(`Paste submission was cancelled: ${pasteResult.val.message}.`);

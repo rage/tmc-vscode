@@ -36,6 +36,7 @@ type WebviewToWebview =
     | {
           type: "selectedMoocCourse";
           target: TargetPanel<MyCoursesPanel>;
+          organizationSlug: string;
           courseId: string;
           instanceId: string;
           courseName: string;

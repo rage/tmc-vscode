@@ -1,8 +1,13 @@
 import { Err, Ok, Result } from "ts-results";
 import { IMock, It, Mock } from "typemoq";
 
-import TMC from "../../api/tmc";
-import { DownloadOrUpdateCourseExercisesResult, LocalExercise } from "../../shared/langsSchema";
+import Langs from "../../api/langs";
+import {
+    DownloadOrUpdateMoocCourseExercisesResult,
+    DownloadOrUpdateTmcCourseExercisesResult,
+    LocalExercise,
+    LocalTmcExercise,
+} from "../../shared/langsSchema";
 import {
     checkExerciseUpdates,
     closedExercisesPythonCourse,
@@ -13,8 +18,11 @@ const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."));
 
 export interface TMCMockValues {
     clean: Result<void, Error>;
-    downloadExercises: Result<DownloadOrUpdateCourseExercisesResult, Error>;
-    listLocalCourseExercisesPythonCourse: Result<LocalExercise[], Error>;
+    downloadExercises: Result<
+        [DownloadOrUpdateTmcCourseExercisesResult, DownloadOrUpdateMoocCourseExercisesResult],
+        Error
+    >;
+    listLocalCourseExercisesPythonCourse: Result<LocalTmcExercise[], Error>;
     getSettingClosedExercises: Result<string[], Error>;
     getSettingProjectsDir: Result<string, Error>;
     migrateExercise: Result<void, Error>;
@@ -23,7 +31,7 @@ export interface TMCMockValues {
     checkExerciseUpdates: Result<Array<{ id: number }>, Error>;
 }
 
-export function createTMCMock(): [IMock<TMC>, TMCMockValues] {
+export function createTMCMock(): [IMock<Langs>, TMCMockValues] {
     const values: TMCMockValues = {
         clean: Ok.EMPTY,
         downloadExercises: NOT_MOCKED_ERROR,
@@ -40,7 +48,7 @@ export function createTMCMock(): [IMock<TMC>, TMCMockValues] {
     return [mock, values];
 }
 
-export function createFailingTMCMock(): [IMock<TMC>, TMCMockValues] {
+export function createFailingTMCMock(): [IMock<Langs>, TMCMockValues] {
     const error = Err(new Error());
     const values: TMCMockValues = {
         clean: error,
@@ -58,8 +66,8 @@ export function createFailingTMCMock(): [IMock<TMC>, TMCMockValues] {
     return [mock, values];
 }
 
-function setupMockValues(values: TMCMockValues): IMock<TMC> {
-    const mock = Mock.ofType<TMC>();
+function setupMockValues(values: TMCMockValues): IMock<Langs> {
+    const mock = Mock.ofType<Langs>();
 
     // ---------------------------------------------------------------------------------------------
     // Authentication commands
@@ -71,7 +79,7 @@ function setupMockValues(values: TMCMockValues): IMock<TMC> {
 
     mock.setup((x) => x.clean(It.isAny())).returns(async () => values.clean);
 
-    mock.setup((x) => x.listLocalCourseExercises(It.isValue("test-python-course"))).returns(
+    mock.setup((x) => x.listLocalCourseExercises("tmc", It.isValue("test-python-course"))).returns(
         async () => values.listLocalCourseExercisesPythonCourse,
     );
 
@@ -99,11 +107,11 @@ function setupMockValues(values: TMCMockValues): IMock<TMC> {
     // Core commands
     // ---------------------------------------------------------------------------------------------
 
-    mock.setup((x) => x.checkExerciseUpdates(It.isAny())).returns(
+    mock.setup((x) => x.checkTmcExerciseUpdates(It.isAny())).returns(
         async () => values.checkExerciseUpdates,
     );
 
-    mock.setup((x) => x.downloadTmcExercises(It.isAny(), It.isAny(), It.isAny())).returns(
+    mock.setup((x) => x.downloadExercises(It.isAny(), It.isAny(), It.isAny())).returns(
         async () => values.downloadExercises,
     );
 

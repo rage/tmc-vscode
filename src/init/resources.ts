@@ -15,7 +15,7 @@ import { Logger } from "../utilities/logger";
 export async function resourceInitialization(
     extensionContext: vscode.ExtensionContext,
     storage: Storage,
-    tmcDataPath: string,
+    tmcDataPath: string | undefined,
     workspaceFileFolder: string,
 ): Promise<Result<Resources, Error>> {
     const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
@@ -24,9 +24,13 @@ export async function resourceInitialization(
     const htmlPath = extensionContext.asAbsolutePath("resources/templates");
     const mediaPath = extensionContext.asAbsolutePath("media");
 
-    if (!fs.existsSync(tmcDataPath)) {
-        fs.mkdirSync(tmcDataPath, { recursive: true });
-        Logger.info(`Created tmc data directory at ${tmcDataPath}`);
+    if (tmcDataPath) {
+        if (!fs.existsSync(tmcDataPath)) {
+            fs.mkdirSync(tmcDataPath, { recursive: true });
+            Logger.info(`Created tmc data directory at ${tmcDataPath}`);
+        }
+    } else {
+        Logger.warn("Skipped tmc data directory check");
     }
 
     const resources = new Resources(
@@ -41,7 +45,7 @@ export async function resourceInitialization(
     // Verify that all course .code-workspaces are in-place on startup.
     fs.ensureDirSync(workspaceFileFolder);
     const userData = storage.getUserData();
-    userData?.courses.forEach((course) => {
+    userData?.tmcCourses.forEach((course) => {
         const tmcWorkspaceFilePath = path.join(
             workspaceFileFolder,
             course.name + ".code-workspace",

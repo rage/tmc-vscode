@@ -3,12 +3,15 @@ import { first, last } from "lodash";
 import { Err, Ok, Result } from "ts-results";
 import { IMock, It, Times } from "typemoq";
 
-import { downloadOrUpdateTmcExercises } from "../../actions";
 import { ActionContext } from "../../actions/types";
 import Dialog from "../../api/dialog";
-import TMC from "../../api/tmc";
+import Langs from "../../api/langs";
 import Settings from "../../config/settings";
-import { DownloadOrUpdateCourseExercisesResult, ExerciseDownload } from "../../shared/langsSchema";
+import {
+    DownloadOrUpdateMoocCourseExercisesResult,
+    DownloadOrUpdateTmcCourseExercisesResult,
+    TmcExerciseDownload,
+} from "../../shared/langsSchema";
 import { ExerciseStatus, WebviewMessage } from "../../ui/types";
 import UI from "../../ui/ui";
 import { createMockActionContext } from "../mocks/actionContext";
@@ -16,15 +19,17 @@ import { createDialogMock } from "../mocks/dialog";
 import { createSettingsMock, SettingsMockValues } from "../mocks/settings";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
 import { createUIMock } from "../mocks/ui";
+import { downloadOrUpdateExercises } from "../../actions";
+import { ExerciseIdentifier } from "../../shared/shared";
 
-const helloWorld: ExerciseDownload = {
+const helloWorld: TmcExerciseDownload = {
     "course-slug": "python-course",
     "exercise-slug": "hello_world",
     id: 1,
     path: "/tmc/vscode/test-python-course/hello_world",
 };
 
-const otherWorld: ExerciseDownload = {
+const otherWorld: TmcExerciseDownload = {
     "course-slug": "python-course",
     "exercise-slug": "other_world",
     id: 2,
@@ -37,7 +42,7 @@ suite("downloadOrUpdateExercises action", function () {
     let dialogMock: IMock<Dialog>;
     let settingsMock: IMock<Settings>;
     let settingsMockValues: SettingsMockValues;
-    let tmcMock: IMock<TMC>;
+    let tmcMock: IMock<Langs>;
     let tmcMockValues: TMCMockValues;
     let uiMock: IMock<UI>;
     let webviewMessages: WebviewMessage[];
@@ -46,20 +51,26 @@ suite("downloadOrUpdateExercises action", function () {
         ...stubContext,
         dialog: dialogMock.object,
         settings: settingsMock.object,
-        tmc: tmcMock.object,
+        langs: new Ok(tmcMock.object),
         ui: uiMock.object,
     });
 
     const createDownloadResult = (
-        downloaded: ExerciseDownload[],
-        skipped: ExerciseDownload[],
-        failed: Array<[ExerciseDownload, string[]]> | undefined,
-    ): Result<DownloadOrUpdateCourseExercisesResult, Error> => {
-        return Ok({
-            downloaded,
-            failed,
-            skipped,
-        });
+        downloaded: TmcExerciseDownload[],
+        skipped: TmcExerciseDownload[],
+        failed: Array<[TmcExerciseDownload, string[]]> | undefined,
+    ): Result<
+        [DownloadOrUpdateTmcCourseExercisesResult, DownloadOrUpdateMoocCourseExercisesResult],
+        Error
+    > => {
+        return Ok([
+            {
+                downloaded,
+                failed,
+                skipped,
+            },
+            { downloaded: [], failed: [], skipped: [] },
+        ]);
     };
 
     setup(function () {
@@ -71,16 +82,16 @@ suite("downloadOrUpdateExercises action", function () {
     });
 
     test("should return empty results if no exercises are given", async function () {
-        const result = (await downloadOrUpdateTmcExercises(actionContext(), [])).unwrap();
+        const result = (await downloadOrUpdateExercises(actionContext(), [])).unwrap();
         expect(result.successful.length).to.be.equal(0);
         expect(result.failed.length).to.be.equal(0);
     });
 
     test("should not call TMC-langs if no exercises are given", async function () {
-        await downloadOrUpdateTmcExercises(actionContext(), []);
+        await downloadOrUpdateExercises(actionContext(), []);
         expect(
             tmcMock.verify(
-                (x) => x.downloadTmcExercises(It.isAny(), It.isAny(), It.isAny()),
+                (x) => x.downloadExercises(It.isAny(), It.isAny(), It.isAny()),
                 Times.never(),
             ),
         );
@@ -89,7 +100,10 @@ suite("downloadOrUpdateExercises action", function () {
     test("should return error if TMC-langs fails", async function () {
         const error = new Error();
         tmcMockValues.downloadExercises = Err(error);
-        const result = await downloadOrUpdateTmcExercises(actionContext(), [1, 2]);
+        const result = await downloadOrUpdateExercises(actionContext(), [
+            ExerciseIdentifier.from(1),
+            ExerciseIdentifier.from(2),
+        ]);
         expect(result.val).to.be.equal(error);
     });
 
@@ -99,7 +113,12 @@ suite("downloadOrUpdateExercises action", function () {
             [],
             undefined,
         );
-        const result = (await downloadOrUpdateTmcExercises(actionContext(), [1, 2])).unwrap();
+        const result = (
+            await downloadOrUpdateExercises(actionContext(), [
+                ExerciseIdentifier.from(1),
+                ExerciseIdentifier.from(2),
+            ])
+        ).unwrap();
         expect(result.successful).to.be.deep.equal([1, 2]);
     });
 
@@ -109,7 +128,12 @@ suite("downloadOrUpdateExercises action", function () {
             [helloWorld, otherWorld],
             undefined,
         );
-        const result = (await downloadOrUpdateTmcExercises(actionContext(), [1, 2])).unwrap();
+        const result = (
+            await downloadOrUpdateExercises(actionContext(), [
+                ExerciseIdentifier.from(1),
+                ExerciseIdentifier.from(2),
+            ])
+        ).unwrap();
         expect(result.successful).to.be.deep.equal([1, 2]);
     });
 
@@ -119,7 +143,9 @@ suite("downloadOrUpdateExercises action", function () {
             [otherWorld],
             undefined,
         );
-        const result = (await downloadOrUpdateTmcExercises(actionContext(), [1])).unwrap();
+        const result = (
+            await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)])
+        ).unwrap();
         expect(result.successful).to.be.deep.equal([1, 2]);
     });
 
@@ -132,20 +158,25 @@ suite("downloadOrUpdateExercises action", function () {
                 [otherWorld, [""]],
             ],
         );
-        const result = (await downloadOrUpdateTmcExercises(actionContext(), [1, 2])).unwrap();
+        const result = (
+            await downloadOrUpdateExercises(actionContext(), [
+                ExerciseIdentifier.from(1),
+                ExerciseIdentifier.from(2),
+            ])
+        ).unwrap();
         expect(result.failed).to.be.deep.equal([1, 2]);
     });
 
     test("should download template if downloadOldSubmission setting is off", async function () {
         tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [], undefined);
         settingsMockValues.getDownloadOldSubmission = false;
-        await downloadOrUpdateTmcExercises(actionContext(), [1]);
+        await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)]);
         tmcMock.verify(
-            (x) => x.downloadTmcExercises(It.isAny(), It.isValue(true), It.isAny()),
+            (x) => x.downloadExercises(It.isAny(), It.isValue(true), It.isAny()),
             Times.once(),
         );
         tmcMock.verify(
-            (x) => x.downloadTmcExercises(It.isAny(), It.isValue(false), It.isAny()),
+            (x) => x.downloadExercises(It.isAny(), It.isValue(false), It.isAny()),
             Times.never(),
         );
     });
@@ -153,13 +184,13 @@ suite("downloadOrUpdateExercises action", function () {
     test("should not necessarily download template if downloadOldSubmission setting is on", async function () {
         tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [], undefined);
         settingsMockValues.getDownloadOldSubmission = true;
-        await downloadOrUpdateTmcExercises(actionContext(), [1]);
+        await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)]);
         tmcMock.verify(
-            (x) => x.downloadTmcExercises(It.isAny(), It.isValue(true), It.isAny()),
+            (x) => x.downloadExercises(It.isAny(), It.isValue(true), It.isAny()),
             Times.never(),
         );
         tmcMock.verify(
-            (x) => x.downloadTmcExercises(It.isAny(), It.isValue(false), It.isAny()),
+            (x) => x.downloadExercises(It.isAny(), It.isValue(false), It.isAny()),
             Times.once(),
         );
     });
@@ -167,13 +198,13 @@ suite("downloadOrUpdateExercises action", function () {
     test.skip("should post status updates of succeeding download", async function () {
         tmcMock.reset();
         tmcMock
-            .setup((x) => x.downloadTmcExercises(It.isAny(), It.isAny(), It.isAny()))
+            .setup((x) => x.downloadExercises(It.isAny(), It.isAny(), It.isAny()))
             .returns(async (_1, _2, cb) => {
                 // Callback is only used for successful downloads
                 cb({ id: helloWorld.id, percent: 0.5 });
                 return createDownloadResult([helloWorld], [], undefined);
             });
-        await downloadOrUpdateTmcExercises(actionContext(), [1]);
+        await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)]);
         expect(webviewMessages.length).to.be.greaterThanOrEqual(
             2,
             "expected at least two status messages",
@@ -190,7 +221,7 @@ suite("downloadOrUpdateExercises action", function () {
 
     test.skip("should post status updates for skipped download", async function () {
         tmcMockValues.downloadExercises = createDownloadResult([], [helloWorld], undefined);
-        await downloadOrUpdateTmcExercises(actionContext(), [1]);
+        await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)]);
         expect(webviewMessages.length).to.be.greaterThanOrEqual(
             2,
             "expected at least two status messages",
@@ -207,7 +238,7 @@ suite("downloadOrUpdateExercises action", function () {
 
     test.skip("should post status updates for failing download", async function () {
         tmcMockValues.downloadExercises = createDownloadResult([], [], [[helloWorld, [""]]]);
-        await downloadOrUpdateTmcExercises(actionContext(), [1]);
+        await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)]);
         expect(webviewMessages.length).to.be.greaterThanOrEqual(
             2,
             "expected at least two status messages",
@@ -224,7 +255,7 @@ suite("downloadOrUpdateExercises action", function () {
 
     test.skip("should post status updates for exercises missing from langs response", async function () {
         tmcMockValues.downloadExercises = createDownloadResult([], [], undefined);
-        await downloadOrUpdateTmcExercises(actionContext(), [1]);
+        await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)]);
         expect(webviewMessages.length).to.be.greaterThanOrEqual(
             2,
             "expected at least two status messages",
@@ -242,7 +273,7 @@ suite("downloadOrUpdateExercises action", function () {
     test.skip("should post status updates when TMC-langs operation fails", async function () {
         const error = new Error();
         tmcMockValues.downloadExercises = Err(error);
-        await downloadOrUpdateTmcExercises(actionContext(), [1]);
+        await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)]);
         expect(webviewMessages.length).to.be.greaterThanOrEqual(
             2,
             "expected at least two status messages",

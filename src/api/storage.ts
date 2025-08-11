@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-import { Enum } from "../shared/shared";
+import { LocalMoocCourseData, LocalTmcCourseData } from "../shared/shared";
 
 export interface ExtensionSettings {
     downloadOldSubmission: boolean;
@@ -10,55 +10,8 @@ export interface ExtensionSettings {
     updateExercisesAutomatically: boolean;
 }
 
-export type LocalCourseData = Enum<LocalTmcCourseData, LocalMoocCourseData>;
-
-export interface LocalTmcCourseData {
-    id: number;
-    name: string;
-    title: string;
-    description: string;
-    organization: string;
-    exercises: LocalTmcCourseExercise[];
-    availablePoints: number;
-    awardedPoints: number;
-    perhapsExamMode: boolean;
-    newExercises: number[];
-    notifyAfter: number;
-    disabled: boolean;
-    materialUrl: string | null;
-}
-
-export interface LocalMoocCourseData {
-    courseId: string;
-    instanceId: string;
-    courseName: string;
-    instanceName: string | null;
-    description: string;
-    awardedPoints: number;
-    availablePoints: number;
-    materialUrl: string;
-    exercises: LocalMoocCourseExercise[];
-}
-
-export type LocalCourseExercise = Enum<LocalTmcCourseExercise, LocalMoocCourseExercise>;
-
-export interface LocalTmcCourseExercise {
-    id: number;
-    availablePoints: number;
-    awardedPoints: number;
-    /// Equivalent to exercise slug
-    name: string;
-    deadline: string | null;
-    passed: boolean;
-    softDeadline: string | null;
-}
-
-export interface LocalMoocCourseExercise {
-    id: string;
-}
-
 export interface UserData {
-    courses: LocalTmcCourseData[];
+    tmcCourses: LocalTmcCourseData[];
     moocCourses: LocalMoocCourseData[];
 }
 

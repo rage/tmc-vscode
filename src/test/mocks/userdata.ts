@@ -1,8 +1,13 @@
 import { IMock, It, Mock } from "typemoq";
 
-import { LocalCourseData, LocalTmcCourseExercise } from "../../api/storage";
 import { UserData } from "../../config/userdata";
 import { v2_1_0 as userData } from "../fixtures/userData";
+import {
+    LocalCourseData,
+    LocalTmcCourseExercise,
+    makeMoocKind,
+    makeTmcKind,
+} from "../../shared/shared";
 
 export interface UserDataMockValues {
     getCourses: LocalCourseData[];
@@ -11,7 +16,7 @@ export interface UserDataMockValues {
 
 export function createUserDataMock(): [IMock<UserData>, UserDataMockValues] {
     const values: UserDataMockValues = {
-        getCourses: userData.courses,
+        getCourses: userData.tmcCourses.map(makeTmcKind),
         getExerciseByName: undefined,
     };
     const mock = setupMockValues(values);

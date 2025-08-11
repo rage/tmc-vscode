@@ -5,7 +5,7 @@ import { createIs } from "typia";
 import * as vscode from "vscode";
 
 import Dialog from "../api/dialog";
-import TMC from "../api/tmc";
+import Langs from "../api/langs";
 import { Logger } from "../utilities";
 
 import { MigratedData } from "./types";
@@ -85,7 +85,7 @@ async function exerciseDataFromV0toV1(
     exerciseData: LocalExerciseDataV0[],
     memento: vscode.Memento,
     dialog: Dialog,
-    tmc: TMC,
+    tmc: Langs,
 ): Promise<void> {
     interface ExtensionSettingsPartial {
         dataPath: string;
@@ -164,7 +164,7 @@ async function exerciseDataFromV0toV1(
 export default async function migrateExerciseData(
     memento: vscode.Memento,
     dialog: Dialog,
-    tmc: TMC,
+    tmc: Langs,
 ): Promise<MigratedData<undefined>> {
     const obsoleteKeys: string[] = [];
 

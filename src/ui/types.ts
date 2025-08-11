@@ -1,15 +1,16 @@
 import { FeedbackQuestion } from "../actions/types";
-import Storage, { LocalCourseData } from "../api/storage";
-import TMC from "../api/tmc";
+import Storage from "../api/storage";
+import Langs from "../api/langs";
 import { Course, Organization } from "../api/types";
 import { ExtensionSettings } from "../config/settings";
 import { SubmissionFinished } from "../shared/langsSchema";
+import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../shared/shared";
 import { LogLevel } from "../utilities/logger";
 
 import UI from "./ui";
 
 export type HandlerContext = {
-    tmc: TMC;
+    tmc: Langs;
     storage: Storage;
     ui: UI;
     visibilityGroups: VisibilityGroups;
@@ -42,7 +43,7 @@ export type CourseDetailsExerciseGroup = {
 };
 
 export type CourseDetailsExercise = {
-    id: number;
+    id: ExerciseIdentifier;
     name: string;
     passed: boolean;
     softDeadline: Date | null;
@@ -132,7 +133,7 @@ export interface LoginError {
 
 export interface SetCourseDisabledStatus {
     command: "setCourseDisabledStatus";
-    courseId: number;
+    courseId: CourseIdentifier;
     disabled: boolean;
 }
 

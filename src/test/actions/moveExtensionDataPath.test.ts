@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 
 import { moveExtensionDataPath } from "../../actions";
 import { ActionContext } from "../../actions/types";
-import TMC from "../../api/tmc";
+import Langs from "../../api/langs";
 import WorkspaceManager, { ExerciseStatus } from "../../api/workspaceManager";
 import { UserData } from "../../config/userdata";
 import { workspaceExercises } from "../fixtures/workspaceManager";
@@ -35,7 +35,7 @@ suite("moveExtensionDataPath action", function () {
     const stubContext = createMockActionContext();
     let root: string;
 
-    let tmcMock: IMock<TMC>;
+    let tmcMock: IMock<Langs>;
     let tmcMockValues: TMCMockValues;
     let userDataMock: IMock<UserData>;
     let workspaceManagerMock: IMock<WorkspaceManager>;
@@ -43,9 +43,9 @@ suite("moveExtensionDataPath action", function () {
 
     const actionContext = (): ActionContext => ({
         ...stubContext,
-        tmc: tmcMock.object,
-        userData: userDataMock.object,
-        workspaceManager: workspaceManagerMock.object,
+        langs: new Ok(tmcMock.object),
+        userData: new Ok(userDataMock.object),
+        workspaceManager: new Ok(workspaceManagerMock.object),
     });
 
     setup(function () {
@@ -78,7 +78,12 @@ suite("moveExtensionDataPath action", function () {
     test.skip("should close current workspace's exercises", async function () {
         await moveExtensionDataPath(actionContext(), emptyFolder(root));
         workspaceManagerMock.verify(
-            (x) => x.closeCourseExercises(It.isValue(courseName), It.isValue(openExerciseSlugs)),
+            (x) =>
+                x.closeCourseExercises(
+                    "tmc",
+                    It.isValue(courseName),
+                    It.isValue(openExerciseSlugs),
+                ),
             Times.once(),
         );
     });
@@ -93,7 +98,12 @@ suite("moveExtensionDataPath action", function () {
         workspaceManagerMockValues.activeCourse = undefined;
         await moveExtensionDataPath(actionContext(), emptyFolder(root));
         workspaceManagerMock.verify(
-            (x) => x.closeCourseExercises(It.isValue(courseName), It.isValue(openExerciseSlugs)),
+            (x) =>
+                x.closeCourseExercises(
+                    "tmc",
+                    It.isValue(courseName),
+                    It.isValue(openExerciseSlugs),
+                ),
             Times.never(),
         );
     });

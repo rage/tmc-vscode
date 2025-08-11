@@ -23,6 +23,7 @@ export enum ExerciseStatus {
 }
 
 export interface WorkspaceExercise {
+    backend: "tmc" | "mooc";
     courseSlug: string;
     exerciseSlug: string;
     status: ExerciseStatus;
@@ -44,7 +45,7 @@ interface ConfigurationProperties {
 export default class WorkspaceManager implements vscode.Disposable {
     private _exercises: WorkspaceExercise[];
     private readonly _resources: Resources;
-    private readonly _watcher: vscode.FileSystemWatcher;
+    private readonly _watcher: vscode.FileSystemWatcher | undefined;
     private readonly _disposables: vscode.Disposable[];
 
     /**
@@ -54,13 +55,16 @@ export default class WorkspaceManager implements vscode.Disposable {
     constructor(resources: Resources, exercises?: WorkspaceExercise[]) {
         this._exercises = exercises ?? [];
         this._resources = resources;
-        this._watcher = vscode.workspace.createFileSystemWatcher(
-            this._resources.projectsDirectory + "/**",
-            true,
-            true,
-            false,
-        );
-        this._watcher.onDidDelete((x) => this._fileDeleteAction(x.fsPath));
+        const projectsDirectory = this._resources.projectsDirectory;
+        if (projectsDirectory) {
+            this._watcher = vscode.workspace.createFileSystemWatcher(
+                projectsDirectory + "/**",
+                true,
+                true,
+                false,
+            );
+            this._watcher.onDidDelete((x) => this._fileDeleteAction(x.fsPath, projectsDirectory));
+        }
         this._disposables = [
             vscode.workspace.onDidChangeWorkspaceFolders((e) =>
                 this._onDidChangeWorkspaceFolders(e),
@@ -120,11 +124,15 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     public getExerciseBySlug(
+        backend: "tmc" | "mooc",
         courseSlug: string,
         exerciseSlug: string,
     ): Readonly<WorkspaceExercise> | undefined {
         return this._exercises.find(
-            (x) => x.courseSlug === courseSlug && x.exerciseSlug === exerciseSlug,
+            (x) =>
+                x.backend === backend &&
+                x.courseSlug === courseSlug &&
+                x.exerciseSlug === exerciseSlug,
         );
     }
 
@@ -141,8 +149,13 @@ export default class WorkspaceManager implements vscode.Disposable {
      */
     public uriIsExercise(uri: vscode.Uri): boolean {
         const exerciseFolderPath = this._resources.projectsDirectory;
-        const relation = path.relative(exerciseFolderPath, uri.fsPath);
-        return !relation.startsWith("..");
+        if (exerciseFolderPath) {
+            const relation = path.relative(exerciseFolderPath, uri.fsPath);
+            return !relation.startsWith("..");
+        } else {
+            Logger.error("Extension was not initialized properly");
+            return false;
+        }
     }
 
     public addExercise(exercise: WorkspaceExercise): void {
@@ -150,11 +163,16 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     public openCourseExercises(
+        backend: "tmc" | "mooc",
         courseSlug: string,
         exerciseSlugs: string[],
     ): Promise<Result<void, Error>> {
         this._exercises.forEach((x) => {
-            if (x.courseSlug === courseSlug && exerciseSlugs.includes(x.exerciseSlug)) {
+            if (
+                x.backend === backend &&
+                x.courseSlug === courseSlug &&
+                exerciseSlugs.includes(x.exerciseSlug)
+            ) {
                 x.status = ExerciseStatus.Open;
             }
         });
@@ -163,12 +181,17 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     public async closeCourseExercises(
+        backend: "tmc" | "mooc",
         courseSlug: string,
         exerciseSlugs: string[],
     ): Promise<Result<Array<WorkspaceExercise>, Error>> {
         const closedExercises: Array<WorkspaceExercise> = [];
         this._exercises.forEach((x) => {
-            if (x.courseSlug === courseSlug && exerciseSlugs.includes(x.exerciseSlug)) {
+            if (
+                x.backend === backend &&
+                x.courseSlug === courseSlug &&
+                exerciseSlugs.includes(x.exerciseSlug)
+            ) {
                 x.status = ExerciseStatus.Closed;
                 closedExercises.push(x);
             }
@@ -212,7 +235,9 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     public dispose(): void {
-        this._watcher.dispose();
+        if (this._watcher) {
+            this._watcher.dispose();
+        }
         this._disposables.forEach((x) => x.dispose());
     }
 
@@ -299,8 +324,8 @@ export default class WorkspaceManager implements vscode.Disposable {
      * Event listener function for workspace watcher delete.
      * @param targetPath Path to deleted item
      */
-    private _fileDeleteAction(targetPath: string): void {
-        const basedir = this._resources.projectsDirectory;
+    private _fileDeleteAction(targetPath: string, projectsDirectory: string): void {
+        const basedir = projectsDirectory;
         const rootFilePath = this._resources.workspaceRootFolder.fsPath;
         Logger.debug("Target path deleted", targetPath);
         if (path.relative(rootFilePath, targetPath) === "") {

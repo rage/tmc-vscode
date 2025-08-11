@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 
 import Dialog from "../../api/dialog";
 import Storage from "../../api/storage";
-import TMC from "../../api/tmc";
+import Langs from "../../api/langs";
 import { migrateExtensionDataFromPreviousVersions } from "../../migrate";
 import { Logger, LogLevel } from "../../utilities";
 import * as exerciseData from "../fixtures/exerciseData";
@@ -36,7 +36,7 @@ suite("Extension data migration", function () {
     let context: vscode.ExtensionContext;
     let dialogMock: IMock<Dialog>;
     let storage: Storage;
-    let tmcMock: IMock<TMC>;
+    let tmcMock: IMock<Langs>;
     let settingsMock: IMock<vscode.WorkspaceConfiguration>;
     let root: string;
 

@@ -35,7 +35,7 @@ function setupMockValues(values: WorkspaceManagerMockValues): IMock<WorkspaceMan
     mock.setup((x) => x.activeCourse).returns(() => values.activeCourse);
     mock.setup((x) => x.activeExercise).returns(() => values.activeExercise);
 
-    mock.setup((x) => x.closeCourseExercises(It.isAny(), It.isAny())).returns(
+    mock.setup((x) => x.closeCourseExercises("tmc", It.isAny(), It.isAny())).returns(
         async () => values.closeExercises,
     );
 

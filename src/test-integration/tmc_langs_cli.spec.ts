@@ -7,11 +7,12 @@ import * as path from "path";
 import * as kill from "tree-kill";
 import { Result } from "ts-results";
 
-import TMC from "../api/tmc";
+import Langs from "../api/langs";
 import { SubmissionFeedback } from "../api/types";
 import { CLIENT_NAME, TMC_LANGS_VERSION } from "../config/constants";
 import { AuthenticationError, AuthorizationError, BottleneckError, RuntimeError } from "../errors";
 import { getLangsCLIForPlatform, getPlatform } from "../utilities/";
+import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared";
 
 // __dirname is the dist folder when built.
 const PROJECT_ROOT = path.join(__dirname, "..");
@@ -59,7 +60,7 @@ suite("tmc langs cli spec", function () {
         let onLoggedInCalls: number;
         let onLoggedOutCalls: number;
         let projectsDir: string;
-        let tmc: TMC;
+        let tmc: Langs;
 
         setup(function () {
             configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME);
@@ -67,7 +68,7 @@ suite("tmc langs cli spec", function () {
             onLoggedInCalls = 0;
             onLoggedOutCalls = 0;
             projectsDir = setupProjectsDir(configDir, path.join(testDir, "tmcdata"));
-            tmc = new TMC(CLI_FILE, CLIENT_NAME, "test", {
+            tmc = new Langs(CLI_FILE, CLIENT_NAME, "test", {
                 cliConfigDir: testDir,
             });
             tmc.on("login", () => onLoggedInCalls++);
@@ -111,23 +112,29 @@ suite("tmc langs cli spec", function () {
         });
 
         test("should be able to download an existing exercise", async function () {
-            const result = await tmc.downloadTmcExercises([1], true, () => {});
+            const result = await tmc.downloadExercises(
+                [ExerciseIdentifier.from(1)],
+                true,
+                () => {},
+            );
             result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`);
         }).timeout(10000);
 
         // Ids missing from the server are missing from the response.
         test.skip("should not be able to download a non-existent exercise", async function () {
-            const downloads = (await tmc.downloadTmcExercises([404], true, () => {})).unwrap();
-            expect(downloads.failed?.length).to.be.equal(1);
+            const [tmcDownloads, moocDownloads] = (
+                await tmc.downloadExercises([ExerciseIdentifier.from(404)], true, () => {})
+            ).unwrap();
+            expect(tmcDownloads.failed?.length).to.be.equal(1);
         });
 
         test("should get existing api data", async function () {
-            const data = (await tmc.getCourseData(1)).unwrap();
+            const data = (await tmc.getTmcCourseData(1)).unwrap();
             expect(data.details.name).to.be.equal("python-course");
             expect(data.exercises.length).to.be.equal(2);
             expect(data.settings.name).to.be.equal("python-course");
 
-            const details = (await tmc.getCourseDetails(1)).unwrap();
+            const details = (await tmc.getCourseDetails(CourseIdentifier.from(1))).unwrap();
             expect(details.id).to.be.equal(1);
             expect(details.name).to.be.equal("python-course");
 
@@ -144,22 +151,22 @@ suite("tmc langs cli spec", function () {
             const exercise = (await tmc.getExerciseDetails(1)).unwrap();
             expect(exercise.exercise_name).to.be.equal("part01-01_passing_exercise");
 
-            const submissions = (await tmc.getOldSubmissions(1)).unwrap();
+            const submissions = (await tmc.getTmcOldSubmissions(1)).unwrap();
             expect(submissions.length).to.be.greaterThan(0);
 
             const organization = (await tmc.getOrganization("test")).unwrap();
             expect(organization.slug).to.be.equal("test");
             expect(organization.name).to.be.equal("Test Organization");
 
-            const organizations = (await tmc.getOrganizations()).unwrap();
+            const organizations = (await tmc.getTmcOrganizations()).unwrap();
             expect(organizations.length).to.be.equal(1, "Expected to get one organization.");
         });
 
         test("should encounter errors when trying to get non-existing api data", async function () {
-            const dataResult = await tmc.getCourseData(404);
+            const dataResult = await tmc.getTmcCourseData(404);
             expect(dataResult.val).to.be.instanceOf(RuntimeError);
 
-            const detailsResult = await tmc.getCourseDetails(404);
+            const detailsResult = await tmc.getCourseDetails(CourseIdentifier.from(404));
             expect(detailsResult.val).to.be.instanceOf(RuntimeError);
 
             const exercisesResult = await tmc.getCourseExercises(404);
@@ -174,7 +181,7 @@ suite("tmc langs cli spec", function () {
             const exerciseResult = await tmc.getExerciseDetails(404);
             expect(exerciseResult.val).to.be.instanceOf(RuntimeError);
 
-            const submissionsResult = await tmc.getOldSubmissions(404);
+            const submissionsResult = await tmc.getTmcOldSubmissions(404);
             expect(submissionsResult.val).to.be.instanceOf(RuntimeError);
 
             const result = await tmc.getOrganization("404");
@@ -195,8 +202,10 @@ suite("tmc langs cli spec", function () {
 
             setup(async function () {
                 deleteSync(projectsDir, { force: true });
-                const result = (await tmc.downloadTmcExercises([1], true, () => {})).unwrap();
-                exercisePath = result.downloaded[0].path;
+                const [tmcRes, moocRes] = (
+                    await tmc.downloadExercises([ExerciseIdentifier.from(1)], true, () => {})
+                ).unwrap();
+                exercisePath = tmcRes.downloaded[0].path;
             });
 
             test("should be able to clean the exercise", async function () {
@@ -204,7 +213,9 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should be able to list local exercises", async function () {
-                const result = await unwrapResult(tmc.listLocalCourseExercises("python-course"));
+                const result = await unwrapResult(
+                    tmc.listLocalCourseExercises("tmc", "python-course"),
+                );
                 expect(result.length).to.be.equal(1);
                 expect(first(result)?.["exercise-path"]).to.be.equal(exercisePath);
             });
@@ -231,45 +242,49 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should be able to check for exercise updates", async function () {
-                const result = await unwrapResult(tmc.checkExerciseUpdates());
+                const result = await unwrapResult(tmc.checkTmcExerciseUpdates());
                 expect(result.length).to.be.equal(0);
             });
 
             test("should be able to save the exercise state and revert it to an old submission", async function () {
-                const submissions = await unwrapResult(tmc.getOldSubmissions(1));
-                await unwrapResult(tmc.downloadOldSubmission(1, exercisePath, 1, true));
+                const submissions = await unwrapResult(tmc.getTmcOldSubmissions(1));
+                await unwrapResult(tmc.downloadTmcOldSubmission(1, exercisePath, 1, true));
 
                 // State saving check is based on a side effect of making a new submission.
-                const newSubmissions = await unwrapResult(tmc.getOldSubmissions(1));
+                const newSubmissions = await unwrapResult(tmc.getTmcOldSubmissions(1));
                 expect(newSubmissions.length).to.be.equal(submissions.length + 1);
             });
 
             test("should be able to download an old submission without saving the current state", async function () {
-                const submissions = await unwrapResult(tmc.getOldSubmissions(1));
-                await unwrapResult(tmc.downloadOldSubmission(1, exercisePath, 1, false));
+                const submissions = await unwrapResult(tmc.getTmcOldSubmissions(1));
+                await unwrapResult(tmc.downloadTmcOldSubmission(1, exercisePath, 1, false));
 
                 // State saving check is based on a side effect of making a new submission.
-                const newSubmissions = await unwrapResult(tmc.getOldSubmissions(1));
+                const newSubmissions = await unwrapResult(tmc.getTmcOldSubmissions(1));
                 expect(newSubmissions.length).to.be.equal(submissions.length);
             });
 
             // Langs fails to remove folder on Windows CI
             test.skip("should be able to save the exercise state and reset it to original template", async function () {
-                const submissions = await unwrapResult(tmc.getOldSubmissions(1));
-                await unwrapResult(tmc.resetExercise(1, exercisePath, true));
+                const submissions = await unwrapResult(tmc.getTmcOldSubmissions(1));
+                await unwrapResult(
+                    tmc.resetExercise(ExerciseIdentifier.from(1), exercisePath, true),
+                );
 
                 // State saving check is based on a side effect of making a new submission.
-                const newSubmissions = await unwrapResult(tmc.getOldSubmissions(1));
+                const newSubmissions = await unwrapResult(tmc.getTmcOldSubmissions(1));
                 expect(newSubmissions.length).to.be.equal(submissions.length + 1);
             });
 
             // Langs fails to remove folder on Windows CI
             test.skip("should be able to reset exercise without saving the current state", async function () {
-                const submissions = await unwrapResult(tmc.getOldSubmissions(1));
-                await unwrapResult(tmc.resetExercise(1, exercisePath, false));
+                const submissions = await unwrapResult(tmc.getTmcOldSubmissions(1));
+                await unwrapResult(
+                    tmc.resetExercise(ExerciseIdentifier.from(1), exercisePath, false),
+                );
 
                 // State saving check is based on a side effect of making a new submission.
-                const newSubmissions = await unwrapResult(tmc.getOldSubmissions(1));
+                const newSubmissions = await unwrapResult(tmc.getTmcOldSubmissions(1));
                 expect(newSubmissions.length).to.be.equal(submissions.length);
             });
 
@@ -277,7 +292,7 @@ suite("tmc langs cli spec", function () {
                 let url: string | undefined;
                 const results = await unwrapResult(
                     tmc.submitExerciseAndWaitForResults(
-                        1,
+                        ExerciseIdentifier.from(1),
                         exercisePath,
                         undefined,
                         (x) => (url = x),
@@ -288,20 +303,26 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should encounter an error if trying to submit the exercise twice too soon", async function () {
-                const first = tmc.submitExerciseAndWaitForResults(1, exercisePath);
-                const second = tmc.submitExerciseAndWaitForResults(1, exercisePath);
+                const first = tmc.submitExerciseAndWaitForResults(
+                    ExerciseIdentifier.from(1),
+                    exercisePath,
+                );
+                const second = tmc.submitExerciseAndWaitForResults(
+                    ExerciseIdentifier.from(1),
+                    exercisePath,
+                );
                 const [, secondResult] = await Promise.all([first, second]);
                 expect(secondResult.val).to.be.instanceOf(BottleneckError);
             });
 
             test("should be able to submit the exercise to TMC-paste", async function () {
-                const pasteUrl = await unwrapResult(tmc.submitExerciseToPaste(1, exercisePath));
+                const pasteUrl = await unwrapResult(tmc.submitTmcExerciseToPaste(1, exercisePath));
                 expect(pasteUrl).to.include("localhost");
             });
 
             test("should encounter an error if trying to submit to paste twice too soon", async function () {
-                const first = tmc.submitExerciseToPaste(1, exercisePath);
-                const second = tmc.submitExerciseToPaste(1, exercisePath);
+                const first = tmc.submitTmcExerciseToPaste(1, exercisePath);
+                const second = tmc.submitTmcExerciseToPaste(1, exercisePath);
                 const [, secondResult] = await Promise.all([first, second]);
                 expect(secondResult.val).to.be.instanceOf(BottleneckError);
             });
@@ -326,22 +347,29 @@ suite("tmc langs cli spec", function () {
 
             // Downloads exercise on Langs 0.18
             test.skip("should encounter an error when attempting to revert to an older submission", async function () {
-                const result = await tmc.downloadOldSubmission(1, missingExercisePath, 1, false);
+                const result = await tmc.downloadTmcOldSubmission(1, missingExercisePath, 1, false);
                 expect(result.val).to.be.instanceOf(RuntimeError);
             });
 
             test("should encounter an error when trying to reset it", async function () {
-                const result = await tmc.resetExercise(1, missingExercisePath, false);
+                const result = await tmc.resetExercise(
+                    ExerciseIdentifier.from(1),
+                    missingExercisePath,
+                    false,
+                );
                 expect(result.val).to.be.instanceOf(RuntimeError);
             });
 
             test("should encounter an error when trying to submit it", async function () {
-                const result = await tmc.submitExerciseAndWaitForResults(1, missingExercisePath);
+                const result = await tmc.submitExerciseAndWaitForResults(
+                    ExerciseIdentifier.from(1),
+                    missingExercisePath,
+                );
                 expect(result.val).to.be.instanceOf(RuntimeError);
             });
 
             test("should encounter an error when trying to submit it to TMC-paste", async function () {
-                const result = await tmc.submitExerciseToPaste(404, missingExercisePath);
+                const result = await tmc.submitTmcExerciseToPaste(404, missingExercisePath);
                 expect(result.val).to.be.instanceOf(RuntimeError);
             });
         });
@@ -352,7 +380,7 @@ suite("tmc langs cli spec", function () {
         let onLoggedOutCalls: number;
         let configDir: string;
         let projectsDir: string;
-        let tmc: TMC;
+        let tmc: Langs;
 
         setup(function () {
             configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME);
@@ -360,7 +388,7 @@ suite("tmc langs cli spec", function () {
             onLoggedInCalls = 0;
             onLoggedOutCalls = 0;
             projectsDir = setupProjectsDir(configDir, path.join(testDir, "tmcdata"));
-            tmc = new TMC(CLI_FILE, CLIENT_NAME, "test", {
+            tmc = new Langs(CLI_FILE, CLIENT_NAME, "test", {
                 cliConfigDir: testDir,
             });
             tmc.on("login", () => onLoggedInCalls++);
@@ -389,15 +417,19 @@ suite("tmc langs cli spec", function () {
         });
 
         test("should not be able to download an exercise", async function () {
-            const result = await tmc.downloadTmcExercises([1], true, () => {});
+            const result = await tmc.downloadExercises(
+                [ExerciseIdentifier.from(1)],
+                true,
+                () => {},
+            );
             expect(result.val).to.be.instanceOf(RuntimeError);
         });
 
         test("should not get existing api data in general", async function () {
-            const dataResult = await tmc.getCourseData(0);
+            const dataResult = await tmc.getTmcCourseData(0);
             expect(dataResult.val).to.be.instanceOf(RuntimeError);
 
-            const detailsResult = await tmc.getCourseDetails(0);
+            const detailsResult = await tmc.getCourseDetails(CourseIdentifier.from(0));
             expect(detailsResult.val).to.be.instanceOf(AuthorizationError);
 
             const exercisesResult = await tmc.getCourseExercises(0);
@@ -412,7 +444,7 @@ suite("tmc langs cli spec", function () {
             const exerciseResult = await tmc.getExerciseDetails(1);
             expect(exerciseResult.val).to.be.instanceOf(AuthorizationError);
 
-            const submissionsResult = await tmc.getOldSubmissions(1);
+            const submissionsResult = await tmc.getTmcOldSubmissions(1);
             expect(submissionsResult.val).to.be.instanceOf(AuthorizationError);
         });
 
@@ -421,7 +453,7 @@ suite("tmc langs cli spec", function () {
             expect(organization.slug).to.be.equal("test");
             expect(organization.name).to.be.equal("Test Organization");
 
-            const organizations = await unwrapResult(tmc.getOrganizations());
+            const organizations = await unwrapResult(tmc.getTmcOrganizations());
             expect(organizations.length).to.be.equal(1, "Expected to get one organization.");
         });
 
@@ -447,9 +479,11 @@ suite("tmc langs cli spec", function () {
             setup(async function () {
                 deleteSync(projectsDir, { force: true });
                 writeCredentials(configDir);
-                const result = (await tmc.downloadTmcExercises([1], true, () => {})).unwrap();
+                const [tmcRes, moocRes] = (
+                    await tmc.downloadExercises([ExerciseIdentifier.from(1)], true, () => {})
+                ).unwrap();
                 clearCredentials(configDir);
-                exercisePath = result.downloaded[0].path;
+                exercisePath = tmcRes.downloaded[0].path;
             });
 
             test("should be able to clean the exercise", async function () {
@@ -458,7 +492,9 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should be able to list local exercises", async function () {
-                const result = await unwrapResult(tmc.listLocalCourseExercises("python-course"));
+                const result = await unwrapResult(
+                    tmc.listLocalCourseExercises("tmc", "python-course"),
+                );
                 expect(result.length).to.be.equal(1);
                 expect(first(result)?.["exercise-path"]).to.be.equal(exercisePath);
             });
@@ -469,23 +505,30 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should not be able to load old submission", async function () {
-                const result = await tmc.downloadOldSubmission(1, exercisePath, 1, true);
+                const result = await tmc.downloadTmcOldSubmission(1, exercisePath, 1, true);
                 expect(result.val).to.be.instanceOf(RuntimeError);
             });
 
             test("should not be able to reset exercise", async function () {
-                const result = await tmc.resetExercise(1, exercisePath, true);
+                const result = await tmc.resetExercise(
+                    ExerciseIdentifier.from(1),
+                    exercisePath,
+                    true,
+                );
                 expect(result.val).to.be.instanceOf(AuthorizationError);
             });
 
             test("should not be able to submit exercise", async function () {
-                const result = await tmc.submitExerciseAndWaitForResults(1, exercisePath);
+                const result = await tmc.submitExerciseAndWaitForResults(
+                    ExerciseIdentifier.from(1),
+                    exercisePath,
+                );
                 expect(result.val).to.be.instanceOf(AuthorizationError);
             });
 
             // This actually works
             test.skip("should not be able to submit exercise to TMC-paste", async function () {
-                const result = await tmc.submitExerciseToPaste(1, exercisePath);
+                const result = await tmc.submitTmcExerciseToPaste(1, exercisePath);
                 expect(result.val).to.be.instanceOf(AuthorizationError);
             });
         });
