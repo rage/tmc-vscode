@@ -9,6 +9,7 @@
 
     let usernameField: HTMLInputElement;
     let passwordField: HTMLInputElement;
+    const errorTimeout = writable<NodeJS.Timeout | null>(null);
     const errorMessage = writable<string | null>(null);
     const loggingIn = writable(false);
 
@@ -23,9 +24,14 @@
             case "loginError": {
                 loggingIn.set(false);
                 errorMessage.set(message.error);
-                setTimeout(() => {
-                    errorMessage.set(null);
-                }, 7500);
+                errorTimeout.update((val) => {
+                    if (val !== null) {
+                        clearTimeout(val);
+                    }
+                    return setTimeout(() => {
+                        errorMessage.set(null);
+                    }, 7500);
+                });
                 break;
             }
             default:

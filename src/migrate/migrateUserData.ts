@@ -1,19 +1,25 @@
 import { createIs } from "typia";
 import * as vscode from "vscode";
 
-import { LocalCourseData } from "../api/storage";
+import { UserData } from "../api/storage";
 import {
     LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../config/constants";
 
+import { EXERCISE_DATA_KEY_V0 } from "./migrateExerciseData";
 import { MigratedData } from "./types";
 import validateData from "./validateData";
+import { LocalTmcCourseData } from "../shared/shared";
 
-const UNSTABLE_EXERCISE_DATA_KEY = "exerciseData";
 const USER_DATA_KEY_V0 = "userData";
 const USER_DATA_KEY_V1 = "user-data-v1";
+const USER_DATA_KEY_V2 = "user-data-v2";
+
+interface UserDataV0 {
+    courses: LocalCourseDataV0[];
+}
 
 export interface LocalCourseDataV0 {
     id: number;
@@ -35,6 +41,10 @@ export interface LocalCourseDataV0 {
     title?: string;
     notifyAfter?: number;
     material_url?: string | null;
+}
+
+interface UserDataV1 {
+    courses: LocalCourseDataV1[];
 }
 
 export interface LocalCourseDataV1 {
@@ -61,7 +71,7 @@ export interface LocalCourseDataV1 {
     materialUrl: string | null;
 }
 
-function courseDataFromV0ToV1(
+function coursesFromV0ToV1(
     unstableData: LocalCourseDataV0[],
     memento: vscode.Memento,
 ): LocalCourseDataV1[] {
@@ -72,7 +82,7 @@ function courseDataFromV0ToV1(
         softDeadline?: string | undefined;
     }
 
-    const localExerciseData = memento.get<LocalExerciseDataPartial[]>(UNSTABLE_EXERCISE_DATA_KEY);
+    const localExerciseData = memento.get<LocalExerciseDataPartial[]>(EXERCISE_DATA_KEY_V0);
     const courseExercises = localExerciseData && new Map(localExerciseData.map((x) => [x.id, x]));
 
     return unstableData.map<LocalCourseDataV1>((x) => {
@@ -103,7 +113,17 @@ function courseDataFromV0ToV1(
     });
 }
 
-export function resolveMissingFields(localCourseData: LocalCourseDataV1[]): LocalCourseData[] {
+function localCourseDataFromV1ToV2(old: UserDataV1): UserData {
+    const defined = resolveMissingFieldsInV1(old.courses);
+    return {
+        tmcCourses: defined,
+        moocCourses: [],
+    };
+}
+
+export function resolveMissingFieldsInV1(
+    localCourseData: LocalCourseDataV1[],
+): LocalTmcCourseData[] {
     return localCourseData.map((course) => {
         const exercises = course.exercises.map((x) => {
             const resolvedAwardedPoints = x.passed
@@ -119,23 +139,33 @@ export function resolveMissingFields(localCourseData: LocalCourseDataV1[]): Loca
     });
 }
 
-export default function migrateUserData(
-    memento: vscode.Memento,
-): MigratedData<{ courses: LocalCourseData[] }> {
-    const obsoleteKeys: string[] = [];
-    const dataV0 = validateData(
-        memento.get(USER_DATA_KEY_V0),
-        createIs<{ courses: LocalCourseDataV0[] }>(),
-    );
-    if (dataV0) {
-        obsoleteKeys.push(USER_DATA_KEY_V0);
+// migrates stored user data to the latest version
+export default function migrateUserData(memento: vscode.Memento): MigratedData<UserData> {
+    // check latest version first, no need to do anything if we're already on the latest userdata ver
+    const userDataV2 = validateData(memento.get(USER_DATA_KEY_V2), createIs<UserData>());
+    if (userDataV2 !== undefined) {
+        return { data: userDataV2, obsoleteKeys: [] };
     }
 
-    const dataV1 = dataV0
-        ? { courses: courseDataFromV0ToV1(dataV0.courses, memento) }
-        : validateData(memento.get(USER_DATA_KEY_V1), createIs<{ courses: LocalCourseDataV1[] }>());
+    // check v1
+    const userDataV1 = validateData(memento.get(USER_DATA_KEY_V1), createIs<UserDataV1>());
+    if (userDataV1 !== undefined) {
+        // migrate from v1 to v2
+        const migratedData = localCourseDataFromV1ToV2(userDataV1);
+        return { data: migratedData, obsoleteKeys: [USER_DATA_KEY_V1] };
+    }
 
-    const data = dataV1 ? { ...dataV1, courses: resolveMissingFields(dataV1?.courses) } : undefined;
+    // check v0
+    const userDataV0 = validateData(memento.get(USER_DATA_KEY_V0), createIs<UserDataV0>());
+    if (userDataV0 !== undefined) {
+        // migrate from v0 to v1
+        const coursesV1 = coursesFromV0ToV1(userDataV0.courses, memento);
+        const userDataV1 = { courses: coursesV1 };
+        // migrate from v1 to v2
+        const userDataV2 = localCourseDataFromV1ToV2(userDataV1);
+        return { data: userDataV2, obsoleteKeys: [USER_DATA_KEY_V0] };
+    }
 
-    return { data, obsoleteKeys };
+    // no data
+    return { data: undefined, obsoleteKeys: [] };
 }

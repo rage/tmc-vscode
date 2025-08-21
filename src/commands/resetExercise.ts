@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 
 import { ActionContext } from "../actions/types";
 import { Logger } from "../utilities";
+import { LocalCourseExercise } from "../shared/shared";
 
 /**
  * Resets an exercise to its initial state. Optionally submits the exercise beforehand.
@@ -13,9 +14,9 @@ export async function resetExercise(
     actionContext: ActionContext,
     resource: vscode.Uri | undefined,
 ): Promise<void> {
-    const { dialog, tmc, userData, workspaceManager } = actionContext;
+    const { dialog, langs, userData, workspaceManager } = actionContext;
     Logger.info("Resetting exercise");
-    if (!(tmc.ok && userData.ok && workspaceManager.ok)) {
+    if (!(langs.ok && userData.ok && workspaceManager.ok)) {
         Logger.error("Extension was not initialized properly");
         return;
     }
@@ -48,11 +49,8 @@ export async function resetExercise(
     const editor = vscode.window.activeTextEditor;
     const document = editor?.document.uri;
 
-    const resetResult = await tmc.val.resetExercise(
-        exerciseDetails.id,
-        exercise.uri.fsPath,
-        submitFirst,
-    );
+    const id = LocalCourseExercise.getId(exerciseDetails);
+    const resetResult = await langs.val.resetExercise(id, exercise.uri.fsPath, submitFirst);
     if (resetResult.err) {
         dialog.errorNotification("Failed to reset exercise.", resetResult.val);
         return;

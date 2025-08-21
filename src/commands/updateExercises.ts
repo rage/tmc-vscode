@@ -27,7 +27,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
     const now = Date.now();
     const exercisesToUpdate = updateablesResult.val.filter((x) => {
         const course = userData.val.getCourse(x.courseId);
-        return course.notifyAfter <= now && !course.disabled;
+        return course.data.notifyAfter <= now && !course.data.disabled;
     });
 
     if (exercisesToUpdate.length === 0) {
@@ -42,7 +42,6 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
             ...userData.val.getCourses().map<ExtensionToWebview>((x) => ({
                 type: "setUpdateables",
                 target: { type: "CourseDetails" },
-                courseId: x.id,
                 exerciseIds: [],
             })),
         );
@@ -59,7 +58,6 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
             ...userData.val.getCourses().map<ExtensionToWebview>((x) => ({
                 type: "setUpdateables",
                 target: { type: "CourseDetails" },
-                courseId: x.id,
                 exerciseIds: downloadResult.val.failed,
             })),
         );

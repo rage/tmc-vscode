@@ -10,13 +10,13 @@ export async function wipe(
     actionContext: ActionContext,
     context: vscode.ExtensionContext,
 ): Promise<void> {
-    const { dialog, resources, tmc, userData, workspaceManager } = actionContext;
+    const { dialog, resources, langs, userData, workspaceManager } = actionContext;
     Logger.info("Wiping");
     if (
         !(
             workspaceManager.ok &&
             resources.ok &&
-            tmc.ok &&
+            langs.ok &&
             userData.ok &&
             resources.val.projectsDirectory
         )
@@ -59,7 +59,7 @@ Please close the workspace and any related files before running this command aga
     const message = "Removing extension data...";
     const wipeResult = await dialog.progressNotification(message, async (progress) => {
         if (
-            !(workspaceManager && resources && tmc && userData && resources.val.projectsDirectory)
+            !(workspaceManager && resources && langs && userData && resources.val.projectsDirectory)
         ) {
             Logger.error("Extension was not initialized properly");
             return Err(new Error("Extension was not initialized properly"));
@@ -74,15 +74,15 @@ Please close the workspace and any related files before running this command aga
         progress.report({ message, percent: 0.25 });
 
         // Reset Langs settings
-        const result2 = await tmc.val.resetSettings();
+        const result2 = await langs.val.resetSettings();
         if (result2.err) {
             return result2;
         }
         progress.report({ message, percent: 0.5 });
 
         // Maybe logout should have setting to disable events?
-        tmc.val.on("logout", () => {});
-        const result3 = await tmc.val.deauthenticate();
+        langs.val.on("logout", () => {});
+        const result3 = await langs.val.deauthenticate();
         if (result3.err) {
             return result3;
         }

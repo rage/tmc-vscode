@@ -10,7 +10,15 @@ import { compact } from "lodash";
 import { Err, Ok, Result } from "ts-results";
 import { ExerciseStatus } from "../api/workspaceManager";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
-import { CourseDetailsPanel, ExtensionToWebview } from "../shared/shared";
+import {
+    CourseDetailsPanel,
+    CourseIdentifier,
+    ExerciseIdentifier,
+    ExtensionToWebview,
+    LocalCourseData,
+    LocalCourseExercise,
+    match,
+} from "../shared/shared";
 import { Logger } from "../utilities";
 import * as systeminformation from "systeminformation";
 import { ActionContext } from "./types";
@@ -22,23 +30,33 @@ import { ActionContext } from "./types";
 export async function openExercises(
     context: vscode.ExtensionContext,
     actionContext: ActionContext,
-    exerciseIdsToOpen: number[],
-    courseName: string,
-): Promise<Result<number[], Error>> {
+    exerciseIdsToOpen: ExerciseIdentifier[],
+    courseId: CourseIdentifier,
+): Promise<Result<Array<ExerciseIdentifier>, Error>> {
     Logger.info("Opening exercises", exerciseIdsToOpen);
 
-    const { workspaceManager, userData, tmc, dialog } = actionContext;
-    if (!(userData.ok && workspaceManager.ok && tmc.ok)) {
+    const { workspaceManager, userData, langs, dialog } = actionContext;
+    if (!(userData.ok && workspaceManager.ok && langs.ok)) {
         return Err(new Error("Extension was not initialized properly"));
     }
 
-    const course = userData.val.getCourseByName(courseName);
-    const courseExercises = new Map(course.exercises.map((x) => [x.id, x]));
-    const exercisesToOpen = compact(exerciseIdsToOpen.map((x) => courseExercises.get(x)));
+    const course = userData.val.getCourse(courseId);
+    const courseExercises = new Map(
+        LocalCourseData.getExercises(course).map((x) => [x.data.id, x]),
+    );
+    const exercisesToOpen = compact(
+        exerciseIdsToOpen.map((x) => courseExercises.get(ExerciseIdentifier.unwrap(x))),
+    );
 
+    const courseName = match(
+        course,
+        (tmc) => tmc.name,
+        (mooc) => mooc.courseName,
+    );
     const openResult = await workspaceManager.val.openCourseExercises(
+        course.kind,
         courseName,
-        exercisesToOpen.map((e) => e.name),
+        exercisesToOpen.map(LocalCourseExercise.getSlug),
     );
     if (openResult.err) {
         return openResult;
@@ -48,7 +66,7 @@ export async function openExercises(
         .getExercisesByCourseSlug(courseName)
         .filter((x) => x.status === ExerciseStatus.Closed)
         .map((x) => x.exerciseSlug);
-    const settingsResult = await tmc.val.setSetting(
+    const settingsResult = await langs.val.setSetting(
         `closed-exercises-for:${courseName}`,
         closedExerciseNames,
     );
@@ -73,7 +91,12 @@ export async function openExercises(
                     const panel: CourseDetailsPanel = {
                         id: randomPanelId(),
                         type: "CourseDetails",
-                        courseId: course.id,
+                        courseId,
+                        exerciseGroups: [],
+                        exerciseStatuses: {
+                            tmc: {},
+                            mooc: {},
+                        },
                     };
                     TmcPanel.renderMain(context.extensionUri, context, actionContext, panel);
                 },
@@ -101,31 +124,55 @@ export async function openExercises(
  */
 export async function closeExercises(
     actionContext: ActionContext,
-    ids: number[],
-    courseName: string,
-): Promise<Result<number[], Error>> {
-    const { workspaceManager, userData, tmc } = actionContext;
-    if (!(userData.ok && workspaceManager.ok && tmc.ok)) {
+    ids: Array<ExerciseIdentifier>,
+    courseId: CourseIdentifier,
+): Promise<Result<Array<ExerciseIdentifier>, Error>> {
+    const { workspaceManager, userData, langs } = actionContext;
+    if (!(userData.ok && workspaceManager.ok && langs.ok)) {
         return Err(new Error("Extension was not initialized properly"));
     }
 
-    const course = userData.val.getCourseByName(courseName);
-    const exercises = new Map(course.exercises.map((x) => [x.id, x]));
-    const exerciseSlugs = compact(ids.map((x) => exercises.get(x)?.name));
+    const course = userData.val.getCourse(courseId);
+    const exercises = new Map(LocalCourseData.getExercises(course).map((x) => [x.data.id, x]));
+    const exerciseSlugs = compact(
+        ids.map((x) => {
+            const exercise = exercises.get(ExerciseIdentifier.unwrap(x));
+            if (!exercise) {
+                return undefined;
+            }
+            return match(
+                exercise,
+                (tmc) => tmc.name,
+                (mooc) => mooc.id,
+            );
+        }),
+    );
 
-    const closeResult = await workspaceManager.val.closeCourseExercises(courseName, exerciseSlugs);
+    const courseName = LocalCourseData.getCourseName(course);
+    const closeResult = await workspaceManager.val.closeCourseExercises(
+        course.kind,
+        courseName,
+        exerciseSlugs,
+    );
     if (closeResult.err) {
         return closeResult;
     }
 
-    const slugToId = new Map(Array.from(exercises.entries(), ([key, val]) => [val.name, key]));
-    const closedIds = closeResult.val.map((exercise) => slugToId.get(exercise.exerciseSlug) || 0);
+    const slugToId = new Map(
+        Array.from(exercises.entries(), ([key, val]) => [
+            LocalCourseExercise.getSlug(val),
+            ExerciseIdentifier.from(key),
+        ]),
+    );
+    const closedIds = closeResult.val
+        .map((exercise) => slugToId.get(exercise.exerciseSlug))
+        .filter((e) => e !== undefined);
 
     const closedExerciseNames = workspaceManager.val
         .getExercisesByCourseSlug(courseName)
         .filter((x) => x.status === ExerciseStatus.Closed)
         .map((x) => x.exerciseSlug);
-    const settingsResult = await tmc.val.setSetting(
+    const settingsResult = await langs.val.setSetting(
         `closed-exercises-for:${courseName}`,
         closedExerciseNames,
     );

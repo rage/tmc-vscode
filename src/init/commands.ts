@@ -5,6 +5,7 @@ import { checkForCourseUpdates, displayUserCourses, removeCourse } from "../acti
 import { ActionContext } from "../actions/types";
 import * as commands from "../commands";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
+import { assertUnreachable, CourseIdentifier, LocalCourseData } from "../shared/shared";
 import { TmcTreeNode } from "../ui/treeview/treenode";
 import { Logger } from "../utilities/";
 
@@ -18,18 +19,6 @@ export function registerCommands(
     // Commands not shown to user in Command Palette / TMC Action menu
     context.subscriptions.push(
         vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
-        vscode.commands.registerCommand(
-            "tmcTreeView.removeCourse",
-            async (treeNode: TmcTreeNode) => {
-                const confirmed = await dialog.confirmation(
-                    `Do you want to remove ${treeNode.label} from your courses? This won't delete your downloaded exercises.`,
-                );
-                if (confirmed) {
-                    await removeCourse(actionContext, Number(treeNode.id));
-                    await displayUserCourses(context, actionContext);
-                }
-            },
-        ),
         vscode.commands.registerCommand("tmcTreeView.refreshCourses", async () => {
             await checkForCourseUpdates(actionContext);
             await commands.updateExercises(actionContext, "loud");
@@ -58,30 +47,91 @@ export function registerCommands(
                 commands.closeExercise(actionContext, resource),
         ),
 
-        vscode.commands.registerCommand("tmc.courseDetails", async (courseId?: number) => {
-            if (userData.err) {
-                Logger.error("The extension was not initialized properly");
-                return;
-            }
+        vscode.commands.registerCommand(
+            "tmc.courseDetails",
+            async (courseId?: CourseIdentifier) => {
+                if (userData.err) {
+                    Logger.error("The extension was not initialized properly");
+                    return;
+                }
 
-            const courses = userData.val.getCourses();
-            if (courses.length === 0) {
-                return;
-            }
-            courseId =
-                courseId ??
-                (await dialog.selectItem(
-                    "Which course page do you want to open?",
-                    ...courses.map<[string, number]>((c) => [c.title, c.id]),
-                ));
-            if (courseId) {
+                const courses = userData.val.getCourses();
+                if (courses.length === 0) {
+                    return;
+                }
+                let actualId: CourseIdentifier;
+                if (courseId === undefined) {
+                    const selected = await dialog.selectItem(
+                        "Which course page do you want to open?",
+                        ...courses.map<[string, CourseIdentifier]>((c) => {
+                            switch (c.kind) {
+                                case "tmc": {
+                                    return [
+                                        c.data.title,
+                                        { kind: "tmc", data: { courseId: c.data.id } },
+                                    ];
+                                }
+                                case "mooc": {
+                                    return [
+                                        c.data.courseName,
+                                        { kind: "mooc", data: { instanceId: c.data.instanceId } },
+                                    ];
+                                }
+                            }
+                        }),
+                    );
+                    if (selected === undefined) {
+                        // user did not select anything
+                        return;
+                    }
+                    actualId = selected;
+                } else {
+                    actualId = courseId;
+                }
+                const course = userData.val.getCourse(actualId);
                 TmcPanel.renderMain(context.extensionUri, context, actionContext, {
                     id: randomPanelId(),
                     type: "CourseDetails",
-                    courseId,
+                    courseId: actualId,
+                    course,
+                    exerciseGroups: [],
+                    exerciseStatuses: { tmc: {}, mooc: {} },
                 });
-            }
-        }),
+            },
+        ),
+
+        vscode.commands.registerCommand(
+            "tmc.courseDetails",
+            async (courseId?: CourseIdentifier) => {
+                if (userData.err) {
+                    Logger.error("The extension was not initialized properly");
+                    return;
+                }
+
+                const courses = userData.val.getCourses();
+                if (courses.length === 0) {
+                    return;
+                }
+                courseId =
+                    courseId ??
+                    (await dialog.selectItem(
+                        "Which course page do you want to open?",
+                        ...courses.map<[string, CourseIdentifier]>((c) => [
+                            LocalCourseData.getCourseName(c),
+                            LocalCourseData.getCourseId(c),
+                        ]),
+                    ));
+                if (courseId) {
+                    TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+                        id: randomPanelId(),
+                        type: "CourseDetails",
+                        courseId,
+                        exerciseGroups: [],
+                        exerciseStatuses: { tmc: {}, mooc: {} },
+                    });
+                }
+            },
+        ),
 
         vscode.commands.registerCommand("tmc.downloadNewExercises", async () =>
             commands.downloadNewExercises(actionContext),

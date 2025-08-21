@@ -6,12 +6,14 @@
     import TextField from "../components/TextField.svelte";
     import { onMount } from "svelte";
     import { vscode } from "../utilities/vscode";
+    import { error } from "console";
 
     export let panel: SelectOrganizationPanel;
 
     const organizations = loadable<Array<Organization>>();
     const pinned = loadable<Array<Organization>>();
     const tmcBackendUrl = loadable<string>();
+    const error = loadable<string>();
     const filter = writable<string>("");
 
     onMount(() => {
@@ -30,6 +32,10 @@
             }
             case "setTmcBackendUrl": {
                 tmcBackendUrl.set(message.tmcBackendUrl);
+                break;
+            }
+            case "requestSelectOrganizationDataError": {
+                error.set(message.error);
                 break;
             }
             default:
@@ -54,67 +60,74 @@
     }
 </script>
 
-<h1>Frequently used organizations</h1>
-{#if $pinned !== undefined && $tmcBackendUrl !== undefined}
-    {#each $pinned as pinned}
-        <div
-            role="button"
-            tabindex="0"
-            class="org-row"
-            on:click={() => selectOrganization(pinned.slug)}
-            on:keypress={() => selectOrganization(pinned.slug)}
-        >
-            <div class="org-img-container">
-                <img
-                    class="org-img"
-                    src={resolveLogoPath($tmcBackendUrl, pinned.logo_path)}
-                    alt={`Logo for ${pinned.name}`}
-                />
-            </div>
-            <div class="org-content">
-                <h3>{pinned.name} <small class="org-slug">({pinned.slug})</small></h3>
-                <p>{pinned.information}</p>
-            </div>
-        </div>
-    {/each}
+{#if $error !== undefined}
+    <div>Error: {$error}</div>
 {:else}
-    <vscode-progress-ring />
-{/if}
-
-<h1>All organizations</h1>
-<div class="search-container">
-    <TextField placeholder="Search organizations" onChange={(val) => filterOrganizations(val)} />
-</div>
-
-{#if $organizations !== undefined && $tmcBackendUrl !== undefined}
-    {#each $organizations ?? [] as organization}
-        <div
-            role="button"
-            tabindex="0"
-            class="org-row"
-            on:click={() => selectOrganization(organization.slug)}
-            on:keypress={() => selectOrganization(organization.slug)}
-            hidden={$filter.length > 0 &&
-                !organization.slug.toUpperCase().includes($filter) &&
-                !organization.name.toUpperCase().includes($filter)}
-        >
-            <div class="org-img-container">
-                <img
-                    class="org-img"
-                    src={resolveLogoPath($tmcBackendUrl, organization.logo_path)}
-                    alt={`Logo for ${organization.name}`}
-                />
+    <h1>Frequently used organizations</h1>
+    {#if $pinned !== undefined && $tmcBackendUrl !== undefined}
+        {#each $pinned as pinned}
+            <div
+                role="button"
+                tabindex="0"
+                class="org-row"
+                on:click={() => selectOrganization(pinned.slug)}
+                on:keypress={() => selectOrganization(pinned.slug)}
+            >
+                <div class="org-img-container">
+                    <img
+                        class="org-img"
+                        src={resolveLogoPath($tmcBackendUrl, pinned.logo_path)}
+                        alt={`Logo for ${pinned.name}`}
+                    />
+                </div>
+                <div class="org-content">
+                    <h3>{pinned.name} <small class="org-slug">({pinned.slug})</small></h3>
+                    <p>{pinned.information}</p>
+                </div>
             </div>
-            <div class="org-content">
-                <h4>
-                    {organization.name} <small class="org-slug">({organization.slug})</small>
-                </h4>
-                <p>{organization.information}</p>
+        {/each}
+    {:else}
+        <vscode-progress-ring />
+    {/if}
+
+    <h1>All organizations</h1>
+    <div class="search-container">
+        <TextField
+            placeholder="Search organizations"
+            onChange={(val) => filterOrganizations(val)}
+        />
+    </div>
+
+    {#if $organizations !== undefined && $tmcBackendUrl !== undefined}
+        {#each $organizations ?? [] as organization}
+            <div
+                role="button"
+                tabindex="0"
+                class="org-row"
+                on:click={() => selectOrganization(organization.slug)}
+                on:keypress={() => selectOrganization(organization.slug)}
+                hidden={$filter.length > 0 &&
+                    !organization.slug.toUpperCase().includes($filter) &&
+                    !organization.name.toUpperCase().includes($filter)}
+            >
+                <div class="org-img-container">
+                    <img
+                        class="org-img"
+                        src={resolveLogoPath($tmcBackendUrl, organization.logo_path)}
+                        alt={`Logo for ${organization.name}`}
+                    />
+                </div>
+                <div class="org-content">
+                    <h4>
+                        {organization.name} <small class="org-slug">({organization.slug})</small>
+                    </h4>
+                    <p>{organization.information}</p>
+                </div>
             </div>
-        </div>
-    {/each}
-{:else}
-    <vscode-progress-ring />
+        {/each}
+    {:else}
+        <vscode-progress-ring />
+    {/if}
 {/if}
 
 <style>

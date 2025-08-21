@@ -2,28 +2,28 @@ import * as path from "path";
 import { createIs } from "typia";
 import * as vscode from "vscode";
 
-import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
-import { ActionContext } from "./actions/types";
-import Dialog from "./api/dialog";
-import ExerciseDecorationProvider from "./api/exerciseDecorationProvider";
-import Storage from "./api/storage";
-import Langs from "./api/langs";
-import WorkspaceManager from "./api/workspaceManager";
+import { checkForCourseUpdates, refreshLocalExercises } from "../actions";
+import { ActionContext } from "../actions/types";
+import Dialog from "../api/dialog";
+import ExerciseDecorationProvider from "../api/exerciseDecorationProvider";
+import Storage from "../api/storage";
+import TMC from "../api/langs";
+import WorkspaceManager from "../api/workspaceManager";
 import {
     CLIENT_NAME,
     DEBUG_MODE,
     EXERCISE_CHECK_INTERVAL,
     EXTENSION_ID,
     TMC_LANGS_CONFIG_DIR,
-} from "./config/constants";
-import Settings from "./config/settings";
-import { UserData } from "./config/userdata";
-import { EmptyLangsResponseError, HaltForReloadError } from "./errors";
-import * as init from "./init";
-import { migrateExtensionDataFromPreviousVersions } from "./migrate";
-import { randomPanelId, TmcPanel } from "./panels/TmcPanel";
-import UI from "./ui/ui";
-import { cliFolder, Logger, LogLevel, semVerCompare } from "./utilities";
+} from "../config/constants";
+import Settings from "../config/settings";
+import { UserData } from "../config/userdata";
+import { EmptyLangsResponseError, HaltForReloadError } from "../errors";
+import * as init from "../init";
+import { migrateExtensionDataFromPreviousVersions } from "../migrate";
+import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
+import UI from "../ui/ui";
+import { cliFolder, Logger, LogLevel, semVerCompare } from "../utilities";
 import { Err, Ok, Result } from "ts-results";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
@@ -70,13 +70,13 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     const cliPathResult = await init.ensureLangsUpdated(cliFolderPath, dialog);
 
     // download langs if necessary
-    let langs: Result<Langs, Error>;
+    let langs: Result<TMC, Error>;
     if (cliPathResult.err) {
         langs = cliPathResult;
         initializationError(dialog, "tmc-langs setup", cliPathResult.val, cliFolderPath);
     } else {
         langs = new Ok(
-            new Langs(cliPathResult.val, CLIENT_NAME, extensionVersion, {
+            new TMC(cliPathResult.val, CLIENT_NAME, extensionVersion, {
                 cliConfigDir: TMC_LANGS_CONFIG_DIR,
             }),
         );

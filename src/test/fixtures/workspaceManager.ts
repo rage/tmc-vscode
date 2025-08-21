@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { ExerciseStatus, WorkspaceExercise } from "../../api/workspaceManager";
 
 export const exerciseHelloWorld: WorkspaceExercise = {
+    backend: "tmc",
     courseSlug: "test-python-course",
     exerciseSlug: "hello_world",
     status: ExerciseStatus.Open,
@@ -10,6 +11,7 @@ export const exerciseHelloWorld: WorkspaceExercise = {
 };
 
 export const exerciseOtherWorld: WorkspaceExercise = {
+    backend: "tmc",
     courseSlug: "test-python-course",
     exerciseSlug: "other_world",
     status: ExerciseStatus.Closed,

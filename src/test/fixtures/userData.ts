@@ -1,7 +1,8 @@
-import { LocalCourseExercise, UserData } from "../../api/storage";
+import { UserData } from "../../api/storage";
 import { LocalCourseDataV0, LocalCourseDataV1 } from "../../migrate/migrateUserData";
+import { LocalTmcCourseExercise } from "../../shared/shared";
 
-export const userDataExerciseHelloWorld: LocalCourseExercise = {
+export const userDataExerciseHelloWorld: LocalTmcCourseExercise = {
     id: 1,
     availablePoints: 1,
     awardedPoints: 0,
@@ -229,7 +230,7 @@ export const v2_0_0: UserDataV1 = {
 };
 
 export const v2_1_0: UserData = {
-    courses: [
+    tmcCourses: [
         {
             id: 0,
             availablePoints: 3,
@@ -265,4 +266,5 @@ export const v2_1_0: UserData = {
             title: "The Python Course",
         },
     ],
+    moocCourses: [],
 };

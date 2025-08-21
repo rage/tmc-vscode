@@ -23,6 +23,7 @@ export enum ExerciseStatus {
 }
 
 export interface WorkspaceExercise {
+    backend: "tmc" | "mooc";
     courseSlug: string;
     exerciseSlug: string;
     status: ExerciseStatus;
@@ -123,11 +124,15 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     public getExerciseBySlug(
+        backend: "tmc" | "mooc",
         courseSlug: string,
         exerciseSlug: string,
     ): Readonly<WorkspaceExercise> | undefined {
         return this._exercises.find(
-            (x) => x.courseSlug === courseSlug && x.exerciseSlug === exerciseSlug,
+            (x) =>
+                x.backend === backend &&
+                x.courseSlug === courseSlug &&
+                x.exerciseSlug === exerciseSlug,
         );
     }
 
@@ -158,11 +163,16 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     public openCourseExercises(
+        backend: "tmc" | "mooc",
         courseSlug: string,
         exerciseSlugs: string[],
     ): Promise<Result<void, Error>> {
         this._exercises.forEach((x) => {
-            if (x.courseSlug === courseSlug && exerciseSlugs.includes(x.exerciseSlug)) {
+            if (
+                x.backend === backend &&
+                x.courseSlug === courseSlug &&
+                exerciseSlugs.includes(x.exerciseSlug)
+            ) {
                 x.status = ExerciseStatus.Open;
             }
         });
@@ -171,12 +181,17 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     public async closeCourseExercises(
+        backend: "tmc" | "mooc",
         courseSlug: string,
         exerciseSlugs: string[],
     ): Promise<Result<Array<WorkspaceExercise>, Error>> {
         const closedExercises: Array<WorkspaceExercise> = [];
         this._exercises.forEach((x) => {
-            if (x.courseSlug === courseSlug && exerciseSlugs.includes(x.exerciseSlug)) {
+            if (
+                x.backend === backend &&
+                x.courseSlug === courseSlug &&
+                exerciseSlugs.includes(x.exerciseSlug)
+            ) {
                 x.status = ExerciseStatus.Closed;
                 closedExercises.push(x);
             }

@@ -9,7 +9,17 @@ import { ExtensionContext } from "vscode";
 import { ExerciseStatus } from "../api/workspaceManager";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { Exercise } from "../shared/langsSchema";
-import { ExtensionToWebview, MyCoursesPanel, Panel } from "../shared/shared";
+import {
+    ExerciseIdentifier,
+    ExtensionToWebview,
+    makeMoocKind,
+    makeTmcKind,
+    MyCoursesPanel,
+    Panel,
+    LocalCourseData,
+    CourseIdentifier,
+    match,
+} from "../shared/shared";
 import * as UITypes from "../ui/types";
 import { dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utilities/";
 
@@ -23,9 +33,9 @@ export async function displayUserCourses(
     context: ExtensionContext,
     actionContext: ActionContext,
 ): Promise<void> {
-    const { userData, tmc } = actionContext;
+    const { userData, langs } = actionContext;
     Logger.info("Displaying My Courses view");
-    if (!(userData.ok && tmc.ok)) {
+    if (!(userData.ok && langs.ok)) {
         Logger.error("Extension was not initialized properly");
         return;
     }
@@ -40,14 +50,14 @@ export async function displayUserCourses(
     const newExercisesCourses: ExtensionToWebview[] = courses.map((c) => ({
         type: "setNewExercises",
         target: panel,
-        courseId: c.id,
-        exerciseIds: c.disabled ? [] : c.newExercises,
+        courseId: LocalCourseData.getCourseId(c),
+        exerciseIds: c.data.disabled ? [] : c.data.newExercises.map(ExerciseIdentifier.from),
     }));
     const disabledStatusCourses: ExtensionToWebview[] = courses.map((c) => ({
         type: "setCourseDisabledStatus",
         target: panel,
-        courseId: c.id,
-        disabled: c.disabled,
+        courseId: LocalCourseData.getCourseId(c),
+        disabled: c.data.disabled,
     }));
 
     TmcPanel.renderMain(context.extensionUri, context, actionContext, panel);
@@ -56,8 +66,8 @@ export async function displayUserCourses(
 
     const now = new Date();
     courses.forEach(async (course) => {
-        const courseId = course.id;
-        const exercises: Exercise[] = (await tmc.val.getCourseDetails(courseId))
+        const courseId = LocalCourseData.getCourseId(course);
+        const exercises: Exercise[] = (await langs.val.getCourseDetails(courseId))
             .map((x) => x.exercises)
             .unwrapOr([]);
 
@@ -78,7 +88,7 @@ export async function displayUserCourses(
         TmcPanel.postMessage({
             type: "setNextCourseDeadline",
             target: panel,
-            courseId: course.id,
+            courseId: LocalCourseData.getCourseId(course),
             deadline,
         });
     });
@@ -90,7 +100,7 @@ export async function displayUserCourses(
 export async function displayLocalCourseDetails(
     context: ExtensionContext,
     actionContext: ActionContext,
-    courseId: number,
+    courseId: CourseIdentifier,
 ): Promise<void> {
     const { userData, workspaceManager } = actionContext;
     if (!(userData.ok && workspaceManager.ok)) {
@@ -98,10 +108,10 @@ export async function displayLocalCourseDetails(
         return;
     }
     const course = userData.val.getCourse(courseId);
-    Logger.info(`Display course view for ${course.name}`);
+    Logger.info(`Display course view for ${LocalCourseData.getCourseName(course)}`);
 
     const mapStatus = (
-        exerciseId: number,
+        exerciseId: ExerciseIdentifier,
         status: ExerciseStatus,
         expired: boolean,
     ): UITypes.ExerciseStatus => {
@@ -121,49 +131,67 @@ export async function displayLocalCourseDetails(
     const initialState: UITypes.WebviewMessage[] = [
         {
             command: "setCourseDisabledStatus",
-            courseId: course.id,
-            disabled: course.disabled,
+            courseId,
+            disabled: match(
+                course,
+                (tmc) => tmc.disabled,
+                (mooc) => mooc.disabled,
+            ),
         },
     ];
-    course.exercises.forEach((ex) => {
-        const nameMatch = ex.name.match(/(\w+)-(.+)/);
-        const groupName = nameMatch?.[1] || "";
-        const group = exerciseData.get(groupName);
-        const name = nameMatch?.[2] || "";
-        const exData = workspaceManager.val.getExerciseBySlug(course.name, ex.name);
-        const softDeadline = ex.softDeadline ? parseDate(ex.softDeadline) : null;
-        const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
-        initialState.push({
-            command: "exerciseStatusChange",
-            exerciseId: ex.id,
-            status: mapStatus(
-                ex.id,
-                exData?.status ?? ExerciseStatus.Missing,
-                hardDeadline !== null && currentDate >= hardDeadline,
-            ),
-        });
-        const entry: UITypes.CourseDetailsExercise = {
-            id: ex.id,
-            name,
-            passed: course.exercises.find((ce) => ce.id === ex.id)?.passed || false,
-            softDeadline,
-            softDeadlineString: softDeadline ? dateToString(softDeadline) : "-",
-            hardDeadline,
-            hardDeadlineString: hardDeadline ? dateToString(hardDeadline) : "-",
-            isHard: softDeadline && hardDeadline ? hardDeadline <= softDeadline : true,
-        };
+    match(
+        course,
+        (tmc) =>
+            tmc.exercises.forEach((ex) => {
+                const nameMatch = ex.name.match(/(\w+)-(.+)/);
+                const groupName = nameMatch?.[1] || "";
+                const group = exerciseData.get(groupName);
+                const name = nameMatch?.[2] || "";
+                const exData = workspaceManager.val.getExerciseBySlug(
+                    "tmc",
+                    LocalCourseData.getCourseName(course),
+                    ex.name,
+                );
+                const softDeadline = ex.softDeadline ? parseDate(ex.softDeadline) : null;
+                const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
+                initialState.push({
+                    command: "exerciseStatusChange",
+                    exerciseId: ex.id,
+                    status: mapStatus(
+                        makeTmcKind({ tmcExerciseId: ex.id }),
+                        exData?.status ?? ExerciseStatus.Missing,
+                        hardDeadline !== null && currentDate >= hardDeadline,
+                    ),
+                });
+                const entry: UITypes.CourseDetailsExercise = {
+                    id: makeTmcKind({ tmcExerciseId: ex.id }),
+                    name,
+                    passed: tmc.exercises.find((ce) => ce.id === ex.id)?.passed || false,
+                    softDeadline,
+                    softDeadlineString: softDeadline ? dateToString(softDeadline) : "-",
+                    hardDeadline,
+                    hardDeadlineString: hardDeadline ? dateToString(hardDeadline) : "-",
+                    isHard: softDeadline && hardDeadline ? hardDeadline <= softDeadline : true,
+                };
 
-        exerciseData.set(groupName, {
-            name: groupName,
-            nextDeadlineString: "",
-            exercises: group?.exercises.concat(entry) || [entry],
-        });
-    });
+                exerciseData.set(groupName, {
+                    name: groupName,
+                    nextDeadlineString: "",
+                    exercises: group?.exercises.concat(entry) || [entry],
+                });
+            }),
+        (mooc) => {},
+    );
 
     const panel: Panel = {
         type: "CourseDetails",
         id: randomPanelId(),
-        courseId: course.id,
+        courseId,
+        exerciseGroups: [],
+        exerciseStatuses: {
+            tmc: {},
+            mooc: {},
+        },
     };
     TmcPanel.renderMain(context.extensionUri, context, actionContext, panel);
 

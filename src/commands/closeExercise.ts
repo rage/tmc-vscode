@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
 import { Logger } from "../utilities";
+import { LocalCourseData, LocalCourseExercise } from "../shared/shared";
 
 export async function closeExercise(
     actionContext: ActionContext,
@@ -23,10 +24,11 @@ export async function closeExercise(
         return;
     }
 
-    const exerciseId = userData.val.getExerciseByName(
+    const localExercise = userData.val.getExerciseByName(
         exercise.courseSlug,
         exercise.exerciseSlug,
-    )?.id;
+    );
+    const exerciseId = localExercise ? LocalCourseExercise.getId(localExercise) : undefined;
     if (
         exerciseId &&
         (userData.val.getPassed(exerciseId) ||
@@ -34,11 +36,9 @@ export async function closeExercise(
                 `Are you sure you want to close uncompleted exercise ${exercise.exerciseSlug}?`,
             )))
     ) {
-        const result = await actions.closeExercises(
-            actionContext,
-            [exerciseId],
-            exercise.courseSlug,
-        );
+        const course = userData.val.getCourseBySlug(exercise.courseSlug);
+        const courseId = LocalCourseData.getCourseId(course);
+        const result = await actions.closeExercises(actionContext, [exerciseId], courseId);
         if (result.err) {
             dialog.errorNotification("Error when closing exercise.", result.val);
             return;

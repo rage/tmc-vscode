@@ -3,7 +3,7 @@ import { Mock } from "typemoq";
 import { ActionContext } from "../../actions/types";
 import Dialog from "../../api/dialog";
 import ExerciseDecorationProvider from "../../api/exerciseDecorationProvider";
-import TMC from "../../api/tmc";
+import Langs from "../../api/langs";
 import WorkspaceManager from "../../api/workspaceManager";
 import Resouces from "../../config/resources";
 import Settings from "../../config/settings";
@@ -18,7 +18,7 @@ export function createMockActionContext(): ActionContext {
         exerciseDecorationProvider: Mock.ofType<Result<ExerciseDecorationProvider, Error>>().object,
         resources: Mock.ofType<Result<Resouces, Error>>().object,
         settings: Mock.ofType<Settings>().object,
-        tmc: Mock.ofType<Result<TMC, Error>>().object,
+        langs: Mock.ofType<Result<Langs, Error>>().object,
         ui: Mock.ofType<UI>().object,
         userData: Mock.ofType<Result<UserData, Error>>().object,
         workspaceManager: Mock.ofType<Result<WorkspaceManager, Error>>().object,

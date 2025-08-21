@@ -10,9 +10,9 @@ export async function cleanExercise(
     actionContext: ActionContext,
     resource: vscode.Uri | undefined,
 ): Promise<void> {
-    const { dialog, tmc, workspaceManager } = actionContext;
+    const { dialog, langs, workspaceManager } = actionContext;
     Logger.info("Cleaning exercise");
-    if (!(workspaceManager.ok && tmc.ok)) {
+    if (!(workspaceManager.ok && langs.ok)) {
         Logger.error("Extension was not initialized properly");
         return;
     }
@@ -28,7 +28,7 @@ export async function cleanExercise(
         return;
     }
 
-    const cleanResult = await tmc.val.clean(exerciseToClean.fsPath);
+    const cleanResult = await langs.val.clean(exerciseToClean.fsPath);
     if (cleanResult.err) {
         dialog.errorNotification("Failed to clean exercise.", cleanResult.val);
     }

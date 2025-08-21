@@ -1,6 +1,3 @@
-// VERSION=0.38.0
-// https://raw.githubusercontent.com/rage/tmc-langs-rust/0.38.0/crates/tmc-langs-cli/bindings.d.ts
-
 export type Locale = string;
 
 export type CliOutput =
@@ -17,16 +14,10 @@ export type DataKind =
           "output-data-kind": "exercise-packaging-configuration";
           "output-data": ExercisePackagingConfiguration;
       }
-    | { "output-data-kind": "local-tmc-exercises"; "output-data": Array<LocalTmcExercise> }
-    | { "output-data-kind": "local-mooc-exercises"; "output-data": Array<LocalMoocExercise> }
     | { "output-data-kind": "refresh-result"; "output-data": RefreshData }
     | { "output-data-kind": "test-result"; "output-data": RunResult }
     | { "output-data-kind": "exercise-desc"; "output-data": ExerciseDesc }
     | { "output-data-kind": "updated-exercises"; "output-data": Array<UpdatedExercise> }
-    | {
-          "output-data-kind": "tmc-exercise-download";
-          "output-data": DownloadOrUpdateTmcCourseExercisesResult;
-      }
     | {
           "output-data-kind": "mooc-exercise-download";
           "output-data": DownloadOrUpdateMoocCourseExercisesResult;
@@ -50,9 +41,17 @@ export type DataKind =
       }
     | { "output-data-kind": "submission-finished"; "output-data": SubmissionFinished }
     | { "output-data-kind": "config-value"; "output-data": ConfigValue }
-    | { "output-data-kind": "tmc-config"; "output-data": TmcConfig }
     | { "output-data-kind": "compressed-project-hash"; "output-data": string }
     | { "output-data-kind": "submission-sandbox"; "output-data": string }
+    | { "output-data-kind": "local-tmc-exercises"; "output-data": Array<LocalTmcExercise> }
+    | {
+          "output-data-kind": "tmc-exercise-download";
+          "output-data": DownloadOrUpdateTmcCourseExercisesResult;
+      }
+    | { "output-data-kind": "tmc-config"; "output-data": TmcConfig }
+    | { "output-data-kind": "mooc-updated-exercises"; "output-data": Array<string> }
+    | { "output-data-kind": "local-mooc-exercises"; "output-data": Array<LocalMoocExercise> }
+    | { "output-data-kind": "mooc-course-instance"; "output-data": CourseInstance }
     | { "output-data-kind": "mooc-course-instances"; "output-data": Array<CourseInstance> }
     | { "output-data-kind": "mooc-exercise-slides"; "output-data": Array<TmcExerciseSlide> }
     | { "output-data-kind": "mooc-exercise-slide"; "output-data": TmcExerciseSlide }
@@ -276,7 +275,7 @@ export type TmcExerciseDownload = {
     path: string;
 };
 
-export type MoocExerciseDownload = { id: string; path: string };
+export type MoocExerciseDownload = { "task-id": string; path: string };
 
 export type CombinedCourseData = {
     details: CourseDetails;
@@ -630,6 +629,7 @@ export type TmcExerciseTask = {
     assignment: unknown;
     public_spec: PublicSpec | null;
     model_solution_spec: ModelSolutionSpec | null;
+    checksum: string;
 };
 
 export type PublicSpec =

@@ -4,6 +4,7 @@ import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
 import { BottleneckError } from "../errors";
 import { Logger } from "../utilities";
+import { matchBackend } from "../shared/shared";
 
 export async function pasteExercise(
     actionContext: ActionContext,
@@ -24,11 +25,14 @@ export async function pasteExercise(
         return;
     }
 
-    const pasteResult = await actions.pasteExercise(
-        actionContext,
-        exercise.courseSlug,
-        exercise.exerciseSlug,
+    const pasteResult = await matchBackend(
+        exercise,
+        (tmc) =>
+            actions.pasteTmcExercise(actionContext, exercise.courseSlug, exercise.exerciseSlug),
+        (mooc) =>
+            actions.pasteMoocExercise(actionContext, exercise.courseSlug, exercise.exerciseSlug),
     );
+    await actions.pasteTmcExercise(actionContext, exercise.courseSlug, exercise.exerciseSlug);
     if (pasteResult.err) {
         if (pasteResult.val instanceof BottleneckError) {
             Logger.warn(`Paste submission was cancelled: ${pasteResult.val.message}.`);

@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 
+import { LocalMoocCourseData, LocalTmcCourseData } from "../shared/shared";
+
 export interface ExtensionSettings {
     downloadOldSubmission: boolean;
     hideMetaFiles: boolean;
@@ -8,35 +10,9 @@ export interface ExtensionSettings {
     updateExercisesAutomatically: boolean;
 }
 
-export interface LocalCourseData {
-    id: number;
-    name: string;
-    title: string;
-    description: string;
-    organization: string;
-    exercises: LocalCourseExercise[];
-    availablePoints: number;
-    awardedPoints: number;
-    perhapsExamMode: boolean;
-    newExercises: number[];
-    notifyAfter: number;
-    disabled: boolean;
-    materialUrl: string | null;
-}
-
-export interface LocalCourseExercise {
-    id: number;
-    availablePoints: number;
-    awardedPoints: number;
-    /// Equivalent to exercise slug
-    name: string;
-    deadline: string | null;
-    passed: boolean;
-    softDeadline: string | null;
-}
-
 export interface UserData {
-    courses: LocalCourseData[];
+    tmcCourses: LocalTmcCourseData[];
+    moocCourses: LocalMoocCourseData[];
 }
 
 export interface SessionState {
@@ -48,7 +24,7 @@ export interface SessionState {
  */
 export default class Storage {
     private static readonly _extensionSettingsKey = "extension-settings-v1";
-    private static readonly _userDataKey = "user-data-v1";
+    private static readonly _userDataKey = "user-data-v2";
     private static readonly _sessionStateKey = "session-state-v1";
 
     private _context: vscode.ExtensionContext;

@@ -3,7 +3,7 @@ import { IMock, It, Times } from "typemoq";
 import * as vscode from "vscode";
 
 import Dialog from "../../api/dialog";
-import TMC from "../../api/tmc";
+import Langs from "../../api/langs";
 import migrateExerciseData from "../../migrate/migrateExerciseData";
 import { Logger, LogLevel } from "../../utilities";
 import * as exerciseData from "../fixtures/exerciseData";
@@ -25,7 +25,7 @@ suite("Exercise data migration", function () {
 
     let dialogMock: IMock<Dialog>;
     let memento: vscode.Memento;
-    let tmcMock: IMock<TMC>;
+    let tmcMock: IMock<Langs>;
 
     setup(function () {
         [dialogMock] = createDialogMock();

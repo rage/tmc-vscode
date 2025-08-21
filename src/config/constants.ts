@@ -9,7 +9,7 @@ declare const __MOOC_BACKEND_URL__: string;
 
 // @ts-ignore "No module found" error even though the file exists
 import FAQ from "../../docs/FAQ.md";
-import { TestResultData } from "../shared/shared";
+import { ExerciseIdentifier, TestResultData } from "../shared/shared";
 
 export const DEBUG_MODE = __DEBUG_MODE__;
 export const TMC_BACKEND_URL = __TMC_BACKEND_URL__;
@@ -106,7 +106,7 @@ export const EXAM_TEST_RESULT: TestResultData = {
         ],
         logs: {},
     },
-    id: 0,
+    id: ExerciseIdentifier.from(0),
     courseSlug: "",
     exerciseName: "part01-exam01",
     tmcLogs: {

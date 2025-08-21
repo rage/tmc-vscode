@@ -21,6 +21,8 @@
     import ExerciseTests from "./panels/ExerciseTests.svelte";
     import ExerciseSubmission from "./panels/ExerciseSubmission.svelte";
     import { onMount } from "svelte";
+    import SelectPlatform from "./panels/SelectPlatform.svelte";
+    import SelectMoocCourse from "./panels/SelectMoocCourse.svelte";
     import InitializationErrorHelp from "./panels/InitializationErrorHelp.svelte";
 
     onMount(() => {
@@ -120,6 +122,10 @@ ${ev.reason.stack}
                 <ExerciseTests panel={$state.panel} />
             {:else if $state.panel.type === "ExerciseSubmission"}
                 <ExerciseSubmission panel={$state.panel} />
+            {:else if $state.panel.type === "SelectPlatform"}
+                <SelectPlatform panel={$state.panel} />
+            {:else if $state.panel.type === "SelectMoocCourse"}
+                <SelectMoocCourse panel={$state.panel} />
             {:else if $state.panel.type === "InitializationErrorHelp"}
                 <InitializationErrorHelp panel={$state.panel} />
             {:else if $state.panel.type === "App"}

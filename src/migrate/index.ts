@@ -5,8 +5,8 @@ import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
 import Dialog from "../api/dialog";
+import Langs from "../api/langs";
 import Storage from "../api/storage";
-import TMC from "../api/tmc";
 import {
     WORKSPACE_ROOT_FILE_NAME,
     WORKSPACE_ROOT_FILE_TEXT,
@@ -30,7 +30,7 @@ export async function migrateExtensionDataFromPreviousVersions(
     context: vscode.ExtensionContext,
     storage: Storage,
     dialog: Dialog,
-    tmc: TMC,
+    tmc: Langs,
     settings: vscode.WorkspaceConfiguration,
 ): Promise<Result<void, Error>> {
     const memento = context.globalState;

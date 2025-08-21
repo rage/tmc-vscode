@@ -195,11 +195,6 @@
                 }
             },
             {
-                "command": "tmcTreeView.removeCourse",
-                "title": "Remove Course",
-                "category": "TMC"
-            },
-            {
                 "command": "tmcView.activateEntry",
                 "title": "Activate",
                 "category": "TMC"
@@ -348,10 +343,6 @@
                     "when": "false"
                 },
                 {
-                    "command": "tmcTreeView.removeCourse",
-                    "when": "false"
-                },
-                {
                     "command": "tmcView.activateEntry",
                     "when": "false"
                 }
@@ -414,12 +405,6 @@
                     "command": "tmcTreeView.refreshCourses",
                     "when": "view == tmcView && test-my-code:LoggedIn",
                     "group": "navigation"
-                }
-            ],
-            "view/item/context": [
-                {
-                    "command": "tmcTreeView.removeCourse",
-                    "when": "view == tmcView && viewItem == child"
                 }
             ]
         },

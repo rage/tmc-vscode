@@ -70,7 +70,7 @@ export default class TmcMenuTree {
      */
     public addChildWithId(
         parentId: string,
-        childId: number,
+        childId: number | string,
         title: string,
         command: vscode.Command,
     ): void {

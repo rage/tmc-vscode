@@ -1,7 +1,7 @@
 import { Result } from "ts-results";
 import Dialog from "../api/dialog";
 import ExerciseDecorationProvider from "../api/exerciseDecorationProvider";
-import TMC from "../api/tmc";
+import Langs from "../api/langs";
 import WorkspaceManager from "../api/workspaceManager";
 import Resources from "../config/resources";
 import Settings from "../config/settings";
@@ -15,7 +15,7 @@ export type ActionContext = {
     exerciseDecorationProvider: Result<ExerciseDecorationProvider, Error>;
     resources: Result<Resources, Error>;
     settings: Settings;
-    tmc: Result<TMC, Error>;
+    langs: Result<Langs, Error>;
     ui: UI;
     userData: Result<UserData, Error>;
     workspaceManager: Result<WorkspaceManager, Error>;

@@ -45,7 +45,7 @@ export async function resourceInitialization(
     // Verify that all course .code-workspaces are in-place on startup.
     fs.ensureDirSync(workspaceFileFolder);
     const userData = storage.getUserData();
-    userData?.courses.forEach((course) => {
+    userData?.tmcCourses.forEach((course) => {
         const tmcWorkspaceFilePath = path.join(
             workspaceFileFolder,
             course.name + ".code-workspace",

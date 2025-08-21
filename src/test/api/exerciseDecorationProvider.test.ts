@@ -79,6 +79,6 @@ suite("ExerciseDecoratorProvider class", function () {
         const notExercise = vscode.Uri.file("something.txt");
         const decoration = exerciseDecorationProvider.provideFileDecoration(notExercise);
         expect(decoration).to.be.undefined;
-        userDataMock.verify((x) => x.getExerciseByName(It.isAny(), It.isAny()), Times.never());
+        userDataMock.verify((x) => x.getTmcExerciseByName(It.isAny(), It.isAny()), Times.never());
     });
 });
