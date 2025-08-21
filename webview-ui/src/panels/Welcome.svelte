@@ -72,6 +72,13 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.4.1 - 2025-08-21</h3>
+            <h4>Fixed Python exercises including venv directories when packaging</h4>
+            <p>
+                Previously, if an exercise contained a venv directory it would get included during
+                submissions and cause issues at the server. Now these directories are ignored during
+                packaging.
+            </p>
             <h3>3.4.0 - 2025-07-17</h3>
             <h4>Improved error handling during initialization</h4>
             <p>

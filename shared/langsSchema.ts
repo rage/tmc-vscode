@@ -1,5 +1,5 @@
-// VERSION=0.38.0
-// https://raw.githubusercontent.com/rage/tmc-langs-rust/0.38.0/crates/tmc-langs-cli/bindings.d.ts
+// VERSION=0.38.1
+// https://raw.githubusercontent.com/rage/tmc-langs-rust/0.38.1/crates/tmc-langs-cli/bindings.d.ts
 
 export type Locale = string;
 
