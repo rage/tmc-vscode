@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.4.1] - 2025-08-21
+
+- Fixed Python exercises including venv directories when packaging.
+
 ## [3.4.0] - 2025-07-17
 
 - Improved error handling during initialization.
