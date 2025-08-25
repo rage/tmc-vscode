@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.4.2] - 2025-08-21
+
+- Fixed unnecessary dynamic library dependency causing errors when the library was missing on the user's computer.
+
 ## [3.4.1] - 2025-08-21
 
 - Fixed Python exercises including venv directories when packaging.
