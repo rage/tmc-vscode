@@ -72,6 +72,12 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.4.2 - 2025-08-25</h3>
+            <h4>Removed an unnecessary dependency which could cause errors</h4>
+            <p>
+                The previous version contained a dependency on an unnecessary library which caused
+                an error when the library was missing on the user's computer.
+            </p>
             <h3>3.4.1 - 2025-08-21</h3>
             <h4>Fixed Python exercises including venv directories when packaging</h4>
             <p>
