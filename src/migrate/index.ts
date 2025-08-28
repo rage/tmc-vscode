@@ -1,9 +1,3 @@
-import * as fs from "fs-extra";
-import { concat, last } from "lodash";
-import * as path from "path";
-import { Err, Ok, Result } from "ts-results";
-import * as vscode from "vscode";
-
 import Dialog from "../api/dialog";
 import Storage from "../api/storage";
 import TMC from "../api/tmc";
@@ -14,11 +8,15 @@ import {
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import { HaltForReloadError } from "../errors";
-
 import migrateExerciseData from "./migrateExerciseData";
 import migrateExtensionSettings from "./migrateExtensionSettings";
 import migrateSessionState from "./migrateSessionState";
 import migrateUserData from "./migrateUserData";
+import * as fs from "fs-extra";
+import { concat, last } from "lodash";
+import * as path from "path";
+import { Err, Ok, Result } from "ts-results";
+import * as vscode from "vscode";
 
 /**
  * Migrates extension data from previous versions to the current one.

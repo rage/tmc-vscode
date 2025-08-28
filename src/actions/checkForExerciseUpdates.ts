@@ -1,9 +1,7 @@
+import { Logger } from "../utilities";
+import { ActionContext } from "./types";
 import { flatten } from "lodash";
 import { Err, Ok, Result } from "ts-results";
-
-import { Logger } from "../utilities";
-
-import { ActionContext } from "./types";
 
 interface Options {
     forceRefresh?: boolean;

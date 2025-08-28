@@ -458,6 +458,9 @@
         ]
     },
     "prettier": {
+        "plugins": [
+            "@trivago/prettier-plugin-sort-imports"
+        ],
         "arrowParens": "always",
         "endOfLine": "lf",
         "printWidth": 100,
@@ -486,6 +489,7 @@
         "@eslint/eslintrc": "^3.1.0",
         "@eslint/js": "^9.10.0",
         "@playwright/test": "1.46.1",
+        "@trivago/prettier-plugin-sort-imports": "^5.2.2",
         "@types/chai": "^4.3.3",
         "@types/chai-as-promised": "^7.1.8",
         "@types/du": "^1.0.3",
@@ -513,7 +517,7 @@
         "husky": "^9.1.5",
         "lint-staged": "^15.2.9",
         "mocha": "^10.7.3",
-        "prettier": "^3.3.3",
+        "prettier": "^3.6.2",
         "raw-loader": "^4.0.2",
         "terser-webpack-plugin": "^5.3.10",
         "tmp": "0.2.3",

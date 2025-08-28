@@ -1,11 +1,9 @@
-import { Err, Result } from "ts-results";
-
 import { LocalCourseData } from "../api/storage";
 import { Logger } from "../utilities";
 import { combineApiExerciseData } from "../utilities/apiData";
-
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
+import { Err, Result } from "ts-results";
 
 /**
  * Adds a new course to user's courses.

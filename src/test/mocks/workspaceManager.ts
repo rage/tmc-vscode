@@ -1,8 +1,7 @@
-import { Ok, Result } from "ts-results";
-import { IMock, It, Mock } from "typemoq";
-
 import WorkspaceManager, { WorkspaceExercise } from "../../api/workspaceManager";
 import { workspaceExercises } from "../fixtures/workspaceManager";
+import { Ok, Result } from "ts-results";
+import { IMock, It, Mock } from "typemoq";
 
 export interface WorkspaceManagerMockValues {
     activeCourse?: string;

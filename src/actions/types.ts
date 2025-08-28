@@ -1,4 +1,3 @@
-import { Result } from "ts-results";
 import Dialog from "../api/dialog";
 import ExerciseDecorationProvider from "../api/exerciseDecorationProvider";
 import TMC from "../api/tmc";
@@ -8,6 +7,7 @@ import Settings from "../config/settings";
 import { UserData } from "../config/userdata";
 import { VisibilityGroups } from "../ui/types";
 import UI from "../ui/ui";
+import { Result } from "ts-results";
 
 // fields may be undefined if something went wrong during initialization
 export type ActionContext = {

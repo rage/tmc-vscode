@@ -1,12 +1,11 @@
-import { Result } from "ts-results";
-import * as vscode from "vscode";
-
 import { downloadOrUpdateExercises, refreshLocalExercises } from "../actions";
 import { ActionContext } from "../actions/types";
 import { TmcPanel } from "../panels/TmcPanel";
 import { ExtensionToWebview } from "../shared/shared";
 import UI from "../ui/ui";
 import { Logger } from "../utilities/";
+import { Result } from "ts-results";
+import * as vscode from "vscode";
 
 /**
  * Registers the various actions and handlers required for the user interface to function.

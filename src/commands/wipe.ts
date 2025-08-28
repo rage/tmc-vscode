@@ -1,10 +1,9 @@
-import * as fs from "fs-extra";
-import { Err, Ok } from "ts-results";
-import * as vscode from "vscode";
-
 import { ActionContext } from "../actions/types";
 import { deactivate } from "../extension";
 import { Logger } from "../utilities";
+import * as fs from "fs-extra";
+import { Err, Ok } from "ts-results";
+import * as vscode from "vscode";
 
 export async function wipe(
     actionContext: ActionContext,

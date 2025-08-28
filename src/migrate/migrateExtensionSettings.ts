@@ -1,10 +1,8 @@
-import { createIs } from "typia";
-import * as vscode from "vscode";
-
 import { semVerCompare } from "../utilities";
-
 import { MigratedData } from "./types";
 import validateData from "./validateData";
+import { createIs } from "typia";
+import * as vscode from "vscode";
 
 const EXTENSION_SETTINGS_KEY_V0 = "extensionSettings";
 const EXTENSION_SETTINGS_KEY_V1 = "extension-settings-v1";

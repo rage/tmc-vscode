@@ -1,12 +1,11 @@
-import { deleteSync } from "del";
-import * as fs from "fs-extra";
-import * as path from "path";
-import { Err, Ok, Result } from "ts-results";
-
 import Dialog from "../api/dialog";
 import { TMC_LANGS_DL_URL, TMC_LANGS_VERSION } from "../config/constants";
 import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger } from "../utilities";
 import { Sha256 } from "@aws-crypto/sha256-js";
+import { deleteSync } from "del";
+import * as fs from "fs-extra";
+import * as path from "path";
+import { Err, Ok, Result } from "ts-results";
 
 /**
  * Downloads correct langs version for the current extension version, unless already present. Will

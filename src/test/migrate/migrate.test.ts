@@ -1,8 +1,3 @@
-import { expect } from "chai";
-import { Ok } from "ts-results";
-import { IMock } from "typemoq";
-import * as vscode from "vscode";
-
 import Dialog from "../../api/dialog";
 import Storage from "../../api/storage";
 import TMC from "../../api/tmc";
@@ -16,6 +11,10 @@ import { createDialogMock } from "../mocks/dialog";
 import { createFailingTMCMock, createTMCMock } from "../mocks/tmc";
 import { createMockContext, createMockWorkspaceConfiguration } from "../mocks/vscode";
 import { makeTmpDirs } from "../utils";
+import { expect } from "chai";
+import { Ok } from "ts-results";
+import { IMock } from "typemoq";
+import * as vscode from "vscode";
 
 const UNSTABLE_EXERCISE_DATA_KEY = "exerciseData";
 const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";

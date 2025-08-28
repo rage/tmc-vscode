@@ -1,15 +1,13 @@
+import Dialog from "../api/dialog";
+import TMC from "../api/tmc";
+import { Logger } from "../utilities";
+import { MigratedData } from "./types";
+import validateData from "./validateData";
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import { createIs } from "typia";
 import * as vscode from "vscode";
-
-import Dialog from "../api/dialog";
-import TMC from "../api/tmc";
-import { Logger } from "../utilities";
-
-import { MigratedData } from "./types";
-import validateData from "./validateData";
 
 const EXERCISE_DATA_KEY_V0 = "exerciseData";
 const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";

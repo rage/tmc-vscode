@@ -1,7 +1,3 @@
-import { expect } from "chai";
-import { IMock, It, Times } from "typemoq";
-import * as vscode from "vscode";
-
 import ExerciseDecorationProvider from "../../api/exerciseDecorationProvider";
 import WorkspaceManager from "../../api/workspaceManager";
 import { UserData } from "../../config/userdata";
@@ -9,6 +5,9 @@ import { userDataExerciseHelloWorld } from "../fixtures/userData";
 import { exerciseHelloWorld } from "../fixtures/workspaceManager";
 import { createUserDataMock, UserDataMockValues } from "../mocks/userdata";
 import { createWorkspaceMangerMock, WorkspaceManagerMockValues } from "../mocks/workspaceManager";
+import { expect } from "chai";
+import { IMock, It, Times } from "typemoq";
+import * as vscode from "vscode";
 
 suite("ExerciseDecoratorProvider class", function () {
     let userDataMock: IMock<UserData>;

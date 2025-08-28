@@ -1,8 +1,7 @@
-import * as vscode from "vscode";
-
 import { ActionContext } from "../actions/types";
 import { OldSubmission } from "../api/types";
 import { dateToString, Logger, parseDate } from "../utilities";
+import * as vscode from "vscode";
 
 /**
  * Looks for older submissions of the given exercise and lets user choose which one to download.

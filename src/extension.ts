@@ -1,7 +1,3 @@
-import * as path from "path";
-import { createIs } from "typia";
-import * as vscode from "vscode";
-
 import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
 import { ActionContext } from "./actions/types";
 import Dialog from "./api/dialog";
@@ -24,7 +20,10 @@ import { migrateExtensionDataFromPreviousVersions } from "./migrate";
 import { randomPanelId, TmcPanel } from "./panels/TmcPanel";
 import UI from "./ui/ui";
 import { cliFolder, Logger, LogLevel, semVerCompare } from "./utilities";
+import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
+import { createIs } from "typia";
+import * as vscode from "vscode";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 

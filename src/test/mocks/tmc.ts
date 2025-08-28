@@ -1,6 +1,3 @@
-import { Err, Ok, Result } from "ts-results";
-import { IMock, It, Mock } from "typemoq";
-
 import TMC from "../../api/tmc";
 import {
     DownloadOrUpdateTmcCourseExercisesResult,
@@ -12,6 +9,8 @@ import {
     closedExercisesPythonCourse,
     listLocalCourseExercisesPythonCourse,
 } from "../fixtures/tmc";
+import { Err, Ok, Result } from "ts-results";
+import { IMock, It, Mock } from "typemoq";
 
 const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."));
 
