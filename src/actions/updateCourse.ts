@@ -4,7 +4,6 @@ import { Logger } from "../utilities";
 import { combineApiExerciseData } from "../utilities/apiData";
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
-import { use } from "chai";
 import { Err, Ok, Result } from "ts-results";
 
 /**
