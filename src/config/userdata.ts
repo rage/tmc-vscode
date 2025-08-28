@@ -1,11 +1,12 @@
 import * as _ from "lodash";
 import { Err, Ok, Result } from "ts-results";
 
-import Storage, { LocalCourseData, LocalCourseExercise } from "../api/storage";
+import Storage from "../storage";
+import { v2 as storage } from "../storage/data";
 import { Logger } from "../utilities/logger";
 
 export class UserData {
-    private _courses: Map<number, LocalCourseData>;
+    private _courses: Map<number, storage.LocalCourseData>;
     private _passedExercises: Set<number> = new Set();
     private _storage: Storage;
     constructor(storage: Storage) {
@@ -26,23 +27,23 @@ export class UserData {
         this._storage = storage;
     }
 
-    public getCourses(): LocalCourseData[] {
+    public getCourses(): storage.LocalCourseData[] {
         return Array.from(this._courses.values());
     }
 
-    public getCourse(id: number): Readonly<LocalCourseData> {
+    public getCourse(id: number): Readonly<storage.LocalCourseData> {
         const course = this._courses.get(id);
-        return course as LocalCourseData;
+        return course as storage.LocalCourseData;
     }
 
-    public getCourseByName(name: string): Readonly<LocalCourseData> {
+    public getCourseByName(name: string): Readonly<storage.LocalCourseData> {
         return this.getCourses().filter((x) => x.name === name)[0];
     }
 
     public getExerciseByName(
         courseSlug: string,
         exerciseName: string,
-    ): Readonly<LocalCourseExercise> | undefined {
+    ): Readonly<storage.LocalCourseExercise> | undefined {
         for (const course of this._courses.values()) {
             if (course.name === courseSlug) {
                 return course.exercises.find((x) => x.name === exerciseName);
@@ -63,7 +64,7 @@ export class UserData {
         }
     }
 
-    public addCourse(data: LocalCourseData): void {
+    public addCourse(data: storage.LocalCourseData): void {
         if (this._courses.has(data.id)) {
             throw new Error("Trying to add an already existing course");
         }
@@ -77,7 +78,7 @@ export class UserData {
         this._updatePersistentData();
     }
 
-    public async updateCourse(data: LocalCourseData): Promise<void> {
+    public async updateCourse(data: storage.LocalCourseData): Promise<void> {
         if (!this._courses.has(data.id)) {
             throw new Error("Trying to fetch course that doesn't exist.");
         }
@@ -87,7 +88,7 @@ export class UserData {
 
     public async updateExercises(
         courseId: number,
-        exercises: LocalCourseExercise[],
+        exercises: storage.LocalCourseExercise[],
     ): Promise<Result<void, Error>> {
         const courseData = this._courses.get(courseId);
         if (!courseData) {

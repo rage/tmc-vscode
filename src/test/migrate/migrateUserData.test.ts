@@ -7,10 +7,11 @@ import {
     LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../../config/constants";
-import migrateUserData, { LocalCourseDataV0 } from "../../migrate/migrateUserData";
+import { v0 } from "../../storage/data";
 import * as exerciseData from "../fixtures/exerciseData";
 import * as userData from "../fixtures/userData";
 import { createMockMemento } from "../mocks/vscode";
+import migrateUserData from "../../storage/migration/userData";
 
 const UNSTABLE_EXERCISE_DATA_KEY = "exerciseData";
 const USER_DATA_KEY_V0 = "userData";
@@ -148,7 +149,7 @@ suite("User data migration", function () {
         });
 
         test("should successfully map unstable data with multiple courses", async function () {
-            const courses: LocalCourseDataV0[] = [
+            const courses: v0.LocalCourseData[] = [
                 {
                     id: 0,
                     description: "",

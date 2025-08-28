@@ -1,7 +1,6 @@
-import { LocalCourseExercise, UserData } from "../../api/storage";
-import { LocalCourseDataV0, LocalCourseDataV1 } from "../../migrate/migrateUserData";
+import { v0, v1, v2 } from "../../storage/data";
 
-export const userDataExerciseHelloWorld: LocalCourseExercise = {
+export const userDataExerciseHelloWorld: v2.LocalCourseExercise = {
     id: 1,
     availablePoints: 1,
     awardedPoints: 0,
@@ -16,11 +15,11 @@ export const userDataExerciseHelloWorld: LocalCourseExercise = {
 // -------------------------------------------------------------------------------------------------
 
 interface UserDataV0 {
-    courses: LocalCourseDataV0[];
+    courses: v0.LocalCourseData[];
 }
 
 interface UserDataV1 {
-    courses: LocalCourseDataV1[];
+    courses: v1.LocalCourseData[];
 }
 
 export const v0_1_0: UserDataV0 = {
@@ -228,7 +227,7 @@ export const v2_0_0: UserDataV1 = {
     ],
 };
 
-export const v2_1_0: UserData = {
+export const v2_1_0: v2.UserData = {
     courses: [
         {
             id: 0,

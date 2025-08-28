@@ -4,9 +4,8 @@ import { IMock } from "typemoq";
 import * as vscode from "vscode";
 
 import Dialog from "../../api/dialog";
-import Storage from "../../api/storage";
+import Storage from "../../storage";
 import TMC from "../../api/tmc";
-import { migrateExtensionDataFromPreviousVersions } from "../../migrate";
 import { Logger, LogLevel } from "../../utilities";
 import * as exerciseData from "../fixtures/exerciseData";
 import * as extensionSettings from "../fixtures/extensionSettings";
@@ -51,9 +50,8 @@ suite("Extension data migration", function () {
     });
 
     test("should succeed without any data", async function () {
-        const result = await migrateExtensionDataFromPreviousVersions(
+        const result = await storage.migrateToLatest(
             context,
-            storage,
             dialogMock.object,
             tmcMock.object,
             settingsMock.object,
@@ -67,9 +65,8 @@ suite("Extension data migration", function () {
         test("should succeed with valid data", async function () {
             await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_1_0(root));
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_1_0);
-            const result = await migrateExtensionDataFromPreviousVersions(
+            const result = await storage.migrateToLatest(
                 context,
-                storage,
                 dialogMock.object,
                 tmcMock.object,
                 settingsMock.object,
@@ -83,9 +80,8 @@ suite("Extension data migration", function () {
             [tmcMock] = createFailingTMCMock();
             await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_1_0(root));
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_1_0);
-            const result = await migrateExtensionDataFromPreviousVersions(
+            const result = await storage.migrateToLatest(
                 context,
-                storage,
                 dialogMock.object,
                 tmcMock.object,
                 settingsMock.object,
@@ -107,9 +103,8 @@ suite("Extension data migration", function () {
         test("should succeed with valid data", async function () {
             await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_2_0(root));
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_2_0);
-            const result = await migrateExtensionDataFromPreviousVersions(
+            const result = await storage.migrateToLatest(
                 context,
-                storage,
                 dialogMock.object,
                 tmcMock.object,
                 settingsMock.object,
@@ -123,9 +118,8 @@ suite("Extension data migration", function () {
             [tmcMock] = createFailingTMCMock();
             await context.globalState.update(UNSTABLE_EXERCISE_DATA_KEY, exerciseData.v0_2_0(root));
             await context.globalState.update(UNSTABLE_USER_DATA_KEY, userData.v0_2_0);
-            const result = await migrateExtensionDataFromPreviousVersions(
+            const result = await storage.migrateToLatest(
                 context,
-                storage,
                 dialogMock.object,
                 tmcMock.object,
                 settingsMock.object,
@@ -149,9 +143,8 @@ suite("Extension data migration", function () {
                 UNSTABLE_EXTENSION_SETTINGS_KEY,
                 extensionSettings.v0_3_0(root),
             );
-            const result = await migrateExtensionDataFromPreviousVersions(
+            const result = await storage.migrateToLatest(
                 context,
-                storage,
                 dialogMock.object,
                 tmcMock.object,
                 settingsMock.object,
@@ -172,9 +165,8 @@ suite("Extension data migration", function () {
                 UNSTABLE_EXTENSION_SETTINGS_KEY,
                 extensionSettings.v0_3_0(root),
             );
-            const result = await migrateExtensionDataFromPreviousVersions(
+            const result = await storage.migrateToLatest(
                 context,
-                storage,
                 dialogMock.object,
                 tmcMock.object,
                 settingsMock.object,
@@ -202,9 +194,8 @@ suite("Extension data migration", function () {
                 UNSTABLE_EXTENSION_SETTINGS_KEY,
                 extensionSettings.v0_9_0(root),
             );
-            const result = await migrateExtensionDataFromPreviousVersions(
+            const result = await storage.migrateToLatest(
                 context,
-                storage,
                 dialogMock.object,
                 tmcMock.object,
                 settingsMock.object,
@@ -225,9 +216,8 @@ suite("Extension data migration", function () {
                 UNSTABLE_EXTENSION_SETTINGS_KEY,
                 extensionSettings.v0_9_0(root),
             );
-            const result = await migrateExtensionDataFromPreviousVersions(
+            const result = await storage.migrateToLatest(
                 context,
-                storage,
                 dialogMock.object,
                 tmcMock.object,
                 settingsMock.object,
@@ -252,9 +242,8 @@ suite("Extension data migration", function () {
             await context.globalState.update(USER_DATA_KEY_V1, userData.v2_0_0);
             await context.globalState.update(EXTENSION_SETTINGS_KEY_V1, extensionSettings.v2_0_0);
             await context.globalState.update(SESSION_STATE_KEY_V1, sessionState.v2_0_0);
-            const result = await migrateExtensionDataFromPreviousVersions(
+            const result = await storage.migrateToLatest(
                 context,
-                storage,
                 dialogMock.object,
                 tmcMock.object,
                 settingsMock.object,

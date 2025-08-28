@@ -1,6 +1,6 @@
 import { Err, Result } from "ts-results";
 
-import { LocalCourseData } from "../api/storage";
+import { v2 as storage } from "../storage/data";
 import { Logger } from "../utilities";
 import { combineApiExerciseData } from "../utilities/apiData";
 
@@ -34,7 +34,7 @@ export async function addNewCourse(
         awardedPoints += x.awarded_points.length;
     });
 
-    const localData: LocalCourseData = {
+    const localData: storage.LocalCourseData = {
         description: courseData.details.description || "",
         exercises: combineApiExerciseData(courseData.details.exercises, courseData.exercises),
         id: courseData.details.id,

@@ -4,14 +4,11 @@ import * as tmp from "tmp";
 import { IMock, It, Times } from "typemoq";
 import * as vscode from "vscode";
 
-import migrateExtensionSettings, {
-    ExtensionSettingsV0,
-    LogLevelV0,
-    LogLevelV1,
-} from "../../migrate/migrateExtensionSettings";
+import { v0, v1 } from "../../storage/data";
 import { LogLevel } from "../../utilities";
 import * as extensionSettings from "../fixtures/extensionSettings";
 import { createMockMemento, createMockWorkspaceConfiguration } from "../mocks/vscode";
+import migrateExtensionSettings from "../../storage/migration/extensionSettings";
 
 use(chaiAsPromised);
 
@@ -189,14 +186,14 @@ suite("Extension settings migration", function () {
         });
 
         test("should remap logger values properly", async function () {
-            const expectedRemappings: [LogLevelV0, LogLevelV1][] = [
-                [LogLevelV0.Debug, "verbose"],
-                [LogLevelV0.Errors, "errors"],
-                [LogLevelV0.None, "none"],
-                [LogLevelV0.Verbose, "verbose"],
+            const expectedRemappings: [v0.LogLevel, v1.LogLevel][] = [
+                [v0.LogLevel.Debug, "verbose"],
+                [v0.LogLevel.Errors, "errors"],
+                [v0.LogLevel.None, "none"],
+                [v0.LogLevel.Verbose, "verbose"],
             ];
             for (const [oldLevel, expectedLevel] of expectedRemappings) {
-                const oldSettings: ExtensionSettingsV0 = { dataPath: root, logLevel: oldLevel };
+                const oldSettings: v0.ExtensionSettings = { dataPath: root, logLevel: oldLevel };
                 await memento.update(EXTENSION_SETTINGS_KEY_V0, oldSettings);
                 const migrated = (await migrateExtensionSettings(memento, settingsMock.object))
                     .data;
