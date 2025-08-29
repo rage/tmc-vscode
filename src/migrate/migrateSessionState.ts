@@ -1,8 +1,7 @@
-import { createIs } from "typia";
-import * as vscode from "vscode";
-
 import { MigratedData } from "./types";
 import validateData from "./validateData";
+import { createIs } from "typia";
+import * as vscode from "vscode";
 
 const SESSION_STATE_KEY_V1 = "session-state-v1";
 const UNSTABLE_EXTENSION_VERSION_KEY = "extensionVersion";

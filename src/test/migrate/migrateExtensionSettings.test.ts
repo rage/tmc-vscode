@@ -1,9 +1,3 @@
-import { expect, use } from "chai";
-import * as chaiAsPromised from "chai-as-promised";
-import * as tmp from "tmp";
-import { IMock, It, Times } from "typemoq";
-import * as vscode from "vscode";
-
 import migrateExtensionSettings, {
     ExtensionSettingsV0,
     LogLevelV0,
@@ -12,6 +6,11 @@ import migrateExtensionSettings, {
 import { LogLevel } from "../../utilities";
 import * as extensionSettings from "../fixtures/extensionSettings";
 import { createMockMemento, createMockWorkspaceConfiguration } from "../mocks/vscode";
+import { expect, use } from "chai";
+import * as chaiAsPromised from "chai-as-promised";
+import * as tmp from "tmp";
+import { IMock, It, Times } from "typemoq";
+import * as vscode from "vscode";
 
 use(chaiAsPromised);
 

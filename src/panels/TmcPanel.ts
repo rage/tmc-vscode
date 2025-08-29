@@ -1,8 +1,3 @@
-import getFolderSize from "get-folder-size";
-import { compact } from "lodash";
-import { Disposable, Uri, ViewColumn, Webview, WebviewPanel, window } from "vscode";
-import * as vscode from "vscode";
-
 import {
     addNewCourse,
     closeExercises,
@@ -32,7 +27,11 @@ import {
 import { getNonce } from "../utilities/getNonce";
 import { getUri } from "../utilities/getUri";
 import { postMessageToWebview, renderPanel } from "../utilities/panel";
+import getFolderSize from "get-folder-size";
+import { compact } from "lodash";
 import { Result } from "ts-results";
+import { Disposable, Uri, ViewColumn, Webview, WebviewPanel, window } from "vscode";
+import * as vscode from "vscode";
 
 /**
  * Manages the rendering of the extension webview panels.

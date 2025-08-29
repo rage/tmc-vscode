@@ -1,8 +1,3 @@
-import { expect } from "chai";
-import { first, last } from "lodash";
-import { Err, Ok, Result } from "ts-results";
-import { IMock, It, Times } from "typemoq";
-
 import { downloadOrUpdateExercises } from "../../actions";
 import { ActionContext } from "../../actions/types";
 import Dialog from "../../api/dialog";
@@ -19,6 +14,10 @@ import { createDialogMock } from "../mocks/dialog";
 import { createSettingsMock, SettingsMockValues } from "../mocks/settings";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
 import { createUIMock } from "../mocks/ui";
+import { expect } from "chai";
+import { first, last } from "lodash";
+import { Err, Ok, Result } from "ts-results";
+import { IMock, It, Times } from "typemoq";
 
 const helloWorld: TmcExerciseDownload = {
     "course-slug": "python-course",

@@ -1,7 +1,6 @@
-import * as vscode from "vscode";
-
 import { ActionContext } from "../actions/types";
 import { Logger } from "../utilities/logger";
+import * as vscode from "vscode";
 
 /**
  * Get the active text editor and figure out the language ID

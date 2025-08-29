@@ -1,6 +1,5 @@
-import * as vscode from "vscode";
-
 import { ExerciseStatus, WorkspaceExercise } from "../../api/workspaceManager";
+import * as vscode from "vscode";
 
 export const exerciseHelloWorld: WorkspaceExercise = {
     courseSlug: "test-python-course",

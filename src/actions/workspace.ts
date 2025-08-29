@@ -3,17 +3,15 @@
  * Group for actions that modify the TMC workspace.
  * -------------------------------------------------------------------------------------------------
  */
-
-import * as vscode from "vscode";
-
-import { compact } from "lodash";
-import { Err, Ok, Result } from "ts-results";
 import { ExerciseStatus } from "../api/workspaceManager";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { CourseDetailsPanel, ExtensionToWebview } from "../shared/shared";
 import { Logger } from "../utilities";
-import * as systeminformation from "systeminformation";
 import { ActionContext } from "./types";
+import { compact } from "lodash";
+import * as systeminformation from "systeminformation";
+import { Err, Ok, Result } from "ts-results";
+import * as vscode from "vscode";
 
 /**
  * Opens given exercises, showing them in TMC workspace.

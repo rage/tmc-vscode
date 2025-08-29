@@ -1,9 +1,8 @@
-import * as vscode from "vscode";
-
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
 import { LocalCourseData } from "../api/storage";
 import { Logger } from "../utilities";
+import * as vscode from "vscode";
 
 export async function switchWorkspace(actionContext: ActionContext): Promise<void> {
     const { dialog, userData } = actionContext;

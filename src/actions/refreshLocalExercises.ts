@@ -1,11 +1,9 @@
+import { ExerciseStatus, WorkspaceExercise } from "../api/workspaceManager";
+import { Logger } from "../utilities";
+import { ActionContext } from "./types";
 import { Err, Result } from "ts-results";
 import { createIs } from "typia";
 import * as vscode from "vscode";
-
-import { ExerciseStatus, WorkspaceExercise } from "../api/workspaceManager";
-import { Logger } from "../utilities";
-
-import { ActionContext } from "./types";
 
 /**
  * Asks for all local exercises from TMC-Langs and passes them to WorkspaceManager.

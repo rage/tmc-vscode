@@ -1,8 +1,6 @@
 /**
  * Various utility functions and types for Svelte <script>s
  */
-
-import { Writable, writable } from "svelte/store";
 import {
     ExtensionToWebview,
     MyCoursesPanel,
@@ -12,6 +10,7 @@ import {
     WebviewToExtension,
 } from "../shared/shared";
 import { vscode } from "./vscode";
+import { Writable, writable } from "svelte/store";
 
 /**
  * Message from the extension host or a webview.

@@ -3,12 +3,6 @@
  * Group of actions that respond to the user.
  * -------------------------------------------------------------------------------------------------
  */
-
-import * as fs from "fs-extra";
-import * as _ from "lodash";
-import { Err, Ok, Result } from "ts-results";
-import * as vscode from "vscode";
-
 import { LocalCourseData } from "../api/storage";
 import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
@@ -17,10 +11,13 @@ import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../shared/shared";
 import { Logger, parseFeedbackQuestion } from "../utilities/";
 import { getActiveEditorExecutablePath } from "../window";
-
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
 import { ActionContext } from "./types";
 import { updateCourse } from "./updateCourse";
+import * as fs from "fs-extra";
+import * as _ from "lodash";
+import { Err, Ok, Result } from "ts-results";
+import * as vscode from "vscode";
 
 export const testInterrupts: Map<number, Array<() => void>> = new Map();
 

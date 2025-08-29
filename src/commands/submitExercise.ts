@@ -1,9 +1,8 @@
-import * as vscode from "vscode";
-
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
 import { BottleneckError } from "../errors";
 import { Logger } from "../utilities";
+import * as vscode from "vscode";
 
 export async function submitExercise(
     context: vscode.ExtensionContext,

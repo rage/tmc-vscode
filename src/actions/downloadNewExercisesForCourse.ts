@@ -1,11 +1,9 @@
-import { Err, Ok, Result } from "ts-results";
-
 import { TmcPanel } from "../panels/TmcPanel";
 import { Logger } from "../utilities";
-
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises";
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
+import { Err, Ok, Result } from "ts-results";
 
 /**
  * Downloads course's new exercises using relevate data from the context's UserData. Also handles

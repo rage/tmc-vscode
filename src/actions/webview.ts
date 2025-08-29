@@ -3,18 +3,15 @@
  * Group of actions that provide webviews.
  * -------------------------------------------------------------------------------------------------
  */
-
-import { ExtensionContext } from "vscode";
-
 import { ExerciseStatus } from "../api/workspaceManager";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { Exercise } from "../shared/langsSchema";
 import { ExtensionToWebview, MyCoursesPanel, Panel } from "../shared/shared";
 import * as UITypes from "../ui/types";
 import { dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utilities/";
-
 import { checkForExerciseUpdates } from "./checkForExerciseUpdates";
 import { ActionContext } from "./types";
+import { ExtensionContext } from "vscode";
 
 /**
  * Displays a summary page of user's courses.
