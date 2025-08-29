@@ -1,6 +1,6 @@
-import { ExerciseStatusV0, LocalExerciseDataV0 } from "../../migrate/migrateExerciseData";
+import { v0 } from "../../storage/data";
 
-const v0_1_0 = (root: string): LocalExerciseDataV0[] => {
+const v0_1_0 = (root: string): v0.LocalExerciseData[] => {
     return [
         {
             id: 1,
@@ -25,7 +25,7 @@ const v0_1_0 = (root: string): LocalExerciseDataV0[] => {
     ];
 };
 
-const v0_2_0 = (root: string): LocalExerciseDataV0[] => [
+const v0_2_0 = (root: string): v0.LocalExerciseData[] => [
     {
         id: 1,
         checksum: "abc123",
@@ -35,7 +35,7 @@ const v0_2_0 = (root: string): LocalExerciseDataV0[] => [
         organization: "test",
         path: root + "/TMC workspace/Exercises/test/test-python-course/hello_world",
         softDeadline: "20201212",
-        status: ExerciseStatusV0.OPEN,
+        status: v0.ExerciseStatus.OPEN,
         updateAvailable: true,
     },
     {
@@ -47,12 +47,12 @@ const v0_2_0 = (root: string): LocalExerciseDataV0[] => [
         organization: "test",
         path: root + "/TMC workspace/closed-exercises/2",
         softDeadline: "20201212",
-        status: ExerciseStatusV0.CLOSED,
+        status: v0.ExerciseStatus.CLOSED,
         updateAvailable: false,
     },
 ];
 
-const v0_3_0: LocalExerciseDataV0[] = [
+const v0_3_0: v0.LocalExerciseData[] = [
     {
         id: 1,
         checksum: "abc123",
@@ -61,7 +61,7 @@ const v0_3_0: LocalExerciseDataV0[] = [
         name: "hello_world",
         organization: "test",
         softDeadline: "20201212",
-        status: ExerciseStatusV0.OPEN,
+        status: v0.ExerciseStatus.OPEN,
         updateAvailable: true,
     },
     {
@@ -72,12 +72,12 @@ const v0_3_0: LocalExerciseDataV0[] = [
         name: "other_world",
         organization: "test",
         softDeadline: "20201212",
-        status: ExerciseStatusV0.CLOSED,
+        status: v0.ExerciseStatus.CLOSED,
         updateAvailable: false,
     },
 ];
 
-const v0_9_0: LocalExerciseDataV0[] = [
+const v0_9_0: v0.LocalExerciseData[] = [
     {
         id: 1,
         checksum: "abc123",
@@ -86,7 +86,7 @@ const v0_9_0: LocalExerciseDataV0[] = [
         name: "hello_world",
         organization: "test",
         softDeadline: "20201212",
-        status: ExerciseStatusV0.OPEN,
+        status: v0.ExerciseStatus.OPEN,
     },
     {
         id: 2,
@@ -96,7 +96,7 @@ const v0_9_0: LocalExerciseDataV0[] = [
         name: "other_world",
         organization: "test",
         softDeadline: "20201212",
-        status: ExerciseStatusV0.CLOSED,
+        status: v0.ExerciseStatus.CLOSED,
     },
 ];
 

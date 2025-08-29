@@ -1,6 +1,6 @@
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
-import { LocalCourseData } from "../api/storage";
+import { v2 as storage } from "../storage/data";
 import { Logger } from "../utilities";
 import * as vscode from "vscode";
 
@@ -16,7 +16,7 @@ export async function switchWorkspace(actionContext: ActionContext): Promise<voi
     const currentWorkspace = vscode.workspace.name?.split(" ")[0];
     const courseWorkspace = await dialog.selectItem(
         "Select a course workspace to open",
-        ...courses.map<[string, LocalCourseData]>((c) => [
+        ...courses.map<[string, storage.LocalCourseData]>((c) => [
             c.name === currentWorkspace ? `${c.name} (Currently open)` : c.name,
             c,
         ]),

@@ -1,11 +1,11 @@
-import { LocalCourseData, LocalCourseExercise } from "../../api/storage";
 import { UserData } from "../../config/userdata";
+import { v2 } from "../../storage/data";
 import { v2_1_0 as userData } from "../fixtures/userData";
 import { IMock, It, Mock } from "typemoq";
 
 export interface UserDataMockValues {
-    getCourses: LocalCourseData[];
-    getExerciseByName: Readonly<LocalCourseExercise> | undefined;
+    getCourses: v2.LocalCourseData[];
+    getExerciseByName: Readonly<v2.LocalCourseExercise> | undefined;
 }
 
 export function createUserDataMock(): [IMock<UserData>, UserDataMockValues] {

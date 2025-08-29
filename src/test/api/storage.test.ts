@@ -1,10 +1,11 @@
-import Storage, { ExtensionSettings, SessionState } from "../../api/storage";
+import Storage from "../../storage";
+import { v2 } from "../../storage/data";
 import { v2_1_0 as userData } from "../fixtures/userData";
 import { createMockContext } from "../mocks/vscode";
 import { expect } from "chai";
 
 suite("Storage class", function () {
-    const extensionSettings: ExtensionSettings = {
+    const extensionSettings: v2.ExtensionSettings = {
         downloadOldSubmission: true,
         hideMetaFiles: true,
         insiderVersion: false,
@@ -12,7 +13,7 @@ suite("Storage class", function () {
         updateExercisesAutomatically: true,
     };
 
-    const sessionState: SessionState = {
+    const sessionState: v2.SessionState = {
         extensionVersion: "2.0.0",
     };
 

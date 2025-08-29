@@ -1,11 +1,10 @@
-import { LocalCourseData } from "../api/storage";
 import {
     LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../config/constants";
-import { MigratedData } from "./types";
-import validateData from "./validateData";
+import { LocalCourseData } from "../storage/data";
+import validateData, { MigratedData } from "../storage/migration";
 import { createIs } from "typia";
 import * as vscode from "vscode";
 

@@ -1,4 +1,5 @@
-import Storage, { SessionState } from "../api/storage";
+import Storage from "../storage";
+import { v2 as storage } from "../storage/data";
 import { Logger, LogLevel } from "../utilities/logger";
 import * as vscode from "vscode";
 
@@ -31,7 +32,7 @@ export default class Settings implements vscode.Disposable {
      */
     private readonly _storage: Storage;
 
-    private _state: SessionState;
+    private _state: storage.SessionState;
     private _disposables: vscode.Disposable[];
 
     constructor(storage: Storage) {

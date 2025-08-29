@@ -1,45 +1,19 @@
-import Dialog from "../api/dialog";
-import TMC from "../api/tmc";
-import { Logger } from "../utilities";
-import { MigratedData } from "./types";
-import validateData from "./validateData";
+import validateData, { MigratedData } from ".";
+import Dialog from "../../api/dialog";
+import TMC from "../../api/tmc";
+import { Logger } from "../../utilities";
+import * as data from "../data";
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import { createIs } from "typia";
 import * as vscode from "vscode";
 
-const EXERCISE_DATA_KEY_V0 = "exerciseData";
-const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";
-
-export enum ExerciseStatusV0 {
-    OPEN = 0,
-    CLOSED = 1,
-    MISSING = 2,
-}
-
-export enum ExerciseStatusV1 {
-    OPEN = "open",
-    CLOSED = "closed",
-    MISSING = "missing",
-}
-
-export interface LocalExerciseDataV0 {
-    id: number;
-    checksum: string;
-    name: string;
-    course: string;
-    deadline?: string | null;
-    isOpen?: boolean;
-    organization: string;
-    path?: string;
-    softDeadline?: string | null;
-    status?: ExerciseStatusV0;
-    updateAvailable?: boolean;
-}
-
-function exerciseIsClosedV0(exerciseStatus?: ExerciseStatusV0, isOpen?: boolean): boolean {
-    if (exerciseStatus === ExerciseStatusV0.CLOSED) {
+export function v0_exerciseIsClosed(
+    exerciseStatus?: data.v0.ExerciseStatus,
+    isOpen?: boolean,
+): boolean {
+    if (exerciseStatus === data.v0.ExerciseStatus.CLOSED) {
         return true;
     } else if (isOpen === false) {
         return true;
@@ -48,7 +22,7 @@ function exerciseIsClosedV0(exerciseStatus?: ExerciseStatusV0, isOpen?: boolean)
     return false;
 }
 
-function resolveExercisePathV0(
+export function v0_resolveExercisePath(
     id: number,
     name: string,
     course: string,
@@ -79,8 +53,8 @@ function resolveExercisePathV0(
     );
 }
 
-async function exerciseDataFromV0toV1(
-    exerciseData: LocalExerciseDataV0[],
+export async function v1_from_v0_migrate(
+    exerciseData: data.v0.LocalExerciseData[],
     memento: vscode.Memento,
     dialog: Dialog,
     tmc: TMC,
@@ -90,14 +64,14 @@ async function exerciseDataFromV0toV1(
     }
 
     const dataPath = memento.get<ExtensionSettingsPartial>(
-        UNSTABLE_EXTENSION_SETTINGS_KEY,
+        data.v0.EXTENSION_SETTINGS_KEY,
     )?.dataPath;
     const closedExercises: { [key: string]: string[] } = {};
 
-    const exercisesToMigrate: Array<[LocalExerciseDataV0, string]> = [];
+    const exercisesToMigrate: Array<[data.v0.LocalExerciseData, string]> = [];
     for (const exercise of exerciseData) {
         const { id, course, isOpen, name, path, organization, status } = exercise;
-        if (exerciseIsClosedV0(status, isOpen)) {
+        if (v0_exerciseIsClosed(status, isOpen)) {
             if (closedExercises[course]) {
                 closedExercises[course].push(name);
             } else {
@@ -105,7 +79,7 @@ async function exerciseDataFromV0toV1(
             }
         }
 
-        const pathResult = resolveExercisePathV0(id, name, course, organization, path, dataPath);
+        const pathResult = v0_resolveExercisePath(id, name, course, organization, path, dataPath);
         if (pathResult.err) {
             Logger.error(`Have to discard exercise ${course}/${name}:`, pathResult.val);
             continue;
@@ -159,20 +133,21 @@ async function exerciseDataFromV0toV1(
     }
 }
 
-export default async function migrateExerciseData(
+export default async function migrateExerciseDataToLatest(
     memento: vscode.Memento,
     dialog: Dialog,
     tmc: TMC,
 ): Promise<MigratedData<undefined>> {
     const obsoleteKeys: string[] = [];
 
+    // migrate v0 data if there is any
     const dataV0 = validateData(
-        memento.get(EXERCISE_DATA_KEY_V0),
-        createIs<LocalExerciseDataV0[]>(),
+        memento.get(data.v0.EXERCISE_DATA_KEY),
+        createIs<data.v0.LocalExerciseData[]>(),
     );
     if (dataV0) {
-        await exerciseDataFromV0toV1(dataV0, memento, dialog, tmc);
-        obsoleteKeys.push(EXERCISE_DATA_KEY_V0);
+        await v1_from_v0_migrate(dataV0, memento, dialog, tmc);
+        obsoleteKeys.push(data.v0.EXERCISE_DATA_KEY);
     }
 
     return { data: undefined, obsoleteKeys };

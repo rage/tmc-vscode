@@ -1,6 +1,5 @@
+import validateData, { MigratedData } from "../storage/migration";
 import { semVerCompare } from "../utilities";
-import { MigratedData } from "./types";
-import validateData from "./validateData";
 import { createIs } from "typia";
 import * as vscode from "vscode";
 

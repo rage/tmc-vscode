@@ -1,3 +1,8 @@
+export interface MigratedData<T> {
+    data: T | undefined;
+    obsoleteKeys: string[];
+}
+
 export default function validateData<T>(
     data: unknown,
     validator: (object: unknown) => object is T,

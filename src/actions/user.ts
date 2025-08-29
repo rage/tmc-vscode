@@ -3,12 +3,12 @@
  * Group of actions that respond to the user.
  * -------------------------------------------------------------------------------------------------
  */
-import { LocalCourseData } from "../api/storage";
 import { WorkspaceExercise } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
 import { BottleneckError } from "../errors";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../shared/shared";
+import { v2 as storage } from "../storage/data";
 import { Logger, parseFeedbackQuestion } from "../utilities/";
 import { getActiveEditorExecutablePath } from "../window";
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
@@ -257,7 +257,7 @@ export async function submitExercise(
 
     const courseData = userData.val.getCourseByName(
         exercise.courseSlug,
-    ) as Readonly<LocalCourseData>;
+    ) as Readonly<storage.LocalCourseData>;
     await checkForCourseUpdates(actionContext, courseData.id);
     vscode.commands.executeCommand("tmc.updateExercises", "silent");
 
@@ -321,13 +321,13 @@ export async function checkForCourseUpdates(
     const courses = courseId ? [userData.val.getCourse(courseId)] : userData.val.getCourses();
     const filteredCourses = courses.filter((c) => c.notifyAfter <= Date.now());
     Logger.info(`Checking for course updates for courses ${filteredCourses.map((c) => c.name)}`);
-    const updatedCourses: LocalCourseData[] = [];
+    const updatedCourses: storage.LocalCourseData[] = [];
     for (const course of filteredCourses) {
         await updateCourse(actionContext, course.id);
         updatedCourses.push(userData.val.getCourse(course.id));
     }
 
-    const handleDownload = async (course: LocalCourseData): Promise<void> => {
+    const handleDownload = async (course: storage.LocalCourseData): Promise<void> => {
         const downloadResult = await downloadNewExercisesForCourse(actionContext, course.id);
         if (downloadResult.err) {
             dialog.errorNotification(

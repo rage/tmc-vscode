@@ -1,4 +1,4 @@
-import migrateSessionState from "../../migrate/migrateSessionState";
+import migrateSessionState from "../../storage/migration/sessionState";
 import * as sessionState from "../fixtures/sessionState";
 import { createMockMemento } from "../mocks/vscode";
 import { expect } from "chai";

@@ -1,5 +1,4 @@
 import Dialog from "../api/dialog";
-import Storage from "../api/storage";
 import TMC from "../api/tmc";
 import {
     WORKSPACE_ROOT_FILE_NAME,
@@ -8,7 +7,7 @@ import {
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import { HaltForReloadError } from "../errors";
-import migrateExerciseData from "./migrateExerciseData";
+import migrateExerciseDataToLatest from "../storage/migration/exerciseData";
 import migrateExtensionSettings from "./migrateExtensionSettings";
 import migrateSessionState from "./migrateSessionState";
 import migrateUserData from "./migrateUserData";
@@ -50,7 +49,7 @@ export async function migrateExtensionDataFromPreviousVersions(
         const migratedUserData = migrateUserData(memento);
 
         // Workspace data migration - this one is a bit more tricky so do it last.
-        const migratedExerciseData = await migrateExerciseData(memento, dialog, tmc);
+        const migratedExerciseData = await migrateExerciseDataToLatest(memento, dialog, tmc);
 
         await storage.updateExtensionSettings(migratedExtensionSettings.data);
         await storage.updateSessionState(migratedSessionState.data);

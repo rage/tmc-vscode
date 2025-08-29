@@ -1,5 +1,4 @@
-import { MigratedData } from "./types";
-import validateData from "./validateData";
+import validateData, { MigratedData } from "../storage/migration";
 import { createIs } from "typia";
 import * as vscode from "vscode";
 
