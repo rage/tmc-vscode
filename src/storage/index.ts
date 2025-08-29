@@ -15,10 +15,10 @@ import {
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import { HaltForReloadError } from "../errors";
-import migrateExtensionSettings from "./migration/extensionSettings";
+import migrateExtensionSettingsToLatest from "./migration/extensionSettings";
 import migrateSessionState from "./migration/sessionState";
-import migrateUserData from "./migration/userData";
-import migrateExerciseData from "./migration/exerciseData";
+import migrateUserDataToLatest from "./migration/userData";
+import migrateExerciseDataToLatest from "./migration/exerciseData";
 
 /**
  * Interface class for accessing stored TMC configuration and data.
@@ -91,12 +91,15 @@ export default class Storage {
         }
 
         try {
-            const migratedExtensionSettings = await migrateExtensionSettings(memento, settings);
+            const migratedExtensionSettings = await migrateExtensionSettingsToLatest(
+                memento,
+                settings,
+            );
             const migratedSessionState = migrateSessionState(memento);
-            const migratedUserData = migrateUserData(memento);
+            const migratedUserData = migrateUserDataToLatest(memento);
 
             // Workspace data migration - this one is a bit more tricky so do it last.
-            const migratedExerciseData = await migrateExerciseData(memento, dialog, tmc);
+            const migratedExerciseData = await migrateExerciseDataToLatest(memento, dialog, tmc);
 
             await this.updateExtensionSettings(migratedExtensionSettings.data);
             await this.updateSessionState(migratedSessionState.data);

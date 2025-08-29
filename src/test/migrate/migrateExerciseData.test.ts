@@ -10,7 +10,7 @@ import { createDialogMock } from "../mocks/dialog";
 import { createTMCMock } from "../mocks/tmc";
 import { createMockMemento } from "../mocks/vscode";
 import { makeTmpDirs } from "../utils";
-import migrateExerciseData from "../../storage/migration/exerciseData";
+import migrateExerciseDataToLatest from "../../storage/migration/exerciseData";
 
 const EXERCISE_DATA_KEY_V0 = "exerciseData";
 const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";
@@ -36,7 +36,11 @@ suite("Exercise data migration", function () {
 
     suite("between versions", function () {
         test("should succeed without any data", async function () {
-            const migrated = await migrateExerciseData(memento, dialogMock.object, tmcMock.object);
+            const migrated = await migrateExerciseDataToLatest(
+                memento,
+                dialogMock.object,
+                tmcMock.object,
+            );
             expect(migrated.data).to.be.undefined;
             expect(migrated.obsoleteKeys).to.be.deep.equal([]);
         });
@@ -44,7 +48,11 @@ suite("Exercise data migration", function () {
         test("should succeed with version 0.1.0 data", async function () {
             const dataPath = makeTmpDirs(virtualFileSystem);
             await memento.update(EXERCISE_DATA_KEY_V0, exerciseData.v0_1_0(dataPath));
-            const migrated = await migrateExerciseData(memento, dialogMock.object, tmcMock.object);
+            const migrated = await migrateExerciseDataToLatest(
+                memento,
+                dialogMock.object,
+                tmcMock.object,
+            );
             expect(migrated.data).to.be.undefined;
             expect(migrated.obsoleteKeys).to.be.deep.equal([EXERCISE_DATA_KEY_V0]);
         });
@@ -52,7 +60,11 @@ suite("Exercise data migration", function () {
         test("should succeed with version 0.2.0 data", async function () {
             const dataPath = makeTmpDirs(virtualFileSystem);
             await memento.update(EXERCISE_DATA_KEY_V0, exerciseData.v0_2_0(dataPath));
-            const migrated = await migrateExerciseData(memento, dialogMock.object, tmcMock.object);
+            const migrated = await migrateExerciseDataToLatest(
+                memento,
+                dialogMock.object,
+                tmcMock.object,
+            );
             expect(migrated.data).to.be.undefined;
             expect(migrated.obsoleteKeys).to.be.deep.equal([EXERCISE_DATA_KEY_V0]);
         });
@@ -61,7 +73,11 @@ suite("Exercise data migration", function () {
             const dataPath = makeTmpDirs(virtualFileSystem);
             await memento.update(UNSTABLE_EXTENSION_SETTINGS_KEY, { dataPath });
             await memento.update(EXERCISE_DATA_KEY_V0, exerciseData.v0_3_0);
-            const migrated = await migrateExerciseData(memento, dialogMock.object, tmcMock.object);
+            const migrated = await migrateExerciseDataToLatest(
+                memento,
+                dialogMock.object,
+                tmcMock.object,
+            );
             expect(migrated.data).to.be.undefined;
             expect(migrated.obsoleteKeys).to.be.deep.equal([EXERCISE_DATA_KEY_V0]);
         });
@@ -70,7 +86,11 @@ suite("Exercise data migration", function () {
             const dataPath = makeTmpDirs(virtualFileSystem);
             await memento.update(UNSTABLE_EXTENSION_SETTINGS_KEY, { dataPath });
             await memento.update(EXERCISE_DATA_KEY_V0, exerciseData.v0_9_0);
-            const migrated = await migrateExerciseData(memento, dialogMock.object, tmcMock.object);
+            const migrated = await migrateExerciseDataToLatest(
+                memento,
+                dialogMock.object,
+                tmcMock.object,
+            );
             expect(migrated.data).to.be.undefined;
             expect(migrated.obsoleteKeys).to.be.deep.equal([EXERCISE_DATA_KEY_V0]);
         });
@@ -80,7 +100,7 @@ suite("Exercise data migration", function () {
         test("should fail if data is garbage", async function () {
             await memento.update(EXERCISE_DATA_KEY_V0, { ironman: "Tony Stark" });
             expect(
-                migrateExerciseData(memento, dialogMock.object, tmcMock.object),
+                migrateExerciseDataToLatest(memento, dialogMock.object, tmcMock.object),
             ).to.be.rejectedWith(/mismatch/);
         });
 
@@ -88,7 +108,7 @@ suite("Exercise data migration", function () {
             const dataPath = makeTmpDirs(virtualFileSystem);
             await memento.update(UNSTABLE_EXTENSION_SETTINGS_KEY, { dataPath });
             await memento.update(EXERCISE_DATA_KEY_V0, exerciseData.v0_3_0);
-            await migrateExerciseData(memento, dialogMock.object, tmcMock.object);
+            await migrateExerciseDataToLatest(memento, dialogMock.object, tmcMock.object);
             const testValue = ["other_world"];
             tmcMock.verify(
                 (x) =>
