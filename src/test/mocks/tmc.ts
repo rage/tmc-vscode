@@ -4,7 +4,6 @@ import { IMock, It, Mock } from "typemoq";
 import TMC from "../../api/tmc";
 import {
     DownloadOrUpdateTmcCourseExercisesResult,
-    LocalExercise,
     LocalTmcExercise,
 } from "../../shared/langsSchema";
 import {

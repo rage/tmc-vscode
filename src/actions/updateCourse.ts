@@ -7,7 +7,6 @@ import { combineApiExerciseData } from "../utilities/apiData";
 
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
-import { use } from "chai";
 
 /**
  * Updates the given course by re-fetching all data from the server. Handles authorization and
