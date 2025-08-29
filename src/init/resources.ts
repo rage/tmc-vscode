@@ -1,12 +1,11 @@
+import { EXTENSION_ID, WORKSPACE_ROOT_FILE_TEXT, WORKSPACE_SETTINGS } from "../config/constants";
+import Resources from "../config/resources";
+import Storage from "../storage";
+import { Logger } from "../utilities/logger";
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
-
-import Storage from "../storage";
-import { EXTENSION_ID, WORKSPACE_ROOT_FILE_TEXT, WORKSPACE_SETTINGS } from "../config/constants";
-import Resources from "../config/resources";
-import { Logger } from "../utilities/logger";
 
 /**
  * Performs resource initialization on extension activation

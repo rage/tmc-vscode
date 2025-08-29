@@ -1,10 +1,8 @@
+import validateData, { MigratedData } from ".";
+import { semVerCompare } from "../../utilities";
+import * as data from "../data";
 import { createIs } from "typia";
 import * as vscode from "vscode";
-
-import { semVerCompare } from "../../utilities";
-
-import * as data from "../data";
-import validateData, { MigratedData } from ".";
 
 function v1_logLevelFromV0(logLevel: data.v0.LogLevel): data.v1.LogLevel {
     switch (logLevel) {

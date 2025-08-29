@@ -1,15 +1,13 @@
+import validateData, { MigratedData } from ".";
+import Dialog from "../../api/dialog";
+import TMC from "../../api/tmc";
+import { Logger } from "../../utilities";
+import * as data from "../data";
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import { createIs } from "typia";
 import * as vscode from "vscode";
-
-import Dialog from "../../api/dialog";
-import TMC from "../../api/tmc";
-import { Logger } from "../../utilities";
-
-import * as data from "../data";
-import validateData, { MigratedData } from ".";
 
 export function v0_exerciseIsClosed(
     exerciseStatus?: data.v0.ExerciseStatus,

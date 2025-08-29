@@ -1,3 +1,8 @@
+import TMC from "../api/tmc";
+import { SubmissionFeedback } from "../api/types";
+import { CLIENT_NAME, TMC_LANGS_VERSION } from "../config/constants";
+import { AuthenticationError, AuthorizationError, BottleneckError, RuntimeError } from "../errors";
+import { getLangsCLIForPlatform, getPlatform } from "../utilities/";
 import { expect } from "chai";
 import * as cp from "child_process";
 import { deleteSync } from "del";
@@ -6,12 +11,6 @@ import { first } from "lodash";
 import * as path from "path";
 import * as kill from "tree-kill";
 import { Result } from "ts-results";
-
-import TMC from "../api/tmc";
-import { SubmissionFeedback } from "../api/types";
-import { CLIENT_NAME, TMC_LANGS_VERSION } from "../config/constants";
-import { AuthenticationError, AuthorizationError, BottleneckError, RuntimeError } from "../errors";
-import { getLangsCLIForPlatform, getPlatform } from "../utilities/";
 
 // __dirname is the dist folder when built.
 const PROJECT_ROOT = path.join(__dirname, "..");

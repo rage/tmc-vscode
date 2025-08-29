@@ -1,8 +1,7 @@
-import * as vscode from "vscode";
-
 import Storage from "../storage";
 import { v2 as storage } from "../storage/data";
 import { Logger, LogLevel } from "../utilities/logger";
+import * as vscode from "vscode";
 
 /**
  * @deprecated Default values are now implemented in package.json / VSCode settings.

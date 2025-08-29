@@ -1,12 +1,10 @@
+import { Logger } from "../utilities";
+import { refreshLocalExercises } from "./refreshLocalExercises";
+import { ActionContext } from "./types";
 import * as fs from "fs-extra";
 import * as path from "path";
 import { Err, Result } from "ts-results";
 import * as vscode from "vscode";
-
-import { Logger } from "../utilities";
-
-import { refreshLocalExercises } from "./refreshLocalExercises";
-import { ActionContext } from "./types";
 
 /**
  * Moves physical location of all exercises on disk. Closes active course workspace's exercises for

@@ -1,7 +1,3 @@
-import * as path from "path";
-import { IMock, It, Times } from "typemoq";
-import * as vscode from "vscode";
-
 import { ActionContext } from "../../actions/types";
 import TMC from "../../api/tmc";
 import WorkspaceManager, { ExerciseStatus } from "../../api/workspaceManager";
@@ -9,7 +5,10 @@ import { cleanExercise } from "../../commands";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock } from "../mocks/tmc";
 import { createWorkspaceMangerMock, WorkspaceManagerMockValues } from "../mocks/workspaceManager";
+import * as path from "path";
 import { Ok } from "ts-results";
+import { IMock, It, Times } from "typemoq";
+import * as vscode from "vscode";
 
 suite("Clean exercise command", function () {
     const BACKEND_FOLDER = path.join(__dirname, "..", "backend");

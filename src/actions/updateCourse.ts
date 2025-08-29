@@ -1,12 +1,10 @@
-import { Err, Ok, Result } from "ts-results";
-
 import { ConnectionError, ForbiddenError } from "../errors";
 import { TmcPanel } from "../panels/TmcPanel";
 import { Logger } from "../utilities";
 import { combineApiExerciseData } from "../utilities/apiData";
-
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
+import { Err, Ok, Result } from "ts-results";
 
 /**
  * Updates the given course by re-fetching all data from the server. Handles authorization and

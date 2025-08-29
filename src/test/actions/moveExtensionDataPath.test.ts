@@ -1,9 +1,3 @@
-import { expect } from "chai";
-import * as path from "path";
-import { Err, Ok } from "ts-results";
-import { IMock, It, Times } from "typemoq";
-import * as vscode from "vscode";
-
 import { moveExtensionDataPath } from "../../actions";
 import { ActionContext } from "../../actions/types";
 import TMC from "../../api/tmc";
@@ -15,6 +9,11 @@ import { createTMCMock, TMCMockValues } from "../mocks/tmc";
 import { createUserDataMock } from "../mocks/userdata";
 import { createWorkspaceMangerMock, WorkspaceManagerMockValues } from "../mocks/workspaceManager";
 import { makeTmpDirs } from "../utils";
+import { expect } from "chai";
+import * as path from "path";
+import { Err, Ok } from "ts-results";
+import { IMock, It, Times } from "typemoq";
+import * as vscode from "vscode";
 
 suite("moveExtensionDataPath action", function () {
     const virtualFileSystem = {

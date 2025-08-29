@@ -1,8 +1,7 @@
+import validateData, { MigratedData } from ".";
+import * as data from "../data";
 import { createIs } from "typia";
 import * as vscode from "vscode";
-
-import * as data from "../data";
-import validateData, { MigratedData } from ".";
 
 export function v0_getVersion(memento: vscode.Memento): string | undefined {
     return validateData(memento.get<string>(data.v0.EXTENSION_VERSION_KEY), createIs<string>());

@@ -1,7 +1,3 @@
-import { expect } from "chai";
-import { Err, Ok } from "ts-results";
-import { IMock, It, Times } from "typemoq";
-
 import { checkForExerciseUpdates } from "../../actions";
 import { ActionContext } from "../../actions/types";
 import TMC from "../../api/tmc";
@@ -9,6 +5,9 @@ import { UserData } from "../../config/userdata";
 import { createMockActionContext } from "../mocks/actionContext";
 import { createTMCMock, TMCMockValues } from "../mocks/tmc";
 import { createUserDataMock } from "../mocks/userdata";
+import { expect } from "chai";
+import { Err, Ok } from "ts-results";
+import { IMock, It, Times } from "typemoq";
 
 suite("checkForExerciseUpdates action", function () {
     const stubContext = createMockActionContext();

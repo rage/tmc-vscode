@@ -3,9 +3,8 @@ import TMC from "../api/tmc";
 import { Course, Organization } from "../api/types";
 import { ExtensionSettings } from "../config/settings";
 import { SubmissionFinished } from "../shared/langsSchema";
-import { LogLevel } from "../utilities/logger";
 import { v2 as storage } from "../storage/data";
-
+import { LogLevel } from "../utilities/logger";
 import UI from "./ui";
 
 export type HandlerContext = {

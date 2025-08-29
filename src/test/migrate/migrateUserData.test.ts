@@ -1,17 +1,16 @@
-import { expect } from "chai";
-import * as tmp from "tmp";
-import * as vscode from "vscode";
-
 import {
     LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../../config/constants";
 import { v0 } from "../../storage/data";
+import migrateUserDataToLatest from "../../storage/migration/userData";
 import * as exerciseData from "../fixtures/exerciseData";
 import * as userData from "../fixtures/userData";
 import { createMockMemento } from "../mocks/vscode";
-import migrateUserDataToLatest from "../../storage/migration/userData";
+import { expect } from "chai";
+import * as tmp from "tmp";
+import * as vscode from "vscode";
 
 const UNSTABLE_EXERCISE_DATA_KEY = "exerciseData";
 const USER_DATA_KEY_V0 = "userData";

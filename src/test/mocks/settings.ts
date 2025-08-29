@@ -1,6 +1,5 @@
-import { IMock, Mock } from "typemoq";
-
 import Settings from "../../config/settings";
+import { IMock, Mock } from "typemoq";
 
 export interface SettingsMockValues {
     getDownloadOldSubmission: boolean;

@@ -1,16 +1,15 @@
-import { expect } from "chai";
-import { IMock, It, Times } from "typemoq";
-import * as vscode from "vscode";
-
 import Dialog from "../../api/dialog";
 import TMC from "../../api/tmc";
+import migrateExerciseDataToLatest from "../../storage/migration/exerciseData";
 import { Logger, LogLevel } from "../../utilities";
 import * as exerciseData from "../fixtures/exerciseData";
 import { createDialogMock } from "../mocks/dialog";
 import { createTMCMock } from "../mocks/tmc";
 import { createMockMemento } from "../mocks/vscode";
 import { makeTmpDirs } from "../utils";
-import migrateExerciseDataToLatest from "../../storage/migration/exerciseData";
+import { expect } from "chai";
+import { IMock, It, Times } from "typemoq";
+import * as vscode from "vscode";
 
 const EXERCISE_DATA_KEY_V0 = "exerciseData";
 const UNSTABLE_EXTENSION_SETTINGS_KEY = "extensionSettings";

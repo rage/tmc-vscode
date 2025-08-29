@@ -1,14 +1,12 @@
-import { createIs } from "typia";
-import * as vscode from "vscode";
-
+import validateData, { MigratedData } from ".";
 import {
     LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
     LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../../config/constants";
-
 import * as data from "../data";
-import validateData, { MigratedData } from ".";
+import { createIs } from "typia";
+import * as vscode from "vscode";
 
 export function v1_migrateFromV0(
     unstableData: data.v0.LocalCourseData[],

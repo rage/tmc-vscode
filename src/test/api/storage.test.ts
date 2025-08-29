@@ -1,9 +1,8 @@
-import { expect } from "chai";
-
 import Storage from "../../storage";
 import { v2 } from "../../storage/data";
 import { v2_1_0 as userData } from "../fixtures/userData";
 import { createMockContext } from "../mocks/vscode";
+import { expect } from "chai";
 
 suite("Storage class", function () {
     const extensionSettings: v2.ExtensionSettings = {

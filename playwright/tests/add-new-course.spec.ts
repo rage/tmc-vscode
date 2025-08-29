@@ -1,8 +1,7 @@
-import { expect } from "@playwright/test";
-
 import { vsCodeTest } from "../fixtures";
 import { LoginPage } from "../pages/login";
 import { MyCoursesPage } from "../pages/my-courses";
+import { expect } from "@playwright/test";
 
 vsCodeTest("can add new course", async ({ page, webview }) => {
     const loginPage = new LoginPage(page, webview);

@@ -1,13 +1,6 @@
 // All access to VSCode's storage should be done through this module.
-
-import * as vscode from "vscode";
-import { v2 as storage, v0 } from "./data";
 import Dialog from "../api/dialog";
-import * as path from "path";
 import TMC from "../api/tmc";
-import { Err, Ok, Result } from "ts-results";
-import { concat, last } from "lodash";
-import * as fs from "fs-extra";
 import {
     WORKSPACE_ROOT_FILE_NAME,
     WORKSPACE_ROOT_FILE_TEXT,
@@ -15,10 +8,16 @@ import {
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import { HaltForReloadError } from "../errors";
+import { v2 as storage, v0 } from "./data";
+import migrateExerciseDataToLatest from "./migration/exerciseData";
 import migrateExtensionSettingsToLatest from "./migration/extensionSettings";
 import migrateSessionState from "./migration/sessionState";
 import migrateUserDataToLatest from "./migration/userData";
-import migrateExerciseDataToLatest from "./migration/exerciseData";
+import * as fs from "fs-extra";
+import { concat, last } from "lodash";
+import * as path from "path";
+import { Err, Ok, Result } from "ts-results";
+import * as vscode from "vscode";
 
 /**
  * Interface class for accessing stored TMC configuration and data.

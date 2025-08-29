@@ -1,9 +1,8 @@
-import * as vscode from "vscode";
-
 import { moveExtensionDataPath } from "../actions";
 import { ActionContext } from "../actions/types";
 import { TmcPanel } from "../panels/TmcPanel";
 import { Logger } from "../utilities";
+import * as vscode from "vscode";
 
 /**
  * Removes language specific meta files from exercise directory.

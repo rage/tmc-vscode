@@ -1,10 +1,6 @@
 /*
  * ======== state ========
  */
-
-import { Uri } from "vscode";
-import * as util from "node:util";
-
 import {
     Course,
     Organization,
@@ -12,7 +8,9 @@ import {
     StyleValidationResult,
     SubmissionFinished,
 } from "./langsSchema";
+import * as util from "node:util";
 import { createIs } from "typia";
+import { Uri } from "vscode";
 
 /**
  * Contains the state of the webview.

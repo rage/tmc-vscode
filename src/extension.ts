@@ -1,7 +1,3 @@
-import * as path from "path";
-import { createIs } from "typia";
-import * as vscode from "vscode";
-
 import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
 import { ActionContext } from "./actions/types";
 import Dialog from "./api/dialog";
@@ -20,10 +16,13 @@ import { UserData } from "./config/userdata";
 import { EmptyLangsResponseError, HaltForReloadError } from "./errors";
 import * as init from "./init";
 import { randomPanelId, TmcPanel } from "./panels/TmcPanel";
+import Storage from "./storage";
 import UI from "./ui/ui";
 import { cliFolder, Logger, LogLevel, semVerCompare } from "./utilities";
+import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
-import Storage from "./storage";
+import { createIs } from "typia";
+import * as vscode from "vscode";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 

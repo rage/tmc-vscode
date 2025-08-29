@@ -1,8 +1,7 @@
-import { IMock, It, Mock } from "typemoq";
-
-import { v2 } from "../../storage/data";
 import { UserData } from "../../config/userdata";
+import { v2 } from "../../storage/data";
 import { v2_1_0 as userData } from "../fixtures/userData";
+import { IMock, It, Mock } from "typemoq";
 
 export interface UserDataMockValues {
     getCourses: v2.LocalCourseData[];

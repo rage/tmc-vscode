@@ -1,9 +1,8 @@
-import * as _ from "lodash";
-import { Err, Ok, Result } from "ts-results";
-
 import Storage from "../storage";
 import { v2 as storage } from "../storage/data";
 import { Logger } from "../utilities/logger";
+import * as _ from "lodash";
+import { Err, Ok, Result } from "ts-results";
 
 export class UserData {
     private _courses: Map<number, storage.LocalCourseData>;

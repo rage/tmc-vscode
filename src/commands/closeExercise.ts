@@ -1,8 +1,7 @@
-import * as vscode from "vscode";
-
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
 import { Logger } from "../utilities";
+import * as vscode from "vscode";
 
 export async function closeExercise(
     actionContext: ActionContext,

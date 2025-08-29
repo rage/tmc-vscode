@@ -1,11 +1,9 @@
-import { Err, Ok, Result } from "ts-results";
-
 import { TmcPanel } from "../panels/TmcPanel";
 import { ExtensionToWebview } from "../shared/shared";
 import { ExerciseStatus } from "../ui/types";
 import { Logger } from "../utilities";
-
 import { ActionContext } from "./types";
+import { Err, Ok, Result } from "ts-results";
 
 interface DownloadResults {
     successful: number[];
