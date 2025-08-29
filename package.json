@@ -457,16 +457,6 @@
             "eslint src --cache --max-warnings 0"
         ]
     },
-    "prettier": {
-        "plugins": [
-            "@trivago/prettier-plugin-sort-imports"
-        ],
-        "arrowParens": "always",
-        "endOfLine": "lf",
-        "printWidth": 100,
-        "tabWidth": 4,
-        "trailingComma": "all"
-    },
     "dependencies": {
         "@aws-crypto/sha256-js": "^5.2.0",
         "del": "^8.0.0",
