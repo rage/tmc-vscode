@@ -72,6 +72,19 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.5.0 - 2025-09-10</h3>
+            <h4>Improved exercise submission packaging to avoid overly large archives</h4>
+            <p>
+                Previously, some unnecessary files were included when packaging exercise
+                submissions, sometimes leading to very large archives if a large file happened to be
+                in the exercise directory.
+            </p>
+            <h4>Improved extension data migration from one version to the next</h4>
+            <p>
+                The format of the extension data may change between extension releases, and in such
+                cases it's necessary to migrate data from the previous format to the new one. This
+                operation has been made more robust in preparation for a future update.
+            </p>
             <h3>3.4.2 - 2025-08-25</h3>
             <h4>Removed an unnecessary dependency which could cause errors</h4>
             <p>
