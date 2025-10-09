@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.5.0] - 2025-09-10
+## [3.5.0] - 2025-10-09
 
 - Improved exercise submission packaging to avoid overly large archives
 - Improved extension data migration from one version to the next

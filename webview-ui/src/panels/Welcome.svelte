@@ -72,7 +72,7 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
-            <h3>3.5.0 - 2025-09-10</h3>
+            <h3>3.5.0 - 2025-10-09</h3>
             <h4>Improved exercise submission packaging to avoid overly large archives</h4>
             <p>
                 Previously, some unnecessary files were included when packaging exercise
