@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.5.0] - 2025-09-10
+
+- Improved exercise submission packaging to avoid overly large archives
+- Improved extension data migration from one version to the next
+
 ## [3.4.2] - 2025-08-21
 
 - Fixed unnecessary dynamic library dependency causing errors when the library was missing on the user's computer.
