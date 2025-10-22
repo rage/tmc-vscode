@@ -1,3 +1,4 @@
+import { InitializationError } from "../errors";
 import { Logger } from "../utilities";
 import { ActionContext } from "./types";
 import { flatten } from "lodash";
@@ -23,7 +24,7 @@ export async function checkForExerciseUpdates(
 ): Promise<Result<OutdatedExercise[], Error>> {
     const { tmc, userData } = actionContext;
     if (!(tmc.ok && userData.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     const forceRefresh = options?.forceRefresh ?? false;
     Logger.info("Checking for exercise updates, forced update:", forceRefresh);

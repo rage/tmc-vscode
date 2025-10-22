@@ -1,3 +1,4 @@
+import { ExerciseUpdateError, InitializationError } from "../errors";
 import { TmcPanel } from "../panels/TmcPanel";
 import { ExtensionToWebview } from "../shared/shared";
 import { ExerciseStatus } from "../ui/types";
@@ -22,7 +23,7 @@ export async function downloadOrUpdateExercises(
 ): Promise<Result<DownloadResults, Error>> {
     const { dialog, settings, tmc } = actionContext;
     if (tmc.err) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     Logger.info("Downloading exercises", exerciseIds);
 
@@ -64,7 +65,7 @@ export async function downloadOrUpdateExercises(
         const failedDownloads = failed.map(([f]) => f["exercise-slug"]);
         dialog.errorNotification(
             "Failed to update exercises.",
-            new Error(failedDownloads.join(", ")),
+            new ExerciseUpdateError(failedDownloads.join(", ")),
         );
     }
 

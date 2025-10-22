@@ -1,5 +1,6 @@
 import Dialog from "../api/dialog";
 import { TMC_LANGS_DL_URL, TMC_LANGS_VERSION } from "../config/constants";
+import { InitializationError } from "../errors";
 import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger } from "../utilities";
 import { Sha256 } from "@aws-crypto/sha256-js";
 import { deleteSync } from "del";
@@ -62,8 +63,9 @@ async function ensureLangsUpdated(
         );
         if (result.err) {
             return Err(
-                new Error(
-                    `Mismatch found between CLI (${cliDigest} ${cliPath} from ${cliUrl}) and checksum (${hashData} ${shaPath} from ${shaUrl})`,
+                new InitializationError(
+                    result.val,
+                    `Mismatch found between CLI (${cliDigest} ${cliPath} from ${cliUrl}) and checksum (${hashData} ${shaPath} from ${shaUrl}), failed during retry`,
                 ),
             );
         }

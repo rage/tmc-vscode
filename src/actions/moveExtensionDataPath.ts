@@ -1,3 +1,4 @@
+import { InitializationError } from "../errors";
 import { Logger } from "../utilities";
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
@@ -19,7 +20,7 @@ export async function moveExtensionDataPath(
 ): Promise<Result<void, Error>> {
     const { resources, tmc } = actionContext;
     if (!(tmc.ok && resources.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     Logger.info("Moving extension data path");
 

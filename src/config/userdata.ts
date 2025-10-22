@@ -91,7 +91,7 @@ export class UserData {
     ): Promise<Result<void, Error>> {
         const courseData = this._courses.get(courseId);
         if (!courseData) {
-            return new Err(new Error("Data missing"));
+            return new Err(new Error(`Course data missing for ${courseId}`));
         }
         const exerciseIds = exercises.map((exercise) => exercise.id);
         // Filter out "new" exercises that no longer were in the API, and then append new data
@@ -123,7 +123,7 @@ export class UserData {
     ): Promise<Result<void, Error>> {
         const courseData = this._courses.get(courseId);
         if (!courseData) {
-            return new Err(new Error("Data missing"));
+            return new Err(new Error(`Course data missing for ${courseId}`));
         }
         courseData.awardedPoints = awardedPoints;
         courseData.availablePoints = availablePoints;
@@ -150,7 +150,7 @@ export class UserData {
     ): Promise<Result<void, Error>> {
         const courseData = this._courses.get(courseId);
         if (!courseData) {
-            return new Err(new Error("Data missing"));
+            return new Err(new Error(`Course data missing for ${courseId}`));
         }
         Logger.info(`Clearing new exercises for ${courseData.name}`);
         if (exercisesToClear !== undefined) {
@@ -182,7 +182,7 @@ export class UserData {
     ): Promise<Result<void, Error>> {
         const courseData = this._courses.get(courseId);
         if (!courseData) {
-            return new Err(new Error("Data missing"));
+            return new Err(new Error(`Course data missing for ${courseId}`));
         }
         Logger.info(
             `Notifying user for course ${courseData.name} again at ${new Date(

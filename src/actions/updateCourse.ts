@@ -1,4 +1,4 @@
-import { ConnectionError, ForbiddenError } from "../errors";
+import { ConnectionError, ForbiddenError, InitializationError } from "../errors";
 import { TmcPanel } from "../panels/TmcPanel";
 import { Logger } from "../utilities";
 import { combineApiExerciseData } from "../utilities/apiData";
@@ -19,7 +19,7 @@ export async function updateCourse(
 ): Promise<Result<boolean, Error>> {
     const { exerciseDecorationProvider, tmc, userData, workspaceManager } = actionContext;
     if (!(tmc.ok && userData.ok && workspaceManager.ok && exerciseDecorationProvider.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     Logger.info("Updating course");
 
