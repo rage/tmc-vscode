@@ -50,3 +50,19 @@ export class RuntimeError extends BaseError {
 export class TimeoutError extends BaseError {
     public readonly name = "Timeout Error";
 }
+
+export class InitializationError extends BaseError {
+    public readonly name = "Initialization Error";
+}
+
+export class ExerciseUpdateError extends BaseError {
+    public readonly name = "Exercise Update Error";
+}
+
+export class FileSystemError extends BaseError {
+    public readonly name = "File System Error";
+}
+
+export class ExerciseMigrationError extends BaseError {
+    public readonly name = "Exercise Migration Error";
+}

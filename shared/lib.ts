@@ -569,13 +569,13 @@ export class BaseError extends Error {
     public syscall?: string;
 
     constructor(err: unknown);
-    constructor(err: Error, details?: string);
+    constructor(err: unknown, details?: string);
     constructor(message?: string, details?: string);
 
-    constructor(err: unknown, details?: string) {
+    constructor(err: unknown, details?: string, causeParam?: string) {
         let message = "";
         let stack = "";
-        let cause: NodeJS.ErrnoException | string = "";
+        let cause: NodeJS.ErrnoException | string = causeParam || "";
 
         let errno: number | undefined = undefined;
         let code: string | undefined = undefined;

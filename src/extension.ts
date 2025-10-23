@@ -13,7 +13,7 @@ import {
 } from "./config/constants";
 import Settings from "./config/settings";
 import { UserData } from "./config/userdata";
-import { EmptyLangsResponseError, HaltForReloadError } from "./errors";
+import { EmptyLangsResponseError, HaltForReloadError, InitializationError } from "./errors";
 import * as init from "./init";
 import { randomPanelId, TmcPanel } from "./panels/TmcPanel";
 import Storage from "./storage";
@@ -223,17 +223,20 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     } else {
         Logger.warn("Skipped userdata setup");
         exerciseDecorationProvider = new Err(
-            new Error(
+            new InitializationError(
+                resources.val,
                 "Could not initialize exercise decoration provider due to failure in resource initialization",
             ),
         );
         userData = new Err(
-            new Error(
+            new InitializationError(
+                resources.val,
                 "Could not initialize exercise decoration provider due to failure in resource initialization",
             ),
         );
         workspaceManager = new Err(
-            new Error(
+            new InitializationError(
+                resources.val,
                 "Could not initialize exercise decoration provider due to failure in resource initialization",
             ),
         );

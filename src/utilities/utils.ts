@@ -1,6 +1,7 @@
 import { FeedbackQuestion } from "../actions/types";
 import { ConnectionError } from "../errors";
 import { SubmissionFeedbackQuestion } from "../shared/langsSchema";
+import { BaseError } from "../shared/shared";
 import { Logger } from "./logger";
 import * as fs from "fs-extra";
 import * as path from "path";
@@ -29,13 +30,19 @@ export async function downloadFile(
         const request = { url, method: "get", headers };
         response = await fetch(request.url, request);
     } catch (error) {
-        Logger.error(error);
         // Typing change from update
         return new Err(new ConnectionError(error));
     }
 
     if (!response.ok) {
-        return new Err(new Error("Request failed: " + response.statusText));
+        let cause: string | undefined;
+        try {
+            cause = await response.text();
+        } catch (_error) {
+            // ignore error in reading response, not important
+        }
+
+        return new Err(new Error("Request failed: " + response.statusText, { cause }));
     }
 
     try {
@@ -59,8 +66,7 @@ export async function downloadFile(
             throw new Error("Unexpected null response body");
         }
     } catch (error) {
-        Logger.error(error);
-        return new Err(new Error("Writing to file failed: " + error));
+        return new Err(new BaseError(error, "Writing to file failed"));
     }
 
     return Ok.EMPTY;

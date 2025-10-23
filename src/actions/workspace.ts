@@ -4,6 +4,7 @@
  * -------------------------------------------------------------------------------------------------
  */
 import { ExerciseStatus } from "../api/workspaceManager";
+import { InitializationError } from "../errors";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { CourseDetailsPanel, ExtensionToWebview } from "../shared/shared";
 import { Logger } from "../utilities";
@@ -27,7 +28,7 @@ export async function openExercises(
 
     const { workspaceManager, userData, tmc, dialog } = actionContext;
     if (!(userData.ok && workspaceManager.ok && tmc.ok)) {
-        return Err(new Error("Extension was not initialized properly"));
+        return Err(new InitializationError("Extension was not initialized properly"));
     }
 
     const course = userData.val.getCourseByName(courseName);
@@ -104,7 +105,7 @@ export async function closeExercises(
 ): Promise<Result<number[], Error>> {
     const { workspaceManager, userData, tmc } = actionContext;
     if (!(userData.ok && workspaceManager.ok && tmc.ok)) {
-        return Err(new Error("Extension was not initialized properly"));
+        return Err(new InitializationError("Extension was not initialized properly"));
     }
 
     const course = userData.val.getCourseByName(courseName);

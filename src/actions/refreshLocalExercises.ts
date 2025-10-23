@@ -1,4 +1,5 @@
 import { ExerciseStatus, WorkspaceExercise } from "../api/workspaceManager";
+import { InitializationError } from "../errors";
 import { Logger } from "../utilities";
 import { ActionContext } from "./types";
 import { Err, Result } from "ts-results";
@@ -13,7 +14,7 @@ export async function refreshLocalExercises(
 ): Promise<Result<void, Error>> {
     const { tmc, userData, workspaceManager } = actionContext;
     if (!(tmc.ok && userData.ok && workspaceManager.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     Logger.info("Refreshing local exercises");
 

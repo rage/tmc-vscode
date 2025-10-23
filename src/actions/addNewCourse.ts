@@ -1,3 +1,4 @@
+import { InitializationError } from "../errors";
 import { v2 as storage } from "../storage/data";
 import { Logger } from "../utilities";
 import { combineApiExerciseData } from "../utilities/apiData";
@@ -15,7 +16,7 @@ export async function addNewCourse(
 ): Promise<Result<void, Error>> {
     const { tmc, ui, userData, workspaceManager } = actionContext;
     if (!(tmc.ok && userData.ok && workspaceManager.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     Logger.info("Adding new course");
 
