@@ -24,3 +24,5 @@ echo "$GENERATED" | npx prettier --parser typescript >> "$BINDINGS_DOWNLOAD_TARG
 
 # update version number
 sed -i s/"TMC_LANGS_RUST_VERSION = .*"/"TMC_LANGS_RUST_VERSION = \"${VERSION}\";/" ./config.js
+
+echo "Complete!"

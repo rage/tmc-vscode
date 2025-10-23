@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.5.1] - 2025-10-23
+
+- Improved error reporting in some cases.
+
 ## [3.5.0] - 2025-10-09
 
 - Improved exercise submission packaging to avoid overly large archives
