@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.5.1] - 2025-11-20
+
+- Fixed CLI hash comparison on Windows
+- Improved error messages on failure to run CLI
+
 ## [3.5.0] - 2025-10-09
 
 - Improved exercise submission packaging to avoid overly large archives

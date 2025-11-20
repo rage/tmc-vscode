@@ -110,8 +110,13 @@ export async function testExercise(
 
     if (!course.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext);
-        const [testRunner, testInterrupt] = tmc.val.runTests(exercise.uri.fsPath, executablePath);
-        const [validationRunner, validationInterrupt] = tmc.val.runCheckstyle(exercise.uri.fsPath);
+        const { process: testRunner, interrupt: testInterrupt } = tmc.val.runTests(
+            exercise.uri.fsPath,
+            executablePath,
+        );
+        const { process: validationRunner, interrupt: validationInterrupt } = tmc.val.runCheckstyle(
+            exercise.uri.fsPath,
+        );
         testInterrupts.set(testRunId, [testInterrupt, validationInterrupt]);
         const exerciseName = exercise.exerciseSlug;
 

@@ -66,3 +66,7 @@ export class FileSystemError extends BaseError {
 export class ExerciseMigrationError extends BaseError {
     public readonly name = "Exercise Migration Error";
 }
+
+export class SpawnError extends BaseError {
+    public readonly name = "Langs Spawn Error";
+}

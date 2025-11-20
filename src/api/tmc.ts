@@ -12,9 +12,11 @@ import {
     ConnectionError,
     EmptyLangsResponseError,
     ForbiddenError,
+    InitializationError,
     InvalidTokenError,
     ObsoleteClientError,
     RuntimeError,
+    SpawnError,
 } from "../errors";
 import {
     CliOutput,
@@ -261,12 +263,15 @@ export default class TMC {
         exercisePath: string,
         pythonExecutablePath?: string,
         progressCallback?: (progressPct: number, message?: string) => void,
-    ): [Promise<Result<RunResult, BaseError>>, () => void] {
+    ): {
+        process: Promise<Result<RunResult, BaseError | InitializationError>>;
+        interrupt: () => void;
+    } {
         const env: { [key: string]: string } = {};
         if (pythonExecutablePath) {
             env.TMC_LANGS_PYTHON_EXEC = pythonExecutablePath;
         }
-        const { interrupt, result } = this._spawnLangsProcess({
+        const process = this._spawnLangsProcess({
             args: ["run-tests", "--exercise-path", exercisePath],
             env,
             onStdout: (data) =>
@@ -274,32 +279,43 @@ export default class TMC {
             onStderr: (data) => Logger.info("Rust Langs", data),
             processTimeout: CLI_PROCESS_TIMEOUT,
         });
+        if (process.err) {
+            return { process: Promise.resolve(process), interrupt: (): void => {} };
+        }
+        const { interrupt, result } = process.val;
         const postResult = result.then((res) =>
             res
                 .andThen((x) => this._checkLangsResponse(x, "test-result"))
                 .map((x) => x.data["output-data"]),
         );
 
-        return [postResult, interrupt];
+        return { process: postResult, interrupt };
     }
 
     public runCheckstyle(
         exercisePath: string,
         progressCallback?: (progressPct: number, message?: string) => void,
-    ): [Promise<Result<StyleValidationResult | null, BaseError>>, () => void] {
-        const { interrupt, result } = this._spawnLangsProcess({
+    ): {
+        process: Promise<Result<StyleValidationResult | null, BaseError>>;
+        interrupt: () => void;
+    } {
+        const process = this._spawnLangsProcess({
             args: ["checkstyle", "--locale", "en", "--exercise-path", exercisePath],
             onStdout: (data) =>
                 progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
             onStderr: (data) => Logger.info("Rust Langs", data),
             processTimeout: CLI_PROCESS_TIMEOUT,
         });
+        if (process.err) {
+            return { process: Promise.resolve(process), interrupt: (): void => {} };
+        }
+        const { interrupt, result } = process.val;
         const checkstyleResult = result.then((res) =>
             res
                 .andThen((x) => this._checkLangsResponse(x, "validation"))
                 .map((x) => x.data["output-data"]),
         );
-        return [checkstyleResult, interrupt];
+        return { process: checkstyleResult, interrupt };
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -946,7 +962,11 @@ export default class TMC {
             }
         }
 
-        const res = await this._spawnLangsProcess(langsArgs).result;
+        const process = this._spawnLangsProcess(langsArgs);
+        if (process.err) {
+            return process;
+        }
+        const res = await process.val.result;
         return res
             .andThen((x) => this._checkLangsResponse(x, outputDataKind))
             .andThen((x) => {
@@ -1020,7 +1040,9 @@ export default class TMC {
      *
      * @returns Rust process runner.
      */
-    private _spawnLangsProcess(commandArgs: LangsProcessArgs): LangsProcessRunner {
+    private _spawnLangsProcess(
+        commandArgs: LangsProcessArgs,
+    ): Result<LangsProcessRunner, InitializationError | SpawnError> {
         const { args, env, obfuscate, onStderr, onStdout, stdin, processTimeout } = commandArgs;
 
         let theResult: OutputData | undefined;
@@ -1044,16 +1066,21 @@ export default class TMC {
 
         let active = true;
         let interrupted = false;
-        const cprocess = cp.spawn(this.cliPath, args, {
-            env: {
-                ...process.env,
-                ...env,
-                RUST_LOG: "debug,rustls=warn,reqwest=warn",
-                TMC_LANGS_TMC_ROOT_URL: tmcBackendUrl,
-                TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
-                TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
-            },
-        });
+        let cprocess;
+        try {
+            cprocess = cp.spawn(this.cliPath, args, {
+                env: {
+                    ...process.env,
+                    ...env,
+                    RUST_LOG: "debug,rustls=warn,reqwest=warn",
+                    TMC_LANGS_TMC_ROOT_URL: tmcBackendUrl,
+                    TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
+                    TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
+                },
+            });
+        } catch (error) {
+            return Err(new SpawnError(error, "Failed to run tmc-langs-cli"));
+        }
         if (stdin) {
             cprocess.stdin.write(stdin + "\n");
         }
@@ -1190,7 +1217,8 @@ ${error.message}`;
                 kill(cprocess.pid as number);
             }
         };
-        return { interrupt, result };
+        const res = { interrupt, result };
+        return Ok(res);
     }
 }
 

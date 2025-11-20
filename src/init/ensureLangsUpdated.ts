@@ -46,11 +46,13 @@ async function ensureLangsUpdated(
     const cliHash = new Sha256();
     const cliData = fs.readFileSync(cliPath);
     cliHash.update(cliData);
-    const cliDigest = Buffer.from(cliHash.digestSync()).toString("hex");
+    // windows returns the calculated hash in uppercase for some reason...
+    const cliDigest = Buffer.from(cliHash.digestSync()).toString("hex").toLowerCase();
 
-    const hashData = fs.readFileSync(shaPath, "utf-8").split(" ")[0];
+    const hashData = fs.readFileSync(shaPath, "utf-8").split(" ")[0].trim();
     if (cliDigest !== hashData) {
         Logger.error("Mismatch between CLI and checksum, trying redownload");
+        Logger.debug(`CLI "${cliDigest}", hash "${hashData}"`);
         deleteSync(cliFolder, { force: true });
         const result = await downloadLangs(
             cliFolder,

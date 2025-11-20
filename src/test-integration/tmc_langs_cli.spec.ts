@@ -209,7 +209,7 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should be able to run tests for exercise", async function () {
-                const result = await unwrapResult(tmc.runTests(exercisePath)[0]);
+                const result = await unwrapResult(tmc.runTests(exercisePath).process);
                 expect(result.status).to.be.equal("PASSED");
             });
 
@@ -319,7 +319,7 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should encounter an error when attempting to run tests for it", async function () {
-                const result = await tmc.runTests(missingExercisePath)[0];
+                const result = await tmc.runTests(missingExercisePath).process;
                 expect(result.val).to.be.instanceOf(RuntimeError);
             });
 
@@ -463,7 +463,7 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should be able to run tests for exercise", async function () {
-                const result = await unwrapResult(tmc.runTests(exercisePath)[0]);
+                const result = await unwrapResult(tmc.runTests(exercisePath).process);
                 expect(result.status).to.be.equal("PASSED");
             });
 
