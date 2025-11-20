@@ -72,6 +72,17 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.5.1 - 2025-11-20</h3>
+            <h4>Fixed CLI hash comparison on Windows</h4>
+            <p>
+                SHA256 hashes calculated on Windows were returned in uppercase, causing spurious
+                hash comparison failures. This has been fixed.
+            </p>
+            <h4>Improved error messages on failure to run CLI</h4>
+            <p>
+                If the CLI fails to execute properly for some reason, the error messaging should now
+                make it more clear to the user how to attempt resolving the issue.
+            </p>
             <h3>3.5.0 - 2025-10-09</h3>
             <h4>Improved exercise submission packaging to avoid overly large archives</h4>
             <p>

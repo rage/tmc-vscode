@@ -13,7 +13,12 @@ import {
 } from "./config/constants";
 import Settings from "./config/settings";
 import { UserData } from "./config/userdata";
-import { EmptyLangsResponseError, HaltForReloadError, InitializationError } from "./errors";
+import {
+    EmptyLangsResponseError,
+    HaltForReloadError,
+    InitializationError,
+    SpawnError,
+} from "./errors";
 import * as init from "./init";
 import { randomPanelId, TmcPanel } from "./panels/TmcPanel";
 import Storage from "./storage";
@@ -33,10 +38,11 @@ function initializationError(dialog: Dialog, step: string, error: Error, cliFold
         error,
         "If this issue is not resolved, the extension may not function properly.",
     );
-    if (error instanceof EmptyLangsResponseError) {
-        Logger.error(
-            "The above error may have been caused by an interfering antivirus program. " +
-                "Please add an exception for the following folder:",
+    if (error instanceof EmptyLangsResponseError || error instanceof SpawnError) {
+        Logger.errorWithDialog(
+            dialog,
+            "This error may have been caused by an interfering antivirus program. " +
+                "Please try adding an exception for the following folder:",
             cliFolder,
         );
     }
