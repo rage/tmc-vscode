@@ -1,3 +1,5 @@
+// types shared between the extension and webview code
+
 /*
  * ======== state ========
  */
@@ -14,42 +16,27 @@ import {
     SubmissionFinished,
 } from "./langsSchema";
 import { createIs } from "typia";
+import { MoocLocalCourseExercise, TmcLocalCourseExercise } from "../storage/data";
 
-
-export interface LocalTmcCourseData {
+// for now, these are just copied from the data module
+// todo: think of better way to do this...
+export interface SharedTmcCourseData {
     id: number;
     name: string;
     title: string;
     description: string;
     organization: string;
-    exercises: LocalTmcCourseExercise[];
+    exercises: Array<SharedTmcCourseExercise>;
     availablePoints: number;
     awardedPoints: number;
     perhapsExamMode: boolean;
-    newExercises: number[];
+    newExercises: Array<number>;
     notifyAfter: number;
     disabled: boolean;
     materialUrl: string | null;
 }
 
-export interface LocalMoocCourseData {
-    courseId: string;
-    instanceId: string;
-    courseName: string;
-    instanceName: string | null;
-    courseDescription: string | null;
-    instanceDescription: string | null;
-    awardedPoints: number;
-    availablePoints: number;
-    disabled: boolean;
-    materialUrl: string | null;
-    exercises: LocalMoocCourseExercise[];
-    newExercises: string[];
-    notifyAfter: number;
-    perhapsExamMode: boolean;
-}
-
-export interface LocalTmcCourseExercise {
+export interface SharedTmcCourseExercise {
     id: number;
     availablePoints: number;
     awardedPoints: number;
@@ -60,28 +47,52 @@ export interface LocalTmcCourseExercise {
     softDeadline: string | null;
 }
 
-export interface LocalMoocCourseExercise {
+export interface SharedMoocCourseData {
+    // instance id
     id: string;
-    slug: string;
+    courseId: string;
+    // course slug
+    name: string;
+    instanceName: string | null;
+    title: string;
+    description: string | null;
+    courseDescription: string | null;
+    organization: string;
+    exercises: Array<SharedMoocCourseExercise>;
+    availablePoints: number;
+    awardedPoints: number;
+    perhapsExamMode: boolean;
+    newExercises: Array<string>;
+    notifyAfter: number;
+    disabled: boolean;
+    materialUrl: string | null;
+}
+
+export interface SharedMoocCourseExercise {
+    id: string;
+    availablePoints: number;
+    awardedPoints: number;
+    /// Equivalent to exercise slug
+    name: string;
     deadline: string | null;
     passed: boolean;
     softDeadline: string | null;
 }
 
-export type LocalCourseExercise = Enum<LocalTmcCourseExercise, LocalMoocCourseExercise>;
+export type LocalCourseExercise = Enum<SharedTmcCourseExercise, SharedMoocCourseExercise>;
 
 export namespace LocalCourseExercise {
     export function getSlug(lce: LocalCourseExercise): string {
         return match(
             lce,
             (tmc) => tmc.name,
-            (mooc) => mooc.slug,
+            (mooc) => mooc.name,
         );
     }
 
     export function unwrap(
         lce: LocalCourseExercise,
-    ): LocalTmcCourseExercise | LocalMoocCourseExercise {
+    ): SharedTmcCourseExercise | SharedMoocCourseExercise {
         return match(
             lce,
             (tmc) => tmc,
@@ -99,7 +110,7 @@ export namespace LocalCourseExercise {
     }
 }
 
-export type LocalCourseData = Enum<LocalTmcCourseData, LocalMoocCourseData>;
+export type LocalCourseData = Enum<SharedTmcCourseData, SharedMoocCourseData>;
 
 export namespace LocalCourseData {
     export function getCourseId(lcd: LocalCourseData): CourseIdentifier {
@@ -114,7 +125,7 @@ export namespace LocalCourseData {
         return match(
             lcd,
             (tmc) => tmc.name,
-            (mooc) => mooc.courseName,
+            (mooc) => mooc.name,
         );
     }
 
@@ -137,7 +148,7 @@ export namespace LocalCourseData {
 
 export function getCourseExercises(
     course: LocalCourseData,
-): Enum<Array<LocalTmcCourseExercise>, Array<LocalMoocCourseExercise>> {
+): Enum<Array<TmcLocalCourseExercise>, Array<MoocLocalCourseExercise>> {
     // doesn't work without an intermediate variable........
     const ret = match(
         course,

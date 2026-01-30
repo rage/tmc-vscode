@@ -5,7 +5,8 @@ import { combineTmcApiExerciseData } from "../utilities/apiData";
 
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
-import { CourseIdentifier, LocalMoocCourseData, LocalTmcCourseData, match } from "../shared/shared";
+import { CourseIdentifier, match } from "../shared/shared";
+import { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data";
 
 /**
  * Adds a new course to user's courses.
@@ -37,7 +38,7 @@ export async function addNewCourse(
                 awardedPoints += x.awarded_points.length;
             });
 
-            const localData: LocalTmcCourseData = {
+            const localData: TmcLocalCourseData = {
                 description: courseData.details.description || "",
                 exercises: combineTmcApiExerciseData(
                     courseData.details.exercises,
@@ -72,13 +73,15 @@ export async function addNewCourse(
             }
             const [courseInstance, _] = courseInstanceRes.val;
 
-            const localData: LocalMoocCourseData = {
+            const localData: MoocLocalCourseData = {
+                id: courseInstance.id,
                 courseId: courseInstance.course_id,
-                instanceId: courseInstance.id,
-                courseName: courseInstance.course_name,
+                name: courseInstance.course_slug,
                 instanceName: courseInstance.instance_name,
+                description: courseInstance.instance_description,
                 courseDescription: courseInstance.course_description,
-                instanceDescription: courseInstance.instance_description,
+                title: courseInstance.course_name,
+                organization: courseInstance.organization_name,
                 awardedPoints: 0,
                 availablePoints: 0,
                 disabled: false,
@@ -89,10 +92,10 @@ export async function addNewCourse(
                 perhapsExamMode: false,
             };
             userData.val.addCourse({ kind: "mooc", data: localData });
-            ui.treeDP.addChildWithId("myCourses", localData.instanceId, localData.courseName, {
+            ui.treeDP.addChildWithId("myCourses", localData.id, localData.name, {
                 command: "tmc.courseDetails",
                 title: "Go To Course Details",
-                arguments: [CourseIdentifier.from(localData.instanceId)],
+                arguments: [CourseIdentifier.from(localData.id)],
             });
             workspaceManager.val.createWorkspaceFile(courseInstance.course_slug);
             return refreshLocalExercises(actionContext);

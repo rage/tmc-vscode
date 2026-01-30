@@ -4,7 +4,7 @@ import {
     LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../config/constants";
 import { CourseExercise, Exercise } from "../shared/langsSchema";
-import { LocalTmcCourseExercise } from "../shared/shared";
+import { TmcLocalCourseExercise } from "../storage/data";
 
 /**
  * Takes exercise arrays from two different endpoints and attempts to resolve them into
@@ -14,15 +14,15 @@ import { LocalTmcCourseExercise } from "../shared/shared";
 export function combineTmcApiExerciseData(
     exercises: Exercise[],
     courseExercises: CourseExercise[],
-): LocalTmcCourseExercise[] {
+): TmcLocalCourseExercise[] {
     const exercisePointsMap = new Map(courseExercises.map((x) => [x.id, x]));
-    return exercises.map<LocalTmcCourseExercise>((x) => {
+    return exercises.map<TmcLocalCourseExercise>((x) => {
         const match = exercisePointsMap.get(x.id);
         const passed = x.completed;
         const awardedPointsFallback = passed
             ? LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER
             : LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER;
-        const localCourseExercise: LocalTmcCourseExercise = {
+        const localCourseExercise: TmcLocalCourseExercise = {
             id: x.id,
             availablePoints:
                 match?.available_points.length ?? LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,

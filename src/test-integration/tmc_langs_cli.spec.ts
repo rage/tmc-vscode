@@ -4,7 +4,7 @@ import { deleteSync } from "del";
 import * as fs from "fs-extra";
 import { first } from "lodash";
 import * as path from "path";
-import * as kill from "tree-kill";
+import kill from "tree-kill";
 import { Result } from "ts-results";
 
 import Langs from "../api/langs";
@@ -291,7 +291,7 @@ suite("tmc langs cli spec", function () {
             test("should be able to submit the exercise for evaluation", async function () {
                 let url: string | undefined;
                 const results = await unwrapResult(
-                    tmc.submitExerciseAndWaitForResults(
+                    tmc.submitTmcExerciseAndWaitForResults(
                         ExerciseIdentifier.from(1),
                         exercisePath,
                         undefined,
@@ -303,11 +303,11 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should encounter an error if trying to submit the exercise twice too soon", async function () {
-                const first = tmc.submitExerciseAndWaitForResults(
+                const first = tmc.submitTmcExerciseAndWaitForResults(
                     ExerciseIdentifier.from(1),
                     exercisePath,
                 );
-                const second = tmc.submitExerciseAndWaitForResults(
+                const second = tmc.submitTmcExerciseAndWaitForResults(
                     ExerciseIdentifier.from(1),
                     exercisePath,
                 );
@@ -361,7 +361,7 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should encounter an error when trying to submit it", async function () {
-                const result = await tmc.submitExerciseAndWaitForResults(
+                const result = await tmc.submitTmcExerciseAndWaitForResults(
                     ExerciseIdentifier.from(1),
                     missingExercisePath,
                 );
@@ -519,7 +519,7 @@ suite("tmc langs cli spec", function () {
             });
 
             test("should not be able to submit exercise", async function () {
-                const result = await tmc.submitExerciseAndWaitForResults(
+                const result = await tmc.submitTmcExerciseAndWaitForResults(
                     ExerciseIdentifier.from(1),
                     exercisePath,
                 );

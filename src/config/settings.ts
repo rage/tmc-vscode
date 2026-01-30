@@ -1,18 +1,9 @@
 import * as vscode from "vscode";
 
-import Storage, { SessionState } from "../api/storage";
+import Storage from "../storage";
+import * as data from "../storage/data";
 import { Logger, LogLevel } from "../utilities/logger";
-
-/**
- * @deprecated Default values are now implemented in package.json / VSCode settings.
- */
-export interface ExtensionSettings {
-    downloadOldSubmission: boolean;
-    hideMetaFiles: boolean;
-    insiderVersion: boolean;
-    logLevel: LogLevel;
-    updateExercisesAutomatically: boolean;
-}
+import { SessionState } from "../storage/data";
 
 /**
  * Class to manage VSCode setting changes and trigger events based on changes.
@@ -85,13 +76,14 @@ export default class Settings implements vscode.Disposable {
      * @deprecated Storage dependency should be removed when major 3.0 release.
      */
     public async updateExtensionSettingsToStorage(): Promise<void> {
-        const settings: ExtensionSettings = {
+        const settings: data.ExtensionSettings = {
             downloadOldSubmission: this._getUserSettingValue("downloadOldSubmission"),
             hideMetaFiles: this._getUserSettingValue("hideMetaFiles"),
             updateExercisesAutomatically: this._getUserSettingValue("updateExercisesAutomatically"),
             logLevel:
                 vscode.workspace.getConfiguration().get("testMyCode.logLevel") ?? LogLevel.Errors,
             insiderVersion: this._getUserSettingValue("insiderVersion"),
+            javaHome: this._getUserSettingString("javaHome"),
         };
         await this._storage.updateExtensionSettings(settings);
     }
@@ -121,6 +113,10 @@ export default class Settings implements vscode.Disposable {
         await this.updateExtensionSettingsToStorage();
     }
 
+    public getJavaHome(): string {
+        return this._getWorkspaceSettingString("javaHome");
+    }
+
     /**
      * Used to fetch boolean values from VSCode settings API Workspace scope
      *
@@ -148,6 +144,36 @@ export default class Settings implements vscode.Disposable {
             return !!scopeSettings?.defaultValue;
         } else {
             return scopeSettings.globalValue;
+        }
+    }
+
+    /**
+     * Used to fetch string values from VSCode settings API User Scope
+     */
+    private _getUserSettingString(section: string): string {
+        const configuration = vscode.workspace.getConfiguration("testMyCode");
+        const scopeSettings = configuration.inspect<string>(section);
+        if (scopeSettings?.globalValue === undefined) {
+            return scopeSettings?.defaultValue ?? "";
+        } else {
+            return scopeSettings.globalValue;
+        }
+    }
+
+    /**
+     * Used to fetch string values from VSCode settings API Workspace scope
+     *
+     * workspaceValue is undefined in multi-root workspace if it matches defaultValue
+     * We want to "force" the value in the multi-root workspace, because then
+     * the workspace scope > user scope.
+     */
+    private _getWorkspaceSettingString(section: string): string {
+        const configuration = vscode.workspace.getConfiguration("testMyCode");
+        const scopeSettings = configuration.inspect<string>(section);
+        if (scopeSettings?.workspaceValue === undefined) {
+            return scopeSettings?.defaultValue ?? "";
+        } else {
+            return scopeSettings.workspaceValue;
         }
     }
 }

@@ -17,6 +17,7 @@ import { combineTmcApiExerciseData } from "../utilities/apiData";
 import { refreshLocalExercises } from "./refreshLocalExercises";
 import { ActionContext } from "./types";
 import { CombinedCourseData, CourseInstance, TmcExerciseSlide } from "../shared/langsSchema";
+import { MoocLocalCourseExercise } from "../storage/data";
 
 /**
  * Updates the given course by re-fetching all data from the server. Handles authorization and
@@ -125,13 +126,18 @@ export async function updateCourse(
             const [_courseInstance, slides] = mooc;
             const localExercises = slides
                 .flatMap((s) =>
-                    s.tasks.map((t) => ({
-                        id: t.task_id,
-                        slug: s.exercise_name,
-                        deadline: s.deadline,
-                        passed: false,
-                        softDeadline: s.deadline,
-                    })),
+                    s.tasks.map((t) => {
+                        const localExercise: MoocLocalCourseExercise = {
+                            id: t.task_id,
+                            name: s.exercise_name,
+                            deadline: s.deadline,
+                            passed: false,
+                            softDeadline: s.deadline,
+                            availablePoints: 0,
+                            awardedPoints: 0,
+                        };
+                        return localExercise;
+                    }),
                 )
                 .map(makeMoocKind);
             return await userData.val.updateExercises(courseId, localExercises);

@@ -221,7 +221,7 @@ export async function submitTmcExercise(
     };
     await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
 
-    const submissionResult = await langs.val.submitExerciseAndWaitForResults(
+    const submissionResult = await langs.val.submitTmcExerciseAndWaitForResults(
         LocalCourseExercise.getId(courseExercise),
         exercise.uri.fsPath,
         (progressPercent, message) => {

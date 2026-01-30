@@ -72,12 +72,12 @@ export function registerUiActions(actionContext: ActionContext): Result<void, Er
                 case "mooc": {
                     const moocCourse = course.data;
                     return {
-                        label: moocCourse.courseName,
-                        id: moocCourse.instanceId,
+                        label: moocCourse.title,
+                        id: moocCourse.id,
                         command: {
                             command: "tmc.courseDetails",
                             title: "Go to course details",
-                            arguments: [moocCourse.instanceId],
+                            arguments: [moocCourse.id],
                         },
                     };
                 }

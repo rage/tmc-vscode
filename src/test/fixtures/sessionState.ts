@@ -1,6 +1,6 @@
-import { SessionStateV1 } from "../../migrate/migrateSessionState";
+import { v1 } from "../../storage/data";
 
-const v2_0_0: SessionStateV1 = {
+const v2_0_0: v1.SessionState = {
     extensionVersion: "2.0.0",
 };
 

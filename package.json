@@ -238,6 +238,11 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Download exercise updates automatically."
+                },
+                "testMyCode.javaHome": {
+                    "type": "string",
+                    "default": "",
+                    "description": "If set, the Java (JDK) version in this path is used for Java exercises."
                 }
             }
         },

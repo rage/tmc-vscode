@@ -3,7 +3,7 @@ import * as path from "path";
 import { Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
-import Storage from "../api/storage";
+import Storage from "../storage";
 import { EXTENSION_ID, WORKSPACE_ROOT_FILE_TEXT, WORKSPACE_SETTINGS } from "../config/constants";
 import Resources from "../config/resources";
 import { Logger } from "../utilities/logger";
@@ -45,7 +45,17 @@ export async function resourceInitialization(
     // Verify that all course .code-workspaces are in-place on startup.
     fs.ensureDirSync(workspaceFileFolder);
     const userData = storage.getUserData();
-    userData?.tmcCourses.forEach((course) => {
+    userData?.courses.forEach((course) => {
+        const tmcWorkspaceFilePath = path.join(
+            workspaceFileFolder,
+            course.name + ".code-workspace",
+        );
+        if (!fs.existsSync(tmcWorkspaceFilePath)) {
+            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
+            Logger.info(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
+        }
+    });
+    userData?.mooc_courses.forEach((course) => {
         const tmcWorkspaceFilePath = path.join(
             workspaceFileFolder,
             course.name + ".code-workspace",

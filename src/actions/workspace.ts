@@ -51,7 +51,7 @@ export async function openExercises(
     const courseName = match(
         course,
         (tmc) => tmc.name,
-        (mooc) => mooc.courseName,
+        (mooc) => mooc.name,
     );
     const openResult = await workspaceManager.val.openCourseExercises(
         course.kind,

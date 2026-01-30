@@ -62,9 +62,9 @@ export async function checkForExerciseUpdates(
                         moocUpdateableExerciseIds.has(x.id),
                     );
                     return outdatedExercises.map((x) => ({
-                        courseId: CourseIdentifier.from(course.data.instanceId),
+                        courseId: CourseIdentifier.from(course.data.id),
                         exerciseId: ExerciseIdentifier.from(x.id),
-                        exerciseName: x.slug,
+                        exerciseName: x.name,
                     }));
                 }
                 default: {

@@ -1,5 +1,5 @@
 import { FeedbackQuestion } from "../actions/types";
-import Storage from "../api/storage";
+import Storage from "../storage";
 import Langs from "../api/langs";
 import { Course, Organization } from "../api/types";
 import { ExtensionSettings } from "../config/settings";

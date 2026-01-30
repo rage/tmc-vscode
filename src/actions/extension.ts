@@ -6,7 +6,7 @@ import { checkForCourseUpdates, refreshLocalExercises } from "../actions";
 import { ActionContext } from "../actions/types";
 import Dialog from "../api/dialog";
 import ExerciseDecorationProvider from "../api/exerciseDecorationProvider";
-import Storage from "../api/storage";
+import Storage from "../storage";
 import TMC from "../api/langs";
 import WorkspaceManager from "../api/workspaceManager";
 import {
@@ -20,7 +20,6 @@ import Settings from "../config/settings";
 import { UserData } from "../config/userdata";
 import { EmptyLangsResponseError, HaltForReloadError } from "../errors";
 import * as init from "../init";
-import { migrateExtensionDataFromPreviousVersions } from "../migrate";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import UI from "../ui/ui";
 import { cliFolder, Logger, LogLevel, semVerCompare } from "../utilities";
@@ -110,9 +109,8 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     // migrate data between versions
     const storage = new Storage(context);
     if (langs.ok) {
-        const migrationResult = await migrateExtensionDataFromPreviousVersions(
+        const migrationResult = await storage.migrateToLatest(
             context,
-            storage,
             dialog,
             langs.val,
             vscode.workspace.getConfiguration(),

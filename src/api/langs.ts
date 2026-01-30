@@ -1,5 +1,5 @@
 import * as cp from "child_process";
-import * as kill from "tree-kill";
+import kill from "tree-kill";
 import { Err, Ok, Result } from "ts-results";
 import { validate } from "typia";
 
@@ -959,7 +959,7 @@ export default class Langs {
      * @param exerciseId Id of the exercise.
      * @param progressCallback Optional callback function that can be used to get status reports.
      */
-    public async submitExerciseAndWaitForResults(
+    public async submitTmcExerciseAndWaitForResults(
         exerciseId: ExerciseIdentifier,
         exercisePath: string,
         progressCallback?: (progressPct: number, message?: string) => void,

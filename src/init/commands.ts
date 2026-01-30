@@ -73,8 +73,8 @@ export function registerCommands(
                                 }
                                 case "mooc": {
                                     return [
-                                        c.data.courseName,
-                                        { kind: "mooc", data: { instanceId: c.data.instanceId } },
+                                        c.data.title,
+                                        { kind: "mooc", data: { instanceId: c.data.id } },
                                     ];
                                 }
                             }

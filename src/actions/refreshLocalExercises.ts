@@ -66,7 +66,7 @@ export async function refreshLocalExercises(
             case "mooc": {
                 const exercisesResult = await langs.val.listLocalCourseExercises(
                     "mooc",
-                    course.data.courseName,
+                    course.data.name,
                 );
                 if (exercisesResult.err) {
                     Logger.warn(
@@ -78,7 +78,7 @@ export async function refreshLocalExercises(
 
                 const closedExercisesResult = (
                     await langs.val.getSetting(
-                        `closed-exercises-for:${course.data.courseName}`,
+                        `closed-exercises-for:${course.data.name}`,
                         createIs<string[] | null>(),
                     )
                 ).mapErr((e) => {
@@ -93,7 +93,7 @@ export async function refreshLocalExercises(
                 workspaceExercises.push(
                     ...exercisesResult.val.map<WorkspaceExercise>((x) => ({
                         backend: "mooc",
-                        courseSlug: course.data.courseName,
+                        courseSlug: course.data.name,
                         exerciseSlug: x["exercise-slug"],
                         status: closedExercises.has(x["exercise-slug"])
                             ? ExerciseStatus.Closed
