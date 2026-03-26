@@ -30,6 +30,26 @@
             "runOptions": {
                 "instanceLimit": 1
             }
+        },
+        {
+            "label": "webviewBuild",
+            "type": "npm",
+            "script": "webview:build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            }
+        },
+        {
+            "label": "buildAll",
+            "dependsOrder": "sequence",
+            "dependsOn": ["webviewBuild", "webpackBuild"],
+            "problemMatcher": []
         }
     ],
     "inputs": [
