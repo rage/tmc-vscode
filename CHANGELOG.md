@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.5.3] - 2026-06-12
+
+- Fixed the extension failing to start on VS Code 1.123 and later (Windows) when the CLI was downloaded or redownloaded, caused by its checksum file being read before the download had finished.
+
 ## [3.5.2] - 2026-06-12
 
 - Fixed unnecessary CLI redownload on every startup caused by case-sensitive checksum comparison

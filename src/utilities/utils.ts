@@ -4,6 +4,8 @@ import { SubmissionFeedbackQuestion } from "../shared/langsSchema";
 import { BaseError } from "../shared/shared";
 import { Logger } from "./logger";
 import * as fs from "fs-extra";
+import { once } from "node:events";
+import { finished } from "node:stream/promises";
 import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import { fetch, Response } from "undici";
@@ -45,27 +47,38 @@ export async function downloadFile(
         return new Err(new Error("Request failed: " + response.statusText, { cause }));
     }
 
+    // Created outside the try so the catch can always release the fd.
+    const writeStream = fs.createWriteStream(filePath);
     try {
-        const file = await fs.createWriteStream(filePath);
-        if (response.body) {
-            let downloaded = 0;
-            const sizeString = response.headers.get("content-length");
-            const size = sizeString ? parseInt(sizeString, 10) : 0;
-            for await (const chunk of response.body) {
-                if (sizeString && progressCallback) {
-                    downloaded += chunk.length;
-                    progressCallback(
-                        Math.round((downloaded / size) * 100),
-                        (100 * chunk.length) / size,
-                    );
-                }
-                await file.write(chunk);
-            }
-            await file.close();
-        } else {
+        if (!response.body) {
             throw new Error("Unexpected null response body");
         }
+
+        let downloaded = 0;
+        const sizeString = response.headers.get("content-length");
+        const size = sizeString ? parseInt(sizeString, 10) : 0;
+        for await (const chunk of response.body) {
+            if (sizeString && progressCallback && size > 0) {
+                downloaded += chunk.length;
+                progressCallback(
+                    Math.round((downloaded / size) * 100),
+                    (100 * chunk.length) / size,
+                );
+            }
+            // write() returns false when the internal buffer is full; wait for
+            // "drain" so large downloads don't grow memory unbounded.
+            if (!writeStream.write(chunk)) {
+                await once(writeStream, "drain");
+            }
+        }
+
+        // Wait until everything is flushed and the fd is closed, so callers
+        // always see a complete file with no handle left open.
+        writeStream.end();
+        await finished(writeStream);
     } catch (error) {
+        // Destroy on error so we never leak an open handle.
+        writeStream.destroy();
         return new Err(new BaseError(error, "Writing to file failed"));
     }
 
