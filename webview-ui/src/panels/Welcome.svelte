@@ -72,6 +72,13 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.5.3 - 2026-06-12</h3>
+            <h4>Fixed the extension failing to start when downloading the CLI</h4>
+            <p>
+                On VS Code 1.123 and later (Windows), the langs CLI checksum file could be read
+                before its download had finished, causing the extension to fail to start when the
+                CLI was downloaded or redownloaded. This has been fixed.
+            </p>
             <h3>3.5.2 - 2026-06-12</h3>
             <h4>Fixed unnecessary CLI redownloads on startup</h4>
             <p>
