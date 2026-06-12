@@ -9,6 +9,15 @@ import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 
 /**
+ * Parses the hash out of a `.sha256` file's contents (format: "HASH  filename")
+ * and normalizes it to lowercase so comparisons are case-insensitive. The
+ * server may serve uppercase hex while computed digests are lowercased.
+ */
+export function parseSha256Sum(contents: string): string {
+    return contents.split(" ")[0].trim().toLowerCase();
+}
+
+/**
  * Downloads correct langs version for the current extension version, unless already present. Will
  * remove any previous versions in the process.
  *
@@ -49,7 +58,7 @@ async function ensureLangsUpdated(
     // windows returns the calculated hash in uppercase for some reason...
     const cliDigest = Buffer.from(cliHash.digestSync()).toString("hex").toLowerCase();
 
-    const hashData = fs.readFileSync(shaPath, "utf-8").split(" ")[0].trim();
+    const hashData = parseSha256Sum(fs.readFileSync(shaPath, "utf-8"));
     if (cliDigest !== hashData) {
         Logger.error("Mismatch between CLI and checksum, trying redownload");
         Logger.debug(`CLI "${cliDigest}", hash "${hashData}"`);

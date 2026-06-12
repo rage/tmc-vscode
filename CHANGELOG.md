@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.5.2] - 2026-06-12
+
+- Fixed unnecessary CLI redownload on every startup caused by case-sensitive checksum comparison
+
 ## [3.5.1] - 2025-11-20
 
 - Fixed CLI hash comparison on Windows

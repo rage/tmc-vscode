@@ -72,6 +72,12 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.5.2 - 2026-06-12</h3>
+            <h4>Fixed unnecessary CLI redownloads on startup</h4>
+            <p>
+                The langs CLI checksum was compared case-sensitively, so it was re-downloaded on
+                every startup. Checksums are now compared case-insensitively.
+            </p>
             <h3>3.5.1 - 2025-11-20</h3>
             <h4>Fixed CLI hash comparison on Windows</h4>
             <p>
