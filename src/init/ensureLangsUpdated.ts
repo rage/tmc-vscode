@@ -1,5 +1,4 @@
 import Dialog from "../api/dialog";
-import { TMC_LANGS_DL_URL, TMC_LANGS_VERSION } from "../config/constants";
 import { FileSystemError, InitializationError } from "../errors";
 import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger } from "../utilities";
 import { Sha256 } from "@aws-crypto/sha256-js";
@@ -20,19 +19,54 @@ export function parseSha256Sum(contents: string): string {
 
 /**
  * Hashes the CLI at `cliPath` and compares it against the checksum stored in the
- * `.sha256` file at `shaPath`. Synchronous; used both for the initial check and
- * for re-verification after a redownload.
+ * `.sha256` file at `shaPath`. Used both for the initial check and for
+ * re-verification after a redownload.
+ *
+ * The CLI is hashed as a stream so a large binary is never read fully into
+ * memory and the hashing doesn't block the event loop in one burst during
+ * activation. A missing or unreadable CLI/checksum file is reported as a
+ * non-match (this never throws) so the caller can redownload instead of
+ * crashing activation.
  */
-export function verifyCli(
+export async function verifyCli(
     cliPath: string,
     shaPath: string,
-): { match: boolean; cliDigest: string; hashData: string } {
-    const cliHash = new Sha256();
-    cliHash.update(fs.readFileSync(cliPath));
-    // windows returns the calculated hash in uppercase for some reason...
-    const cliDigest = Buffer.from(cliHash.digestSync()).toString("hex").toLowerCase();
-    const hashData = parseSha256Sum(fs.readFileSync(shaPath, "utf-8"));
-    return { match: cliDigest === hashData, cliDigest, hashData };
+): Promise<{ match: boolean; cliDigest: string; hashData: string }> {
+    let cliDigest = "";
+    try {
+        cliDigest = await hashFile(cliPath);
+    } catch (error) {
+        Logger.warn(`Failed to read or hash CLI at ${cliPath} for verification:`, error);
+    }
+
+    let hashData = "";
+    try {
+        hashData = parseSha256Sum(await fs.readFile(shaPath, "utf-8"));
+    } catch (error) {
+        Logger.warn(`Failed to read checksum file at ${shaPath} for verification:`, error);
+    }
+
+    // An empty cliDigest means the CLI couldn't be hashed; require a non-empty
+    // digest so two unreadable files don't compare equal ("" === "").
+    const match = cliDigest !== "" && cliDigest === hashData;
+    return { match, cliDigest, hashData };
+}
+
+/**
+ * Streams the file at `filePath` through a SHA-256 hash and resolves with the
+ * digest as lowercase hex. Rejects if the file cannot be read.
+ */
+function hashFile(filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const hash = new Sha256();
+        const stream = fs.createReadStream(filePath);
+        stream.on("error", reject);
+        stream.on("data", (chunk) => hash.update(chunk));
+        // windows returns the calculated hash in uppercase for some reason...
+        stream.on("end", () =>
+            resolve(Buffer.from(hash.digestSync()).toString("hex").toLowerCase()),
+        );
+    });
 }
 
 /**
@@ -55,15 +89,15 @@ export async function removeCliFolder(cliFolder: string): Promise<Result<void, E
  *
  * @param cliFolder
  * @param dialog
- * @param opts Optional overrides (used by tests); defaults to the webpack-inlined constants.
+ * @param config Download URL and version to fetch; owned by the caller (the
+ * extension passes the webpack-inlined constants, tests pass a local server).
  */
 async function ensureLangsUpdated(
     cliFolder: string,
     dialog: Dialog,
-    opts?: { downloadUrl?: string; version?: string },
+    config: { downloadUrl: string; version: string },
 ): Promise<Result<string, Error>> {
-    const downloadUrl = opts?.downloadUrl ?? TMC_LANGS_DL_URL;
-    const version = opts?.version ?? TMC_LANGS_VERSION;
+    const { downloadUrl, version } = config;
 
     Logger.info("Platform " + process.platform + " Arch " + process.arch);
     const executable = getLangsCLIForPlatform(getPlatform(), version);
@@ -91,7 +125,7 @@ async function ensureLangsUpdated(
     }
 
     // check shasum
-    const initial = verifyCli(cliPath, shaPath);
+    const initial = await verifyCli(cliPath, shaPath);
     if (!initial.match) {
         Logger.error("Mismatch between CLI and checksum, trying redownload");
         Logger.debug(`CLI "${initial.cliDigest}", hash "${initial.hashData}"`);
@@ -111,24 +145,41 @@ async function ensureLangsUpdated(
             return Err(
                 new InitializationError(
                     result.val,
-                    `Mismatch found between CLI (${initial.cliDigest} ${cliPath} from ${cliUrl}) and checksum (${initial.hashData} ${shaPath} from ${shaUrl}), failed during retry`,
+                    `Mismatch found between ${checksumMismatchDetails(initial, cliPath, cliUrl, shaPath, shaUrl)}, failed during retry`,
                 ),
             );
         }
 
         // Re-verify after the redownload so we never hand back an unverified
         // binary; a persistent mismatch is fatal.
-        const recheck = verifyCli(cliPath, shaPath);
+        const recheck = await verifyCli(cliPath, shaPath);
         if (!recheck.match) {
             return Err(
                 new InitializationError(
-                    `Checksum still mismatched after redownload between CLI (${recheck.cliDigest} ${cliPath} from ${cliUrl}) and checksum (${recheck.hashData} ${shaPath} from ${shaUrl})`,
+                    `Checksum still mismatched after redownload between ${checksumMismatchDetails(recheck, cliPath, cliUrl, shaPath, shaUrl)}`,
                 ),
             );
         }
     }
 
     return Ok(cliPath);
+}
+
+/**
+ * Builds the shared "CLI (...) and checksum (...)" detail string used in the
+ * redownload-failure and persistent-mismatch error messages.
+ */
+function checksumMismatchDetails(
+    result: { cliDigest: string; hashData: string },
+    cliPath: string,
+    cliUrl: string,
+    shaPath: string,
+    shaUrl: string,
+): string {
+    return (
+        `CLI (${result.cliDigest} ${cliPath} from ${cliUrl}) and ` +
+        `checksum (${result.hashData} ${shaPath} from ${shaUrl})`
+    );
 }
 
 async function downloadLangs(

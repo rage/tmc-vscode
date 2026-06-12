@@ -7,6 +7,7 @@ import {
 } from "../../init/ensureLangsUpdated";
 import { getLangsCLIForPlatform, getPlatform } from "../../utilities";
 import { createDialogMock } from "../mocks/dialog";
+import { serverUrl, startServer } from "../utils/httpServer";
 import { expect } from "chai";
 import * as crypto from "crypto";
 import * as fs from "fs-extra";
@@ -26,7 +27,7 @@ interface ServeState {
 }
 
 function startLangsServer(state: ServeState): Promise<http.Server> {
-    const server = http.createServer((req, res) => {
+    return startServer((req, res) => {
         if ((req.url ?? "").endsWith(".sha256")) {
             state.hits.sha++;
             const body = state.shaFor(state.hits.sha);
@@ -38,15 +39,6 @@ function startLangsServer(state: ServeState): Promise<http.Server> {
             res.end(state.cli);
         }
     });
-    return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server)));
-}
-
-function baseUrl(server: http.Server): string {
-    const addr = server.address();
-    if (addr && typeof addr === "object") {
-        return `http://127.0.0.1:${addr.port}/`;
-    }
-    throw new Error("test server has no address");
 }
 
 suite("ensureLangsUpdated checksum parsing", function () {
@@ -100,36 +92,63 @@ suite("verifyCli", function () {
         return { cliPath, shaPath };
     }
 
-    test("matches when the checksum is correct", function () {
+    test("matches when the checksum is correct", async function () {
         const cli = Buffer.from("hello cli");
         const { cliPath, shaPath } = write(cli, `${sha256(cli)}  cli`);
-        const result = verifyCli(cliPath, shaPath);
+        const result = await verifyCli(cliPath, shaPath);
         expect(result.match).to.equal(true);
         expect(result.cliDigest).to.equal(sha256(cli));
     });
 
-    test("matches case-insensitively against an uppercase checksum", function () {
+    test("matches case-insensitively against an uppercase checksum", async function () {
         const cli = Buffer.from("hello cli");
         const { cliPath, shaPath } = write(cli, `${sha256(cli).toUpperCase()}\r\n`);
-        expect(verifyCli(cliPath, shaPath).match).to.equal(true);
+        expect((await verifyCli(cliPath, shaPath)).match).to.equal(true);
     });
 
-    test("does not match a wrong checksum but still reports both digests", function () {
+    test("does not match a wrong checksum but still reports both digests", async function () {
         const cli = Buffer.from("hello cli");
         const wrong = sha256(Buffer.from("other"));
         const { cliPath, shaPath } = write(cli, `${wrong}  cli`);
-        const result = verifyCli(cliPath, shaPath);
+        const result = await verifyCli(cliPath, shaPath);
         expect(result.match).to.equal(false);
         expect(result.cliDigest).to.equal(sha256(cli));
         expect(result.hashData).to.equal(wrong);
     });
 
-    test("does not match (and does not throw) on an empty checksum file", function () {
+    test("does not match (and does not throw) on an empty checksum file", async function () {
         const cli = Buffer.from("hello cli");
         const { cliPath, shaPath } = write(cli, "");
-        const result = verifyCli(cliPath, shaPath);
+        const result = await verifyCli(cliPath, shaPath);
         expect(result.match).to.equal(false);
         expect(result.hashData).to.equal("");
+    });
+
+    test("does not match (and does not throw) when the checksum file is missing", async function () {
+        const cli = Buffer.from("hello cli");
+        const cliPath = path.join(tmpDir.name, "cli");
+        fs.writeFileSync(cliPath, cli);
+        const result = await verifyCli(cliPath, cliPath + ".sha256");
+        expect(result.match).to.equal(false);
+        expect(result.cliDigest).to.equal(sha256(cli));
+        expect(result.hashData).to.equal("");
+    });
+
+    test("does not match (and does not throw) when the CLI file is missing", async function () {
+        const shaPath = path.join(tmpDir.name, "cli.sha256");
+        fs.writeFileSync(shaPath, `${sha256(Buffer.from("anything"))}  cli`);
+        const result = await verifyCli(path.join(tmpDir.name, "cli"), shaPath);
+        expect(result.match).to.equal(false);
+        expect(result.cliDigest).to.equal("");
+    });
+
+    test("does not match two unreadable files as equal", async function () {
+        // Both files missing -> both digests "" -> must NOT report a match.
+        const result = await verifyCli(
+            path.join(tmpDir.name, "missing-cli"),
+            path.join(tmpDir.name, "missing-cli.sha256"),
+        );
+        expect(result.match).to.equal(false);
     });
 });
 
@@ -193,7 +212,7 @@ suite("ensureLangsUpdated end-to-end", function () {
         const folder = path.join(tmpDir.name, "cli");
 
         const result = await ensureLangsUpdated(folder, dialog.object, {
-            downloadUrl: baseUrl(server),
+            downloadUrl: serverUrl(server),
             version,
         });
 
@@ -201,7 +220,7 @@ suite("ensureLangsUpdated end-to-end", function () {
         const cliPath = result.unwrap();
         expect(fs.existsSync(cliPath)).to.equal(true);
         expect(fs.readFileSync(cliPath + ".sha256", "utf-8").length).to.be.greaterThan(0);
-        expect(verifyCli(cliPath, cliPath + ".sha256").match).to.equal(true);
+        expect((await verifyCli(cliPath, cliPath + ".sha256")).match).to.equal(true);
         // A correct first download must not trigger a redownload.
         expect(state.hits.cli).to.equal(1);
     });
@@ -220,7 +239,7 @@ suite("ensureLangsUpdated end-to-end", function () {
         const folder = path.join(tmpDir.name, "cli");
 
         const result = await ensureLangsUpdated(folder, dialog.object, {
-            downloadUrl: baseUrl(server),
+            downloadUrl: serverUrl(server),
             version,
         });
 
@@ -242,7 +261,7 @@ suite("ensureLangsUpdated end-to-end", function () {
         const folder = path.join(tmpDir.name, "cli");
 
         const result = await ensureLangsUpdated(folder, dialog.object, {
-            downloadUrl: baseUrl(server),
+            downloadUrl: serverUrl(server),
             version,
         });
 
@@ -269,13 +288,13 @@ suite("ensureLangsUpdated end-to-end", function () {
         const folder = path.join(tmpDir.name, "cli");
 
         const result = await ensureLangsUpdated(folder, dialog.object, {
-            downloadUrl: baseUrl(server),
+            downloadUrl: serverUrl(server),
             version,
         });
 
         expect(result.ok).to.equal(true);
         const cliPath = result.unwrap();
-        expect(verifyCli(cliPath, cliPath + ".sha256").match).to.equal(true);
+        expect((await verifyCli(cliPath, cliPath + ".sha256")).match).to.equal(true);
         expect(state.hits.cli).to.equal(2);
     });
 
@@ -285,7 +304,7 @@ suite("ensureLangsUpdated end-to-end", function () {
             shaFor: () => "",
             hits: { cli: 0, sha: 0 },
         });
-        const deadUrl = baseUrl(dead);
+        const deadUrl = serverUrl(dead);
         await new Promise<void>((resolve) => dead.close(() => resolve()));
         const [dialog] = createDialogMock();
         const folder = path.join(tmpDir.name, "cli");
@@ -316,12 +335,39 @@ suite("ensureLangsUpdated end-to-end", function () {
         const [dialog] = createDialogMock();
 
         const result = await ensureLangsUpdated(folder, dialog.object, {
-            downloadUrl: baseUrl(server),
+            downloadUrl: serverUrl(server),
             version,
         });
 
         expect(result.ok).to.equal(true);
         expect(state.hits.cli).to.equal(0);
         expect(state.hits.sha).to.equal(0);
+    });
+
+    test("a cached CLI whose checksum file is missing recovers via redownload instead of throwing", async function () {
+        // Simulates a prior run that downloaded+renamed the CLI but failed to
+        // write its .sha256: the binary exists on disk, the checksum does not.
+        const cli = Buffer.from("cached cli with no checksum file");
+        const folder = path.join(tmpDir.name, "cli");
+        fs.outputFileSync(path.join(folder, executable), cli);
+        const state: ServeState = {
+            cli,
+            shaFor: () => `${sha256(cli)}  ${executable}`,
+            hits: { cli: 0, sha: 0 },
+        };
+        server = await startLangsServer(state);
+        const [dialog] = createDialogMock();
+
+        const result = await ensureLangsUpdated(folder, dialog.object, {
+            downloadUrl: serverUrl(server),
+            version,
+        });
+
+        expect(result.ok).to.equal(true);
+        const cliPath = result.unwrap();
+        expect((await verifyCli(cliPath, cliPath + ".sha256")).match).to.equal(true);
+        // The missing checksum forced a single redownload rather than a crash.
+        expect(state.hits.cli).to.equal(1);
+        expect(state.hits.sha).to.equal(1);
     });
 });

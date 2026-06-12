@@ -10,6 +10,8 @@ import {
     EXERCISE_CHECK_INTERVAL,
     EXTENSION_ID,
     TMC_LANGS_CONFIG_DIR,
+    TMC_LANGS_DL_URL,
+    TMC_LANGS_VERSION,
 } from "./config/constants";
 import Settings from "./config/settings";
 import { UserData } from "./config/userdata";
@@ -71,7 +73,10 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 
     const dialog = new Dialog();
     const cliFolderPath = cliFolder(context);
-    const cliPathResult = await init.ensureLangsUpdated(cliFolderPath, dialog);
+    const cliPathResult = await init.ensureLangsUpdated(cliFolderPath, dialog, {
+        downloadUrl: TMC_LANGS_DL_URL,
+        version: TMC_LANGS_VERSION,
+    });
 
     // download langs if necessary
     let tmc: Result<TMC, Error>;

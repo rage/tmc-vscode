@@ -1,25 +1,11 @@
 import { ConnectionError } from "../../errors";
 import { downloadFile } from "../../utilities/utils";
+import { serverUrl, startServer } from "./httpServer";
 import { expect } from "chai";
 import * as fs from "fs-extra";
 import * as http from "http";
 import * as path from "path";
 import * as tmp from "tmp";
-
-type Handler = (req: http.IncomingMessage, res: http.ServerResponse) => void;
-
-function startServer(handler: Handler): Promise<http.Server> {
-    const server = http.createServer(handler);
-    return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server)));
-}
-
-function urlFor(server: http.Server, p = "/"): string {
-    const addr = server.address();
-    if (addr && typeof addr === "object") {
-        return `http://127.0.0.1:${addr.port}${p}`;
-    }
-    throw new Error("test server has no address");
-}
 
 suite("downloadFile", function () {
     this.timeout(20000);
@@ -55,7 +41,7 @@ suite("downloadFile", function () {
         });
         const out = path.join(tmpDir.name, "x.sha256");
 
-        const result = await downloadFile(urlFor(server), out);
+        const result = await downloadFile(serverUrl(server), out);
         // Block the event loop the way the synchronous CLI hashing does.
         const start = Date.now();
         while (Date.now() - start < 200) {
@@ -78,7 +64,7 @@ suite("downloadFile", function () {
         });
         const out = path.join(tmpDir.name, "big.bin");
 
-        const result = await downloadFile(urlFor(server), out);
+        const result = await downloadFile(serverUrl(server), out);
 
         expect(result.ok).to.equal(true);
         const onDisk = fs.readFileSync(out);
@@ -95,7 +81,7 @@ suite("downloadFile", function () {
         const out = path.join(tmpDir.name, "prog.bin");
         const percents: number[] = [];
 
-        const result = await downloadFile(urlFor(server), out, undefined, (percent) => {
+        const result = await downloadFile(serverUrl(server), out, undefined, (percent) => {
             percents.push(percent);
         });
 
@@ -115,7 +101,7 @@ suite("downloadFile", function () {
         });
         const out = path.join(tmpDir.name, "sub", "f.txt");
 
-        await downloadFile(urlFor(server), out);
+        await downloadFile(serverUrl(server), out);
         // No open fd should remain; on Windows a leftover handle throws ENOTEMPTY.
         expect(() => fs.rmSync(path.join(tmpDir.name, "sub"), { recursive: true })).to.not.throw();
     });
@@ -127,7 +113,7 @@ suite("downloadFile", function () {
         });
         const out = path.join(tmpDir.name, "missing");
 
-        const result = await downloadFile(urlFor(server), out);
+        const result = await downloadFile(serverUrl(server), out);
 
         expect(result.err).to.equal(true);
         if (result.err) {
@@ -137,7 +123,7 @@ suite("downloadFile", function () {
 
     test("returns a ConnectionError when the host is unreachable", async function () {
         const dead = await startServer(() => {});
-        const deadUrl = urlFor(dead);
+        const deadUrl = serverUrl(dead);
         await new Promise<void>((resolve) => dead.close(() => resolve()));
         const out = path.join(tmpDir.name, "unreachable");
 
@@ -147,5 +133,24 @@ suite("downloadFile", function () {
         if (result.err) {
             expect(result.val).to.be.instanceOf(ConnectionError);
         }
+    });
+
+    test("returns an Err (does not throw) when the output directory cannot be created", async function () {
+        // A regular file occupies a parent path component, so creating the
+        // output directory fails before any request is made.
+        const blocker = path.join(tmpDir.name, "blocker");
+        fs.writeFileSync(blocker, "i am a file, not a directory");
+        const out = path.join(blocker, "child", "f.txt");
+
+        let result: Awaited<ReturnType<typeof downloadFile>> | undefined;
+        let threw = false;
+        try {
+            result = await downloadFile("http://127.0.0.1:9/never-reached", out);
+        } catch (_e) {
+            threw = true;
+        }
+
+        expect(threw, "downloadFile should not throw").to.equal(false);
+        expect(result?.err).to.equal(true);
     });
 });

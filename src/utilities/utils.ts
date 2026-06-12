@@ -25,7 +25,11 @@ export async function downloadFile(
     headers?: { [key: string]: string },
     progressCallback?: (downloadedPct: number, increment: number) => void,
 ): Promise<Result<void, Error>> {
-    fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
+    try {
+        fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
+    } catch (error) {
+        return new Err(new BaseError(error, "Failed to create download directory"));
+    }
 
     let response: Response;
     try {
