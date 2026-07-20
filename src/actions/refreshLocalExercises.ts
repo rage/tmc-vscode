@@ -3,6 +3,7 @@ import { createIs } from "typia";
 import * as vscode from "vscode";
 
 import { ExerciseStatus, WorkspaceExercise } from "../api/workspaceManager";
+import { InitializationError } from "../errors";
 import { assertUnreachable } from "../shared/shared";
 import { Logger } from "../utilities";
 
@@ -16,7 +17,7 @@ export async function refreshLocalExercises(
 ): Promise<Result<void, Error>> {
     const { langs, userData, workspaceManager } = actionContext;
     if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     Logger.info("Refreshing local exercises");
 

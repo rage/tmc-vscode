@@ -1,9 +1,8 @@
-import { env } from "process";
-import { OutputChannel, Uri, window } from "vscode";
-
+import Dialog from "../api/dialog";
 import { DEBUG_MODE, OUTPUT_CHANNEL_NAME } from "../config/constants";
 import { BaseError } from "../shared/shared";
-import Dialog from "../api/dialog";
+import { env } from "process";
+import { OutputChannel, Uri, window } from "vscode";
 
 export enum LogLevel {
     None = "none",

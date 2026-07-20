@@ -235,7 +235,7 @@ export class UserData {
     ): Promise<Result<void, Error>> {
         const courseData = this.getCourse(courseId);
         if (!courseData) {
-            return new Err(new Error("Data missing"));
+            return new Err(new Error(`Course data missing for ${courseId}`));
         }
         const courseExercises = LocalCourseData.getExercises(courseData);
         const newExercises = LocalCourseData.getNewExercises(courseData);
@@ -312,7 +312,7 @@ export class UserData {
     ): Promise<Result<void, Error>> {
         const courseData = this._tmcCourses.get(courseId);
         if (!courseData) {
-            return new Err(new Error("Data missing"));
+            return new Err(new Error(`Course data missing for ${courseId}`));
         }
         courseData.awardedPoints = awardedPoints;
         courseData.availablePoints = availablePoints;
@@ -339,7 +339,7 @@ export class UserData {
     ): Promise<Result<void, Error>> {
         let courseData = this.getCourse(courseId);
         if (!courseData) {
-            return new Err(new Error("Data missing"));
+            return new Err(new Error(`Course data missing for ${courseId}`));
         }
         const newExercises = courseData.data.newExercises.map(ExerciseIdentifier.from);
         Logger.info(`Clearing new exercises`);
@@ -387,7 +387,7 @@ export class UserData {
             (mooc) => this._moocCourses.get(mooc.instanceId),
         );
         if (!courseData) {
-            return new Err(new Error("Data missing"));
+            return new Err(new Error(`Course data missing for ${courseId}`));
         }
         Logger.info(`Notifying user for course again at ${new Date(dateInMillis).toString()}`);
         courseData.notifyAfter = dateInMillis;

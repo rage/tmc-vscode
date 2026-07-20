@@ -14,7 +14,7 @@ import {
     WorkspaceExercise as WorkspaceTmcExercise,
 } from "../api/workspaceManager";
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
-import { BottleneckError } from "../errors";
+import { BottleneckError, InitializationError } from "../errors";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import {
     CourseIdentifier,
@@ -43,7 +43,7 @@ export async function login(
 ): Promise<Result<void, Error>> {
     const { langs, dialog } = actionContext;
     if (langs.err) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     Logger.info("Logging in");
 
@@ -66,7 +66,7 @@ export async function login(
 export async function logout(actionContext: ActionContext): Promise<Result<void, Error>> {
     const { langs, dialog } = actionContext;
     if (langs.err) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
 
     const result = await langs.val.deauthenticate();
@@ -88,7 +88,7 @@ export async function testExercise(
 ): Promise<Result<void, Error>> {
     const { langs, userData } = actionContext;
     if (!(langs.ok && userData.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
 
     const course = userData.val.getCourseBySlug(exercise.courseSlug);
@@ -124,10 +124,12 @@ export async function testExercise(
 
     if (!course.data.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext);
-        const [testRunner, testInterrupt] = langs.val.runTests(exercise.uri.fsPath, executablePath);
-        const [validationRunner, validationInterrupt] = langs.val.runCheckstyle(
+        const { process: testRunner, interrupt: testInterrupt } = langs.val.runTests(
             exercise.uri.fsPath,
+            executablePath,
         );
+        const { process: validationRunner, interrupt: validationInterrupt } =
+            langs.val.runCheckstyle(exercise.uri.fsPath);
         testInterrupts.set(testRunId, [testInterrupt, validationInterrupt]);
         const exerciseName = exercise.exerciseSlug;
 
@@ -197,7 +199,7 @@ export async function submitTmcExercise(
 ): Promise<Result<void, Error>> {
     const { exerciseDecorationProvider, langs, userData } = actionContext;
     if (!(langs.ok && userData.ok && exerciseDecorationProvider.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     Logger.info(`Submitting exercise ${exercise.exerciseSlug} to server`);
 
@@ -295,7 +297,7 @@ export async function pasteTmcExercise(
 ): Promise<Result<string, Error>> {
     const { langs, userData, workspaceManager, dialog } = actionContext;
     if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
 
     const exerciseId = userData.val.getTmcExerciseByName(courseSlug, exerciseName)?.id;
@@ -330,7 +332,7 @@ export async function pasteMoocExercise(
 ): Promise<Result<string, Error>> {
     const { langs, userData, workspaceManager, dialog } = actionContext;
     if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
 
     const exerciseId = userData.val.getMoocExerciseByName(courseSlug, exerciseName)?.id;

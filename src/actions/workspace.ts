@@ -9,6 +9,7 @@ import * as vscode from "vscode";
 import { compact } from "lodash";
 import { Err, Ok, Result } from "ts-results";
 import { ExerciseStatus } from "../api/workspaceManager";
+import { InitializationError } from "../errors";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import {
     CourseDetailsPanel,
@@ -37,7 +38,7 @@ export async function openExercises(
 
     const { workspaceManager, userData, langs, dialog } = actionContext;
     if (!(userData.ok && workspaceManager.ok && langs.ok)) {
-        return Err(new Error("Extension was not initialized properly"));
+        return Err(new InitializationError("Extension was not initialized properly"));
     }
 
     const course = userData.val.getCourse(courseId);
@@ -129,7 +130,7 @@ export async function closeExercises(
 ): Promise<Result<Array<ExerciseIdentifier>, Error>> {
     const { workspaceManager, userData, langs } = actionContext;
     if (!(userData.ok && workspaceManager.ok && langs.ok)) {
-        return Err(new Error("Extension was not initialized properly"));
+        return Err(new InitializationError("Extension was not initialized properly"));
     }
 
     const course = userData.val.getCourse(courseId);

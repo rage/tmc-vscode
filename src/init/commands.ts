@@ -1,5 +1,3 @@
-import * as vscode from "vscode";
-
 import * as actions from "../actions";
 import { checkForCourseUpdates, displayUserCourses, removeCourse } from "../actions";
 import { ActionContext } from "../actions/types";
@@ -8,6 +6,7 @@ import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { assertUnreachable, CourseIdentifier, LocalCourseData } from "../shared/shared";
 import { TmcTreeNode } from "../ui/treeview/treenode";
 import { Logger } from "../utilities/";
+import * as vscode from "vscode";
 
 export function registerCommands(
     context: vscode.ExtensionContext,

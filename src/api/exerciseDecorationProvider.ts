@@ -1,7 +1,6 @@
-import * as vscode from "vscode";
-
 import WorkspaceManager, { WorkspaceExercise } from "../api/workspaceManager";
 import { UserData } from "../config/userdata";
+import * as vscode from "vscode";
 
 /**
  * Class that adds decorations like completion icons for exercises.

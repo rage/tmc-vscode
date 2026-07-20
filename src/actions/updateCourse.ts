@@ -1,6 +1,6 @@
 import { Err, Ok, Result } from "ts-results";
 
-import { ConnectionError, ForbiddenError } from "../errors";
+import { ConnectionError, ForbiddenError, InitializationError } from "../errors";
 import { TmcPanel } from "../panels/TmcPanel";
 import {
     CourseIdentifier,
@@ -32,7 +32,7 @@ export async function updateCourse(
 ): Promise<Result<boolean, Error>> {
     const { exerciseDecorationProvider, langs, userData, workspaceManager } = actionContext;
     if (!(langs.ok && userData.ok && workspaceManager.ok && exerciseDecorationProvider.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     Logger.info("Updating course");
 

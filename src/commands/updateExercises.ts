@@ -1,11 +1,10 @@
-import { uniq } from "lodash";
-
 import * as actions from "../actions";
 import { ActionContext } from "../actions/types";
 import { NOTIFICATION_DELAY } from "../config/constants";
 import { TmcPanel } from "../panels/TmcPanel";
 import { ExtensionToWebview } from "../shared/shared";
 import { Logger } from "../utilities";
+import { uniq } from "lodash";
 
 export async function updateExercises(actionContext: ActionContext, silent: string): Promise<void> {
     const { dialog, settings, userData } = actionContext;

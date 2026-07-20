@@ -1,5 +1,3 @@
-import { Mock } from "typemoq";
-
 import { ActionContext } from "../../actions/types";
 import Dialog from "../../api/dialog";
 import ExerciseDecorationProvider from "../../api/exerciseDecorationProvider";
@@ -11,6 +9,7 @@ import { UserData } from "../../config/userdata";
 import { VisibilityGroups } from "../../ui/types";
 import UI from "../../ui/ui";
 import { Result } from "ts-results";
+import { Mock } from "typemoq";
 
 export function createMockActionContext(): ActionContext {
     return {

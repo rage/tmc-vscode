@@ -1,5 +1,6 @@
 import { Err, Ok, Result } from "ts-results";
 
+import { InitializationError } from "../errors";
 import { TmcPanel } from "../panels/TmcPanel";
 import { Logger } from "../utilities";
 
@@ -20,7 +21,7 @@ export async function downloadNewExercisesForCourse(
 ): Promise<Result<void, Error>> {
     const { userData } = actionContext;
     if (userData.err) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     const course = userData.val.getCourse(courseId);
     Logger.info("Downloading new exercises for course");

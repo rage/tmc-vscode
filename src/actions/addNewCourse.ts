@@ -1,5 +1,6 @@
 import { Err, Result } from "ts-results";
 
+import { InitializationError } from "../errors";
 import { Logger } from "../utilities";
 import { combineTmcApiExerciseData } from "../utilities/apiData";
 
@@ -18,7 +19,7 @@ export async function addNewCourse(
 ): Promise<Result<void, Error>> {
     const { langs, ui, userData, workspaceManager } = actionContext;
     if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     Logger.info("Adding new course");
 

@@ -1,7 +1,6 @@
-import { expect } from "@playwright/test";
-
 import { vsCodeTest } from "../fixtures";
 import { LoginPage } from "../pages/login";
+import { expect } from "@playwright/test";
 
 vsCodeTest("can interact with the login page", async ({ page, webview }) => {
     const loginPage = new LoginPage(page, webview);

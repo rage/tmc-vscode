@@ -1,8 +1,7 @@
-import { FrameLocator, Page } from "@playwright/test";
-
 import { SelectCourse } from "./select-course";
 import { SelectOrganization } from "./select-organization";
 import { TmcPage } from "./tmc";
+import { FrameLocator, Page } from "@playwright/test";
 
 export class MyCoursesPage extends TmcPage {
     constructor(

@@ -1,5 +1,31 @@
 # Changelog
 
+## [3.5.3] - 2026-06-12
+
+- Fixed the extension failing to start on VS Code 1.123 and later (Windows) when the CLI was downloaded or redownloaded, caused by its checksum file being read before the download had finished.
+
+## [3.5.2] - 2026-06-12
+
+- Fixed unnecessary CLI redownload on every startup caused by case-sensitive checksum comparison
+
+## [3.5.1] - 2025-11-20
+
+- Fixed CLI hash comparison on Windows
+- Improved error messages on failure to run CLI
+
+## [3.5.0] - 2025-10-09
+
+- Improved exercise submission packaging to avoid overly large archives
+- Improved extension data migration from one version to the next
+
+## [3.4.2] - 2025-08-21
+
+- Fixed unnecessary dynamic library dependency causing errors when the library was missing on the user's computer.
+
+## [3.4.1] - 2025-08-21
+
+- Fixed Python exercises including venv directories when packaging.
+
 ## [3.4.0] - 2025-07-17
 
 - Improved error handling during initialization.

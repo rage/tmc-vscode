@@ -1,6 +1,7 @@
 import validateData, { MigratedData } from ".";
 import Dialog from "../../api/dialog";
 import Langs from "../../api/langs";
+import { ExerciseMigrationError } from "../../errors";
 import { Logger } from "../../utilities";
 import * as data from "../data";
 import * as fs from "fs-extra";
@@ -120,7 +121,7 @@ export async function v1_migrateFromV0(
     });
 
     if (result.err) {
-        throw new Error("Exercise migration failed.");
+        throw new ExerciseMigrationError(result.val, "Exercise migration failed.");
     }
 
     for (const key of Object.keys(closedExercises)) {

@@ -1,12 +1,7 @@
-import * as path from "path";
-import { createIs } from "typia";
-import * as vscode from "vscode";
-
 import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
 import { ActionContext } from "./actions/types";
 import Dialog from "./api/dialog";
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider";
-import Storage from "./storage";
 import Langs from "./api/langs";
 import WorkspaceManager from "./api/workspaceManager";
 import {
@@ -15,15 +10,26 @@ import {
     EXERCISE_CHECK_INTERVAL,
     EXTENSION_ID,
     TMC_LANGS_CONFIG_DIR,
+    TMC_LANGS_DL_URL,
+    TMC_LANGS_VERSION,
 } from "./config/constants";
 import Settings from "./config/settings";
 import { UserData } from "./config/userdata";
-import { EmptyLangsResponseError, HaltForReloadError } from "./errors";
+import {
+    EmptyLangsResponseError,
+    HaltForReloadError,
+    InitializationError,
+    SpawnError,
+} from "./errors";
 import * as init from "./init";
 import { randomPanelId, TmcPanel } from "./panels/TmcPanel";
+import Storage from "./storage";
 import UI from "./ui/ui";
 import { cliFolder, Logger, LogLevel, semVerCompare } from "./utilities";
+import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
+import { createIs } from "typia";
+import * as vscode from "vscode";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
 
@@ -34,10 +40,11 @@ function initializationError(dialog: Dialog, step: string, error: Error, cliFold
         error,
         "If this issue is not resolved, the extension may not function properly.",
     );
-    if (error instanceof EmptyLangsResponseError) {
-        Logger.error(
-            "The above error may have been caused by an interfering antivirus program. " +
-                "Please add an exception for the following folder:",
+    if (error instanceof EmptyLangsResponseError || error instanceof SpawnError) {
+        Logger.errorWithDialog(
+            dialog,
+            "This error may have been caused by an interfering antivirus program. " +
+                "Please try adding an exception for the following folder:",
             cliFolder,
         );
     }
@@ -66,7 +73,10 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 
     const dialog = new Dialog();
     const cliFolderPath = cliFolder(context);
-    const cliPathResult = await init.ensureLangsUpdated(cliFolderPath, dialog);
+    const cliPathResult = await init.ensureLangsUpdated(cliFolderPath, dialog, {
+        downloadUrl: TMC_LANGS_DL_URL,
+        version: TMC_LANGS_VERSION,
+    });
 
     // download langs if necessary
     let langs: Result<Langs, Error>;
@@ -224,17 +234,20 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     } else {
         Logger.warn("Skipped userdata setup");
         exerciseDecorationProvider = new Err(
-            new Error(
+            new InitializationError(
+                resources.val,
                 "Could not initialize exercise decoration provider due to failure in resource initialization",
             ),
         );
         userData = new Err(
-            new Error(
+            new InitializationError(
+                resources.val,
                 "Could not initialize exercise decoration provider due to failure in resource initialization",
             ),
         );
         workspaceManager = new Err(
-            new Error(
+            new InitializationError(
+                resources.val,
                 "Could not initialize exercise decoration provider due to failure in resource initialization",
             ),
         );
