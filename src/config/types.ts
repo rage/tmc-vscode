@@ -1,8 +1,8 @@
-import { LogLevel } from "../utilities/";
+import type { LogLevel } from "../utilities/"
 
 export type ExtensionSettingsData =
-    | { setting: "downloadOldSubmission"; value: boolean }
-    | { setting: "hideMetaFiles"; value: boolean }
-    | { setting: "insiderVersion"; value: boolean }
-    | { setting: "logLevel"; value: LogLevel }
-    | { setting: "updateExercisesAutomatically"; value: boolean };
+  | { setting: "downloadOldSubmission"; value: boolean }
+  | { setting: "hideMetaFiles"; value: boolean }
+  | { setting: "insiderVersion"; value: boolean }
+  | { setting: "logLevel"; value: LogLevel }
+  | { setting: "updateExercisesAutomatically"; value: boolean }

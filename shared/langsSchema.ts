@@ -1,649 +1,348 @@
-// VERSION=0.39.4
-// https://raw.githubusercontent.com/rage/tmc-langs-rust/0.39.4/crates/tmc-langs-cli/bindings.d.ts
-
-export type Locale = string;
-
-export type CliOutput =
-    | ({ "output-kind": "output-data" } & OutputData)
-    | ({ "output-kind": "status-update" } & StatusUpdateData)
-    | ({ "output-kind": "notification" } & Notification);
-
-export type DataKind =
-    | { "output-data-kind": "error"; "output-data": { kind: Kind; trace: Array<string> } }
-    | { "output-data-kind": "validation"; "output-data": StyleValidationResult | null }
-    | { "output-data-kind": "available-points"; "output-data": Array<string> }
-    | { "output-data-kind": "exercises"; "output-data": Array<string> }
-    | {
-          "output-data-kind": "exercise-packaging-configuration";
-          "output-data": ExercisePackagingConfiguration;
-      }
-    | { "output-data-kind": "local-tmc-exercises"; "output-data": Array<LocalTmcExercise> }
-    | { "output-data-kind": "local-mooc-exercises"; "output-data": Array<LocalMoocExercise> }
-    | { "output-data-kind": "refresh-result"; "output-data": RefreshData }
-    | { "output-data-kind": "test-result"; "output-data": RunResult }
-    | { "output-data-kind": "exercise-desc"; "output-data": ExerciseDesc }
-    | { "output-data-kind": "updated-exercises"; "output-data": Array<UpdatedExercise> }
-    | {
-          "output-data-kind": "tmc-exercise-download";
-          "output-data": DownloadOrUpdateTmcCourseExercisesResult;
-      }
-    | {
-          "output-data-kind": "mooc-exercise-download";
-          "output-data": DownloadOrUpdateMoocCourseExercisesResult;
-      }
-    | { "output-data-kind": "combined-course-data"; "output-data": CombinedCourseData }
-    | { "output-data-kind": "course-details"; "output-data": CourseDetails }
-    | { "output-data-kind": "course-exercises"; "output-data": Array<CourseExercise> }
-    | { "output-data-kind": "course-data"; "output-data": CourseData }
-    | { "output-data-kind": "courses"; "output-data": Array<Course> }
-    | { "output-data-kind": "exercise-details"; "output-data": ExerciseDetails }
-    | { "output-data-kind": "submissions"; "output-data": Array<Submission> }
-    | { "output-data-kind": "update-result"; "output-data": UpdateResult }
-    | { "output-data-kind": "organization"; "output-data": Organization }
-    | { "output-data-kind": "organizations"; "output-data": Array<Organization> }
-    | { "output-data-kind": "reviews"; "output-data": Array<Review> }
-    | { "output-data-kind": "token"; "output-data": unknown }
-    | { "output-data-kind": "new-submission"; "output-data": NewSubmission }
-    | {
-          "output-data-kind": "submission-feedback-response";
-          "output-data": SubmissionFeedbackResponse;
-      }
-    | { "output-data-kind": "submission-finished"; "output-data": SubmissionFinished }
-    | { "output-data-kind": "config-value"; "output-data": ConfigValue }
-    | { "output-data-kind": "tmc-config"; "output-data": TmcConfig }
-    | { "output-data-kind": "compressed-project-hash"; "output-data": string }
-    | { "output-data-kind": "submission-sandbox"; "output-data": string }
-    | { "output-data-kind": "mooc-course-instances"; "output-data": Array<CourseInstance> }
-    | { "output-data-kind": "mooc-exercise-slides"; "output-data": Array<TmcExerciseSlide> }
-    | { "output-data-kind": "mooc-exercise-slide"; "output-data": TmcExerciseSlide }
-    | {
-          "output-data-kind": "mooc-submission-finished";
-          "output-data": ExerciseTaskSubmissionResult;
-      };
-
-export type Kind =
-    | "generic"
-    | "forbidden"
-    | "not-logged-in"
-    | "connection-error"
-    | "obsolete-client"
-    | "invalid-token"
-    | {
-          "failed-exercise-download": {
-              completed: Array<TmcExerciseDownload>;
-              skipped: Array<TmcExerciseDownload>;
-              failed: Array<[TmcExerciseDownload, Array<string>]>;
-          };
-      };
-
-export type OutputData = {
-    status: Status;
-    message: string;
-    result: OutputResult;
-    data: DataKind | null;
-};
-
-export type OutputResult =
-    | "logged-in"
-    | "logged-out"
-    | "not-logged-in"
-    | "error"
-    | "executed-command";
-
-export type Status = "finished" | "crashed";
-
-export type StatusUpdateData =
-    | ({ "update-data-kind": "client-update-data" } & StatusUpdate<ClientUpdateData>)
-    | ({ "update-data-kind": "none" } & StatusUpdate<null>);
-
-export type Notification = { "notification-kind": NotificationKind; message: string };
-
-export type NotificationKind = "warning" | "info";
-
-export type StatusUpdate<T> = {
-    finished: boolean;
-    message: string;
-    "percent-done": number;
-    time: number;
-    data: T | null;
-};
-
-export type ClientUpdateData =
-    | { "client-update-data-kind": "exercise-download"; id: number; path: string }
-    | ({ "client-update-data-kind": "posted-submission" } & NewSubmission);
-
-export type StyleValidationResult = {
-    strategy: StyleValidationStrategy;
-    validation_errors: Record<string, Array<StyleValidationError>> | null;
-};
-
-export type StyleValidationError = {
-    column: number;
-    line: number;
-    message: string;
-    source_name: string;
-};
-
-export type StyleValidationStrategy = "FAIL" | "WARN" | "DISABLED";
-
-export type ExercisePackagingConfiguration = {
-    /**
-     * Student folders or files which are copied from submission.
-     */
-    student_file_paths: Array<string>;
-    /**
-     * Exercise folders or files which are copied from exercise template or clone.
-     */
-    exercise_file_paths: Array<string>;
-};
-
-export type LocalExercise = { tmc: LocalTmcExercise } | { mooc: LocalMoocExercise };
-
-export type LocalTmcExercise = { "exercise-slug": string; "exercise-path": string };
-
-export type LocalMoocExercise = { "exercise-id": string; "exercise-path": string };
-
-export type Compression = "tar" | "zip" | "zstd";
-
-export type RefreshData = {
-    "new-cache-path": string;
-    "course-options": object;
-    exercises: Array<RefreshExercise>;
-};
-
-export type RefreshExercise = {
-    name: string;
-    checksum: string;
-    points: Array<string>;
-    "sandbox-image": string;
-    "tmcproject-yml": TmcProjectYml | null;
-};
-
-export type TmcProjectYml = {
-    /**
-     * A list of files or directories that will always be considered student files.
-     */
-    extra_student_files: Array<string>;
-    /**
-     * A list of files or directories that will always be considered exercise files.
-     * `extra_student_files` takes precedence if a file is both an extra student file and an extra exercise file.
-     */
-    extra_exercise_files: Array<string>;
-    /**
-     * A list of files that should always be overwritten by updates even if they are student files.
-     */
-    force_update: Array<string>;
-    /**
-     * If set, tests are forcibly stopped after this duration.
-     */
-    tests_timeout_ms?: number;
-    /**
-     * If set, Valgrind errors will be considered test errors.
-     */
-    fail_on_valgrind_error?: boolean;
-    /**
-     * If set, will cause an error telling the student to update their Python if their version is older than the minimum.
-     */
-    minimum_python_version?: PythonVer;
-    /**
-     * Overrides the default sandbox image. e.g. `eu.gcr.io/moocfi-public/tmc-sandbox-python:latest`
-     */
-    sandbox_image?: string;
-    /**
-     * Overrides the default archive size limit (500 Mb).
-     */
-    submission_size_limit_mb?: number;
-};
-
-export type PythonVer = { major: number; minor: number | null; patch: number | null };
-
-export type RunResult = {
-    /**
-     * The overall status of a test run.
-     */
-    status: RunStatus;
-    /**
-     * Whether each test passed and which points were awarded.
-     */
-    testResults: Array<TestResult>;
-    /**
-     * Logs from the test run.
-     * The key may be an arbitrary string identifying the type of log.
-     */
-    logs: Record<string, string>;
-};
-
-export type RunStatus =
-    | "PASSED"
-    | "TESTS_FAILED"
-    | "COMPILE_FAILED"
-    | "TESTRUN_INTERRUPTED"
-    | "GENERIC_ERROR";
-
-export type TestResult = {
-    name: string;
-    successful: boolean;
-    /**
-     * List of points that were received from the exercise from passed tests.
-     */
-    points: Array<string>;
-    message: string;
-    exception: Array<string>;
-};
-
-export type ExerciseDesc = {
-    /**
-     * The name of the exercise to be shown to the user.
-     * Does not necessarily match or even contain the directory name.
-     */
-    name: string;
-    /**
-     * Descriptions of the tests that will be run for this exercise.
-     */
-    tests: Array<TestDesc>;
-};
-
-export type TestDesc = {
-    /**
-     * The full name of the test.
-     *
-     * If the language organises tests into suites or classes, it is customary
-     * to name the test as "class_name.method_name".
-     */
-    name: string;
-    /**
-     * The list of point names that passing this test may give.
-     *
-     * To obtain a point X, the user must pass all exercises that require point X.
-     */
-    points: Array<string>;
-};
-
-export type UpdatedExercise = { id: number };
-
-export type DownloadOrUpdateTmcCourseExercisesResult = {
-    downloaded: Array<TmcExerciseDownload>;
-    skipped: Array<TmcExerciseDownload>;
-    failed?: Array<[TmcExerciseDownload, Array<string>]>;
-};
-
-export type DownloadOrUpdateMoocCourseExercisesResult = {
-    downloaded: Array<MoocExerciseDownload>;
-    skipped: Array<MoocExerciseDownload>;
-    failed?: Array<[MoocExerciseDownload, Array<string>]>;
-};
-
-export type TmcExerciseDownload = {
-    id: number;
-    "course-slug": string;
-    "exercise-slug": string;
-    path: string;
-};
-
-export type MoocExerciseDownload = { id: string; path: string };
-
-export type CombinedCourseData = {
-    details: CourseDetails;
-    exercises: Array<CourseExercise>;
-    settings: CourseData;
-};
-
-export type CourseDetails = {
-    unlockables: Array<string>;
-    exercises: Array<Exercise>;
-    id: number;
-    name: string;
-    title: string;
-    description: string | null;
-    /**
-     * /api/v8/core/courses/{course_id}
-     */
-    details_url: string;
-    /**
-     * /api/v8/core/courses/{course_id}/unlock
-     */
-    unlock_url: string;
-    /**
-     * /api/v8/core/courses/{course_id}/reviews
-     */
-    reviews_url: string;
-    /**
-     * Typically empty.
-     */
-    comet_url: string;
-    spyware_urls: Array<string>;
-};
-
-export type Exercise = {
-    id: number;
-    name: string;
-    locked: boolean;
-    deadline_description: string | null;
-    deadline: string | null;
-    soft_deadline: string | null;
-    soft_deadline_description: string | null;
-    checksum: string;
-    /**
-     * /api/v8/core/exercises/{exercise_id}/submissions
-     */
-    return_url: string;
-    /**
-     * /api/v8/core/exercises/{exercise_id}/download
-     */
-    zip_url: string;
-    returnable: boolean;
-    requires_review: boolean;
-    attempted: boolean;
-    completed: boolean;
-    reviewed: boolean;
-    all_review_points_given: boolean;
-    memory_limit: number | null;
-    runtime_params: Array<string>;
-    valgrind_strategy: string | null;
-    code_review_requests_enabled: boolean;
-    run_tests_locally_action_enabled: boolean;
-    /**
-     * Typically null.
-     */
-    latest_submission_url: string | null;
-    latest_submission_id: number | null;
-    /**
-     * /api/v8/core/exercises/{exercise_id}/solution/download
-     */
-    solution_zip_url: string | null;
-};
-
-export type Course = {
-    id: number;
-    name: string;
-    title: string;
-    description: string | null;
-    /**
-     * /api/v8/core/courses/{course_id}
-     */
-    details_url: string;
-    /**
-     * /api/v8/core/courses/{course_id}/unlock
-     */
-    unlock_url: string;
-    /**
-     * /api/v8/core/courses/{course_id}/reviews
-     */
-    reviews_url: string;
-    /**
-     * Typically empty.
-     */
-    comet_url: string;
-    spyware_urls: Array<string>;
-};
-
-export type CourseExercise = {
-    id: number;
-    available_points: Array<ExercisePoint>;
-    awarded_points: Array<string>;
-    name: string;
-    publish_time: string | null;
-    solution_visible_after: string | null;
-    deadline: string | null;
-    soft_deadline: string | null;
-    disabled: boolean;
-    unlocked: boolean;
-};
-
-export type ExercisePoint = {
-    id: number;
-    exercise_id: number;
-    name: string;
-    requires_review: boolean;
-};
-
-export type CourseData = {
-    name: string;
-    hide_after: string | null;
-    hidden: boolean;
-    cache_version: number | null;
-    spreadsheet_key: string | null;
-    hidden_if_registered_after: string | null;
-    refreshed_at: string | null;
-    locked_exercise_points_visible: boolean;
-    description: string | null;
-    paste_visibility: number | null;
-    formal_name: string | null;
-    certificate_downloadable: boolean | null;
-    certificate_unlock_spec: string | null;
-    organization_id: number | null;
-    disabled_status: string | null;
-    title: string | null;
-    /**
-     * Typically empty.
-     */
-    material_url: string | null;
-    course_template_id: number | null;
-    hide_submission_results: boolean;
-    /**
-     * Typically empty.
-     */
-    external_scoreboard_url: string | null;
-    organization_slug: string | null;
-};
-
-export type ExerciseDetails = {
-    course_name: string;
-    course_id: number;
-    code_review_requests_enabled: boolean;
-    run_tests_locally_action_enabled: boolean;
-    exercise_name: string;
-    exercise_id: number;
-    unlocked_at: string | null;
-    deadline: string | null;
-    submissions: Array<ExerciseSubmission>;
-};
-
-export type ExerciseSubmission = {
-    exercise_name: string;
-    id: number;
-    user_id: number;
-    course_id: number;
-    created_at: string;
-    all_tests_passed: boolean;
-    points: string | null;
-    /**
-     * /api/v8/core/submissions/{submission_id}/download
-     */
-    submitted_zip_url: string;
-    /**
-     * https://tmc.mooc.fi/paste/{paste_code}
-     */
-    paste_url: string | null;
-    processing_time: number | null;
-    reviewed: boolean;
-    requests_review: boolean;
-};
-
-export type Submission = {
-    id: number;
-    user_id: number;
-    pretest_error: string | null;
-    created_at: string;
-    exercise_name: string;
-    course_id: number;
-    processed: boolean;
-    all_tests_passed: boolean;
-    points: string | null;
-    processing_tried_at: string | null;
-    processing_began_at: string | null;
-    processing_completed_at: string | null;
-    times_sent_to_sandbox: number;
-    processing_attempts_started_at: string;
-    params_json: string | null;
-    requires_review: boolean;
-    requests_review: boolean;
-    reviewed: boolean;
-    message_for_reviewer: string;
-    newer_submission_reviewed: boolean;
-    review_dismissed: boolean;
-    paste_available: boolean;
-    message_for_paste: string;
-    paste_key: string | null;
-};
-
-export type UpdateResult = { created: Array<Exercise>; updated: Array<Exercise> };
-
-export type Organization = {
-    name: string;
-    information: string;
-    slug: string;
-    logo_path: string;
-    pinned: boolean;
-};
-
-export type Review = {
-    submission_id: number;
-    exercise_name: string;
-    id: number;
-    marked_as_read: boolean;
-    reviewer_name: string;
-    review_body: string;
-    points: Array<string>;
-    points_not_awarded: Array<string>;
-    /**
-     * https://tmc.mooc.fi/submissions/{submission_id}/reviews
-     */
-    url: string;
-    /**
-     * /api/v8/core/courses/{course_id}/reviews/{review_id}
-     */
-    update_url: string;
-    created_at: string;
-    updated_at: string;
-};
-
-export type NewSubmission = {
-    /**
-     * https://tmc.mooc.fi/api/v8/core/submissions/{submission_id}
-     */
-    show_submission_url: string;
-    /**
-     * https://tmc.mooc.fi/paste/{paste_code}
-     */
-    paste_url: string;
-    /**
-     * https://tmc.mooc.fi/submissions/{submission_id}
-     */
-    submission_url: string;
-};
-
-export type SubmissionFeedbackResponse = { api_version: number; status: SubmissionStatus };
-
-export type SubmissionStatus = "processing" | "fail" | "ok" | "error" | "hidden";
-
-export type TmcStyleValidationResult = {
-    strategy: TmcStyleValidationStrategy;
-    validationErrors: Record<string, Array<TmcStyleValidationError>> | null;
-};
-
-export type TmcStyleValidationError = {
-    column: number;
-    line: number;
-    message: string;
-    sourceName: string;
-};
-
-export type TmcStyleValidationStrategy = "FAIL" | "WARN" | "DISABLED";
-
-export type SubmissionFinished = {
-    api_version: number;
-    all_tests_passed: boolean | null;
-    user_id: number;
-    login: string;
-    course: string;
-    exercise_name: string;
-    status: SubmissionStatus;
-    points: Array<string>;
-    valgrind: string | null;
-    /**
-     * https://tmc.mooc.fi/submissions/{submission_id}}
-     */
-    submission_url: string;
-    /**
-     * https://tmc.mooc.fi/exercises/{exercise_id}/solution
-     */
-    solution_url: string | null;
-    submitted_at: string;
-    processing_time: number | null;
-    reviewed: boolean;
-    requests_review: boolean;
-    /**
-     * https://tmc.mooc.fi/paste/{paste_code}
-     */
-    paste_url: string | null;
-    message_for_paste: string | null;
-    missing_review_points: Array<string>;
-    test_cases: Array<TestCase> | null;
-    feedback_questions: Array<SubmissionFeedbackQuestion> | null;
-    /**
-     * /api/v8/core/submissions/{submission_id}/feedback
-     */
-    feedback_answer_url: string | null;
-    error: string | null;
-    validations: TmcStyleValidationResult | null;
-};
-
-export type TestCase = {
-    name: string;
-    successful: boolean;
-    message: string | null;
-    exception: Array<string> | null;
-    detailed_message: string | null;
-};
-
-export type SubmissionFeedbackQuestion = {
-    id: number;
-    question: string;
-    kind: SubmissionFeedbackKind;
-};
-
-export type SubmissionFeedbackKind = "Text" | { IntRange: { lower: number; upper: number } };
-
-export type ConfigValue = unknown | null | string;
-
-export type TmcConfig = { projects_dir: string };
-
-export type CourseInstance = {
-    id: string;
-    course_id: string;
-    course_slug: string;
-    course_name: string;
-    course_description: string | null;
-    instance_name: string | null;
-    instance_description: string | null;
-};
-
-export type TmcExerciseSlide = {
-    slide_id: string;
-    exercise_id: string;
-    exercise_name: string;
-    exercise_order_number: number;
-    deadline: string | null;
-    tasks: Array<TmcExerciseTask>;
-};
-
-export type TmcExerciseTask = {
-    task_id: string;
-    order_number: number;
-    assignment: unknown;
-    public_spec: PublicSpec | null;
-    model_solution_spec: ModelSolutionSpec | null;
-};
-
-export type PublicSpec =
-    | { type: "Browser"; files: Array<ExerciseFile> }
-    | { type: "Editor"; archive_name: string; archive_download_url: string; checksum: string };
-
-export type ModelSolutionSpec =
-    | { type: "Browser"; solution_files: Array<ExerciseFile> }
-    | { type: "Editor"; download_url: string };
-
-export type ExerciseFile = { filepath: string; contents: string };
-
-export type ExerciseTaskSubmissionResult = { submission_id: string };
+import { z } from "zod"
+
+// The tmc-langs-cli stdout contract, as zod v4 schemas.
+//
+// SOURCE OF TRUTH: the serde-annotated Rust types in tmc-langs-rust
+// (crates/tmc-langs-cli/src/output.rs and crates/tmc-mooc-client). They are
+// exported from that repo as a schemars JSON Schema
+// (crates/tmc-langs-cli/bindings.schema.json), generated with the *serialize*
+// contract so it describes exactly what the CLI writes to stdout.
+//
+// This file is a thin SHIM: the zod schemas and TypeScript types below are
+// AUTOGENERATED from that JSON Schema and re-exported here under stable public
+// names. Do not hand-edit the schemas -- regenerate them instead:
+//
+//   npm run generate:langs-schema
+//
+// which re-vendors shared/bindings.schema.json from a local tmc-langs-rust
+// checkout (bin/updateLangsSchema.sh), converts it to a minimal OpenAPI 3.1
+// document (bin/generateLangsSchema.mjs), and runs @hey-api/openapi-ts to emit
+// shared/generated/langs/{zod.gen.ts, types.gen.ts, index.ts}. The generated
+// files are committed; CI can diff them to catch contract drift.
+//
+// Vendored from tmc-langs-rust rev 65d9b7e87161820e6e062279938282ddc03e7ba3
+// (branch programming-exercise-migration).
+//
+// Notes on the generated schemas:
+//   - Optionality reflects *serialization*: serde emits Option::None as an
+//     explicit `null` unless skip_serializing_if is set, so Option fields are
+//     required-but-nullable and only genuinely omitted fields are optional.
+//   - `format: "uuid"` fields validate as z.uuid(); `format: "date-time"` is
+//     stripped during generation so timestamps validate as plain strings (real
+//     TMC timestamps carry +03:00 offsets that a Z-only ISO check would
+//     reject).
+//   - Objects are non-strict: unknown keys are tolerated, so a newer CLI
+//     adding fields does not break validation.
+//   - The CLI's internally-tagged enums (output-kind / output-data-kind /
+//     update-data-kind) come out as unions of `.and()` intersections rather
+//     than z.discriminatedUnion, but validate identically.
+//
+// A handful of names are NOT part of the generated CliOutput contract and stay
+// hand-written or aliased below (CLI input helpers, client-side composites, a
+// generic type, and the mooc-course name-collision alias). Everything else is
+// a direct re-export.
+//
+// Every schema constant has a same-named exported type, so existing type-only
+// imports keep working unchanged.
+import {
+  zClientUpdateData,
+  zCliOutput,
+  zCombinedCourseData,
+  zConfigValue,
+  zCourse,
+  zCourse2,
+  zCourseData,
+  zCourseDetails,
+  zCourseExercise,
+  zDataKind,
+  zDownloadOrUpdateMoocCourseExercisesResult,
+  zDownloadOrUpdateTmcCourseExercisesResult,
+  zExercise,
+  zExerciseDesc,
+  zExerciseDetails,
+  zExerciseFile,
+  zExercisePackagingConfiguration,
+  zExercisePoint,
+  zExerciseSubmission,
+  zExerciseTaskSubmissionResult,
+  zExerciseType,
+  zKind,
+  zLocalMoocExercise,
+  zLocalTmcExercise,
+  zModelSolutionSpec,
+  zMoocExerciseDownload,
+  zNewSubmission,
+  zNotification,
+  zNotificationKind,
+  zOrganization,
+  zOutputData,
+  zOutputResult,
+  zPublicSpec,
+  zPythonVer,
+  zRefreshData,
+  zRefreshExercise,
+  zReview,
+  zRunResult,
+  zRunStatus,
+  zStatus,
+  zStatusUpdateData,
+  zStyleValidationError,
+  zStyleValidationResult,
+  zStyleValidationStrategy,
+  zSubmission,
+  zSubmissionFeedbackKind,
+  zSubmissionFeedbackQuestion,
+  zSubmissionFeedbackResponse,
+  zSubmissionFinished,
+  zSubmissionStatus,
+  zTestCase,
+  zTestDesc,
+  zTestResult,
+  zTmcConfig,
+  zTmcExerciseDownload,
+  zTmcExerciseSlide,
+  zTmcExerciseTask,
+  zTmcProjectYml,
+  zTmcStyleValidationError,
+  zTmcStyleValidationResult,
+  zTmcStyleValidationStrategy,
+  zUpdatedExercise,
+  zUpdateResult,
+} from "./generated/langs/zod.gen"
+
+// ---------------------------------------------------------------------------
+// Not part of the generated CliOutput contract: CLI input helpers and
+// client-side composites, kept hand-written for compatibility.
+// ---------------------------------------------------------------------------
+
+export const Locale = z.string()
+export type Locale = z.infer<typeof Locale>
+
+export const Compression = z.enum(["tar", "zip", "zstd"])
+export type Compression = z.infer<typeof Compression>
+
+export const LocalExercise = z.union([
+  z.object({ tmc: zLocalTmcExercise }),
+  z.object({ mooc: zLocalMoocExercise }),
+])
+export type LocalExercise = z.infer<typeof LocalExercise>
+
+/** The format for all status updates. May contain some data. */
+export interface StatusUpdate<T> {
+  finished: boolean
+  message: string
+  "percent-done": number
+  time: number
+  data: T | null
+}
+
+// ---------------------------------------------------------------------------
+// Courses MOOC name-collision alias: the mooc course type is `Course` in Rust
+// but disambiguated to `Course2` in the generated schema (the TMC course type
+// keeps the `Course` name). Re-exported under the intended `MoocCourse` name.
+// ---------------------------------------------------------------------------
+
+export const MoocCourse = zCourse2
+export type MoocCourse = z.infer<typeof MoocCourse>
+
+/**
+ * @deprecated The langs CLI no longer has a course-instance concept; it
+ * returns courses. Alias kept so existing imports resolve -- migrate usages to
+ * `MoocCourse` (fields changed: e.g. `course_name` -> `name`).
+ */
+export const CourseInstance = MoocCourse
+export type CourseInstance = z.infer<typeof CourseInstance>
+
+// ---------------------------------------------------------------------------
+// Generated schemas, re-exported under their stable public names.
+// ---------------------------------------------------------------------------
+
+export const ClientUpdateData = zClientUpdateData
+export type ClientUpdateData = z.infer<typeof ClientUpdateData>
+
+export const CliOutput = zCliOutput
+export type CliOutput = z.infer<typeof CliOutput>
+
+export const CombinedCourseData = zCombinedCourseData
+export type CombinedCourseData = z.infer<typeof CombinedCourseData>
+
+export const ConfigValue = zConfigValue
+export type ConfigValue = z.infer<typeof ConfigValue>
+
+export const Course = zCourse
+export type Course = z.infer<typeof Course>
+
+export const CourseData = zCourseData
+export type CourseData = z.infer<typeof CourseData>
+
+export const CourseDetails = zCourseDetails
+export type CourseDetails = z.infer<typeof CourseDetails>
+
+export const CourseExercise = zCourseExercise
+export type CourseExercise = z.infer<typeof CourseExercise>
+
+export const DataKind = zDataKind
+export type DataKind = z.infer<typeof DataKind>
+
+export const DownloadOrUpdateMoocCourseExercisesResult = zDownloadOrUpdateMoocCourseExercisesResult
+export type DownloadOrUpdateMoocCourseExercisesResult = z.infer<
+  typeof DownloadOrUpdateMoocCourseExercisesResult
+>
+
+export const DownloadOrUpdateTmcCourseExercisesResult = zDownloadOrUpdateTmcCourseExercisesResult
+export type DownloadOrUpdateTmcCourseExercisesResult = z.infer<
+  typeof DownloadOrUpdateTmcCourseExercisesResult
+>
+
+export const Exercise = zExercise
+export type Exercise = z.infer<typeof Exercise>
+
+export const ExerciseDesc = zExerciseDesc
+export type ExerciseDesc = z.infer<typeof ExerciseDesc>
+
+export const ExerciseDetails = zExerciseDetails
+export type ExerciseDetails = z.infer<typeof ExerciseDetails>
+
+export const ExerciseFile = zExerciseFile
+export type ExerciseFile = z.infer<typeof ExerciseFile>
+
+export const ExercisePackagingConfiguration = zExercisePackagingConfiguration
+export type ExercisePackagingConfiguration = z.infer<typeof ExercisePackagingConfiguration>
+
+export const ExercisePoint = zExercisePoint
+export type ExercisePoint = z.infer<typeof ExercisePoint>
+
+export const ExerciseSubmission = zExerciseSubmission
+export type ExerciseSubmission = z.infer<typeof ExerciseSubmission>
+
+export const ExerciseTaskSubmissionResult = zExerciseTaskSubmissionResult
+export type ExerciseTaskSubmissionResult = z.infer<typeof ExerciseTaskSubmissionResult>
+
+export const ExerciseType = zExerciseType
+export type ExerciseType = z.infer<typeof ExerciseType>
+
+export const Kind = zKind
+export type Kind = z.infer<typeof Kind>
+
+export const LocalMoocExercise = zLocalMoocExercise
+export type LocalMoocExercise = z.infer<typeof LocalMoocExercise>
+
+export const LocalTmcExercise = zLocalTmcExercise
+export type LocalTmcExercise = z.infer<typeof LocalTmcExercise>
+
+export const ModelSolutionSpec = zModelSolutionSpec
+export type ModelSolutionSpec = z.infer<typeof ModelSolutionSpec>
+
+export const MoocExerciseDownload = zMoocExerciseDownload
+export type MoocExerciseDownload = z.infer<typeof MoocExerciseDownload>
+
+export const NewSubmission = zNewSubmission
+export type NewSubmission = z.infer<typeof NewSubmission>
+
+export const Notification = zNotification
+export type Notification = z.infer<typeof Notification>
+
+export const NotificationKind = zNotificationKind
+export type NotificationKind = z.infer<typeof NotificationKind>
+
+export const Organization = zOrganization
+export type Organization = z.infer<typeof Organization>
+
+export const OutputData = zOutputData
+export type OutputData = z.infer<typeof OutputData>
+
+export const OutputResult = zOutputResult
+export type OutputResult = z.infer<typeof OutputResult>
+
+export const PublicSpec = zPublicSpec
+export type PublicSpec = z.infer<typeof PublicSpec>
+
+export const PythonVer = zPythonVer
+export type PythonVer = z.infer<typeof PythonVer>
+
+export const RefreshData = zRefreshData
+export type RefreshData = z.infer<typeof RefreshData>
+
+export const RefreshExercise = zRefreshExercise
+export type RefreshExercise = z.infer<typeof RefreshExercise>
+
+export const Review = zReview
+export type Review = z.infer<typeof Review>
+
+export const RunResult = zRunResult
+export type RunResult = z.infer<typeof RunResult>
+
+export const RunStatus = zRunStatus
+export type RunStatus = z.infer<typeof RunStatus>
+
+export const Status = zStatus
+export type Status = z.infer<typeof Status>
+
+export const StatusUpdateData = zStatusUpdateData
+export type StatusUpdateData = z.infer<typeof StatusUpdateData>
+
+export const StyleValidationError = zStyleValidationError
+export type StyleValidationError = z.infer<typeof StyleValidationError>
+
+export const StyleValidationResult = zStyleValidationResult
+export type StyleValidationResult = z.infer<typeof StyleValidationResult>
+
+export const StyleValidationStrategy = zStyleValidationStrategy
+export type StyleValidationStrategy = z.infer<typeof StyleValidationStrategy>
+
+export const Submission = zSubmission
+export type Submission = z.infer<typeof Submission>
+
+export const SubmissionFeedbackKind = zSubmissionFeedbackKind
+export type SubmissionFeedbackKind = z.infer<typeof SubmissionFeedbackKind>
+
+export const SubmissionFeedbackQuestion = zSubmissionFeedbackQuestion
+export type SubmissionFeedbackQuestion = z.infer<typeof SubmissionFeedbackQuestion>
+
+export const SubmissionFeedbackResponse = zSubmissionFeedbackResponse
+export type SubmissionFeedbackResponse = z.infer<typeof SubmissionFeedbackResponse>
+
+export const SubmissionFinished = zSubmissionFinished
+export type SubmissionFinished = z.infer<typeof SubmissionFinished>
+
+export const SubmissionStatus = zSubmissionStatus
+export type SubmissionStatus = z.infer<typeof SubmissionStatus>
+
+export const TestCase = zTestCase
+export type TestCase = z.infer<typeof TestCase>
+
+export const TestDesc = zTestDesc
+export type TestDesc = z.infer<typeof TestDesc>
+
+export const TestResult = zTestResult
+export type TestResult = z.infer<typeof TestResult>
+
+export const TmcConfig = zTmcConfig
+export type TmcConfig = z.infer<typeof TmcConfig>
+
+export const TmcExerciseDownload = zTmcExerciseDownload
+export type TmcExerciseDownload = z.infer<typeof TmcExerciseDownload>
+
+export const TmcExerciseSlide = zTmcExerciseSlide
+export type TmcExerciseSlide = z.infer<typeof TmcExerciseSlide>
+
+export const TmcExerciseTask = zTmcExerciseTask
+export type TmcExerciseTask = z.infer<typeof TmcExerciseTask>
+
+export const TmcProjectYml = zTmcProjectYml
+export type TmcProjectYml = z.infer<typeof TmcProjectYml>
+
+export const TmcStyleValidationError = zTmcStyleValidationError
+export type TmcStyleValidationError = z.infer<typeof TmcStyleValidationError>
+
+export const TmcStyleValidationResult = zTmcStyleValidationResult
+export type TmcStyleValidationResult = z.infer<typeof TmcStyleValidationResult>
+
+export const TmcStyleValidationStrategy = zTmcStyleValidationStrategy
+export type TmcStyleValidationStrategy = z.infer<typeof TmcStyleValidationStrategy>
+
+export const UpdatedExercise = zUpdatedExercise
+export type UpdatedExercise = z.infer<typeof UpdatedExercise>
+
+export const UpdateResult = zUpdateResult
+export type UpdateResult = z.infer<typeof UpdateResult>

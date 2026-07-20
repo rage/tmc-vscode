@@ -1,15 +1,9 @@
-import { TmcPage } from "./tmc";
-import { FrameLocator, Page } from "@playwright/test";
+import type { FrameLocator } from "@playwright/test"
+
+import { TmcPage } from "./tmc"
 
 export class TestSubmissionPage extends TmcPage {
-    constructor(
-        public readonly page: Page,
-        public readonly webview: FrameLocator,
-    ) {
-        super(page, webview);
-    }
-
-    getWebview(): FrameLocator {
-        return this.getSidePanel();
-    }
+  public getWebview(): FrameLocator {
+    return this.getSidePanel()
+  }
 }

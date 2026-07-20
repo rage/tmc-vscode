@@ -1,22 +1,24 @@
-import Dialog from "../../api/dialog";
-import { IMock, It, Mock } from "typemoq";
+import type { IMock } from "typemoq"
+import { It, Mock } from "typemoq"
+
+import type Dialog from "../../api/dialog"
 
 export interface DialogMockValues {
-    confirmation: boolean | undefined;
+  confirmation: boolean | undefined
 }
 
 export function createDialogMock(): [IMock<Dialog>, DialogMockValues] {
-    const mock = Mock.ofType<Dialog>();
-    const values: DialogMockValues = {
-        confirmation: true,
-    };
+  const mock = Mock.ofType<Dialog>()
+  const values: DialogMockValues = {
+    confirmation: true,
+  }
 
-    mock.setup((x) => x.confirmation(It.isAny())).returns(async () => values.confirmation);
+  mock.setup((x) => x.confirmation(It.isAny())).returns(async () => values.confirmation)
 
-    // Call the attached callback.
-    mock.setup((x) => x.progressNotification(It.isAny(), It.isAny())).returns((_, cb) =>
-        cb({ report: () => {} }),
-    );
+  // Call the attached callback.
+  mock
+    .setup((x) => x.progressNotification(It.isAny(), It.isAny()))
+    .returns((_, cb) => cb({ report: () => {} }))
 
-    return [mock, values];
+  return [mock, values]
 }

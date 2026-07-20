@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Raised the minimum required VS Code version to 1.100.
+
 ## [3.5.3] - 2026-06-12
 
 - Fixed the extension failing to start on VS Code 1.123 and later (Windows) when the CLI was downloaded or redownloaded, caused by its checksum file being read before the download had finished.
@@ -274,7 +278,7 @@ Reverted TMC-langs back to version 0.23.2.
 
 - Reworked caching for TMC API data.
 - Bumped TMC-langs to version 0.6.1.
-    - Fixes path issues with some Python libraries when running tests on Windows.
+  - Fixes path issues with some Python libraries when running tests on Windows.
 
 #### Fixed
 
@@ -307,7 +311,7 @@ Reverted TMC-langs back to version 0.23.2.
 - Handle logout when token has expired.
 - Log out user if token is invalid.
 - Run TMC Actions for exercises when right clicking exercise folders or files in the explorer view.
-    - This way .ipynb notebooks can be tested and submitted more easily.
+  - This way .ipynb notebooks can be tested and submitted more easily.
 - Buttons to clear new exercises buffer from notification or course card.
 - Inform user if TMC Extension is too old.
 - Access to course details page from the TMC Tree Menu.
@@ -341,7 +345,7 @@ Reverted TMC-langs back to version 0.23.2.
 - Open logs folder button to Settings page.
 - _Need Help?_ option on TMC Submission Result view.
 - When downloading an exercise, download last submission by default.
-    - Default behavior can be changed in Settings.
+  - Default behavior can be changed in Settings.
 
 #### Changed
 

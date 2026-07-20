@@ -1,178 +1,177 @@
-import { FeedbackQuestion } from "../actions/types";
-import Storage from "../storage";
-import Langs from "../api/langs";
-import { Course, Organization } from "../api/types";
-import { ExtensionSettings } from "../config/settings";
-import { SubmissionFinished } from "../shared/langsSchema";
-import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../shared/shared";
-import { LogLevel } from "../utilities/logger";
+import type { FeedbackQuestion } from "../actions/types"
+import type Langs from "../api/langs"
+import type { Course, Organization } from "../api/types"
+import type { SubmissionFinished } from "../shared/langsSchema"
+import type { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../shared/shared"
+import type Storage from "../storage"
+import type { ExtensionSettings } from "../storage/data"
+import type { LogLevel } from "../utilities/logger"
+import type UI from "./ui"
 
-import UI from "./ui";
+export interface HandlerContext {
+  tmc: Langs
+  storage: Storage
+  ui: UI
+  visibilityGroups: VisibilityGroups
+}
 
-export type HandlerContext = {
-    tmc: Langs;
-    storage: Storage;
-    ui: UI;
-    visibilityGroups: VisibilityGroups;
-};
+export interface VisibilityGroups {
+  loggedIn: VisibilityGroup
+}
 
-export type VisibilityGroups = {
-    loggedIn: VisibilityGroup;
-};
+export interface VisibilityGroup {
+  id: string
+  not: VisibilityGroupNegated
+}
 
-export type VisibilityGroup = {
-    id: string;
-    not: VisibilityGroupNegated;
-};
+export interface VisibilityGroupNegated {
+  id: string
+}
 
-export type VisibilityGroupNegated = {
-    id: string;
-};
+export interface CourseDetailsData {
+  course: LocalCourseData
+  courseId: number
+  exerciseData: CourseDetailsExerciseGroup[]
+  offlineMode: boolean
+}
 
-export type CourseDetailsData = {
-    course: LocalCourseData;
-    courseId: number;
-    exerciseData: CourseDetailsExerciseGroup[];
-    offlineMode: boolean;
-};
+export interface CourseDetailsExerciseGroup {
+  name: string
+  nextDeadlineString: string
+  exercises: CourseDetailsExercise[]
+}
 
-export type CourseDetailsExerciseGroup = {
-    name: string;
-    nextDeadlineString: string;
-    exercises: CourseDetailsExercise[];
-};
+export interface CourseDetailsExercise {
+  id: ExerciseIdentifier
+  name: string
+  passed: boolean
+  softDeadline: Date | null
+  softDeadlineString: string
+  hardDeadline: Date | null
+  hardDeadlineString: string
+  isHard: boolean
+}
 
-export type CourseDetailsExercise = {
-    id: ExerciseIdentifier;
-    name: string;
-    passed: boolean;
-    softDeadline: Date | null;
-    softDeadlineString: string;
-    hardDeadline: Date | null;
-    hardDeadlineString: string;
-    isHard: boolean;
-};
+export interface CourseData {
+  courses: Course[]
+  organization: Organization
+}
 
-export type CourseData = {
-    courses: Course[];
-    organization: Organization;
-};
+export interface ErrorData {
+  error: Error
+}
 
-export type ErrorData = {
-    error: Error;
-};
+export interface LoginData {
+  error?: string
+}
 
-export type LoginData = {
-    error?: string;
-};
+export interface OrganizationData {
+  organizations: Organization[]
+  pinned: Organization[]
+}
 
-export type OrganizationData = {
-    organizations: Organization[];
-    pinned: Organization[];
-};
+export interface RunningTestsData {
+  exerciseName: string
+}
 
-export type RunningTestsData = {
-    exerciseName: string;
-};
+export interface SettingsData {
+  extensionSettings: ExtensionSettings
+  tmcDataSize: string
+}
 
-export type SettingsData = {
-    extensionSettings: ExtensionSettings;
-    tmcDataSize: string;
-};
+export interface SubmissionResultData {
+  statusData: SubmissionFinished
+  feedbackQuestions: FeedbackQuestion[]
+  submissionUrl: string | undefined
+}
 
-export type SubmissionResultData = {
-    statusData: SubmissionFinished;
-    feedbackQuestions: FeedbackQuestion[];
-    submissionUrl: string | undefined;
-};
+export interface SubmissionStatusData {
+  messages: string[]
+  progressPct: number
+  submissionUrl: string | undefined
+}
 
-export type SubmissionStatusData = {
-    messages: string[];
-    progressPct: number;
-    submissionUrl: string | undefined;
-};
-
-export type TestResultData = {
-    testResult: unknown;
-    id: number;
-    courseSlug: string;
-    exerciseName: string;
-    tmcLogs: {
-        stdout?: string;
-        stderr?: string;
-    };
-    pasteLink?: string;
-    disabled?: boolean;
-};
+export interface TestResultData {
+  testResult: unknown
+  id: number
+  courseSlug: string
+  exerciseName: string
+  tmcLogs: {
+    stdout?: string
+    stderr?: string
+  }
+  pasteLink?: string
+  disabled?: boolean
+}
 
 export type ExerciseStatus =
-    | "closed"
-    | "downloading"
-    | "downloadFailed"
-    | "expired"
-    | "missing"
-    | "new"
-    | "opened";
+  | "closed"
+  | "downloading"
+  | "downloadFailed"
+  | "expired"
+  | "missing"
+  | "new"
+  | "opened"
 
 export interface ExerciseStatusChange {
-    command: "exerciseStatusChange";
-    exerciseId: number;
-    status: ExerciseStatus;
+  command: "exerciseStatusChange"
+  exerciseId: number
+  status: ExerciseStatus
 }
 
 export interface SetDataFolder {
-    command: "setTmcDataFolder";
-    path: string;
-    diskSize: string;
+  command: "setTmcDataFolder"
+  path: string
+  diskSize: string
 }
 
 export interface LoginError {
-    command: "loginError";
-    error: string;
+  command: "loginError"
+  error: string
 }
 
 export interface SetCourseDisabledStatus {
-    command: "setCourseDisabledStatus";
-    courseId: CourseIdentifier;
-    disabled: boolean;
+  command: "setCourseDisabledStatus"
+  courseId: CourseIdentifier
+  disabled: boolean
 }
 
 export interface SetBooleanSetting {
-    command: "setBooleanSetting";
-    setting: "downloadOldSubmission" | "hideMetaFiles" | "insider" | "updateExercisesAutomatically";
-    enabled: boolean;
+  command: "setBooleanSetting"
+  setting: "downloadOldSubmission" | "hideMetaFiles" | "insider" | "updateExercisesAutomatically"
+  enabled: boolean
 }
 
 export interface SetLogLevel {
-    command: "setLogLevel";
-    level: LogLevel;
+  command: "setLogLevel"
+  level: LogLevel
 }
 
 export interface SetNextCourseDeadline {
-    command: "setNextCourseDeadline";
-    deadline: string;
-    courseId: number;
+  command: "setNextCourseDeadline"
+  deadline: string
+  courseId: number
 }
 
 export interface SetNewExercises {
-    command: "setNewExercises";
-    courseId: number;
-    exerciseIds: number[];
+  command: "setNewExercises"
+  courseId: number
+  exerciseIds: number[]
 }
 
 export interface SetUpdateables {
-    command: "setUpdateables";
-    exerciseIds: number[];
-    courseId: number;
+  command: "setUpdateables"
+  exerciseIds: number[]
+  courseId: number
 }
 
 export type WebviewMessage =
-    | ExerciseStatusChange
-    | LoginError
-    | SetBooleanSetting
-    | SetCourseDisabledStatus
-    | SetDataFolder
-    | SetNextCourseDeadline
-    | SetNewExercises
-    | SetLogLevel
-    | SetUpdateables;
+  | ExerciseStatusChange
+  | LoginError
+  | SetBooleanSetting
+  | SetCourseDisabledStatus
+  | SetDataFolder
+  | SetNextCourseDeadline
+  | SetNewExercises
+  | SetLogLevel
+  | SetUpdateables

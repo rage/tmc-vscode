@@ -20,3 +20,6 @@ out/
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# svelte-check --tsgo transpilation scratch dir
+webview-ui/.svelte-check/

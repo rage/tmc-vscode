@@ -2,92 +2,110 @@ name: Extension tests
 
 on: push
 
+permissions: read-all
+
 jobs:
-    extension_tests:
-        name: Extension tests
-        env:
-            CI: true
-        strategy:
-            matrix:
-                node-version: [22.x]
-                os: [ubuntu-latest, macos-latest, windows-latest]
-        runs-on: ${{ matrix.os }}
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4.1.0
-              with:
-                  submodules: "true"
+  code_style:
+    name: Code style
+    permissions:
+      contents: read
+    env:
+      CI: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.0
 
-            - name: Use Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v3.8.1
-              with:
-                  node-version: ${{ matrix.node-version }}
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
 
-            - name: Lint source
-              run: |
-                  npm run ci:all
-                  npm run eslint-check
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-            - name: Run prettier if not Windows
-              if: matrix.os != 'windows-latest'
-              run: npm run prettier-check
+      - name: Lint (oxlint)
+        run: pnpm run lint:ci
 
-            - name: Setup backend
-              run: |
-                  cd backend
-                  npm run setup
-                  chmod -R +x cli
-                  cd ..
+      - name: Format check (oxfmt)
+        run: pnpm run format:check
 
-            - name: Unit tests
-              uses: coactions/setup-xvfb@v1.0.1
-              with:
-                  run: npm test
+      - name: Typecheck (tsgo)
+        run: pnpm run typecheck
 
-    playwright_tests:
-        name: Playwright tests
-        env:
-            CI: true
-        strategy:
-            matrix:
-                node-version: [22.x]
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4.1.0
-              with:
-                  submodules: "true"
+  extension_tests:
+    name: Extension tests
+    permissions:
+      contents: read
+    env:
+      CI: true
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.0
+        with:
+          submodules: "true"
 
-            - name: Use Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v3.8.1
-              with:
-                  node-version: ${{ matrix.node-version }}
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
 
-            - name: Setup
-              run: |
-                  npm run ci:all
-                  cd backend
-                  npm run setup
-                  chmod -R +x cli
-                  cd ..
-                  npm run pretest
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-            - name: Start backend
-              run: npm run backend:start &
+      - name: Setup backend
+        run: |
+          cd backend
+          pnpm run setup
+          chmod -R +x cli
+          cd ..
 
-            - name: Playwright tests
-              run: npm run playwright-test
+      - name: Unit tests
+        uses: coactions/setup-xvfb@v1.0.1
+        with:
+          run: pnpm test
 
-            - uses: actions/upload-artifact@v4.4.0
-              if: failure()
-              with:
-                  name: test-results
-                  path: ./test-results/
-                  if-no-files-found: ignore
+  playwright_tests:
+    name: Playwright tests
+    permissions:
+      contents: read
+    env:
+      CI: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.0
+        with:
+          submodules: "true"
 
-            - uses: actions/upload-artifact@v4.4.0
-              if: failure()
-              with:
-                  name: playwright-html-report
-                  path: ./playwright-report/index.html
-                  if-no-files-found: ignore
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Setup
+        run: |
+          pnpm install --frozen-lockfile
+          cd backend
+          pnpm run setup
+          chmod -R +x cli
+          cd ..
+          pnpm run pretest
+
+      - name: Start backend
+        run: pnpm run backend:start &
+
+      - name: Playwright tests
+        run: pnpm run playwright-test
+
+      - uses: actions/upload-artifact@v4.4.0
+        if: failure()
+        with:
+          name: test-results
+          path: ./test-results/
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4.4.0
+        if: failure()
+        with:
+          name: playwright-html-report
+          path: ./playwright-report/index.html
+          if-no-files-found: ignore

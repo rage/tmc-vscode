@@ -1,11 +1,10 @@
 {
-    "compilerOptions": {
-        "noEmit": true,
-        "module": "commonjs",
-        "target": "ES2022",
-        "lib": ["ES2022"],
-        "sourceMap": true,
-        "rootDir": ".",
-        "strict": true
-    }
+  // Playwright end-to-end test project. Shares the strict baseline with
+  // the rest of the workspace.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "types": ["node"]
+  },
+  "include": ["**/*", "../playwright.config.ts"]
 }

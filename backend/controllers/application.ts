@@ -1,12 +1,12 @@
-import { Router } from "express";
+import { Router } from "express"
 
-const applicationRounter = Router();
+const applicationRounter = Router()
 
-applicationRounter.get("/vscode_plugin/credentials", (req, res) => {
-    return res.json({
-        application_id: "1337",
-        secret: "mainframe",
-    });
-});
+applicationRounter.get("/vscode_plugin/credentials", (_req, res) => {
+  return res.json({
+    application_id: "1337",
+    secret: "mainframe",
+  })
+})
 
-export default applicationRounter;
+export default applicationRounter

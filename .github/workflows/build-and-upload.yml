@@ -1,54 +1,52 @@
 name: Build and Upload
 
 on:
-    push:
-        branches: [master]
-    pull_request:
-        branches: [master]
-    release:
-        types:
-            - created
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  release:
+    types:
+      - created
+
+permissions: read-all
 
 jobs:
-    build_and_upload:
-        name: Build and Upload
-        runs-on: ubuntu-latest
-        strategy:
-            matrix:
-                node-version: [22.x]
+  build_and_upload:
+    name: Build and Upload
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    env:
+      PRERELEASE: ${{ endsWith ( github.event.release.tag_name, '-prerelease' ) && '--pre-release' || '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.0
+        with:
+          submodules: "true"
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+      - name: Package extension
+        run: |
+          chmod +x bin/package.bash
+          bin/package.bash ${{ env.PRERELEASE }}
+          # move packaged extension from project root to own release folder
+          mkdir extension && mv *.vsix extension
         env:
-            PRERELEASE: ${{ endsWith ( github.event.release.tag_name, '-prerelease' ) && '--pre-release' || '' }}
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4.1.0
-              with:
-                  submodules: "true"
-            - name: Use Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v4.0.3
-              with:
-                  node-version: ${{ matrix.node-version }}
-            - name: Package extension
-              run: |
-                  npm install -g @vscode/vsce
-                  chmod +x bin/package.bash
-                  bin/package.bash ${{ env.PRERELEASE }}
-                  # move packaged extension from project root to own release folder
-                  mkdir extension && mv *.vsix extension
-              env:
-                  CI: true
-            - name: Upload artifact
-              uses: actions/upload-artifact@v4.4.0
-              if: success()
-              with:
-                  name: packaged-extension
-                  path: extension/
-            - name: Publish to Visual Studio Marketplace
-              if: success() && github.event_name == 'release'
-              run: |
-                  chmod +x bin/validateRelease.sh
-                  bin/validateRelease.sh ${{ github.event.release.tag_name }}
-                  vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} ${{ env.PRERELEASE }} --packagePath extension/*.vsix
-            - name: Publish to Open VSX Marketplace
-              if: success() && github.event_name == 'release'
-              run: |
-                  npx ovsx publish extension/*.vsix -p ${{ secrets.OVSX_PUBLISHER_TOKEN }} ${{ env.PRERELEASE }}
+          CI: true
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4.4.0
+        if: success()
+        with:
+          name: packaged-extension
+          path: extension/
+      - name: Publish to Visual Studio Marketplace
+        if: success() && github.event_name == 'release'
+        run: |
+          chmod +x bin/validateRelease.sh
+          bin/validateRelease.sh ${{ github.event.release.tag_name }}
+          pnpm dlx @vscode/vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} ${{ env.PRERELEASE }} --packagePath extension/*.vsix
+      - name: Publish to Open VSX Marketplace
+        if: success() && github.event_name == 'release'
+        run: |
+          pnpm dlx ovsx publish extension/*.vsix -p ${{ secrets.OVSX_PUBLISHER_TOKEN }} ${{ env.PRERELEASE }}

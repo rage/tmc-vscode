@@ -1,16 +1,18 @@
-import UI from "../../ui/ui";
-import { IMock, Mock } from "typemoq";
+import type { IMock } from "typemoq"
+import { Mock } from "typemoq"
 
-export type UIMockValues = unknown;
+import type UI from "../../ui/ui"
+
+export type UIMockValues = unknown
 
 export function createUIMock(): [IMock<UI>, UIMockValues] {
-    const values: UIMockValues = {};
-    const mock = setupMockValues(values);
-    return [mock, values];
+  const values: UIMockValues = {}
+  const mock = setupMockValues(values)
+  return [mock, values]
 }
 
 function setupMockValues(_values: UIMockValues): IMock<UI> {
-    const mock = Mock.ofType<UI>();
+  const mock = Mock.ofType<UI>()
 
-    return mock;
+  return mock
 }

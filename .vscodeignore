@@ -9,6 +9,11 @@ out/**
 src/**
 submodules/**
 test-resources/**
+test-results/**
+test-artifacts/**
+playwright/**
+playwright-report/**
+playwright.config.ts
 
 **/.dockerignore
 **/.eslintcache
@@ -27,6 +32,11 @@ test-resources/**
 **/vsc-extension-quickstart.md
 config.js
 
+# pnpm workspace files (not needed in the packaged extension)
+pnpm-workspace.yaml
+pnpm-lock.yaml
+patches/**
+
 # Media
 # Nothing hidden
 
@@ -39,11 +49,8 @@ docs/publish.md
 # Development backend
 backend/**
 
-# Webpack configuration
-webpack.common.js
-webpack.config.js
-webpack.dev.js
-webpack.prod.js
+# Build configuration (esbuild bundles the extension host)
+esbuild.mjs
 
 # Ignore all webview-ui files except the build directory
 webview-ui/src/**
@@ -52,8 +59,8 @@ webview-ui/scripts/**
 webview-ui/index.html
 webview-ui/README.md
 webview-ui/package.json
-webview-ui/package-lock.json
-webview-ui/rollup.config.js
+webview-ui/vite.config.ts
+webview-ui/svelte.config.js
 webview-ui/node_modules/**
 
 # Other files

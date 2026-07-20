@@ -1,7 +1,12 @@
 {
-    "compilerOptions": {
-        "esModuleInterop": true,
-        "module": "commonjs",
-        "target": "ES2022"
-    }
+  // Mock-backend project (express app run with tsx). Shares the strict
+  // baseline with the rest of the workspace.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "types": ["node"],
+    // setup.ts imports the build-profile map from ../config.js
+    "allowJs": true
+  },
+  "include": ["*.ts", "controllers/**/*"]
 }

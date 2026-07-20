@@ -1,13 +1,18 @@
 <script lang="ts">
-    export let checked: boolean = false;
-    export let onClick: (checked: boolean) => void = () => {};
+  interface Props {
+    checked?: boolean
+    onClick?: (checked: boolean) => void
+    hidden?: boolean
+    children?: import("svelte").Snippet
+  }
 
-    export let hidden: boolean = false;
+  let { checked = $bindable(false), onClick = () => {}, hidden = false, children }: Props = $props()
 
-    function onClickWrapper() {
-        checked = !checked;
-        onClick(checked);
-    }
+  function onClickWrapper(event: Event) {
+    event.stopPropagation()
+    checked = !checked
+    onClick(checked)
+  }
 </script>
 
 <!--
@@ -19,13 +24,13 @@
     instead we use the span's event handlers to check/uncheck
 -->
 <span
-    role="button"
-    tabindex="0"
-    {hidden}
-    on:click|capture|stopPropagation={onClickWrapper}
-    on:keypress|capture|stopPropagation={onClickWrapper}
+  role="button"
+  tabindex="0"
+  {hidden}
+  onclickcapture={onClickWrapper}
+  onkeypresscapture={onClickWrapper}
 >
-    <vscode-checkbox {checked}>
-        <slot />
-    </vscode-checkbox>
+  <vscode-checkbox {checked}>
+    {@render children?.()}
+  </vscode-checkbox>
 </span>

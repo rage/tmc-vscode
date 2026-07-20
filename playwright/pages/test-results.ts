@@ -1,22 +1,13 @@
-import { TmcPage } from "./tmc";
-import { FrameLocator, Page } from "@playwright/test";
+import type { FrameLocator } from "@playwright/test"
+
+import { TmcPage } from "./tmc"
 
 export class TestResultsPage extends TmcPage {
-    constructor(
-        public readonly page: Page,
-        public readonly webview: FrameLocator,
-    ) {
-        super(page, webview);
-    }
+  public async submit(): Promise<void> {
+    await this.getWebview().getByRole("button", { name: "Send solution to server" }).first().click()
+  }
 
-    async submit(): Promise<void> {
-        await this.getWebview()
-            .getByRole("button", { name: "Send solution to server" })
-            .first()
-            .click();
-    }
-
-    getWebview(): FrameLocator {
-        return this.getSidePanel();
-    }
+  public getWebview(): FrameLocator {
+    return this.getSidePanel()
+  }
 }

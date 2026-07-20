@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": false,
+  "singleQuote": false,
+  "trailingComma": "all",
+  "printWidth": 100,
+  "sortImports": true,
+  "sortPackageJson": true,
+  "svelte": true,
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "out",
+    ".vscode-test",
+    ".svelte-check",
+    "playwright-report",
+    "test-results",
+    "test-artifacts",
+    "test-resources",
+    "submodules",
+    "shared/generated",
+    "shared/bindings.schema.json",
+    "src/shared",
+    "webview-ui/src/shared",
+    "webview-ui/public/build",
+    "backend/cli",
+    "backend/resources"
+  ]
+}

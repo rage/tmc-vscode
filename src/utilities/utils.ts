@@ -1,15 +1,19 @@
-import { FeedbackQuestion } from "../actions/types";
-import { ConnectionError } from "../errors";
-import { SubmissionFeedbackQuestion } from "../shared/langsSchema";
-import { BaseError } from "../shared/shared";
-import { Logger } from "./logger";
-import * as fs from "fs-extra";
-import { once } from "node:events";
-import { finished } from "node:stream/promises";
-import * as path from "path";
-import { Err, Ok, Result } from "ts-results";
-import { fetch, Response } from "undici";
-import { ExtensionContext } from "vscode";
+import { once } from "node:events"
+import { finished } from "node:stream/promises"
+import * as path from "path"
+
+import * as fs from "fs-extra"
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
+import type { Response } from "undici"
+import { fetch } from "undici"
+import type { ExtensionContext } from "vscode"
+
+import type { FeedbackQuestion } from "../actions/types"
+import { ConnectionError } from "../errors"
+import type { SubmissionFeedbackQuestion } from "../shared/langsSchema"
+import { BaseError } from "../shared/shared"
+import { Logger } from "./logger"
 
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be
@@ -20,73 +24,69 @@ import { ExtensionContext } from "vscode";
  * @param headers Request headers if any
  */
 export async function downloadFile(
-    url: string,
-    filePath: string,
-    headers?: { [key: string]: string },
-    progressCallback?: (downloadedPct: number, increment: number) => void,
+  url: string,
+  filePath: string,
+  headers?: Record<string, string>,
+  progressCallback?: (downloadedPct: number, increment: number) => void,
 ): Promise<Result<void, Error>> {
+  try {
+    fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true })
+  } catch (error) {
+    return new Err(new BaseError(error, "Failed to create download directory"))
+  }
+
+  let response: Response
+  try {
+    response = await fetch(url, { method: "get", ...(headers ? { headers } : {}) })
+  } catch (error) {
+    // Typing change from update
+    return new Err(new ConnectionError(error))
+  }
+
+  if (!response.ok) {
+    let cause: string | undefined
     try {
-        fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
-    } catch (error) {
-        return new Err(new BaseError(error, "Failed to create download directory"));
+      cause = await response.text()
+    } catch (_error) {
+      // ignore error in reading response, not important
     }
 
-    let response: Response;
-    try {
-        const request = { url, method: "get", headers };
-        response = await fetch(request.url, request);
-    } catch (error) {
-        // Typing change from update
-        return new Err(new ConnectionError(error));
+    return new Err(new Error("Request failed: " + response.statusText, { cause }))
+  }
+
+  // Created outside the try so the catch can always release the fd.
+  const writeStream = fs.createWriteStream(filePath)
+  try {
+    if (!response.body) {
+      throw new Error("Unexpected null response body")
     }
 
-    if (!response.ok) {
-        let cause: string | undefined;
-        try {
-            cause = await response.text();
-        } catch (_error) {
-            // ignore error in reading response, not important
-        }
-
-        return new Err(new Error("Request failed: " + response.statusText, { cause }));
+    let downloaded = 0
+    const sizeString = response.headers.get("content-length")
+    const size = sizeString ? Math.trunc(Number(sizeString)) : 0
+    for await (const chunk of response.body) {
+      if (sizeString && progressCallback && size > 0) {
+        downloaded += chunk.length
+        progressCallback(Math.round((downloaded / size) * 100), (100 * chunk.length) / size)
+      }
+      // write() returns false when the internal buffer is full; wait for
+      // "drain" so large downloads don't grow memory unbounded.
+      if (!writeStream.write(chunk)) {
+        await once(writeStream, "drain")
+      }
     }
 
-    // Created outside the try so the catch can always release the fd.
-    const writeStream = fs.createWriteStream(filePath);
-    try {
-        if (!response.body) {
-            throw new Error("Unexpected null response body");
-        }
+    // Wait until everything is flushed and the fd is closed, so callers
+    // always see a complete file with no handle left open.
+    writeStream.end()
+    await finished(writeStream)
+  } catch (error) {
+    // Destroy on error so we never leak an open handle.
+    writeStream.destroy()
+    return new Err(new BaseError(error, "Writing to file failed"))
+  }
 
-        let downloaded = 0;
-        const sizeString = response.headers.get("content-length");
-        const size = sizeString ? parseInt(sizeString, 10) : 0;
-        for await (const chunk of response.body) {
-            if (sizeString && progressCallback && size > 0) {
-                downloaded += chunk.length;
-                progressCallback(
-                    Math.round((downloaded / size) * 100),
-                    (100 * chunk.length) / size,
-                );
-            }
-            // write() returns false when the internal buffer is full; wait for
-            // "drain" so large downloads don't grow memory unbounded.
-            if (!writeStream.write(chunk)) {
-                await once(writeStream, "drain");
-            }
-        }
-
-        // Wait until everything is flushed and the fd is closed, so callers
-        // always see a complete file with no handle left open.
-        writeStream.end();
-        await finished(writeStream);
-    } catch (error) {
-        // Destroy on error so we never leak an open handle.
-        writeStream.destroy();
-        return new Err(new BaseError(error, "Writing to file failed"));
-    }
-
-    return Ok.EMPTY;
+  return Ok.EMPTY
 }
 
 /**
@@ -94,28 +94,26 @@ export async function downloadFile(
  * @param millis
  */
 export function sleep(millis: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, millis));
+  return new Promise((resolve) => {
+    setTimeout(resolve, millis)
+  })
 }
 
 export function formatSizeInBytes(size: number, precision = 3): string {
-    let suffix = "B";
-    let cSize = size;
-    const targetPrecision = Math.min(
-        size === 0 ? 1 : Math.floor(Math.log10(size) + 1),
-        21,
-        precision,
-    );
+  let suffix = "B"
+  let cSize = size
+  const targetPrecision = Math.min(size === 0 ? 1 : Math.floor(Math.log10(size) + 1), 21, precision)
 
-    for (const s of ["kB", "MB", "GB", "TB", "EB"]) {
-        if (Number.parseFloat(cSize.toPrecision(targetPrecision)) >= 1000) {
-            cSize /= 1000;
-            suffix = s;
-        } else {
-            break;
-        }
+  for (const s of ["kB", "MB", "GB", "TB", "EB"]) {
+    if (Number(cSize.toPrecision(targetPrecision)) >= 1000) {
+      cSize /= 1000
+      suffix = s
+    } else {
+      break
     }
+  }
 
-    return `${cSize.toPrecision(targetPrecision)} ${suffix}`;
+  return `${cSize.toPrecision(targetPrecision)} ${suffix}`
 }
 
 /**
@@ -123,7 +121,7 @@ export function formatSizeInBytes(size: number, precision = 3): string {
  * @param percentDone How much done of the progress
  */
 export function getProgressBar(percentDone: number): string {
-    return `<div class="progress">
+  return `<div class="progress">
         <div
             class="progress-bar progress-bar-striped progress-bar-animated"
             role="progressbar"
@@ -132,42 +130,42 @@ export function getProgressBar(percentDone: number): string {
             aria-valuemax="100"
             style="width: ${percentDone}%"
         ></div>
-    </div>`;
+    </div>`
 }
 
 export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): FeedbackQuestion[] {
-    const feedbackQuestions: FeedbackQuestion[] = [];
-    questions.forEach((x) => {
-        if (x.kind === "Text") {
-            feedbackQuestions.push({
-                id: x.id,
-                kind: "text",
-                question: x.question,
-            });
-        } else if (x.kind.IntRange) {
-            feedbackQuestions.push({
-                id: x.id,
-                kind: "intrange",
-                lower: x.kind.IntRange.lower,
-                question: x.question,
-                upper: x.kind.IntRange.upper,
-            });
-        } else {
-            Logger.info("Unexpected feedback question type:", x.kind);
-        }
-    });
-    return feedbackQuestions;
+  const feedbackQuestions: FeedbackQuestion[] = []
+  questions.forEach((x) => {
+    if (x.kind === "Text") {
+      feedbackQuestions.push({
+        id: x.id,
+        kind: "text",
+        question: x.question,
+      })
+    } else if (x.kind.IntRange) {
+      feedbackQuestions.push({
+        id: x.id,
+        kind: "intrange",
+        lower: x.kind.IntRange.lower,
+        question: x.question,
+        upper: x.kind.IntRange.upper,
+      })
+    } else {
+      Logger.info("Unexpected feedback question type:", x.kind)
+    }
+  })
+  return feedbackQuestions
 }
 
 export function parseTestResultsText(value: string): string {
-    return value
-        .replace(/\\/g, "\\\\")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;")
-        .replace(/`/g, "&#96;");
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;")
+    .replaceAll("`", "&#96;")
 }
 
 /**
@@ -176,20 +174,20 @@ export function parseTestResultsText(value: string): string {
  * @param oldDataObject
  */
 export async function removeOldData(oldDataObject: {
-    path: string;
-    timestamp: number;
+  path: string
+  timestamp: number
 }): Promise<Result<string, Error>> {
-    if (oldDataObject.timestamp + 10 * 60 * 1000 > Date.now()) {
-        try {
-            fs.removeSync(oldDataObject.path);
-        } catch (_err) {
-            return new Err(new Error(`Still failed to remove data from ${oldDataObject.path}`));
-        }
-        return new Ok(`Removed successfully from ${oldDataObject.path}`);
+  if (oldDataObject.timestamp + 10 * 60 * 1000 > Date.now()) {
+    try {
+      fs.removeSync(oldDataObject.path)
+    } catch (_err) {
+      return new Err(new Error(`Still failed to remove data from ${oldDataObject.path}`))
     }
-    return new Ok(`Time exceeded, will not remove data from ${oldDataObject.path}`);
+    return new Ok(`Removed successfully from ${oldDataObject.path}`)
+  }
+  return new Ok(`Time exceeded, will not remove data from ${oldDataObject.path}`)
 }
 
 export function cliFolder(context: ExtensionContext): string {
-    return path.join(context.globalStorageUri.fsPath, "cli");
+  return path.join(context.globalStorageUri.fsPath, "cli")
 }

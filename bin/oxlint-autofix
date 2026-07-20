@@ -1,0 +1,6 @@
+#!/bin/bash
+# Pre-commit autofix tier (from secret-project-331): apply oxlint's safe
+# fixes but never block the commit — the failing gate is `lint:ci` in CI.
+set -u
+pnpm exec oxlint --fix "$@" || true
+exit 0

@@ -1,480 +1,912 @@
+import * as util from "node:util"
+
+import type { Uri } from "vscode"
+import { z } from "zod"
+
 // types shared between the extension and webview code
+//
+// the runtime-validated types are defined as zod schemas with the
+// TypeScript types inferred from them (`z.infer`), so the schema is
+// the single source of truth for both sides of the message boundary.
+//
+// note: langs types (`./langsSchema`) are validated with the same zod
+// schemas that are used at the CLI boundary. types that cannot be
+// validated meaningfully (`vscode.Uri`, `Error` instances) are passed
+// through with `z.custom<T>()` — `vscode.Uri` does not survive
+// `postMessage` serialization as a class instance anyway.
+/*
+ * ======== imports ========
+ */
+import {
+  Course,
+  MoocCourse,
+  Organization,
+  RunResult,
+  StyleValidationResult,
+  SubmissionFinished,
+} from "./langsSchema"
+
+/*
+ * ======== enum & identifiers ========
+ */
+
+interface TmcKind {
+  kind: "tmc"
+}
+
+interface MoocKind {
+  kind: "mooc"
+}
+
+export type Enum<Tmc, Mooc> = { kind: "tmc"; data: Tmc } | { kind: "mooc"; data: Mooc }
+
+// schema equivalent of the `Enum<Tmc, Mooc>` tagged union
+//
+// the return type is annotated as `z.ZodType<Enum<...>>` so that the inferred
+// type of an enum schema is exactly the `Enum<A, B>` alias — this keeps
+// generic helpers like `match` inferring the same way they do for
+// hand-written `Enum<A, B>` types
+export function EnumSchema<Tmc extends z.ZodType, Mooc extends z.ZodType>(
+  tmc: Tmc,
+  mooc: Mooc,
+): z.ZodType<Enum<z.output<Tmc>, z.output<Mooc>>> {
+  // the cast is needed because TypeScript cannot prove that the mapped types
+  // in zod's inferred object types simplify to `Enum`'s members while `Tmc` and
+  // `Mooc` are still generic; every call site is checked against the annotated
+  // return type above
+  return z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("tmc"), data: tmc }),
+    z.object({ kind: z.literal("mooc"), data: mooc }),
+  ]) as unknown as z.ZodType<Enum<z.output<Tmc>, z.output<Mooc>>>
+}
+
+export namespace Enum {
+  // oxlint-disable-next-line no-shadow -- the namespace-scoped helpers deliberately reuse the module-level `unwrap` name (qualified access, e.g. Enum.unwrap)
+  export function unwrap<A, B>(e: Enum<A, B>): A | B {
+    return match(
+      e,
+      (value) => value,
+      (value) => value,
+    )
+  }
+}
+
+export const CourseIdentifierSchema = EnumSchema(
+  z.object({ courseId: z.number() }),
+  z.object({ instanceId: z.string() }),
+)
+
+export type CourseIdentifier = z.infer<typeof CourseIdentifierSchema>
+
+export namespace CourseIdentifier {
+  export function from(id: number | string): CourseIdentifier {
+    if (typeof id === "number") {
+      return makeTmcKind({ courseId: id })
+    } else if (typeof id === "string") {
+      return makeMoocKind({ instanceId: id })
+    }
+    assertUnreachable(id)
+  }
+
+  export function toString(id: CourseIdentifier): string {
+    return match(
+      id,
+      (tmc) => tmc.courseId.toString(),
+      (mooc) => mooc.instanceId,
+    )
+  }
+}
+
+export type TmcExerciseId = number
+export type MoocExerciseId = string
+
+export const ExerciseIdentifierSchema = EnumSchema(
+  z.object({ tmcExerciseId: z.number() }),
+  z.object({ moocExerciseId: z.string() }),
+)
+
+export type ExerciseIdentifier = z.infer<typeof ExerciseIdentifierSchema>
+
+export namespace ExerciseIdentifier {
+  export function from(id: number | string): ExerciseIdentifier {
+    if (typeof id === "number") {
+      return makeTmcKind({ tmcExerciseId: id })
+    } else if (typeof id === "string") {
+      return makeMoocKind({ moocExerciseId: id })
+    }
+    assertUnreachable(id)
+  }
+
+  // oxlint-disable-next-line no-shadow -- deliberate qualified-name reuse (ExerciseIdentifier.unwrap)
+  export function unwrap(id: ExerciseIdentifier): number | string {
+    if (id.kind === "tmc") {
+      return id.data.tmcExerciseId
+    }
+    if (id.kind === "mooc") {
+      return id.data.moocExerciseId
+    }
+    assertUnreachable(id)
+  }
+
+  export function toString(id: ExerciseIdentifier): string {
+    return match(
+      id,
+      (tmc) => tmc.tmcExerciseId.toString(),
+      (mooc) => mooc.moocExerciseId,
+    )
+  }
+}
+
+// helper to simulate Rust's `match`
+export function match<A, B, C, D>(data: Enum<A, B>, tmc: (x: A) => C, mooc: (x: B) => D): C | D {
+  switch (data.kind) {
+    case "tmc": {
+      return tmc(data.data)
+    }
+    case "mooc": {
+      return mooc(data.data)
+    }
+    default: {
+      assertUnreachable(data)
+    }
+  }
+}
+
+export function matchBackend<A extends { backend: "tmc" | "mooc" }, B, C>(
+  data: A,
+  tmc: (x: A) => B,
+  mooc: (x: A) => C,
+): B | C {
+  switch (data.backend) {
+    case "tmc": {
+      return tmc(data)
+    }
+    case "mooc": {
+      return mooc(data)
+    }
+    default: {
+      assertUnreachable(data.backend)
+    }
+  }
+}
+
+export function matchOption<A, B, T extends Enum<A, B> | undefined>(
+  data: T,
+  tmc: (x: T & TmcKind) => A,
+  mooc: (x: T & MoocKind) => B,
+): A | B | undefined {
+  switch (data?.kind) {
+    case "tmc": {
+      return tmc(data as T & TmcKind)
+    }
+    case "mooc": {
+      return mooc(data as T & MoocKind)
+    }
+    case undefined: {
+      return undefined
+    }
+    default: {
+      assertUnreachable(data)
+    }
+  }
+}
+
+export function makeTmcKind<T>(t: T): { kind: "tmc" } & { data: T } {
+  return { kind: "tmc", data: t }
+}
+
+export function makeMoocKind<T>(t: T): { kind: "mooc" } & { data: T } {
+  return { kind: "mooc", data: t }
+}
+
+export function unwrap<A, B>(e: Enum<A, B>): A | B {
+  return match(
+    e,
+    (a) => a,
+    (b) => b,
+  )
+}
+
+export function assertUnreachable(x: never): never {
+  throw new Error(`Unreachable ${JSON.stringify(x, null, 2)}`)
+}
 
 /*
  * ======== state ========
  */
-import {
-    Course,
-    CourseInstance,
-    Organization,
-    RunResult,
-    StyleValidationResult,
-    SubmissionFinished,
-} from "./langsSchema";
-import * as util from "node:util";
-import { createIs } from "typia";
-import { Uri } from "vscode";
-import { MoocLocalCourseExercise, TmcLocalCourseExercise } from "../storage/data";
 
 // for now, these are just copied from the data module
 // todo: think of better way to do this...
-export interface SharedTmcCourseData {
-    id: number;
-    name: string;
-    title: string;
-    description: string;
-    organization: string;
-    exercises: Array<SharedTmcCourseExercise>;
-    availablePoints: number;
-    awardedPoints: number;
-    perhapsExamMode: boolean;
-    newExercises: Array<number>;
-    notifyAfter: number;
-    disabled: boolean;
-    materialUrl: string | null;
-}
+export const SharedTmcCourseExerciseSchema = z.object({
+  id: z.number(),
+  availablePoints: z.number(),
+  awardedPoints: z.number(),
+  /// Equivalent to exercise slug
+  name: z.string(),
+  deadline: z.string().nullable(),
+  passed: z.boolean(),
+  softDeadline: z.string().nullable(),
+})
 
-export interface SharedTmcCourseExercise {
-    id: number;
-    availablePoints: number;
-    awardedPoints: number;
-    /// Equivalent to exercise slug
-    name: string;
-    deadline: string | null;
-    passed: boolean;
-    softDeadline: string | null;
-}
+export type SharedTmcCourseExercise = z.infer<typeof SharedTmcCourseExerciseSchema>
 
-export interface SharedMoocCourseData {
-    // instance id
-    id: string;
-    courseId: string;
-    // course slug
-    name: string;
-    instanceName: string | null;
-    title: string;
-    description: string | null;
-    courseDescription: string | null;
-    organization: string;
-    exercises: Array<SharedMoocCourseExercise>;
-    availablePoints: number;
-    awardedPoints: number;
-    perhapsExamMode: boolean;
-    newExercises: Array<string>;
-    notifyAfter: number;
-    disabled: boolean;
-    materialUrl: string | null;
-}
+export const SharedTmcCourseDataSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  title: z.string(),
+  description: z.string(),
+  organization: z.string(),
+  exercises: z.array(SharedTmcCourseExerciseSchema),
+  availablePoints: z.number(),
+  awardedPoints: z.number(),
+  perhapsExamMode: z.boolean(),
+  newExercises: z.array(z.number()),
+  notifyAfter: z.number(),
+  disabled: z.boolean(),
+  materialUrl: z.string().nullable(),
+})
 
-export interface SharedMoocCourseExercise {
-    id: string;
-    availablePoints: number;
-    awardedPoints: number;
-    /// Equivalent to exercise slug
-    name: string;
-    deadline: string | null;
-    passed: boolean;
-    softDeadline: string | null;
-}
+export type SharedTmcCourseData = z.infer<typeof SharedTmcCourseDataSchema>
 
-export type LocalCourseExercise = Enum<SharedTmcCourseExercise, SharedMoocCourseExercise>;
+export const SharedMoocCourseExerciseSchema = z.object({
+  id: z.string(),
+  availablePoints: z.number(),
+  awardedPoints: z.number(),
+  /// Equivalent to exercise slug
+  name: z.string(),
+  deadline: z.string().nullable(),
+  passed: z.boolean(),
+  softDeadline: z.string().nullable(),
+})
+
+export type SharedMoocCourseExercise = z.infer<typeof SharedMoocCourseExerciseSchema>
+
+export const SharedMoocCourseDataSchema = z.object({
+  // instance id
+  id: z.string(),
+  courseId: z.string(),
+  // course slug
+  name: z.string(),
+  instanceName: z.string().nullable(),
+  title: z.string(),
+  description: z.string().nullable(),
+  courseDescription: z.string().nullable(),
+  organization: z.string(),
+  exercises: z.array(SharedMoocCourseExerciseSchema),
+  availablePoints: z.number(),
+  awardedPoints: z.number(),
+  perhapsExamMode: z.boolean(),
+  newExercises: z.array(z.string()),
+  notifyAfter: z.number(),
+  disabled: z.boolean(),
+  materialUrl: z.string().nullable(),
+})
+
+export type SharedMoocCourseData = z.infer<typeof SharedMoocCourseDataSchema>
+
+export const LocalCourseExerciseSchema = EnumSchema(
+  SharedTmcCourseExerciseSchema,
+  SharedMoocCourseExerciseSchema,
+)
+
+export type LocalCourseExercise = Enum<SharedTmcCourseExercise, SharedMoocCourseExercise>
 
 export namespace LocalCourseExercise {
-    export function getSlug(lce: LocalCourseExercise): string {
-        return match(
-            lce,
-            (tmc) => tmc.name,
-            (mooc) => mooc.name,
-        );
-    }
+  export function getSlug(lce: LocalCourseExercise): string {
+    return match(
+      lce,
+      (tmc) => tmc.name,
+      (mooc) => mooc.name,
+    )
+  }
 
-    export function unwrap(
-        lce: LocalCourseExercise,
-    ): SharedTmcCourseExercise | SharedMoocCourseExercise {
-        return match(
-            lce,
-            (tmc) => tmc,
-            (mooc) => mooc,
-        );
-    }
+  // oxlint-disable-next-line no-shadow -- deliberate qualified-name reuse (LocalCourseExercise.unwrap)
+  export function unwrap(
+    lce: LocalCourseExercise,
+  ): SharedTmcCourseExercise | SharedMoocCourseExercise {
+    return match(
+      lce,
+      (tmc) => tmc,
+      (mooc) => mooc,
+    )
+  }
 
-    export function getId(lce: LocalCourseExercise): ExerciseIdentifier {
-        const id = match(
-            lce,
-            (tmc) => tmc.id,
-            (mooc) => mooc.id,
-        );
-        return ExerciseIdentifier.from(id);
-    }
+  export function getId(lce: LocalCourseExercise): ExerciseIdentifier {
+    const id = match(
+      lce,
+      (tmc) => tmc.id,
+      (mooc) => mooc.id,
+    )
+    return ExerciseIdentifier.from(id)
+  }
 }
 
-export type LocalCourseData = Enum<SharedTmcCourseData, SharedMoocCourseData>;
+export const LocalCourseDataSchema = EnumSchema(
+  SharedTmcCourseDataSchema,
+  SharedMoocCourseDataSchema,
+)
+
+export type LocalCourseData = Enum<SharedTmcCourseData, SharedMoocCourseData>
 
 export namespace LocalCourseData {
-    export function getCourseId(lcd: LocalCourseData): CourseIdentifier {
-        return match(
-            lcd,
-            (tmc) => makeTmcKind({ courseId: tmc.id }),
-            (mooc) => makeMoocKind({ instanceId: mooc.courseId }),
-        );
-    }
+  export function getCourseId(lcd: LocalCourseData): CourseIdentifier {
+    return match(
+      lcd,
+      (tmc) => makeTmcKind({ courseId: tmc.id }),
+      (mooc) => makeMoocKind({ instanceId: mooc.courseId }),
+    )
+  }
 
-    export function getCourseName(lcd: LocalCourseData): string {
-        return match(
-            lcd,
-            (tmc) => tmc.name,
-            (mooc) => mooc.name,
-        );
-    }
+  export function getCourseName(lcd: LocalCourseData): string {
+    return match(
+      lcd,
+      (tmc) => tmc.name,
+      (mooc) => mooc.name,
+    )
+  }
 
-    export function getNewExercises(lcd: LocalCourseData): Array<ExerciseIdentifier> {
-        return match(
-            lcd,
-            (tmc) => tmc.newExercises.map((neid) => makeTmcKind({ tmcExerciseId: neid })),
-            (mooc) => mooc.newExercises.map((neid) => makeMoocKind({ moocExerciseId: neid })),
-        );
-    }
+  export function getNewExercises(lcd: LocalCourseData): ExerciseIdentifier[] {
+    return match(
+      lcd,
+      (tmc) => tmc.newExercises.map((neid) => makeTmcKind({ tmcExerciseId: neid })),
+      (mooc) => mooc.newExercises.map((neid) => makeMoocKind({ moocExerciseId: neid })),
+    )
+  }
 
-    export function getExercises(lcd: LocalCourseData): Array<LocalCourseExercise> {
-        return match(
-            lcd,
-            (tmc) => tmc.exercises.map(makeTmcKind),
-            (mooc) => mooc.exercises.map(makeMoocKind),
-        );
-    }
+  export function getExercises(lcd: LocalCourseData): LocalCourseExercise[] {
+    return match(
+      lcd,
+      (tmc) => tmc.exercises.map(makeTmcKind),
+      (mooc) => mooc.exercises.map(makeMoocKind),
+    )
+  }
 }
 
 export function getCourseExercises(
-    course: LocalCourseData,
-): Enum<Array<TmcLocalCourseExercise>, Array<MoocLocalCourseExercise>> {
-    // doesn't work without an intermediate variable........
-    const ret = match(
-        course,
-        (tmc) => makeTmcKind(tmc.exercises),
-        (mooc) => makeMoocKind(mooc.exercises),
-    );
-    return ret;
+  course: LocalCourseData,
+): Enum<SharedTmcCourseExercise[], SharedMoocCourseExercise[]> {
+  // doesn't work without an intermediate variable........
+  const ret = match(
+    course,
+    (tmc) => makeTmcKind(tmc.exercises),
+    (mooc) => makeMoocKind(mooc.exercises),
+  )
+  return ret
 }
 
-/**
- * Contains the state of the webview.
+/*
+ * ======== additional types ========
  */
-export type State = {
-    panel: Panel;
-};
+
+export const NewExerciseSchema = z.object({
+  id: z.number(),
+})
+
+export type NewExercise = z.infer<typeof NewExerciseSchema>
+
+export const TmcCourseDataSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  title: z.string(),
+  description: z.string(),
+  organization: z.string(),
+  awardedPoints: z.number(),
+  availablePoints: z.number(),
+  exercises: z.array(NewExerciseSchema),
+  newExercises: z.array(z.number()),
+  disabled: z.boolean(),
+  materialUrl: z.string().nullable(),
+  perhapsExamMode: z.boolean(),
+})
+
+export type TmcCourseData = z.infer<typeof TmcCourseDataSchema>
+
+export const MoocCourseDataSchema = z.object({
+  courseId: z.string(),
+  instanceId: z.string(),
+  courseName: z.string(),
+  instanceName: z.string().nullable(),
+  description: z.string(),
+  awardedPoints: z.number(),
+  availablePoints: z.number(),
+  materialUrl: z.string(),
+})
+
+export type MoocCourseData = z.infer<typeof MoocCourseDataSchema>
+
+export const CourseDataSchema = EnumSchema(TmcCourseDataSchema, MoocCourseDataSchema)
+
+export type CourseData = Enum<TmcCourseData, MoocCourseData>
+
+export const ExerciseStatusSchema = z.enum([
+  "closed",
+  "downloading",
+  "downloadFailed",
+  "expired",
+  "missing",
+  "new",
+  "opened",
+])
+
+export type ExerciseStatus = z.infer<typeof ExerciseStatusSchema>
+
+export const ExerciseSchema = z.object({
+  id: ExerciseIdentifierSchema,
+  name: z.string(),
+  isHard: z.boolean(),
+  hardDeadlineString: z.string(),
+  softDeadlineString: z.string(),
+  passed: z.boolean(),
+})
+
+export type Exercise = z.infer<typeof ExerciseSchema>
+
+export const ExerciseGroupSchema = z.object({
+  name: z.string(),
+  exercises: z.array(ExerciseSchema),
+  nextDeadlineString: z.string(),
+})
+
+export type ExerciseGroup = z.infer<typeof ExerciseGroupSchema>
+
+export interface TestExercise {
+  id: number
+  availablePoints: number
+  awardedPoints: number
+  /// Equivalent to exercise slug
+  name: string
+  deadline: string | null
+  passed: boolean
+  softDeadline: string | null
+}
+
+export const TestResultDataSchema = z.object({
+  testResult: RunResult,
+  id: ExerciseIdentifierSchema,
+  courseSlug: z.string(),
+  exerciseName: z.string(),
+  tmcLogs: z.object({
+    stdout: z.string().optional(),
+    stderr: z.string().optional(),
+  }),
+  pasteLink: z.string().optional(),
+  disabled: z.boolean().optional(),
+  styleValidationResult: StyleValidationResult.nullable().optional(),
+})
+
+export type TestResultData = z.infer<typeof TestResultDataSchema>
+
+export interface TestCourse {
+  id: CourseIdentifier
+  name: string
+  title: string
+  description: string
+  organization: string
+  availablePoints: number
+  awardedPoints: number
+  perhapsExamMode: boolean
+  newExercises: number[]
+  notifyAfter: number
+  disabled: boolean
+  materialUrl: string | null
+}
+
+export const FeedbackQuestionSchema = z.object({
+  id: z.number(),
+  kind: z.string(),
+  lower: z.number().optional(),
+  upper: z.number().optional(),
+  question: z.string(),
+})
+
+export type FeedbackQuestion = z.infer<typeof FeedbackQuestionSchema>
 
 /*
  * ======== panels ========
  */
+
+export const AppPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("App"),
+})
+
+export type AppPanel = z.infer<typeof AppPanelSchema>
+
+export const WelcomePanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("Welcome"),
+  version: z.string().optional(),
+})
+
+export type WelcomePanel = z.infer<typeof WelcomePanelSchema>
+
+export const LoginPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("Login"),
+})
+
+export type LoginPanel = z.infer<typeof LoginPanelSchema>
+
+export const MyCoursesPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("MyCourses"),
+  // matches the `setMyCourses` message, which carries the user's local course data
+  courses: z.array(LocalCourseDataSchema).optional(),
+  tmcDataPath: z.string().optional(),
+  tmcDataSize: z.string().optional(),
+  // keyed by `CourseIdentifier.toString` (course id for tmc, instance id for mooc)
+  courseDeadlines: z.record(z.string(), z.string()),
+})
+
+export type MyCoursesPanel = z.infer<typeof MyCoursesPanelSchema>
+
+export const CourseDetailsPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("CourseDetails"),
+  courseId: CourseIdentifierSchema,
+  course: LocalCourseDataSchema.optional(),
+  offlineMode: z.boolean().optional(),
+  updateableExercises: z.array(ExerciseIdentifierSchema).optional(),
+  // undefined until the exercise groups have been received from the extension host
+  exerciseGroups: z.array(ExerciseGroupSchema).optional(),
+  exerciseStatuses: z.object({
+    tmc: z.record(z.coerce.number(), ExerciseStatusSchema),
+    mooc: z.record(z.string(), ExerciseStatusSchema),
+  }),
+})
+
+export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
+
+// NOTE: defined by hand (rather than as `Panel["type"]`) so that
+// `targetPanelSchema`/`broadcastPanelSchema` can be used inside the panel schemas
+// themselves without creating a circular type dependency;
+// the `_panelTypesMatch` assertion below `Panel` keeps this in sync with `PanelSchema`
+export type PanelType =
+  | "App"
+  | "Welcome"
+  | "Login"
+  | "MyCourses"
+  | "CourseDetails"
+  | "SelectOrganization"
+  | "SelectCourse"
+  | "ExerciseTests"
+  | "ExerciseSubmission"
+  | "SelectPlatform"
+  | "SelectMoocCourse"
+  | "InitializationErrorHelp"
+
+// used to define messages that should only be sent to a specific instance of a panel
+// for example, the course selected by the user on the SelectCoursePanel should only be sent
+// to the panel which initiated the course selection
+export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "id" | "type">
+
+// used to define messages that should be sent to any instance of a given panel type
+// for example, a change in an exercise's status should be sent to all panels that display the status
+export type BroadcastPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "type">
+
+// schema equivalent of `TargetPanel<T>` for the given panel type(s)
+export function targetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
+  return z.object({
+    id: z.number(),
+    type: z.literal(types),
+  })
+}
+
+// schema equivalent of `BroadcastPanel<T>` for the given panel type(s)
+export function broadcastPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
+  return z.object({
+    type: z.literal(types),
+  })
+}
+
+export const SelectOrganizationPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("SelectOrganization"),
+  // the result of the selection is sent back to this panel
+  requestingPanel: targetPanelSchema("MyCourses"),
+})
+
+export type SelectOrganizationPanel = z.infer<typeof SelectOrganizationPanelSchema>
+
+export const SelectCoursePanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("SelectCourse"),
+  organizationSlug: z.string(),
+  // the result of the selection is sent back to this panel
+  requestingPanel: targetPanelSchema("MyCourses"),
+})
+
+export type SelectCoursePanel = z.infer<typeof SelectCoursePanelSchema>
+
+export const ExerciseTestsPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("ExerciseTests"),
+  course: LocalCourseDataSchema,
+  exercise: LocalCourseExerciseSchema,
+  // note: `Uri` does not survive `postMessage` serialization as a class instance,
+  // so it is passed through without validation
+  exerciseUri: z.custom<Uri>(),
+  testRunId: z.number(),
+})
+
+export type ExerciseTestsPanel = z.infer<typeof ExerciseTestsPanelSchema>
+
+export const ExerciseSubmissionPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("ExerciseSubmission"),
+  course: LocalCourseDataSchema,
+  exercise: LocalCourseExerciseSchema,
+})
+
+export type ExerciseSubmissionPanel = z.infer<typeof ExerciseSubmissionPanelSchema>
+
+export const InitializationErrorHelpPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("InitializationErrorHelp"),
+})
+
+export type InitializationErrorHelpPanel = z.infer<typeof InitializationErrorHelpPanelSchema>
+
+export const SelectPlatformPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("SelectPlatform"),
+  requestingPanel: targetPanelSchema("MyCourses"),
+})
+
+export type SelectPlatformPanel = z.infer<typeof SelectPlatformPanelSchema>
+
+export const SelectMoocCoursePanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("SelectMoocCourse"),
+  requestingPanel: targetPanelSchema("MyCourses"),
+})
+
+export type SelectMoocCoursePanel = z.infer<typeof SelectMoocCoursePanelSchema>
 
 /**
  * Represents a panel that is rendered by the webview.
  *
  * `id`: used to make sure messages are delivered to the correct panels
  */
-export type Panel =
-    | AppPanel
-    | WelcomePanel
-    | LoginPanel
-    | MyCoursesPanel
-    | CourseDetailsPanel
-    | SelectOrganizationPanel
-    | SelectCoursePanel
-    | ExerciseTestsPanel
-    | ExerciseSubmissionPanel
-    | SelectPlatformPanel
-    | SelectMoocCoursePanel
-    | InitializationErrorHelpPanel;
+export const PanelSchema = z.discriminatedUnion("type", [
+  AppPanelSchema,
+  WelcomePanelSchema,
+  LoginPanelSchema,
+  MyCoursesPanelSchema,
+  CourseDetailsPanelSchema,
+  SelectOrganizationPanelSchema,
+  SelectCoursePanelSchema,
+  ExerciseTestsPanelSchema,
+  ExerciseSubmissionPanelSchema,
+  SelectPlatformPanelSchema,
+  SelectMoocCoursePanelSchema,
+  InitializationErrorHelpPanelSchema,
+])
 
-export type PanelType = Panel["type"];
+export type Panel = z.infer<typeof PanelSchema>
 
-// used to define messages that should only be sent to a specific instance of a panel
-// for example, the course selected by the user on the SelectCoursePanel should only be sent
-// to the panel which initiated the course selection
-export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "id" | "type">;
+// compile-time assertion that the hand-written `PanelType` stays in sync with `PanelSchema`
+type Equal<X, Y> =
+  (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false
 
-// used to define messages that should be sent to any instance of a given panel type
-// for example, a change in an exercise's status should be sent to all panels that display the status
-export type BroadcastPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "type">;
+type _panelTypesMatch = Equal<Panel["type"], PanelType> extends true ? true : never
 
-export type AppPanel = {
-    id: number;
-    type: "App";
-};
+const _panelTypesMatch: _panelTypesMatch = true
 
-export type WelcomePanel = {
-    id: number;
-    type: "Welcome";
-    version?: string;
-};
+/**
+ * Contains the state of the webview.
+ */
+export const StateSchema = z.object({
+  panel: PanelSchema,
+})
 
-export type LoginPanel = {
-    id: number;
-    type: "Login";
-};
-
-export type MyCoursesPanel = {
-    id: number;
-    type: "MyCourses";
-    courses?: Array<CourseData>;
-    moocCourses?: Array<MoocCourseData>;
-    tmcDataPath?: string;
-    tmcDataSize?: string;
-    courseDeadlines: Record<number, string>;
-};
-
-export type CourseDetailsPanel = {
-    id: number;
-    type: "CourseDetails";
-    courseId: CourseIdentifier;
-    course?: LocalCourseData;
-    offlineMode?: boolean;
-    updateableExercises?: Array<ExerciseIdentifier>;
-    exerciseGroups: Array<ExerciseGroup>;
-    exerciseStatuses: {
-        tmc: Record<TmcExerciseId, ExerciseStatus>;
-        mooc: Record<MoocExerciseId, ExerciseStatus>;
-    };
-};
-
-export type SelectOrganizationPanel = {
-    id: number;
-    type: "SelectOrganization";
-    // the result of the selection is sent back to this panel
-    requestingPanel: TargetPanel<MyCoursesPanel>;
-};
-
-export type SelectCoursePanel = {
-    id: number;
-    type: "SelectCourse";
-    organizationSlug: string;
-    // the result of the selection is sent back to this panel
-    requestingPanel: TargetPanel<MyCoursesPanel>;
-};
-
-export type ExerciseTestsPanel = {
-    id: number;
-    type: "ExerciseTests";
-    course: LocalCourseData;
-    exercise: LocalCourseExercise;
-    exerciseUri: Uri;
-    testRunId: number;
-};
-
-export type ExerciseSubmissionPanel = {
-    id: number;
-    type: "ExerciseSubmission";
-    course: LocalCourseData;
-    exercise: LocalCourseExercise;
-};
-
-export type InitializationErrorHelpPanel = {
-    id: number;
-    type: "InitializationErrorHelp";
-};
-
-export type SelectPlatformPanel = {
-    id: number;
-    type: "SelectPlatform";
-    requestingPanel: TargetPanel<MyCoursesPanel>;
-};
-
-export type SelectMoocCoursePanel = {
-    id: number;
-    type: "SelectMoocCourse";
-    requestingPanel: TargetPanel<MyCoursesPanel>;
-};
+export type State = z.infer<typeof StateSchema>
 
 /*
  * ======== messages to webview ========
  */
+
+const initializationErrorSchema = z
+  .object({
+    error: z.string(),
+    stack: z.string(),
+  })
+  .nullable()
+
+/**
+ * For use with `webview.postMessage` in `TmcPanel`.
+ * Handled by the Svelte app.
+ */
+export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("setPanel"),
+    target: targetPanelSchema("App"),
+    panel: PanelSchema,
+  }),
+  z.object({
+    type: z.literal("setWelcomeData"),
+    target: targetPanelSchema("Welcome"),
+    version: z.string(),
+  }),
+  z.object({
+    type: z.literal("setMyCourses"),
+    target: targetPanelSchema("MyCourses"),
+    courses: z.array(LocalCourseDataSchema),
+  }),
+  z.object({
+    type: z.literal("setTmcDataPath"),
+    target: broadcastPanelSchema("MyCourses"),
+    tmcDataPath: z.string(),
+  }),
+  z.object({
+    type: z.literal("setNextCourseDeadline"),
+    target: targetPanelSchema("MyCourses"),
+    courseId: CourseIdentifierSchema,
+    deadline: z.string(),
+  }),
+  z.object({
+    type: z.literal("setTmcDataSize"),
+    target: targetPanelSchema("MyCourses"),
+    tmcDataSize: z.string(),
+  }),
+  z.object({
+    type: z.literal("loginError"),
+    target: targetPanelSchema("Login"),
+    error: z.string(),
+  }),
+  z.object({
+    type: z.literal("setCourseData"),
+    target: targetPanelSchema("CourseDetails"),
+    courseData: LocalCourseDataSchema,
+  }),
+  z.object({
+    type: z.literal("setCourseGroups"),
+    target: targetPanelSchema("CourseDetails"),
+    offlineMode: z.boolean(),
+    exerciseGroups: z.array(ExerciseGroupSchema),
+  }),
+  z.object({
+    type: z.literal("setCourseDisabledStatus"),
+    target: broadcastPanelSchema("MyCourses", "CourseDetails"),
+    courseId: CourseIdentifierSchema,
+    disabled: z.boolean(),
+  }),
+  z.object({
+    type: z.literal("exerciseStatusChange"),
+    target: broadcastPanelSchema("CourseDetails"),
+    exerciseId: ExerciseIdentifierSchema,
+    status: ExerciseStatusSchema,
+  }),
+  z.object({
+    type: z.literal("setUpdateables"),
+    target: broadcastPanelSchema("CourseDetails"),
+    exerciseIds: z.array(ExerciseIdentifierSchema),
+  }),
+  z.object({
+    type: z.literal("setOrganizations"),
+    target: targetPanelSchema("SelectOrganization"),
+    organizations: z.array(Organization),
+  }),
+  z.object({
+    type: z.literal("setTmcBackendUrl"),
+    target: targetPanelSchema("SelectOrganization", "SelectCourse"),
+    tmcBackendUrl: z.string(),
+  }),
+  z.object({
+    type: z.literal("setOrganization"),
+    target: targetPanelSchema("SelectCourse"),
+    organization: Organization,
+  }),
+  z.object({
+    type: z.literal("setSelectableCourses"),
+    target: targetPanelSchema("SelectCourse"),
+    courses: z.array(Course),
+  }),
+  z.object({
+    type: z.literal("testResults"),
+    target: targetPanelSchema("ExerciseTests"),
+    testResults: TestResultDataSchema,
+  }),
+  z.object({
+    type: z.literal("testError"),
+    target: targetPanelSchema("ExerciseTests"),
+    error: z.custom<BaseError>(),
+  }),
+  z.object({
+    type: z.literal("pasteResult"),
+    target: targetPanelSchema("ExerciseTests", "ExerciseSubmission"),
+    pasteLink: z.string(),
+  }),
+  z.object({
+    type: z.literal("pasteError"),
+    target: targetPanelSchema("ExerciseTests", "ExerciseSubmission"),
+    error: z.string(),
+  }),
+  z.object({
+    type: z.literal("submissionStatusUrl"),
+    target: targetPanelSchema("ExerciseSubmission"),
+    url: z.string(),
+  }),
+  z.object({
+    type: z.literal("submissionStatusUpdate"),
+    target: targetPanelSchema("ExerciseSubmission"),
+    progressPercent: z.number(),
+    message: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("submissionResult"),
+    target: targetPanelSchema("ExerciseSubmission"),
+    result: SubmissionFinished,
+    questions: z.array(FeedbackQuestionSchema),
+  }),
+  z.object({
+    type: z.literal("submissionStatusError"),
+    target: targetPanelSchema("ExerciseSubmission"),
+    error: z.custom<Error>(),
+  }),
+  z.object({
+    type: z.literal("setNewExercises"),
+    target: broadcastPanelSchema("MyCourses"),
+    courseId: CourseIdentifierSchema,
+    exerciseIds: z.array(ExerciseIdentifierSchema),
+  }),
+  z.object({
+    type: z.literal("willNotRunTestsForExam"),
+    target: targetPanelSchema("ExerciseTests"),
+  }),
+  z.object({
+    type: z.literal("setSelectMoocCourseData"),
+    target: broadcastPanelSchema("SelectMoocCourse"),
+    courseInstances: z.array(MoocCourse),
+  }),
+  z.object({
+    type: z.literal("requestSelectCourseDataError"),
+    target: targetPanelSchema("SelectCourse"),
+    error: z.string(),
+  }),
+  z.object({
+    type: z.literal("requestSelectOrganizationDataError"),
+    target: targetPanelSchema("SelectOrganization"),
+    error: z.string(),
+  }),
+  z.object({
+    type: z.literal("requestSelectMoocCourseDataError"),
+    target: targetPanelSchema("SelectMoocCourse"),
+    error: z.string(),
+  }),
+  z.object({
+    type: z.literal("initializationErrors"),
+    target: targetPanelSchema("InitializationErrorHelp"),
+    cliFolder: z.string(),
+    initializationErrors: z.object({
+      tmc: initializationErrorSchema,
+      userData: initializationErrorSchema,
+      workspaceManager: initializationErrorSchema,
+      exerciseDecorationProvider: initializationErrorSchema,
+      resources: initializationErrorSchema,
+    }),
+  }),
+])
 
 /**
  * For use with `webview.postMessage` in `TmcPanel`.
  * Handled by the Svelte app.
  */
 export type ExtensionToWebview =
-    | {
-          type: "setPanel";
-          target: TargetPanel<AppPanel>;
-          panel: Panel;
-      }
-    | {
-          type: "setWelcomeData";
-          target: TargetPanel<WelcomePanel>;
-          version: string;
-      }
-    | {
-          type: "setMyCourses";
-          target: TargetPanel<MyCoursesPanel>;
-          courses: Array<LocalCourseData>;
-      }
-    | {
-          type: "setTmcDataPath";
-          target: BroadcastPanel<MyCoursesPanel>;
-          tmcDataPath: string;
-      }
-    | {
-          type: "setNextCourseDeadline";
-          target: TargetPanel<MyCoursesPanel>;
-          courseId: CourseIdentifier;
-          deadline: string;
-      }
-    | {
-          type: "setTmcDataSize";
-          target: TargetPanel<MyCoursesPanel>;
-          tmcDataSize: string;
-      }
-    | {
-          type: "loginError";
-          target: TargetPanel<LoginPanel>;
-          error: string;
-      }
-    | {
-          type: "setCourseData";
-          target: TargetPanel<CourseDetailsPanel>;
-          courseData: LocalCourseData;
-      }
-    | {
-          type: "setCourseGroups";
-          target: TargetPanel<CourseDetailsPanel>;
-          offlineMode: boolean;
-          exerciseGroups: Array<ExerciseGroup>;
-      }
-    | {
-          type: "setCourseDisabledStatus";
-          target: BroadcastPanel<MyCoursesPanel | CourseDetailsPanel>;
-          courseId: CourseIdentifier;
-          disabled: boolean;
-      }
-    | {
-          type: "exerciseStatusChange";
-          target: BroadcastPanel<CourseDetailsPanel>;
-          exerciseId: ExerciseIdentifier;
-          status: ExerciseStatus;
-      }
-    | {
-          type: "setUpdateables";
-          target: BroadcastPanel<CourseDetailsPanel>;
-          exerciseIds: Array<ExerciseIdentifier>;
-      }
-    | {
-          type: "setOrganizations";
-          target: TargetPanel<SelectOrganizationPanel>;
-          organizations: Array<Organization>;
-      }
-    | {
-          type: "setTmcBackendUrl";
-          target: TargetPanel<SelectOrganizationPanel | SelectCoursePanel>;
-          tmcBackendUrl: string;
-      }
-    | {
-          type: "setOrganization";
-          target: TargetPanel<SelectCoursePanel>;
-          organization: Organization;
-      }
-    | {
-          type: "setSelectableCourses";
-          target: TargetPanel<SelectCoursePanel>;
-          courses: Array<Course>;
-      }
-    | {
-          type: "testResults";
-          target: TargetPanel<ExerciseTestsPanel>;
-          testResults: TestResultData;
-      }
-    | {
-          type: "testError";
-          target: TargetPanel<ExerciseTestsPanel>;
-          error: BaseError;
-      }
-    | {
-          type: "pasteResult";
-          target: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
-          pasteLink: string;
-      }
-    | {
-          type: "pasteError";
-          target: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
-          error: string;
-      }
-    | {
-          type: "submissionStatusUrl";
-          target: TargetPanel<ExerciseSubmissionPanel>;
-          url: string;
-      }
-    | {
-          type: "submissionStatusUpdate";
-          target: TargetPanel<ExerciseSubmissionPanel>;
-          progressPercent: number;
-          message?: string;
-      }
-    | {
-          type: "submissionResult";
-          target: TargetPanel<ExerciseSubmissionPanel>;
-          result: SubmissionFinished;
-          questions: Array<FeedbackQuestion>;
-      }
-    | {
-          type: "submissionStatusError";
-          target: TargetPanel<ExerciseSubmissionPanel>;
-          error: Error;
-      }
-    | {
-          type: "setNewExercises";
-          target: BroadcastPanel<MyCoursesPanel>;
-          courseId: CourseIdentifier;
-          exerciseIds: Array<ExerciseIdentifier>;
-      }
-    | {
-          type: "willNotRunTestsForExam";
-          target: TargetPanel<ExerciseTestsPanel>;
-      }
-    | {
-          type: "setSelectMoocCourseData";
-          target: BroadcastPanel<SelectMoocCoursePanel>;
-          courseInstances: Array<CourseInstance>;
-      }
-    | {
-          type: "requestSelectCourseDataError";
-          target: TargetPanel<SelectCoursePanel>;
-          error: string;
-      }
-    | {
-          type: "requestSelectOrganizationDataError";
-          target: TargetPanel<SelectOrganizationPanel>;
-          error: string;
-      }
-    | {
-          type: "requestSelectMoocCourseDataError";
-          target: TargetPanel<SelectMoocCoursePanel>;
-          error: string;
-      }
-    | {
-          type: "initializationErrors";
-          target: TargetPanel<InitializationErrorHelpPanel>;
-          cliFolder: string;
-          initializationErrors: {
-              tmc: { error: string; stack: string } | null;
-              userData: { error: string; stack: string } | null;
-              workspaceManager: { error: string; stack: string } | null;
-              exerciseDecorationProvider: { error: string; stack: string } | null;
-              resources: { error: string; stack: string } | null;
-          };
-      }
-    // the last variant exists just to make TypeScript think that every panel type has
-    // at least two different message types, which makes TS treat them differently than if
-    // they only had one...
-    | {
-          type: never;
-          target: never;
-      };
+  | z.infer<typeof ExtensionToWebviewSchema>
+  // the last variant exists just to make TypeScript think that every panel type has
+  // at least two different message types, which makes TS treat them differently than if
+  // they only had one...
+  | {
+      type: never
+      target: never
+    }
 
 // helper type for messages from the extension to a specific panel
-export type TargetedExtensionToWebview<T extends PanelType> = Targeted<ExtensionToWebview, T>;
+export type TargetedExtensionToWebview<T extends PanelType> = Targeted<ExtensionToWebview, T>
 
 // helper type for messages from the extension to a specific panel type
-export type BroadcastExtensionToWebview<T extends PanelType> = Broadcast<ExtensionToWebview, T>;
+export type BroadcastExtensionToWebview<T extends PanelType> = Broadcast<ExtensionToWebview, T>
 
 /*
  * ======== from webview ========
@@ -484,269 +916,163 @@ export type BroadcastExtensionToWebview<T extends PanelType> = Broadcast<Extensi
  * For use with `vscode.postMessage` in the Svelte app.
  * Handled by the extension host in `TmcPanel`.
  */
-export type WebviewToExtension =
-    | {
-          type: "requestCourseDetailsData";
-          sourcePanel: CourseDetailsPanel;
-      }
-    | {
-          type: "requestExerciseSubmissionData";
-          sourcePanel: ExerciseSubmissionPanel;
-      }
-    | {
-          type: "requestExerciseTestsData";
-          sourcePanel: ExerciseTestsPanel;
-      }
-    | {
-          type: "requestLoginData";
-          sourcePanel: LoginPanel;
-      }
-    | {
-          type: "requestMyCoursesData";
-          sourcePanel: MyCoursesPanel;
-      }
-    | {
-          type: "requestSelectCourseData";
-          sourcePanel: SelectCoursePanel;
-      }
-    | {
-          type: "requestSelectOrganizationData";
-          sourcePanel: SelectOrganizationPanel;
-      }
-    | {
-          type: "requestWelcomeData";
-          sourcePanel: WelcomePanel;
-      }
-    | {
-          type: "login";
-          sourcePanel: LoginPanel;
-          username: string;
-          password: string;
-      }
-    | {
-          type: "selectOrganization";
-          sourcePanel: TargetPanel<MyCoursesPanel>;
-      }
-    | {
-          type: "removeCourse";
-          id: CourseIdentifier;
-      }
-    | {
-          type: "openCourseWorkspace";
-          courseName: string;
-      }
-    | {
-          type: "downloadExercises";
-          ids: Array<ExerciseIdentifier>;
-          courseId: CourseIdentifier;
-          mode: "download" | "update";
-      }
-    | {
-          type: "clearNewExercises";
-          courseId: CourseIdentifier;
-      }
-    | {
-          type: "changeTmcDataPath";
-      }
-    | {
-          type: "openCourseDetails";
-          courseId: CourseIdentifier;
-      }
-    | {
-          type: "openMyCourses";
-      }
-    | {
-          type: "refreshCourseDetails";
-          id: CourseIdentifier;
-          useCache: boolean;
-      }
-    | {
-          type: "openExercises";
-          ids: Array<ExerciseIdentifier>;
-          courseId: CourseIdentifier;
-      }
-    | {
-          type: "closeExercises";
-          ids: Array<ExerciseIdentifier>;
-          courseId: CourseIdentifier;
-      }
-    | {
-          type: "refreshCourseDetails";
-          id: CourseIdentifier;
-          useCache: boolean;
-      }
-    | {
-          type: "selectCourse";
-          sourcePanel: TargetPanel<MyCoursesPanel>;
-          slug: string;
-      }
-    | {
-          type: "addCourse";
-          organizationSlug: string;
-          courseId: CourseIdentifier;
-          requestingPanel: TargetPanel<MyCoursesPanel>;
-      }
-    | {
-          type: "relayToWebview";
-          // the message type is handled by the webview
-          message: unknown;
-      }
-    | {
-          type: "closeSidePanel";
-      }
-    | {
-          type: "cancelTests";
-          testRunId: number;
-      }
-    | {
-          type: "submitExercise";
-          course: LocalCourseData;
-          exercise: LocalCourseExercise;
-          exerciseUri: Uri;
-      }
-    | {
-          type: "pasteExercise";
-          course: LocalCourseData;
-          exercise: LocalCourseExercise;
-          requestingPanel: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
-      }
-    | {
-          type: "openLinkInBrowser";
-          url: string;
-      }
-    | {
-          type: "requestInitializationErrors";
-          sourcePanel: InitializationErrorHelpPanel;
-      }
-    | {
-          type: "selectPlatform";
-          sourcePanel: TargetPanel<MyCoursesPanel>;
-      }
-    | {
-          type: "selectMoocCourse";
-          sourcePanel: TargetPanel<MyCoursesPanel>;
-      }
-    | {
-          type: "requestSelectMoocCourseData";
-          sourcePanel: TargetPanel<SelectMoocCoursePanel>;
-      }
-    | {
-          type: "addMoocCourse";
-          organizationSlug: string;
-          courseId: string;
-          instanceId: string;
-          courseName: string;
-          instanceName: string | null;
-          requestingPanel: TargetPanel<MyCoursesPanel>;
-      };
+export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("requestCourseDetailsData"),
+    sourcePanel: CourseDetailsPanelSchema,
+  }),
+  z.object({
+    type: z.literal("requestExerciseSubmissionData"),
+    sourcePanel: ExerciseSubmissionPanelSchema,
+  }),
+  z.object({
+    type: z.literal("requestExerciseTestsData"),
+    sourcePanel: ExerciseTestsPanelSchema,
+  }),
+  z.object({
+    type: z.literal("requestLoginData"),
+    sourcePanel: LoginPanelSchema,
+  }),
+  z.object({
+    type: z.literal("requestMyCoursesData"),
+    sourcePanel: MyCoursesPanelSchema,
+  }),
+  z.object({
+    type: z.literal("requestSelectCourseData"),
+    sourcePanel: SelectCoursePanelSchema,
+  }),
+  z.object({
+    type: z.literal("requestSelectOrganizationData"),
+    sourcePanel: SelectOrganizationPanelSchema,
+  }),
+  z.object({
+    type: z.literal("requestWelcomeData"),
+    sourcePanel: WelcomePanelSchema,
+  }),
+  z.object({
+    type: z.literal("login"),
+    sourcePanel: LoginPanelSchema,
+    username: z.string(),
+    password: z.string(),
+  }),
+  z.object({
+    type: z.literal("selectOrganization"),
+    sourcePanel: targetPanelSchema("MyCourses"),
+  }),
+  z.object({
+    type: z.literal("removeCourse"),
+    id: CourseIdentifierSchema,
+  }),
+  z.object({
+    type: z.literal("openCourseWorkspace"),
+    courseName: z.string(),
+  }),
+  z.object({
+    type: z.literal("downloadExercises"),
+    ids: z.array(ExerciseIdentifierSchema),
+    courseId: CourseIdentifierSchema,
+    mode: z.enum(["download", "update"]),
+  }),
+  z.object({
+    type: z.literal("clearNewExercises"),
+    courseId: CourseIdentifierSchema,
+  }),
+  z.object({
+    type: z.literal("changeTmcDataPath"),
+  }),
+  z.object({
+    type: z.literal("openCourseDetails"),
+    courseId: CourseIdentifierSchema,
+  }),
+  z.object({
+    type: z.literal("openMyCourses"),
+  }),
+  z.object({
+    type: z.literal("refreshCourseDetails"),
+    id: CourseIdentifierSchema,
+    useCache: z.boolean(),
+  }),
+  z.object({
+    type: z.literal("openExercises"),
+    ids: z.array(ExerciseIdentifierSchema),
+    courseId: CourseIdentifierSchema,
+  }),
+  z.object({
+    type: z.literal("closeExercises"),
+    ids: z.array(ExerciseIdentifierSchema),
+    courseId: CourseIdentifierSchema,
+  }),
+  z.object({
+    type: z.literal("selectCourse"),
+    sourcePanel: targetPanelSchema("MyCourses"),
+    slug: z.string(),
+  }),
+  z.object({
+    type: z.literal("addCourse"),
+    organizationSlug: z.string(),
+    courseId: CourseIdentifierSchema,
+    requestingPanel: targetPanelSchema("MyCourses"),
+  }),
+  z.object({
+    type: z.literal("relayToWebview"),
+    // the message type is handled by the webview
+    message: z.unknown(),
+  }),
+  z.object({
+    type: z.literal("closeSidePanel"),
+  }),
+  z.object({
+    type: z.literal("cancelTests"),
+    testRunId: z.number(),
+  }),
+  z.object({
+    type: z.literal("submitExercise"),
+    course: LocalCourseDataSchema,
+    exercise: LocalCourseExerciseSchema,
+    exerciseUri: z.custom<Uri>(),
+  }),
+  z.object({
+    type: z.literal("pasteExercise"),
+    course: LocalCourseDataSchema,
+    exercise: LocalCourseExerciseSchema,
+    requestingPanel: targetPanelSchema("ExerciseTests", "ExerciseSubmission"),
+  }),
+  z.object({
+    type: z.literal("openLinkInBrowser"),
+    url: z.string(),
+  }),
+  z.object({
+    type: z.literal("requestInitializationErrors"),
+    sourcePanel: InitializationErrorHelpPanelSchema,
+  }),
+  z.object({
+    type: z.literal("selectPlatform"),
+    sourcePanel: targetPanelSchema("MyCourses"),
+  }),
+  z.object({
+    type: z.literal("selectMoocCourse"),
+    sourcePanel: targetPanelSchema("MyCourses"),
+  }),
+  z.object({
+    type: z.literal("requestSelectMoocCourseData"),
+    sourcePanel: targetPanelSchema("SelectMoocCourse"),
+  }),
+  z.object({
+    type: z.literal("addMoocCourse"),
+    organizationSlug: z.string(),
+    courseId: z.string(),
+    instanceId: z.string(),
+    courseName: z.string(),
+    instanceName: z.string().nullable(),
+    requestingPanel: targetPanelSchema("MyCourses"),
+  }),
+])
 
-/*
- * ======== additional types ========
+/**
+ * For use with `vscode.postMessage` in the Svelte app.
+ * Handled by the extension host in `TmcPanel`.
  */
-
-export type CourseData = Enum<TmcCourseData, MoocCourseData>;
-
-export type TmcCourseData = {
-    id: number;
-    name: string;
-    title: string;
-    description: string;
-    organization: string;
-    awardedPoints: number;
-    availablePoints: number;
-    exercises: Array<NewExercise>;
-    newExercises: Array<number>;
-    disabled: boolean;
-    materialUrl: string | null;
-    perhapsExamMode: boolean;
-};
-
-export type MoocCourseData = {
-    courseId: string;
-    instanceId: string;
-    courseName: string;
-    instanceName: string | null;
-    description: string;
-    awardedPoints: number;
-    availablePoints: number;
-    materialUrl: string;
-};
-
-export type NewExercise = {
-    id: number;
-};
-
-export type ExerciseGroup = {
-    name: string;
-    exercises: Array<Exercise>;
-    nextDeadlineString: string;
-};
-
-export type Exercise = {
-    id: ExerciseIdentifier;
-    name: string;
-    isHard: boolean;
-    hardDeadlineString: string;
-    softDeadlineString: string;
-    passed: boolean;
-};
-
-export type ExerciseStatus =
-    | "closed"
-    | "downloading"
-    | "downloadFailed"
-    | "expired"
-    | "missing"
-    | "new"
-    | "opened";
-
-export type TestExercise = {
-    id: number;
-    availablePoints: number;
-    awardedPoints: number;
-    /// Equivalent to exercise slug
-    name: string;
-    deadline: string | null;
-    passed: boolean;
-    softDeadline: string | null;
-};
-
-export type TestResultData = {
-    testResult: RunResult;
-    id: ExerciseIdentifier;
-    courseSlug: string;
-    exerciseName: string;
-    tmcLogs: {
-        stdout?: string;
-        stderr?: string;
-    };
-    pasteLink?: string;
-    disabled?: boolean;
-    styleValidationResult?: StyleValidationResult | null;
-};
-
-export type TestCourse = {
-    id: CourseIdentifier;
-    name: string;
-    title: string;
-    description: string;
-    organization: string;
-    availablePoints: number;
-    awardedPoints: number;
-    perhapsExamMode: boolean;
-    newExercises: number[];
-    notifyAfter: number;
-    disabled: boolean;
-    materialUrl: string | null;
-};
-
-export type FeedbackQuestion = {
-    id: number;
-    kind: string;
-    lower?: number;
-    upper?: number;
-    question: string;
-};
+export type WebviewToExtension = z.infer<typeof WebviewToExtensionSchema>
 
 /*
  * ======== helpers ========
@@ -756,266 +1082,126 @@ export type FeedbackQuestion = {
 // target type doesn't have the panel type
 // works...somehow
 export type Targeted<M, T extends PanelType> = Exclude<
-    M,
-    { target: { type: Exclude<PanelType, T> } }
->;
+  M,
+  { target: { type: Exclude<PanelType, T> } }
+>
 
-export type Broadcast<M, T extends PanelType> = Omit<Targeted<M, T>, "target">;
-
-export function assertUnreachable(x: never): never {
-    throw new Error(`Unreachable ${JSON.stringify(x, null, 2)}`);
-}
+export type Broadcast<M, T extends PanelType> = Omit<Targeted<M, T>, "target">
 
 /*
  * ======== errors ========
  */
+
+// checks the optional fields of `NodeJS.ErrnoException`;
+// the `Error` part is expected to have been checked already
+// (with `util.types.isNativeError`)
+const errnoExceptionFieldsSchema = z.object({
+  errno: z.number().optional(),
+  code: z.string().optional(),
+  path: z.string().optional(),
+  syscall: z.string().optional(),
+})
+
+function isErrnoException(err: Error): err is NodeJS.ErrnoException {
+  return errnoExceptionFieldsSchema.safeParse(err).success
+}
+
 export class BaseError extends Error {
-    public readonly name: string = "Base Error";
-    public details?: string;
-    public cause?: NodeJS.ErrnoException | string;
-    public stack?: string;
+  public override readonly name: string = "Base Error"
+  public details?: string | undefined
+  public override cause?: NodeJS.ErrnoException | string
+  public override stack?: string
 
-    // possible fields from ErrnoException
-    public errno?: number;
-    public code?: string;
-    public path?: string;
-    public syscall?: string;
+  // possible fields from ErrnoException
+  public errno?: number | undefined
+  public code?: string | undefined
+  public path?: string | undefined
+  public syscall?: string | undefined
 
-    constructor(err: unknown);
-    constructor(err: unknown, details?: string);
-    constructor(message?: string, details?: string);
+  public constructor(err?: unknown, details?: string)
 
-    constructor(err: unknown, details?: string, causeParam?: string) {
-        let message = "";
-        let stack = "";
-        let cause: NodeJS.ErrnoException | string = causeParam || "";
+  public constructor(err: unknown, details?: string, causeParam?: string) {
+    let message = ""
+    let stack = ""
+    let cause: NodeJS.ErrnoException | string = causeParam || ""
 
-        let errno: number | undefined = undefined;
-        let code: string | undefined = undefined;
-        let path: string | undefined = undefined;
-        let syscall: string | undefined = undefined;
+    let errno: number | undefined = undefined
+    let code: string | undefined = undefined
+    let path: string | undefined = undefined
+    let syscall: string | undefined = undefined
 
-        // simple check first...
-        if (typeof err === "string") {
-            message = err;
-        } else if (util.types.isNativeError(err)) {
-            // deal with regular error stuff first
-            message = err.message;
-            if (err.stack) {
-                stack = err.stack;
-            }
+    // simple check first...
+    if (typeof err === "string") {
+      message = err
+    } else if (util.types.isNativeError(err)) {
+      // deal with regular error stuff first
+      message = err.message
+      if (err.stack) {
+        stack = err.stack
+      }
 
-            // also check for special NodeJS error
-            if (createIs<NodeJS.ErrnoException>()(err)) {
-                // nodejs error with error code
-                errno = err.errno;
-                code = err.code;
-                path = err.path;
-                syscall = err.syscall;
-            }
+      // also check for special NodeJS error
+      if (isErrnoException(err)) {
+        // nodejs error with error code
+        errno = err.errno
+        code = err.code
+        path = err.path
+        syscall = err.syscall
+      }
 
-            if (err.cause) {
-                // same checks for cause
-                if (
-                    util.types.isNativeError(err.cause) &&
-                    createIs<NodeJS.ErrnoException>()(err.cause)
-                ) {
-                    cause = err.cause;
-                } else {
-                    cause = err.cause.toString();
-                }
-            }
+      if (err.cause) {
+        // same checks for cause
+        if (util.types.isNativeError(err.cause) && isErrnoException(err.cause)) {
+          cause = err.cause
         } else {
-            // it's expected that this function is only called with
-            // strings or error objects. but since errors are often "unknown"
-            // in catch statements etc., this function accepts unknown types
-            // and thus we'll handle them here just in case
-            message = `Unexpected error ${err} (${typeof err})`;
+          cause = err.cause.toString()
         }
-
-        super(message);
-        this.details = details;
-        if (stack) {
-            this.stack = stack;
-        }
-        if (cause) {
-            this.cause = cause;
-        }
-
-        // errno fields
-        this.errno = errno;
-        this.code = code;
-        this.path = path;
-        this.syscall = syscall;
+      }
+    } else {
+      // it's expected that this function is only called with
+      // strings or error objects. but since errors are often "unknown"
+      // in catch statements etc., this function accepts unknown types
+      // and thus we'll handle them here just in case
+      message = `Unexpected error ${err} (${typeof err})`
     }
 
-    public toString(): string {
-        let errorMessage = "";
-        if (this.errno) {
-            errorMessage += `[${this.errno}] `;
-        }
-        if (this.code) {
-            errorMessage += `(${this.code}) `;
-        }
-        if (this.syscall) {
-            errorMessage += `\`${this.syscall}\` `;
-        }
-        if (this.path) {
-            errorMessage += `@${this.path} `;
-        }
-        errorMessage += `${this.name}: ${this.message}.`;
-        if (this.details) {
-            errorMessage += ` ${this.details}.`;
-        }
-        if (this.cause) {
-            errorMessage += ` Caused by: ${this.cause}.`;
-        }
-        return errorMessage;
+    super(message)
+    this.details = details
+    if (stack) {
+      this.stack = stack
     }
-}
-
-type TmcKind = { kind: "tmc" };
-
-type MoocKind = { kind: "mooc" };
-
-export type Enum<Tmc, Mooc> = { kind: "tmc"; data: Tmc } | { kind: "mooc"; data: Mooc };
-
-export namespace Enum {
-    export function unwrap<A, B>(e: Enum<A, B>): A | B {
-        return match(
-            e,
-            (e) => e,
-            (e) => e,
-        );
-    }
-}
-
-export type CourseIdentifier = Enum<{ courseId: number }, { instanceId: string }>;
-
-export namespace CourseIdentifier {
-    export function from(id: number | string): CourseIdentifier {
-        if (typeof id === "number") {
-            return makeTmcKind({ courseId: id });
-        } else if (typeof id === "string") {
-            return makeMoocKind({ instanceId: id });
-        } else {
-            assertUnreachable(id);
-        }
+    if (cause) {
+      this.cause = cause
     }
 
-    export function toString(id: CourseIdentifier): string {
-        return match(
-            id,
-            (tmc) => tmc.courseId.toString(),
-            (mooc) => mooc.instanceId,
-        );
+    // errno fields
+    this.errno = errno
+    this.code = code
+    this.path = path
+    this.syscall = syscall
+  }
+
+  public override toString(): string {
+    let errorMessage = ""
+    if (this.errno) {
+      errorMessage += `[${this.errno}] `
     }
-}
-
-export type TmcExerciseId = number;
-export type MoocExerciseId = string;
-
-export type ExerciseIdentifier = Enum<{ tmcExerciseId: number }, { moocExerciseId: string }>;
-
-export namespace ExerciseIdentifier {
-    export function from(id: number | string): ExerciseIdentifier {
-        if (typeof id === "number") {
-            return makeTmcKind({ tmcExerciseId: id });
-        } else if (typeof id === "string") {
-            return makeMoocKind({ moocExerciseId: id });
-        } else {
-            assertUnreachable(id);
-        }
+    if (this.code) {
+      errorMessage += `(${this.code}) `
     }
-
-    export function unwrap(id: ExerciseIdentifier): number | string {
-        if (id.kind === "tmc") {
-            return id.data.tmcExerciseId;
-        }
-        if (id.kind === "mooc") {
-            return id.data.moocExerciseId;
-        } else {
-            assertUnreachable(id);
-        }
+    if (this.syscall) {
+      errorMessage += `\`${this.syscall}\` `
     }
-
-    export function toString(id: ExerciseIdentifier): string {
-        return match(
-            id,
-            (tmc) => tmc.tmcExerciseId.toString(),
-            (mooc) => mooc.moocExerciseId,
-        );
+    if (this.path) {
+      errorMessage += `@${this.path} `
     }
-}
-
-// helper to simulate Rust's `match`
-export function match<A, B, C, D>(data: Enum<A, B>, tmc: (x: A) => C, mooc: (x: B) => D): C | D {
-    switch (data.kind) {
-        case "tmc": {
-            return tmc(data.data);
-        }
-        case "mooc": {
-            return mooc(data.data);
-        }
-        default: {
-            assertUnreachable(data);
-        }
+    errorMessage += `${this.name}: ${this.message}.`
+    if (this.details) {
+      errorMessage += ` ${this.details}.`
     }
-}
-
-export function matchBackend<A extends { backend: "tmc" | "mooc" }, B, C, D>(
-    data: A,
-    tmc: (x: A) => B,
-    mooc: (x: A) => C,
-): B | C {
-    switch (data.backend) {
-        case "tmc": {
-            return tmc(data);
-        }
-        case "mooc": {
-            return mooc(data);
-        }
-        default: {
-            assertUnreachable(data.backend);
-        }
+    if (this.cause) {
+      errorMessage += ` Caused by: ${this.cause}.`
     }
-}
-
-export function matchOption<A, B, T extends Enum<A, B> | undefined>(
-    data: T,
-    tmc: (x: T & TmcKind) => A,
-    mooc: (x: T & MoocKind) => B,
-): A | B | undefined {
-    switch (data?.kind) {
-        case "tmc": {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return tmc(data as any);
-        }
-        case "mooc": {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return mooc(data as any);
-        }
-        case undefined: {
-            return undefined;
-        }
-        default: {
-            assertUnreachable(data);
-        }
-    }
-}
-
-export function makeTmcKind<T>(t: T): { kind: "tmc" } & { data: T } {
-    return { kind: "tmc", data: t };
-}
-
-export function makeMoocKind<T>(t: T): { kind: "mooc" } & { data: T } {
-    return { kind: "mooc", data: t };
-}
-
-export function unwrap<A, B>(e: Enum<A, B>): A | B {
-    return match(
-        e,
-        (a) => a,
-        (b) => b,
-    );
+    return errorMessage
+  }
 }

@@ -1,0 +1,59 @@
+packages:
+  - "."
+  - "webview-ui"
+  - "backend"
+
+# --- Settings copied from secret-project-331 (generic, single-package-safe) ---
+
+engineStrict: true
+
+pmOnFail: download
+
+# Supply-chain hardening: refuse dependency versions younger than 7 days.
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+
+nodeVersion: 24.18.0
+
+# Reproducible resolution: resolve as of lockfile time. The npm registry does not
+# expose a per-version time field, so pnpm infers it.
+resolutionMode: time-based
+registrySupportsTimeField: false
+
+preferFrozenLockfile: true
+trustLockfile: true
+
+# Auto-run install when node_modules is stale before running a script.
+verifyDepsBeforeRun: install
+
+# Fail if a dependency wants to run an install/build script that is not allow-listed.
+strictDepBuilds: true
+
+confirmModulesPurge: false
+updateNotifier: false
+
+# Explicit decisions for every dependency that ships an install/build script
+# (required because strictDepBuilds fails on any un-decided build).
+allowBuilds:
+  # esbuild (extension-host bundler + tsx backend runner) needs its native binary
+  # placed by its install script.
+  esbuild: true
+  # Pulled in transitively; its install script only prints a reminder message.
+  svelte-preprocess: false
+  # Publishes with a prebuilt dist/; postinstall-build is a no-op when dist exists.
+  typemoq: false
+
+patchedDependencies:
+  ts-results@3.3.0: patches/ts-results@3.3.0.patch
+
+# Unlike sp331 (a collection of independent projects), this IS a single workspace,
+# so we deliberately keep ONE shared lockfile: sharedWorkspaceLockfile / link-protocol
+# settings (linkWorkspacePackages, preferWorkspacePackages, saveWorkspaceProtocol) are
+# omitted on purpose.
+
+minimumReleaseAgeExclude:
+  # Already resolved into the lockfile by an earlier install; re-validated only
+  # because the dependency graph changed (eslint removal). Ages past the 7-day
+  # gate on 2026-07-20; safe to drop this entry afterwards.
+  - "postcss@8.5.19"

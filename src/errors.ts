@@ -1,72 +1,72 @@
-import { BaseError } from "./shared/shared";
+import { BaseError } from "./shared/shared"
 
 export class ApiError extends BaseError {
-    public readonly name = "API Error";
+  public override readonly name = "API Error"
 }
 export class AuthenticationError extends BaseError {
-    public readonly name = "Authentication Error";
+  public override readonly name = "Authentication Error"
 }
 
 export class AuthorizationError extends BaseError {
-    public readonly name = "Authorization Error";
+  public override readonly name = "Authorization Error"
 }
 
 export class BottleneckError extends BaseError {
-    public readonly name = "Bottleneck Error";
+  public override readonly name = "Bottleneck Error"
 }
 
 export class ConnectionError extends BaseError {
-    public readonly name = "Connection Error";
+  public override readonly name = "Connection Error"
 }
 
 export class EmptyLangsResponseError extends BaseError {
-    public readonly name = "Empy Langs Response Error";
+  public override readonly name = "Empy Langs Response Error"
 }
 
 export class ExerciseExistsError extends BaseError {
-    public readonly name = "Exercise Exists Error";
+  public override readonly name = "Exercise Exists Error"
 }
 
 export class ForbiddenError extends BaseError {
-    public readonly name = "Forbidden Error";
+  public override readonly name = "Forbidden Error"
 }
 
 export class HaltForReloadError extends BaseError {
-    public readonly name = "Reload Required error";
+  public override readonly name = "Reload Required error"
 }
 
 export class InvalidTokenError extends BaseError {
-    public readonly name = "Invalid Token Error";
+  public override readonly name = "Invalid Token Error"
 }
 
 export class ObsoleteClientError extends BaseError {
-    public readonly name = "Obsolete Client Error";
+  public override readonly name = "Obsolete Client Error"
 }
 
 export class RuntimeError extends BaseError {
-    public readonly name = "Runtime Error";
+  public override readonly name = "Runtime Error"
 }
 
 export class TimeoutError extends BaseError {
-    public readonly name = "Timeout Error";
+  public override readonly name = "Timeout Error"
 }
 
 export class InitializationError extends BaseError {
-    public readonly name = "Initialization Error";
+  public override readonly name = "Initialization Error"
 }
 
 export class ExerciseUpdateError extends BaseError {
-    public readonly name = "Exercise Update Error";
+  public override readonly name = "Exercise Update Error"
 }
 
 export class FileSystemError extends BaseError {
-    public readonly name = "File System Error";
+  public override readonly name = "File System Error"
 }
 
 export class ExerciseMigrationError extends BaseError {
-    public readonly name = "Exercise Migration Error";
+  public override readonly name = "Exercise Migration Error"
 }
 
 export class SpawnError extends BaseError {
-    public readonly name = "Langs Spawn Error";
+  public override readonly name = "Langs Spawn Error"
 }

@@ -1,242 +1,226 @@
-import { expect } from "chai";
-import { Ok } from "ts-results";
-import { IMock } from "typemoq";
-import * as vscode from "vscode";
+import { expect } from "chai"
+import { Ok } from "ts-results"
+import type { IMock } from "typemoq"
+import type * as vscode from "vscode"
 
-import Dialog from "../../api/dialog";
-import Storage from "../../storage";
-import Langs from "../../api/langs";
-import { Logger, LogLevel } from "../../utilities";
-import * as exerciseData from "../fixtures/exerciseData";
-import * as extensionSettings from "../fixtures/extensionSettings";
-import * as sessionState from "../fixtures/sessionState";
-import * as userData from "../fixtures/userData";
-import { createDialogMock } from "../mocks/dialog";
-import { createFailingTMCMock, createTMCMock } from "../mocks/tmc";
-import { createMockContext, createMockWorkspaceConfiguration } from "../mocks/vscode";
-import { makeTmpDirs } from "../utils";
-import { v0, v1 } from "../../storage/data";
+import type Dialog from "../../api/dialog"
+import type Langs from "../../api/langs"
+import Storage from "../../storage"
+import { v0, v1 } from "../../storage/data"
+import { Logger, LogLevel } from "../../utilities"
+import * as exerciseData from "../fixtures/exerciseData"
+import * as extensionSettings from "../fixtures/extensionSettings"
+import * as sessionState from "../fixtures/sessionState"
+import * as userData from "../fixtures/userData"
+import { createDialogMock } from "../mocks/dialog"
+import { createFailingTMCMock, createTMCMock } from "../mocks/tmc"
+import { createMockContext, createMockWorkspaceConfiguration } from "../mocks/vscode"
+import { makeTmpDirs } from "../utils"
 
 suite("Extension data migration", function () {
-    const virtualFileSystem = {
-        "/TMC workspace/": {
-            Exercises: { test: { "test-python-course": { hello_world: {} } } },
-            "closed-exercises": { "2": {} },
-        },
-    };
+  const virtualFileSystem = {
+    "/TMC workspace/": {
+      Exercises: { test: { "test-python-course": { hello_world: {} } } },
+      "closed-exercises": { "2": {} },
+    },
+  }
 
-    let context: vscode.ExtensionContext;
-    let dialogMock: IMock<Dialog>;
-    let storage: Storage;
-    let tmcMock: IMock<Langs>;
-    let settingsMock: IMock<vscode.WorkspaceConfiguration>;
-    let root: string;
+  let context: vscode.ExtensionContext
+  let dialogMock: IMock<Dialog>
+  let storage: Storage
+  let tmcMock: IMock<Langs>
+  let settingsMock: IMock<vscode.WorkspaceConfiguration>
+  let root: string
 
-    setup(function () {
-        Logger.configure(LogLevel.Verbose);
-        root = makeTmpDirs(virtualFileSystem);
-        context = createMockContext();
-        [dialogMock] = createDialogMock();
-        settingsMock = createMockWorkspaceConfiguration();
-        storage = new Storage(context);
-        [tmcMock] = createTMCMock();
-    });
+  setup(function () {
+    Logger.configure(LogLevel.Verbose)
+    root = makeTmpDirs(virtualFileSystem)
+    context = createMockContext()
+    ;[dialogMock] = createDialogMock()
+    settingsMock = createMockWorkspaceConfiguration()
+    storage = new Storage(context)
+    ;[tmcMock] = createTMCMock()
+  })
 
-    test("should succeed without any data", async function () {
-        const result = await storage.migrateToLatest(
-            context,
-            dialogMock.object,
-            tmcMock.object,
-            settingsMock.object,
-        );
-        expect(result.ok).to.be.true;
-    });
+  test("should succeed without any data", async function () {
+    const result = await storage.migrateToLatest(
+      context,
+      dialogMock.object,
+      tmcMock.object,
+      settingsMock.object,
+    )
+    expect(result.ok).to.be.true
+  })
 
-    test("should be compatible with extended future data");
+  test("should be compatible with extended future data")
 
-    suite("from version 0.1.0", function () {
-        test("should succeed with valid data", async function () {
-            await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(root));
-            await context.globalState.update(v0.USER_DATA_KEY, userData.v0_1_0);
-            const result = await storage.migrateToLatest(
-                context,
-                dialogMock.object,
-                tmcMock.object,
-                settingsMock.object,
-            );
-            expect(result).to.be.equal(Ok.EMPTY);
-            expect(storage.getUserData()).to.not.be.undefined;
-            expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.undefined;
-        });
+  suite("from version 0.1.0", function () {
+    test("should succeed with valid data", async function () {
+      await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(root))
+      await context.globalState.update(v0.USER_DATA_KEY, userData.v0_1_0)
+      const result = await storage.migrateToLatest(
+        context,
+        dialogMock.object,
+        tmcMock.object,
+        settingsMock.object,
+      )
+      expect(result).to.be.equal(Ok.EMPTY)
+      expect(storage.getUserData()).to.not.be.undefined
+      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.undefined
+    })
 
-        test("should not change anything if Langs fails", async function () {
-            [tmcMock] = createFailingTMCMock();
-            await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(root));
-            await context.globalState.update(v0.USER_DATA_KEY, userData.v0_1_0);
-            const result = await storage.migrateToLatest(
-                context,
-                dialogMock.object,
-                tmcMock.object,
-                settingsMock.object,
-            );
-            expect(result.val).to.be.instanceOf(Error);
-            expect(storage.getUserData()).to.be.undefined;
-            console.log("a", context.globalState.get(v0.EXERCISE_DATA_KEY));
-            console.log("b", exerciseData.v0_1_0(root));
-            expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.deep.equal(
-                exerciseData.v0_1_0(root),
-            );
-            expect(context.globalState.get(v0.USER_DATA_KEY)).to.be.deep.equal(userData.v0_1_0);
-        });
-    });
+    test("should not change anything if Langs fails", async function () {
+      ;[tmcMock] = createFailingTMCMock()
+      await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(root))
+      await context.globalState.update(v0.USER_DATA_KEY, userData.v0_1_0)
+      const result = await storage.migrateToLatest(
+        context,
+        dialogMock.object,
+        tmcMock.object,
+        settingsMock.object,
+      )
+      expect(result.val).to.be.instanceOf(Error)
+      expect(storage.getUserData()).to.be.undefined
+      console.log("a", context.globalState.get(v0.EXERCISE_DATA_KEY))
+      console.log("b", exerciseData.v0_1_0(root))
+      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.deep.equal(
+        exerciseData.v0_1_0(root),
+      )
+      expect(context.globalState.get(v0.USER_DATA_KEY)).to.be.deep.equal(userData.v0_1_0)
+    })
+  })
 
-    suite("from version 0.2.0", function () {
-        test("should succeed with valid data", async function () {
-            await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_2_0(root));
-            await context.globalState.update(v0.USER_DATA_KEY, userData.v0_2_0);
-            const result = await storage.migrateToLatest(
-                context,
-                dialogMock.object,
-                tmcMock.object,
-                settingsMock.object,
-            );
-            expect(result).to.be.equal(Ok.EMPTY);
-            expect(storage.getUserData()).to.not.be.undefined;
-            expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.undefined;
-        });
+  suite("from version 0.2.0", function () {
+    test("should succeed with valid data", async function () {
+      await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_2_0(root))
+      await context.globalState.update(v0.USER_DATA_KEY, userData.v0_2_0)
+      const result = await storage.migrateToLatest(
+        context,
+        dialogMock.object,
+        tmcMock.object,
+        settingsMock.object,
+      )
+      expect(result).to.be.equal(Ok.EMPTY)
+      expect(storage.getUserData()).to.not.be.undefined
+      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.undefined
+    })
 
-        test("should not modify data if Langs fails", async function () {
-            [tmcMock] = createFailingTMCMock();
-            await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_2_0(root));
-            await context.globalState.update(v0.USER_DATA_KEY, userData.v0_2_0);
-            const result = await storage.migrateToLatest(
-                context,
-                dialogMock.object,
-                tmcMock.object,
-                settingsMock.object,
-            );
-            expect(result.val).to.be.instanceOf(Error);
-            expect(storage.getUserData()).to.be.undefined;
-            expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.deep.equal(
-                exerciseData.v0_2_0(root),
-            );
-            expect(context.globalState.get(v0.USER_DATA_KEY)).to.be.deep.equal(userData.v0_2_0);
-        });
-    });
+    test("should not modify data if Langs fails", async function () {
+      ;[tmcMock] = createFailingTMCMock()
+      await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_2_0(root))
+      await context.globalState.update(v0.USER_DATA_KEY, userData.v0_2_0)
+      const result = await storage.migrateToLatest(
+        context,
+        dialogMock.object,
+        tmcMock.object,
+        settingsMock.object,
+      )
+      expect(result.val).to.be.instanceOf(Error)
+      expect(storage.getUserData()).to.be.undefined
+      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.deep.equal(
+        exerciseData.v0_2_0(root),
+      )
+      expect(context.globalState.get(v0.USER_DATA_KEY)).to.be.deep.equal(userData.v0_2_0)
+    })
+  })
 
-    suite("from version 0.3.0", function () {
-        test("should succeed with valid data", async function () {
-            await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_3_0);
-            await context.globalState.update(v0.USER_DATA_KEY, userData.v0_3_0);
-            await context.globalState.update(
-                v0.EXTENSION_SETTINGS_KEY,
-                extensionSettings.v0_3_0(root),
-            );
-            const result = await storage.migrateToLatest(
-                context,
-                dialogMock.object,
-                tmcMock.object,
-                settingsMock.object,
-            );
-            expect(result).to.be.equal(Ok.EMPTY);
-            expect(storage.getUserData()).to.not.be.undefined;
-            expect(storage.getExtensionSettings()).to.not.be.undefined;
-            expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.undefined;
-            expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).to.be.undefined;
-            expect(context.globalState.get(v0.USER_DATA_KEY)).to.be.undefined;
-        });
+  suite("from version 0.3.0", function () {
+    test("should succeed with valid data", async function () {
+      await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_3_0)
+      await context.globalState.update(v0.USER_DATA_KEY, userData.v0_3_0)
+      await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, extensionSettings.v0_3_0(root))
+      const result = await storage.migrateToLatest(
+        context,
+        dialogMock.object,
+        tmcMock.object,
+        settingsMock.object,
+      )
+      expect(result).to.be.equal(Ok.EMPTY)
+      expect(storage.getUserData()).to.not.be.undefined
+      expect(storage.getExtensionSettings()).to.not.be.undefined
+      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.undefined
+      expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).to.be.undefined
+      expect(context.globalState.get(v0.USER_DATA_KEY)).to.be.undefined
+    })
 
-        test("should not modify data if Langs fails", async function () {
-            [tmcMock] = createFailingTMCMock();
-            await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_3_0);
-            await context.globalState.update(v0.USER_DATA_KEY, userData.v0_3_0);
-            await context.globalState.update(
-                v0.EXTENSION_SETTINGS_KEY,
-                extensionSettings.v0_3_0(root),
-            );
-            const result = await storage.migrateToLatest(
-                context,
-                dialogMock.object,
-                tmcMock.object,
-                settingsMock.object,
-            );
-            expect(result.val).to.be.instanceOf(Error);
-            expect(storage.getUserData()).to.be.undefined;
-            expect(storage.getExtensionSettings()).to.be.undefined;
-            expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.deep.equal(
-                exerciseData.v0_3_0,
-            );
-            expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).to.be.deep.equal(
-                extensionSettings.v0_3_0(root),
-            );
-            expect(context.globalState.get(v0.USER_DATA_KEY)).to.be.deep.equal(userData.v0_3_0);
-        });
-    });
+    test("should not modify data if Langs fails", async function () {
+      ;[tmcMock] = createFailingTMCMock()
+      await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_3_0)
+      await context.globalState.update(v0.USER_DATA_KEY, userData.v0_3_0)
+      await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, extensionSettings.v0_3_0(root))
+      const result = await storage.migrateToLatest(
+        context,
+        dialogMock.object,
+        tmcMock.object,
+        settingsMock.object,
+      )
+      expect(result.val).to.be.instanceOf(Error)
+      expect(storage.getUserData()).to.be.undefined
+      expect(storage.getExtensionSettings()).to.be.undefined
+      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.deep.equal(exerciseData.v0_3_0)
+      expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).to.be.deep.equal(
+        extensionSettings.v0_3_0(root),
+      )
+      expect(context.globalState.get(v0.USER_DATA_KEY)).to.be.deep.equal(userData.v0_3_0)
+    })
+  })
 
-    suite("from version 0.9.0", function () {
-        test("should succeed with valid data", async function () {
-            await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_9_0);
-            await context.globalState.update(v0.USER_DATA_KEY, userData.v0_9_0);
-            await context.globalState.update(
-                v0.EXTENSION_SETTINGS_KEY,
-                extensionSettings.v0_9_0(root),
-            );
-            const result = await storage.migrateToLatest(
-                context,
-                dialogMock.object,
-                tmcMock.object,
-                settingsMock.object,
-            );
-            expect(result).to.be.equal(Ok.EMPTY);
-            expect(storage.getUserData()).to.not.be.undefined;
-            expect(storage.getExtensionSettings()).to.not.be.undefined;
-            expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.undefined;
-            expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).to.be.undefined;
-            expect(context.globalState.get(v0.USER_DATA_KEY)).to.be.undefined;
-        });
+  suite("from version 0.9.0", function () {
+    test("should succeed with valid data", async function () {
+      await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_9_0)
+      await context.globalState.update(v0.USER_DATA_KEY, userData.v0_9_0)
+      await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, extensionSettings.v0_9_0(root))
+      const result = await storage.migrateToLatest(
+        context,
+        dialogMock.object,
+        tmcMock.object,
+        settingsMock.object,
+      )
+      expect(result).to.be.equal(Ok.EMPTY)
+      expect(storage.getUserData()).to.not.be.undefined
+      expect(storage.getExtensionSettings()).to.not.be.undefined
+      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.undefined
+      expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).to.be.undefined
+      expect(context.globalState.get(v0.USER_DATA_KEY)).to.be.undefined
+    })
 
-        test("should not modify data if Langs fails", async function () {
-            [tmcMock] = createFailingTMCMock();
-            await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_9_0);
-            await context.globalState.update(v0.USER_DATA_KEY, userData.v0_9_0);
-            await context.globalState.update(
-                v0.EXTENSION_SETTINGS_KEY,
-                extensionSettings.v0_9_0(root),
-            );
-            const result = await storage.migrateToLatest(
-                context,
-                dialogMock.object,
-                tmcMock.object,
-                settingsMock.object,
-            );
-            expect(result.val).to.be.instanceOf(Error);
-            expect(storage.getUserData()).to.be.undefined;
-            expect(storage.getExtensionSettings()).to.be.undefined;
-            expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.deep.equal(
-                exerciseData.v0_9_0,
-            );
-            expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).to.be.deep.equal(
-                extensionSettings.v0_9_0(root),
-            );
-            expect(context.globalState.get(v0.USER_DATA_KEY)).to.be.deep.equal(userData.v0_9_0);
-        });
-    });
+    test("should not modify data if Langs fails", async function () {
+      ;[tmcMock] = createFailingTMCMock()
+      await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_9_0)
+      await context.globalState.update(v0.USER_DATA_KEY, userData.v0_9_0)
+      await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, extensionSettings.v0_9_0(root))
+      const result = await storage.migrateToLatest(
+        context,
+        dialogMock.object,
+        tmcMock.object,
+        settingsMock.object,
+      )
+      expect(result.val).to.be.instanceOf(Error)
+      expect(storage.getUserData()).to.be.undefined
+      expect(storage.getExtensionSettings()).to.be.undefined
+      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).to.be.deep.equal(exerciseData.v0_9_0)
+      expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).to.be.deep.equal(
+        extensionSettings.v0_9_0(root),
+      )
+      expect(context.globalState.get(v0.USER_DATA_KEY)).to.be.deep.equal(userData.v0_9_0)
+    })
+  })
 
-    suite("from version 2.0.0", function () {
-        test("should succeed with valid data", async function () {
-            await context.globalState.update(v1.USER_DATA_KEY, userData.v2_0_0);
-            await context.globalState.update(v1.EXTENSION_SETTINGS_KEY, extensionSettings.v2_0_0);
-            await context.globalState.update(v1.SESSION_STATE_KEY, sessionState.v2_0_0);
-            const result = await storage.migrateToLatest(
-                context,
-                dialogMock.object,
-                tmcMock.object,
-                settingsMock.object,
-            );
-            expect(result).to.be.equal(Ok.EMPTY);
-            expect(storage.getUserData()).to.not.be.undefined;
-            expect(storage.getExtensionSettings()).to.not.be.undefined;
-            expect(storage.getSessionState()).to.not.be.undefined;
-        });
-    });
-});
+  suite("from version 2.0.0", function () {
+    test("should succeed with valid data", async function () {
+      await context.globalState.update(v1.USER_DATA_KEY, userData.v2_0_0)
+      await context.globalState.update(v1.EXTENSION_SETTINGS_KEY, extensionSettings.v2_0_0)
+      await context.globalState.update(v1.SESSION_STATE_KEY, sessionState.v2_0_0)
+      const result = await storage.migrateToLatest(
+        context,
+        dialogMock.object,
+        tmcMock.object,
+        settingsMock.object,
+      )
+      expect(result).to.be.equal(Ok.EMPTY)
+      expect(storage.getUserData()).to.not.be.undefined
+      expect(storage.getExtensionSettings()).to.not.be.undefined
+      expect(storage.getSessionState()).to.not.be.undefined
+    })
+  })
+})

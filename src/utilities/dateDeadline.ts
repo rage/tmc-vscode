@@ -1,65 +1,65 @@
-import { Exercise } from "../api/types";
+import type { Exercise } from "../api/types"
 
 /**
  * Creates a date object from string
  * @param deadline Deadline as string from API
  */
 export function parseDate(dateAsString: string): Date {
-    const inMillis = Date.parse(dateAsString);
-    const date = new Date(inMillis);
-    return date;
+  const inMillis = Date.parse(dateAsString)
+  const date = new Date(inMillis)
+  return date
 }
 
 /**
  * Returns a trimmed string presentation of a date.
  */
 export function dateToString(date: Date): string {
-    return date.toString().split("(", 1)[0];
+  return date.toString().split("(", 1)[0] ?? ""
 }
 
 /**
  * Finds the next date after initial date, or null if can't find any.
  */
-export function findNextDateAfter(after: Date, dates: Array<Date | null>): Date | null {
-    const nextDate = (currentDate: Date | null, nextDate: Date | null): Date | null => {
-        if (!nextDate || after >= nextDate) {
-            return currentDate;
-        }
-        if (!currentDate) {
-            return nextDate;
-        }
-        return nextDate < currentDate ? nextDate : currentDate;
-    };
+export function findNextDateAfter(after: Date, dates: (Date | null)[]): Date | null {
+  const pickNext = (currentDate: Date | null, candidate: Date | null): Date | null => {
+    if (!candidate || after >= candidate) {
+      return currentDate
+    }
+    if (!currentDate) {
+      return candidate
+    }
+    return candidate < currentDate ? candidate : currentDate
+  }
 
-    return dates.reduce(nextDate, null);
+  return dates.reduce((acc, date) => pickNext(acc, date), null)
 }
 
 export interface Deadline {
-    /**Date of deadline */
-    date: Date | null;
-    /**Whether this deadline is yet to be met. */
-    active: boolean;
+  /**Date of deadline */
+  date: Date | null
+  /**Whether this deadline is yet to be met. */
+  active: boolean
 }
 
 /**
  * Resolves a future deadline if there is one and returns a verbal explanation of results.
  */
 export function parseNextDeadlineAfter(after: Date, deadlines: Deadline[]): string {
-    const validDeadlines = deadlines.filter((x) => x.date);
-    if (validDeadlines.length === 0) {
-        return "No deadline";
-    }
+  const validDeadlines = deadlines.filter((x) => x.date)
+  if (validDeadlines.length === 0) {
+    return "No deadline"
+  }
 
-    const next = findNextDateAfter(
-        after,
-        validDeadlines.map((x) => x.date),
-    );
+  const next = findNextDateAfter(
+    after,
+    validDeadlines.map((x) => x.date),
+  )
 
-    if (next) {
-        return `Next deadline: ${dateToString(next)}`;
-    }
+  if (next) {
+    return `Next deadline: ${dateToString(next)}`
+  }
 
-    return "All deadlines have expired";
+  return "All deadlines have expired"
 }
 
 /**
@@ -68,11 +68,10 @@ export function parseNextDeadlineAfter(after: Date, deadlines: Deadline[]): stri
  * @param b second date arg
  */
 export function compareDates(a: Date, b: Date): number {
-    if (a > b) {
-        return 1;
-    } else {
-        return -1;
-    }
+  if (a > b) {
+    return 1
+  }
+  return -1
 }
 
 /**
@@ -80,16 +79,16 @@ export function compareDates(a: Date, b: Date): number {
  * @returns Soft deadline and/or Hard deadline for exercise
  */
 export function chooseDeadline(ex: Exercise): { date: Date | null; isHard: boolean } {
-    const softDeadline = ex.soft_deadline ? parseDate(ex.soft_deadline) : null;
-    const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
-    const next = findNextDateAfter(new Date(), [softDeadline, hardDeadline]);
-    return { date: next, isHard: next === hardDeadline };
+  const softDeadline = ex.soft_deadline ? parseDate(ex.soft_deadline) : null
+  const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null
+  const next = findNextDateAfter(new Date(), [softDeadline, hardDeadline])
+  return { date: next, isHard: next === hardDeadline }
 }
 
 /**
  * Make date pathable. Removes ":"" and replace with "-" and removes GMT.
  */
 export function dateInPath(date: string): string {
-    const fixedDate = date.replace(/:/g, "-");
-    return fixedDate.split(" GMT")[0];
+  const fixedDate = date.replaceAll(":", "-")
+  return fixedDate.split(" GMT")[0] ?? fixedDate
 }

@@ -1,34 +1,16 @@
 {
-    "compilerOptions": {
-        "jsx": "react",
-        "module": "commonjs",
-        "target": "ES2022",
-        "outDir": "out",
-        "lib": ["ES2022", "dom"],
-        "plugins": [
-            {
-                "transform": "typia/lib/transform"
-            }
-        ],
-        "typeRoots": ["./types", "./node_modules/@types"],
-        "sourceMap": true,
-        "rootDirs": ["src", "shared"],
-        "esModuleInterop": true,
-        "strict": true /* enable all strict type-checking options */
-        /* Additional Checks */
-        // "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
-        // "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
-        // "noUnusedParameters": true,  /* Report errors on unused parameters. */
-    },
-    "exclude": [
-        ".vscode-test",
-        "backend",
-        "node_modules",
-        "test-resources",
-        "typings",
-        "webview-ui",
-        "shared",
-        "playwright",
-        "playwright.config.ts"
-    ]
+  // Extension-host project: everything under src/ (incl. the src/shared
+  // symlinks into shared/ and the mocha test suites). The sources are
+  // authored as ESM and bundled to a single CJS file by esbuild, so module
+  // resolution follows the bundler. No DOM: the extension host runs in
+  // Node; the webview has its own project (webview-ui/tsconfig.json).
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    // explicit so tsc and tsgo agree on which globals-providing packages
+    // are in scope (tsgo does not auto-include everything under @types)
+    "types": ["node", "mocha", "vscode"],
+    "sourceMap": true
+  },
+  "include": ["src/**/*"]
 }

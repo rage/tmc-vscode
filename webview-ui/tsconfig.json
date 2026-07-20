@@ -1,23 +1,17 @@
 {
-    "extends": "@tsconfig/svelte/tsconfig.json",
-
-    "include": ["src/**/*"],
-    "exclude": ["node_modules/*", "__sapper__/*", "public/*"],
-
-    // sync with rollup.config.js
-    "compilerOptions": {
-        "strict": true,
-        // workaround for https://github.com/sveltejs/svelte-preprocess/issues/206
-        "importsNotUsedAsValues": "remove",
-
-        // copied from svelte's tsconfig.json
-        "moduleResolution": "node",
-        "target": "ES2022",
-        "isolatedModules": true,
-        "sourceMap": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true,
-        "verbatimModuleSyntax": false
-    }
+  // Webview project: Svelte 4 + DOM, bundled by Vite. Shares the strict
+  // baseline with the extension host (../tsconfig.base.json). tsc/tsgo only
+  // type-check the .ts files (they skip .svelte); svelte-check reads this
+  // same config and additionally checks the .svelte components.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    // node is needed because the shared lib (shared/lib.ts) uses node:util
+    // and NodeJS.ErrnoException; explicit so tsc and tsgo agree
+    "types": ["node", "vscode-webview"],
+    // to have warnings/errors of the Svelte compiler at the correct
+    // position, enable source maps
+    "sourceMap": true
+  },
+  "include": ["src/**/*"]
 }

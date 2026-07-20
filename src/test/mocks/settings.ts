@@ -1,22 +1,24 @@
-import Settings from "../../config/settings";
-import { IMock, Mock } from "typemoq";
+import type { IMock } from "typemoq"
+import { Mock } from "typemoq"
+
+import type Settings from "../../config/settings"
 
 export interface SettingsMockValues {
-    getDownloadOldSubmission: boolean;
+  getDownloadOldSubmission: boolean
 }
 
 export function createSettingsMock(): [IMock<Settings>, SettingsMockValues] {
-    const values: SettingsMockValues = {
-        getDownloadOldSubmission: false,
-    };
-    const mock = setupMockValues(values);
-    return [mock, values];
+  const values: SettingsMockValues = {
+    getDownloadOldSubmission: false,
+  }
+  const mock = setupMockValues(values)
+  return [mock, values]
 }
 
 function setupMockValues(values: SettingsMockValues): IMock<Settings> {
-    const mock = Mock.ofType<Settings>();
+  const mock = Mock.ofType<Settings>()
 
-    mock.setup((x) => x.getDownloadOldSubmission()).returns(() => values.getDownloadOldSubmission);
+  mock.setup((x) => x.getDownloadOldSubmission()).returns(() => values.getDownloadOldSubmission)
 
-    return mock;
+  return mock
 }

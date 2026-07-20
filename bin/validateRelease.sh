@@ -17,14 +17,6 @@ then
     exitCode=1
 fi
 
-# Make sure that the package-lock.json version also matches
-packageLockVersion=$(grep -Eom 1 '"version":.+$' package-lock.json)
-if [[ ! $packageLockVersion =~ '"version": "'$tagVersion'",' ]]
-then
-    echo "Error: The version in package-lock.json '${packageLockVersion}' doesn't match with the tag '${tagVersion}'. Run \`npm i --package-lock-only\`."
-    exitCode=1
-fi
-
 # Changelog must have entry matching [X.Y.Z] - YYYY-MM-DD
 # Count the number of matches
 changelogEntry=$(grep -Ec "\[$tagVersion\] - [0-9]{4}(-[0-9]{2}){2}$" CHANGELOG.md)

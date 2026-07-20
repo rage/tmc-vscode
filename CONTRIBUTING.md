@@ -6,21 +6,21 @@ You can start by looking through the issues marked with label [`good first issue
 
 ## Project structure
 
--   `./src`: contains the "backend" of the extension
-    -   `./src/actions`: Contains composable actions used by the VSCode commands and other actions
-    -   `./src/commands`: Contains a source file for each VSCode command contributed by the extension
--   `./webview-ui`: contains the "frontend" of the extension
--   `./shared`: contains types that are shared between the backend and frontend
+- `./src`: contains the "backend" of the extension
+  - `./src/actions`: Contains composable actions used by the VSCode commands and other actions
+  - `./src/commands`: Contains a source file for each VSCode command contributed by the extension
+- `./webview-ui`: contains the "frontend" of the extension
+- `./shared`: contains types that are shared between the backend and frontend
 
 ## Setup
 
 ### Prerequisites
 
--   [Git](https://git-scm.com/)
--   [NodeJS / npm](https://nodejs.org/)
--   [VSCode](https://code.visualstudio.com/)
--   [vsce](https://www.npmjs.com/package/vsce)
--   Chromium based browser for Playwright (`npx playwright install chromium`)
+- [Git](https://git-scm.com/)
+- [NodeJS / npm](https://nodejs.org/)
+- [VSCode](https://code.visualstudio.com/)
+- [vsce](https://www.npmjs.com/package/vsce)
+- Chromium based browser for Playwright (`npx playwright install chromium`)
 
 ### Getting the code
 
@@ -67,7 +67,7 @@ This project uses [ESLint](https://eslint.org/) for code linting. You can run ES
 From VSCode, the extension can be launched with `F5` by default.
 Automatic build task starts the first time that the extension is launched from VSCode.
 
-You can also build the extension by running `npm run webpack` or `npm run webpack:watch`.
+You can also build the extension by running `pnpm run build` or `pnpm run watch`.
 
 ## Updating dependencies
 
@@ -77,7 +77,7 @@ The tmc-langs version can be updated by changing the `TMC_LANGS_RUST_VERSION` va
 
 The tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so. The tests can be run with `npm run test`. If you get a `Connection error: TypeError`, make sure the backend is running.
 
-1. `npm run webpack:watch` to keep building the extension while writing code while VSCode is closed.
+1. `pnpm run watch` to keep building the extension while writing code while VSCode is closed.
 
 2. `npm run backend:start` to start the mock backend used by the tests.
 
@@ -107,8 +107,8 @@ To release, create a release with the tag in the format `vMAJOR.MINOR.PATCH`, fo
 
 A script, `./bin/validateRelease.sh`, is ran during the release process to ensure that
 
--   the `CHANGELOG.md` has an entry for the tagged version
--   the `package.json` and `package-lock.json` has the same version number as the tagged version
+- the `CHANGELOG.md` has an entry for the tagged version
+- the `package.json` and `package-lock.json` has the same version number as the tagged version
 
 You can update the `package-lock.json` version with `npm i --package-lock-only`.
 
@@ -120,7 +120,7 @@ The extension is packaged using the script `./bin/package.bash`. Like the valida
 
 Running the extension produces the following superfluous warnings:
 
--   `An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.`: https://github.com/microsoft/vscode/issues/192853
--   `[Violation] Avoid using document.write(). <URL>`: https://github.com/microsoft/vscode/issues/156147
+- `An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.`: https://github.com/microsoft/vscode/issues/192853
+- `[Violation] Avoid using document.write(). <URL>`: https://github.com/microsoft/vscode/issues/156147
 
 Updating langs can be done by changing the version number at `config.js`.
