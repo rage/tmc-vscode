@@ -1,4 +1,4 @@
-import { LocalExercise, LocalTmcExercise } from "../../shared/langsSchema";
+import { LocalTmcExercise } from "../../shared/langsSchema";
 
 const checkExerciseUpdates: Array<{ id: number }> = [{ id: 2 }];
 

@@ -1,6 +1,3 @@
-import bodyParser from "body-parser";
-import express, { Response } from "express";
-
 import {
     Course,
     CourseDetails,
@@ -13,7 +10,6 @@ import {
     SubmissionResponse,
     SubmissionStatusReport,
 } from "../src/api/types";
-
 import { applicationRouter, langsRounter, oauthRouter } from "./controllers";
 import {
     BackendCourse,
@@ -27,6 +23,8 @@ import {
     passingExerciseId,
     respondWithFile,
 } from "./utils";
+import bodyParser from "body-parser";
+import express, { Response } from "express";
 
 const PORT = 4001;
 

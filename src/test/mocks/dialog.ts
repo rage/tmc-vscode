@@ -1,6 +1,5 @@
-import { IMock, It, Mock } from "typemoq";
-
 import Dialog from "../../api/dialog";
+import { IMock, It, Mock } from "typemoq";
 
 export interface DialogMockValues {
     confirmation: boolean | undefined;

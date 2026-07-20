@@ -1,13 +1,14 @@
-import * as fs from "fs-extra";
-import * as path from "path";
-import { Err, Ok, Result } from "ts-results";
-import { fetch, Response } from "undici";
-
 import { FeedbackQuestion } from "../actions/types";
 import { ConnectionError } from "../errors";
 import { SubmissionFeedbackQuestion } from "../shared/langsSchema";
-
+import { BaseError } from "../shared/shared";
 import { Logger } from "./logger";
+import * as fs from "fs-extra";
+import { once } from "node:events";
+import { finished } from "node:stream/promises";
+import * as path from "path";
+import { Err, Ok, Result } from "ts-results";
+import { fetch, Response } from "undici";
 import { ExtensionContext } from "vscode";
 
 /**
@@ -24,45 +25,65 @@ export async function downloadFile(
     headers?: { [key: string]: string },
     progressCallback?: (downloadedPct: number, increment: number) => void,
 ): Promise<Result<void, Error>> {
-    fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
+    try {
+        fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
+    } catch (error) {
+        return new Err(new BaseError(error, "Failed to create download directory"));
+    }
 
     let response: Response;
     try {
         const request = { url, method: "get", headers };
         response = await fetch(request.url, request);
     } catch (error) {
-        Logger.error(error);
         // Typing change from update
         return new Err(new ConnectionError(error));
     }
 
     if (!response.ok) {
-        return new Err(new Error("Request failed: " + response.statusText));
+        let cause: string | undefined;
+        try {
+            cause = await response.text();
+        } catch (_error) {
+            // ignore error in reading response, not important
+        }
+
+        return new Err(new Error("Request failed: " + response.statusText, { cause }));
     }
 
+    // Created outside the try so the catch can always release the fd.
+    const writeStream = fs.createWriteStream(filePath);
     try {
-        const file = await fs.createWriteStream(filePath);
-        if (response.body) {
-            let downloaded = 0;
-            const sizeString = response.headers.get("content-length");
-            const size = sizeString ? parseInt(sizeString, 10) : 0;
-            for await (const chunk of response.body) {
-                if (sizeString && progressCallback) {
-                    downloaded += chunk.length;
-                    progressCallback(
-                        Math.round((downloaded / size) * 100),
-                        (100 * chunk.length) / size,
-                    );
-                }
-                await file.write(chunk);
-            }
-            await file.close();
-        } else {
+        if (!response.body) {
             throw new Error("Unexpected null response body");
         }
+
+        let downloaded = 0;
+        const sizeString = response.headers.get("content-length");
+        const size = sizeString ? parseInt(sizeString, 10) : 0;
+        for await (const chunk of response.body) {
+            if (sizeString && progressCallback && size > 0) {
+                downloaded += chunk.length;
+                progressCallback(
+                    Math.round((downloaded / size) * 100),
+                    (100 * chunk.length) / size,
+                );
+            }
+            // write() returns false when the internal buffer is full; wait for
+            // "drain" so large downloads don't grow memory unbounded.
+            if (!writeStream.write(chunk)) {
+                await once(writeStream, "drain");
+            }
+        }
+
+        // Wait until everything is flushed and the fd is closed, so callers
+        // always see a complete file with no handle left open.
+        writeStream.end();
+        await finished(writeStream);
     } catch (error) {
-        Logger.error(error);
-        return new Err(new Error("Writing to file failed: " + error));
+        // Destroy on error so we never leak an open handle.
+        writeStream.destroy();
+        return new Err(new BaseError(error, "Writing to file failed"));
     }
 
     return Ok.EMPTY;

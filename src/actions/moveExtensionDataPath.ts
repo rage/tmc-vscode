@@ -3,6 +3,7 @@ import * as path from "path";
 import { Err, Result } from "ts-results";
 import * as vscode from "vscode";
 
+import { InitializationError } from "../errors";
 import { Logger } from "../utilities";
 
 import { refreshLocalExercises } from "./refreshLocalExercises";
@@ -21,7 +22,7 @@ export async function moveExtensionDataPath(
 ): Promise<Result<void, Error>> {
     const { resources, langs } = actionContext;
     if (!(langs.ok && resources.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     Logger.info("Moving extension data path");
 

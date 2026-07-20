@@ -1,9 +1,3 @@
-import * as fs from "fs-extra";
-import * as _ from "lodash";
-import * as path from "path";
-import { Err, Ok, Result } from "ts-results";
-import * as vscode from "vscode";
-
 import {
     HIDE_META_FILES,
     SHOW_META_FILES,
@@ -15,6 +9,11 @@ import {
 } from "../config/constants";
 import Resources, { EditorKind } from "../config/resources";
 import { Logger } from "../utilities";
+import * as fs from "fs-extra";
+import * as _ from "lodash";
+import * as path from "path";
+import { Err, Ok, Result } from "ts-results";
+import * as vscode from "vscode";
 
 export enum ExerciseStatus {
     Closed = "closed",

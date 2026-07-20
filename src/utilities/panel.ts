@@ -1,8 +1,6 @@
-import { Webview } from "vscode";
-
 import { Panel, PanelType, TargetedExtensionToWebview } from "../shared/shared";
-
 import { Logger } from "./logger";
+import { Webview } from "vscode";
 
 /**
  * Helper function for the extension panel to render a webview panel.

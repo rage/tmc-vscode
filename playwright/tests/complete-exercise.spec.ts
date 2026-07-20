@@ -1,5 +1,3 @@
-import { expect } from "@playwright/test";
-
 import { vsCodeTest } from "../fixtures";
 import { CoursePage } from "../pages/course";
 import { ExplorerPage } from "../pages/explorer";
@@ -7,6 +5,7 @@ import { LoginPage } from "../pages/login";
 import { MyCoursesPage } from "../pages/my-courses";
 import { TestResultsPage } from "../pages/test-results";
 import { TestSubmissionPage } from "../pages/test-submission";
+import { expect } from "@playwright/test";
 
 type Exercise = {
     course: string;

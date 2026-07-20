@@ -1,6 +1,3 @@
-import { Response } from "express";
-import path from "path";
-
 import {
     Course,
     CourseDetails,
@@ -12,6 +9,8 @@ import {
     Organization,
     SubmissionResultReport,
 } from "../src/api/types";
+import { Response } from "express";
+import path from "path";
 
 interface CreateOrganizationParams {
     information: string;

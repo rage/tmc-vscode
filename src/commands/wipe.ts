@@ -1,10 +1,10 @@
+import { ActionContext } from "../actions/types";
+import { FileSystemError, InitializationError } from "../errors";
+import { deactivate } from "../extension";
+import { Logger } from "../utilities";
 import * as fs from "fs-extra";
 import { Err, Ok } from "ts-results";
 import * as vscode from "vscode";
-
-import { ActionContext } from "../actions/types";
-import { deactivate } from "../extension";
-import { Logger } from "../utilities";
 
 export async function wipe(
     actionContext: ActionContext,
@@ -62,14 +62,14 @@ Please close the workspace and any related files before running this command aga
             !(workspaceManager && resources && langs && userData && resources.val.projectsDirectory)
         ) {
             Logger.error("Extension was not initialized properly");
-            return Err(new Error("Extension was not initialized properly"));
+            return Err(new InitializationError("Extension was not initialized properly"));
         }
 
         // Remove exercises
         try {
             fs.removeSync(resources.val.projectsDirectory);
-        } catch (_e) {
-            return Err(new Error("Failed to remove projects directory."));
+        } catch (e) {
+            return Err(new FileSystemError(e, "Failed to remove projects directory."));
         }
         progress.report({ message, percent: 0.25 });
 

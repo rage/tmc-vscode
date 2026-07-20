@@ -1,6 +1,5 @@
-import { expect } from "chai";
-
 import { semVerCompare } from "../../utilities";
+import { expect } from "chai";
 
 suite("Semantic version utils", function () {
     test("Major version comparisons work as expected", function () {

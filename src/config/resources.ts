@@ -1,7 +1,6 @@
+import { WORKSPACE_ROOT_FILE_NAME, WORKSPACE_ROOT_FOLDER_NAME } from "./constants";
 import * as path from "path";
 import * as vscode from "vscode";
-
-import { WORKSPACE_ROOT_FILE_NAME, WORKSPACE_ROOT_FOLDER_NAME } from "./constants";
 
 export enum EditorKind {
     Code,

@@ -3,10 +3,6 @@
 /*
  * ======== state ========
  */
-
-import { Uri } from "vscode";
-import * as util from "node:util";
-
 import {
     Course,
     CourseInstance,
@@ -15,7 +11,9 @@ import {
     StyleValidationResult,
     SubmissionFinished,
 } from "./langsSchema";
+import * as util from "node:util";
 import { createIs } from "typia";
+import { Uri } from "vscode";
 import { MoocLocalCourseExercise, TmcLocalCourseExercise } from "../storage/data";
 
 // for now, these are just copied from the data module
@@ -784,13 +782,13 @@ export class BaseError extends Error {
     public syscall?: string;
 
     constructor(err: unknown);
-    constructor(err: Error, details?: string);
+    constructor(err: unknown, details?: string);
     constructor(message?: string, details?: string);
 
-    constructor(err: unknown, details?: string) {
+    constructor(err: unknown, details?: string, causeParam?: string) {
         let message = "";
         let stack = "";
-        let cause: NodeJS.ErrnoException | string = "";
+        let cause: NodeJS.ErrnoException | string = causeParam || "";
 
         let errno: number | undefined = undefined;
         let code: string | undefined = undefined;

@@ -1,6 +1,7 @@
 import { flatten } from "lodash";
 import { Err, Ok, Result } from "ts-results";
 
+import { InitializationError } from "../errors";
 import { assertUnreachable, CourseIdentifier, ExerciseIdentifier } from "../shared/shared";
 import { Logger } from "../utilities";
 
@@ -26,7 +27,7 @@ export async function checkForExerciseUpdates(
 ): Promise<Result<OutdatedExercise[], Error>> {
     const { langs, userData } = actionContext;
     if (!(langs.ok && userData.ok)) {
-        return new Err(new Error("Extension was not initialized properly"));
+        return new Err(new InitializationError("Extension was not initialized properly"));
     }
     const forceRefresh = options?.forceRefresh ?? false;
     Logger.info("Checking for exercise updates, forced update:", forceRefresh);

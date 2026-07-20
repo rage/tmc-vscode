@@ -1,6 +1,5 @@
-import * as vscode from "vscode";
-
 import { Logger } from "../utilities";
+import * as vscode from "vscode";
 
 type Item<T> = [label: string, value: T];
 

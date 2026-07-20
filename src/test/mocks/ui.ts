@@ -1,6 +1,5 @@
-import { IMock, Mock } from "typemoq";
-
 import UI from "../../ui/ui";
+import { IMock, Mock } from "typemoq";
 
 export type UIMockValues = unknown;
 

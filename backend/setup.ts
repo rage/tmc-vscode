@@ -1,10 +1,9 @@
+import * as config from "../config";
+import { getLangsCLIForPlatform, getPlatform } from "../src/utilities/env";
 import archiver from "archiver";
 import fs from "fs";
 import { ncp } from "ncp";
 import path from "path";
-
-import * as config from "../config";
-import { getLangsCLIForPlatform, getPlatform } from "../src/utilities/env";
 
 const TMC_LANGS_DL_URL = config.productionApi.__TMC_LANGS_DL_URL__.replace(/"/g, "");
 const TMC_LANGS_VERSION = config.productionApi.__TMC_LANGS_VERSION__.replace(/"/g, "");

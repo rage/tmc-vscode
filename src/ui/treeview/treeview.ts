@@ -1,9 +1,7 @@
-import * as vscode from "vscode";
-
 import { VisibilityGroup, VisibilityGroupNegated } from "../types";
-
 import { TmcTreeNode } from "./treenode";
 import { Visibility } from "./visibility";
+import * as vscode from "vscode";
 
 /**
  * A class for managing the TMC menu treeview.

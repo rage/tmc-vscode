@@ -1,6 +1,5 @@
-import * as assert from "assert";
-
 import { formatSizeInBytes } from "../../utilities/utils";
+import * as assert from "assert";
 
 suite("Number formatting utils", () => {
     test("formatSizeInBytes", () => {
