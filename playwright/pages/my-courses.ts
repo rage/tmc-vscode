@@ -1,5 +1,6 @@
 import { SelectCourse } from "./select-course"
 import { SelectOrganization } from "./select-organization"
+import { SelectPlatform } from "./select-platform"
 import { TmcPage } from "./tmc"
 
 export class MyCoursesPage extends TmcPage {
@@ -10,6 +11,11 @@ export class MyCoursesPage extends TmcPage {
 
   public async addNewCourse(name: string): Promise<void> {
     await this.webview.getByRole("button", { name: "Add new course" }).first().click()
+
+    // Adding a course goes through platform selection first; these specs
+    // exercise the tmc flow against the mock backend.
+    const selectPlatform = new SelectPlatform(this.page, this.webview)
+    await selectPlatform.selectTmc()
 
     const selectOrganization = new SelectOrganization(this.page, this.webview)
     await selectOrganization.select("Test Organization (test)")

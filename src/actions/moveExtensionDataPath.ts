@@ -11,8 +11,10 @@ import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ActionContext } from "./types"
 
 /**
- * Moves physical location of all exercises on disk. Closes active course workspace's exercises for
- * the duration of transfer.
+ * Moves the physical location of all exercises on disk, then refreshes them.
+ *
+ * Exercises are no longer closed before the move: that step was removed
+ * deliberately (commit d39605f) as unnecessary on current VS Code.
  *
  * @param newPath New disk location for exercises.
  */

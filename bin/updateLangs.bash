@@ -20,7 +20,7 @@ GENERATED=$(curl "$BINDINGS_DOWNLOAD_URL")
 printf "// VERSION=%s\n" "$VERSION" > "$BINDINGS_DOWNLOAD_TARGET"
 # write URL to the file to make it easy to keep track of the version
 printf "// %s\n\n" "$BINDINGS_DOWNLOAD_URL" >> "$BINDINGS_DOWNLOAD_TARGET"
-echo "$GENERATED" | pnpm exec prettier --parser typescript >> "$BINDINGS_DOWNLOAD_TARGET"
+echo "$GENERATED" | pnpm exec oxfmt --stdin-filepath="$BINDINGS_DOWNLOAD_TARGET" >> "$BINDINGS_DOWNLOAD_TARGET"
 
 # update version number
 sed -i s/"TMC_LANGS_RUST_VERSION = .*"/"TMC_LANGS_RUST_VERSION = \"${VERSION}\";/" ./config.js

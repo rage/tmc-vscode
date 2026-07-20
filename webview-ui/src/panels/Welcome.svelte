@@ -21,8 +21,7 @@
   addMessageListener(panel, (message) => {
     switch (message.type) {
       case "setWelcomeData": {
-        // note: props are not deeply reactive in Svelte 5,
-        // so the panel is reassigned rather than mutated
+        // props aren't deeply reactive in Svelte 5, so panel is reassigned rather than mutated
         panel = { ...panel, version: message.version }
         savePanelState(panel)
         break

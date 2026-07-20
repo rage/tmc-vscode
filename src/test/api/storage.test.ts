@@ -1,5 +1,3 @@
-import { expect } from "chai"
-
 import Storage from "../../storage"
 import type { v3 } from "../../storage/data"
 import { v3_0_0 as userData } from "../fixtures/userData"
@@ -20,50 +18,50 @@ suite("Storage class", function () {
 
   let storage: Storage
 
-  setup(function () {
+  beforeEach(function () {
     storage = new Storage(createMockContext())
   })
 
   test("should store and retrieve extension settings", async function () {
-    expect(storage.getExtensionSettings()).to.be.undefined
+    expect(storage.getExtensionSettings()).toBeUndefined()
     await storage.updateExtensionSettings(extensionSettings)
-    expect(storage.getExtensionSettings()).to.be.deep.equal(extensionSettings)
+    expect(storage.getExtensionSettings()).toEqual(extensionSettings)
   })
 
   test("should store and retrieve session state", async function () {
-    expect(storage.getSessionState()).to.be.undefined
+    expect(storage.getSessionState()).toBeUndefined()
     await storage.updateSessionState(sessionState)
-    expect(storage.getSessionState()).to.be.deep.equal(sessionState)
+    expect(storage.getSessionState()).toEqual(sessionState)
   })
 
   test("should store and retrieve user data", async function () {
-    expect(storage.getUserData()).to.be.undefined
+    expect(storage.getUserData()).toBeUndefined()
     await storage.updateUserData(userData)
-    expect(storage.getUserData()).to.be.deep.equal(userData)
+    expect(storage.getUserData()).toEqual(userData)
   })
 
   test("should use unique key for exercise data", async function () {
-    expect(storage.getExtensionSettings()).to.be.undefined
-    expect(storage.getSessionState()).to.be.undefined
-    expect(storage.getUserData()).to.be.undefined
+    expect(storage.getExtensionSettings()).toBeUndefined()
+    expect(storage.getSessionState()).toBeUndefined()
+    expect(storage.getUserData()).toBeUndefined()
   })
 
   test("should use unique key for extension settings", async function () {
     await storage.updateExtensionSettings(extensionSettings)
-    expect(storage.getSessionState()).to.be.undefined
-    expect(storage.getUserData()).to.be.undefined
+    expect(storage.getSessionState()).toBeUndefined()
+    expect(storage.getUserData()).toBeUndefined()
   })
 
   test("should use unique key for session state", async function () {
     await storage.updateSessionState(sessionState)
-    expect(storage.getExtensionSettings()).to.be.undefined
-    expect(storage.getUserData()).to.be.undefined
+    expect(storage.getExtensionSettings()).toBeUndefined()
+    expect(storage.getUserData()).toBeUndefined()
   })
 
   test("should use unique key for user data", async function () {
     await storage.updateUserData(userData)
-    expect(storage.getExtensionSettings()).to.be.undefined
-    expect(storage.getSessionState()).to.be.undefined
+    expect(storage.getExtensionSettings()).toBeUndefined()
+    expect(storage.getSessionState()).toBeUndefined()
   })
 
   test("should wipe all data", async function () {
@@ -71,8 +69,8 @@ suite("Storage class", function () {
     await storage.updateSessionState(sessionState)
     await storage.updateUserData(userData)
     await storage.wipeStorage()
-    expect(storage.getExtensionSettings()).to.be.undefined
-    expect(storage.getSessionState()).to.be.undefined
-    expect(storage.getUserData()).to.be.undefined
+    expect(storage.getExtensionSettings()).toBeUndefined()
+    expect(storage.getSessionState()).toBeUndefined()
+    expect(storage.getUserData()).toBeUndefined()
   })
 })

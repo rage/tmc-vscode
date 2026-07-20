@@ -26,9 +26,11 @@ export default class TmcMenuTree {
    * Register an action to be shown in the action treeview.
    *
    * @param label A label, displayed in the treeview
-   * @param onClick An action handler
+   * @param id Action id
    * @param groups Determines when the action should be visible in the treeview
-   * @param id Optional, required for [[triggerCallback]]
+   * @param command The command invoked when the action is clicked
+   * @param collapsibleState Optional collapsible state for the tree item
+   * @param children Optional child nodes
    */
   public registerAction(
     label: string,
@@ -82,7 +84,6 @@ export default class TmcMenuTree {
 
   /**
    * Register a visibility group for the action treeview
-   * @param group Name of the group
    * @param visible Whether the group should start as active or not
    */
   public createVisibilityGroup(visible?: boolean): VisibilityGroup {

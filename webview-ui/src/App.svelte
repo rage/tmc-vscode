@@ -61,9 +61,8 @@ ${ev.reason.stack}
     panel: appPanel,
   }
 
-  // $state.raw: the state is only ever replaced wholesale, and the panel
-  // object is passed to vscode.postMessage by the panel components —
-  // a deep $state proxy would fail postMessage's structured clone
+  // $state.raw, not $state: panel objects are passed to vscode.postMessage, and a deep
+  // $state proxy would fail its structured clone
   let appState = $state.raw<State>(initialState)
   addMessageListener(appPanel, (message) => {
     switch (message.type) {
@@ -72,7 +71,6 @@ ${ev.reason.stack}
         if (!isTransient(newState.panel)) {
           vscode.setState(newState)
         }
-        console.log(newState)
         appState = newState
         break
       }

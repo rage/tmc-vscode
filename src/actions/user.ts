@@ -16,13 +16,8 @@ import type {
 import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants"
 import { BottleneckError, InitializationError } from "../errors"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
-import type {
-  CourseIdentifier,
-  ExerciseSubmissionPanel,
-  ExerciseTestsPanel,
-  TestResultData,
-} from "../shared/shared"
-import { LocalCourseData, LocalCourseExercise } from "../shared/shared"
+import type { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../shared/shared"
+import { CourseIdentifier, LocalCourseData, LocalCourseExercise } from "../shared/shared"
 import { Logger, parseFeedbackQuestion } from "../utilities/"
 import { getActiveEditorExecutablePath } from "../window"
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse"
@@ -331,7 +326,7 @@ export async function pasteMoocExercise(
   }
 
   const exerciseId = userData.val.getMoocExerciseByName(courseSlug, exerciseName)?.id
-  const exercisePath = workspaceManager.val.getExerciseBySlug("tmc", courseSlug, exerciseName)?.uri
+  const exercisePath = workspaceManager.val.getExerciseBySlug("mooc", courseSlug, exerciseName)?.uri
     .fsPath
   if (!exerciseId || !exercisePath) {
     return Err(new Error("Failed to resolve exercise id"))
@@ -489,7 +484,7 @@ export async function removeCourse(
   }
 
   userData.val.deleteCourse(id)
-  ui.treeDP.removeChildWithId("myCourses", id.toString())
+  ui.treeDP.removeChildWithId("myCourses", CourseIdentifier.toString(id))
 
   if (workspaceManager.val.activeCourse === courseName) {
     Logger.info("Closing course workspace because it was removed.")

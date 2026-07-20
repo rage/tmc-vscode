@@ -70,9 +70,14 @@ export function v1_resolveMissingFields(
 }
 
 export function v3_migrateFromV2(prev: data.v2.UserData): data.v3.UserData {
+  // Preserve any fields a newer extension version may have persisted
+  // (validateData returns the original object for exactly this reason), then
+  // ensure the v3-only `mooc_courses` field is present without clobbering it
+  // if the persisted data already carries one.
+  const maybeFuture = prev as Partial<data.v3.UserData>
   return {
-    courses: prev.courses,
-    mooc_courses: [],
+    ...prev,
+    mooc_courses: maybeFuture.mooc_courses ?? [],
   }
 }
 

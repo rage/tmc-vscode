@@ -30,7 +30,6 @@ export async function pasteExercise(
     () => actions.pasteTmcExercise(actionContext, exercise.courseSlug, exercise.exerciseSlug),
     () => actions.pasteMoocExercise(actionContext, exercise.courseSlug, exercise.exerciseSlug),
   )
-  await actions.pasteTmcExercise(actionContext, exercise.courseSlug, exercise.exerciseSlug)
   if (pasteResult.err) {
     if (pasteResult.val instanceof BottleneckError) {
       Logger.warn(`Paste submission was cancelled: ${pasteResult.val.message}.`)

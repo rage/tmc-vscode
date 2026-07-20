@@ -21,9 +21,11 @@ import {
   EmptyLangsResponseError,
   ForbiddenError,
   InvalidTokenError,
+  LangsResponseSchemaError,
   ObsoleteClientError,
   RuntimeError,
   SpawnError,
+  UnsupportedOperationError,
 } from "../errors"
 import type {
   CombinedCourseData,
@@ -49,10 +51,10 @@ import type {
   UpdatedExercise,
 } from "../shared/langsSchema"
 import { CliOutput } from "../shared/langsSchema"
-import type { CourseIdentifier } from "../shared/shared"
 import {
   assertUnreachable,
   BaseError,
+  CourseIdentifier,
   ExerciseIdentifier,
   makeTmcKind,
   match,
@@ -126,9 +128,7 @@ export default class Langs {
   private _onLogout?: () => void
 
   /**
-   * Creates a new instance of TMC interface class.
-   *
-   * @param configuration
+   * Creates a new instance of the langs interface class.
    */
   public constructor(
     private readonly cliPath: string,
@@ -253,25 +253,24 @@ export default class Langs {
   }
 
   /**
-   * Lists local exercises for given course. Uses TMC-langs `list-local-tmc-course-exercises` command
-   * internally.
+   * Lists local exercises for given course. Uses TMC-langs `list-local-course-exercises`
+   * command internally, which is TMC-only and keyed solely by course slug.
    *
+   * @param _courseKind Kept for call-site symmetry; the CLI command is TMC-only.
    * @param courseSlug Course which's exercises should be listed.
    */
   public async listLocalCourseExercises(
-    courseKind: "tmc" | "mooc",
+    _courseKind: "tmc" | "mooc",
     courseSlug: string,
   ): Promise<Result<LocalTmcExercise[], Error>> {
     const res = await this._executeLangsCommand(
       {
         args: [
-          "list-local-tmc-course-exercises",
+          "list-local-course-exercises",
           "--client-name",
           this.clientName,
           "--course-slug",
           courseSlug,
-          "--course-type",
-          courseKind,
         ],
       },
       "local-tmc-exercises",
@@ -282,7 +281,7 @@ export default class Langs {
   /**
    * Runs local tests for given exercise. Uses TMC-langs `run-tests` command internally.
    *
-   * @param id ID of the exercise to test.
+   * @param exercisePath Path to the exercise to test.
    * @param pythonExecutablePath Optional path to Python executable to use instead of the one
    * detected in PATH.
    */
@@ -567,7 +566,6 @@ export default class Langs {
         "tmc-exercise-download",
       )
       const tmcMappedRes = tmcRes.andThen((x) => {
-        // Invalidate exercise update cache
         this._responseCache.delete(Langs._exerciseUpdatesCacheKey)
         return Ok(x.data["output-data"])
       })
@@ -592,7 +590,6 @@ export default class Langs {
         "mooc-exercise-download",
       )
       const moocMappedRes = moocRes.andThen((x) => {
-        // Invalidate exercise update cache
         this._responseCache.delete(Langs._exerciseUpdatesCacheKey)
         return Ok(x.data["output-data"])
       })
@@ -768,19 +765,33 @@ export default class Langs {
     if (courseId.kind === "tmc") {
       const res = await this._executeLangsCommand(
         {
-          args: this._tmcCmd("get-course-details", "--course-id", courseId.toString()),
+          args: this._tmcCmd(
+            "get-course-details",
+            "--course-id",
+            CourseIdentifier.toString(courseId),
+          ),
         },
         "course-details",
-        { forceRefresh: options?.forceRefresh, key: `course-${courseId}-details` },
+        {
+          forceRefresh: options?.forceRefresh,
+          key: `course-${CourseIdentifier.toString(courseId)}-details`,
+        },
       )
       return res.map((x) => x.data["output-data"])
     } else if (courseId.kind === "mooc") {
       const res = await this._executeLangsCommand(
         {
-          args: this._moocCmd("get-course-details", "--course-id", courseId.toString()),
+          args: this._moocCmd(
+            "get-course-details",
+            "--course-id",
+            CourseIdentifier.toString(courseId),
+          ),
         },
         "course-details",
-        { forceRefresh: options?.forceRefresh, key: `course-${courseId}-details` },
+        {
+          forceRefresh: options?.forceRefresh,
+          key: `course-${CourseIdentifier.toString(courseId)}-details`,
+        },
       )
       return res.map((x) => x.data["output-data"])
     }
@@ -947,17 +958,28 @@ export default class Langs {
     exercisePath: string,
     saveOldState: boolean,
   ): Promise<Result<void, Error>> {
-    const saveOldStateArg = saveOldState ? ["--save-old-state"] : []
-    const args = this._tmcCmd(
-      "reset-exercise",
-      ...saveOldStateArg,
-      "--exercise-id",
-      ExerciseIdentifier.toString(exerciseId),
-      "--exercise-path",
-      exercisePath,
+    return match(
+      exerciseId,
+      async (tmc) => {
+        const saveOldStateArg = saveOldState ? ["--save-old-state"] : []
+        const args = this._tmcCmd(
+          "reset-exercise",
+          ...saveOldStateArg,
+          "--exercise-id",
+          tmc.tmcExerciseId.toString(),
+          "--exercise-path",
+          exercisePath,
+        )
+        const res = await this._executeLangsCommand({ args }, null)
+        return res.err ? res : Ok.EMPTY
+      },
+      async () =>
+        Err(
+          new UnsupportedOperationError(
+            "Resetting exercises is not yet supported for courses.mooc.fi exercises.",
+          ),
+        ),
     )
-    const res = await this._executeLangsCommand({ args }, null)
-    return res.err ? res : Ok.EMPTY
   }
 
   /**
@@ -965,7 +987,7 @@ export default class Langs {
    * command internally.
    *
    * This function can only be called once per `MINIMUM_SUBMISSION_INTERVAL` and this limitation
-   * is shared with `submitExerciseToPaste()`.
+   * is shared with `submitTmcExerciseToPaste()`.
    *
    * @param exerciseId Id of the exercise.
    * @param progressCallback Optional callback function that can be used to get status reports.
@@ -1013,7 +1035,7 @@ export default class Langs {
    * command internally.
    *
    * This function can only be called once per `MINIMUM_SUBMISSION_INTERVAL` and this limitation
-   * is shared with `submitExerciseAndWaitForResults()`.
+   * is shared with `submitTmcExerciseAndWaitForResults()`.
    *
    * @param exerciseId Id of the exercise.
    * @returns TMC paste link.
@@ -1129,11 +1151,10 @@ export default class Langs {
   }
 
   /**
-   * Executes a tmc-langs-cli process with given arguments to the completion and handles
-   * validation for the last response received from the process.
+   * Executes a tmc-langs-cli process to completion and validates the final response.
    *
-   * @param langsArgs Command arguments passed on to spawnLangsProcess.
-   * @param validator Validator used to check that the result corresponds to the expected type.
+   * @param langsArgs Command arguments passed to `_spawnLangsProcess`.
+   * @param outputDataKind Expected `output-data-kind` of the result.
    * @param cacheConfig Cache options.
    */
   private async _executeLangsCommand<T extends DataKind["output-data-kind"] | null>(
@@ -1247,6 +1268,9 @@ export default class Langs {
 
     let theResult: OutputData | undefined
     let stdoutBuffer = ""
+    // Last CliOutput schema-validation failure, if any — lets a process that ends without
+    // output data report *why* instead of a generic "no result data" message.
+    let lastSchemaValidationFailure: { issueSummary: string; outputKind: unknown } | undefined
 
     const obfuscatedArgs = args.map((x, i) => (obfuscate?.includes(i) ? "***" : x))
     const loggableCommand = [this.cliPath]
@@ -1301,8 +1325,7 @@ export default class Langs {
         if (timeout) {
           clearTimeout(timeout)
         }
-        // check for macos error code -88, which indicates an
-        // architecture mismatch
+        // macOS error -88 indicates an architecture (Rosetta) mismatch
         if ("errno" in error && error.errno === -88) {
           error.message = `A compatibility error was detected.
 If you're on macOS: Try installing Rosetta by running \`softwareupdate --install-rosetta\` in the terminal. (See https://support.apple.com/en-us/102527).
@@ -1347,10 +1370,13 @@ ${error.message}`
             const json = JSON.parse(trimmed)
             const validation = CliOutput.safeParse(json)
             if (!validation.success) {
-              Logger.error(
-                "TMC-langs response didn't match expected type:",
-                z.prettifyError(validation.error),
-              )
+              const issueSummary = z.prettifyError(validation.error)
+              const outputKind =
+                json && typeof json === "object" && "output-kind" in json
+                  ? (json as { "output-kind": unknown })["output-kind"]
+                  : undefined
+              lastSchemaValidationFailure = { issueSummary, outputKind }
+              Logger.error("TMC-langs response didn't match expected type:", issueSummary)
               Logger.debug(json)
               continue
             }
@@ -1381,7 +1407,6 @@ ${error.message}`
       try {
         await processResult
       } catch (error) {
-        // Typing change from update
         return Err(new RuntimeError(error as string))
       }
 
@@ -1396,6 +1421,15 @@ ${error.message}`
 
       if (theResult) {
         return Ok(theResult)
+      }
+      if (lastSchemaValidationFailure) {
+        return Err(
+          new LangsResponseSchemaError(
+            `Langs process ended without result data because its output didn't match the ` +
+              `expected schema (output-kind: ${JSON.stringify(lastSchemaValidationFailure.outputKind)}): ` +
+              `${lastSchemaValidationFailure.issueSummary}`,
+          ),
+        )
       }
       return Err(
         new EmptyLangsResponseError(
@@ -1421,10 +1455,9 @@ ${error.message}`
  *
  * @param data The `OutputData` with unknown result data.
  * @param kind The expected `output-data-kind`. If `null`, doesn't check `output-data`.
- * @returns
  */
 function dataMatchesKind<T extends DataKind["output-data-kind"] | null>(
-  data: OutputData, // this can be changed to unknown later if needed
+  data: OutputData,
   kind: T,
 ): data is OutputData & { data: T extends null ? null : { "output-data-kind": T } } {
   return (

@@ -157,7 +157,7 @@
       tabindex="0"
       onclick={() => expanded.update((e) => !e)}
       onkeypress={() => expanded.update((e) => !e)}
-      appearance="secondary"
+      secondary
     >
       {#if $expanded}
         Hide exercises

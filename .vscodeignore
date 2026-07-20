@@ -56,7 +56,8 @@ esbuild.mjs
 webview-ui/src/**
 #webview-ui/public/**
 webview-ui/scripts/**
-webview-ui/index.html
+webview-ui/public/index.html
+webview-ui/public/favicon.png
 webview-ui/README.md
 webview-ui/package.json
 webview-ui/vite.config.ts

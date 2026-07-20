@@ -4,6 +4,18 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type BrowserTestRuntime = 'python';
+
+/**
+ * In-browser test spec produced by the `tmc` exercise service: the script to
+ * run in the client plus an optional error set when the build failed.
+ */
+export type BrowserTestSpec = {
+    error: string | null;
+    runtime: BrowserTestRuntime;
+    script: string;
+};
+
 /**
  * The update data type for the progress reporter.
  */
@@ -51,14 +63,6 @@ export type Course = {
      * /api/v8/core/courses/{course_id}/unlock
      */
     unlock_url: string;
-};
-
-export type Course2 = {
-    description: string | null;
-    id: string;
-    name: string;
-    organization_name: string;
-    slug: string;
 };
 
 /**
@@ -242,10 +246,10 @@ export type DataKind = {
     'output-data': Array<LocalMoocExercise>;
     'output-data-kind': 'local-mooc-exercises';
 } | {
-    'output-data': Course2;
+    'output-data': MoocCourse;
     'output-data-kind': 'mooc-course';
 } | {
-    'output-data': Array<Course2>;
+    'output-data': Array<MoocCourse>;
     'output-data-kind': 'mooc-courses';
 } | {
     'output-data': Array<TmcExerciseSlide>;
@@ -433,6 +437,14 @@ export type ModelSolutionSpec = {
     type: 'Editor';
 };
 
+export type MoocCourse = {
+    description: string | null;
+    id: string;
+    name: string;
+    organization_name: string;
+    slug: string;
+};
+
 export type MoocExerciseDownload = {
     path: string;
     'task-id': string;
@@ -486,10 +498,16 @@ export type OutputResult = 'logged-in' | 'logged-out' | 'not-logged-in' | 'error
 
 export type PublicSpec = {
     archive_name: string;
+    /**
+     * In-browser test config: script to run in the client and optional error
+     * if the build failed. Omitted for editor exercises or when no script was
+     * built. Serde treats the `Option` field as optional when absent.
+     */
+    browser_test: BrowserTestSpec | null;
     checksum: string;
-    exercise_type: ExerciseType;
     stub_download_url: string;
     student_file_paths: Array<string>;
+    type: ExerciseType;
 };
 
 /**

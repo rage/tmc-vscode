@@ -1,7 +1,6 @@
 import type * as http from "http"
 import * as path from "path"
 
-import { expect } from "chai"
 import * as fs from "fs-extra"
 import * as tmp from "tmp"
 
@@ -10,24 +9,23 @@ import { downloadFile } from "../../utilities/utils"
 import { serverUrl, startServer } from "./httpServer"
 
 suite("downloadFile", function () {
-  this.timeout(20000)
-
   let server: http.Server | undefined
   let tmpDir: tmp.DirResult
 
-  setup(function () {
+  beforeEach(function () {
     tmpDir = tmp.dirSync({ unsafeCleanup: true })
   })
 
-  teardown(function (done) {
+  afterEach(function () {
     tmpDir.removeCallback()
     if (server) {
       const s = server
       server = undefined
-      s.close(() => done())
-    } else {
-      done()
+      return new Promise<void>((resolve) => {
+        s.close(() => resolve())
+      })
     }
+    return undefined
   })
 
   test("writes the full body to disk before resolving, even when the event loop is then starved", async function () {
@@ -51,8 +49,8 @@ suite("downloadFile", function () {
     }
     const onDisk = fs.readFileSync(out, "utf-8")
 
-    expect(result.ok).to.equal(true)
-    expect(onDisk).to.equal(body)
+    expect(result.ok).toBe(true)
+    expect(onDisk).toBe(body)
   })
 
   test("writes a large multi-chunk body byte-for-byte (backpressure)", async function () {
@@ -68,10 +66,10 @@ suite("downloadFile", function () {
 
     const result = await downloadFile(serverUrl(server), out)
 
-    expect(result.ok).to.equal(true)
+    expect(result.ok).toBe(true)
     const onDisk = fs.readFileSync(out)
-    expect(onDisk.length).to.equal(body.length)
-    expect(onDisk.equals(body)).to.equal(true)
+    expect(onDisk.length).toBe(body.length)
+    expect(onDisk.equals(body)).toBe(true)
   })
 
   test("reports monotonic progress up to 100", async function () {
@@ -87,12 +85,12 @@ suite("downloadFile", function () {
       percents.push(percent)
     })
 
-    expect(result.ok).to.equal(true)
-    expect(percents.length).to.be.greaterThan(0)
+    expect(result.ok).toBe(true)
+    expect(percents.length).toBeGreaterThan(0)
     for (let i = 1; i < percents.length; i++) {
-      expect(percents[i]).to.be.at.least(percents[i - 1] ?? 0)
+      expect(percents[i]).toBeGreaterThanOrEqual(percents[i - 1] ?? 0)
     }
-    expect(percents[percents.length - 1]).to.equal(100)
+    expect(percents[percents.length - 1]).toBe(100)
   })
 
   test("releases the file handle so the directory can be removed immediately", async function () {
@@ -105,7 +103,7 @@ suite("downloadFile", function () {
 
     await downloadFile(serverUrl(server), out)
     // No open fd should remain; on Windows a leftover handle throws ENOTEMPTY.
-    expect(() => fs.rmSync(path.join(tmpDir.name, "sub"), { recursive: true })).to.not.throw()
+    expect(() => fs.rmSync(path.join(tmpDir.name, "sub"), { recursive: true })).not.toThrow()
   })
 
   test("returns Err with 'Request failed' on a non-2xx response", async function () {
@@ -117,9 +115,9 @@ suite("downloadFile", function () {
 
     const result = await downloadFile(serverUrl(server), out)
 
-    expect(result.err).to.equal(true)
+    expect(result.err).toBe(true)
     if (result.err) {
-      expect(result.val.message).to.contain("Request failed")
+      expect(result.val.message).toContain("Request failed")
     }
   })
 
@@ -133,9 +131,9 @@ suite("downloadFile", function () {
 
     const result = await downloadFile(deadUrl, out)
 
-    expect(result.err).to.equal(true)
+    expect(result.err).toBe(true)
     if (result.err) {
-      expect(result.val).to.be.instanceOf(ConnectionError)
+      expect(result.val).toBeInstanceOf(ConnectionError)
     }
   })
 
@@ -154,7 +152,7 @@ suite("downloadFile", function () {
       threw = true
     }
 
-    expect(threw, "downloadFile should not throw").to.equal(false)
-    expect(result?.err).to.equal(true)
+    expect(threw, "downloadFile should not throw").toBe(false)
+    expect(result?.err).toBe(true)
   })
 })

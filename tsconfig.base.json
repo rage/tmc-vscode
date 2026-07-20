@@ -1,8 +1,7 @@
 {
   // Shared strict compiler baseline for every project in the workspace
-  // (extension host, webview, mock backend, playwright). The flag set is
-  // inherited from secret-project-331's tsconfigs; per-project configs only
-  // set module-resolution/lib/types specifics.
+  // (extension host, webview, mock backend, playwright). Per-project configs
+  // only set module-resolution/lib/types specifics.
   "compilerOptions": {
     "target": "esnext",
     "module": "esnext",

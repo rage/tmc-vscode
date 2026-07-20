@@ -1,5 +1,4 @@
-import type { IMock } from "typemoq"
-import { Mock } from "typemoq"
+import { vi } from "vitest"
 
 import type Settings from "../../config/settings"
 
@@ -7,18 +6,14 @@ export interface SettingsMockValues {
   getDownloadOldSubmission: boolean
 }
 
-export function createSettingsMock(): [IMock<Settings>, SettingsMockValues] {
+export function createSettingsMock(): [Settings, SettingsMockValues] {
   const values: SettingsMockValues = {
     getDownloadOldSubmission: false,
   }
-  const mock = setupMockValues(values)
-  return [mock, values]
-}
 
-function setupMockValues(values: SettingsMockValues): IMock<Settings> {
-  const mock = Mock.ofType<Settings>()
+  const mock = {
+    getDownloadOldSubmission: vi.fn(() => values.getDownloadOldSubmission),
+  }
 
-  mock.setup((x) => x.getDownloadOldSubmission()).returns(() => values.getDownloadOldSubmission)
-
-  return mock
+  return [mock as unknown as Settings, values]
 }

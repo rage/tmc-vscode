@@ -20,11 +20,24 @@ import type {
 } from "../storage/data"
 import { Logger } from "../utilities/logger"
 
+/**
+ * Builds the primitive key under which an exercise's passed-state is tracked.
+ *
+ * The key is backend-qualified so that a tmc exercise and a mooc exercise whose
+ * ids stringify identically (e.g. tmc `1` and mooc `"1"`) don't collide.
+ */
+function passedExerciseKey(id: ExerciseIdentifier): string {
+  return `${id.kind}:${ExerciseIdentifier.toString(id)}`
+}
+
 export class UserData {
   private _tmcCourses: Map<number, TmcLocalCourseData>
   // maps instance ids to course data
   private _moocCourses: Map<string, MoocLocalCourseData>
-  private _passedExercises = new Set<ExerciseIdentifier>()
+  // keyed by a backend-qualified string (see `passedExerciseKey`), never by the
+  // ExerciseIdentifier object itself — a `Set` of objects only ever matches on
+  // reference identity, so membership would silently never hit.
+  private _passedExercises = new Set<string>()
   private _storage: Storage
   public constructor(storage: Storage) {
     const persistentData = storage.getUserData()
@@ -35,14 +48,14 @@ export class UserData {
       persistentData.courses.forEach((x) =>
         x.exercises.forEach((y) => {
           if (y.passed) {
-            this._passedExercises.add(ExerciseIdentifier.from(y.id))
+            this._passedExercises.add(passedExerciseKey(ExerciseIdentifier.from(y.id)))
           }
         }),
       )
       persistentData.mooc_courses.forEach((x) =>
         x.exercises.forEach((y) => {
           if (y.passed) {
-            this._passedExercises.add(ExerciseIdentifier.from(y.id))
+            this._passedExercises.add(passedExerciseKey(ExerciseIdentifier.from(y.id)))
           }
         }),
       )
@@ -278,8 +291,8 @@ export class UserData {
       )
     }
     exercises.forEach((x) => {
-      const id = ExerciseIdentifier.from(x.data.id)
-      return x.data.passed ? this._passedExercises.add(id) : this._passedExercises.delete(id)
+      const key = passedExerciseKey(ExerciseIdentifier.from(x.data.id))
+      return x.data.passed ? this._passedExercises.add(key) : this._passedExercises.delete(key)
     })
     match(
       courseData,
@@ -306,7 +319,10 @@ export class UserData {
           .filter((e) => e !== undefined)
       },
     )
-    this.addCourse(courseData)
+    // `courseData.data` is the same object held by the backing map (getCourse
+    // wraps the stored reference), so the mutations above are already in place;
+    // persisting is all that's left. Calling addCourse here would throw, since
+    // the course already exists.
     await this._updatePersistentData()
     return Ok.EMPTY
   }
@@ -328,7 +344,7 @@ export class UserData {
   }
 
   public getPassed(exerciseId: ExerciseIdentifier): boolean {
-    return this._passedExercises.has(exerciseId)
+    return this._passedExercises.has(passedExerciseKey(exerciseId))
   }
 
   /**
@@ -350,22 +366,41 @@ export class UserData {
     const newExercises = courseData.data.newExercises.map(ExerciseIdentifier.from)
     Logger.info(`Clearing new exercises`)
     if (exercisesToClear !== undefined) {
-      const unSuccessfullyDownloaded = _.difference(newExercises, exercisesToClear)
-      let tmcIds: number[] = []
-      let moocIds: string[] = []
-      unSuccessfullyDownloaded.forEach((id) =>
-        match(
-          id,
-          (tmc) => tmcIds.push(tmc.tmcExerciseId),
-          (mooc) => moocIds.push(mooc.moocExerciseId),
-        ),
+      // `ExerciseIdentifier`s are tagged-union objects, so a plain `difference`
+      // compares them by reference and never subtracts anything — diff by their
+      // string form instead.
+      const unSuccessfullyDownloaded = _.differenceBy(
+        newExercises,
+        exercisesToClear,
+        ExerciseIdentifier.toString,
       )
-      if (tmcIds.length > 0) {
-        courseData.data.newExercises = tmcIds
-      }
-      if (moocIds.length > 0) {
-        courseData.data.newExercises = moocIds
-      }
+      // Write the remainder back to the course's own backend-typed array,
+      // always — including down to an empty list when everything was cleared.
+      match(
+        courseData,
+        (tmc) => {
+          tmc.newExercises = unSuccessfullyDownloaded
+            .map((id) =>
+              match(
+                id,
+                (t) => t.tmcExerciseId,
+                () => undefined,
+              ),
+            )
+            .filter((id) => id !== undefined)
+        },
+        (mooc) => {
+          mooc.newExercises = unSuccessfullyDownloaded
+            .map((id) =>
+              match(
+                id,
+                () => undefined,
+                (m) => m.moocExerciseId,
+              ),
+            )
+            .filter((id) => id !== undefined)
+        },
+      )
       if (unSuccessfullyDownloaded.length === 0) {
         courseData.data.notifyAfter = 0
       }

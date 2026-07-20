@@ -1,7 +1,6 @@
 import { vitePreprocess } from "@sveltejs/vite-plugin-svelte"
 
-// vitePreprocess handles `<script lang="ts">` (replacing the former
-// svelte-preprocess dependency).
+// vitePreprocess handles `<script lang="ts">`.
 export default {
   preprocess: vitePreprocess(),
 }

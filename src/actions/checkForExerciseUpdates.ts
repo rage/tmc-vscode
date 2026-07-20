@@ -20,7 +20,6 @@ interface OutdatedExercise {
 /**
  * Checks all user's courses for exercise updates.
  */
-// todo: mooc
 export async function checkForExerciseUpdates(
   actionContext: ActionContext,
   options?: Options,

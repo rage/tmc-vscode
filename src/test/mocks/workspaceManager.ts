@@ -1,11 +1,12 @@
 import type { Result } from "ts-results"
-import { Ok } from "ts-results"
-import type { IMock } from "typemoq"
-import { It, Mock } from "typemoq"
+import { Err, Ok } from "ts-results"
+import { vi } from "vitest"
 
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { workspaceExercises } from "../fixtures/workspaceManager"
+
+const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."))
 
 export interface WorkspaceManagerMockValues {
   activeCourse?: string | undefined
@@ -17,7 +18,7 @@ export interface WorkspaceManagerMockValues {
   uriIsExercise: boolean
 }
 
-export function createWorkspaceMangerMock(): [IMock<WorkspaceManager>, WorkspaceManagerMockValues] {
+export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManagerMockValues] {
   const values: WorkspaceManagerMockValues = {
     activeCourse: undefined,
     activeExercise: undefined,
@@ -27,29 +28,26 @@ export function createWorkspaceMangerMock(): [IMock<WorkspaceManager>, Workspace
     setExercises: Ok.EMPTY,
     uriIsExercise: true,
   }
-  const mock = setupMockValues(values)
 
-  return [mock, values]
-}
+  const mock = {
+    get activeCourse() {
+      return values.activeCourse
+    },
+    get activeExercise() {
+      return values.activeExercise
+    },
+    closeCourseExercises: vi.fn(async (backend: string, courseSlug: string) =>
+      backend === "tmc" && courseSlug === "test-python-course"
+        ? values.closeExercises
+        : NOT_MOCKED_ERROR,
+    ),
+    getExerciseByPath: vi.fn(() => values.getExerciseByPath),
+    getExercisesByCourseSlug: vi.fn((courseSlug: string) =>
+      courseSlug === "test-python-course" ? values.getExercisesByCoursePythonCourse : [],
+    ),
+    setExercises: vi.fn(async () => values.setExercises),
+    uriIsExercise: vi.fn(() => values.uriIsExercise),
+  }
 
-function setupMockValues(values: WorkspaceManagerMockValues): IMock<WorkspaceManager> {
-  const mock = Mock.ofType<WorkspaceManager>()
-
-  mock.setup((x) => x.activeCourse).returns(() => values.activeCourse)
-  mock.setup((x) => x.activeExercise).returns(() => values.activeExercise)
-
-  mock
-    .setup((x) => x.closeCourseExercises("tmc", It.isAny(), It.isAny()))
-    .returns(async () => values.closeExercises)
-
-  mock.setup((x) => x.getExerciseByPath(It.isAny())).returns(() => values.getExerciseByPath)
-
-  mock
-    .setup((x) => x.getExercisesByCourseSlug(It.isValue("test-python-course")))
-    .returns(() => values.getExercisesByCoursePythonCourse)
-
-  mock.setup((x) => x.setExercises(It.isAny())).returns(async () => values.setExercises)
-  mock.setup((x) => x.uriIsExercise(It.isAny())).returns(() => values.uriIsExercise)
-
-  return mock
+  return [mock as unknown as WorkspaceManager, values]
 }

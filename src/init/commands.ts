@@ -6,7 +6,7 @@ import type { ActionContext } from "../actions/types"
 import * as commands from "../commands"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
-import { assertUnreachable, LocalCourseData } from "../shared/shared"
+import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities/"
 
 export function registerCommands(
@@ -40,52 +40,6 @@ export function registerCommands(
     vscode.commands.registerCommand("tmc.closeExercise", async (resource: vscode.Uri | undefined) =>
       commands.closeExercise(actionContext, resource),
     ),
-
-    vscode.commands.registerCommand("tmc.courseDetails", async (courseId?: CourseIdentifier) => {
-      if (userData.err) {
-        Logger.error("The extension was not initialized properly")
-        return
-      }
-
-      const courses = userData.val.getCourses()
-      if (courses.length === 0) {
-        return
-      }
-      let actualId: CourseIdentifier
-      if (courseId === undefined) {
-        const selected = await dialog.selectItem(
-          "Which course page do you want to open?",
-          ...courses.map<[string, CourseIdentifier]>((c) => {
-            switch (c.kind) {
-              case "tmc": {
-                return [c.data.title, { kind: "tmc", data: { courseId: c.data.id } }]
-              }
-              case "mooc": {
-                return [c.data.title, { kind: "mooc", data: { instanceId: c.data.id } }]
-              }
-              default: {
-                return assertUnreachable(c)
-              }
-            }
-          }),
-        )
-        if (selected === undefined) {
-          // user did not select anything
-          return
-        }
-        actualId = selected
-      } else {
-        actualId = courseId
-      }
-      const course = userData.val.getCourse(actualId)
-      TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-        id: randomPanelId(),
-        type: "CourseDetails",
-        courseId: actualId,
-        course,
-        exerciseStatuses: { tmc: {}, mooc: {} },
-      })
-    }),
 
     vscode.commands.registerCommand("tmc.courseDetails", async (courseId?: CourseIdentifier) => {
       if (userData.err) {

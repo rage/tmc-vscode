@@ -10,7 +10,7 @@ fi
 
 # Version in package.json must match with tag version
 tagVersion=${BASH_REMATCH[1]}
-packageVersion=$(grep -Eo '^    "version": ".+$' package.json | cut -d\" -f4)
+packageVersion=$(node -p "require('./package.json').version")
 if [[ ! $packageVersion =~ $tagVersion ]]
 then
     echo "Error: The version in package.json '${packageVersion}' doesn't match with the tag '${tagVersion}'."

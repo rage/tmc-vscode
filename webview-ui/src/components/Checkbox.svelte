@@ -9,6 +9,10 @@
   let { checked = $bindable(false), onClick = () => {}, hidden = false, children }: Props = $props()
 
   function onClickWrapper(event: Event) {
+    // preventDefault is required, not just stopPropagation: the click lands on
+    // vscode-checkbox's internal <label for="input">, whose default action re-fires a
+    // synthetic click on the inner <input> and undoes this toggle if not canceled.
+    event.preventDefault()
     event.stopPropagation()
     checked = !checked
     onClick(checked)

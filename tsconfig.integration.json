@@ -1,0 +1,14 @@
+{
+  // Mocha test-electron integration tier (src/test-integration/**). This suite
+  // drives the real tmc-langs CLI against the bundled mock backend and is
+  // bundled by esbuild to dist/integration.spec.js, then loaded inside
+  // test-electron (bin/runIntegrationTests.js). Mocha (tdd UI) provides the
+  // ambient suite/test/setup/suiteSetup globals.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "types": ["node", "vscode", "mocha"],
+    "sourceMap": true
+  },
+  "include": ["src/test-integration/**/*"]
+}

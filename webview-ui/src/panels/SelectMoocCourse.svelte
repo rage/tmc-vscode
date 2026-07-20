@@ -45,8 +45,7 @@
   function filterCourses(query: string) {
     filter.set(query.toUpperCase())
   }
-  // note: the langs CLI no longer has a course-instance concept, so the
-  // course id doubles as the instance id in the selection message
+  // the langs CLI has no course-instance concept, so the course id doubles as the instance id
   function selectCourse(course: MoocCourse) {
     postMessageToWebview({
       type: "selectedMoocCourse",

@@ -89,8 +89,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     langs = cliPathResult
     initializationError(dialog, "tmc-langs setup", cliPathResult.val, cliFolderPath)
   } else {
-    // fire-and-forget diagnostic: check that the CLI's output contract
-    // matches the schema this extension was built against
+    // fire-and-forget: verify the CLI's output contract matches this build's schema
     void init.verifyCliSchema(cliPathResult.val, context.extensionPath)
     langs = new Ok(
       new Langs(cliPathResult.val, CLIENT_NAME, extensionVersion, {

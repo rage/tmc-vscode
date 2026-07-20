@@ -181,15 +181,6 @@ export async function closeExercises(
       },
     })),
   )
-  const exerciseStatusChangeMessages = closedIds.map<ExtensionToWebview>((id) => ({
-    type: "exerciseStatusChange",
-    target: {
-      type: "CourseDetails",
-    },
-    exerciseId: id,
-    status: "closed",
-  }))
-  TmcPanel.postMessage(...exerciseStatusChangeMessages)
 
   return new Ok(closedIds)
 }

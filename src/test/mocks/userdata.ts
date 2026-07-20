@@ -1,5 +1,4 @@
-import type { IMock } from "typemoq"
-import { It, Mock } from "typemoq"
+import { vi } from "vitest"
 
 import type { UserData } from "../../config/userdata"
 import type { LocalCourseData } from "../../shared/shared"
@@ -12,24 +11,16 @@ export interface UserDataMockValues {
   getExerciseByName: Readonly<TmcLocalCourseExercise> | undefined
 }
 
-export function createUserDataMock(): [IMock<UserData>, UserDataMockValues] {
+export function createUserDataMock(): [UserData, UserDataMockValues] {
   const values: UserDataMockValues = {
     getCourses: userData.courses.map(makeTmcKind),
     getExerciseByName: undefined,
   }
-  const mock = setupMockValues(values)
 
-  return [mock, values]
-}
+  const mock = {
+    getCourses: vi.fn(() => values.getCourses),
+    getTmcExerciseByName: vi.fn(() => values.getExerciseByName),
+  }
 
-function setupMockValues(values: UserDataMockValues): IMock<UserData> {
-  const mock = Mock.ofType<UserData>()
-
-  mock.setup((x) => x.getCourses()).returns(() => values.getCourses)
-
-  mock
-    .setup((x) => x.getTmcExerciseByName(It.isAny(), It.isAny()))
-    .returns(() => values.getExerciseByName)
-
-  return mock
+  return [mock as unknown as UserData, values]
 }

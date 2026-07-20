@@ -62,7 +62,7 @@ const exercise = {
   solution_zip_url: null,
 }
 
-// NOTE: flattened — see the CourseDetails deviation note in shared/langsSchema.ts
+// Flattened — see the CourseDetails serialize-contract note in langsSchema.test.ts
 const courseDetails = {
   ...course,
   unlockables: [],
@@ -246,12 +246,12 @@ const moocExerciseSlide = {
       order_number: 0,
       assignment: { type: "doc", content: [] },
       public_spec: {
-        type: "PublicSpec",
-        exercise_type: "editor",
+        type: "editor",
         archive_name: "part01.tar.zst",
         stub_download_url: "https://courses.mooc.fi/api/v0/files/stub.tar.zst",
         student_file_paths: ["src/main.rs"],
         checksum: "1234abcd",
+        browser_test: { runtime: "python", script: "print('hello')", error: null },
       },
       model_solution_spec: {
         type: "Editor",

@@ -61,12 +61,11 @@ export async function addNewCourse(
         arguments: [CourseIdentifier.from(localData.id)],
       })
       workspaceManager.val.createWorkspaceFile(courseData.details.name)
-      //await displayUserCourses(actionContext);
       return refreshLocalExercises(actionContext)
     },
     async (mooc) => {
-      // note: the langs CLI no longer has a course-instance concept;
-      // the identifier is the course id and the CLI returns the course itself
+      // mooc has no course-instance concept: the identifier is the course id,
+      // and the CLI call returns the course itself.
       const courseRes = await langs.val.getMoocCourseInstanceData(mooc.instanceId)
       if (courseRes.err) {
         return courseRes

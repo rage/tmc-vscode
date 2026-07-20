@@ -37,8 +37,6 @@ export default class Dialog {
     ...items: NotificationButton[]
   ): Promise<void> {
     if (error) {
-      // Refactor notice: This looks a bit iffy. Maybe error should always exist when calling
-      // this function?
       Logger.error(notification, error)
       items = items.concat([Dialog._logsButton])
     }

@@ -2,6 +2,18 @@
 
 import * as z from 'zod';
 
+export const zBrowserTestRuntime = z.enum(['python']);
+
+/**
+ * In-browser test spec produced by the `tmc` exercise service: the script to
+ * run in the client plus an optional error set when the build failed.
+ */
+export const zBrowserTestSpec = z.object({
+    error: z.string().nullable(),
+    runtime: zBrowserTestRuntime,
+    script: z.string()
+});
+
 /**
  * A setting in a TmcConfig file.
  */
@@ -23,14 +35,6 @@ export const zCourse = z.object({
     spyware_urls: z.array(z.string()),
     title: z.string(),
     unlock_url: z.string()
-});
-
-export const zCourse2 = z.object({
-    description: z.string().nullable(),
-    id: z.uuid(),
-    name: z.string(),
-    organization_name: z.string(),
-    slug: z.string()
 });
 
 /**
@@ -210,6 +214,14 @@ export const zModelSolutionSpec = z.union([
     })
 ]);
 
+export const zMoocCourse = z.object({
+    description: z.string().nullable(),
+    id: z.uuid(),
+    name: z.string(),
+    organization_name: z.string(),
+    slug: z.string()
+});
+
 export const zMoocExerciseDownload = z.object({
     path: z.string(),
     'task-id': z.uuid()
@@ -273,10 +285,11 @@ export const zOutputResult = z.enum([
 
 export const zPublicSpec = z.object({
     archive_name: z.string(),
+    browser_test: zBrowserTestSpec.nullable(),
     checksum: z.string(),
-    exercise_type: zExerciseType,
     stub_download_url: z.string(),
-    student_file_paths: z.array(z.string())
+    student_file_paths: z.array(z.string()),
+    type: zExerciseType
 });
 
 /**
@@ -783,11 +796,11 @@ export const zDataKind = z.union([
         'output-data-kind': z.literal('local-mooc-exercises')
     }),
     z.object({
-        'output-data': zCourse2,
+        'output-data': zMoocCourse,
         'output-data-kind': z.literal('mooc-course')
     }),
     z.object({
-        'output-data': z.array(zCourse2),
+        'output-data': z.array(zMoocCourse),
         'output-data-kind': z.literal('mooc-courses')
     }),
     z.object({

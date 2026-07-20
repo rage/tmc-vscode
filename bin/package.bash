@@ -15,7 +15,7 @@ pnpm install --frozen-lockfile
 pnpm run webview:build
 
 # create package
-# --no-dependencies: esbuild bundles everything into dist/, so the extension's
-# runtime node_modules are not shipped. This also sidesteps @vscode/vsce walking
-# pnpm's symlinked node_modules layout.
+# --no-dependencies: esbuild bundles everything into dist/, so runtime
+# node_modules aren't shipped; also avoids @vscode/vsce choking on pnpm's
+# symlinked node_modules layout.
 BACKEND=production pnpm dlx @vscode/vsce package --no-dependencies "${PRERELEASE_ARG}"

@@ -1,5 +1,5 @@
 {
-  // Webview project: Svelte 4 + DOM, bundled by Vite. Shares the strict
+  // Webview project: Svelte 5 + DOM, bundled by Vite. Shares the strict
   // baseline with the extension host (../tsconfig.base.json). tsc/tsgo only
   // type-check the .ts files (they skip .svelte); svelte-check reads this
   // same config and additionally checks the .svelte components.
@@ -8,7 +8,7 @@
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     // node is needed because the shared lib (shared/lib.ts) uses node:util
     // and NodeJS.ErrnoException; explicit so tsc and tsgo agree
-    "types": ["node", "vscode-webview"],
+    "types": ["node", "vscode-webview", "vitest/globals", "@testing-library/jest-dom"],
     // to have warnings/errors of the Svelte compiler at the correct
     // position, enable source maps
     "sourceMap": true

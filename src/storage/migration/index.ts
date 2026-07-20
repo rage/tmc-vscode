@@ -14,9 +14,8 @@ export default function validateData<T>(data: unknown, schema: z.ZodType<T>): T 
     throw new Error(`Data type mismatch: ${JSON.stringify(data)}`)
   }
 
-  // Return the original value rather than zod's parsed copy: zod strips
-  // unknown keys when parsing, but persisted data may contain extra keys
-  // written by a newer extension version and those must be preserved
-  // (the typia type guard this replaces also passed the original through).
+  // Return the original value, not zod's parsed copy: zod strips unknown
+  // keys, but persisted data may carry extra keys from a newer extension
+  // version that must be preserved.
   return data as T
 }

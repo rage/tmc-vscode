@@ -9,11 +9,11 @@ import { z } from "zod"
 // TypeScript types inferred from them (`z.infer`), so the schema is
 // the single source of truth for both sides of the message boundary.
 //
-// note: langs types (`./langsSchema`) are validated with the same zod
-// schemas that are used at the CLI boundary. types that cannot be
-// validated meaningfully (`vscode.Uri`, `Error` instances) are passed
-// through with `z.custom<T>()` — `vscode.Uri` does not survive
-// `postMessage` serialization as a class instance anyway.
+// langs types (`./langsSchema`) are validated with the same zod
+// schemas used at the CLI boundary. types that cannot be validated
+// meaningfully (`vscode.Uri`, `Error` instances) are passed through
+// with `z.custom<T>()` — `vscode.Uri` does not survive `postMessage`
+// serialization as a class instance anyway.
 /*
  * ======== imports ========
  */
@@ -215,8 +215,7 @@ export function assertUnreachable(x: never): never {
  * ======== state ========
  */
 
-// for now, these are just copied from the data module
-// todo: think of better way to do this...
+// duplicated from the data module; keep in sync manually
 export const SharedTmcCourseExerciseSchema = z.object({
   id: z.number(),
   availablePoints: z.number(),
@@ -365,7 +364,7 @@ export namespace LocalCourseData {
 export function getCourseExercises(
   course: LocalCourseData,
 ): Enum<SharedTmcCourseExercise[], SharedMoocCourseExercise[]> {
-  // doesn't work without an intermediate variable........
+  // TS can't infer the return type without an intermediate variable
   const ret = match(
     course,
     (tmc) => makeTmcKind(tmc.exercises),
@@ -557,7 +556,7 @@ export const CourseDetailsPanelSchema = z.object({
 
 export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
 
-// NOTE: defined by hand (rather than as `Panel["type"]`) so that
+// defined by hand (rather than as `Panel["type"]`) so that
 // `targetPanelSchema`/`broadcastPanelSchema` can be used inside the panel schemas
 // themselves without creating a circular type dependency;
 // the `_panelTypesMatch` assertion below `Panel` keeps this in sync with `PanelSchema`
@@ -599,6 +598,27 @@ export function broadcastPanelSchema<T extends PanelType>(...types: [T, ...T[]])
   })
 }
 
+// stricter variant of `targetPanelSchema`, rejecting unknown keys.
+//
+// Used only for the *webview → extension host* direction (`sourcePanel`/
+// `requestingPanel` fields in `WebviewToExtensionSchema`): the webview should
+// never legitimately need to send more than `{id, type}` there, so this acts
+// as a guard against accidentally posting a whole (potentially Svelte 5
+// `$state`-proxied) panel object, which would otherwise crash the webview
+// message relay with an opaque `DataCloneError` instead of failing loudly.
+//
+// Deliberately NOT used for `ExtensionToWebviewSchema`/`WebviewToWebviewSchema`
+// `target` fields: some existing extension-host call sites pass a whole panel
+// object as `target` (harmless there, since it's a plain object the receiving
+// side only reads `.id`/`.type` off), and tightening those schemas would
+// reject otherwise-working messages.
+function strictTargetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
+  return z.strictObject({
+    id: z.number(),
+    type: z.literal(types),
+  })
+}
+
 export const SelectOrganizationPanelSchema = z.object({
   id: z.number(),
   type: z.literal("SelectOrganization"),
@@ -623,7 +643,7 @@ export const ExerciseTestsPanelSchema = z.object({
   type: z.literal("ExerciseTests"),
   course: LocalCourseDataSchema,
   exercise: LocalCourseExerciseSchema,
-  // note: `Uri` does not survive `postMessage` serialization as a class instance,
+  // `Uri` does not survive `postMessage` serialization as a class instance,
   // so it is passed through without validation
   exerciseUri: z.custom<Uri>(),
   testRunId: z.number(),
@@ -894,9 +914,8 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
  */
 export type ExtensionToWebview =
   | z.infer<typeof ExtensionToWebviewSchema>
-  // the last variant exists just to make TypeScript think that every panel type has
-  // at least two different message types, which makes TS treat them differently than if
-  // they only had one...
+  // exists only to make TypeScript treat every panel as having at least two
+  // message types, rather than one
   | {
       type: never
       target: never
@@ -907,6 +926,58 @@ export type TargetedExtensionToWebview<T extends PanelType> = Targeted<Extension
 
 // helper type for messages from the extension to a specific panel type
 export type BroadcastExtensionToWebview<T extends PanelType> = Broadcast<ExtensionToWebview, T>
+
+/*
+ * ======== webview to webview ========
+ */
+
+/**
+ * Messages relayed from one webview to another, tunnelled through the
+ * extension host inside a `relayToWebview` envelope (see below) and delivered
+ * by `postMessageToWebview` / received by `addMessageListener` in the webview.
+ *
+ * Defined here (rather than webview-only, as it used to be) so the relay
+ * envelope's `message` field can reference it and be validated on BOTH sides of
+ * the boundary. A reshaped relayed payload (e.g. renaming `selectedMoocCourse`'s
+ * `instanceId`) then fails at build time — producers post the inferred
+ * `WebviewToWebview` type — and at `safeParse` time on the webview → host post
+ * (`vscode.ts`) and the host → webview relay (`TmcPanel`), instead of only
+ * failing silently at runtime when the target webview rejects it on receipt.
+ *
+ * Uses the non-strict `targetPanelSchema` for `target`, exactly like
+ * `ExtensionToWebviewSchema`: some call sites pass a whole panel object as
+ * `target`, which is harmless (the receiver only reads `.id`/`.type`), and the
+ * `strictTargetPanelSchema` guard is reserved for the `sourcePanel`/
+ * `requestingPanel` fields the webview → host direction relies on.
+ */
+export const WebviewToWebviewSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("selectedOrganization"),
+    target: targetPanelSchema("MyCourses"),
+    slug: z.string(),
+  }),
+  z.object({
+    type: z.literal("selectedCourse"),
+    target: targetPanelSchema("MyCourses"),
+    organizationSlug: z.string(),
+    courseId: z.number(),
+  }),
+  z.object({
+    type: z.literal("selectedMoocCourse"),
+    target: targetPanelSchema("MyCourses"),
+    organizationSlug: z.string(),
+    courseId: z.string(),
+    instanceId: z.string(),
+    courseName: z.string(),
+    instanceName: z.string().nullable(),
+  }),
+])
+
+/**
+ * For use with `postMessageToWebview` in the Svelte app.
+ * Relayed by the extension host to another webview.
+ */
+export type WebviewToWebview = z.infer<typeof WebviewToWebviewSchema>
 
 /*
  * ======== from webview ========
@@ -957,7 +1028,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("selectOrganization"),
-    sourcePanel: targetPanelSchema("MyCourses"),
+    sourcePanel: strictTargetPanelSchema("MyCourses"),
   }),
   z.object({
     type: z.literal("removeCourse"),
@@ -1004,19 +1075,21 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("selectCourse"),
-    sourcePanel: targetPanelSchema("MyCourses"),
+    sourcePanel: strictTargetPanelSchema("MyCourses"),
     slug: z.string(),
   }),
   z.object({
     type: z.literal("addCourse"),
     organizationSlug: z.string(),
     courseId: CourseIdentifierSchema,
-    requestingPanel: targetPanelSchema("MyCourses"),
+    requestingPanel: strictTargetPanelSchema("MyCourses"),
   }),
   z.object({
     type: z.literal("relayToWebview"),
-    // the message type is handled by the webview
-    message: z.unknown(),
+    // validated against the shared relayable-message schema so a reshaped
+    // payload fails on both sides, instead of the previous `z.unknown()` which
+    // let the inner message be checked only at runtime on receipt
+    message: WebviewToWebviewSchema,
   }),
   z.object({
     type: z.literal("closeSidePanel"),
@@ -1035,7 +1108,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     type: z.literal("pasteExercise"),
     course: LocalCourseDataSchema,
     exercise: LocalCourseExerciseSchema,
-    requestingPanel: targetPanelSchema("ExerciseTests", "ExerciseSubmission"),
+    requestingPanel: strictTargetPanelSchema("ExerciseTests", "ExerciseSubmission"),
   }),
   z.object({
     type: z.literal("openLinkInBrowser"),
@@ -1047,15 +1120,19 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("selectPlatform"),
-    sourcePanel: targetPanelSchema("MyCourses"),
+    sourcePanel: strictTargetPanelSchema("MyCourses"),
   }),
   z.object({
     type: z.literal("selectMoocCourse"),
-    sourcePanel: targetPanelSchema("MyCourses"),
+    sourcePanel: strictTargetPanelSchema("MyCourses"),
   }),
   z.object({
     type: z.literal("requestSelectMoocCourseData"),
-    sourcePanel: targetPanelSchema("SelectMoocCourse"),
+    // the full panel, like every other `request*Data` message: the panel posts
+    // `sourcePanel: panel` on mount, and `SelectMoocCoursePanel` carries a
+    // `requestingPanel` field that the narrow `strictTargetPanelSchema` rejected,
+    // silently dropping the initial data request at the `vscode.ts` post guard
+    sourcePanel: SelectMoocCoursePanelSchema,
   }),
   z.object({
     type: z.literal("addMoocCourse"),
@@ -1064,7 +1141,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     instanceId: z.string(),
     courseName: z.string(),
     instanceName: z.string().nullable(),
-    requestingPanel: targetPanelSchema("MyCourses"),
+    requestingPanel: strictTargetPanelSchema("MyCourses"),
   }),
 ])
 
@@ -1130,19 +1207,15 @@ export class BaseError extends Error {
     let path: string | undefined = undefined
     let syscall: string | undefined = undefined
 
-    // simple check first...
     if (typeof err === "string") {
       message = err
     } else if (util.types.isNativeError(err)) {
-      // deal with regular error stuff first
       message = err.message
       if (err.stack) {
         stack = err.stack
       }
 
-      // also check for special NodeJS error
       if (isErrnoException(err)) {
-        // nodejs error with error code
         errno = err.errno
         code = err.code
         path = err.path
@@ -1150,7 +1223,6 @@ export class BaseError extends Error {
       }
 
       if (err.cause) {
-        // same checks for cause
         if (util.types.isNativeError(err.cause) && isErrnoException(err.cause)) {
           cause = err.cause
         } else {
@@ -1158,10 +1230,8 @@ export class BaseError extends Error {
         }
       }
     } else {
-      // it's expected that this function is only called with
-      // strings or error objects. but since errors are often "unknown"
-      // in catch statements etc., this function accepts unknown types
-      // and thus we'll handle them here just in case
+      // callers often hit this with `unknown` from catch blocks; anything that
+      // isn't a string or Error falls through to a generic message
       message = `Unexpected error ${err} (${typeof err})`
     }
 
@@ -1174,7 +1244,6 @@ export class BaseError extends Error {
       this.cause = cause
     }
 
-    // errno fields
     this.errno = errno
     this.code = code
     this.path = path

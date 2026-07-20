@@ -1,47 +1,93 @@
-import { expect } from "chai"
 import { Err, Ok } from "ts-results"
-import type { IMock } from "typemoq"
-import { It, Times } from "typemoq"
 
 import { checkForExerciseUpdates } from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type { UserData } from "../../config/userdata"
+import type { LocalCourseData } from "../../shared/shared"
+import { CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
+import type { MoocLocalCourseData } from "../../storage/data"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
+import type { UserDataMockValues } from "../mocks/userdata"
 import { createUserDataMock } from "../mocks/userdata"
+
+// The default userData mock exposes a single tmc course (id 0) whose exercises
+// are `1: hello_world` and `2: other_world`.
+const tmcOutdated = {
+  courseId: CourseIdentifier.from(0),
+  exerciseId: ExerciseIdentifier.from(2),
+  exerciseName: "other_world",
+}
+
+const moocCourse: MoocLocalCourseData = {
+  id: "instance-uuid-1",
+  courseId: "course-uuid-1",
+  name: "mooc-python-course",
+  instanceName: null,
+  title: "Mooc Python",
+  description: null,
+  courseDescription: null,
+  organization: "mooc",
+  exercises: [
+    {
+      id: "mooc-ex-1",
+      name: "mooc_hello",
+      availablePoints: 1,
+      awardedPoints: 0,
+      deadline: null,
+      passed: false,
+      softDeadline: null,
+    },
+  ],
+  availablePoints: 1,
+  awardedPoints: 0,
+  perhapsExamMode: false,
+  newExercises: [],
+  notifyAfter: 0,
+  disabled: false,
+  materialUrl: null,
+}
+
+const moocOutdated = {
+  courseId: CourseIdentifier.from("instance-uuid-1"),
+  exerciseId: ExerciseIdentifier.from("mooc-ex-1"),
+  exerciseName: "mooc_hello",
+}
 
 suite("checkForExerciseUpdates action", function () {
   const stubContext = createMockActionContext()
-  const updateableExercises = [{ courseId: 0, exerciseId: 2, exerciseName: "other_world" }]
 
-  let tmcMock: IMock<Langs>
+  let tmcMock: Langs
   let tmcMockValues: TMCMockValues
-  let userDataMock: IMock<UserData>
+  let userDataMock: UserData
+  let userDataMockValues: UserDataMockValues
 
   const actionContext = (): ActionContext => ({
     ...stubContext,
-    langs: new Ok(tmcMock.object),
-    userData: new Ok(userDataMock.object),
+    langs: new Ok(tmcMock),
+    userData: new Ok(userDataMock),
   })
 
-  setup(function () {
+  beforeEach(function () {
     ;[tmcMock, tmcMockValues] = createTMCMock()
-    ;[userDataMock] = createUserDataMock()
+    ;[userDataMock, userDataMockValues] = createUserDataMock()
   })
 
   test("should return exercise updates", async function () {
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result.val).to.be.deep.equal(updateableExercises)
+    expect(result.val).toEqual([tmcOutdated])
   })
 
   test("should respect forceRefresh option", async function () {
     for (const forceRefresh of [true, false]) {
       await checkForExerciseUpdates(actionContext(), { forceRefresh })
-      tmcMock.verify(
-        (x) => x.checkTmcExerciseUpdates(It.isObjectWith({ forceRefresh })),
-        Times.once(),
+      expect(tmcMock.checkTmcExerciseUpdates).toHaveBeenCalledWith(
+        expect.objectContaining({ forceRefresh }),
+      )
+      expect(tmcMock.checkMoocExerciseUpdates).toHaveBeenCalledWith(
+        expect.objectContaining({ forceRefresh }),
       )
     }
   })
@@ -49,18 +95,34 @@ suite("checkForExerciseUpdates action", function () {
   test("should return empty array when there are no updates", async function () {
     tmcMockValues.checkExerciseUpdates = Ok([])
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result.val).to.be.deep.equal([])
+    expect(result.val).toEqual([])
   })
 
   test("should filter out unknown exercise ids", async function () {
-    tmcMockValues.checkExerciseUpdates = Ok([...tmcMockValues.checkExerciseUpdates, { id: 404 }])
+    tmcMockValues.checkExerciseUpdates = Ok([{ id: 2 }, { id: 404 }])
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result.val).to.be.deep.equal(updateableExercises)
+    expect(result.val).toEqual([tmcOutdated])
   })
 
-  test("should result in error if Langs operation fails", async function () {
+  test("should combine tmc and mooc updates across courses", async function () {
+    userDataMockValues.getCourses = [
+      ...userDataMockValues.getCourses,
+      makeMoocKind(moocCourse) as LocalCourseData,
+    ]
+    tmcMockValues.checkMoocExerciseUpdates = Ok(["mooc-ex-1"])
+    const result = await checkForExerciseUpdates(actionContext())
+    expect(result.val).toEqual([tmcOutdated, moocOutdated])
+  })
+
+  test("should result in error if the tmc Langs operation fails", async function () {
     tmcMockValues.checkExerciseUpdates = Err(new Error())
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result.val).to.be.instanceOf(Error)
+    expect(result.val).toBeInstanceOf(Error)
+  })
+
+  test("should result in error if the mooc Langs operation fails", async function () {
+    tmcMockValues.checkMoocExerciseUpdates = Err(new Error())
+    const result = await checkForExerciseUpdates(actionContext())
+    expect(result.val).toBeInstanceOf(Error)
   })
 })

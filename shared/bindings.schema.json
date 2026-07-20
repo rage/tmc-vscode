@@ -47,6 +47,35 @@
     }
   ],
   "$defs": {
+    "BrowserTestRuntime": {
+      "type": "string",
+      "enum": [
+        "python"
+      ]
+    },
+    "BrowserTestSpec": {
+      "description": "In-browser test spec produced by the `tmc` exercise service: the script to\nrun in the client plus an optional error set when the build failed.",
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runtime": {
+          "$ref": "#/$defs/BrowserTestRuntime"
+        },
+        "script": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "runtime",
+        "script",
+        "error"
+      ]
+    },
     "ClientUpdateData": {
       "description": "The update data type for the progress reporter.",
       "oneOf": [
@@ -172,37 +201,6 @@
         "reviews_url",
         "comet_url",
         "spyware_urls"
-      ]
-    },
-    "Course2": {
-      "type": "object",
-      "properties": {
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "id": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "name": {
-          "type": "string"
-        },
-        "organization_name": {
-          "type": "string"
-        },
-        "slug": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "slug",
-        "name",
-        "description",
-        "organization_name"
       ]
     },
     "CourseData": {
@@ -1086,7 +1084,7 @@
           "type": "object",
           "properties": {
             "output-data": {
-              "$ref": "#/$defs/Course2"
+              "$ref": "#/$defs/MoocCourse"
             },
             "output-data-kind": {
               "type": "string",
@@ -1104,7 +1102,7 @@
             "output-data": {
               "type": "array",
               "items": {
-                "$ref": "#/$defs/Course2"
+                "$ref": "#/$defs/MoocCourse"
               }
             },
             "output-data-kind": {
@@ -1796,6 +1794,37 @@
         }
       ]
     },
+    "MoocCourse": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "organization_name": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "slug",
+        "name",
+        "description",
+        "organization_name"
+      ]
+    },
     "MoocExerciseDownload": {
       "type": "object",
       "properties": {
@@ -1931,11 +1960,19 @@
         "archive_name": {
           "type": "string"
         },
+        "browser_test": {
+          "description": "In-browser test config: script to run in the client and optional error\nif the build failed. Omitted for editor exercises or when no script was\nbuilt. Serde treats the `Option` field as optional when absent.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BrowserTestSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "checksum": {
           "type": "string"
-        },
-        "exercise_type": {
-          "$ref": "#/$defs/ExerciseType"
         },
         "stub_download_url": {
           "type": "string"
@@ -1945,14 +1982,18 @@
           "items": {
             "type": "string"
           }
+        },
+        "type": {
+          "$ref": "#/$defs/ExerciseType"
         }
       },
       "required": [
-        "exercise_type",
+        "type",
         "archive_name",
         "stub_download_url",
         "student_file_paths",
-        "checksum"
+        "checksum",
+        "browser_test"
       ]
     },
     "PythonVer": {

@@ -30,8 +30,7 @@
       sourcePanel: panel,
     })
   })
-  // note: props are not deeply reactive in Svelte 5,
-  // so the panel is reassigned rather than mutated
+  // props aren't deeply reactive in Svelte 5, so panel is reassigned rather than mutated
   addMessageListener(panel, (message) => {
     switch (message.type) {
       case "setMyCourses": {
@@ -53,7 +52,7 @@
         selectedOrganizationSlug.set(message.slug)
         vscode.postMessage({
           type: "selectCourse",
-          sourcePanel: panel,
+          sourcePanel: { id: panel.id, type: panel.type },
           slug: message.slug,
         })
         break
@@ -64,7 +63,7 @@
           organizationSlug: message.organizationSlug,
           // the tmc course selection sends a plain tmc course id
           courseId: makeTmcKind({ courseId: message.courseId }),
-          requestingPanel: panel,
+          requestingPanel: { id: panel.id, type: panel.type },
         })
         // todo: only close side panel on success
         vscode.postMessage({
@@ -80,7 +79,7 @@
           instanceId: message.instanceId,
           courseName: message.courseName,
           instanceName: message.instanceName,
-          requestingPanel: panel,
+          requestingPanel: { id: panel.id, type: panel.type },
         })
         // todo: only close side panel on success
         vscode.postMessage({
@@ -143,7 +142,9 @@
   function addNewCourse() {
     vscode.postMessage({
       type: "selectPlatform",
-      sourcePanel: panel,
+      // only `{id, type}` is expected by the schema; the full `panel` prop is `$state`-backed
+      // and risks a `DataCloneError` once reassigned (e.g. by `setMyCourses`)
+      sourcePanel: { id: panel.id, type: panel.type },
     })
   }
   function changeTmcDataPath() {

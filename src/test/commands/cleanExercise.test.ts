@@ -1,8 +1,6 @@
 import * as path from "path"
 
 import { Ok } from "ts-results"
-import type { IMock } from "typemoq"
-import { It, Times } from "typemoq"
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../../actions/types"
@@ -23,19 +21,19 @@ suite("Clean exercise command", function () {
   const stubContext = createMockActionContext()
   const uri = vscode.Uri.file(PASSING_EXERCISE_PATH)
 
-  let tmcMock: IMock<Langs>
-  let workspaceManagerMock: IMock<WorkspaceManager>
+  let tmcMock: Langs
+  let workspaceManagerMock: WorkspaceManager
   let workspaceManagerMockValues: WorkspaceManagerMockValues
 
   function actionContext(): ActionContext {
     return {
       ...stubContext,
-      langs: new Ok(tmcMock.object),
-      workspaceManager: new Ok(workspaceManagerMock.object),
+      langs: new Ok(tmcMock),
+      workspaceManager: new Ok(workspaceManagerMock),
     }
   }
 
-  setup(function () {
+  beforeEach(function () {
     ;[tmcMock] = createTMCMock()
     ;[workspaceManagerMock, workspaceManagerMockValues] = createWorkspaceMangerMock()
   })
@@ -49,22 +47,22 @@ suite("Clean exercise command", function () {
       uri,
     }
     await cleanExercise(actionContext(), undefined)
-    tmcMock.verify((x) => x.clean(It.isValue(uri.fsPath)), Times.once())
+    expect(tmcMock.clean).toHaveBeenCalledExactlyOnceWith(uri.fsPath)
   })
 
   test("should not clean active non-exercise", async function () {
     await cleanExercise(actionContext(), undefined)
-    tmcMock.verify((x) => x.clean(It.isAny()), Times.never())
+    expect(tmcMock.clean).not.toHaveBeenCalled()
   })
 
   test("should clean provided exercise", async function () {
     await cleanExercise(actionContext(), uri)
-    tmcMock.verify((x) => x.clean(It.isValue(uri.fsPath)), Times.once())
+    expect(tmcMock.clean).toHaveBeenCalledExactlyOnceWith(uri.fsPath)
   })
 
   test("should not clean provided non-exercise", async function () {
     workspaceManagerMockValues.uriIsExercise = false
     await cleanExercise(actionContext(), uri)
-    tmcMock.verify((x) => x.clean(It.isAny()), Times.never())
+    expect(tmcMock.clean).not.toHaveBeenCalled()
   })
 })

@@ -10,8 +10,7 @@ export default class UI {
   public treeDP: TmcMenuTree
 
   /**
-   * Creates an UI object and (temporarily) initializes it with login-related content
-   * @param extensionContext VSCode extension content
+   * Creates a UI object with an empty treeview.
    */
   public constructor() {
     this.treeDP = new TmcMenuTree("tmcView")

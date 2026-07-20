@@ -1,0 +1,17 @@
+{
+  // Build/tooling config project: root-level and webview-ui config files
+  // that run directly under Node (loaded by Vite/Vitest, never bundled by
+  // esbuild). Not covered by tsconfig.json (only includes src/**) or
+  // webview-ui/tsconfig.json (only includes webview-ui/src/**).
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "types": ["node"]
+  },
+  "include": [
+    "vitest.config.ts",
+    "vitest.unit.config.ts",
+    "webview-ui/vite.config.ts",
+    "webview-ui/vitest.config.ts"
+  ]
+}

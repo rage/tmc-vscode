@@ -11,8 +11,12 @@
 // shared/langsSchema.ts is a thin shim re-exporting the generated output under
 // the stable public names consumers import.
 //
-// Run via `npm run generate:langs-schema` (which re-vendors first). The
-// generated files are committed; CI can diff them to catch drift.
+// Run via `npm run generate:langs-schema`. This script only regenerates from
+// the already-vendored shared/bindings.schema.json -- it does not re-vendor
+// (use `npm run vendor:langs-schema` for that, which needs a local
+// tmc-langs-rust checkout). The generated files are committed; a CI step
+// re-runs this script and diffs shared/generated + shared/bindings.schema.json
+// to catch drift (see .github/workflows/test.yml).
 //
 // The three transforms applied to the JSON Schema are all GENERIC (no
 // type-specific hacks):
@@ -23,9 +27,8 @@
 //      siblings -- this is what keeps the internally-tagged-enum discriminators
 //      (output-kind / output-data-kind / update-data-kind) intact.
 //   3. strip `format: "date-time"` -- generated validators map it to Z-only ISO
-//      datetime, but real TMC timestamps carry +03:00 offsets; timestamps are
-//      validated as plain strings instead (same choice the hand-written schemas
-//      made).
+//      datetime, but real TMC timestamps carry +03:00 offsets, so timestamps
+//      are validated as plain strings instead.
 import { execFileSync } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"

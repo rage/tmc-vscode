@@ -7,10 +7,10 @@
 # (and is also printed at runtime by the `tmc-langs-cli schema` subcommand).
 #
 # The vendored copy at shared/bindings.schema.json is NOT used at runtime.
-# It is the drift reference for the hand-written zod schemas in
-# shared/langsSchema.ts: the contract test (src/test/langsSchema.test.ts)
-# cross-checks the zod schemas against it, and a future startup self-check
-# can diff it against `tmc-langs-cli schema` output from the actual binary.
+# It is the drift reference for the generated zod schemas: the contract test
+# (src/test/langsSchema.test.ts) cross-checks them against it, and the startup
+# self-check (src/init/verifyCliSchema.ts) diffs it against `tmc-langs-cli
+# schema` output from the actual binary.
 #
 # For now this copies from a local tmc-langs-rust checkout, because the
 # extension currently tracks the unreleased `programming-exercise-migration`
@@ -19,8 +19,14 @@
 # same way bin/updateLangs.bash fetches bindings.d.ts:
 #   https://raw.githubusercontent.com/rage/tmc-langs-rust/<version>/crates/tmc-langs-cli/bindings.schema.json
 #
-# After updating the schema, update the hand-written zod schemas in
-# shared/langsSchema.ts to match, then run the contract test.
+# Run via `npm run vendor:langs-schema`. This step alone only re-vendors the
+# JSON Schema; it does not regenerate the zod/TS output. Follow it with
+# `npm run generate:langs-schema` (bin/generateLangsSchema.mjs) to regenerate
+# shared/generated/langs from the freshly vendored schema, then update the
+# hand-written shim in shared/langsSchema.ts to match and run the contract
+# test. The two steps are split so CI can run `generate:langs-schema` alone
+# (from the committed vendored schema) to check for drift, without needing a
+# tmc-langs-rust checkout to vendor from.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

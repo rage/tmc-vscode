@@ -42,8 +42,7 @@
       sourcePanel: panel,
     })
   })
-  // note: props are not deeply reactive in Svelte 5,
-  // so the panel is reassigned rather than mutated
+  // props aren't deeply reactive in Svelte 5, so panel is reassigned rather than mutated
   addMessageListener(panel, (message) => {
     switch (message.type) {
       case "setCourseData": {
@@ -112,7 +111,9 @@
     refreshing.set(true)
     vscode.postMessage({
       type: "refreshCourseDetails",
-      id,
+      // `id` is nested in the `$state`-proxied `panel`; snapshot it or posting
+      // fails structured clone with a `DataCloneError`
+      id: $state.snapshot(id),
       useCache: false,
     })
   }
@@ -136,23 +137,25 @@
   function downloadExercises(p: CourseDetailsPanel, ids: Array<ExerciseIdentifier>) {
     vscode.postMessage({
       type: "downloadExercises",
-      ids,
-      courseId: p.courseId,
+      // `ids`/`p.courseId` may be `$state` proxies once `panel` is reassigned;
+      // snapshot before posting or it fails structured clone with a `DataCloneError`
+      ids: $state.snapshot(ids),
+      courseId: $state.snapshot(p.courseId),
       mode: "download",
     })
   }
   function openExercises(p: CourseDetailsPanel, ids: Array<ExerciseIdentifier>) {
     vscode.postMessage({
       type: "openExercises",
-      ids,
-      courseId: p.courseId,
+      ids: $state.snapshot(ids),
+      courseId: $state.snapshot(p.courseId),
     })
   }
   function closeExercises(p: CourseDetailsPanel, ids: Array<ExerciseIdentifier>) {
     vscode.postMessage({
       type: "closeExercises",
-      ids,
-      courseId: p.courseId,
+      ids: $state.snapshot(ids),
+      courseId: $state.snapshot(p.courseId),
     })
   }
   function clearSelectedExercises() {
@@ -167,7 +170,7 @@
       (tmc) => {
         vscode.postMessage({
           type: "downloadExercises",
-          ids: p.updateableExercises ?? [],
+          ids: $state.snapshot(p.updateableExercises ?? []),
           courseId: makeTmcKind({ courseId: tmc.id }),
           mode: "update",
         })
@@ -227,7 +230,7 @@
       onclick={() => refresh(panel.courseId)}
       onkeypress={() => refresh(panel.courseId)}
       disabled={$refreshing || $totalDownloading > 0}
-      appearance="secondary"
+      secondary
     >
       {#if $refreshing}
         Refreshing

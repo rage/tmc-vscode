@@ -19,7 +19,11 @@ export class CoursePage extends TmcPage {
 
   public async openExercises(names: string[]): Promise<void> {
     for (const name of names) {
-      await this.webview.getByRole("row", { name }).getByRole("checkbox").click()
+      // The checkbox's actual click target is the wrapping `role="button"`
+      // span in `Checkbox.svelte` — the `<input type="checkbox">` itself is
+      // covered by its `<label>`, so `role="checkbox"` fails Playwright's
+      // actionability check.
+      await this.webview.getByRole("row", { name }).getByRole("button").click()
     }
     await this.webview.getByRole("button", { name: "Open", exact: true }).first().click()
   }

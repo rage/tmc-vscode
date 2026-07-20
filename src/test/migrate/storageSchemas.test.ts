@@ -1,4 +1,3 @@
-import { expect } from "chai"
 import { z } from "zod"
 
 import { v0, v1, v2, v3 } from "../../storage/data"
@@ -10,11 +9,11 @@ import * as userData from "../fixtures/userData"
 
 function expectAccepts(schema: z.ZodType, value: unknown): void {
   const result = schema.safeParse(value)
-  expect(result.success, result.success ? undefined : String(result.error)).to.be.true
+  expect(result.success, result.success ? undefined : String(result.error)).toBe(true)
 }
 
 function expectRejects(schema: z.ZodType, value: unknown): void {
-  expect(schema.safeParse(value).success).to.be.false
+  expect(schema.safeParse(value).success).toBe(false)
 }
 
 suite("Versioned storage schemas", function () {
@@ -141,19 +140,19 @@ suite("Versioned storage schemas", function () {
 
   suite("validateData", function () {
     test("returns undefined for missing data", function () {
-      expect(validateData(undefined, v1.sessionStateSchema)).to.be.undefined
-      expect(validateData(null, v1.sessionStateSchema)).to.be.undefined
+      expect(validateData(undefined, v1.sessionStateSchema)).toBeUndefined()
+      expect(validateData(null, v1.sessionStateSchema)).toBeUndefined()
     })
 
     test("returns the original object, preserving unknown extra keys", function () {
       const data = { ...userData.v2_1_0, batman: "Bruce Wayne" }
       const validated = validateData(data, v2.userDataSchema)
-      expect(validated).to.equal(data)
-      expect(validated).to.be.deep.equal(data)
+      expect(validated).toBe(data)
+      expect(validated).toEqual(data)
     })
 
     test("throws a type mismatch error on invalid data", function () {
-      expect(() => validateData({ batman: "Bruce Wayne" }, v2.userDataSchema)).to.throw(/mismatch/)
+      expect(() => validateData({ batman: "Bruce Wayne" }, v2.userDataSchema)).toThrow(/mismatch/)
     })
   })
 })

@@ -204,9 +204,6 @@ export default class WorkspaceManager implements vscode.Disposable {
 
   /**
    * Adds extension recommendations to current course workspace.
-   *
-   * @param workspace
-   * @param extensions
    */
   public addWorkspaceRecommendation(workspace: string, extensions: string[]): void {
     const pathToWorkspace = path.join(this._resources.getWorkspaceFilePath(workspace))
@@ -297,8 +294,7 @@ export default class WorkspaceManager implements vscode.Disposable {
    * workspace file. If the key can't be found in the .code-workspace file, it will write the
    * setting defined in the User scope to the file. Last resort, default value.
    *
-   * This is to ensure that workspace defined settings really overrides the user scope...
-   * https://github.com/microsoft/vscode/issues/58038
+   * Workaround for https://github.com/microsoft/vscode/issues/58038
    */
   private async _ensureSettingsAreStoredInMultiRootWorkspace(): Promise<void> {
     const extension = vscode.extensions.getExtension("moocfi.test-my-code")

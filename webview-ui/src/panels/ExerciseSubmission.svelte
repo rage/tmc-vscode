@@ -125,7 +125,7 @@
       hidden={false}
       course={panel.course}
       exercise={panel.exercise}
-      sourcePanel={panel}
+      sourcePanel={{ id: panel.id, type: panel.type }}
       pasteUrl={$pasteResult}
       pasteError={$pasteError}
     />

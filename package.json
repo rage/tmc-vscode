@@ -31,20 +31,27 @@
     "clean-local-rust-config": "cd backend && cd cli && rm -rf tmc-vscode_plugin",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "generate:langs-schema": "bash bin/updateLangsSchema.sh && node bin/generateLangsSchema.mjs",
+    "generate:langs-schema": "node bin/generateLangsSchema.mjs",
     "install:all": "pnpm install",
     "lint": "oxlint --fix",
     "lint:ci": "oxlint --max-warnings=0",
     "playwright-test": "pnpm run webview:build && pnpm run build && xvfb-maybe playwright test",
     "playwright-test-debug": "pnpm run webview:build && pnpm run build && xvfb-maybe playwright test --debug",
+    "playwright-test:local": "cross-env NODE_ENV=development BACKEND=mockBackend pnpm run playwright-test",
     "prepare": "husky",
-    "pretest": "cross-env NODE_ENV=development BACKEND=mockBackend pnpm run build",
+    "pretest:integration": "cross-env NODE_ENV=development BACKEND=mockBackend pnpm run build",
     "release": "./bin/publishRelease.sh",
     "setup-ultimate": "git clean -X -d -f && git submodule update --init && pnpm install && pnpm --filter tmc-vscode-mock-backend run setup",
-    "test": "node ./bin/runTests.js",
-    "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p webview-ui/tsconfig.json && tsgo --noEmit -p backend/tsconfig.json && tsgo --noEmit -p playwright/tsconfig.json",
-    "typecheck:tsc": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p webview-ui/tsconfig.json && tsc --noEmit -p backend/tsconfig.json && tsc --noEmit -p playwright/tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "test:integration": "node ./bin/runIntegrationTests.js",
+    "test:playwright": "pnpm run playwright-test",
+    "ci:test": "pnpm run test && pnpm run test:integration",
+    "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.test.json && tsgo --noEmit -p tsconfig.integration.json && tsgo --noEmit -p webview-ui/tsconfig.json && tsgo --noEmit -p backend/tsconfig.json && tsgo --noEmit -p playwright/tsconfig.json && tsgo --noEmit -p tsconfig.node.json",
+    "typecheck:tsc": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.integration.json && tsc --noEmit -p webview-ui/tsconfig.json && tsc --noEmit -p backend/tsconfig.json && tsc --noEmit -p playwright/tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "update-submodules": "git submodule foreach git pull origin master",
+    "vendor:langs-schema": "bash bin/updateLangsSchema.sh",
     "vscode:prepublish": "cross-env NODE_ENV=production pnpm run build",
     "watch": "node esbuild.mjs --watch",
     "webview:build": "pnpm --filter tmc-vscode-svelte run build",
@@ -66,6 +73,8 @@
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.99.0",
     "@playwright/test": "^1.61.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/svelte": "^5.4.2",
     "@types/chai": "^5.0.0",
     "@types/chai-as-promised": "^8.0.0",
     "@types/fs-extra": "^11.0.4",
@@ -75,6 +84,7 @@
     "@types/tmp": "0.2.6",
     "@types/vscode": "~1.100.0",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "@vitest/coverage-v8": "^4.1.10",
     "@vscode/test-electron": "^3.0.0",
     "chai": "^6.0.0",
     "chai-as-promised": "^8.0.0",
@@ -83,14 +93,17 @@
     "eslint-plugin-playwright": "^2.10.5",
     "glob": "^13.0.0",
     "husky": "^9.1.5",
+    "jest-mock-vscode": "^4.12.0",
+    "jsdom": "^29.1.1",
     "lint-staged": "^17.0.0",
     "mocha": "^11.0.0",
     "oxfmt": "^0.58.0",
     "oxlint": "^1.73.0",
     "tmp": "^0.2.7",
     "ts-node": "^10.9.2",
-    "typemoq": "^2.1.0",
     "typescript": "^5.5.4",
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10",
     "xvfb-maybe": "^0.2.1"
   },
   "contributes": {
@@ -496,7 +509,8 @@
   "packageManager": "pnpm@11.9.0",
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": true
+      "supported": false,
+      "description": "TestMyCode runs exercise code and the TMC-langs CLI on files in the workspace."
     }
   }
 }

@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Raised the minimum required VS Code version to 1.100.
+- The extension now declares itself unsupported in untrusted (restricted-mode) workspaces, since it downloads and runs the TMC-langs CLI against workspace files.
 
 ## [3.5.3] - 2026-06-12
 

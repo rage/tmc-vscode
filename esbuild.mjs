@@ -1,11 +1,11 @@
 import { createRequire } from "node:module"
 import path from "node:path"
 
-// Extension-host bundler. Replaces the former webpack build.
+// Extension-host bundler.
 //
 // esbuild does NOT type-check (it strips types); run `pnpm run tsc` (tsc
-// --noEmit) separately to gate on types. Build-profile constants are injected
-// via `define`, mirroring the old webpack DefinePlugin contract in config.js.
+// --noEmit) separately to gate on types. Build-profile constants are
+// injected via `define` (see config.js).
 import * as esbuild from "esbuild"
 import { globSync } from "glob"
 
@@ -31,22 +31,24 @@ const apiConfig = (() => {
   }
 })()
 
-// The values in the profile maps are already JSON.stringify'd, which is exactly
-// what esbuild's `define` expects (raw text substituted at build time).
+// Profile map values are already JSON.stringify'd — that's exactly what
+// esbuild's `define` expects (raw text substituted at build time).
 const define = {
   __DEBUG_MODE__: JSON.stringify(!production),
   ...apiConfig,
 }
 
-// systeminformation optionally `require`s this macOS-only native addon. It is
-// not installed on other platforms; stub it to an empty module so the bundle
-// resolves cleanly (matches the old webpack `alias: { "osx-temperature-sensor":
-// false }`).
+// systeminformation optionally `require`s these macOS-only native addons
+// (cpu.js guards both osx-temperature-sensor and, as of 5.31,
+// macos-temperature-sensor in their own try/catch). Neither is installed on
+// other platforms; stub both to an empty module so the bundle resolves
+// cleanly instead of leaving an unresolved runtime `require` in the CJS
+// bundle.
 const stubOptionalNativeAddon = {
   name: "stub-optional-native-addon",
   setup(build) {
-    build.onResolve({ filter: /^osx-temperature-sensor$/ }, () => ({
-      path: "osx-temperature-sensor",
+    build.onResolve({ filter: /^(osx|macos)-temperature-sensor$/ }, (args) => ({
+      path: args.path,
       namespace: "stub-empty",
     }))
     build.onLoad({ filter: /.*/, namespace: "stub-empty" }, () => ({
@@ -99,11 +101,11 @@ const common = {
   sourcemap: production ? false : "inline",
   minify: production,
   logLevel: "info",
-  plugins: [stubOptionalNativeAddon, problemMatcherPlugin],
+  plugins: watch ? [stubOptionalNativeAddon, problemMatcherPlugin] : [stubOptionalNativeAddon],
 }
 
-// The two test outputs bundle every matching spec file into a single file (as
-// the old webpack `entry` arrays did) via a generated in-memory entry point.
+// The two test outputs bundle every matching spec file into a single file
+// via a generated in-memory entry point.
 function aggregateEntry(globPattern) {
   const files = globSync(globPattern, { cwd: __dirname })
   const contents = files
@@ -119,14 +121,14 @@ const builds = [
     entryPoints: { extension: "./src/extension.ts" },
     outdir: "dist",
   },
+  // The integration tier stays in test-electron and is bundled for the
+  // mocha loader (bin/runIntegrationTests.js). Matches both *.spec.ts (this
+  // tier's convention) and *.test.ts (the common convention elsewhere), so a
+  // new integration test named the latter way isn't silently excluded from
+  // the bundle.
   {
     ...common,
-    stdin: aggregateEntry("src/test/**/*.test.ts"),
-    outfile: "dist/testBundle.test.js",
-  },
-  {
-    ...common,
-    stdin: aggregateEntry("src/test-integration/**/*.spec.ts"),
+    stdin: aggregateEntry("src/test-integration/**/*.{spec,test}.ts"),
     outfile: "dist/integration.spec.js",
   },
 ]

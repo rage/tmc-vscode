@@ -2,7 +2,6 @@ import * as crypto from "crypto"
 import type * as http from "http"
 import * as path from "path"
 
-import { expect } from "chai"
 import * as fs from "fs-extra"
 import * as tmp from "tmp"
 
@@ -50,39 +49,38 @@ suite("ensureLangsUpdated checksum parsing", function () {
   test("normalizes an uppercase .sha256 hash to lowercase", function () {
     // Regression: server-served uppercase hashes used to trigger a
     // redownload on every startup.
-    expect(parseSha256Sum(`${upperHash}  tmc-langs-cli`)).to.equal(lowerHash)
+    expect(parseSha256Sum(`${upperHash}  tmc-langs-cli`)).toBe(lowerHash)
   })
 
   test("leaves a lowercase hash unchanged", function () {
-    expect(parseSha256Sum(`${lowerHash}  tmc-langs-cli`)).to.equal(lowerHash)
+    expect(parseSha256Sum(`${lowerHash}  tmc-langs-cli`)).toBe(lowerHash)
   })
 
   test("strips trailing whitespace/newline", function () {
-    expect(parseSha256Sum(`${lowerHash}\n`)).to.equal(lowerHash)
+    expect(parseSha256Sum(`${lowerHash}\n`)).toBe(lowerHash)
   })
 
   test("handles a bare uppercase hash with CRLF and no filename", function () {
-    // No filename field, uppercase hex, CRLF line ending.
-    expect(parseSha256Sum(`${upperHash}\r\n`)).to.equal(lowerHash)
+    expect(parseSha256Sum(`${upperHash}\r\n`)).toBe(lowerHash)
   })
 
   test("tolerates leading whitespace and tab separators", function () {
-    expect(parseSha256Sum(`   ${lowerHash}\ttmc-langs-cli`)).to.equal(lowerHash)
+    expect(parseSha256Sum(`   ${lowerHash}\ttmc-langs-cli`)).toBe(lowerHash)
   })
 
   test("returns empty string for empty or whitespace-only content", function () {
-    expect(parseSha256Sum("")).to.equal("")
-    expect(parseSha256Sum("   \r\n  ")).to.equal("")
+    expect(parseSha256Sum("")).toBe("")
+    expect(parseSha256Sum("   \r\n  ")).toBe("")
   })
 })
 
 suite("verifyCli", function () {
   let tmpDir: tmp.DirResult
 
-  setup(function () {
+  beforeEach(function () {
     tmpDir = tmp.dirSync({ unsafeCleanup: true })
   })
-  teardown(function () {
+  afterEach(function () {
     tmpDir.removeCallback()
   })
 
@@ -98,14 +96,14 @@ suite("verifyCli", function () {
     const cli = Buffer.from("hello cli")
     const { cliPath, shaPath } = write(cli, `${sha256(cli)}  cli`)
     const result = await verifyCli(cliPath, shaPath)
-    expect(result.match).to.equal(true)
-    expect(result.cliDigest).to.equal(sha256(cli))
+    expect(result.match).toBe(true)
+    expect(result.cliDigest).toBe(sha256(cli))
   })
 
   test("matches case-insensitively against an uppercase checksum", async function () {
     const cli = Buffer.from("hello cli")
     const { cliPath, shaPath } = write(cli, `${sha256(cli).toUpperCase()}\r\n`)
-    expect((await verifyCli(cliPath, shaPath)).match).to.equal(true)
+    expect((await verifyCli(cliPath, shaPath)).match).toBe(true)
   })
 
   test("does not match a wrong checksum but still reports both digests", async function () {
@@ -113,17 +111,17 @@ suite("verifyCli", function () {
     const wrong = sha256(Buffer.from("other"))
     const { cliPath, shaPath } = write(cli, `${wrong}  cli`)
     const result = await verifyCli(cliPath, shaPath)
-    expect(result.match).to.equal(false)
-    expect(result.cliDigest).to.equal(sha256(cli))
-    expect(result.hashData).to.equal(wrong)
+    expect(result.match).toBe(false)
+    expect(result.cliDigest).toBe(sha256(cli))
+    expect(result.hashData).toBe(wrong)
   })
 
   test("does not match (and does not throw) on an empty checksum file", async function () {
     const cli = Buffer.from("hello cli")
     const { cliPath, shaPath } = write(cli, "")
     const result = await verifyCli(cliPath, shaPath)
-    expect(result.match).to.equal(false)
-    expect(result.hashData).to.equal("")
+    expect(result.match).toBe(false)
+    expect(result.hashData).toBe("")
   })
 
   test("does not match (and does not throw) when the checksum file is missing", async function () {
@@ -131,17 +129,17 @@ suite("verifyCli", function () {
     const cliPath = path.join(tmpDir.name, "cli")
     fs.writeFileSync(cliPath, cli)
     const result = await verifyCli(cliPath, cliPath + ".sha256")
-    expect(result.match).to.equal(false)
-    expect(result.cliDigest).to.equal(sha256(cli))
-    expect(result.hashData).to.equal("")
+    expect(result.match).toBe(false)
+    expect(result.cliDigest).toBe(sha256(cli))
+    expect(result.hashData).toBe("")
   })
 
   test("does not match (and does not throw) when the CLI file is missing", async function () {
     const shaPath = path.join(tmpDir.name, "cli.sha256")
     fs.writeFileSync(shaPath, `${sha256(Buffer.from("anything"))}  cli`)
     const result = await verifyCli(path.join(tmpDir.name, "cli"), shaPath)
-    expect(result.match).to.equal(false)
-    expect(result.cliDigest).to.equal("")
+    expect(result.match).toBe(false)
+    expect(result.cliDigest).toBe("")
   })
 
   test("does not match two unreadable files as equal", async function () {
@@ -150,56 +148,55 @@ suite("verifyCli", function () {
       path.join(tmpDir.name, "missing-cli"),
       path.join(tmpDir.name, "missing-cli.sha256"),
     )
-    expect(result.match).to.equal(false)
+    expect(result.match).toBe(false)
   })
 })
 
 suite("removeCliFolder", function () {
   let tmpDir: tmp.DirResult
 
-  setup(function () {
+  beforeEach(function () {
     tmpDir = tmp.dirSync({ unsafeCleanup: true })
   })
-  teardown(function () {
+  afterEach(function () {
     tmpDir.removeCallback()
   })
 
   test("returns Ok for a non-existent folder", async function () {
     const result = await removeCliFolder(path.join(tmpDir.name, "does-not-exist"))
-    expect(result.ok).to.equal(true)
+    expect(result.ok).toBe(true)
   })
 
   test("removes a populated folder and returns Ok", async function () {
     const folder = path.join(tmpDir.name, "cli")
     fs.outputFileSync(path.join(folder, "a", "f.txt"), "data")
     const result = await removeCliFolder(folder)
-    expect(result.ok).to.equal(true)
-    expect(fs.existsSync(folder)).to.equal(false)
+    expect(result.ok).toBe(true)
+    expect(fs.existsSync(folder)).toBe(false)
   })
 })
 
 suite("ensureLangsUpdated end-to-end", function () {
-  this.timeout(20000)
-
   const version = "0.0.0-test"
   const executable = getLangsCLIForPlatform(getPlatform(), version)
 
   let server: http.Server | undefined
   let tmpDir: tmp.DirResult
 
-  setup(function () {
+  beforeEach(function () {
     tmpDir = tmp.dirSync({ unsafeCleanup: true })
   })
 
-  teardown(function (done) {
+  afterEach(function () {
     tmpDir.removeCallback()
     if (server) {
       const s = server
       server = undefined
-      s.close(() => done())
-    } else {
-      done()
+      return new Promise<void>((resolve) => {
+        s.close(() => resolve())
+      })
     }
+    return undefined
   })
 
   test("fresh install downloads, verifies, and does not double-download", async function () {
@@ -213,23 +210,21 @@ suite("ensureLangsUpdated end-to-end", function () {
     const [dialog] = createDialogMock()
     const folder = path.join(tmpDir.name, "cli")
 
-    const result = await ensureLangsUpdated(folder, dialog.object, {
+    const result = await ensureLangsUpdated(folder, dialog, {
       downloadUrl: serverUrl(server),
       version,
     })
 
-    expect(result.ok).to.equal(true)
+    expect(result.ok).toBe(true)
     const cliPath = result.unwrap()
-    expect(fs.existsSync(cliPath)).to.equal(true)
-    expect(fs.readFileSync(cliPath + ".sha256", "utf-8").length).to.be.greaterThan(0)
-    expect((await verifyCli(cliPath, cliPath + ".sha256")).match).to.equal(true)
+    expect(fs.existsSync(cliPath)).toBe(true)
+    expect(fs.readFileSync(cliPath + ".sha256", "utf-8").length).toBeGreaterThan(0)
+    expect((await verifyCli(cliPath, cliPath + ".sha256")).match).toBe(true)
     // A correct first download must not trigger a redownload.
-    expect(state.hits.cli).to.equal(1)
+    expect(state.hits.cli).toBe(1)
   })
 
   test("fresh install accepts an uppercase + CRLF checksum on the first try", async function () {
-    // An uppercase hex + CRLF checksum with no filename field must still verify
-    // on the first download, with no redownload.
     const cli = Buffer.from("fake cli binary contents")
     const state: ServeState = {
       cli,
@@ -240,14 +235,14 @@ suite("ensureLangsUpdated end-to-end", function () {
     const [dialog] = createDialogMock()
     const folder = path.join(tmpDir.name, "cli")
 
-    const result = await ensureLangsUpdated(folder, dialog.object, {
+    const result = await ensureLangsUpdated(folder, dialog, {
       downloadUrl: serverUrl(server),
       version,
     })
 
-    expect(result.ok).to.equal(true)
-    expect(state.hits.cli).to.equal(1)
-    expect(state.hits.sha).to.equal(1)
+    expect(result.ok).toBe(true)
+    expect(state.hits.cli).toBe(1)
+    expect(state.hits.sha).toBe(1)
   })
 
   test("a persistently corrupt download fails closed with an Err (never throws)", async function () {
@@ -262,17 +257,17 @@ suite("ensureLangsUpdated end-to-end", function () {
     const [dialog] = createDialogMock()
     const folder = path.join(tmpDir.name, "cli")
 
-    const result = await ensureLangsUpdated(folder, dialog.object, {
+    const result = await ensureLangsUpdated(folder, dialog, {
       downloadUrl: serverUrl(server),
       version,
     })
 
-    expect(result.err).to.equal(true)
+    expect(result.err).toBe(true)
     if (result.err) {
-      expect(result.val).to.be.instanceOf(InitializationError)
+      expect(result.val).toBeInstanceOf(InitializationError)
     }
     // initial download + one redownload attempt
-    expect(state.hits.cli).to.equal(2)
+    expect(state.hits.cli).toBe(2)
   })
 
   test("recovers when the redownload yields a matching checksum", async function () {
@@ -288,15 +283,15 @@ suite("ensureLangsUpdated end-to-end", function () {
     const [dialog] = createDialogMock()
     const folder = path.join(tmpDir.name, "cli")
 
-    const result = await ensureLangsUpdated(folder, dialog.object, {
+    const result = await ensureLangsUpdated(folder, dialog, {
       downloadUrl: serverUrl(server),
       version,
     })
 
-    expect(result.ok).to.equal(true)
+    expect(result.ok).toBe(true)
     const cliPath = result.unwrap()
-    expect((await verifyCli(cliPath, cliPath + ".sha256")).match).to.equal(true)
-    expect(state.hits.cli).to.equal(2)
+    expect((await verifyCli(cliPath, cliPath + ".sha256")).match).toBe(true)
+    expect(state.hits.cli).toBe(2)
   })
 
   test("a failed download returns an Err and never throws", async function () {
@@ -312,12 +307,12 @@ suite("ensureLangsUpdated end-to-end", function () {
     const [dialog] = createDialogMock()
     const folder = path.join(tmpDir.name, "cli")
 
-    const result = await ensureLangsUpdated(folder, dialog.object, {
+    const result = await ensureLangsUpdated(folder, dialog, {
       downloadUrl: deadUrl,
       version,
     })
 
-    expect(result.err).to.equal(true)
+    expect(result.err).toBe(true)
   })
 
   test("a valid cache with an uppercase checksum is accepted without any download", async function () {
@@ -334,14 +329,14 @@ suite("ensureLangsUpdated end-to-end", function () {
     server = await startLangsServer(state)
     const [dialog] = createDialogMock()
 
-    const result = await ensureLangsUpdated(folder, dialog.object, {
+    const result = await ensureLangsUpdated(folder, dialog, {
       downloadUrl: serverUrl(server),
       version,
     })
 
-    expect(result.ok).to.equal(true)
-    expect(state.hits.cli).to.equal(0)
-    expect(state.hits.sha).to.equal(0)
+    expect(result.ok).toBe(true)
+    expect(state.hits.cli).toBe(0)
+    expect(state.hits.sha).toBe(0)
   })
 
   test("a cached CLI whose checksum file is missing recovers via redownload instead of throwing", async function () {
@@ -358,16 +353,16 @@ suite("ensureLangsUpdated end-to-end", function () {
     server = await startLangsServer(state)
     const [dialog] = createDialogMock()
 
-    const result = await ensureLangsUpdated(folder, dialog.object, {
+    const result = await ensureLangsUpdated(folder, dialog, {
       downloadUrl: serverUrl(server),
       version,
     })
 
-    expect(result.ok).to.equal(true)
+    expect(result.ok).toBe(true)
     const cliPath = result.unwrap()
-    expect((await verifyCli(cliPath, cliPath + ".sha256")).match).to.equal(true)
+    expect((await verifyCli(cliPath, cliPath + ".sha256")).match).toBe(true)
     // The missing checksum forced a single redownload rather than a crash.
-    expect(state.hits.cli).to.equal(1)
-    expect(state.hits.sha).to.equal(1)
+    expect(state.hits.cli).toBe(1)
+    expect(state.hits.sha).toBe(1)
   })
 })

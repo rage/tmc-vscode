@@ -9,8 +9,12 @@
     "lib": ["ESNext"],
     // explicit so tsc and tsgo agree on which globals-providing packages
     // are in scope (tsgo does not auto-include everything under @types)
-    "types": ["node", "mocha", "vscode"],
+    "types": ["node", "vscode"],
     "sourceMap": true
   },
-  "include": ["src/**/*"]
+  // The two test tiers have their own projects (tsconfig.test.json for the
+  // vitest unit tier, tsconfig.integration.json for the mocha test-electron
+  // tier) because their global environments differ (vitest vs mocha).
+  "include": ["src/**/*"],
+  "exclude": ["src/test/**", "src/test-integration/**"]
 }

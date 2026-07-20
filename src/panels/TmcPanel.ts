@@ -1,5 +1,6 @@
 import getFolderSize from "get-folder-size"
 import { compact } from "lodash"
+import { Err } from "ts-results"
 import type { Result } from "ts-results"
 import type { Disposable, Webview, WebviewPanel } from "vscode"
 import { Uri, ViewColumn, window } from "vscode"
@@ -24,9 +25,11 @@ import { TMC_BACKEND_URL } from "../config/constants"
 import { uiDownloadExercises } from "../init"
 import type { ExerciseGroup, ExtensionToWebview, Panel, WebviewToExtension } from "../shared/shared"
 import {
+  ExerciseIdentifier,
   LocalCourseData,
   LocalCourseExercise,
   makeMoocKind,
+  match,
   WebviewToExtensionSchema,
 } from "../shared/shared"
 import type * as UITypes from "../ui/types"
@@ -246,16 +249,13 @@ export class TmcPanel {
       async (untrustedMessage: unknown) => {
         const validationResult = WebviewToExtensionSchema.safeParse(untrustedMessage)
         if (!validationResult.success) {
-          // log and drop invalid messages instead of processing them
           Logger.error(
             "Ignoring invalid message from webview:",
             z.prettifyError(validationResult.error),
           )
           return
         }
-        // note: the original message is passed on rather than the parse result
-        // on purpose, as zod strips unknown fields by default and the validation
-        // is only meant to act as a guard
+        // zod strips unknown fields, so the original message is used instead of the parse result
         const message = untrustedMessage as WebviewToExtension
         switch (message.type) {
           case "requestCourseDetailsData": {
@@ -273,7 +273,6 @@ export class TmcPanel {
 
             langs.val.getCourseDetails(message.sourcePanel.courseId).then((apiCourse) => {
               const offlineMode = apiCourse.err // failed to get course details = offline mode
-              const exerciseData = new Map<string, UITypes.CourseDetailsExerciseGroup>()
 
               const currentDate = new Date()
               postMessageToWebview(webview, {
@@ -283,19 +282,23 @@ export class TmcPanel {
                 disabled: course.data.disabled,
               })
 
-              const exerciseGroupData = new Map<string, ExerciseGroup>()
+              const exerciseGroupData = new Map<string, UITypes.CourseDetailsExerciseGroup>()
               LocalCourseData.getExercises(course).forEach((ex) => {
                 const nameMatch = LocalCourseExercise.getSlug(ex).match(/(\w+)-(.+)/)
                 const groupName = nameMatch?.[1] || ""
-                const group = exerciseData.get(groupName)
+                const group = exerciseGroupData.get(groupName)
                 const name = nameMatch?.[2] || ""
+                // the workspace manager only tracks on-disk exercises, so an undownloaded
+                // exercise is expected to be missing here rather than an error
                 const exData = workspaceManager.val.getExerciseBySlug(
                   course.kind,
                   LocalCourseData.getCourseName(course),
                   LocalCourseExercise.getSlug(ex),
                 )
                 if (!exData) {
-                  throw new Error("nonexistent exercise")
+                  Logger.debug(
+                    `Exercise ${LocalCourseExercise.getSlug(ex)} has not been downloaded yet`,
+                  )
                 }
 
                 const softDeadline = ex.data.softDeadline ? parseDate(ex.data.softDeadline) : null
@@ -316,7 +319,9 @@ export class TmcPanel {
                   name,
                   passed:
                     LocalCourseData.getExercises(course).find(
-                      (ce) => LocalCourseExercise.getId(ce) === exerciseId,
+                      (ce) =>
+                        ExerciseIdentifier.toString(LocalCourseExercise.getId(ce)) ===
+                        ExerciseIdentifier.toString(exerciseId),
                     )?.data.passed || false,
                   softDeadline,
                   softDeadlineString: softDeadline ? dateToString(softDeadline) : "-",
@@ -330,7 +335,7 @@ export class TmcPanel {
                   exercises: group?.exercises.concat(entry) || [entry],
                 })
               })
-              const exerciseGroups: ExerciseGroup[] = Array.from(exerciseData.values())
+              const exerciseGroups: ExerciseGroup[] = Array.from(exerciseGroupData.values())
                 .toSorted((a, b) => (a.name > b.name ? 1 : -1))
                 .map((e) => {
                   return {
@@ -644,10 +649,18 @@ export class TmcPanel {
             // todo: move to actions
             // download exercises that don't exist locally
             const course = userData.val.getCourse(message.courseId)
+            // Key by a primitive: ExerciseIdentifier is a tagged-union object, so a
+            // Map keyed by it would only match on reference identity and always miss
+            // the deserialized ids coming from the webview.
             const courseExercises = new Map(
-              LocalCourseData.getExercises(course).map((x) => [LocalCourseExercise.getId(x), x]),
+              LocalCourseData.getExercises(course).map((x) => [
+                ExerciseIdentifier.toString(LocalCourseExercise.getId(x)),
+                x,
+              ]),
             )
-            const exercisesToOpen = compact(message.ids.map((x) => courseExercises.get(x)))
+            const exercisesToOpen = compact(
+              message.ids.map((x) => courseExercises.get(ExerciseIdentifier.toString(x))),
+            )
             const localCourseExercises = await langs.val.listLocalCourseExercises(
               message.courseId.kind,
               LocalCourseData.getCourseName(course),
@@ -791,10 +804,18 @@ export class TmcPanel {
             break
           }
           case "pasteExercise": {
-            const pasteResult = await pasteTmcExercise(
-              actionContext,
-              LocalCourseData.getCourseName(message.course),
-              LocalCourseExercise.getSlug(message.exercise),
+            const pasteResult = await match(
+              message.course,
+              () =>
+                pasteTmcExercise(
+                  actionContext,
+                  LocalCourseData.getCourseName(message.course),
+                  LocalCourseExercise.getSlug(message.exercise),
+                ),
+              () =>
+                Promise.resolve(
+                  Err(new Error("Pasting is not yet supported for courses.mooc.fi exercises.")),
+                ),
             )
             if (pasteResult.err) {
               actionContext.dialog.errorNotification(

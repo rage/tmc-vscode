@@ -1,6 +1,3 @@
-import { expect } from "chai"
-import type { IMock } from "typemoq"
-import { It, Times } from "typemoq"
 import * as vscode from "vscode"
 
 import ExerciseDecorationProvider from "../../api/exerciseDecorationProvider"
@@ -14,37 +11,33 @@ import type { WorkspaceManagerMockValues } from "../mocks/workspaceManager"
 import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
 
 suite("ExerciseDecoratorProvider class", function () {
-  let userDataMock: IMock<UserData>
+  let userDataMock: UserData
   let userDataMockValues: UserDataMockValues
-  let workspaceManagerMock: IMock<WorkspaceManager>
+  let workspaceManagerMock: WorkspaceManager
   let workspaceManagerMockValues: WorkspaceManagerMockValues
 
   let exerciseDecorationProvider: ExerciseDecorationProvider
 
-  setup(function () {
+  beforeEach(function () {
     ;[userDataMock, userDataMockValues] = createUserDataMock()
     userDataMockValues.getExerciseByName = userDataExerciseHelloWorld
-
     ;[workspaceManagerMock, workspaceManagerMockValues] = createWorkspaceMangerMock()
     workspaceManagerMockValues.getExerciseByPath = exerciseHelloWorld
 
-    exerciseDecorationProvider = new ExerciseDecorationProvider(
-      userDataMock.object,
-      workspaceManagerMock.object,
-    )
+    exerciseDecorationProvider = new ExerciseDecorationProvider(userDataMock, workspaceManagerMock)
   })
 
   test("should decorate passed exercise with a filled circle", function () {
     userDataMockValues.getExerciseByName = { ...userDataExerciseHelloWorld, passed: true }
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
-    expect((decoration as vscode.FileDecoration).badge).to.be.equal("⬤")
+    expect((decoration as vscode.FileDecoration).badge).toBe("⬤")
   })
 
   test("should decorate expired exercise with an X mark", function () {
     const expiredExercise = { ...userDataExerciseHelloWorld, deadline: "1970-01-01" }
     userDataMockValues.getExerciseByName = expiredExercise
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
-    expect((decoration as vscode.FileDecoration).badge).to.be.equal("✗")
+    expect((decoration as vscode.FileDecoration).badge).toBe("✗")
   })
 
   test("should decorate partially completed exercise with small circle", function () {
@@ -55,19 +48,19 @@ suite("ExerciseDecoratorProvider class", function () {
     }
     userDataMockValues.getExerciseByName = partialCompletion
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
-    expect((decoration as vscode.FileDecoration).badge).to.be.equal("○")
+    expect((decoration as vscode.FileDecoration).badge).toBe("○")
   })
 
   test("should decorate exercise missing from UserData with information symbol", function () {
     userDataMockValues.getExerciseByName = undefined
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
-    expect((decoration as vscode.FileDecoration).badge).to.be.equal("ⓘ")
+    expect((decoration as vscode.FileDecoration).badge).toBe("ⓘ")
   })
 
   test("should not decorate valid exercise that isn't yet passed", function () {
     userDataMockValues.getExerciseByName = { ...userDataExerciseHelloWorld, passed: false }
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
-    expect(decoration).to.be.undefined
+    expect(decoration).toBeUndefined()
   })
 
   test("should not decorate exercise folder subitem", function () {
@@ -75,13 +68,13 @@ suite("ExerciseDecoratorProvider class", function () {
     const subUri = vscode.Uri.file("/tmc/vscode/test-python-course/hello_world/src/hello.py")
     workspaceManagerMockValues.getExerciseByPath = { ...exerciseHelloWorld, uri: rootUri }
     const decoration = exerciseDecorationProvider.provideFileDecoration(subUri)
-    expect(decoration).to.be.undefined
+    expect(decoration).toBeUndefined()
   })
 
   test("should not attempt to decorate a non-exercise", function () {
     const notExercise = vscode.Uri.file("something.txt")
     const decoration = exerciseDecorationProvider.provideFileDecoration(notExercise)
-    expect(decoration).to.be.undefined
-    userDataMock.verify((x) => x.getTmcExerciseByName(It.isAny(), It.isAny()), Times.never())
+    expect(decoration).toBeUndefined()
+    expect(userDataMock.getTmcExerciseByName).not.toHaveBeenCalled()
   })
 })

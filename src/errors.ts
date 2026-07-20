@@ -70,3 +70,11 @@ export class ExerciseMigrationError extends BaseError {
 export class SpawnError extends BaseError {
   public override readonly name = "Langs Spawn Error"
 }
+
+export class UnsupportedOperationError extends BaseError {
+  public override readonly name = "Unsupported Operation Error"
+}
+
+export class LangsResponseSchemaError extends BaseError {
+  public override readonly name = "Langs Response Schema Error"
+}

@@ -5,7 +5,7 @@ import { downloadOrUpdateExercises, refreshLocalExercises } from "../actions"
 import type { ActionContext } from "../actions/types"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseIdentifier, ExtensionToWebview } from "../shared/shared"
-import { assertUnreachable, CourseIdentifier, LocalCourseData } from "../shared/shared"
+import { CourseIdentifier, LocalCourseData } from "../shared/shared"
 import type UI from "../ui/ui"
 import { Logger } from "../utilities/"
 
@@ -31,57 +31,6 @@ export function registerUiActions(actionContext: ActionContext): Result<void, Er
     return new Err(new Error("Extension was not initialized properly"))
   }
 
-  // Register UI actions
-  ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.loggedIn.not], {
-    command: "tmc.showLogin",
-    title: "",
-    arguments: [],
-  })
-
-  const courses = userData.val.getCourses()
-  ui.treeDP.registerAction(
-    "My Courses",
-    "myCourses",
-    [visibilityGroups.loggedIn],
-    {
-      command: "tmc.myCourses",
-      title: "Go to My Courses",
-    },
-    courses.length > 0
-      ? vscode.TreeItemCollapsibleState.Expanded
-      : vscode.TreeItemCollapsibleState.Collapsed,
-    courses.map<{ label: string; id: string; command: vscode.Command }>((course) => {
-      switch (course.kind) {
-        case "tmc": {
-          const tmcCourse = course.data
-          return {
-            label: tmcCourse.title,
-            id: tmcCourse.id.toString(),
-            command: {
-              command: "tmc.courseDetails",
-              title: "Go to course details",
-              arguments: [tmcCourse.id],
-            },
-          }
-        }
-        case "mooc": {
-          const moocCourse = course.data
-          return {
-            label: moocCourse.title,
-            id: moocCourse.id,
-            command: {
-              command: "tmc.courseDetails",
-              title: "Go to course details",
-              arguments: [moocCourse.id],
-            },
-          }
-        }
-        default: {
-          return assertUnreachable(course)
-        }
-      }
-    }),
-  )
   if (
     !(
       userData.ok &&

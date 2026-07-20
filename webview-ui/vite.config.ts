@@ -3,8 +3,8 @@ import { defineConfig, type UserConfig } from "vite"
 
 // Builds the webview bundle the extension loads from
 // `webview-ui/public/build/{bundle.js,bundle.css}` (see src/panels/TmcPanel.ts).
-// Library mode keeps the single-IIFE + separate-CSS layout the old rollup config
-// produced, with stable, unhashed filenames.
+// Library mode keeps a single-IIFE + separate-CSS layout, with stable,
+// unhashed filenames.
 export default defineConfig(({ mode }): UserConfig => {
   const production = mode === "production"
   return {

@@ -1,6 +1,5 @@
 {
-  // Playwright end-to-end test project. Shares the strict baseline with
-  // the rest of the workspace.
+  // Shares the strict baseline with the rest of the workspace.
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ESNext"],

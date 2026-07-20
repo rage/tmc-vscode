@@ -70,14 +70,24 @@ const download = async (url: string, fileName: string): Promise<void> => {
   console.log(fileName, "downloaded!")
 }
 
-try {
+// no top-level await: tsx transforms this file as CJS (backend has no
+// "type": "module", and ESM would break the __dirname uses above)
+const main = async (): Promise<void> => {
   console.log("Copying tmc modules to python courses...")
   await copyTMCPythonModules()
   console.log("Starting server setup...")
   const langsVersion = getLangsCLIForPlatform(getPlatform(), TMC_LANGS_VERSION)
   await download(TMC_LANGS_DL_URL + langsVersion, langsVersion)
+  // the extension verifies the CLI against its .sha256 file and fails to
+  // initialize if the mock backend cannot serve it
+  await download(TMC_LANGS_DL_URL + langsVersion + ".sha256", langsVersion + ".sha256")
   console.log("Setup complete!")
-} catch (err) {
-  console.error("Failed to download langs files.", err)
-  process.exit(1)
 }
+
+// oxlint-disable-next-line unicorn/prefer-top-level-await -- tsx runs this as CJS
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error("Setup failed.", err)
+    process.exit(1)
+  })

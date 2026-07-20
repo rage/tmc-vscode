@@ -85,15 +85,10 @@ export interface UserData {
 
 // validation schemas
 //
-// These guard real users' persisted data. Like the typia validators they
-// replace, they must tolerate unknown extra keys (data written by a newer
-// extension version) — zod's default object schema accepts and ignores
-// unknown keys, and `validateData` returns the original object untouched.
-//
-// Known (deliberate) difference from typia: z.number() rejects NaN/Infinity
-// while typia accepted any `typeof === "number"`. Persisted memento data is
-// JSON-serialized, which cannot represent non-finite numbers, so this cannot
-// affect real stored data.
+// These guard real users' persisted data and must tolerate unknown extra
+// keys (data written by a newer extension version): zod's default object
+// schema accepts and ignores unknown keys, and `validateData` returns the
+// original object untouched.
 
 export const localCourseDataExerciseSchema: z.ZodType<LocalCourseDataExercise> = z.object({
   id: z.number(),

@@ -7,15 +7,15 @@ import { Logger } from "../utilities"
 /**
  * Startup self-check for the tmc-langs-cli output contract.
  *
- * Runs `tmc-langs-cli schema` against the actual binary and byte-compares the
- * output with the vendored schema at `shared/bindings.schema.json` (the same
- * file the hand-written zod schemas in `shared/langsSchema.ts` are checked
- * against). A mismatch means the CLI binary and the extension were built
- * against different versions of the output contract, which would otherwise
- * only surface later as opaque JSON validation failures.
+ * Runs `tmc-langs-cli schema` and byte-compares it against the vendored
+ * `shared/bindings.schema.json` (the same file the generated zod schemas in
+ * `shared/langsSchema.ts` are checked against). A mismatch means the CLI
+ * binary and the extension were built against different contract versions,
+ * which would otherwise only surface later as opaque JSON validation
+ * failures.
  *
- * This is a diagnostic only: it never throws, and a mismatch is reported with
- * `Logger.warn` instead of failing activation.
+ * Diagnostic only: never throws; a mismatch is reported via `Logger.warn`
+ * instead of failing activation.
  */
 export async function verifyCliSchema(cliPath: string, extensionPath: string): Promise<void> {
   try {
@@ -44,7 +44,7 @@ export async function verifyCliSchema(cliPath: string, extensionPath: string): P
     }
   } catch (error) {
     // e.g. an older CLI without the `schema` subcommand, or a missing
-    // vendored schema file; the check is best-effort by design
+    // vendored schema file -- best-effort by design
     Logger.warn(
       "Failed to check the tmc-langs-cli output schema against the bundled contract schema.",
       error,

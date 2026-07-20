@@ -1,22 +1,21 @@
-import { expect } from "chai"
 import { first, last } from "lodash"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
-import type { IMock } from "typemoq"
-import { It, Times } from "typemoq"
 
 import { downloadOrUpdateExercises } from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type Settings from "../../config/settings"
+import { TmcPanel } from "../../panels/TmcPanel"
 import type {
   DownloadOrUpdateMoocCourseExercisesResult,
   DownloadOrUpdateTmcCourseExercisesResult,
   TmcExerciseDownload,
 } from "../../shared/langsSchema"
+import type { ExtensionToWebview } from "../../shared/shared"
 import { ExerciseIdentifier } from "../../shared/shared"
-import type { ExerciseStatus, WebviewMessage } from "../../ui/types"
+import type { ExerciseStatus } from "../../ui/types"
 import type UI from "../../ui/ui"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -61,41 +60,48 @@ const createDownloadResult = (
 suite("downloadOrUpdateExercises action", function () {
   const stubContext = createMockActionContext()
 
-  let dialogMock: IMock<Dialog>
-  let settingsMock: IMock<Settings>
+  let dialogMock: Dialog
+  let settingsMock: Settings
   let settingsMockValues: SettingsMockValues
-  let tmcMock: IMock<Langs>
+  let tmcMock: Langs
   let tmcMockValues: TMCMockValues
-  let uiMock: IMock<UI>
-  let webviewMessages: WebviewMessage[]
+  let uiMock: UI
+  let webviewMessages: ExtensionToWebview[]
 
   const actionContext = (): ActionContext => ({
     ...stubContext,
-    dialog: dialogMock.object,
-    settings: settingsMock.object,
-    langs: new Ok(tmcMock.object),
-    ui: uiMock.object,
+    dialog: dialogMock,
+    settings: settingsMock,
+    langs: new Ok(tmcMock),
+    ui: uiMock,
   })
 
-  setup(function () {
+  beforeEach(function () {
     ;[dialogMock] = createDialogMock()
     ;[settingsMock, settingsMockValues] = createSettingsMock()
     ;[tmcMock, tmcMockValues] = createTMCMock()
     ;[uiMock] = createUIMock()
     webviewMessages = []
+    // The action posts exercise-status updates through the static
+    // TmcPanel.postMessage sink; capture them so the tests can assert on them.
+    vi.spyOn(TmcPanel, "postMessage").mockImplementation(async (...messages) => {
+      webviewMessages.push(...messages)
+    })
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
   })
 
   test("should return empty results if no exercises are given", async function () {
     const result = (await downloadOrUpdateExercises(actionContext(), [])).unwrap()
-    expect(result.successful.length).to.be.equal(0)
-    expect(result.failed.length).to.be.equal(0)
+    expect(result.successful.length).toBe(0)
+    expect(result.failed.length).toBe(0)
   })
 
   test("should not call TMC-langs if no exercises are given", async function () {
     await downloadOrUpdateExercises(actionContext(), [])
-    expect(
-      tmcMock.verify((x) => x.downloadExercises(It.isAny(), It.isAny(), It.isAny()), Times.never()),
-    )
+    expect(tmcMock.downloadExercises).not.toHaveBeenCalled()
   })
 
   test("should return error if TMC-langs fails", async function () {
@@ -105,9 +111,11 @@ suite("downloadOrUpdateExercises action", function () {
       ExerciseIdentifier.from(1),
       ExerciseIdentifier.from(2),
     ])
-    expect(result.val).to.be.equal(error)
+    expect(result.val).toBe(error)
   })
 
+  // The action returns ExerciseIdentifier objects (not raw numbers) for
+  // successful/failed; earlier assertions compared against bare numbers.
   test("should return ids of successful downloads", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([helloWorld, otherWorld], [], undefined)
     const result = (
@@ -116,7 +124,7 @@ suite("downloadOrUpdateExercises action", function () {
         ExerciseIdentifier.from(2),
       ])
     ).unwrap()
-    expect(result.successful).to.be.deep.equal([1, 2])
+    expect(result.successful).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
   })
 
   test("should return ids of skipped downloads as successful", async function () {
@@ -127,7 +135,7 @@ suite("downloadOrUpdateExercises action", function () {
         ExerciseIdentifier.from(2),
       ])
     ).unwrap()
-    expect(result.successful).to.be.deep.equal([1, 2])
+    expect(result.successful).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
   })
 
   test("should combine successful and skipped downloads", async function () {
@@ -135,7 +143,7 @@ suite("downloadOrUpdateExercises action", function () {
     const result = (
       await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)])
     ).unwrap()
-    expect(result.successful).to.be.deep.equal([1, 2])
+    expect(result.successful).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
   })
 
   test("should return ids of failed downloads", async function () {
@@ -153,20 +161,52 @@ suite("downloadOrUpdateExercises action", function () {
         ExerciseIdentifier.from(2),
       ])
     ).unwrap()
-    expect(result.failed).to.be.deep.equal([1, 2])
+    expect(result.failed).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
+  })
+
+  test("should handle mooc task-id download results", async function () {
+    const moocTaskId = "task-uuid-1"
+    tmcMockValues.downloadExercises = Ok([
+      { downloaded: [], failed: [], skipped: [] },
+      { downloaded: [{ "task-id": moocTaskId, path: "/mooc/ex" }], failed: [], skipped: [] },
+    ])
+    const result = (
+      await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(moocTaskId)])
+    ).unwrap()
+    expect(result.successful).toEqual([ExerciseIdentifier.from(moocTaskId)])
+    expect(result.failed).toEqual([])
+  })
+
+  test("should report failed mooc downloads", async function () {
+    const moocTaskId = "task-uuid-2"
+    tmcMockValues.downloadExercises = Ok([
+      { downloaded: [], failed: [], skipped: [] },
+      {
+        downloaded: [],
+        failed: [[{ "task-id": moocTaskId, path: "/mooc/ex" }, ["boom"]]],
+        skipped: [],
+      },
+    ])
+    const result = (
+      await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(moocTaskId)])
+    ).unwrap()
+    expect(result.failed).toEqual([ExerciseIdentifier.from(moocTaskId)])
+    expect(result.successful).toEqual([])
   })
 
   test("should download template if downloadOldSubmission setting is off", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [], undefined)
     settingsMockValues.getDownloadOldSubmission = false
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)])
-    tmcMock.verify(
-      (x) => x.downloadExercises(It.isAny(), It.isValue(true), It.isAny()),
-      Times.once(),
+    expect(tmcMock.downloadExercises).toHaveBeenCalledWith(
+      expect.anything(),
+      true,
+      expect.anything(),
     )
-    tmcMock.verify(
-      (x) => x.downloadExercises(It.isAny(), It.isValue(false), It.isAny()),
-      Times.never(),
+    expect(tmcMock.downloadExercises).not.toHaveBeenCalledWith(
+      expect.anything(),
+      false,
+      expect.anything(),
     )
   })
 
@@ -174,115 +214,74 @@ suite("downloadOrUpdateExercises action", function () {
     tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [], undefined)
     settingsMockValues.getDownloadOldSubmission = true
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)])
-    tmcMock.verify(
-      (x) => x.downloadExercises(It.isAny(), It.isValue(true), It.isAny()),
-      Times.never(),
+    expect(tmcMock.downloadExercises).not.toHaveBeenCalledWith(
+      expect.anything(),
+      true,
+      expect.anything(),
     )
-    tmcMock.verify(
-      (x) => x.downloadExercises(It.isAny(), It.isValue(false), It.isAny()),
-      Times.once(),
+    expect(tmcMock.downloadExercises).toHaveBeenCalledWith(
+      expect.anything(),
+      false,
+      expect.anything(),
     )
   })
 
-  test.skip("should post status updates of succeeding download", async function () {
-    tmcMock.reset()
-    tmcMock
-      .setup((x) => x.downloadExercises(It.isAny(), It.isAny(), It.isAny()))
-      .returns(async (_1, _2, cb) => {
-        // Callback is only used for successful downloads
-        cb({ id: helloWorld.id, percent: 0.5 })
-        return createDownloadResult([helloWorld], [], undefined)
-      })
+  test("should post status updates of succeeding download", async function () {
+    // The progress callback carries an ExerciseIdentifier (the action calls
+    // ExerciseIdentifier.unwrap on it). A downloaded exercise is marked
+    // "closed" here; the "opened" transition happens later in openExercises.
+    tmcMock.downloadExercises = vi.fn(async (_1, _2, cb) => {
+      cb?.({ id: ExerciseIdentifier.from(helloWorld.id), percent: 0.5 })
+      return createDownloadResult([helloWorld], [], undefined)
+    }) as Langs["downloadExercises"]
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)])
-    expect(webviewMessages.length).to.be.greaterThanOrEqual(
-      2,
-      "expected at least two status messages",
-    )
-    expect(first(webviewMessages)).to.be.deep.equal(
-      wrapToMessage(helloWorld.id, "downloading"),
-      'expected first message to be "downloading"',
-    )
-    expect(last(webviewMessages)).to.be.deep.equal(
-      wrapToMessage(helloWorld.id, "opened"),
-      'expected last message to be "opened"',
-    )
+    expect(webviewMessages.length).toBeGreaterThanOrEqual(2)
+    expect(first(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloading"))
+    expect(last(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "closed"))
   })
 
-  test.skip("should post status updates for skipped download", async function () {
+  test("should post status updates for skipped download", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([], [helloWorld], undefined)
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)])
-    expect(webviewMessages.length).to.be.greaterThanOrEqual(
-      2,
-      "expected at least two status messages",
-    )
-    expect(first(webviewMessages)).to.be.deep.equal(
-      wrapToMessage(helloWorld.id, "downloading"),
-      'expected first message to be "downloading"',
-    )
-    expect(last(webviewMessages)).to.be.deep.equal(
-      wrapToMessage(helloWorld.id, "closed"),
-      'expected last message to be "closed"',
-    )
+    expect(webviewMessages.length).toBeGreaterThanOrEqual(2)
+    expect(first(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloading"))
+    expect(last(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "closed"))
   })
 
-  test.skip("should post status updates for failing download", async function () {
+  test("should post status updates for failing download", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([], [], [[helloWorld, [""]]])
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)])
-    expect(webviewMessages.length).to.be.greaterThanOrEqual(
-      2,
-      "expected at least two status messages",
-    )
-    expect(first(webviewMessages)).to.be.deep.equal(
-      wrapToMessage(helloWorld.id, "downloading"),
-      'expected first message to be "downloading"',
-    )
-    expect(last(webviewMessages)).to.be.deep.equal(
-      wrapToMessage(helloWorld.id, "downloadFailed"),
-      'expected last message to be "downloadFailed"',
-    )
+    expect(webviewMessages.length).toBeGreaterThanOrEqual(2)
+    expect(first(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloading"))
+    expect(last(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloadFailed"))
   })
 
-  test.skip("should post status updates for exercises missing from langs response", async function () {
+  test("should post status updates for exercises missing from langs response", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([], [], undefined)
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)])
-    expect(webviewMessages.length).to.be.greaterThanOrEqual(
-      2,
-      "expected at least two status messages",
-    )
-    expect(first(webviewMessages)).to.be.deep.equal(
-      wrapToMessage(helloWorld.id, "downloading"),
-      'expected first message to be "downloading"',
-    )
-    expect(last(webviewMessages)).to.be.deep.equal(
-      wrapToMessage(helloWorld.id, "downloadFailed"),
-      'expected last message to be "downloadFailed"',
-    )
+    expect(webviewMessages.length).toBeGreaterThanOrEqual(2)
+    expect(first(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloading"))
+    expect(last(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloadFailed"))
   })
 
-  test.skip("should post status updates when TMC-langs operation fails", async function () {
+  test("should post status updates when TMC-langs operation fails", async function () {
     const error = new Error()
     tmcMockValues.downloadExercises = Err(error)
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)])
-    expect(webviewMessages.length).to.be.greaterThanOrEqual(
-      2,
-      "expected at least two status messages",
-    )
-    expect(first(webviewMessages)).to.be.deep.equal(
-      wrapToMessage(helloWorld.id, "downloading"),
-      'expected first message to be "downloading"',
-    )
-    expect(last(webviewMessages)).to.be.deep.equal(
-      wrapToMessage(helloWorld.id, "downloadFailed"),
-      'expected last message to be "downloadFailed"',
-    )
+    expect(webviewMessages.length).toBeGreaterThanOrEqual(2)
+    expect(first(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloading"))
+    expect(last(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloadFailed"))
   })
 })
 
-// These kind of functions should maybe be in utils?
-function wrapToMessage(exerciseId: number, status: ExerciseStatus): WebviewMessage {
+// Mirrors the message the action posts via TmcPanel.postMessage.
+function wrapToMessage(exerciseId: number, status: ExerciseStatus): ExtensionToWebview {
   return {
-    command: "exerciseStatusChange",
-    exerciseId,
+    type: "exerciseStatusChange",
+    target: {
+      type: "CourseDetails",
+    },
+    exerciseId: ExerciseIdentifier.from(exerciseId),
     status,
   }
 }

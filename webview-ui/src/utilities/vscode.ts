@@ -1,6 +1,8 @@
 import type { WebviewApi } from "vscode-webview"
+import { z } from "zod"
 
 import type { State, WebviewToExtension } from "../shared/shared"
+import { WebviewToExtensionSchema } from "../shared/shared"
 
 /**
  * A utility wrapper around the acquireVsCodeApi() function, which enables
@@ -32,6 +34,19 @@ class VSCodeAPIWrapper {
    */
   public postMessage(message: WebviewToExtension): void {
     console.log("Message from webview", message)
+    // guards against posting a non-serializable value (e.g. a Svelte 5 `$state` proxy, or a
+    // whole panel where only `{id, type}` is expected), which would otherwise fail with an
+    // opaque DataCloneError. On success the original message is still sent, since zod would
+    // strip fields the receiver relies on (e.g. `z.custom<Uri>()`).
+    const validationResult = WebviewToExtensionSchema.safeParse(message)
+    if (!validationResult.success) {
+      console.error(
+        "Refusing to post malformed message to extension host:",
+        z.prettifyError(validationResult.error),
+        message,
+      )
+      return
+    }
     if (this.vsCodeApi) {
       this.vsCodeApi.postMessage(message)
     } else {

@@ -1,18 +1,13 @@
 import * as path from "path"
 
-import { expect } from "chai"
 import { Err, Ok } from "ts-results"
-import type { IMock } from "typemoq"
-import { It, Times } from "typemoq"
 import * as vscode from "vscode"
 
 import { moveExtensionDataPath } from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
-import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
-import { workspaceExercises } from "../fixtures/workspaceManager"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
@@ -35,25 +30,23 @@ suite("moveExtensionDataPath action", function () {
   }
 
   const courseName = "test-python-course"
-  const openExercises = workspaceExercises.filter((x) => x.status === ExerciseStatus.Open)
-  const openExerciseSlugs = openExercises.map((x) => x.exerciseSlug)
   const stubContext = createMockActionContext()
   let root: string
 
-  let tmcMock: IMock<Langs>
+  let tmcMock: Langs
   let tmcMockValues: TMCMockValues
-  let userDataMock: IMock<UserData>
-  let workspaceManagerMock: IMock<WorkspaceManager>
+  let userDataMock: UserData
+  let workspaceManagerMock: WorkspaceManager
   let workspaceManagerMockValues: WorkspaceManagerMockValues
 
   const actionContext = (): ActionContext => ({
     ...stubContext,
-    langs: new Ok(tmcMock.object),
-    userData: new Ok(userDataMock.object),
-    workspaceManager: new Ok(workspaceManagerMock.object),
+    langs: new Ok(tmcMock),
+    userData: new Ok(userDataMock),
+    workspaceManager: new Ok(workspaceManagerMock),
   })
 
-  setup(function () {
+  beforeEach(function () {
     root = makeTmpDirs(virtualFileSystem)
     ;[tmcMock, tmcMockValues] = createTMCMock()
     ;[userDataMock] = createUserDataMock()
@@ -63,46 +56,37 @@ suite("moveExtensionDataPath action", function () {
 
   test("should change extension data path", async function () {
     const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
-    expect(result).to.be.equal(Ok.EMPTY)
-    tmcMock.verify(
-      (x) => x.moveProjectsDirectory(It.isValue(emptyFolder(root).fsPath), It.isAny()),
-      Times.once(),
+    expect(result).toBe(Ok.EMPTY)
+    expect(tmcMock.moveProjectsDirectory).toHaveBeenCalledExactlyOnceWith(
+      emptyFolder(root).fsPath,
+      undefined,
     )
   })
 
   test("should append tmcdata to path if target is not empty", async function () {
     const result = await moveExtensionDataPath(actionContext(), nonEmptyFolder(root))
-    expect(result).to.be.equal(Ok.EMPTY)
+    expect(result).toBe(Ok.EMPTY)
     const expected = path.join(nonEmptyFolder(root).fsPath, "tmcdata")
-    tmcMock.verify((x) => x.moveProjectsDirectory(It.isValue(expected), It.isAny()), Times.once())
-  })
-
-  test.skip("should close current workspace's exercises", async function () {
-    await moveExtensionDataPath(actionContext(), emptyFolder(root))
-    workspaceManagerMock.verify(
-      (x) => x.closeCourseExercises("tmc", It.isValue(courseName), It.isValue(openExerciseSlugs)),
-      Times.once(),
-    )
+    expect(tmcMock.moveProjectsDirectory).toHaveBeenCalledExactlyOnceWith(expected, undefined)
   })
 
   test("should set exercises again after moving", async function () {
     await moveExtensionDataPath(actionContext(), emptyFolder(root))
-    // Due to usage of path.sep, exact matching not consistent between platforms
-    workspaceManagerMock.verify((x) => x.setExercises(It.isAny()), Times.once())
+    // path.sep differs across platforms, so args aren't compared exactly.
+    expect(workspaceManagerMock.setExercises).toHaveBeenCalledTimes(1)
   })
 
-  test.skip("should not close anything if no course workspace is active", async function () {
-    workspaceManagerMockValues.activeCourse = undefined
+  // Closing the active course's exercises before the move was removed
+  // deliberately (commit d39605f) as unnecessary on current VS Code, so the
+  // move must not close anything even when a course workspace is active.
+  test("should not close exercises before moving", async function () {
     await moveExtensionDataPath(actionContext(), emptyFolder(root))
-    workspaceManagerMock.verify(
-      (x) => x.closeCourseExercises("tmc", It.isValue(courseName), It.isValue(openExerciseSlugs)),
-      Times.never(),
-    )
+    expect(workspaceManagerMock.closeCourseExercises).not.toHaveBeenCalled()
   })
 
   test("should result in error if TMC operation fails", async function () {
     tmcMockValues.moveProjectsDirectory = Err(new Error())
     const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
-    expect(result.val).to.be.instanceOf(Error)
+    expect(result.val).toBeInstanceOf(Error)
   })
 })

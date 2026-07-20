@@ -61,7 +61,11 @@ export async function vscodeapi_migrateFromV1(
     await settings.update(data.v2.TMC_INSIDER_VERSION_KEY, storageSettings.insiderVersion, true)
     await settings.update(data.v2.TMC_LOG_LEVEL_KEY, storageSettings.logLevel, true)
 
+    // Spread the stored settings through so any fields a newer extension
+    // version persisted are preserved (validateData returns the original
+    // object for exactly this reason), then overlay the known settings.
     return {
+      ...storageSettings,
       downloadOldSubmission: storageSettings.downloadOldSubmission,
       hideMetaFiles: storageSettings.hideMetaFiles,
       updateExercisesAutomatically: storageSettings.updateExercisesAutomatically,
