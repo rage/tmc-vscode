@@ -1,27 +1,26 @@
 {
-    "name": "tmc-vscode-mock-backend",
-    "version": "1.0.0",
-    "description": "Mock backend for tmc-vscode",
-    "main": "index.ts",
-    "scripts": {
-        "setup": "tsx setup.ts",
-        "start": "tsx index.ts",
-        "test": "echo \"Error: no test specified\" && exit 1",
-        "tsc": "tsc"
-    },
-    "author": "",
-    "license": "MIT",
-    "devDependencies": {
-        "@types/archiver": "^6.0.2",
-        "@types/express": "^4.17.21",
-        "@types/ncp": "^2.0.8",
-        "archiver": "^6.0.1",
-        "ncp": "^2.0.0",
-        "tsx": "^4.6.2",
-        "typescript": "^5.3.3"
-    },
-    "dependencies": {
-        "body-parser": "^1.20.2",
-        "express": "^4.18.2"
-    }
+  "name": "tmc-vscode-mock-backend",
+  "version": "1.0.0",
+  "description": "Mock backend for tmc-vscode",
+  "license": "MIT",
+  "author": "",
+  "main": "index.ts",
+  "scripts": {
+    "setup": "tsx setup.ts",
+    "start": "tsx index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "tsc": "tsc"
+  },
+  "dependencies": {
+    "express": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/archiver": "^8.0.0",
+    "@types/express": "^5.0.6",
+    "@types/ncp": "^2.0.8",
+    "archiver": "^8.0.0",
+    "ncp": "^2.0.0",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.3"
+  }
 }

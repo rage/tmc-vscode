@@ -11,8 +11,11 @@ rm -rf ./dist
 rm -rf ./webview-ui/public/build
 
 # run ci and build webview
-npm run ci:all
-npm run webview:build
+pnpm install --frozen-lockfile
+pnpm run webview:build
 
 # create package
-BACKEND=production npx vsce package "${PRERELEASE_ARG}"
+# --no-dependencies: esbuild bundles everything into dist/, so runtime
+# node_modules aren't shipped; also avoids @vscode/vsce choking on pnpm's
+# symlinked node_modules layout.
+BACKEND=production pnpm dlx @vscode/vsce package --no-dependencies "${PRERELEASE_ARG}"

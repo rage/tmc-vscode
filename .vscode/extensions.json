@@ -1,5 +1,10 @@
 {
-    // See http://go.microsoft.com/fwlink/?LinkId=827846
-    // for the documentation about the extensions.json format
-    "recommendations": ["dbaeumer.vscode-eslint", "svelte.svelte-vscode"]
+  // See http://go.microsoft.com/fwlink/?LinkId=827846
+  // for the documentation about the extensions.json format
+  "recommendations": [
+    "oxc.oxc-vscode",
+    "svelte.svelte-vscode",
+    "editorconfig.editorconfig",
+    "TypeScriptTeam.native-preview"
+  ]
 }

@@ -7,28 +7,28 @@
  * versions are same, undefined if a or b doensn't match semantic version.
  */
 function semVerCompare(
-    a: string,
-    b: string,
-    level: "major" | "minor" | "patch",
+  a: string,
+  b: string,
+  level: "major" | "minor" | "patch",
 ): number | undefined {
-    const matcher = /([0-9]+).([0-9]+).([0-9]+)/;
-    const matchA = a.match(matcher);
-    const matchB = b.match(matcher);
-    if (matchA === null || matchB === null) {
-        return undefined;
-    }
+  const matcher = /([0-9]+).([0-9]+).([0-9]+)/
+  const matchA = a.match(matcher)
+  const matchB = b.match(matcher)
+  if (matchA === null || matchB === null) {
+    return undefined
+  }
 
-    const majdiff = parseInt(matchA[1]) - parseInt(matchB[1]);
-    if (majdiff !== 0 || level === "major") {
-        return majdiff;
-    }
+  const majdiff = Math.trunc(Number(matchA[1] ?? "0")) - Math.trunc(Number(matchB[1] ?? "0"))
+  if (majdiff !== 0 || level === "major") {
+    return majdiff
+  }
 
-    const mindiff = parseInt(matchA[2]) - parseInt(matchB[2]);
-    if (mindiff !== 0 || level === "minor") {
-        return mindiff;
-    }
+  const mindiff = Math.trunc(Number(matchA[2] ?? "0")) - Math.trunc(Number(matchB[2] ?? "0"))
+  if (mindiff !== 0 || level === "minor") {
+    return mindiff
+  }
 
-    return parseInt(matchA[3]) - parseInt(matchB[3]);
+  return Math.trunc(Number(matchA[3] ?? "0")) - Math.trunc(Number(matchB[3] ?? "0"))
 }
 
-export { semVerCompare };
+export { semVerCompare }

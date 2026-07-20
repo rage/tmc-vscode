@@ -1,8 +1,8 @@
-import * as vscode from "vscode";
+import * as vscode from "vscode"
 
-import { ActionContext } from "../actions/types";
-import { Logger } from "../utilities";
-import { LocalCourseExercise } from "../shared/shared";
+import type { ActionContext } from "../actions/types"
+import { LocalCourseExercise } from "../shared/shared"
+import { Logger } from "../utilities"
 
 /**
  * Resets an exercise to its initial state. Optionally submits the exercise beforehand.
@@ -11,53 +11,50 @@ import { LocalCourseExercise } from "../shared/shared";
  * @param options Optional parameters that can be used to control the action behavior.
  */
 export async function resetExercise(
-    actionContext: ActionContext,
-    resource: vscode.Uri | undefined,
+  actionContext: ActionContext,
+  resource: vscode.Uri | undefined,
 ): Promise<void> {
-    const { dialog, langs, userData, workspaceManager } = actionContext;
-    Logger.info("Resetting exercise");
-    if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-        Logger.error("Extension was not initialized properly");
-        return;
-    }
+  const { dialog, langs, userData, workspaceManager } = actionContext
+  Logger.info("Resetting exercise")
+  if (!(langs.ok && userData.ok && workspaceManager.ok)) {
+    Logger.error("Extension was not initialized properly")
+    return
+  }
 
-    const exercise = resource
-        ? workspaceManager.val.getExerciseByPath(resource)
-        : workspaceManager.val.activeExercise;
-    if (!exercise) {
-        dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
-        return;
-    }
+  const exercise = resource
+    ? workspaceManager.val.getExerciseByPath(resource)
+    : workspaceManager.val.activeExercise
+  if (!exercise) {
+    dialog.errorNotification("Currently open editor is not part of a TMC exercise.")
+    return
+  }
 
-    const exerciseDetails = userData.val.getExerciseByName(
-        exercise.courseSlug,
-        exercise.exerciseSlug,
-    );
-    if (!exerciseDetails) {
-        dialog.errorNotification(`Missing exercise data for ${exercise.exerciseSlug}.`);
-        return;
-    }
+  const exerciseDetails = userData.val.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
+  if (!exerciseDetails) {
+    dialog.errorNotification(`Missing exercise data for ${exercise.exerciseSlug}.`)
+    return
+  }
 
-    const submitFirst = await dialog.confirmation(
-        "Do you want to save the current state of the exercise by submitting it to TMC Server?",
-    );
-    if (submitFirst === undefined) {
-        Logger.debug("Answer for submitting first not provided, returning early.");
-        return;
-    }
+  const submitFirst = await dialog.confirmation(
+    "Do you want to save the current state of the exercise by submitting it to TMC Server?",
+  )
+  if (submitFirst === undefined) {
+    Logger.debug("Answer for submitting first not provided, returning early.")
+    return
+  }
 
-    const editor = vscode.window.activeTextEditor;
-    const document = editor?.document.uri;
+  const editor = vscode.window.activeTextEditor
+  const document = editor?.document.uri
 
-    const id = LocalCourseExercise.getId(exerciseDetails);
-    const resetResult = await langs.val.resetExercise(id, exercise.uri.fsPath, submitFirst);
-    if (resetResult.err) {
-        dialog.errorNotification("Failed to reset exercise.", resetResult.val);
-        return;
-    }
+  const id = LocalCourseExercise.getId(exerciseDetails)
+  const resetResult = await langs.val.resetExercise(id, exercise.uri.fsPath, submitFirst)
+  if (resetResult.err) {
+    dialog.errorNotification("Failed to reset exercise.", resetResult.val)
+    return
+  }
 
-    if (editor && document) {
-        Logger.debug(`Reopening original file "${document.fsPath}"`);
-        await vscode.commands.executeCommand("workbench.action.files.revert", document);
-    }
+  if (editor && document) {
+    Logger.debug(`Reopening original file "${document.fsPath}"`)
+    await vscode.commands.executeCommand("workbench.action.files.revert", document)
+  }
 }

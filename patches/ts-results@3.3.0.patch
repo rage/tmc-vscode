@@ -1,0 +1,2304 @@
+diff --git a/esm/index.js b/esm/index.js
+index 5b8900db2c625fe1973490b8c6c6d077fa44e8b5..882b19b7cd57838cd9bbd82a85b740add9286e60 100644
+--- a/esm/index.js
++++ b/esm/index.js
+@@ -1,3 +1,27 @@
+-export * from './result';
+-export * from './option';
+-//# sourceMappingURL=index.js.map
+\ No newline at end of file
++"use strict";
++
++Object.defineProperty(exports, "__esModule", {
++  value: true
++});
++var _result = require("./result");
++Object.keys(_result).forEach(function (key) {
++  if (key === "default" || key === "__esModule") return;
++  if (key in exports && exports[key] === _result[key]) return;
++  Object.defineProperty(exports, key, {
++    enumerable: true,
++    get: function () {
++      return _result[key];
++    }
++  });
++});
++var _option = require("./option");
++Object.keys(_option).forEach(function (key) {
++  if (key === "default" || key === "__esModule") return;
++  if (key in exports && exports[key] === _option[key]) return;
++  Object.defineProperty(exports, key, {
++    enumerable: true,
++    get: function () {
++      return _option[key];
++    }
++  });
++});
+\ No newline at end of file
+diff --git a/esm/option.js b/esm/option.js
+index c1cb8ec52e1726caae055c5c1637eb5bc6452caa..8af684c899fbb261570854ab063b0659ab247f66 100644
+--- a/esm/option.js
++++ b/esm/option.js
+@@ -1,159 +1,166 @@
+-import { toString } from './utils';
+-import { Ok, Err } from './result';
++"use strict";
++
++Object.defineProperty(exports, "__esModule", {
++  value: true
++});
++exports.Some = exports.Option = exports.None = void 0;
++var _utils = require("./utils");
++var _result = require("./result");
+ /**
+  * Contains the None value
+  */
+-var NoneImpl = /** @class */ (function () {
+-    function NoneImpl() {
+-        this.some = false;
+-        this.none = true;
+-    }
+-    NoneImpl.prototype[Symbol.iterator] = function () {
++var NoneImpl = /** @class */function () {
++  function NoneImpl() {
++    this.some = false;
++    this.none = true;
++  }
++  NoneImpl.prototype[Symbol.iterator] = function () {
++    return {
++      next: function () {
+         return {
+-            next: function () {
+-                return { done: true, value: undefined };
+-            },
++          done: true,
++          value: undefined
+         };
+-    };
+-    NoneImpl.prototype.unwrapOr = function (val) {
+-        return val;
+-    };
+-    NoneImpl.prototype.expect = function (msg) {
+-        throw new Error("" + msg);
+-    };
+-    NoneImpl.prototype.unwrap = function () {
+-        throw new Error("Tried to unwrap None");
+-    };
+-    NoneImpl.prototype.map = function (_mapper) {
+-        return this;
+-    };
+-    NoneImpl.prototype.andThen = function (op) {
+-        return this;
+-    };
+-    NoneImpl.prototype.toResult = function (error) {
+-        return Err(error);
+-    };
+-    NoneImpl.prototype.toString = function () {
+-        return 'None';
+-    };
+-    return NoneImpl;
+-}());
++      }
++    };
++  };
++  NoneImpl.prototype.unwrapOr = function (val) {
++    return val;
++  };
++  NoneImpl.prototype.expect = function (msg) {
++    throw new Error("" + msg);
++  };
++  NoneImpl.prototype.unwrap = function () {
++    throw new Error("Tried to unwrap None");
++  };
++  NoneImpl.prototype.map = function (_mapper) {
++    return this;
++  };
++  NoneImpl.prototype.andThen = function (op) {
++    return this;
++  };
++  NoneImpl.prototype.toResult = function (error) {
++    return (0, _result.Err)(error);
++  };
++  NoneImpl.prototype.toString = function () {
++    return 'None';
++  };
++  return NoneImpl;
++}();
+ // Export None as a singleton, then freeze it so it can't be modified
+-export var None = new NoneImpl();
++var None = exports.None = new NoneImpl();
+ Object.freeze(None);
+ /**
+  * Contains the success value
+  */
+-var SomeImpl = /** @class */ (function () {
+-    function SomeImpl(val) {
+-        if (!(this instanceof SomeImpl)) {
+-            return new SomeImpl(val);
+-        }
+-        this.some = true;
+-        this.none = false;
+-        this.val = val;
++var SomeImpl = /** @class */function () {
++  function SomeImpl(val) {
++    if (!(this instanceof SomeImpl)) {
++      return new SomeImpl(val);
+     }
+-    /**
+-     * Helper function if you know you have an Some<T> and T is iterable
+-     */
+-    SomeImpl.prototype[Symbol.iterator] = function () {
+-        var obj = Object(this.val);
+-        return Symbol.iterator in obj
+-            ? obj[Symbol.iterator]()
+-            : {
+-                next: function () {
+-                    return { done: true, value: undefined };
+-                },
+-            };
+-    };
+-    SomeImpl.prototype.unwrapOr = function (_val) {
+-        return this.val;
+-    };
+-    SomeImpl.prototype.expect = function (_msg) {
+-        return this.val;
+-    };
+-    SomeImpl.prototype.unwrap = function () {
+-        return this.val;
+-    };
+-    SomeImpl.prototype.map = function (mapper) {
+-        return Some(mapper(this.val));
+-    };
+-    SomeImpl.prototype.andThen = function (mapper) {
+-        return mapper(this.val);
+-    };
+-    SomeImpl.prototype.toResult = function (error) {
+-        return Ok(this.val);
+-    };
+-    /**
+-     * Returns the contained `Some` value, but never throws.
+-     * Unlike `unwrap()`, this method doesn't throw and is only callable on an Some<T>
+-     *
+-     * Therefore, it can be used instead of `unwrap()` as a maintainability safeguard
+-     * that will fail to compile if the type of the Option is later changed to a None that can actually occur.
+-     *
+-     * (this is the `into_Some()` in rust)
+-     */
+-    SomeImpl.prototype.safeUnwrap = function () {
+-        return this.val;
+-    };
+-    SomeImpl.prototype.toString = function () {
+-        return "Some(" + toString(this.val) + ")";
+-    };
+-    SomeImpl.EMPTY = new SomeImpl(undefined);
+-    return SomeImpl;
+-}());
++    this.some = true;
++    this.none = false;
++    this.val = val;
++  }
++  /**
++   * Helper function if you know you have an Some<T> and T is iterable
++   */
++  SomeImpl.prototype[Symbol.iterator] = function () {
++    var obj = Object(this.val);
++    return Symbol.iterator in obj ? obj[Symbol.iterator]() : {
++      next: function () {
++        return {
++          done: true,
++          value: undefined
++        };
++      }
++    };
++  };
++  SomeImpl.prototype.unwrapOr = function (_val) {
++    return this.val;
++  };
++  SomeImpl.prototype.expect = function (_msg) {
++    return this.val;
++  };
++  SomeImpl.prototype.unwrap = function () {
++    return this.val;
++  };
++  SomeImpl.prototype.map = function (mapper) {
++    return Some(mapper(this.val));
++  };
++  SomeImpl.prototype.andThen = function (mapper) {
++    return mapper(this.val);
++  };
++  SomeImpl.prototype.toResult = function (error) {
++    return (0, _result.Ok)(this.val);
++  };
++  /**
++   * Returns the contained `Some` value, but never throws.
++   * Unlike `unwrap()`, this method doesn't throw and is only callable on an Some<T>
++   *
++   * Therefore, it can be used instead of `unwrap()` as a maintainability safeguard
++   * that will fail to compile if the type of the Option is later changed to a None that can actually occur.
++   *
++   * (this is the `into_Some()` in rust)
++   */
++  SomeImpl.prototype.safeUnwrap = function () {
++    return this.val;
++  };
++  SomeImpl.prototype.toString = function () {
++    return "Some(" + (0, _utils.toString)(this.val) + ")";
++  };
++  SomeImpl.EMPTY = new SomeImpl(undefined);
++  return SomeImpl;
++}();
+ // This allows Some to be callable - possible because of the es5 compilation target
+-export var Some = SomeImpl;
+-export var Option;
++var Some = exports.Some = SomeImpl;
++var Option;
+ (function (Option) {
+-    /**
+-     * Parse a set of `Option`s, returning an array of all `Some` values.
+-     * Short circuits with the first `None` found, if any
+-     */
+-    function all() {
+-        var options = [];
+-        for (var _i = 0; _i < arguments.length; _i++) {
+-            options[_i] = arguments[_i];
+-        }
+-        var someOption = [];
+-        for (var _a = 0, options_1 = options; _a < options_1.length; _a++) {
+-            var option = options_1[_a];
+-            if (option.some) {
+-                someOption.push(option.val);
+-            }
+-            else {
+-                return option;
+-            }
+-        }
+-        return Some(someOption);
++  /**
++   * Parse a set of `Option`s, returning an array of all `Some` values.
++   * Short circuits with the first `None` found, if any
++   */
++  function all() {
++    var options = [];
++    for (var _i = 0; _i < arguments.length; _i++) {
++      options[_i] = arguments[_i];
++    }
++    var someOption = [];
++    for (var _a = 0, options_1 = options; _a < options_1.length; _a++) {
++      var option = options_1[_a];
++      if (option.some) {
++        someOption.push(option.val);
++      } else {
++        return option;
++      }
+     }
+-    Option.all = all;
+-    /**
+-     * Parse a set of `Option`s, short-circuits when an input value is `Some`.
+-     * If no `Some` is found, returns `None`.
+-     */
+-    function any() {
+-        var options = [];
+-        for (var _i = 0; _i < arguments.length; _i++) {
+-            options[_i] = arguments[_i];
+-        }
+-        // short-circuits
+-        for (var _a = 0, options_2 = options; _a < options_2.length; _a++) {
+-            var option = options_2[_a];
+-            if (option.some) {
+-                return option;
+-            }
+-            else {
+-                return option;
+-            }
+-        }
+-        // it must be None
+-        return None;
++    return Some(someOption);
++  }
++  Option.all = all;
++  /**
++   * Parse a set of `Option`s, short-circuits when an input value is `Some`.
++   * If no `Some` is found, returns `None`.
++   */
++  function any() {
++    var options = [];
++    for (var _i = 0; _i < arguments.length; _i++) {
++      options[_i] = arguments[_i];
+     }
+-    Option.any = any;
+-    function isOption(value) {
+-        return value instanceof Some || value === None;
++    // short-circuits
++    for (var _a = 0, options_2 = options; _a < options_2.length; _a++) {
++      var option = options_2[_a];
++      if (option.some) {
++        return option;
++      } else {
++        return option;
++      }
+     }
+-    Option.isOption = isOption;
+-})(Option || (Option = {}));
+-//# sourceMappingURL=option.js.map
+\ No newline at end of file
++    // it must be None
++    return None;
++  }
++  Option.any = any;
++  function isOption(value) {
++    return value instanceof Some || value === None;
++  }
++  Option.isOption = isOption;
++})(Option || (exports.Option = Option = {}));
+\ No newline at end of file
+diff --git a/esm/result.js b/esm/result.js
+index 5a79d2a74d11d3a28771ab077fedb03adcac5cc2..4220aa5547c5d38370e51bff96b725496bc17166 100644
+--- a/esm/result.js
++++ b/esm/result.js
+@@ -1,227 +1,232 @@
+-import { toString } from './utils';
+-import { None, Some } from './option';
++"use strict";
++
++Object.defineProperty(exports, "__esModule", {
++  value: true
++});
++exports.Result = exports.OkImpl = exports.Ok = exports.ErrImpl = exports.Err = void 0;
++var _utils = require("./utils");
++var _option = require("./option");
+ /**
+  * Contains the error value
+  */
+-var ErrImpl = /** @class */ (function () {
+-    function ErrImpl(val) {
+-        if (!(this instanceof ErrImpl)) {
+-            return new ErrImpl(val);
+-        }
+-        this.ok = false;
+-        this.err = true;
+-        this.val = val;
+-        var stackLines = new Error().stack.split('\n').slice(2);
+-        if (stackLines && stackLines.length > 0 && stackLines[0].includes('ErrImpl')) {
+-            stackLines.shift();
+-        }
+-        this._stack = stackLines.join('\n');
++var ErrImpl = exports.ErrImpl = /** @class */function () {
++  function ErrImpl(val) {
++    if (!(this instanceof ErrImpl)) {
++      return new ErrImpl(val);
+     }
+-    ErrImpl.prototype[Symbol.iterator] = function () {
++    this.ok = false;
++    this.err = true;
++    this.val = val;
++    var stackLines = new Error().stack.split('\n').slice(2);
++    if (stackLines && stackLines.length > 0 && stackLines[0].includes('ErrImpl')) {
++      stackLines.shift();
++    }
++    this._stack = stackLines.join('\n');
++  }
++  ErrImpl.prototype[Symbol.iterator] = function () {
++    return {
++      next: function () {
+         return {
+-            next: function () {
+-                return { done: true, value: undefined };
+-            },
++          done: true,
++          value: undefined
+         };
+-    };
+-    /**
+-     * @deprecated in favor of unwrapOr
+-     * @see unwrapOr
+-     */
+-    ErrImpl.prototype.else = function (val) {
+-        return val;
+-    };
+-    ErrImpl.prototype.unwrapOr = function (val) {
+-        return val;
+-    };
+-    ErrImpl.prototype.expect = function (msg) {
+-        throw new Error(msg + " - Error: " + toString(this.val) + "\n" + this._stack);
+-    };
+-    ErrImpl.prototype.unwrap = function () {
+-        throw new Error("Tried to unwrap Error: " + toString(this.val) + "\n" + this._stack);
+-    };
+-    ErrImpl.prototype.map = function (_mapper) {
+-        return this;
+-    };
+-    ErrImpl.prototype.andThen = function (op) {
+-        return this;
+-    };
+-    ErrImpl.prototype.mapErr = function (mapper) {
+-        return new Err(mapper(this.val));
+-    };
+-    ErrImpl.prototype.toOption = function () {
+-        return None;
+-    };
+-    ErrImpl.prototype.toString = function () {
+-        return "Err(" + toString(this.val) + ")";
+-    };
+-    Object.defineProperty(ErrImpl.prototype, "stack", {
+-        get: function () {
+-            return this + "\n" + this._stack;
+-        },
+-        enumerable: false,
+-        configurable: true
+-    });
+-    /** An empty Err */
+-    ErrImpl.EMPTY = new ErrImpl(undefined);
+-    return ErrImpl;
+-}());
+-export { ErrImpl };
++      }
++    };
++  };
++  /**
++   * @deprecated in favor of unwrapOr
++   * @see unwrapOr
++   */
++  ErrImpl.prototype.else = function (val) {
++    return val;
++  };
++  ErrImpl.prototype.unwrapOr = function (val) {
++    return val;
++  };
++  ErrImpl.prototype.expect = function (msg) {
++    throw new Error(msg + " - Error: " + (0, _utils.toString)(this.val) + "\n" + this._stack);
++  };
++  ErrImpl.prototype.unwrap = function () {
++    throw new Error("Tried to unwrap Error: " + (0, _utils.toString)(this.val) + "\n" + this._stack);
++  };
++  ErrImpl.prototype.map = function (_mapper) {
++    return this;
++  };
++  ErrImpl.prototype.andThen = function (op) {
++    return this;
++  };
++  ErrImpl.prototype.mapErr = function (mapper) {
++    return new Err(mapper(this.val));
++  };
++  ErrImpl.prototype.toOption = function () {
++    return _option.None;
++  };
++  ErrImpl.prototype.toString = function () {
++    return "Err(" + (0, _utils.toString)(this.val) + ")";
++  };
++  Object.defineProperty(ErrImpl.prototype, "stack", {
++    get: function () {
++      return this + "\n" + this._stack;
++    },
++    enumerable: false,
++    configurable: true
++  });
++  /** An empty Err */
++  ErrImpl.EMPTY = new ErrImpl(undefined);
++  return ErrImpl;
++}();
+ // This allows Err to be callable - possible because of the es5 compilation target
+-export var Err = ErrImpl;
++var Err = exports.Err = ErrImpl;
+ /**
+  * Contains the success value
+  */
+-var OkImpl = /** @class */ (function () {
+-    function OkImpl(val) {
+-        if (!(this instanceof OkImpl)) {
+-            return new OkImpl(val);
+-        }
+-        this.ok = true;
+-        this.err = false;
+-        this.val = val;
++var OkImpl = exports.OkImpl = /** @class */function () {
++  function OkImpl(val) {
++    if (!(this instanceof OkImpl)) {
++      return new OkImpl(val);
+     }
+-    /**
+-     * Helper function if you know you have an Ok<T> and T is iterable
+-     */
+-    OkImpl.prototype[Symbol.iterator] = function () {
+-        var obj = Object(this.val);
+-        return Symbol.iterator in obj
+-            ? obj[Symbol.iterator]()
+-            : {
+-                next: function () {
+-                    return { done: true, value: undefined };
+-                },
+-            };
+-    };
+-    /**
+-     * @see unwrapOr
+-     * @deprecated in favor of unwrapOr
+-     */
+-    OkImpl.prototype.else = function (_val) {
+-        return this.val;
+-    };
+-    OkImpl.prototype.unwrapOr = function (_val) {
+-        return this.val;
+-    };
+-    OkImpl.prototype.expect = function (_msg) {
+-        return this.val;
+-    };
+-    OkImpl.prototype.unwrap = function () {
+-        return this.val;
+-    };
+-    OkImpl.prototype.map = function (mapper) {
+-        return new Ok(mapper(this.val));
+-    };
+-    OkImpl.prototype.andThen = function (mapper) {
+-        return mapper(this.val);
+-    };
+-    OkImpl.prototype.mapErr = function (_mapper) {
+-        return this;
+-    };
+-    OkImpl.prototype.toOption = function () {
+-        return Some(this.val);
+-    };
+-    /**
+-     * Returns the contained `Ok` value, but never throws.
+-     * Unlike `unwrap()`, this method doesn't throw and is only callable on an Ok<T>
+-     *
+-     * Therefore, it can be used instead of `unwrap()` as a maintainability safeguard
+-     * that will fail to compile if the error type of the Result is later changed to an error that can actually occur.
+-     *
+-     * (this is the `into_ok()` in rust)
+-     */
+-    OkImpl.prototype.safeUnwrap = function () {
+-        return this.val;
+-    };
+-    OkImpl.prototype.toString = function () {
+-        return "Ok(" + toString(this.val) + ")";
+-    };
+-    OkImpl.EMPTY = new OkImpl(undefined);
+-    return OkImpl;
+-}());
+-export { OkImpl };
++    this.ok = true;
++    this.err = false;
++    this.val = val;
++  }
++  /**
++   * Helper function if you know you have an Ok<T> and T is iterable
++   */
++  OkImpl.prototype[Symbol.iterator] = function () {
++    var obj = Object(this.val);
++    return Symbol.iterator in obj ? obj[Symbol.iterator]() : {
++      next: function () {
++        return {
++          done: true,
++          value: undefined
++        };
++      }
++    };
++  };
++  /**
++   * @see unwrapOr
++   * @deprecated in favor of unwrapOr
++   */
++  OkImpl.prototype.else = function (_val) {
++    return this.val;
++  };
++  OkImpl.prototype.unwrapOr = function (_val) {
++    return this.val;
++  };
++  OkImpl.prototype.expect = function (_msg) {
++    return this.val;
++  };
++  OkImpl.prototype.unwrap = function () {
++    return this.val;
++  };
++  OkImpl.prototype.map = function (mapper) {
++    return new Ok(mapper(this.val));
++  };
++  OkImpl.prototype.andThen = function (mapper) {
++    return mapper(this.val);
++  };
++  OkImpl.prototype.mapErr = function (_mapper) {
++    return this;
++  };
++  OkImpl.prototype.toOption = function () {
++    return (0, _option.Some)(this.val);
++  };
++  /**
++   * Returns the contained `Ok` value, but never throws.
++   * Unlike `unwrap()`, this method doesn't throw and is only callable on an Ok<T>
++   *
++   * Therefore, it can be used instead of `unwrap()` as a maintainability safeguard
++   * that will fail to compile if the error type of the Result is later changed to an error that can actually occur.
++   *
++   * (this is the `into_ok()` in rust)
++   */
++  OkImpl.prototype.safeUnwrap = function () {
++    return this.val;
++  };
++  OkImpl.prototype.toString = function () {
++    return "Ok(" + (0, _utils.toString)(this.val) + ")";
++  };
++  OkImpl.EMPTY = new OkImpl(undefined);
++  return OkImpl;
++}();
+ // This allows Ok to be callable - possible because of the es5 compilation target
+-export var Ok = OkImpl;
+-export var Result;
++var Ok = exports.Ok = OkImpl;
++var Result;
+ (function (Result) {
+-    /**
+-     * Parse a set of `Result`s, returning an array of all `Ok` values.
+-     * Short circuits with the first `Err` found, if any
+-     */
+-    function all() {
+-        var results = [];
+-        for (var _i = 0; _i < arguments.length; _i++) {
+-            results[_i] = arguments[_i];
+-        }
+-        var okResult = [];
+-        for (var _a = 0, results_1 = results; _a < results_1.length; _a++) {
+-            var result = results_1[_a];
+-            if (result.ok) {
+-                okResult.push(result.val);
+-            }
+-            else {
+-                return result;
+-            }
+-        }
+-        return new Ok(okResult);
++  /**
++   * Parse a set of `Result`s, returning an array of all `Ok` values.
++   * Short circuits with the first `Err` found, if any
++   */
++  function all() {
++    var results = [];
++    for (var _i = 0; _i < arguments.length; _i++) {
++      results[_i] = arguments[_i];
++    }
++    var okResult = [];
++    for (var _a = 0, results_1 = results; _a < results_1.length; _a++) {
++      var result = results_1[_a];
++      if (result.ok) {
++        okResult.push(result.val);
++      } else {
++        return result;
++      }
+     }
+-    Result.all = all;
+-    /**
+-     * Parse a set of `Result`s, short-circuits when an input value is `Ok`.
+-     * If no `Ok` is found, returns an `Err` containing the collected error values
+-     */
+-    function any() {
+-        var results = [];
+-        for (var _i = 0; _i < arguments.length; _i++) {
+-            results[_i] = arguments[_i];
+-        }
+-        var errResult = [];
+-        // short-circuits
+-        for (var _a = 0, results_2 = results; _a < results_2.length; _a++) {
+-            var result = results_2[_a];
+-            if (result.ok) {
+-                return result;
+-            }
+-            else {
+-                errResult.push(result.val);
+-            }
+-        }
+-        // it must be a Err
+-        return new Err(errResult);
++    return new Ok(okResult);
++  }
++  Result.all = all;
++  /**
++   * Parse a set of `Result`s, short-circuits when an input value is `Ok`.
++   * If no `Ok` is found, returns an `Err` containing the collected error values
++   */
++  function any() {
++    var results = [];
++    for (var _i = 0; _i < arguments.length; _i++) {
++      results[_i] = arguments[_i];
+     }
+-    Result.any = any;
+-    /**
+-     * Wrap an operation that may throw an Error (`try-catch` style) into checked exception style
+-     * @param op The operation function
+-     */
+-    function wrap(op) {
+-        try {
+-            return new Ok(op());
+-        }
+-        catch (e) {
+-            return new Err(e);
+-        }
++    var errResult = [];
++    // short-circuits
++    for (var _a = 0, results_2 = results; _a < results_2.length; _a++) {
++      var result = results_2[_a];
++      if (result.ok) {
++        return result;
++      } else {
++        errResult.push(result.val);
++      }
+     }
+-    Result.wrap = wrap;
+-    /**
+-     * Wrap an async operation that may throw an Error (`try-catch` style) into checked exception style
+-     * @param op The operation function
+-     */
+-    function wrapAsync(op) {
+-        try {
+-            return op()
+-                .then(function (val) { return new Ok(val); })
+-                .catch(function (e) { return new Err(e); });
+-        }
+-        catch (e) {
+-            return Promise.resolve(new Err(e));
+-        }
++    // it must be a Err
++    return new Err(errResult);
++  }
++  Result.any = any;
++  /**
++   * Wrap an operation that may throw an Error (`try-catch` style) into checked exception style
++   * @param op The operation function
++   */
++  function wrap(op) {
++    try {
++      return new Ok(op());
++    } catch (e) {
++      return new Err(e);
+     }
+-    Result.wrapAsync = wrapAsync;
+-    function isResult(val) {
+-        return val instanceof Err || val instanceof Ok;
++  }
++  Result.wrap = wrap;
++  /**
++   * Wrap an async operation that may throw an Error (`try-catch` style) into checked exception style
++   * @param op The operation function
++   */
++  function wrapAsync(op) {
++    try {
++      return op().then(function (val) {
++        return new Ok(val);
++      }).catch(function (e) {
++        return new Err(e);
++      });
++    } catch (e) {
++      return Promise.resolve(new Err(e));
+     }
+-    Result.isResult = isResult;
+-})(Result || (Result = {}));
+-//# sourceMappingURL=result.js.map
+\ No newline at end of file
++  }
++  Result.wrapAsync = wrapAsync;
++  function isResult(val) {
++    return val instanceof Err || val instanceof Ok;
++  }
++  Result.isResult = isResult;
++})(Result || (exports.Result = Result = {}));
+\ No newline at end of file
+diff --git a/esm/rxjs-operators/index.js b/esm/rxjs-operators/index.js
+index 03893ab9b9ceef5feddd07e2a19a772d9ded8765..b7ef8ae72f15fe4f550776964c7933ad27472575 100644
+--- a/esm/rxjs-operators/index.js
++++ b/esm/rxjs-operators/index.js
+@@ -1,114 +1,144 @@
+-import { of } from 'rxjs';
+-import { filter, map, mergeMap, switchMap, tap } from 'rxjs/operators';
+-import { Ok, Result } from '../index';
+-export function resultMap(mapper) {
+-    return function (source) {
+-        return source.pipe(map(function (result) { return result.map(mapper); }));
+-    };
++"use strict";
++
++Object.defineProperty(exports, "__esModule", {
++  value: true
++});
++exports.elseMap = elseMap;
++exports.elseMapTo = elseMapTo;
++exports.filterResultErr = filterResultErr;
++exports.filterResultOk = filterResultOk;
++exports.resultMap = resultMap;
++exports.resultMapErr = resultMapErr;
++exports.resultMapErrTo = resultMapErrTo;
++exports.resultMapTo = resultMapTo;
++exports.resultMergeMap = resultMergeMap;
++exports.resultSwitchMap = resultSwitchMap;
++exports.tapResultErr = tapResultErr;
++exports.tapResultOk = tapResultOk;
++var _rxjs = require("rxjs");
++var _operators = require("rxjs/operators");
++var _index = require("../index");
++function resultMap(mapper) {
++  return function (source) {
++    return source.pipe((0, _operators.map)(function (result) {
++      return result.map(mapper);
++    }));
++  };
+ }
+-export function resultMapErr(mapper) {
+-    return function (source) {
+-        return source.pipe(map(function (result) { return result.mapErr(mapper); }));
+-    };
++function resultMapErr(mapper) {
++  return function (source) {
++    return source.pipe((0, _operators.map)(function (result) {
++      return result.mapErr(mapper);
++    }));
++  };
+ }
+-export function resultMapTo(value) {
+-    return function (source) {
+-        return source.pipe(map(function (result) { return result.map(function () { return value; }); }));
+-    };
++function resultMapTo(value) {
++  return function (source) {
++    return source.pipe((0, _operators.map)(function (result) {
++      return result.map(function () {
++        return value;
++      });
++    }));
++  };
+ }
+-export function resultMapErrTo(value) {
+-    return function (source) {
+-        return source.pipe(map(function (result) { return result.mapErr(function () { return value; }); }));
+-    };
++function resultMapErrTo(value) {
++  return function (source) {
++    return source.pipe((0, _operators.map)(function (result) {
++      return result.mapErr(function () {
++        return value;
++      });
++    }));
++  };
+ }
+-export function elseMap(mapper) {
+-    return function (source) {
+-        return source.pipe(map(function (result) {
+-            if (result.err) {
+-                return mapper(result.val);
+-            }
+-            else {
+-                return result.val;
+-            }
+-        }));
+-    };
++function elseMap(mapper) {
++  return function (source) {
++    return source.pipe((0, _operators.map)(function (result) {
++      if (result.err) {
++        return mapper(result.val);
++      } else {
++        return result.val;
++      }
++    }));
++  };
+ }
+-export function elseMapTo(value) {
+-    return function (source) {
+-        return source.pipe(map(function (result) {
+-            if (result.err) {
+-                return value;
+-            }
+-            else {
+-                return result.val;
+-            }
+-        }));
+-    };
++function elseMapTo(value) {
++  return function (source) {
++    return source.pipe((0, _operators.map)(function (result) {
++      if (result.err) {
++        return value;
++      } else {
++        return result.val;
++      }
++    }));
++  };
+ }
+-export function resultSwitchMap(mapper) {
+-    return function (source) {
+-        return source.pipe(switchMap(function (result) {
+-            if (result.ok) {
+-                return mapper(result.val);
+-            }
+-            else {
+-                return of(result);
+-            }
+-        }), map(function (result) {
+-            if (Result.isResult(result)) {
+-                return result;
+-            }
+-            else {
+-                return new Ok(result);
+-            }
+-        }));
+-    };
++function resultSwitchMap(mapper) {
++  return function (source) {
++    return source.pipe((0, _operators.switchMap)(function (result) {
++      if (result.ok) {
++        return mapper(result.val);
++      } else {
++        return (0, _rxjs.of)(result);
++      }
++    }), (0, _operators.map)(function (result) {
++      if (_index.Result.isResult(result)) {
++        return result;
++      } else {
++        return new _index.Ok(result);
++      }
++    }));
++  };
+ }
+-export function resultMergeMap(mapper) {
+-    return function (source) {
+-        return source.pipe(mergeMap(function (result) {
+-            if (result.ok) {
+-                return mapper(result.val);
+-            }
+-            else {
+-                return of(result);
+-            }
+-        }), map(function (result) {
+-            if (Result.isResult(result)) {
+-                return result;
+-            }
+-            else {
+-                return new Ok(result);
+-            }
+-        }));
+-    };
++function resultMergeMap(mapper) {
++  return function (source) {
++    return source.pipe((0, _operators.mergeMap)(function (result) {
++      if (result.ok) {
++        return mapper(result.val);
++      } else {
++        return (0, _rxjs.of)(result);
++      }
++    }), (0, _operators.map)(function (result) {
++      if (_index.Result.isResult(result)) {
++        return result;
++      } else {
++        return new _index.Ok(result);
++      }
++    }));
++  };
+ }
+-export function filterResultOk() {
+-    return function (source) {
+-        return source.pipe(filter(function (result) { return result.ok; }), map(function (result) { return result.val; }));
+-    };
++function filterResultOk() {
++  return function (source) {
++    return source.pipe((0, _operators.filter)(function (result) {
++      return result.ok;
++    }), (0, _operators.map)(function (result) {
++      return result.val;
++    }));
++  };
+ }
+-export function filterResultErr() {
+-    return function (source) {
+-        return source.pipe(filter(function (result) { return result.err; }), map(function (result) { return result.val; }));
+-    };
++function filterResultErr() {
++  return function (source) {
++    return source.pipe((0, _operators.filter)(function (result) {
++      return result.err;
++    }), (0, _operators.map)(function (result) {
++      return result.val;
++    }));
++  };
+ }
+-export function tapResultErr(tapFn) {
+-    return function (source) {
+-        return source.pipe(tap(function (r) {
+-            if (!r.ok) {
+-                tapFn(r.val);
+-            }
+-        }));
+-    };
++function tapResultErr(tapFn) {
++  return function (source) {
++    return source.pipe((0, _operators.tap)(function (r) {
++      if (!r.ok) {
++        tapFn(r.val);
++      }
++    }));
++  };
+ }
+-export function tapResultOk(tapFn) {
+-    return function (source) {
+-        return source.pipe(tap(function (r) {
+-            if (r.ok) {
+-                tapFn(r.val);
+-            }
+-        }));
+-    };
++function tapResultOk(tapFn) {
++  return function (source) {
++    return source.pipe((0, _operators.tap)(function (r) {
++      if (r.ok) {
++        tapFn(r.val);
++      }
++    }));
++  };
+ }
+\ No newline at end of file
+-//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/esm/utils.js b/esm/utils.js
+index 55687267dfe375b6260dbb5acdd7021ddb99fa8a..c200b0810fd227a7e1274cc197abda698e0283f2 100644
+--- a/esm/utils.js
++++ b/esm/utils.js
+@@ -1,11 +1,15 @@
+-export function toString(val) {
+-    var value = String(val);
+-    if (value === '[object Object]') {
+-        try {
+-            value = JSON.stringify(val);
+-        }
+-        catch (_a) { }
+-    }
+-    return value;
++"use strict";
++
++Object.defineProperty(exports, "__esModule", {
++  value: true
++});
++exports.toString = toString;
++function toString(val) {
++  var value = String(val);
++  if (value === '[object Object]') {
++    try {
++      value = JSON.stringify(val);
++    } catch (_a) {}
++  }
++  return value;
+ }
+\ No newline at end of file
+-//# sourceMappingURL=utils.js.map
+\ No newline at end of file
+diff --git a/index.js b/index.js
+index b65f555f23e89280f859fa036a8c6c15822cd499..a362fb3d1785807533a0f58f087cc1bb52ed10c4 100644
+--- a/index.js
++++ b/index.js
+@@ -1,16 +1,19 @@
++"use strict";
++
+ (function (factory) {
+-    if (typeof module === "object" && typeof module.exports === "object") {
+-        var v = factory(require, exports);
+-        if (v !== undefined) module.exports = v;
+-    }
+-    else if (typeof define === "function" && define.amd) {
+-        define(["require", "exports", "tslib", "./result", "./option"], factory);
+-    }
++  if (typeof module === "object" && typeof module.exports === "object") {
++    var v = factory(require, exports);
++    if (v !== undefined) module.exports = v;
++  } else if (typeof define === "function" && define.amd) {
++    define(["require", "exports", "tslib", "./result", "./option"], factory);
++  }
+ })(function (require, exports) {
+-    "use strict";
+-    Object.defineProperty(exports, "__esModule", { value: true });
+-    var tslib_1 = require("tslib");
+-    tslib_1.__exportStar(require("./result"), exports);
+-    tslib_1.__exportStar(require("./option"), exports);
++  "use strict";
++
++  Object.defineProperty(exports, "__esModule", {
++    value: true
++  });
++  var tslib_1 = require("tslib");
++  tslib_1.__exportStar(require("./result"), exports);
++  tslib_1.__exportStar(require("./option"), exports);
+ });
+\ No newline at end of file
+-//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/option.js b/option.js
+index 7e03bd26a5bbf25d6cc0942b44b8f4021bf1997e..f74cd83cfa3a6e492f33f60b9136a526d24e2c62 100644
+--- a/option.js
++++ b/option.js
+@@ -1,172 +1,177 @@
++"use strict";
++
+ (function (factory) {
+-    if (typeof module === "object" && typeof module.exports === "object") {
+-        var v = factory(require, exports);
+-        if (v !== undefined) module.exports = v;
++  if (typeof module === "object" && typeof module.exports === "object") {
++    var v = factory(require, exports);
++    if (v !== undefined) module.exports = v;
++  } else if (typeof define === "function" && define.amd) {
++    define(["require", "exports", "./utils", "./result"], factory);
++  }
++})(function (require, exports) {
++  "use strict";
++
++  Object.defineProperty(exports, "__esModule", {
++    value: true
++  });
++  exports.Option = exports.Some = exports.None = void 0;
++  var utils_1 = require("./utils");
++  var result_1 = require("./result");
++  /**
++   * Contains the None value
++   */
++  var NoneImpl = /** @class */function () {
++    function NoneImpl() {
++      this.some = false;
++      this.none = true;
+     }
+-    else if (typeof define === "function" && define.amd) {
+-        define(["require", "exports", "./utils", "./result"], factory);
++    NoneImpl.prototype[Symbol.iterator] = function () {
++      return {
++        next: function () {
++          return {
++            done: true,
++            value: undefined
++          };
++        }
++      };
++    };
++    NoneImpl.prototype.unwrapOr = function (val) {
++      return val;
++    };
++    NoneImpl.prototype.expect = function (msg) {
++      throw new Error("" + msg);
++    };
++    NoneImpl.prototype.unwrap = function () {
++      throw new Error("Tried to unwrap None");
++    };
++    NoneImpl.prototype.map = function (_mapper) {
++      return this;
++    };
++    NoneImpl.prototype.andThen = function (op) {
++      return this;
++    };
++    NoneImpl.prototype.toResult = function (error) {
++      return result_1.Err(error);
++    };
++    NoneImpl.prototype.toString = function () {
++      return 'None';
++    };
++    return NoneImpl;
++  }();
++  // Export None as a singleton, then freeze it so it can't be modified
++  exports.None = new NoneImpl();
++  Object.freeze(exports.None);
++  /**
++   * Contains the success value
++   */
++  var SomeImpl = /** @class */function () {
++    function SomeImpl(val) {
++      if (!(this instanceof SomeImpl)) {
++        return new SomeImpl(val);
++      }
++      this.some = true;
++      this.none = false;
++      this.val = val;
+     }
+-})(function (require, exports) {
+-    "use strict";
+-    Object.defineProperty(exports, "__esModule", { value: true });
+-    exports.Option = exports.Some = exports.None = void 0;
+-    var utils_1 = require("./utils");
+-    var result_1 = require("./result");
+     /**
+-     * Contains the None value
++     * Helper function if you know you have an Some<T> and T is iterable
+      */
+-    var NoneImpl = /** @class */ (function () {
+-        function NoneImpl() {
+-            this.some = false;
+-            this.none = true;
++    SomeImpl.prototype[Symbol.iterator] = function () {
++      var obj = Object(this.val);
++      return Symbol.iterator in obj ? obj[Symbol.iterator]() : {
++        next: function () {
++          return {
++            done: true,
++            value: undefined
++          };
+         }
+-        NoneImpl.prototype[Symbol.iterator] = function () {
+-            return {
+-                next: function () {
+-                    return { done: true, value: undefined };
+-                },
+-            };
+-        };
+-        NoneImpl.prototype.unwrapOr = function (val) {
+-            return val;
+-        };
+-        NoneImpl.prototype.expect = function (msg) {
+-            throw new Error("" + msg);
+-        };
+-        NoneImpl.prototype.unwrap = function () {
+-            throw new Error("Tried to unwrap None");
+-        };
+-        NoneImpl.prototype.map = function (_mapper) {
+-            return this;
+-        };
+-        NoneImpl.prototype.andThen = function (op) {
+-            return this;
+-        };
+-        NoneImpl.prototype.toResult = function (error) {
+-            return result_1.Err(error);
+-        };
+-        NoneImpl.prototype.toString = function () {
+-            return 'None';
+-        };
+-        return NoneImpl;
+-    }());
+-    // Export None as a singleton, then freeze it so it can't be modified
+-    exports.None = new NoneImpl();
+-    Object.freeze(exports.None);
++      };
++    };
++    SomeImpl.prototype.unwrapOr = function (_val) {
++      return this.val;
++    };
++    SomeImpl.prototype.expect = function (_msg) {
++      return this.val;
++    };
++    SomeImpl.prototype.unwrap = function () {
++      return this.val;
++    };
++    SomeImpl.prototype.map = function (mapper) {
++      return exports.Some(mapper(this.val));
++    };
++    SomeImpl.prototype.andThen = function (mapper) {
++      return mapper(this.val);
++    };
++    SomeImpl.prototype.toResult = function (error) {
++      return result_1.Ok(this.val);
++    };
+     /**
+-     * Contains the success value
++     * Returns the contained `Some` value, but never throws.
++     * Unlike `unwrap()`, this method doesn't throw and is only callable on an Some<T>
++     *
++     * Therefore, it can be used instead of `unwrap()` as a maintainability safeguard
++     * that will fail to compile if the type of the Option is later changed to a None that can actually occur.
++     *
++     * (this is the `into_Some()` in rust)
+      */
+-    var SomeImpl = /** @class */ (function () {
+-        function SomeImpl(val) {
+-            if (!(this instanceof SomeImpl)) {
+-                return new SomeImpl(val);
+-            }
+-            this.some = true;
+-            this.none = false;
+-            this.val = val;
+-        }
+-        /**
+-         * Helper function if you know you have an Some<T> and T is iterable
+-         */
+-        SomeImpl.prototype[Symbol.iterator] = function () {
+-            var obj = Object(this.val);
+-            return Symbol.iterator in obj
+-                ? obj[Symbol.iterator]()
+-                : {
+-                    next: function () {
+-                        return { done: true, value: undefined };
+-                    },
+-                };
+-        };
+-        SomeImpl.prototype.unwrapOr = function (_val) {
+-            return this.val;
+-        };
+-        SomeImpl.prototype.expect = function (_msg) {
+-            return this.val;
+-        };
+-        SomeImpl.prototype.unwrap = function () {
+-            return this.val;
+-        };
+-        SomeImpl.prototype.map = function (mapper) {
+-            return exports.Some(mapper(this.val));
+-        };
+-        SomeImpl.prototype.andThen = function (mapper) {
+-            return mapper(this.val);
+-        };
+-        SomeImpl.prototype.toResult = function (error) {
+-            return result_1.Ok(this.val);
+-        };
+-        /**
+-         * Returns the contained `Some` value, but never throws.
+-         * Unlike `unwrap()`, this method doesn't throw and is only callable on an Some<T>
+-         *
+-         * Therefore, it can be used instead of `unwrap()` as a maintainability safeguard
+-         * that will fail to compile if the type of the Option is later changed to a None that can actually occur.
+-         *
+-         * (this is the `into_Some()` in rust)
+-         */
+-        SomeImpl.prototype.safeUnwrap = function () {
+-            return this.val;
+-        };
+-        SomeImpl.prototype.toString = function () {
+-            return "Some(" + utils_1.toString(this.val) + ")";
+-        };
+-        SomeImpl.EMPTY = new SomeImpl(undefined);
+-        return SomeImpl;
+-    }());
+-    // This allows Some to be callable - possible because of the es5 compilation target
+-    exports.Some = SomeImpl;
+-    var Option;
+-    (function (Option) {
+-        /**
+-         * Parse a set of `Option`s, returning an array of all `Some` values.
+-         * Short circuits with the first `None` found, if any
+-         */
+-        function all() {
+-            var options = [];
+-            for (var _i = 0; _i < arguments.length; _i++) {
+-                options[_i] = arguments[_i];
+-            }
+-            var someOption = [];
+-            for (var _a = 0, options_1 = options; _a < options_1.length; _a++) {
+-                var option = options_1[_a];
+-                if (option.some) {
+-                    someOption.push(option.val);
+-                }
+-                else {
+-                    return option;
+-                }
+-            }
+-            return exports.Some(someOption);
+-        }
+-        Option.all = all;
+-        /**
+-         * Parse a set of `Option`s, short-circuits when an input value is `Some`.
+-         * If no `Some` is found, returns `None`.
+-         */
+-        function any() {
+-            var options = [];
+-            for (var _i = 0; _i < arguments.length; _i++) {
+-                options[_i] = arguments[_i];
+-            }
+-            // short-circuits
+-            for (var _a = 0, options_2 = options; _a < options_2.length; _a++) {
+-                var option = options_2[_a];
+-                if (option.some) {
+-                    return option;
+-                }
+-                else {
+-                    return option;
+-                }
+-            }
+-            // it must be None
+-            return exports.None;
++    SomeImpl.prototype.safeUnwrap = function () {
++      return this.val;
++    };
++    SomeImpl.prototype.toString = function () {
++      return "Some(" + utils_1.toString(this.val) + ")";
++    };
++    SomeImpl.EMPTY = new SomeImpl(undefined);
++    return SomeImpl;
++  }();
++  // This allows Some to be callable - possible because of the es5 compilation target
++  exports.Some = SomeImpl;
++  var Option;
++  (function (Option) {
++    /**
++     * Parse a set of `Option`s, returning an array of all `Some` values.
++     * Short circuits with the first `None` found, if any
++     */
++    function all() {
++      var options = [];
++      for (var _i = 0; _i < arguments.length; _i++) {
++        options[_i] = arguments[_i];
++      }
++      var someOption = [];
++      for (var _a = 0, options_1 = options; _a < options_1.length; _a++) {
++        var option = options_1[_a];
++        if (option.some) {
++          someOption.push(option.val);
++        } else {
++          return option;
+         }
+-        Option.any = any;
+-        function isOption(value) {
+-            return value instanceof exports.Some || value === exports.None;
++      }
++      return exports.Some(someOption);
++    }
++    Option.all = all;
++    /**
++     * Parse a set of `Option`s, short-circuits when an input value is `Some`.
++     * If no `Some` is found, returns `None`.
++     */
++    function any() {
++      var options = [];
++      for (var _i = 0; _i < arguments.length; _i++) {
++        options[_i] = arguments[_i];
++      }
++      // short-circuits
++      for (var _a = 0, options_2 = options; _a < options_2.length; _a++) {
++        var option = options_2[_a];
++        if (option.some) {
++          return option;
++        } else {
++          return option;
+         }
+-        Option.isOption = isOption;
+-    })(Option = exports.Option || (exports.Option = {}));
++      }
++      // it must be None
++      return exports.None;
++    }
++    Option.any = any;
++    function isOption(value) {
++      return value instanceof exports.Some || value === exports.None;
++    }
++    Option.isOption = isOption;
++  })(Option = exports.Option || (exports.Option = {}));
+ });
+\ No newline at end of file
+-//# sourceMappingURL=option.js.map
+\ No newline at end of file
+diff --git a/result.js b/result.js
+index 54a748cf6a44b25b8b1c3c52ec3216d1dd39a0a8..e87df2649f3b885738fb62a34c5fce544ac14291 100644
+--- a/result.js
++++ b/result.js
+@@ -1,240 +1,245 @@
++"use strict";
++
+ (function (factory) {
+-    if (typeof module === "object" && typeof module.exports === "object") {
+-        var v = factory(require, exports);
+-        if (v !== undefined) module.exports = v;
++  if (typeof module === "object" && typeof module.exports === "object") {
++    var v = factory(require, exports);
++    if (v !== undefined) module.exports = v;
++  } else if (typeof define === "function" && define.amd) {
++    define(["require", "exports", "./utils", "./option"], factory);
++  }
++})(function (require, exports) {
++  "use strict";
++
++  Object.defineProperty(exports, "__esModule", {
++    value: true
++  });
++  exports.Result = exports.Ok = exports.OkImpl = exports.Err = exports.ErrImpl = void 0;
++  var utils_1 = require("./utils");
++  var option_1 = require("./option");
++  /**
++   * Contains the error value
++   */
++  var ErrImpl = /** @class */function () {
++    function ErrImpl(val) {
++      if (!(this instanceof ErrImpl)) {
++        return new ErrImpl(val);
++      }
++      this.ok = false;
++      this.err = true;
++      this.val = val;
++      var stackLines = new Error().stack.split('\n').slice(2);
++      if (stackLines && stackLines.length > 0 && stackLines[0].includes('ErrImpl')) {
++        stackLines.shift();
++      }
++      this._stack = stackLines.join('\n');
+     }
+-    else if (typeof define === "function" && define.amd) {
+-        define(["require", "exports", "./utils", "./option"], factory);
++    ErrImpl.prototype[Symbol.iterator] = function () {
++      return {
++        next: function () {
++          return {
++            done: true,
++            value: undefined
++          };
++        }
++      };
++    };
++    /**
++     * @deprecated in favor of unwrapOr
++     * @see unwrapOr
++     */
++    ErrImpl.prototype.else = function (val) {
++      return val;
++    };
++    ErrImpl.prototype.unwrapOr = function (val) {
++      return val;
++    };
++    ErrImpl.prototype.expect = function (msg) {
++      throw new Error(msg + " - Error: " + utils_1.toString(this.val) + "\n" + this._stack);
++    };
++    ErrImpl.prototype.unwrap = function () {
++      throw new Error("Tried to unwrap Error: " + utils_1.toString(this.val) + "\n" + this._stack);
++    };
++    ErrImpl.prototype.map = function (_mapper) {
++      return this;
++    };
++    ErrImpl.prototype.andThen = function (op) {
++      return this;
++    };
++    ErrImpl.prototype.mapErr = function (mapper) {
++      return new exports.Err(mapper(this.val));
++    };
++    ErrImpl.prototype.toOption = function () {
++      return option_1.None;
++    };
++    ErrImpl.prototype.toString = function () {
++      return "Err(" + utils_1.toString(this.val) + ")";
++    };
++    Object.defineProperty(ErrImpl.prototype, "stack", {
++      get: function () {
++        return this + "\n" + this._stack;
++      },
++      enumerable: false,
++      configurable: true
++    });
++    /** An empty Err */
++    ErrImpl.EMPTY = new ErrImpl(undefined);
++    return ErrImpl;
++  }();
++  exports.ErrImpl = ErrImpl;
++  // This allows Err to be callable - possible because of the es5 compilation target
++  exports.Err = ErrImpl;
++  /**
++   * Contains the success value
++   */
++  var OkImpl = /** @class */function () {
++    function OkImpl(val) {
++      if (!(this instanceof OkImpl)) {
++        return new OkImpl(val);
++      }
++      this.ok = true;
++      this.err = false;
++      this.val = val;
+     }
+-})(function (require, exports) {
+-    "use strict";
+-    Object.defineProperty(exports, "__esModule", { value: true });
+-    exports.Result = exports.Ok = exports.OkImpl = exports.Err = exports.ErrImpl = void 0;
+-    var utils_1 = require("./utils");
+-    var option_1 = require("./option");
+     /**
+-     * Contains the error value
++     * Helper function if you know you have an Ok<T> and T is iterable
+      */
+-    var ErrImpl = /** @class */ (function () {
+-        function ErrImpl(val) {
+-            if (!(this instanceof ErrImpl)) {
+-                return new ErrImpl(val);
+-            }
+-            this.ok = false;
+-            this.err = true;
+-            this.val = val;
+-            var stackLines = new Error().stack.split('\n').slice(2);
+-            if (stackLines && stackLines.length > 0 && stackLines[0].includes('ErrImpl')) {
+-                stackLines.shift();
+-            }
+-            this._stack = stackLines.join('\n');
++    OkImpl.prototype[Symbol.iterator] = function () {
++      var obj = Object(this.val);
++      return Symbol.iterator in obj ? obj[Symbol.iterator]() : {
++        next: function () {
++          return {
++            done: true,
++            value: undefined
++          };
+         }
+-        ErrImpl.prototype[Symbol.iterator] = function () {
+-            return {
+-                next: function () {
+-                    return { done: true, value: undefined };
+-                },
+-            };
+-        };
+-        /**
+-         * @deprecated in favor of unwrapOr
+-         * @see unwrapOr
+-         */
+-        ErrImpl.prototype.else = function (val) {
+-            return val;
+-        };
+-        ErrImpl.prototype.unwrapOr = function (val) {
+-            return val;
+-        };
+-        ErrImpl.prototype.expect = function (msg) {
+-            throw new Error(msg + " - Error: " + utils_1.toString(this.val) + "\n" + this._stack);
+-        };
+-        ErrImpl.prototype.unwrap = function () {
+-            throw new Error("Tried to unwrap Error: " + utils_1.toString(this.val) + "\n" + this._stack);
+-        };
+-        ErrImpl.prototype.map = function (_mapper) {
+-            return this;
+-        };
+-        ErrImpl.prototype.andThen = function (op) {
+-            return this;
+-        };
+-        ErrImpl.prototype.mapErr = function (mapper) {
+-            return new exports.Err(mapper(this.val));
+-        };
+-        ErrImpl.prototype.toOption = function () {
+-            return option_1.None;
+-        };
+-        ErrImpl.prototype.toString = function () {
+-            return "Err(" + utils_1.toString(this.val) + ")";
+-        };
+-        Object.defineProperty(ErrImpl.prototype, "stack", {
+-            get: function () {
+-                return this + "\n" + this._stack;
+-            },
+-            enumerable: false,
+-            configurable: true
+-        });
+-        /** An empty Err */
+-        ErrImpl.EMPTY = new ErrImpl(undefined);
+-        return ErrImpl;
+-    }());
+-    exports.ErrImpl = ErrImpl;
+-    // This allows Err to be callable - possible because of the es5 compilation target
+-    exports.Err = ErrImpl;
++      };
++    };
+     /**
+-     * Contains the success value
++     * @see unwrapOr
++     * @deprecated in favor of unwrapOr
+      */
+-    var OkImpl = /** @class */ (function () {
+-        function OkImpl(val) {
+-            if (!(this instanceof OkImpl)) {
+-                return new OkImpl(val);
+-            }
+-            this.ok = true;
+-            this.err = false;
+-            this.val = val;
+-        }
+-        /**
+-         * Helper function if you know you have an Ok<T> and T is iterable
+-         */
+-        OkImpl.prototype[Symbol.iterator] = function () {
+-            var obj = Object(this.val);
+-            return Symbol.iterator in obj
+-                ? obj[Symbol.iterator]()
+-                : {
+-                    next: function () {
+-                        return { done: true, value: undefined };
+-                    },
+-                };
+-        };
+-        /**
+-         * @see unwrapOr
+-         * @deprecated in favor of unwrapOr
+-         */
+-        OkImpl.prototype.else = function (_val) {
+-            return this.val;
+-        };
+-        OkImpl.prototype.unwrapOr = function (_val) {
+-            return this.val;
+-        };
+-        OkImpl.prototype.expect = function (_msg) {
+-            return this.val;
+-        };
+-        OkImpl.prototype.unwrap = function () {
+-            return this.val;
+-        };
+-        OkImpl.prototype.map = function (mapper) {
+-            return new exports.Ok(mapper(this.val));
+-        };
+-        OkImpl.prototype.andThen = function (mapper) {
+-            return mapper(this.val);
+-        };
+-        OkImpl.prototype.mapErr = function (_mapper) {
+-            return this;
+-        };
+-        OkImpl.prototype.toOption = function () {
+-            return option_1.Some(this.val);
+-        };
+-        /**
+-         * Returns the contained `Ok` value, but never throws.
+-         * Unlike `unwrap()`, this method doesn't throw and is only callable on an Ok<T>
+-         *
+-         * Therefore, it can be used instead of `unwrap()` as a maintainability safeguard
+-         * that will fail to compile if the error type of the Result is later changed to an error that can actually occur.
+-         *
+-         * (this is the `into_ok()` in rust)
+-         */
+-        OkImpl.prototype.safeUnwrap = function () {
+-            return this.val;
+-        };
+-        OkImpl.prototype.toString = function () {
+-            return "Ok(" + utils_1.toString(this.val) + ")";
+-        };
+-        OkImpl.EMPTY = new OkImpl(undefined);
+-        return OkImpl;
+-    }());
+-    exports.OkImpl = OkImpl;
+-    // This allows Ok to be callable - possible because of the es5 compilation target
+-    exports.Ok = OkImpl;
+-    var Result;
+-    (function (Result) {
+-        /**
+-         * Parse a set of `Result`s, returning an array of all `Ok` values.
+-         * Short circuits with the first `Err` found, if any
+-         */
+-        function all() {
+-            var results = [];
+-            for (var _i = 0; _i < arguments.length; _i++) {
+-                results[_i] = arguments[_i];
+-            }
+-            var okResult = [];
+-            for (var _a = 0, results_1 = results; _a < results_1.length; _a++) {
+-                var result = results_1[_a];
+-                if (result.ok) {
+-                    okResult.push(result.val);
+-                }
+-                else {
+-                    return result;
+-                }
+-            }
+-            return new exports.Ok(okResult);
+-        }
+-        Result.all = all;
+-        /**
+-         * Parse a set of `Result`s, short-circuits when an input value is `Ok`.
+-         * If no `Ok` is found, returns an `Err` containing the collected error values
+-         */
+-        function any() {
+-            var results = [];
+-            for (var _i = 0; _i < arguments.length; _i++) {
+-                results[_i] = arguments[_i];
+-            }
+-            var errResult = [];
+-            // short-circuits
+-            for (var _a = 0, results_2 = results; _a < results_2.length; _a++) {
+-                var result = results_2[_a];
+-                if (result.ok) {
+-                    return result;
+-                }
+-                else {
+-                    errResult.push(result.val);
+-                }
+-            }
+-            // it must be a Err
+-            return new exports.Err(errResult);
+-        }
+-        Result.any = any;
+-        /**
+-         * Wrap an operation that may throw an Error (`try-catch` style) into checked exception style
+-         * @param op The operation function
+-         */
+-        function wrap(op) {
+-            try {
+-                return new exports.Ok(op());
+-            }
+-            catch (e) {
+-                return new exports.Err(e);
+-            }
+-        }
+-        Result.wrap = wrap;
+-        /**
+-         * Wrap an async operation that may throw an Error (`try-catch` style) into checked exception style
+-         * @param op The operation function
+-         */
+-        function wrapAsync(op) {
+-            try {
+-                return op()
+-                    .then(function (val) { return new exports.Ok(val); })
+-                    .catch(function (e) { return new exports.Err(e); });
+-            }
+-            catch (e) {
+-                return Promise.resolve(new exports.Err(e));
+-            }
++    OkImpl.prototype.else = function (_val) {
++      return this.val;
++    };
++    OkImpl.prototype.unwrapOr = function (_val) {
++      return this.val;
++    };
++    OkImpl.prototype.expect = function (_msg) {
++      return this.val;
++    };
++    OkImpl.prototype.unwrap = function () {
++      return this.val;
++    };
++    OkImpl.prototype.map = function (mapper) {
++      return new exports.Ok(mapper(this.val));
++    };
++    OkImpl.prototype.andThen = function (mapper) {
++      return mapper(this.val);
++    };
++    OkImpl.prototype.mapErr = function (_mapper) {
++      return this;
++    };
++    OkImpl.prototype.toOption = function () {
++      return option_1.Some(this.val);
++    };
++    /**
++     * Returns the contained `Ok` value, but never throws.
++     * Unlike `unwrap()`, this method doesn't throw and is only callable on an Ok<T>
++     *
++     * Therefore, it can be used instead of `unwrap()` as a maintainability safeguard
++     * that will fail to compile if the error type of the Result is later changed to an error that can actually occur.
++     *
++     * (this is the `into_ok()` in rust)
++     */
++    OkImpl.prototype.safeUnwrap = function () {
++      return this.val;
++    };
++    OkImpl.prototype.toString = function () {
++      return "Ok(" + utils_1.toString(this.val) + ")";
++    };
++    OkImpl.EMPTY = new OkImpl(undefined);
++    return OkImpl;
++  }();
++  exports.OkImpl = OkImpl;
++  // This allows Ok to be callable - possible because of the es5 compilation target
++  exports.Ok = OkImpl;
++  var Result;
++  (function (Result) {
++    /**
++     * Parse a set of `Result`s, returning an array of all `Ok` values.
++     * Short circuits with the first `Err` found, if any
++     */
++    function all() {
++      var results = [];
++      for (var _i = 0; _i < arguments.length; _i++) {
++        results[_i] = arguments[_i];
++      }
++      var okResult = [];
++      for (var _a = 0, results_1 = results; _a < results_1.length; _a++) {
++        var result = results_1[_a];
++        if (result.ok) {
++          okResult.push(result.val);
++        } else {
++          return result;
+         }
+-        Result.wrapAsync = wrapAsync;
+-        function isResult(val) {
+-            return val instanceof exports.Err || val instanceof exports.Ok;
++      }
++      return new exports.Ok(okResult);
++    }
++    Result.all = all;
++    /**
++     * Parse a set of `Result`s, short-circuits when an input value is `Ok`.
++     * If no `Ok` is found, returns an `Err` containing the collected error values
++     */
++    function any() {
++      var results = [];
++      for (var _i = 0; _i < arguments.length; _i++) {
++        results[_i] = arguments[_i];
++      }
++      var errResult = [];
++      // short-circuits
++      for (var _a = 0, results_2 = results; _a < results_2.length; _a++) {
++        var result = results_2[_a];
++        if (result.ok) {
++          return result;
++        } else {
++          errResult.push(result.val);
+         }
+-        Result.isResult = isResult;
+-    })(Result = exports.Result || (exports.Result = {}));
++      }
++      // it must be a Err
++      return new exports.Err(errResult);
++    }
++    Result.any = any;
++    /**
++     * Wrap an operation that may throw an Error (`try-catch` style) into checked exception style
++     * @param op The operation function
++     */
++    function wrap(op) {
++      try {
++        return new exports.Ok(op());
++      } catch (e) {
++        return new exports.Err(e);
++      }
++    }
++    Result.wrap = wrap;
++    /**
++     * Wrap an async operation that may throw an Error (`try-catch` style) into checked exception style
++     * @param op The operation function
++     */
++    function wrapAsync(op) {
++      try {
++        return op().then(function (val) {
++          return new exports.Ok(val);
++        }).catch(function (e) {
++          return new exports.Err(e);
++        });
++      } catch (e) {
++        return Promise.resolve(new exports.Err(e));
++      }
++    }
++    Result.wrapAsync = wrapAsync;
++    function isResult(val) {
++      return val instanceof exports.Err || val instanceof exports.Ok;
++    }
++    Result.isResult = isResult;
++  })(Result = exports.Result || (exports.Result = {}));
+ });
+\ No newline at end of file
+-//# sourceMappingURL=result.js.map
+\ No newline at end of file
+diff --git a/rxjs-operators/index.js b/rxjs-operators/index.js
+index 38300dd473d775aaf18cf96a11dcf5bbe8c28156..2b2f73b713dd5510d13f0edcf1a94c401013c996 100644
+--- a/rxjs-operators/index.js
++++ b/rxjs-operators/index.js
+@@ -1,139 +1,156 @@
++"use strict";
++
+ (function (factory) {
+-    if (typeof module === "object" && typeof module.exports === "object") {
+-        var v = factory(require, exports);
+-        if (v !== undefined) module.exports = v;
+-    }
+-    else if (typeof define === "function" && define.amd) {
+-        define(["require", "exports", "rxjs", "rxjs/operators", "../index"], factory);
+-    }
++  if (typeof module === "object" && typeof module.exports === "object") {
++    var v = factory(require, exports);
++    if (v !== undefined) module.exports = v;
++  } else if (typeof define === "function" && define.amd) {
++    define(["require", "exports", "rxjs", "rxjs/operators", "../index"], factory);
++  }
+ })(function (require, exports) {
+-    "use strict";
+-    Object.defineProperty(exports, "__esModule", { value: true });
+-    exports.tapResultOk = exports.tapResultErr = exports.filterResultErr = exports.filterResultOk = exports.resultMergeMap = exports.resultSwitchMap = exports.elseMapTo = exports.elseMap = exports.resultMapErrTo = exports.resultMapTo = exports.resultMapErr = exports.resultMap = void 0;
+-    var rxjs_1 = require("rxjs");
+-    var operators_1 = require("rxjs/operators");
+-    var index_1 = require("../index");
+-    function resultMap(mapper) {
+-        return function (source) {
+-            return source.pipe(operators_1.map(function (result) { return result.map(mapper); }));
+-        };
+-    }
+-    exports.resultMap = resultMap;
+-    function resultMapErr(mapper) {
+-        return function (source) {
+-            return source.pipe(operators_1.map(function (result) { return result.mapErr(mapper); }));
+-        };
+-    }
+-    exports.resultMapErr = resultMapErr;
+-    function resultMapTo(value) {
+-        return function (source) {
+-            return source.pipe(operators_1.map(function (result) { return result.map(function () { return value; }); }));
+-        };
+-    }
+-    exports.resultMapTo = resultMapTo;
+-    function resultMapErrTo(value) {
+-        return function (source) {
+-            return source.pipe(operators_1.map(function (result) { return result.mapErr(function () { return value; }); }));
+-        };
+-    }
+-    exports.resultMapErrTo = resultMapErrTo;
+-    function elseMap(mapper) {
+-        return function (source) {
+-            return source.pipe(operators_1.map(function (result) {
+-                if (result.err) {
+-                    return mapper(result.val);
+-                }
+-                else {
+-                    return result.val;
+-                }
+-            }));
+-        };
+-    }
+-    exports.elseMap = elseMap;
+-    function elseMapTo(value) {
+-        return function (source) {
+-            return source.pipe(operators_1.map(function (result) {
+-                if (result.err) {
+-                    return value;
+-                }
+-                else {
+-                    return result.val;
+-                }
+-            }));
+-        };
+-    }
+-    exports.elseMapTo = elseMapTo;
+-    function resultSwitchMap(mapper) {
+-        return function (source) {
+-            return source.pipe(operators_1.switchMap(function (result) {
+-                if (result.ok) {
+-                    return mapper(result.val);
+-                }
+-                else {
+-                    return rxjs_1.of(result);
+-                }
+-            }), operators_1.map(function (result) {
+-                if (index_1.Result.isResult(result)) {
+-                    return result;
+-                }
+-                else {
+-                    return new index_1.Ok(result);
+-                }
+-            }));
+-        };
+-    }
+-    exports.resultSwitchMap = resultSwitchMap;
+-    function resultMergeMap(mapper) {
+-        return function (source) {
+-            return source.pipe(operators_1.mergeMap(function (result) {
+-                if (result.ok) {
+-                    return mapper(result.val);
+-                }
+-                else {
+-                    return rxjs_1.of(result);
+-                }
+-            }), operators_1.map(function (result) {
+-                if (index_1.Result.isResult(result)) {
+-                    return result;
+-                }
+-                else {
+-                    return new index_1.Ok(result);
+-                }
+-            }));
+-        };
+-    }
+-    exports.resultMergeMap = resultMergeMap;
+-    function filterResultOk() {
+-        return function (source) {
+-            return source.pipe(operators_1.filter(function (result) { return result.ok; }), operators_1.map(function (result) { return result.val; }));
+-        };
+-    }
+-    exports.filterResultOk = filterResultOk;
+-    function filterResultErr() {
+-        return function (source) {
+-            return source.pipe(operators_1.filter(function (result) { return result.err; }), operators_1.map(function (result) { return result.val; }));
+-        };
+-    }
+-    exports.filterResultErr = filterResultErr;
+-    function tapResultErr(tapFn) {
+-        return function (source) {
+-            return source.pipe(operators_1.tap(function (r) {
+-                if (!r.ok) {
+-                    tapFn(r.val);
+-                }
+-            }));
+-        };
+-    }
+-    exports.tapResultErr = tapResultErr;
+-    function tapResultOk(tapFn) {
+-        return function (source) {
+-            return source.pipe(operators_1.tap(function (r) {
+-                if (r.ok) {
+-                    tapFn(r.val);
+-                }
+-            }));
+-        };
+-    }
+-    exports.tapResultOk = tapResultOk;
++  "use strict";
++
++  Object.defineProperty(exports, "__esModule", {
++    value: true
++  });
++  exports.tapResultOk = exports.tapResultErr = exports.filterResultErr = exports.filterResultOk = exports.resultMergeMap = exports.resultSwitchMap = exports.elseMapTo = exports.elseMap = exports.resultMapErrTo = exports.resultMapTo = exports.resultMapErr = exports.resultMap = void 0;
++  var rxjs_1 = require("rxjs");
++  var operators_1 = require("rxjs/operators");
++  var index_1 = require("../index");
++  function resultMap(mapper) {
++    return function (source) {
++      return source.pipe(operators_1.map(function (result) {
++        return result.map(mapper);
++      }));
++    };
++  }
++  exports.resultMap = resultMap;
++  function resultMapErr(mapper) {
++    return function (source) {
++      return source.pipe(operators_1.map(function (result) {
++        return result.mapErr(mapper);
++      }));
++    };
++  }
++  exports.resultMapErr = resultMapErr;
++  function resultMapTo(value) {
++    return function (source) {
++      return source.pipe(operators_1.map(function (result) {
++        return result.map(function () {
++          return value;
++        });
++      }));
++    };
++  }
++  exports.resultMapTo = resultMapTo;
++  function resultMapErrTo(value) {
++    return function (source) {
++      return source.pipe(operators_1.map(function (result) {
++        return result.mapErr(function () {
++          return value;
++        });
++      }));
++    };
++  }
++  exports.resultMapErrTo = resultMapErrTo;
++  function elseMap(mapper) {
++    return function (source) {
++      return source.pipe(operators_1.map(function (result) {
++        if (result.err) {
++          return mapper(result.val);
++        } else {
++          return result.val;
++        }
++      }));
++    };
++  }
++  exports.elseMap = elseMap;
++  function elseMapTo(value) {
++    return function (source) {
++      return source.pipe(operators_1.map(function (result) {
++        if (result.err) {
++          return value;
++        } else {
++          return result.val;
++        }
++      }));
++    };
++  }
++  exports.elseMapTo = elseMapTo;
++  function resultSwitchMap(mapper) {
++    return function (source) {
++      return source.pipe(operators_1.switchMap(function (result) {
++        if (result.ok) {
++          return mapper(result.val);
++        } else {
++          return rxjs_1.of(result);
++        }
++      }), operators_1.map(function (result) {
++        if (index_1.Result.isResult(result)) {
++          return result;
++        } else {
++          return new index_1.Ok(result);
++        }
++      }));
++    };
++  }
++  exports.resultSwitchMap = resultSwitchMap;
++  function resultMergeMap(mapper) {
++    return function (source) {
++      return source.pipe(operators_1.mergeMap(function (result) {
++        if (result.ok) {
++          return mapper(result.val);
++        } else {
++          return rxjs_1.of(result);
++        }
++      }), operators_1.map(function (result) {
++        if (index_1.Result.isResult(result)) {
++          return result;
++        } else {
++          return new index_1.Ok(result);
++        }
++      }));
++    };
++  }
++  exports.resultMergeMap = resultMergeMap;
++  function filterResultOk() {
++    return function (source) {
++      return source.pipe(operators_1.filter(function (result) {
++        return result.ok;
++      }), operators_1.map(function (result) {
++        return result.val;
++      }));
++    };
++  }
++  exports.filterResultOk = filterResultOk;
++  function filterResultErr() {
++    return function (source) {
++      return source.pipe(operators_1.filter(function (result) {
++        return result.err;
++      }), operators_1.map(function (result) {
++        return result.val;
++      }));
++    };
++  }
++  exports.filterResultErr = filterResultErr;
++  function tapResultErr(tapFn) {
++    return function (source) {
++      return source.pipe(operators_1.tap(function (r) {
++        if (!r.ok) {
++          tapFn(r.val);
++        }
++      }));
++    };
++  }
++  exports.tapResultErr = tapResultErr;
++  function tapResultOk(tapFn) {
++    return function (source) {
++      return source.pipe(operators_1.tap(function (r) {
++        if (r.ok) {
++          tapFn(r.val);
++        }
++      }));
++    };
++  }
++  exports.tapResultOk = tapResultOk;
+ });
+\ No newline at end of file
+-//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/utils.js b/utils.js
+index 62c9c7388bcf49a300d61aa930dd4521958d752c..bb779c4fe2be5ef030b4783ce1c6cad7ee7bc68c 100644
+--- a/utils.js
++++ b/utils.js
+@@ -1,25 +1,27 @@
++"use strict";
++
+ (function (factory) {
+-    if (typeof module === "object" && typeof module.exports === "object") {
+-        var v = factory(require, exports);
+-        if (v !== undefined) module.exports = v;
+-    }
+-    else if (typeof define === "function" && define.amd) {
+-        define(["require", "exports"], factory);
+-    }
++  if (typeof module === "object" && typeof module.exports === "object") {
++    var v = factory(require, exports);
++    if (v !== undefined) module.exports = v;
++  } else if (typeof define === "function" && define.amd) {
++    define(["require", "exports"], factory);
++  }
+ })(function (require, exports) {
+-    "use strict";
+-    Object.defineProperty(exports, "__esModule", { value: true });
+-    exports.toString = void 0;
+-    function toString(val) {
+-        var value = String(val);
+-        if (value === '[object Object]') {
+-            try {
+-                value = JSON.stringify(val);
+-            }
+-            catch (_a) { }
+-        }
+-        return value;
++  "use strict";
++
++  Object.defineProperty(exports, "__esModule", {
++    value: true
++  });
++  exports.toString = void 0;
++  function toString(val) {
++    var value = String(val);
++    if (value === '[object Object]') {
++      try {
++        value = JSON.stringify(val);
++      } catch (_a) {}
+     }
+-    exports.toString = toString;
++    return value;
++  }
++  exports.toString = toString;
+ });
+\ No newline at end of file
+-//# sourceMappingURL=utils.js.map

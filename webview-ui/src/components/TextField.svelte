@@ -1,23 +1,24 @@
 <script lang="ts">
-    export let type: "text" = "text";
-    export let placeholder: string = "";
-    export let value: string = "";
-    export let onChange: (value: string) => void = () => {};
+  interface Props {
+    type?: "text"
+    placeholder?: string
+    value?: string
+    onChange?: (value: string) => void
+  }
 
-    type InputEvent = Event & {
-        currentTarget: EventTarget & HTMLInputElement;
-    };
-    function onChangeWrapper(event: InputEvent) {
-        onChange(event.currentTarget.value);
-    }
+  let { type = "text", placeholder = "", value = "", onChange = () => {} }: Props = $props()
+
+  function onChangeWrapper(event: Event) {
+    const target = event.currentTarget as { value: string } | null
+    onChange(target?.value ?? "")
+  }
 </script>
 
-<vscode-text-field class="input" {type} {placeholder} {value} on:input={onChangeWrapper}>
-    <slot />
-</vscode-text-field>
+<vscode-textfield class="input" {type} {placeholder} {value} oninput={onChangeWrapper}
+></vscode-textfield>
 
 <style>
-    .input {
-        width: 100%;
-    }
+  .input {
+    width: 100%;
+  }
 </style>

@@ -1,0 +1,14 @@
+{
+  // Vitest unit tier (src/test/**). Same strict baseline as the extension
+  // host, but the ambient globals come from vitest (describe/test/expect/vi/
+  // beforeEach/…) rather than mocha, and `vscode` is a mocked module at
+  // runtime (aliased in vitest.unit.config.ts) while still type-checked
+  // against @types/vscode here.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "types": ["node", "vscode", "vitest/globals"],
+    "sourceMap": true
+  },
+  "include": ["src/test/**/*"]
+}

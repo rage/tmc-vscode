@@ -1,42 +1,45 @@
-import * as fs from "fs-extra";
-import * as path from "path";
-import { Err, Result } from "ts-results";
-import * as vscode from "vscode";
+import * as path from "path"
 
-import { InitializationError } from "../errors";
-import { Logger } from "../utilities";
+import * as fs from "fs-extra"
+import type { Result } from "ts-results"
+import { Err } from "ts-results"
+import type * as vscode from "vscode"
 
-import { refreshLocalExercises } from "./refreshLocalExercises";
-import { ActionContext } from "./types";
+import { InitializationError } from "../errors"
+import { Logger } from "../utilities"
+import { refreshLocalExercises } from "./refreshLocalExercises"
+import type { ActionContext } from "./types"
 
 /**
- * Moves physical location of all exercises on disk. Closes active course workspace's exercises for
- * the duration of transfer.
+ * Moves the physical location of all exercises on disk, then refreshes them.
+ *
+ * Exercises are no longer closed before the move: that step was removed
+ * deliberately (commit d39605f) as unnecessary on current VS Code.
  *
  * @param newPath New disk location for exercises.
  */
 export async function moveExtensionDataPath(
-    actionContext: ActionContext,
-    newPath: vscode.Uri,
-    onUpdate?: (value: { percent: number; message?: string }) => void,
+  actionContext: ActionContext,
+  newPath: vscode.Uri,
+  onUpdate?: (value: { percent: number; message?: string }) => void,
 ): Promise<Result<void, Error>> {
-    const { resources, langs } = actionContext;
-    if (!(langs.ok && resources.ok)) {
-        return new Err(new InitializationError("Extension was not initialized properly"));
-    }
-    Logger.info("Moving extension data path");
+  const { resources, langs } = actionContext
+  if (!(langs.ok && resources.ok)) {
+    return new Err(new InitializationError("Extension was not initialized properly"))
+  }
+  Logger.info("Moving extension data path")
 
-    // Use given path if empty dir, otherwise append
-    let newFsPath = newPath.fsPath;
-    if (fs.readdirSync(newFsPath).length > 0) {
-        newFsPath = path.join(newFsPath, "tmcdata");
-    }
+  // Use given path if empty dir, otherwise append
+  let newFsPath = newPath.fsPath
+  if (fs.readdirSync(newFsPath).length > 0) {
+    newFsPath = path.join(newFsPath, "tmcdata")
+  }
 
-    const moveResult = await langs.val.moveProjectsDirectory(newFsPath, onUpdate);
-    if (moveResult.err) {
-        return moveResult;
-    }
+  const moveResult = await langs.val.moveProjectsDirectory(newFsPath, onUpdate)
+  if (moveResult.err) {
+    return moveResult
+  }
 
-    resources.val.projectsDirectory = newFsPath;
-    return refreshLocalExercises(actionContext);
+  resources.val.projectsDirectory = newFsPath
+  return refreshLocalExercises(actionContext)
 }

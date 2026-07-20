@@ -1,8 +1,0 @@
-{
-    "plugins": ["@trivago/prettier-plugin-sort-imports"],
-    "arrowParens": "always",
-    "endOfLine": "lf",
-    "printWidth": 100,
-    "tabWidth": 4,
-    "trailingComma": "all"
-}

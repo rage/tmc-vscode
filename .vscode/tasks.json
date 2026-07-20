@@ -1,51 +1,59 @@
 // See https://go.microsoft.com/fwlink/?LinkId=733558
 // for the documentation about the tasks.json format
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "webpackBuild",
-            "type": "npm",
-            "script": "webpack:watch",
-            "options": {
-                "env": {
-                    "NODE_ENV": "${input:nodeEnv}",
-                    "BACKEND": "${input:zBackend}"
-                }
-            },
-            "promptOnClose": false,
-            "problemMatcher": {
-                "base": "$tsc-watch",
-                "background": {
-                    "activeOnStart": true,
-                    "beginsPattern": "^     \\[webpack-cli\\] Compilation starting\\.\\.\\.",
-                    "endsPattern": "^    \\[webpack-cli\\] Compiler is watching files for updates\\.\\.\\."
-                }
-            },
-            "isBackground": true,
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "runOptions": {
-                "instanceLimit": 1
-            }
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "esbuildWatch",
+      "type": "npm",
+      "script": "watch",
+      "options": {
+        "env": {
+          "NODE_ENV": "${input:nodeEnv}",
+          "BACKEND": "${input:zBackend}"
         }
-    ],
-    "inputs": [
-        {
-            "type": "pickString",
-            "id": "nodeEnv",
-            "description": "Define node environment",
-            "options": ["development", "production"],
-            "default": "development"
+      },
+      "promptOnClose": false,
+      "problemMatcher": {
+        "owner": "esbuild",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^\\s*(?:✘ \\[ERROR\\] )?(.+):(\\d+):(\\d+):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "message": 4
         },
-        {
-            "type": "pickString",
-            "id": "zBackend",
-            "description": "Select backend mode",
-            "options": ["mockTmcLocalMooc", "mockBackend", "production"],
-            "default": "production"
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\[watch\\] build started",
+          "endsPattern": "^\\[watch\\] build finished"
         }
-    ]
+      },
+      "isBackground": true,
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "type": "pickString",
+      "id": "nodeEnv",
+      "description": "Define node environment",
+      "options": ["development", "production"],
+      "default": "development"
+    },
+    {
+      "type": "pickString",
+      "id": "zBackend",
+      "description": "Select backend mode",
+      "options": ["mockTmcLocalMooc", "mockBackend", "production"],
+      "default": "production"
+    }
+  ]
 }

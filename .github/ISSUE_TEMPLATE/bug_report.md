@@ -27,10 +27,10 @@ If applicable, add screenshots to help explain your problem.
 
 **Desktop (please complete the following information):**
 
--   OS: [e.g. iOS]
--   VSCode Version [e.g. 1.4.0]
--   TMC Extension Version [e.g. 0.8.1]
--   Other related extensions.
+- OS: [e.g. iOS]
+- VSCode Version [e.g. 1.4.0]
+- TMC Extension Version [e.g. 0.8.1]
+- Other related extensions.
 
 **TMC Extension logs**
 

@@ -1,0 +1,3170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CliOutput",
+  "description": "The format for all messages written to stdout by the CLI",
+  "oneOf": [
+    {
+      "description": "Data that is output at the end of a command.",
+      "type": "object",
+      "properties": {
+        "output-kind": {
+          "type": "string",
+          "const": "output-data"
+        }
+      },
+      "$ref": "#/$defs/OutputData",
+      "required": [
+        "output-kind"
+      ]
+    },
+    {
+      "description": "Status update output as a command progresses.",
+      "type": "object",
+      "properties": {
+        "output-kind": {
+          "type": "string",
+          "const": "status-update"
+        }
+      },
+      "$ref": "#/$defs/StatusUpdateData",
+      "required": [
+        "output-kind"
+      ]
+    },
+    {
+      "description": "Additional warnings, such as for an outdated Python dependency.",
+      "type": "object",
+      "properties": {
+        "output-kind": {
+          "type": "string",
+          "const": "notification"
+        }
+      },
+      "$ref": "#/$defs/Notification",
+      "required": [
+        "output-kind"
+      ]
+    }
+  ],
+  "$defs": {
+    "BrowserTestRuntime": {
+      "type": "string",
+      "enum": [
+        "python"
+      ]
+    },
+    "BrowserTestSpec": {
+      "description": "In-browser test spec produced by the `tmc` exercise service: the script to\nrun in the client plus an optional error set when the build failed.",
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runtime": {
+          "$ref": "#/$defs/BrowserTestRuntime"
+        },
+        "script": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "runtime",
+        "script",
+        "error"
+      ]
+    },
+    "ClientUpdateData": {
+      "description": "The update data type for the progress reporter.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "client-update-data-kind": {
+              "type": "string",
+              "const": "exercise-download"
+            },
+            "id": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "client-update-data-kind",
+            "id",
+            "path"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "client-update-data-kind": {
+              "type": "string",
+              "const": "posted-submission"
+            }
+          },
+          "$ref": "#/$defs/NewSubmission",
+          "required": [
+            "client-update-data-kind"
+          ]
+        }
+      ]
+    },
+    "CombinedCourseData": {
+      "type": "object",
+      "properties": {
+        "details": {
+          "$ref": "#/$defs/CourseDetails"
+        },
+        "exercises": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CourseExercise"
+          }
+        },
+        "settings": {
+          "$ref": "#/$defs/CourseData"
+        }
+      },
+      "required": [
+        "details",
+        "exercises",
+        "settings"
+      ]
+    },
+    "ConfigValue": {
+      "description": "A setting in a TmcConfig file.",
+      "anyOf": [
+        true,
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "Course": {
+      "description": "get /api/v8/core/org/{organization_slug}/courses",
+      "type": "object",
+      "properties": {
+        "comet_url": {
+          "description": "Typically empty.",
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "details_url": {
+          "description": "/api/v8/core/courses/{course_id}",
+          "type": "string"
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        },
+        "reviews_url": {
+          "description": "/api/v8/core/courses/{course_id}/reviews",
+          "type": "string"
+        },
+        "spyware_urls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "title": {
+          "type": "string"
+        },
+        "unlock_url": {
+          "description": "/api/v8/core/courses/{course_id}/unlock",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "title",
+        "description",
+        "details_url",
+        "unlock_url",
+        "reviews_url",
+        "comet_url",
+        "spyware_urls"
+      ]
+    },
+    "CourseData": {
+      "description": "get /api/v8/courses/{course_id}\nget /api/v8/org/{organization_slug}/courses/{course_name}",
+      "type": "object",
+      "properties": {
+        "cache_version": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "certificate_downloadable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "certificate_unlock_spec": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "course_template_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "disabled_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "external_scoreboard_url": {
+          "description": "Typically empty.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "formal_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "hidden_if_registered_after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hide_after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hide_submission_results": {
+          "type": "boolean"
+        },
+        "locked_exercise_points_visible": {
+          "type": "boolean"
+        },
+        "material_url": {
+          "description": "Typically empty.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "organization_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "organization_slug": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "paste_visibility": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "refreshed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "spreadsheet_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "hide_after",
+        "hidden",
+        "cache_version",
+        "spreadsheet_key",
+        "hidden_if_registered_after",
+        "refreshed_at",
+        "locked_exercise_points_visible",
+        "description",
+        "paste_visibility",
+        "formal_name",
+        "certificate_downloadable",
+        "certificate_unlock_spec",
+        "organization_id",
+        "disabled_status",
+        "title",
+        "material_url",
+        "course_template_id",
+        "hide_submission_results",
+        "external_scoreboard_url",
+        "organization_slug"
+      ]
+    },
+    "CourseDetails": {
+      "description": "get /api/v8/core/courses/{course_id}",
+      "type": "object",
+      "properties": {
+        "comet_url": {
+          "description": "Typically empty.",
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "details_url": {
+          "description": "/api/v8/core/courses/{course_id}",
+          "type": "string"
+        },
+        "exercises": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Exercise"
+          }
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        },
+        "reviews_url": {
+          "description": "/api/v8/core/courses/{course_id}/reviews",
+          "type": "string"
+        },
+        "spyware_urls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "title": {
+          "type": "string"
+        },
+        "unlock_url": {
+          "description": "/api/v8/core/courses/{course_id}/unlock",
+          "type": "string"
+        },
+        "unlockables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "title",
+        "description",
+        "details_url",
+        "unlock_url",
+        "reviews_url",
+        "comet_url",
+        "spyware_urls",
+        "unlockables",
+        "exercises"
+      ]
+    },
+    "CourseExercise": {
+      "description": "get /api/v8/courses/{course_id}/exercises",
+      "type": "object",
+      "properties": {
+        "available_points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExercisePoint"
+          }
+        },
+        "awarded_points": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deadline": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        },
+        "publish_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "soft_deadline": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "solution_visible_after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unlocked": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "available_points",
+        "awarded_points",
+        "name",
+        "publish_time",
+        "solution_visible_after",
+        "deadline",
+        "soft_deadline",
+        "disabled",
+        "unlocked"
+      ]
+    },
+    "DataKind": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "$ref": "#/$defs/Kind"
+                },
+                "trace": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "kind",
+                "trace"
+              ]
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "error"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/StyleValidationResult"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "validation"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "description": "megabytes",
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "available-points"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "exercises"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/ExercisePackagingConfiguration"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "exercise-packaging-configuration"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/RefreshData"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "refresh-result"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/RunResult"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "test-result"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/ExerciseDesc"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "exercise-desc"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/UpdatedExercise"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "updated-exercises"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/DownloadOrUpdateMoocCourseExercisesResult"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-exercise-download"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/CombinedCourseData"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "combined-course-data"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/CourseDetails"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "course-details"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CourseExercise"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "course-exercises"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/CourseData"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "course-data"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Course"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "courses"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/ExerciseDetails"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "exercise-details"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Submission"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "submissions"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/UpdateResult"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "update-result"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/Organization"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "organization"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Organization"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "organizations"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Review"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "reviews"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": true,
+            "output-data-kind": {
+              "type": "string",
+              "const": "token"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/NewSubmission"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "new-submission"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/SubmissionFeedbackResponse"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "submission-feedback-response"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/SubmissionFinished"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "submission-finished"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/ConfigValue"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "config-value"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "string"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "compressed-project-hash"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "string"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "submission-sandbox"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/LocalTmcExercise"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "local-tmc-exercises"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/DownloadOrUpdateTmcCourseExercisesResult"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "tmc-exercise-download"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/TmcConfig"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "tmc-config"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-updated-exercises"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/LocalMoocExercise"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "local-mooc-exercises"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/MoocCourse"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-course"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/MoocCourse"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-courses"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TmcExerciseSlide"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-exercise-slides"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/TmcExerciseSlide"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-exercise-slide"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/ExerciseTaskSubmissionResult"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-submission-finished"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        }
+      ]
+    },
+    "DownloadOrUpdateMoocCourseExercisesResult": {
+      "type": "object",
+      "properties": {
+        "downloaded": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MoocExerciseDownload"
+          }
+        },
+        "failed": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/MoocExerciseDownload"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MoocExerciseDownload"
+          }
+        }
+      },
+      "required": [
+        "downloaded",
+        "skipped"
+      ]
+    },
+    "DownloadOrUpdateTmcCourseExercisesResult": {
+      "type": "object",
+      "properties": {
+        "downloaded": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TmcExerciseDownload"
+          }
+        },
+        "failed": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/TmcExerciseDownload"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TmcExerciseDownload"
+          }
+        }
+      },
+      "required": [
+        "downloaded",
+        "skipped"
+      ]
+    },
+    "Exercise": {
+      "type": "object",
+      "properties": {
+        "all_review_points_given": {
+          "type": "boolean"
+        },
+        "attempted": {
+          "type": "boolean"
+        },
+        "checksum": {
+          "type": "string"
+        },
+        "code_review_requests_enabled": {
+          "type": "boolean"
+        },
+        "completed": {
+          "type": "boolean"
+        },
+        "deadline": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deadline_description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "latest_submission_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "latest_submission_url": {
+          "description": "Typically null.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "memory_limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        },
+        "requires_review": {
+          "type": "boolean"
+        },
+        "return_url": {
+          "description": "/api/v8/core/exercises/{exercise_id}/submissions",
+          "type": "string"
+        },
+        "returnable": {
+          "type": "boolean"
+        },
+        "reviewed": {
+          "type": "boolean"
+        },
+        "run_tests_locally_action_enabled": {
+          "type": "boolean"
+        },
+        "runtime_params": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "soft_deadline": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "soft_deadline_description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "solution_zip_url": {
+          "description": "/api/v8/core/exercises/{exercise_id}/solution/download",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "valgrind_strategy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "zip_url": {
+          "description": "/api/v8/core/exercises/{exercise_id}/download",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "locked",
+        "deadline_description",
+        "deadline",
+        "soft_deadline",
+        "soft_deadline_description",
+        "checksum",
+        "return_url",
+        "zip_url",
+        "returnable",
+        "requires_review",
+        "attempted",
+        "completed",
+        "reviewed",
+        "all_review_points_given",
+        "memory_limit",
+        "runtime_params",
+        "valgrind_strategy",
+        "code_review_requests_enabled",
+        "run_tests_locally_action_enabled",
+        "latest_submission_url",
+        "latest_submission_id",
+        "solution_zip_url"
+      ]
+    },
+    "ExerciseDesc": {
+      "description": "A description of an exercise.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The name of the exercise to be shown to the user.\nDoes not necessarily match or even contain the directory name.",
+          "type": "string"
+        },
+        "tests": {
+          "description": "Descriptions of the tests that will be run for this exercise.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TestDesc"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "tests"
+      ]
+    },
+    "ExerciseDetails": {
+      "description": "get /api/v8/core/exercises/{exercise_id}",
+      "type": "object",
+      "properties": {
+        "code_review_requests_enabled": {
+          "type": "boolean"
+        },
+        "course_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "course_name": {
+          "type": "string"
+        },
+        "deadline": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exercise_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "exercise_name": {
+          "type": "string"
+        },
+        "run_tests_locally_action_enabled": {
+          "type": "boolean"
+        },
+        "submissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExerciseSubmission"
+          }
+        },
+        "unlocked_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "course_name",
+        "course_id",
+        "code_review_requests_enabled",
+        "run_tests_locally_action_enabled",
+        "exercise_name",
+        "exercise_id",
+        "unlocked_at",
+        "deadline",
+        "submissions"
+      ]
+    },
+    "ExerciseFile": {
+      "type": "object",
+      "properties": {
+        "contents": {
+          "type": "string"
+        },
+        "filepath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "filepath",
+        "contents"
+      ]
+    },
+    "ExercisePackagingConfiguration": {
+      "description": "Represents configuration based on which submission may be packaged.",
+      "type": "object",
+      "properties": {
+        "exercise_file_paths": {
+          "description": "Exercise folders or files which are copied from exercise template or clone.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "student_file_paths": {
+          "description": "Student folders or files which are copied from submission.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "student_file_paths",
+        "exercise_file_paths"
+      ]
+    },
+    "ExercisePoint": {
+      "type": "object",
+      "properties": {
+        "exercise_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        },
+        "requires_review": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "exercise_id",
+        "name",
+        "requires_review"
+      ]
+    },
+    "ExerciseSubmission": {
+      "type": "object",
+      "properties": {
+        "all_tests_passed": {
+          "type": "boolean"
+        },
+        "course_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "exercise_name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "paste_url": {
+          "description": "https://tmc.mooc.fi/paste/{paste_code}",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "points": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "processing_time": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "requests_review": {
+          "type": "boolean"
+        },
+        "reviewed": {
+          "type": "boolean"
+        },
+        "submitted_zip_url": {
+          "description": "/api/v8/core/submissions/{submission_id}/download",
+          "type": "string"
+        },
+        "user_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "exercise_name",
+        "id",
+        "user_id",
+        "course_id",
+        "created_at",
+        "all_tests_passed",
+        "points",
+        "submitted_zip_url",
+        "paste_url",
+        "processing_time",
+        "reviewed",
+        "requests_review"
+      ]
+    },
+    "ExerciseTaskSubmissionResult": {
+      "type": "object",
+      "properties": {
+        "submission_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "submission_id"
+      ]
+    },
+    "ExerciseType": {
+      "type": "string",
+      "enum": [
+        "browser",
+        "editor"
+      ]
+    },
+    "Kind": {
+      "oneOf": [
+        {
+          "description": "For all other errors",
+          "type": "string",
+          "const": "generic"
+        },
+        {
+          "description": "403 from server",
+          "type": "string",
+          "const": "forbidden"
+        },
+        {
+          "description": "Not logged in, detected either by no token or 401 from server",
+          "type": "string",
+          "const": "not-logged-in"
+        },
+        {
+          "description": "Failed to connect to the TMC server, likely due to no internet connection",
+          "type": "string",
+          "const": "connection-error"
+        },
+        {
+          "description": "Client out of date",
+          "type": "string",
+          "const": "obsolete-client"
+        },
+        {
+          "description": "Invalid token",
+          "type": "string",
+          "const": "invalid-token"
+        },
+        {
+          "description": "Failed to download some or all exercises",
+          "type": "object",
+          "properties": {
+            "failed-exercise-download": {
+              "type": "object",
+              "properties": {
+                "completed": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/TmcExerciseDownload"
+                  }
+                },
+                "failed": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "prefixItems": [
+                      {
+                        "$ref": "#/$defs/TmcExerciseDownload"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "skipped": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/TmcExerciseDownload"
+                  }
+                }
+              },
+              "required": [
+                "completed",
+                "skipped",
+                "failed"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "failed-exercise-download"
+          ]
+        }
+      ]
+    },
+    "LocalMoocExercise": {
+      "description": "MOOC exercise inside the projects directory.",
+      "type": "object",
+      "properties": {
+        "exercise-id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "exercise-path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "exercise-id",
+        "exercise-path"
+      ]
+    },
+    "LocalTmcExercise": {
+      "description": "TMC eercise inside the projects directory.",
+      "type": "object",
+      "properties": {
+        "exercise-path": {
+          "type": "string"
+        },
+        "exercise-slug": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "exercise-slug",
+        "exercise-path"
+      ]
+    },
+    "ModelSolutionSpec": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "solution_files": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExerciseFile"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "Browser"
+            }
+          },
+          "required": [
+            "type",
+            "solution_files"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "download_url": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "Editor"
+            }
+          },
+          "required": [
+            "type",
+            "download_url"
+          ]
+        }
+      ]
+    },
+    "MoocCourse": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "organization_name": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "slug",
+        "name",
+        "description",
+        "organization_name"
+      ]
+    },
+    "MoocExerciseDownload": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "task-id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "task-id",
+        "path"
+      ]
+    },
+    "NewSubmission": {
+      "description": "post /api/v8/core/exercises/{exercise_id}/submissions",
+      "type": "object",
+      "properties": {
+        "paste_url": {
+          "description": "https://tmc.mooc.fi/paste/{paste_code}",
+          "type": "string"
+        },
+        "show_submission_url": {
+          "description": "https://tmc.mooc.fi/api/v8/core/submissions/{submission_id}",
+          "type": "string"
+        },
+        "submission_url": {
+          "description": "https://tmc.mooc.fi/submissions/{submission_id}",
+          "type": "string"
+        }
+      },
+      "required": [
+        "show_submission_url",
+        "paste_url",
+        "submission_url"
+      ]
+    },
+    "Notification": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "notification-kind": {
+          "$ref": "#/$defs/NotificationKind"
+        }
+      },
+      "required": [
+        "notification-kind",
+        "message"
+      ]
+    },
+    "NotificationKind": {
+      "type": "string",
+      "enum": [
+        "warning",
+        "info"
+      ]
+    },
+    "Organization": {
+      "description": "get /api/v8/org.json\nget /api/v8/org/{organization_slug}.json",
+      "type": "object",
+      "properties": {
+        "information": {
+          "type": "string"
+        },
+        "logo_path": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "slug": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "information",
+        "slug",
+        "logo_path",
+        "pinned"
+      ]
+    },
+    "OutputData": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DataKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/$defs/OutputResult"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "result",
+        "data"
+      ]
+    },
+    "OutputResult": {
+      "type": "string",
+      "enum": [
+        "logged-in",
+        "logged-out",
+        "not-logged-in",
+        "error",
+        "executed-command"
+      ]
+    },
+    "PublicSpec": {
+      "type": "object",
+      "properties": {
+        "archive_name": {
+          "type": "string"
+        },
+        "browser_test": {
+          "description": "In-browser test config: script to run in the client and optional error\nif the build failed. Omitted for editor exercises or when no script was\nbuilt. Serde treats the `Option` field as optional when absent.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BrowserTestSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checksum": {
+          "type": "string"
+        },
+        "stub_download_url": {
+          "type": "string"
+        },
+        "student_file_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "$ref": "#/$defs/ExerciseType"
+        }
+      },
+      "required": [
+        "type",
+        "archive_name",
+        "stub_download_url",
+        "student_file_paths",
+        "checksum",
+        "browser_test"
+      ]
+    },
+    "PythonVer": {
+      "description": "Python version from TmcProjectYml.",
+      "type": "object",
+      "properties": {
+        "major": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "minor": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "patch": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "major",
+        "minor",
+        "patch"
+      ]
+    },
+    "RefreshData": {
+      "description": "Data from a finished course refresh.",
+      "type": "object",
+      "properties": {
+        "course-options": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "exercises": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RefreshExercise"
+          }
+        },
+        "new-cache-path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "new-cache-path",
+        "course-options",
+        "exercises"
+      ]
+    },
+    "RefreshExercise": {
+      "description": "An exercise from a finished course refresh.",
+      "type": "object",
+      "properties": {
+        "checksum": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sandbox-image": {
+          "type": "string"
+        },
+        "tmcproject-yml": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TmcProjectYml"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "checksum",
+        "points",
+        "sandbox-image",
+        "tmcproject-yml"
+      ]
+    },
+    "Review": {
+      "description": "get /api/v8/core/courses/{course_id}/reviews",
+      "type": "object",
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "exercise_name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "marked_as_read": {
+          "type": "boolean"
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "points_not_awarded": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "review_body": {
+          "type": "string"
+        },
+        "reviewer_name": {
+          "type": "string"
+        },
+        "submission_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "update_url": {
+          "description": "/api/v8/core/courses/{course_id}/reviews/{review_id}",
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "url": {
+          "description": "https://tmc.mooc.fi/submissions/{submission_id}/reviews",
+          "type": "string"
+        }
+      },
+      "required": [
+        "submission_id",
+        "exercise_name",
+        "id",
+        "marked_as_read",
+        "reviewer_name",
+        "review_body",
+        "points",
+        "points_not_awarded",
+        "url",
+        "update_url",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "RunResult": {
+      "description": "The result of running an exercise's test suite against a submission.",
+      "type": "object",
+      "properties": {
+        "logs": {
+          "description": "Logs from the test run.\nThe key may be an arbitrary string identifying the type of log.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "description": "The overall status of a test run.",
+          "$ref": "#/$defs/RunStatus"
+        },
+        "testResults": {
+          "description": "Whether each test passed and which points were awarded.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TestResult"
+          }
+        }
+      },
+      "required": [
+        "status",
+        "testResults",
+        "logs"
+      ]
+    },
+    "RunStatus": {
+      "description": "The overall status of a test run.",
+      "oneOf": [
+        {
+          "description": "The submission and tests compiled and all tests passed.",
+          "type": "string",
+          "const": "PASSED"
+        },
+        {
+          "description": "The submission and tests compiled but some tests failed.",
+          "type": "string",
+          "const": "TESTS_FAILED"
+        },
+        {
+          "description": "The submission or tests did not compile.",
+          "type": "string",
+          "const": "COMPILE_FAILED"
+        },
+        {
+          "description": "The submission compiled but testrun was interrupted.",
+          "type": "string",
+          "const": "TESTRUN_INTERRUPTED"
+        },
+        {
+          "description": "For when no other status seems suitable, or the language plugin has\nsuffered an internal error.",
+          "type": "string",
+          "const": "GENERIC_ERROR"
+        }
+      ]
+    },
+    "Status": {
+      "oneOf": [
+        {
+          "description": "The command was ran without fatal errors",
+          "type": "string",
+          "const": "finished"
+        },
+        {
+          "description": "An unexpected issue occurred during the command",
+          "type": "string",
+          "const": "crashed"
+        }
+      ]
+    },
+    "StatusUpdate": {
+      "description": "The format for all status updates. May contain some data.",
+      "type": "object",
+      "properties": {
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClientUpdateData"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finished": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "percent-done": {
+          "type": "number",
+          "format": "double"
+        },
+        "time": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "finished",
+        "message",
+        "percent-done",
+        "time",
+        "data"
+      ]
+    },
+    "StatusUpdate2": {
+      "description": "The format for all status updates. May contain some data.",
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "null"
+        },
+        "finished": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "percent-done": {
+          "type": "number",
+          "format": "double"
+        },
+        "time": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "finished",
+        "message",
+        "percent-done",
+        "time",
+        "data"
+      ]
+    },
+    "StatusUpdateData": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "update-data-kind": {
+              "type": "string",
+              "const": "client-update-data"
+            }
+          },
+          "$ref": "#/$defs/StatusUpdate",
+          "required": [
+            "update-data-kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "update-data-kind": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "$ref": "#/$defs/StatusUpdate2",
+          "required": [
+            "update-data-kind"
+          ]
+        }
+      ]
+    },
+    "StyleValidationError": {
+      "description": "A style validation error.",
+      "type": "object",
+      "properties": {
+        "column": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "line": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "message": {
+          "type": "string"
+        },
+        "source_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "column",
+        "line",
+        "message",
+        "source_name"
+      ]
+    },
+    "StyleValidationResult": {
+      "description": "The result of a style check.",
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "$ref": "#/$defs/StyleValidationStrategy"
+        },
+        "validation_errors": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/StyleValidationError"
+            }
+          }
+        }
+      },
+      "required": [
+        "strategy",
+        "validation_errors"
+      ]
+    },
+    "StyleValidationStrategy": {
+      "description": "Determines how style errors are handled.",
+      "type": "string",
+      "enum": [
+        "FAIL",
+        "WARN",
+        "DISABLED"
+      ]
+    },
+    "Submission": {
+      "description": "get /api/v8/courses/{course_id}/submissions\nget /api/v8/courses/{course_id}/users/{user_id}/submissions\nget /api/v8/courses/{course_id}/users/current/submissions\nget api/v8/exercises/{exercise_id}/users/{user_id}/submissions\nget api/v8/exercises/{exercise_id}/users/current/submissions\nget /api/v8/org/{organization_slug}/courses/{course_name}/submissions\nget /api/v8/org/{organization_slug}/courses/{course_name}/users/{user_id}/submissions\nget /api/v8/org/{organization_slug}/courses/{course_name}/users/current/submissions\nget api/v8/exercises/{exercise_id}/users/{user_id}/submissions\nget api/v8/exercises/{exercise_id}/users/current/submissions",
+      "type": "object",
+      "properties": {
+        "all_tests_passed": {
+          "type": "boolean"
+        },
+        "course_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "exercise_name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "message_for_paste": {
+          "type": "string"
+        },
+        "message_for_reviewer": {
+          "type": "string"
+        },
+        "newer_submission_reviewed": {
+          "type": "boolean"
+        },
+        "params_json": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "paste_available": {
+          "type": "boolean"
+        },
+        "paste_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "points": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pretest_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "processed": {
+          "type": "boolean"
+        },
+        "processing_attempts_started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "processing_began_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "processing_completed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "processing_tried_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "requests_review": {
+          "type": "boolean"
+        },
+        "requires_review": {
+          "type": "boolean"
+        },
+        "review_dismissed": {
+          "type": "boolean"
+        },
+        "reviewed": {
+          "type": "boolean"
+        },
+        "times_sent_to_sandbox": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "user_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "user_id",
+        "pretest_error",
+        "created_at",
+        "exercise_name",
+        "course_id",
+        "processed",
+        "all_tests_passed",
+        "points",
+        "processing_tried_at",
+        "processing_began_at",
+        "processing_completed_at",
+        "times_sent_to_sandbox",
+        "processing_attempts_started_at",
+        "params_json",
+        "requires_review",
+        "requests_review",
+        "reviewed",
+        "message_for_reviewer",
+        "newer_submission_reviewed",
+        "review_dismissed",
+        "paste_available",
+        "message_for_paste",
+        "paste_key"
+      ]
+    },
+    "SubmissionFeedbackKind": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "Text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "IntRange": {
+              "type": "object",
+              "properties": {
+                "lower": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "upper": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "lower",
+                "upper"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "IntRange"
+          ]
+        }
+      ]
+    },
+    "SubmissionFeedbackQuestion": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "kind": {
+          "$ref": "#/$defs/SubmissionFeedbackKind"
+        },
+        "question": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "question",
+        "kind"
+      ]
+    },
+    "SubmissionFeedbackResponse": {
+      "description": "post /api/v8/core/submissions/{submission_id}/feedback",
+      "type": "object",
+      "properties": {
+        "api_version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "status": {
+          "$ref": "#/$defs/SubmissionStatus"
+        }
+      },
+      "required": [
+        "api_version",
+        "status"
+      ]
+    },
+    "SubmissionFinished": {
+      "type": "object",
+      "properties": {
+        "all_tests_passed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "api_version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "course": {
+          "type": "string"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exercise_name": {
+          "type": "string"
+        },
+        "feedback_answer_url": {
+          "description": "/api/v8/core/submissions/{submission_id}/feedback",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "feedback_questions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/SubmissionFeedbackQuestion"
+          }
+        },
+        "login": {
+          "type": "string"
+        },
+        "message_for_paste": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "missing_review_points": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "paste_url": {
+          "description": "https://tmc.mooc.fi/paste/{paste_code}",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "processing_time": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "requests_review": {
+          "type": "boolean"
+        },
+        "reviewed": {
+          "type": "boolean"
+        },
+        "solution_url": {
+          "description": "https://tmc.mooc.fi/exercises/{exercise_id}/solution",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/SubmissionStatus"
+        },
+        "submission_url": {
+          "description": "https://tmc.mooc.fi/submissions/{submission_id}}",
+          "type": "string"
+        },
+        "submitted_at": {
+          "type": "string"
+        },
+        "test_cases": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/TestCase"
+          }
+        },
+        "user_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "valgrind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "validations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TmcStyleValidationResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "api_version",
+        "all_tests_passed",
+        "user_id",
+        "login",
+        "course",
+        "exercise_name",
+        "status",
+        "points",
+        "valgrind",
+        "submission_url",
+        "solution_url",
+        "submitted_at",
+        "processing_time",
+        "reviewed",
+        "requests_review",
+        "paste_url",
+        "message_for_paste",
+        "missing_review_points",
+        "test_cases",
+        "feedback_questions",
+        "feedback_answer_url",
+        "error",
+        "validations"
+      ]
+    },
+    "SubmissionStatus": {
+      "type": "string",
+      "enum": [
+        "processing",
+        "fail",
+        "ok",
+        "error",
+        "hidden"
+      ]
+    },
+    "TestCase": {
+      "type": "object",
+      "properties": {
+        "detailed_message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exception": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "successful": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "successful",
+        "message",
+        "exception",
+        "detailed_message"
+      ]
+    },
+    "TestDesc": {
+      "description": "A description of an exercise's test case.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The full name of the test.\n\nIf the language organises tests into suites or classes, it is customary\nto name the test as \"class_name.method_name\".",
+          "type": "string"
+        },
+        "points": {
+          "description": "The list of point names that passing this test may give.\n\nTo obtain a point X, the user must pass all exercises that require point X.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "points"
+      ]
+    },
+    "TestResult": {
+      "description": "The result of a single test case.",
+      "type": "object",
+      "properties": {
+        "exception": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "message": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "points": {
+          "description": "List of points that were received from the exercise from passed tests.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "successful": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "successful",
+        "points",
+        "message",
+        "exception"
+      ]
+    },
+    "TmcConfig": {
+      "description": "The main configuration file. A separate one is used for each client.",
+      "type": "object",
+      "properties": {
+        "projects_dir": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "projects_dir"
+      ]
+    },
+    "TmcExerciseDownload": {
+      "type": "object",
+      "properties": {
+        "course-slug": {
+          "type": "string"
+        },
+        "exercise-slug": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "course-slug",
+        "exercise-slug",
+        "path"
+      ]
+    },
+    "TmcExerciseSlide": {
+      "type": "object",
+      "properties": {
+        "deadline": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "exercise_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "exercise_name": {
+          "type": "string"
+        },
+        "exercise_order_number": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "slide_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TmcExerciseTask"
+          }
+        }
+      },
+      "required": [
+        "slide_id",
+        "exercise_id",
+        "exercise_name",
+        "exercise_order_number",
+        "deadline",
+        "tasks"
+      ]
+    },
+    "TmcExerciseTask": {
+      "type": "object",
+      "properties": {
+        "assignment": true,
+        "checksum": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_solution_spec": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelSolutionSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "order_number": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "public_spec": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "task_id",
+        "order_number",
+        "assignment",
+        "public_spec",
+        "model_solution_spec",
+        "checksum"
+      ]
+    },
+    "TmcProjectYml": {
+      "description": "Extra data from a `.tmcproject.yml` file.",
+      "type": "object",
+      "properties": {
+        "extra_exercise_files": {
+          "description": "A list of files or directories that will always be considered exercise files.\n`extra_student_files` takes precedence if a file is both an extra student file and an extra exercise file.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "extra_student_files": {
+          "description": "A list of files or directories that will always be considered student files.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fail_on_valgrind_error": {
+          "description": "If set, Valgrind errors will be considered test errors.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "force_update": {
+          "description": "A list of files that should always be overwritten by updates even if they are student files.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "minimum_python_version": {
+          "description": "If set, will cause an error telling the student to update their Python if their version is older than the minimum.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PythonVer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sandbox_image": {
+          "description": "Overrides the default sandbox image. e.g. `eu.gcr.io/moocfi-public/tmc-sandbox-python:latest`",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "submission_size_limit_mb": {
+          "description": "Overrides the default archive size limit (500 Mb).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "tests_timeout_ms": {
+          "description": "If set, tests are forcibly stopped after this duration.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      }
+    },
+    "TmcStyleValidationError": {
+      "description": "A style validation error.",
+      "type": "object",
+      "properties": {
+        "column": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "line": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "message": {
+          "type": "string"
+        },
+        "sourceName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "column",
+        "line",
+        "message",
+        "sourceName"
+      ]
+    },
+    "TmcStyleValidationResult": {
+      "description": "The result of a style check.",
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "$ref": "#/$defs/TmcStyleValidationStrategy"
+        },
+        "validationErrors": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TmcStyleValidationError"
+            }
+          }
+        }
+      },
+      "required": [
+        "strategy",
+        "validationErrors"
+      ]
+    },
+    "TmcStyleValidationStrategy": {
+      "description": "Determines how style errors are handled.",
+      "type": "string",
+      "enum": [
+        "FAIL",
+        "WARN",
+        "DISABLED"
+      ]
+    },
+    "UpdateResult": {
+      "description": "Updated exercises.",
+      "type": "object",
+      "properties": {
+        "created": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Exercise"
+          }
+        },
+        "updated": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Exercise"
+          }
+        }
+      },
+      "required": [
+        "created",
+        "updated"
+      ]
+    },
+    "UpdatedExercise": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  }
+}
