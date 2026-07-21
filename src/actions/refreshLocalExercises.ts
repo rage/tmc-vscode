@@ -5,6 +5,7 @@ import { z } from "zod"
 
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { ExerciseStatus } from "../api/workspaceManager"
+import { closedExercisesSettingKey } from "../config/constants"
 import { InitializationError } from "../errors"
 import { assertUnreachable } from "../shared/shared"
 import { Logger } from "../utilities"
@@ -42,7 +43,7 @@ export async function refreshLocalExercises(
 
         const closedExercisesResult = (
           await langs.val.getSetting(
-            `closed-exercises-for:${course.data.name}`,
+            closedExercisesSettingKey("tmc", course.data.name),
             isClosedExercisesSetting,
           )
         ).mapErr((e) => {
@@ -65,7 +66,9 @@ export async function refreshLocalExercises(
         break
       }
       case "mooc": {
-        const exercisesResult = await langs.val.listLocalCourseExercises("mooc", course.data.name)
+        // mooc configs store no course slug, so the local listing is looked up by
+        // course id (the UUID); the display slug stays `course.data.name`.
+        const exercisesResult = await langs.val.listLocalCourseExercises("mooc", course.data.id)
         if (exercisesResult.err) {
           Logger.warn(
             `Failed to get exercises for course: ${JSON.stringify(course, null, 2)}`,
@@ -76,7 +79,7 @@ export async function refreshLocalExercises(
 
         const closedExercisesResult = (
           await langs.val.getSetting(
-            `closed-exercises-for:${course.data.name}`,
+            closedExercisesSettingKey("mooc", course.data.name),
             isClosedExercisesSetting,
           )
         ).mapErr((e) => {

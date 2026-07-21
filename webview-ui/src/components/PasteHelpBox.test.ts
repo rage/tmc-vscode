@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/svelte"
 
+import { findButton, getButton } from "../test/dom"
 import { tmcLocalCourse, tmcLocalExercise } from "../test/fixtures"
 import { postedMessages } from "../test/setup"
 import PasteHelpBox from "./PasteHelpBox.svelte"
@@ -13,8 +14,8 @@ suite("PasteHelpBox component", () => {
     render(PasteHelpBox, { props: { hidden: false, course, exercise, sourcePanel } })
 
     // reveal the help section, then trigger the paste
-    screen.getByText("Need help?").click()
-    const submit = await screen.findByRole("button", { name: "Submit to TMC Paste" })
+    getButton("Need help?").click()
+    const submit = await findButton("Submit to TMC Paste")
     postedMessages.mockClear()
     submit.click()
 
@@ -37,7 +38,7 @@ suite("PasteHelpBox component", () => {
       },
     })
 
-    screen.getByText("Need help?").click()
+    getButton("Need help?").click()
     const link = await screen.findByRole("link", { name: "https://paste.example/abc" })
     expect(link).toBeVisible()
   })

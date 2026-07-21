@@ -495,6 +495,26 @@
         "unlocked"
       ]
     },
+    "CourseProgress": {
+      "description": "The current user's progress across every exercise they can see in a course.\nCourse-level totals (awarded/available points, passed count, percentage) are\nnot sent separately; derive them by summing over `exercises`, guarding the\npercentage against a zero total.",
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "exercises": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExerciseProgress"
+          }
+        }
+      },
+      "required": [
+        "course_id",
+        "exercises"
+      ]
+    },
     "DataKind": {
       "oneOf": [
         {
@@ -1165,6 +1185,73 @@
             "output-data-kind",
             "output-data"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/ExerciseTaskSubmissionStatus"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-submission-status"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExerciseSlideSubmissionListItem"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-submissions"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/PasteResult"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-paste"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/CourseProgress"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-course-progress"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
         }
       ]
     },
@@ -1543,6 +1630,83 @@
         "requires_review"
       ]
     },
+    "ExerciseProgress": {
+      "description": "The current user's progress on a single exercise. The authoritative \"passed\"\nsignal is `completed`; `attempted` distinguishes \"not started\" from \"started\nbut not passed\".",
+      "type": "object",
+      "properties": {
+        "attempted": {
+          "description": "`true` once the user has started or submitted the exercise.",
+          "type": "boolean"
+        },
+        "completed": {
+          "description": "`true` once the exercise reached the `Completed` activity stage.",
+          "type": "boolean"
+        },
+        "exercise_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "score_given": {
+          "description": "Points awarded to the user; `0.0` when the user has no state for the\nexercise. Can be fractional (partial credit).",
+          "type": "number",
+          "format": "float"
+        },
+        "score_maximum": {
+          "description": "The maximum points obtainable from the exercise; can be `0`.",
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "required": [
+        "exercise_id",
+        "score_given",
+        "score_maximum",
+        "completed",
+        "attempted"
+      ]
+    },
+    "ExerciseSlideSubmissionListItem": {
+      "description": "A single past submission of the current user to an exercise. `id` is the\nexercise-slide-submission id used to download or share the submission.",
+      "type": "object",
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "exercise_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "grading_progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GradingProgress"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "score_given": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        }
+      },
+      "required": [
+        "id",
+        "exercise_id",
+        "created_at",
+        "score_given",
+        "grading_progress"
+      ]
+    },
     "ExerciseSubmission": {
       "type": "object",
       "properties": {
@@ -1630,11 +1794,103 @@
         "submission_id"
       ]
     },
+    "ExerciseTaskSubmissionStatus": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "NoGradingYet"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "Grading": {
+              "type": "object",
+              "properties": {
+                "feedback_json": true,
+                "feedback_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "grading_completed_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "grading_progress": {
+                  "$ref": "#/$defs/GradingProgress"
+                },
+                "grading_started_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "score_given": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "float"
+                }
+              },
+              "required": [
+                "grading_progress",
+                "score_given",
+                "grading_started_at",
+                "grading_completed_at",
+                "feedback_json",
+                "feedback_text"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Grading"
+          ]
+        }
+      ]
+    },
     "ExerciseType": {
       "type": "string",
       "enum": [
         "browser",
         "editor"
+      ]
+    },
+    "GradingProgress": {
+      "oneOf": [
+        {
+          "description": "The grading could not complete.",
+          "type": "string",
+          "const": "Failed"
+        },
+        {
+          "description": "There is no grading process occurring; for example, the student has not yet made any submission.",
+          "type": "string",
+          "const": "NotReady"
+        },
+        {
+          "description": "Final Grade is pending, and it does require human intervention; if a Score value is present, it indicates the current value is partial and may be updated during the manual grading.",
+          "type": "string",
+          "const": "PendingManual"
+        },
+        {
+          "description": "Final Grade is pending, but does not require manual intervention; if a Score value is present, it indicates the current value is partial and may be updated.",
+          "type": "string",
+          "const": "Pending"
+        },
+        {
+          "description": "The grading process is completed; the score value, if any, represents the current Final Grade;",
+          "type": "string",
+          "const": "FullyGraded"
+        }
       ]
     },
     "Kind": {
@@ -1668,6 +1924,11 @@
           "description": "Invalid token",
           "type": "string",
           "const": "invalid-token"
+        },
+        {
+          "description": "The user is not enrolled on the course this exercise belongs to\n(backend `message_key: \"not_enrolled\"`, HTTP 422)",
+          "type": "string",
+          "const": "not-enrolled"
         },
         {
           "description": "Failed to download some or all exercises",
@@ -1732,9 +1993,14 @@
         },
         "exercise-path": {
           "type": "string"
+        },
+        "exercise-slug": {
+          "description": "The exercise's on-disk directory name, used as its slug when building a\nworkspace entry (mirrors the TMC slug); stable since names are unique per\ncourse.",
+          "type": "string"
         }
       },
       "required": [
+        "exercise-slug",
         "exercise-id",
         "exercise-path"
       ]
@@ -1794,6 +2060,32 @@
         }
       ]
     },
+    "MoocClientUpdateData": {
+      "description": "The update data type for the mooc progress reporter.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "client-update-data-kind": {
+              "type": "string",
+              "const": "exercise-download"
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "client-update-data-kind",
+            "id",
+            "path"
+          ]
+        }
+      ]
+    },
     "MoocCourse": {
       "type": "object",
       "properties": {
@@ -1825,19 +2117,60 @@
         "organization_name"
       ]
     },
-    "MoocExerciseDownload": {
+    "MoocDeviceLogin": {
+      "description": "The data attached to a `mooc-device-login` status update. Mirrors the\nrelevant fields of the RFC 8628 device authorization response.",
       "type": "object",
       "properties": {
-        "path": {
+        "expires_in": {
+          "description": "Seconds until the device/user codes expire.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "interval": {
+          "description": "Minimum seconds between token-endpoint polls.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "user_code": {
+          "description": "The code the user enters (or confirms) on the verification page.",
           "type": "string"
         },
-        "task-id": {
-          "type": "string",
-          "format": "uuid"
+        "verification_uri": {
+          "description": "URL the user opens to enter the `user_code`.",
+          "type": "string"
+        },
+        "verification_uri_complete": {
+          "description": "URL that already includes the `user_code`, if the server provided one.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
-        "task-id",
+        "verification_uri",
+        "verification_uri_complete",
+        "user_code",
+        "expires_in",
+        "interval"
+      ]
+    },
+    "MoocExerciseDownload": {
+      "type": "object",
+      "properties": {
+        "exercise-id": {
+          "description": "The requested exercise's id; results are keyed by it so callers can\ncorrelate each download/skip/failure back to the exercise (not the internal\neditor task id).",
+          "type": "string",
+          "format": "uuid"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "exercise-id",
         "path"
       ]
     },
@@ -1954,6 +2287,18 @@
         "executed-command"
       ]
     },
+    "PasteResult": {
+      "description": "A shareable URL for a submission.",
+      "type": "object",
+      "properties": {
+        "paste_url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "paste_url"
+      ]
+    },
     "PublicSpec": {
       "type": "object",
       "properties": {
@@ -1961,7 +2306,7 @@
           "type": "string"
         },
         "browser_test": {
-          "description": "In-browser test config: script to run in the client and optional error\nif the build failed. Omitted for editor exercises or when no script was\nbuilt. Serde treats the `Option` field as optional when absent.",
+          "description": "In-browser test config; omitted for editor exercises or when no script\nwas built.",
           "anyOf": [
             {
               "$ref": "#/$defs/BrowserTestSpec"
@@ -2276,7 +2621,83 @@
       "type": "object",
       "properties": {
         "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MoocDeviceLogin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finished": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "percent-done": {
+          "type": "number",
+          "format": "double"
+        },
+        "time": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "finished",
+        "message",
+        "percent-done",
+        "time",
+        "data"
+      ]
+    },
+    "StatusUpdate3": {
+      "description": "The format for all status updates. May contain some data.",
+      "type": "object",
+      "properties": {
+        "data": {
           "type": "null"
+        },
+        "finished": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "percent-done": {
+          "type": "number",
+          "format": "double"
+        },
+        "time": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "finished",
+        "message",
+        "percent-done",
+        "time",
+        "data"
+      ]
+    },
+    "StatusUpdate4": {
+      "description": "The format for all status updates. May contain some data.",
+      "type": "object",
+      "properties": {
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MoocClientUpdateData"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "finished": {
           "type": "boolean"
@@ -2318,6 +2739,34 @@
           ]
         },
         {
+          "description": "Emitted during a `mooc download-or-update-course-exercises` run, once per\nexercise as it finishes downloading, so the client can report per-exercise\nprogress (mirrors the tmc `client-update-data` / `exercise-download`).",
+          "type": "object",
+          "properties": {
+            "update-data-kind": {
+              "type": "string",
+              "const": "mooc-client-update-data"
+            }
+          },
+          "$ref": "#/$defs/StatusUpdate4",
+          "required": [
+            "update-data-kind"
+          ]
+        },
+        {
+          "description": "Emitted once at the start of `mooc login`, before the CLI blocks polling:\ncarries the verification URL and user code the client shows the user to\ncomplete the OAuth2 device authorization login.",
+          "type": "object",
+          "properties": {
+            "update-data-kind": {
+              "type": "string",
+              "const": "mooc-device-login"
+            }
+          },
+          "$ref": "#/$defs/StatusUpdate2",
+          "required": [
+            "update-data-kind"
+          ]
+        },
+        {
           "type": "object",
           "properties": {
             "update-data-kind": {
@@ -2325,7 +2774,7 @@
               "const": "none"
             }
           },
-          "$ref": "#/$defs/StatusUpdate2",
+          "$ref": "#/$defs/StatusUpdate3",
           "required": [
             "update-data-kind"
           ]
@@ -2913,6 +3362,11 @@
     "TmcExerciseSlide": {
       "type": "object",
       "properties": {
+        "course_id": {
+          "description": "The course the exercise belongs to, so a client can locate it without a\nseparate lookup or an enrolled-course scan.",
+          "type": "string",
+          "format": "uuid"
+        },
         "deadline": {
           "type": [
             "string",
@@ -2945,6 +3399,7 @@
       "required": [
         "slide_id",
         "exercise_id",
+        "course_id",
         "exercise_name",
         "exercise_order_number",
         "deadline",

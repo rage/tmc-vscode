@@ -5,7 +5,12 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { EXTENSION_ID, WORKSPACE_ROOT_FILE_TEXT, WORKSPACE_SETTINGS } from "../config/constants"
+import {
+  EXTENSION_ID,
+  workspaceFileName,
+  WORKSPACE_ROOT_FILE_TEXT,
+  WORKSPACE_SETTINGS,
+} from "../config/constants"
 import Resources from "../config/resources"
 import type Storage from "../storage"
 import { Logger } from "../utilities/logger"
@@ -48,17 +53,23 @@ export async function resourceInitialization(
   fs.ensureDirSync(workspaceFileFolder)
   const userData = storage.getUserData()
   userData?.courses.forEach((course) => {
-    const tmcWorkspaceFilePath = path.join(workspaceFileFolder, course.name + ".code-workspace")
+    const tmcWorkspaceFilePath = path.join(
+      workspaceFileFolder,
+      workspaceFileName(course.name, "tmc"),
+    )
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
       fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS))
       Logger.info(`Created tmc workspace file at ${tmcWorkspaceFilePath}`)
     }
   })
   userData?.mooc_courses.forEach((course) => {
-    const tmcWorkspaceFilePath = path.join(workspaceFileFolder, course.name + ".code-workspace")
-    if (!fs.existsSync(tmcWorkspaceFilePath)) {
-      fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS))
-      Logger.info(`Created tmc workspace file at ${tmcWorkspaceFilePath}`)
+    const moocWorkspaceFilePath = path.join(
+      workspaceFileFolder,
+      workspaceFileName(course.name, "mooc"),
+    )
+    if (!fs.existsSync(moocWorkspaceFilePath)) {
+      fs.writeFileSync(moocWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS))
+      Logger.info(`Created mooc workspace file at ${moocWorkspaceFilePath}`)
     }
   })
 

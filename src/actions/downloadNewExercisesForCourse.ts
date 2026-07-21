@@ -39,7 +39,7 @@ export async function downloadNewExercisesForCourse(
   postNewExercises([])
 
   const newExercises = LocalCourseData.getNewExercises(course)
-  const downloadResult = await downloadOrUpdateExercises(actionContext, newExercises)
+  const downloadResult = await downloadOrUpdateExercises(actionContext, newExercises, courseId)
   if (downloadResult.err) {
     Logger.error("Failed to download new exercises.", downloadResult.val)
     postNewExercises(newExercises)

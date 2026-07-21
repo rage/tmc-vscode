@@ -73,12 +73,9 @@ function moocCourse(
 ): storage.MoocLocalCourseData {
   return {
     id: "instance-uuid-1",
-    courseId: "course-uuid-1",
     name: "mooc-python-course",
-    instanceName: "default",
     title: "Mooc Python",
     description: "Mooc description",
-    courseDescription: "Mooc course description",
     organization: "mooc",
     exercises: [
       moocExercise({ id: "exercise-uuid-1", name: "mooc_hello" }),
@@ -243,7 +240,7 @@ suite("UserData clearFromNewExercises (Bug 2 regression)", function () {
 })
 
 // -------------------------------------------------------------------------------------------------
-// General UserData surface (Gap 3): construction, CRUD, updateExercises, persistence, both backends
+// General UserData surface: construction, CRUD, updateExercises, persistence, both backends
 // -------------------------------------------------------------------------------------------------
 
 suite("UserData construction", function () {
@@ -322,15 +319,6 @@ suite("UserData course add/get/update/delete", function () {
     userData.deleteCourse(CourseIdentifier.from("instance-uuid-1"))
     expect(userData.getTmcCourses()).toEqual([])
     expect(userData.getMoocCourses()).toEqual([])
-  })
-
-  test("updatePoints updates a tmc course's point totals", async function () {
-    const [userData] = await makeUserData({ courses: [tmcCourse({ id: 0 })], mooc_courses: [] })
-    const result = await userData.updatePoints(0, 3, 10)
-    expect(result.ok).toBe(true)
-    const course = userData.getTmcCourse(0)
-    expect(course.awardedPoints).toBe(3)
-    expect(course.availablePoints).toBe(10)
   })
 
   test("setNotifyDate updates the notify timer for both backends", async function () {

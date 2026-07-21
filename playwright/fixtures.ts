@@ -40,10 +40,30 @@ interface CustomTestFixtures {
   webview: FrameLocator
 }
 
-export const customTestFixtures: Fixtures<CustomTestFixtures> = {
-  vsCode: async ({}, run, testInfo) => {
+interface CustomTestOptions {
+  // Overrides the mooc OAuth client id the CLI authenticates as
+  // (TMC_LANGS_MOOC_CLIENT_ID). The mooc mock selects the device-flow scenario
+  // from this id (see backend/mooc/oauth.ts) — e.g. the cancel spec uses the
+  // "never approves" client so the login stays pending until it is cancelled.
+  // Defaults to unset (the real default client id, which the mock approves).
+  moocClientId: string | undefined
+}
+
+export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions> = {
+  moocClientId: [undefined, { option: true }],
+  vsCode: async ({ moocClientId }, run, testInfo) => {
     const configDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-config"))
     const projectsDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-projects"))
+    // The mock backend (localhost:4001) is one long-lived process shared across
+    // all specs, so its in-memory mooc state (issued device-flow tokens/polls,
+    // submissions) leaks between tests. Reset it before each test the same way
+    // the per-test config/projects dirs isolate on-disk state. Best-effort: if
+    // the backend isn't up yet the individual spec will fail loudly on its own.
+    try {
+      await fetch("http://localhost:4001/mooc-mock/reset", { method: "POST" })
+    } catch (error) {
+      console.warn("Could not reset mooc mock state (is the mock backend running?):", error)
+    }
     const electronApp = await electron.launch({
       executablePath: await downloadAndUnzipVSCode(),
       args,
@@ -51,6 +71,14 @@ export const customTestFixtures: Fixtures<CustomTestFixtures> = {
         ...process.env,
         RUST_LOG: "TRACE",
         TMC_LANGS_TMC_ROOT_URL: "http://localhost:4001",
+        // Route mooc (courses.mooc.fi) CLI calls at the mock mounted in the same
+        // backend process (backend/mooc). Overrides the compiled MOOC_BACKEND_URL
+        // define.
+        TMC_LANGS_MOOC_ROOT_URL: "http://localhost:4001",
+        // Poll the device-flow token endpoint fast so the mooc login e2e does
+        // not wait the real multi-second RFC 8628 interval.
+        TMC_LANGS_MOOC_DEVICE_POLL_INTERVAL_MS: "250",
+        ...(moocClientId ? { TMC_LANGS_MOOC_CLIENT_ID: moocClientId } : {}),
         TMC_LANGS_CONFIG_DIR: configDir,
         TMC_LANGS_DEFAULT_PROJECTS_DIR: projectsDir,
       },
@@ -88,4 +116,4 @@ export const customTestFixtures: Fixtures<CustomTestFixtures> = {
 }
 
 // @ts-expect-error: Custom type
-export const vsCodeTest = base.extend<CustomTestFixtures>(customTestFixtures)
+export const vsCodeTest = base.extend<CustomTestFixtures & CustomTestOptions>(customTestFixtures)

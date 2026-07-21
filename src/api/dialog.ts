@@ -80,33 +80,50 @@ export default class Dialog {
    *
    * @param message A prompt to be displayed to the user.
    * @param task Long task that determines the duration of the notification.
+   * The cancellation token only fires when `cancellable` is set.
+   * @param options Set `cancellable` to offer a Cancel button.
    */
   public async progressNotification<T>(
     message: string,
-    task: (progress: vscode.Progress<PercentProgress>) => Promise<T>,
+    task: (
+      progress: vscode.Progress<PercentProgress>,
+      token: vscode.CancellationToken,
+    ) => Promise<T>,
+    options?: { cancellable?: boolean },
   ): Promise<T> {
     return vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
         title: "TestMyCode",
+        cancellable: options?.cancellable ?? false,
       },
-      (progress) => {
+      (progress, token) => {
         progress.report({ message, increment: 0 })
         const percentageProgress = this._incrementPercentageWrapper(progress)
 
-        return task(percentageProgress)
+        return task(percentageProgress, token)
       },
     )
   }
 
   /**
    * Prompts the user with a selection of items and returns their corresponding value.
+   *
+   * @param prompt The quick pick's placeholder, or an object also giving the
+   * pick a title for context.
    */
-  public async selectItem<T>(prompt: string, ...items: Item<T>[]): Promise<T | undefined> {
+  public async selectItem<T>(
+    prompt: string | { title: string; placeHolder: string },
+    ...items: Item<T>[]
+  ): Promise<T | undefined> {
+    const options =
+      typeof prompt === "string"
+        ? { placeHolder: prompt }
+        : { title: prompt.title, placeHolder: prompt.placeHolder }
     return vscode.window
       .showQuickPick(
         items.map((i) => i[0]),
-        { placeHolder: prompt },
+        options,
       )
       .then((selection) => items.find((x) => x[0] === selection)?.[1])
   }

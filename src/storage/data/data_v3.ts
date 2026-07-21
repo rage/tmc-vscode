@@ -26,15 +26,14 @@ export interface MoocLocalCourseExercise {
 }
 
 export interface MoocLocalCourseData {
-  // instance id
+  // The courses.mooc.fi course id. There is no separate course-instance concept
+  // on this backend: the backend resolves the user's enrolled instance from
+  // their identity, so the course id is the sole client-side course key.
   id: string
-  courseId: string
   // course slug
   name: string
-  instanceName: string | null
   title: string
   description: string | null
-  courseDescription: string | null
   organization: string
   exercises: MoocLocalCourseExercise[]
   availablePoints: number
@@ -83,12 +82,9 @@ export const moocLocalCourseExerciseSchema: z.ZodType<MoocLocalCourseExercise> =
 
 export const moocLocalCourseDataSchema: z.ZodType<MoocLocalCourseData> = z.object({
   id: z.string(),
-  courseId: z.string(),
   name: z.string(),
-  instanceName: z.string().nullable(),
   title: z.string(),
   description: z.string().nullable(),
-  courseDescription: z.string().nullable(),
   organization: z.string(),
   exercises: z.array(moocLocalCourseExerciseSchema),
   availablePoints: z.number(),

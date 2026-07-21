@@ -21,11 +21,14 @@ export async function submitExercise(
     ? workspaceManager.val.getExerciseByPath(resource)
     : workspaceManager.val.activeExercise
   if (!exercise) {
-    dialog.errorNotification("Currently open editor is not part of a TMC exercise.")
+    dialog.errorNotification("The active editor is not part of a course exercise.")
     return
   }
 
-  const result = await actions.submitTmcExercise(context, actionContext, exercise)
+  const result =
+    exercise.backend === "mooc"
+      ? await actions.submitMoocExercise(context, actionContext, exercise)
+      : await actions.submitTmcExercise(context, actionContext, exercise)
   if (result.err) {
     if (result.val instanceof BottleneckError) {
       Logger.warn("Submission was cancelled:", result.val)

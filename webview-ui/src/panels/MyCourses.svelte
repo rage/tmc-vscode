@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte"
 
+  import Button from "../components/Button.svelte"
   import Card from "../components/Card.svelte"
   import ProgressBar from "../components/ProgressBar.svelte"
   import type { LocalCourseData as LocalCourseDataType, MyCoursesPanel } from "../shared/shared"
@@ -13,7 +14,7 @@
     match,
     unwrap,
   } from "../shared/shared"
-  import { addMessageListener, loadable, savePanelState } from "../utilities/script"
+  import { addMessageListener, savePanelState } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -21,8 +22,6 @@
   }
 
   let { panel = $bindable() }: Props = $props()
-
-  const selectedOrganizationSlug = loadable<string>()
 
   onMount(() => {
     vscode.postMessage({
@@ -49,7 +48,6 @@
         break
       }
       case "selectedOrganization": {
-        selectedOrganizationSlug.set(message.slug)
         vscode.postMessage({
           type: "selectCourse",
           sourcePanel: { id: panel.id, type: panel.type },
@@ -58,6 +56,8 @@
         break
       }
       case "selectedCourse": {
+        // Extension closes the selection side panel only on success, so a failed add
+        // leaves it open for retry.
         vscode.postMessage({
           type: "addCourse",
           organizationSlug: message.organizationSlug,
@@ -65,25 +65,14 @@
           courseId: makeTmcKind({ courseId: message.courseId }),
           requestingPanel: { id: panel.id, type: panel.type },
         })
-        // todo: only close side panel on success
-        vscode.postMessage({
-          type: "closeSidePanel",
-        })
         break
       }
       case "selectedMoocCourse": {
         vscode.postMessage({
           type: "addMoocCourse",
-          organizationSlug: message.organizationSlug,
-          courseId: message.courseId,
           instanceId: message.instanceId,
           courseName: message.courseName,
-          instanceName: message.instanceName,
           requestingPanel: { id: panel.id, type: panel.type },
-        })
-        // todo: only close side panel on success
-        vscode.postMessage({
-          type: "closeSidePanel",
         })
         break
       }
@@ -164,10 +153,11 @@
       id,
     })
   }
-  function openWorkspace(name: string) {
+  function openWorkspace(name: string, backend: "tmc" | "mooc") {
     vscode.postMessage({
       type: "openCourseWorkspace",
       courseName: name,
+      backend,
     })
   }
   function downloadExercises(ids: Array<ExerciseIdentifier>, courseId: CourseIdentifier) {
@@ -187,24 +177,15 @@
 </script>
 
 <div>
-  <h1>My Courses</h1>
+  <h1>My courses</h1>
 
   <div class="top-container">
     <div>
       <div>
-        Currently your exercises ({panel.tmcDataSize ?? "loading size..."}) are located at:
-        <span class="data-path">{panel.tmcDataPath ?? "loading path..."}</span>
+        Currently your exercises ({panel.tmcDataSize ?? "loading size…"}) are located at:
+        <span class="data-path">{panel.tmcDataPath ?? "loading path…"}</span>
       </div>
-      <vscode-button
-        role="button"
-        tabindex="0"
-        class="change-path-button"
-        secondary
-        onclick={changeTmcDataPath}
-        onkeypress={changeTmcDataPath}
-      >
-        Change path
-      </vscode-button>
+      <Button class="change-path-button" secondary onclick={changeTmcDataPath}>Change path</Button>
     </div>
   </div>
 
@@ -212,131 +193,86 @@
     {#each panel.courses as course}
       {@const courseData = unwrap(course)}
       {@const courseId = LocalCourseData.getCourseId(course)}
-      {@const completed = ((courseData.awardedPoints / courseData.availablePoints) * 100).toFixed(
-        2,
-      )}
+      {@const completed =
+        courseData.availablePoints > 0
+          ? ((courseData.awardedPoints / courseData.availablePoints) * 100).toFixed(2)
+          : "0.00"}
       <Card>
-        <div
-          role="button"
-          tabindex="0"
-          onclick={() => {
-            openCourseDetails(courseId)
-          }}
-          onkeypress={() => {
-            openCourseDetails(courseId)
-          }}
-        >
-          <div class="course-header">
-            <h3 class="course-title">
-              {courseData.title} <small class="muted">({courseData.name})</small>
-            </h3>
-            <vscode-button
-              role="button"
-              tabindex="0"
-              class="remove-button"
-              secondary
+        <div class="course-header">
+          <h3 class="course-title">
+            <!-- A native button avoids nesting interactive controls inside an interactive
+                 ancestor, which would collapse the whole card into one giant "button" for AT. -->
+            <button
               type="button"
-              aria-label="remove course"
-              onclick={(e: Event) => {
-                e.stopPropagation()
-                removeCourse(courseId)
-              }}
-              onkeypress={(e: Event) => {
-                e.stopPropagation()
-                removeCourse(courseId)
-              }}
+              class="course-title-button"
+              onclick={() => openCourseDetails(courseId)}
             >
-              ×
-            </vscode-button>
-          </div>
-          {#if courseData.description}
-            <p class="course-description">{courseData.description}</p>
-          {/if}
-          <div class="progress-bar-container">
-            <ProgressBar
-              label={`Programming exercise progress: ${completed}%`}
-              value={courseData.awardedPoints}
-              max={courseData.availablePoints}
-            />
-          </div>
-          <vscode-button
-            role="button"
-            tabindex="0"
-            type="button"
-            aria-label="Open workspace"
-            onclick={(e: Event) => {
-              e.stopPropagation()
-              openWorkspace(courseData.name)
-            }}
-            onkeypress={(e: Event) => {
-              e.stopPropagation()
-              openWorkspace(courseData.name)
-            }}
+              {courseData.title} <small class="muted">({courseData.name})</small>
+            </button>
+          </h3>
+          <Button
+            class="remove-button"
+            secondary
+            aria-label="remove course"
+            onclick={() => removeCourse(courseId)}
           >
-            Open workspace
-          </vscode-button>
-
-          {#if courseData.disabled}
-            <div role="alert">
-              This course has been disabled. Exercises cannot be downloaded or submitted.
-            </div>
-          {:else if courseData.newExercises.length > 0}
-            <div role="alert">
-              {courseData.newExercises.length} new exercises found for this course.
-              <vscode-button
-                role="button"
-                tabindex="0"
-                type="button"
-                onclick={() => {
-                  downloadExercises(LocalCourseData.getNewExercises(course), courseId)
-                }}
-                onkeypress={() => {
-                  downloadExercises(LocalCourseData.getNewExercises(course), courseId)
-                }}
-              >
-                Download them!
-              </vscode-button>
-              <vscode-button
-                role="button"
-                tabindex="0"
-                type="button"
-                aria-label="Close"
-                onclick={() => clearNewExercises(courseId)}
-                onkeypress={() => clearNewExercises(courseId)}
-              >
-                ×
-              </vscode-button>
-            </div>
-          {/if}
+            <vscode-icon name="close" aria-hidden="true"></vscode-icon>
+          </Button>
         </div>
+        {#if courseData.description}
+          <p class="course-description">{courseData.description}</p>
+        {/if}
+        <div class="progress-bar-container">
+          <ProgressBar
+            label={`Programming exercise progress: ${completed}%`}
+            value={courseData.awardedPoints}
+            max={courseData.availablePoints}
+          />
+        </div>
+        <Button
+          aria-label="Open workspace"
+          onclick={() => openWorkspace(courseData.name, course.kind)}
+        >
+          Open workspace
+        </Button>
+
+        {#if courseData.disabled}
+          <div role="alert">
+            This course has been disabled. Exercises cannot be downloaded or submitted.
+          </div>
+        {:else if courseData.newExercises.length > 0}
+          <div role="alert">
+            {courseData.newExercises.length} new exercises found for this course.
+            <Button
+              onclick={() => downloadExercises(LocalCourseData.getNewExercises(course), courseId)}
+            >
+              Download them!
+            </Button>
+            <Button aria-label="Close" onclick={() => clearNewExercises(courseId)}>
+              <vscode-icon name="close" aria-hidden="true"></vscode-icon>
+            </Button>
+          </div>
+        {/if}
       </Card>
     {/each}
     {#if panel.courses.length === 0}
       <div>Add courses to start completing exercises.</div>
     {/if}
   {:else}
-    <vscode-progress-ring></vscode-progress-ring>
+    <vscode-progress-ring aria-label="Loading"></vscode-progress-ring>
   {/if}
 </div>
 
 <div class="add-new-course-container">
-  <vscode-button
-    role="button"
-    tabindex="0"
-    class="add-new-course"
-    type="button"
-    onclick={addNewCourse}
-    onkeypress={addNewCourse}
-  >
-    Add new course
-  </vscode-button>
+  <Button class="add-new-course" onclick={addNewCourse}>Add new course</Button>
 </div>
 
 <style>
   .muted {
     opacity: 90%;
   }
-  .add-new-course {
+  /* targets the <vscode-button> rendered inside the Button wrapper */
+  .add-new-course-container :global(.add-new-course) {
     margin-bottom: 0.4rem;
   }
   .course-header {
@@ -346,14 +282,29 @@
     margin-top: 0.2rem;
     flex-grow: 1;
   }
+  /* Resets the native button to look like plain heading text. */
+  .course-title-button {
+    all: unset;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+    display: inline;
+  }
+  .course-title-button:hover {
+    text-decoration: underline;
+  }
+  .course-title-button:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: 2px;
+  }
   .data-path {
     white-space: normal;
     font-family: monospace;
   }
-  .change-path-button {
+  .top-container :global(.change-path-button) {
     margin-top: 0.4rem;
   }
-  .remove-button {
+  .course-header :global(.remove-button) {
     align-self: start;
     margin: 0.4rem;
   }
@@ -374,7 +325,7 @@
   }
 
   @media (orientation: landscape) {
-    .add-new-course {
+    .add-new-course-container :global(.add-new-course) {
       margin-bottom: 0rem;
     }
     .top-container {

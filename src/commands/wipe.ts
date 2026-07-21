@@ -79,11 +79,15 @@ Please close the workspace and any related files before running this command aga
     }
     progress.report({ message, percent: 0.5 })
 
-    // Maybe logout should have setting to disable events?
-    langs.val.on("logout", () => {})
+    // `deauthenticate` fires the logout events with `expected: true`, so the
+    // session-expiry warning stays quiet and the auth context updates itself.
     const result3 = await langs.val.deauthenticate()
     if (result3.err) {
       return result3
+    }
+    const result4 = await langs.val.deauthenticateMooc()
+    if (result4.err) {
+      return result4
     }
     progress.report({ message, percent: 0.75 })
 

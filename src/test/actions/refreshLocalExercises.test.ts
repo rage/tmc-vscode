@@ -67,13 +67,10 @@ suite("refreshLocalExercises action", function () {
 
   test("should set mooc course exercises with the mooc backend", async function () {
     const moocCourse: MoocLocalCourseData = {
-      id: "instance-uuid-1",
-      courseId: "course-uuid-1",
+      id: "course-uuid-1",
       name: "mooc-python-course",
-      instanceName: null,
       title: "Mooc Python",
       description: null,
-      courseDescription: null,
       organization: "mooc",
       exercises: [],
       availablePoints: 0,
@@ -85,15 +82,23 @@ suite("refreshLocalExercises action", function () {
       materialUrl: null,
     }
     userDataMockValues.getCourses = [makeMoocKind(moocCourse) as LocalCourseData]
-    tmcMock.listLocalCourseExercises = vi.fn(async (backend: string, slug: string) =>
-      backend === "mooc" && slug === "mooc-python-course"
-        ? Ok([{ "exercise-slug": "mooc_hello", "exercise-path": "/mooc/hello" }])
+    // The mooc local listing is looked up by course id (UUID), since mooc configs
+    // store no slug. The display slug stays the course name.
+    tmcMock.listLocalCourseExercises = vi.fn(async (backend: string, courseId: string) =>
+      backend === "mooc" && courseId === "course-uuid-1"
+        ? Ok([
+            {
+              "exercise-slug": "mooc_hello",
+              "exercise-id": "exercise-uuid-1",
+              "exercise-path": "/mooc/hello",
+            },
+          ])
         : Err(new Error("not mocked")),
     ) as Langs["listLocalCourseExercises"]
 
     const result = await refreshLocalExercises(actionContext())
     expect(result).toBe(Ok.EMPTY)
-    expect(tmcMock.listLocalCourseExercises).toHaveBeenCalledWith("mooc", "mooc-python-course")
+    expect(tmcMock.listLocalCourseExercises).toHaveBeenCalledWith("mooc", "course-uuid-1")
     expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith([
       expect.objectContaining({
         backend: "mooc",

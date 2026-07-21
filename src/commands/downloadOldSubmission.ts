@@ -1,9 +1,39 @@
+import type { Result } from "ts-results"
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
-import type { OldSubmission } from "../api/types"
+import type { ExerciseSlideSubmissionListItem } from "../shared/langsSchema"
 import { ExerciseIdentifier, match } from "../shared/shared"
 import { dateToString, Logger, parseDate } from "../utilities"
+
+/**
+ * A submission normalized for the picker across both backends: the backend's own
+ * submission id (integer for TMC, uuid string for mooc), a timestamp, and a
+ * human-readable status shown next to the date.
+ */
+interface PickableSubmission {
+  id: number | string
+  createdAt: string
+  status: string
+}
+
+/** Human-readable grading status for a mooc submission (score + progress). */
+function moocSubmissionStatus(submission: ExerciseSlideSubmissionListItem): string {
+  if (submission.grading_progress === null) {
+    return "Not graded"
+  }
+  const score = submission.score_given !== null ? ` (score ${submission.score_given})` : ""
+  switch (submission.grading_progress) {
+    case "FullyGraded":
+      return `${(submission.score_given ?? 0) > 0 ? "Passed" : "Not passed"}${score}`
+    case "Failed":
+      return `Failed${score}`
+    case "PendingManual":
+      return `Awaiting manual grading${score}`
+    default:
+      return `Pending${score}`
+  }
+}
 
 /**
  * Looks for older submissions of the given exercise and lets user choose which one to download.
@@ -26,12 +56,16 @@ export async function downloadOldSubmission(
     ? workspaceManager.val.getExerciseByPath(resource)
     : workspaceManager.val.activeExercise
   if (!exercise) {
-    dialog.errorNotification("Currently open editor is not part of a TMC exercise.")
+    dialog.errorNotification("The active editor is not part of a course exercise.")
     return
   }
 
-  const exerciseId = userData.val.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
-    ?.data?.id
+  // Look up by known backend rather than a name-only match, which could
+  // resolve to the wrong backend if a tmc and mooc exercise share a slug.
+  const exerciseId =
+    exercise.backend === "mooc"
+      ? userData.val.getMoocExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id
+      : userData.val.getTmcExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id
   if (!exerciseId) {
     dialog.errorNotification("Failed to resolve exercise id.")
     return
@@ -39,10 +73,31 @@ export async function downloadOldSubmission(
 
   const id = ExerciseIdentifier.from(exerciseId)
   Logger.debug("Fetching old submissions")
+  // Normalize both backends' submission shapes into a common pickable list; the
+  // id spaces differ (TMC integer, mooc uuid string) and the status is derived
+  // differently (TMC all_tests_passed vs mooc grading progress + score).
   const submissionsResult = await match(
     id,
-    (tmc) => langs.val.getTmcOldSubmissions(tmc.tmcExerciseId),
-    (mooc) => langs.val.getMoocOldSubmissions(mooc.moocExerciseId),
+    (tmc): Promise<Result<PickableSubmission[], Error>> =>
+      langs.val.getTmcOldSubmissions(tmc.tmcExerciseId).then((res) =>
+        res.map((submissions) =>
+          submissions.map<PickableSubmission>((submission) => ({
+            id: submission.id,
+            createdAt: submission.created_at,
+            status: submission.all_tests_passed ? "Passed" : "Not passed",
+          })),
+        ),
+      ),
+    (mooc): Promise<Result<PickableSubmission[], Error>> =>
+      langs.val.getMoocOldSubmissions(mooc.moocExerciseId).then((res) =>
+        res.map((submissions) =>
+          submissions.map<PickableSubmission>((submission) => ({
+            id: submission.id,
+            createdAt: submission.created_at,
+            status: moocSubmissionStatus(submission),
+          })),
+        ),
+      ),
   )
   if (submissionsResult.err) {
     dialog.errorNotification("Failed to fetch old submissions.", submissionsResult.val)
@@ -50,7 +105,7 @@ export async function downloadOldSubmission(
   }
 
   submissionsResult.val.sort(
-    (a, b) => parseDate(a.created_at).getTime() - parseDate(b.created_at).getTime(),
+    (a, b) => parseDate(a.createdAt).getTime() - parseDate(b.createdAt).getTime(),
   )
   if (submissionsResult.val.length === 0) {
     dialog.notification(`No previous submissions found for exercise ${exerciseId}`)
@@ -58,9 +113,12 @@ export async function downloadOldSubmission(
   }
 
   const submission = await dialog.selectItem(
-    exercise.exerciseSlug + ": Select a submission",
-    ...submissionsResult.val.map<[string, OldSubmission]>((a) => [
-      dateToString(parseDate(a.created_at)) + "| " + (a.all_tests_passed ? "Passed" : "Not passed"),
+    {
+      title: "Download Old Submission",
+      placeHolder: exercise.exerciseSlug + ": Select a submission",
+    },
+    ...submissionsResult.val.map<[string, PickableSubmission]>((a) => [
+      dateToString(parseDate(a.createdAt)) + "| " + a.status,
       a,
     ]),
   )
@@ -68,8 +126,18 @@ export async function downloadOldSubmission(
     return
   }
 
+  // Name the backend the submission would go to, so the mooc branch does not say
+  // "TMC Server".
+  const serverName = match(
+    id,
+    () => "TMC Server",
+    () => "courses.mooc.fi",
+  )
   const submitFirstSelection = await dialog.selectItem(
-    "Do you want to save the current state of the exercise by submitting it to TMC Server?",
+    {
+      title: "Download Old Submission",
+      placeHolder: `Do you want to save the current state of the exercise by submitting it to ${serverName}?`,
+    },
     ["Submit to server", "submit"],
     ["Discard current state", "discard"],
   )
@@ -82,7 +150,7 @@ export async function downloadOldSubmission(
   // if we're submitting first, nothing will be lost anyway so it's probably okay to not annoy the user with a double confirm
   if (!submitFirst) {
     const confirm = await dialog.selectItem(
-      "Are you sure?",
+      { title: "Download Old Submission", placeHolder: "Are you sure?" },
       ["No, save the current exercise state", "submit"],
       ["Yes, discard current state", "discard"],
     )
@@ -101,14 +169,14 @@ export async function downloadOldSubmission(
       langs.val.downloadTmcOldSubmission(
         tmc.tmcExerciseId,
         exercise.uri.fsPath,
-        submission.id,
+        submission.id as number,
         submitFirst,
       ),
     (mooc) =>
       langs.val.downloadMoocOldSubmission(
         mooc.moocExerciseId,
         exercise.uri.fsPath,
-        submission.id.toString(),
+        String(submission.id),
         submitFirst,
       ),
   )

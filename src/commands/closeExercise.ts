@@ -20,7 +20,7 @@ export async function closeExercise(
     ? workspaceManager.val.getExerciseByPath(resource)
     : workspaceManager.val.activeExercise
   if (!exercise) {
-    dialog.errorNotification("Currently open editor is not part of a TMC exercise.")
+    dialog.errorNotification("The active editor is not part of a course exercise.")
     return
   }
 

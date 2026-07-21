@@ -181,6 +181,19 @@ export class UserData {
     }
   }
 
+  public async setMoocExerciseAsPassed(courseSlug: string, exerciseName: string): Promise<void> {
+    for (const course of this._moocCourses.values()) {
+      if (course.name === courseSlug) {
+        const exercise = course.exercises.find((x) => x.name === exerciseName)
+        if (exercise) {
+          exercise.passed = true
+          await this._updatePersistentData()
+          break
+        }
+      }
+    }
+  }
+
   public addCourse(data: LocalCourseData): void {
     switch (data.kind) {
       case "tmc": {
@@ -323,22 +336,6 @@ export class UserData {
     // wraps the stored reference), so the mutations above are already in place;
     // persisting is all that's left. Calling addCourse here would throw, since
     // the course already exists.
-    await this._updatePersistentData()
-    return Ok.EMPTY
-  }
-
-  public async updatePoints(
-    courseId: number,
-    awardedPoints: number,
-    availablePoints: number,
-  ): Promise<Result<void, Error>> {
-    const courseData = this._tmcCourses.get(courseId)
-    if (!courseData) {
-      return new Err(new Error(`Course data missing for ${courseId}`))
-    }
-    courseData.awardedPoints = awardedPoints
-    courseData.availablePoints = availablePoints
-    this._tmcCourses.set(courseId, courseData)
     await this._updatePersistentData()
     return Ok.EMPTY
   }

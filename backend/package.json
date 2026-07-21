@@ -8,16 +8,20 @@
   "scripts": {
     "setup": "tsx setup.ts",
     "start": "tsx index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --import tsx --test mooc/*.test.ts",
     "tsc": "tsc"
   },
   "dependencies": {
-    "express": "^5.0.0"
+    "express": "^5.0.0",
+    "multer": "^2.0.0",
+    "openapi-backend": "^5.11.0"
   },
   "devDependencies": {
     "@types/archiver": "^8.0.0",
     "@types/express": "^5.0.6",
+    "@types/multer": "^2.0.0",
     "@types/ncp": "^2.0.8",
+    "ajv": "^8.20.0",
     "archiver": "^8.0.0",
     "ncp": "^2.0.0",
     "tsx": "^4.6.2",

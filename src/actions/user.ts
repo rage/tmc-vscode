@@ -13,7 +13,11 @@ import type {
   WorkspaceExercise,
   WorkspaceExercise as WorkspaceTmcExercise,
 } from "../api/workspaceManager"
-import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants"
+import {
+  closedExercisesSettingKey,
+  EXAM_TEST_RESULT,
+  NOTIFICATION_DELAY,
+} from "../config/constants"
 import { BottleneckError, InitializationError } from "../errors"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../shared/shared"
@@ -46,7 +50,7 @@ export async function login(
 
   const result = await langs.val.authenticate(username, password)
   if (result.err) {
-    dialog.errorNotification(`Failed to log in: "${result.val.message}:"`, result.val)
+    dialog.errorNotification(`Failed to log in: ${result.val.message}`, result.val)
     return result
   }
 
@@ -54,7 +58,25 @@ export async function login(
 }
 
 /**
- * Logs the user out, updating UI state
+ * Converts a thrown exception into an `Err` Result so a failure in one
+ * backend's deauthenticate call can't skip the other in `logout`.
+ */
+async function safeDeauthenticate(
+  deauthenticate: () => Promise<Result<void, Error>>,
+): Promise<Result<void, Error>> {
+  try {
+    return await deauthenticate()
+  } catch (e) {
+    return Err(e instanceof Error ? e : new Error(String(e)))
+  }
+}
+
+/**
+ * Logs the user out of both backends, updating UI state.
+ *
+ * Both deauthenticate calls run unconditionally so a failure in one doesn't
+ * skip the other; each failure gets its own notification, and the returned
+ * `Result` reports whichever failed (tmc's, if both did).
  */
 export async function logout(actionContext: ActionContext): Promise<Result<void, Error>> {
   const { langs, dialog } = actionContext
@@ -62,12 +84,24 @@ export async function logout(actionContext: ActionContext): Promise<Result<void,
     return new Err(new InitializationError("Extension was not initialized properly"))
   }
 
-  const result = await langs.val.deauthenticate()
+  const result = await safeDeauthenticate(() => langs.val.deauthenticate())
   if (result.err) {
-    dialog.errorNotification(`Failed to log out: "${result.val.message}:"`, result.val)
-    return result
+    dialog.errorNotification(`Failed to log out: ${result.val.message}`, result.val)
+  }
+  const moocResult = await safeDeauthenticate(() => langs.val.deauthenticateMooc())
+  if (moocResult.err) {
+    dialog.errorNotification(
+      `Failed to log out of courses.mooc.fi: ${moocResult.val.message}`,
+      moocResult.val,
+    )
   }
 
+  if (result.err) {
+    return result
+  }
+  if (moocResult.err) {
+    return moocResult
+  }
   return Ok.EMPTY
 }
 
@@ -276,6 +310,96 @@ export async function submitTmcExercise(
 }
 
 /**
+ * Submits a mooc exercise and shows the reduced grading result, the mooc twin
+ * of {@link submitTmcExercise}. Mooc grading has no per-test breakdown or
+ * feedback questions, so the panel shows only the overall grading progress,
+ * score, and feedback text (posted via `moocSubmissionResult`).
+ */
+export async function submitMoocExercise(
+  context: vscode.ExtensionContext,
+  actionContext: ActionContext,
+  exercise: WorkspaceExercise,
+): Promise<Result<void, Error>> {
+  const { exerciseDecorationProvider, langs, userData } = actionContext
+  if (!(langs.ok && userData.ok && exerciseDecorationProvider.ok)) {
+    return new Err(new InitializationError("Extension was not initialized properly"))
+  }
+  Logger.info(`Submitting mooc exercise ${exercise.exerciseSlug} to server`)
+
+  const course = userData.val.getCourseBySlug(exercise.courseSlug)
+  const courseExercise = LocalCourseData.getExercises(course).find(
+    (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
+  )
+  if (!courseExercise) {
+    return Err(new Error(`ID for exercise ${exercise.exerciseSlug} was not found.`))
+  }
+  const exerciseId = userData.val.getMoocExerciseByName(
+    exercise.courseSlug,
+    exercise.exerciseSlug,
+  )?.id
+  if (!exerciseId) {
+    return Err(new Error(`ID for exercise ${exercise.exerciseSlug} was not found.`))
+  }
+
+  const panel: ExerciseSubmissionPanel = {
+    id: randomPanelId(),
+    type: "ExerciseSubmission",
+    course,
+    exercise: courseExercise,
+  }
+  await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+
+  const submissionResult = await langs.val.submitMoocExerciseAndWaitForResults(
+    exerciseId,
+    exercise.uri.fsPath,
+    (progressPercent, message) => {
+      TmcPanel.postMessage({
+        type: "submissionStatusUpdate",
+        target: panel,
+        progressPercent,
+        message,
+      })
+    },
+  )
+
+  if (submissionResult.err) {
+    if (submissionResult.val instanceof BottleneckError) {
+      Logger.warn("Submission was cancelled:", submissionResult.val)
+      return Ok.EMPTY
+    }
+    TmcPanel.postMessage({
+      type: "submissionStatusError",
+      target: panel,
+      error: submissionResult.val,
+    })
+    return submissionResult
+  }
+
+  const status = submissionResult.val
+  if (
+    status !== "NoGradingYet" &&
+    status.Grading.grading_progress === "FullyGraded" &&
+    status.Grading.score_given !== null &&
+    status.Grading.score_given > 0
+  ) {
+    userData.val.setMoocExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug).then(() => {
+      exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
+    })
+  }
+
+  if (TmcPanel.sidePanel === undefined) {
+    await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+  }
+  TmcPanel.postMessage({
+    type: "moocSubmissionResult",
+    target: panel,
+    result: status,
+  })
+
+  return Ok.EMPTY
+}
+
+/**
  * Sends the exercise to the TMC Paste server.
  * @param id Exercise ID
  * @returns TMC Paste link if the action was successful.
@@ -335,7 +459,7 @@ export async function pasteMoocExercise(
   const pasteResult = await langs.val.submitMoocExerciseToPaste(exerciseId, exercisePath)
   if (pasteResult.err) {
     dialog.errorNotification(
-      `Failed to send exercise to TMC Paste: ${pasteResult.val.message}.`,
+      `Failed to send exercise to the courses.mooc.fi paste service: ${pasteResult.val.message}`,
       pasteResult.val,
     )
     return pasteResult
@@ -344,7 +468,9 @@ export async function pasteMoocExercise(
   const pasteLink = pasteResult.val
   if (pasteLink === "") {
     const message = "Didn't receive paste link from server."
-    return new Err(new Error(`Failed to send exercise to TMC Paste: ${message}`))
+    return new Err(
+      new Error(`Failed to send exercise to the courses.mooc.fi paste service: ${message}`),
+    )
   }
 
   return new Ok(pasteLink)
@@ -378,7 +504,10 @@ export async function checkForCourseUpdates(
     const id = LocalCourseData.getCourseId(course)
     const downloadResult = await downloadNewExercisesForCourse(actionContext, id)
     if (downloadResult.err) {
-      dialog.errorNotification(`Failed to download new exercises for course"`, downloadResult.val)
+      dialog.errorNotification(
+        "Failed to download new exercises for the course.",
+        downloadResult.val,
+      )
     }
   }
 
@@ -410,7 +539,11 @@ export async function checkForCourseUpdates(
 /**
  * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
  */
-export async function openWorkspace(actionContext: ActionContext, name: string): Promise<void> {
+export async function openWorkspace(
+  actionContext: ActionContext,
+  name: string,
+  backend: "tmc" | "mooc",
+): Promise<void> {
   const { dialog, resources, workspaceManager } = actionContext
   if (!(resources.ok && workspaceManager.ok)) {
     Logger.error("Extension was not initialized properly")
@@ -418,7 +551,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
   }
 
   const currentWorkspaceFile = vscode.workspace.workspaceFile
-  const tmcWorkspaceFile = resources.val.getWorkspaceFilePath(name)
+  const tmcWorkspaceFile = resources.val.getWorkspaceFilePath(name, backend)
   const workspaceAsUri = vscode.Uri.file(tmcWorkspaceFile)
   Logger.info(`Current workspace: ${currentWorkspaceFile?.fsPath}`)
   Logger.info(`TMC workspace: ${tmcWorkspaceFile}`)
@@ -429,7 +562,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
       (await dialog.confirmation("Do you want to open TMC workspace and close the current one?"))
     ) {
       if (!fs.existsSync(tmcWorkspaceFile)) {
-        workspaceManager.val.createWorkspaceFile(name)
+        workspaceManager.val.createWorkspaceFile(name, backend)
       }
       await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri)
       // Restarts VSCode
@@ -441,7 +574,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
           choice,
           async (): Promise<Thenable<unknown>> => {
             if (!fs.existsSync(tmcWorkspaceFile)) {
-              workspaceManager.val.createWorkspaceFile(name)
+              workspaceManager.val.createWorkspaceFile(name, backend)
             }
             return vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri)
           },
@@ -475,10 +608,12 @@ export async function removeCourse(
   const courseName = LocalCourseData.getCourseName(course)
   Logger.info(`Closing exercises for ${courseName} and removing course data from userData`)
 
-  const unsetResult = await langs.val.unsetSetting(`closed-exercises-for:${courseName}`)
+  const unsetResult = await langs.val.unsetSetting(
+    closedExercisesSettingKey(course.kind, courseName),
+  )
   if (unsetResult.err) {
     dialog.errorNotification(
-      `Failed to remove TMC-langs data for "${courseName}:"`,
+      `Failed to remove TMC-langs data for "${courseName}".`,
       unsetResult.val,
     )
   }
@@ -486,7 +621,10 @@ export async function removeCourse(
   userData.val.deleteCourse(id)
   ui.treeDP.removeChildWithId("myCourses", CourseIdentifier.toString(id))
 
-  if (workspaceManager.val.activeCourse === courseName) {
+  if (
+    workspaceManager.val.activeCourse === courseName &&
+    workspaceManager.val.activeCourseBackend === course.kind
+  ) {
     Logger.info("Closing course workspace because it was removed.")
     await vscode.commands.executeCommand("workbench.action.closeFolder")
   }

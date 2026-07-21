@@ -1,6 +1,4 @@
 import { onDestroy } from "svelte"
-import type { Writable } from "svelte/store"
-import { writable } from "svelte/store"
 import { z } from "zod"
 
 /**
@@ -44,13 +42,6 @@ type WebviewToWebview =
 const MessageToWebviewSchema = z.union([ExtensionToWebviewSchema, WebviewToWebviewSchema])
 
 type TargetedMessage<T extends Panel> = Targeted<Message, T["type"]>
-
-/**
- * Convenience function for writable Svelte stores with an `undefined` starting value. The actual value is "loaded" later.
- */
-export function loadable<T>(): Writable<T | undefined> {
-  return writable(undefined)
-}
 
 /**
  * Convenience function for listening to messages from the extension host to the webview.
@@ -103,6 +94,20 @@ export function postMessageToWebview(message: SharedWebviewToWebview): void {
   vscode.postMessage(webviewToExtension)
 }
 
+/** Builds the URL for a logo served by the backend, falling back to its "missing" placeholder. */
+export function resolveLogoPath(backendUrl: string, path: string): string {
+  return !path.endsWith("missing.png")
+    ? `${backendUrl}${path}`
+    : `${backendUrl}/logos/small_logo/missing.png`
+}
+
 export function savePanelState(panel: Panel): void {
-  vscode.setState({ panel })
+  // `panel` reaches here as a Svelte 5 `$state` proxy (it is the reassigned panel
+  // prop). VS Code's real `setState` serializes its argument with the structured
+  // clone algorithm, which throws `DataCloneError` on a proxy -- the same hazard
+  // the postMessage boundary guards against. Deep-clone to a plain object first.
+  // This is a plain `.ts` module, so `$state.snapshot` (a compiler rune) is not
+  // available; a JSON round-trip reads through the proxy and yields a plain,
+  // structured-cloneable object (Panel is always JSON-serializable).
+  vscode.setState({ panel: JSON.parse(JSON.stringify(panel)) as Panel })
 }

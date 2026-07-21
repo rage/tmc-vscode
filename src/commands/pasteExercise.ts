@@ -21,7 +21,7 @@ export async function pasteExercise(
     ? workspaceManager.val.getExerciseByPath(resource)
     : workspaceManager.val.activeExercise
   if (!exercise) {
-    dialog.errorNotification("Currently open editor is not part of a TMC exercise.")
+    dialog.errorNotification("The active editor is not part of a course exercise.")
     return
   }
 
@@ -36,7 +36,12 @@ export async function pasteExercise(
       return
     }
 
-    dialog.errorNotification("TMC Paste command failed.", pasteResult.val)
+    const pasteService = matchBackend(
+      exercise,
+      () => "TMC Paste",
+      () => "courses.mooc.fi paste",
+    )
+    dialog.errorNotification(`Failed to send the exercise to ${pasteService}.`, pasteResult.val)
     return
   }
 

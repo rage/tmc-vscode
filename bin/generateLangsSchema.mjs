@@ -18,7 +18,7 @@
 // re-runs this script and diffs shared/generated + shared/bindings.schema.json
 // to catch drift (see .github/workflows/test.yml).
 //
-// The three transforms applied to the JSON Schema are all GENERIC (no
+// The transforms applied to the JSON Schema are all GENERIC (no
 // type-specific hacks):
 //   1. #/$defs/X  ->  #/components/schemas/X   (OpenAPI component refs)
 //   2. "$ref with sibling keywords"  ->  "allOf: [{$ref}] + siblings".
@@ -71,6 +71,55 @@ walk(root, (n) => {
 walk(root, (n) => {
   if (n.format === "date-time") {
     delete n.format
+  }
+})
+// 4. materialize boolean-`true` subschemas sitting in schema positions.
+//    JSON Schema allows `true` (accept-anything) as a subschema, and schemars
+//    emits it for any-typed but REQUIRED `serde_json::Value` fields (e.g. the
+//    grading status' `feedback_json`, the `token` output-data). The zod
+//    generator silently DROPS such properties -- so a required key vanishes from
+//    both the generated type and the validation. Replacing `true` with the
+//    equivalent empty object schema `{}` makes the generator emit `z.unknown()`
+//    (same as it already does for `additionalProperties: true`), preserving the
+//    key. Only boolean schemas in real schema positions are touched; boolean
+//    KEYWORDS (uniqueItems, readOnly, ...) are left alone.
+const SCHEMA_MAP_KEYWORDS = ["properties", "patternProperties", "$defs", "definitions"]
+const SCHEMA_SINGLE_KEYWORDS = [
+  "additionalProperties",
+  "items",
+  "propertyNames",
+  "not",
+  "if",
+  "then",
+  "else",
+  "contains",
+]
+const SCHEMA_LIST_KEYWORDS = ["allOf", "anyOf", "oneOf", "prefixItems"]
+walk(root, (n) => {
+  for (const kw of SCHEMA_MAP_KEYWORDS) {
+    const map = n[kw]
+    if (map && typeof map === "object" && !Array.isArray(map)) {
+      for (const key of Object.keys(map)) {
+        if (map[key] === true) {
+          map[key] = {}
+        }
+      }
+    }
+  }
+  for (const kw of SCHEMA_SINGLE_KEYWORDS) {
+    if (n[kw] === true) {
+      n[kw] = {}
+    }
+  }
+  for (const kw of SCHEMA_LIST_KEYWORDS) {
+    const list = n[kw]
+    if (Array.isArray(list)) {
+      for (let i = 0; i < list.length; i++) {
+        if (list[i] === true) {
+          list[i] = {}
+        }
+      }
+    }
   }
 })
 

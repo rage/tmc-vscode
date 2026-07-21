@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/svelte"
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte"
 import { vi } from "vitest"
 
 import type { LoginPanel } from "../shared/shared"
@@ -45,15 +45,21 @@ suite("Login panel", () => {
     const { container } = render(Login, { props: { panel } })
     postedMessages.mockClear()
 
-    const usernameField = container.querySelector<HTMLInputElement>("#username-field")
-    const passwordField = container.querySelector<HTMLInputElement>("#password-field")
+    // Ids are generated via $props.id(), so fields are found by type; fire `input` after
+    // setting `.value` since `bind:value` reads it on that event.
+    const usernameField = container.querySelector<HTMLInputElement>('vscode-textfield[type="text"]')
+    const passwordField = container.querySelector<HTMLInputElement>(
+      'vscode-textfield[type="password"]',
+    )
     expect(usernameField).not.toBeNull()
     expect(passwordField).not.toBeNull()
     if (usernameField) {
       usernameField.value = "test-user"
+      await fireEvent.input(usernameField)
     }
     if (passwordField) {
       passwordField.value = "test-password"
+      await fireEvent.input(passwordField)
     }
 
     const form = container.querySelector("form")

@@ -10,6 +10,7 @@ import type * as vscode from "vscode"
  * -------------------------------------------------------------------------------------------------
  */
 import { ExerciseStatus } from "../api/workspaceManager"
+import { closedExercisesSettingKey } from "../config/constants"
 import { InitializationError } from "../errors"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseDetailsPanel, CourseIdentifier, ExtensionToWebview } from "../shared/shared"
@@ -59,7 +60,7 @@ export async function openExercises(
     .filter((x) => x.status === ExerciseStatus.Closed)
     .map((x) => x.exerciseSlug)
   const settingsResult = await langs.val.setSetting(
-    `closed-exercises-for:${courseName}`,
+    closedExercisesSettingKey(course.kind, courseName),
     closedExerciseNames,
   )
   if (settingsResult.err) {
@@ -98,6 +99,7 @@ export async function openExercises(
   TmcPanel.postMessage(
     ...exerciseIdsToOpen.map<ExtensionToWebview>((id) => ({
       type: "exerciseStatusChange",
+      courseId,
       exerciseId: id,
       status: "opened",
       target: {
@@ -131,11 +133,8 @@ export async function closeExercises(
       if (!exercise) {
         return undefined
       }
-      return match(
-        exercise,
-        (tmc) => tmc.name,
-        (mooc) => mooc.id,
-      )
+      // The workspace manager expects a slug, not the mooc exercise's raw uuid id.
+      return LocalCourseExercise.getSlug(exercise)
     }),
   )
 
@@ -164,7 +163,7 @@ export async function closeExercises(
     .filter((x) => x.status === ExerciseStatus.Closed)
     .map((x) => x.exerciseSlug)
   const settingsResult = await langs.val.setSetting(
-    `closed-exercises-for:${courseName}`,
+    closedExercisesSettingKey(course.kind, courseName),
     closedExerciseNames,
   )
   if (settingsResult.err) {
@@ -174,6 +173,7 @@ export async function closeExercises(
   TmcPanel.postMessage(
     ...closedIds.map<ExtensionToWebview>((id) => ({
       type: "exerciseStatusChange",
+      courseId,
       exerciseId: id,
       status: "closed",
       target: {

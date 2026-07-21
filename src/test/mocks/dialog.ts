@@ -15,8 +15,20 @@ export function createDialogMock(): [Dialog, DialogMockValues] {
   const explicit: Partial<Record<keyof Dialog, unknown>> = {
     confirmation: vi.fn(async () => values.confirmation),
     progressNotification: vi.fn(
-      (_message: string, task: (progress: { report: () => void }) => unknown) =>
-        task({ report: () => {} }),
+      (
+        _message: string,
+        task: (
+          progress: { report: () => void },
+          token: { isCancellationRequested: boolean; onCancellationRequested: () => unknown },
+        ) => unknown,
+      ) =>
+        task(
+          { report: () => {} },
+          {
+            isCancellationRequested: false,
+            onCancellationRequested: () => ({ dispose: (): void => {} }),
+          },
+        ),
     ),
   }
 

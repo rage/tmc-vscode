@@ -8,5 +8,5 @@
     // setup.ts imports the build-profile map from ../config.js
     "allowJs": true
   },
-  "include": ["*.ts", "controllers/**/*"]
+  "include": ["*.ts", "controllers/**/*", "mooc/**/*"]
 }

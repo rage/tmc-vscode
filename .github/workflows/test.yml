@@ -36,6 +36,14 @@ jobs:
           pnpm run generate:langs-schema
           git diff --exit-code -- shared/generated shared/bindings.schema.json
 
+      # The mooc mock's vendored OpenAPI spec is copied from secret-project-331,
+      # which CI has no checkout of, so it cannot re-vendor here. Instead assert
+      # the vendored spec still matches its committed provenance stamp
+      # (sha256 recorded at vendoring time) -- catches a hand-edit of the
+      # vendored spec that never went through `pnpm run vendor:langs-openapi`.
+      - name: Vendored OpenAPI spec stamp
+        run: pnpm run vendor:langs-openapi -- --check-stamp
+
   unit_tests:
     name: Unit tests
     permissions:

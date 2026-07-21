@@ -14,15 +14,21 @@ export async function switchWorkspace(actionContext: ActionContext): Promise<voi
   }
 
   const courses = userData.val.getCourses()
+  // Workspace files are named `<slug>-<backend>`, so compare against the tagged name.
   const currentWorkspace = vscode.workspace.name?.split(" ")[0]
   const courseWorkspace = await dialog.selectItem(
-    "Select a course workspace to open",
+    { title: "Switch Course Workspace", placeHolder: "Select a course workspace to open" },
     ...courses.map<[string, LocalCourseData]>((c) => {
       const name = LocalCourseData.getCourseName(c)
-      return [name === currentWorkspace ? `${name} (Currently open)` : name, c]
+      const taggedName = `${name}-${c.kind}`
+      return [taggedName === currentWorkspace ? `${name} (Currently open)` : name, c]
     }),
   )
   if (courseWorkspace) {
-    actions.openWorkspace(actionContext, LocalCourseData.getCourseName(courseWorkspace))
+    actions.openWorkspace(
+      actionContext,
+      LocalCourseData.getCourseName(courseWorkspace),
+      courseWorkspace.kind,
+    )
   }
 }

@@ -5,6 +5,7 @@ import type { ActionContext } from "../actions/types"
 import { NOTIFICATION_DELAY } from "../config/constants"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { ExtensionToWebview } from "../shared/shared"
+import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 
 export async function updateExercises(actionContext: ActionContext, silent: string): Promise<void> {
@@ -38,13 +39,27 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
   }
 
   const downloadHandler = async (): Promise<void> => {
-    TmcPanel.postMessage(
-      ...userData.val.getCourses().map<ExtensionToWebview>(() => ({
+    // Broadcast per course so a CourseDetails panel only applies its own list;
+    // identifiers are compared by canonical string since they're fresh objects.
+    const coursesToUpdate = new Map(
+      exercisesToUpdate.map((x) => [CourseIdentifier.toString(x.courseId), x.courseId]),
+    )
+    const exerciseIdsByCourse = (exerciseIds: ExerciseIdentifier[]): ExtensionToWebview[] => {
+      const wanted = new Set(exerciseIds.map((x) => ExerciseIdentifier.unwrap(x)))
+      return Array.from(coursesToUpdate.entries()).map<ExtensionToWebview>(([key, courseId]) => ({
         type: "setUpdateables",
         target: { type: "CourseDetails" },
-        exerciseIds: [],
-      })),
-    )
+        courseId,
+        exerciseIds: exercisesToUpdate
+          .filter(
+            (x) =>
+              CourseIdentifier.toString(x.courseId) === key &&
+              wanted.has(ExerciseIdentifier.unwrap(x.exerciseId)),
+          )
+          .map((x) => x.exerciseId),
+      }))
+    }
+    TmcPanel.postMessage(...exerciseIdsByCourse([]))
     const downloadResult = await actions.downloadOrUpdateExercises(
       actionContext,
       exercisesToUpdate.map((x) => x.exerciseId),
@@ -54,13 +69,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
       return
     }
 
-    TmcPanel.postMessage(
-      ...userData.val.getCourses().map<ExtensionToWebview>(() => ({
-        type: "setUpdateables",
-        target: { type: "CourseDetails" },
-        exerciseIds: downloadResult.val.failed,
-      })),
-    )
+    TmcPanel.postMessage(...exerciseIdsByCourse(downloadResult.val.failed))
   }
 
   if (settings.getAutomaticallyUpdateExercises()) {

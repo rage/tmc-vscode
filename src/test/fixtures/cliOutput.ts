@@ -237,6 +237,7 @@ const moocCourse = {
 const moocExerciseSlide = {
   slide_id: UUID_A,
   exercise_id: UUID_B,
+  course_id: UUID_A,
   exercise_name: "Best exercise",
   exercise_order_number: 1,
   deadline: "2026-08-19T23:59:59.999999Z",
@@ -530,7 +531,7 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   {
     name: "local-mooc-exercises",
     value: outputData("local-mooc-exercises", [
-      { "exercise-id": UUID_B, "exercise-path": "/p/mooc-ex" },
+      { "exercise-slug": "mooc-ex", "exercise-id": UUID_B, "exercise-path": "/p/mooc-ex" },
     ]),
   },
   {
@@ -549,8 +550,8 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   {
     name: "mooc-exercise-download",
     value: outputData("mooc-exercise-download", {
-      downloaded: [{ "task-id": UUID_C, path: "/p/mooc-ex" }],
-      skipped: [{ "task-id": UUID_B, path: "/p/mooc-ex2" }],
+      downloaded: [{ "exercise-id": UUID_C, path: "/p/mooc-ex" }],
+      skipped: [{ "exercise-id": UUID_B, path: "/p/mooc-ex2" }],
     }),
   },
   { name: "tmc-config", value: outputData("tmc-config", { projects_dir: "/projects" }) },

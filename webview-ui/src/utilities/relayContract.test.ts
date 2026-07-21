@@ -11,11 +11,8 @@ import { postMessageToWebview } from "./script"
 const selectedMoocCourse = {
   type: "selectedMoocCourse",
   target: { id: 7, type: "MyCourses" },
-  organizationSlug: "mooc.fi",
-  courseId: MOOC_INSTANCE_ID,
   instanceId: MOOC_INSTANCE_ID,
   courseName: "MOOC Python",
-  instanceName: null,
 } satisfies WebviewToWebview
 
 suite("relayToWebview contract", () => {
@@ -52,7 +49,7 @@ suite("relayToWebview contract", () => {
     postMessageToWebview({
       type: "selectedMoocCourse",
       target: { id: 7, type: "MyCourses" },
-      // missing organizationSlug/courseId/... on purpose
+      // missing instanceId/courseName on purpose
     } as unknown as WebviewToWebview)
     expect(postedMessages).not.toHaveBeenCalled()
   })

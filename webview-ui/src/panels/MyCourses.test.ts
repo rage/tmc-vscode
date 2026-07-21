@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/svelte"
+import { render } from "@testing-library/svelte"
 
 import type { MyCoursesPanel } from "../shared/shared"
+import { findButton } from "../test/dom"
 import { postedMessages } from "../test/setup"
 import MyCourses from "./MyCourses.svelte"
 
@@ -14,7 +15,7 @@ suite("MyCourses panel", () => {
     render(MyCourses, { props: { panel } })
     postedMessages.mockClear()
 
-    const addNewCourseButton = await screen.findByRole("button", { name: "Add new course" })
+    const addNewCourseButton = await findButton("Add new course")
     addNewCourseButton.click()
 
     expect(postedMessages).toHaveBeenCalledWith({

@@ -31,18 +31,41 @@ export async function checkForExerciseUpdates(
   const forceRefresh = options?.forceRefresh ?? false
   Logger.info("Checking for exercise updates, forced update:", forceRefresh)
 
+  // This runs on startup and on an interval, so a failure on one backend
+  // (e.g. expired credentials) must not discard the other's results.
+  const tmcUpdateableExerciseIds = new Set<number>()
   const tmcCheckUpdatesResult = await langs.val.checkTmcExerciseUpdates({ forceRefresh })
-  if (tmcCheckUpdatesResult.err) {
-    return tmcCheckUpdatesResult
+  if (tmcCheckUpdatesResult.ok) {
+    for (const exercise of tmcCheckUpdatesResult.val) {
+      tmcUpdateableExerciseIds.add(exercise.id)
+    }
+  } else {
+    Logger.warn("Skipping tmc.mooc.fi exercise update check; it failed:", tmcCheckUpdatesResult.val)
   }
 
-  const moocCheckUpdatesResult = await langs.val.checkMoocExerciseUpdates({ forceRefresh })
-  if (moocCheckUpdatesResult.err) {
-    return moocCheckUpdatesResult
+  // Skipped entirely (via a cheap local check, no backend call) when not
+  // authenticated, so a tmc-only user pays no network cost on every background run.
+  const moocUpdateableExerciseIds = new Set<string>()
+  const moocAuthenticated = await langs.val.isMoocAuthenticated()
+  if (moocAuthenticated.ok && moocAuthenticated.val) {
+    const moocCheckUpdatesResult = await langs.val.checkMoocExerciseUpdates({ forceRefresh })
+    if (moocCheckUpdatesResult.ok) {
+      for (const id of moocCheckUpdatesResult.val) {
+        moocUpdateableExerciseIds.add(id)
+      }
+    } else {
+      Logger.warn(
+        "Skipping courses.mooc.fi exercise update check; it failed:",
+        moocCheckUpdatesResult.val,
+      )
+    }
+  } else {
+    Logger.debug(
+      "Skipping courses.mooc.fi exercise update check; not authenticated.",
+      moocAuthenticated.err ? moocAuthenticated.val : undefined,
+    )
   }
 
-  const tmcUpdateableExerciseIds = new Set<number>(tmcCheckUpdatesResult.val.map((x) => x.id))
-  const moocUpdateableExerciseIds = new Set<string>(moocCheckUpdatesResult.val.map((x) => x))
   const outdatedExercisesByCourse = userData.val.getCourses().map<OutdatedExercise[]>((course) => {
     switch (course.kind) {
       case "tmc": {

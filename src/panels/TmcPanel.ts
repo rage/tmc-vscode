@@ -1,6 +1,5 @@
 import getFolderSize from "get-folder-size"
 import { compact } from "lodash"
-import { Err } from "ts-results"
 import type { Result } from "ts-results"
 import type { Disposable, Webview, WebviewPanel } from "vscode"
 import { Uri, ViewColumn, window } from "vscode"
@@ -13,6 +12,7 @@ import {
   login,
   openExercises,
   openWorkspace,
+  pasteMoocExercise,
   pasteTmcExercise,
   removeCourse,
   testInterrupts,
@@ -44,6 +44,7 @@ import {
 import { getNonce } from "../utilities/getNonce"
 import { getUri } from "../utilities/getUri"
 import { postMessageToWebview, renderPanel } from "../utilities/panel"
+import { moocLoginRegistry } from "./moocLoginRegistry"
 
 /**
  * Manages the rendering of the extension webview panels.
@@ -105,6 +106,12 @@ export class TmcPanel {
     panel: Panel,
   ): Promise<void> {
     const column = ViewColumn.Two
+    // Navigating away from an in-flight mooc login abandons it, so kill its CLI
+    // process. Exempt for re-entering MoocLogin: the new `moocLogin` handler
+    // interrupt-and-replaces the old attempt itself.
+    if (panel.type !== "MoocLogin") {
+      moocLoginRegistry.cancelAll()
+    }
     if (TmcPanel.sidePanel !== undefined) {
       await renderPanel(panel, TmcPanel.sidePanel._panel.webview)
       TmcPanel.sidePanel._panel.reveal(column, false)
@@ -185,6 +192,12 @@ export class TmcPanel {
   public dispose(): void {
     this._panel.dispose()
 
+    // Interrupt any in-flight mooc login on side-panel dispose (close/reload)
+    // so no orphaned CLI process keeps polling.
+    if (!this._isMain) {
+      moocLoginRegistry.cancelAll()
+    }
+
     if (this._isMain) {
       TmcPanel.mainPanel = undefined
       // if we're disposing the main panel, we'll dispose the side panel as well
@@ -203,6 +216,12 @@ export class TmcPanel {
   private _getWebviewContent(webview: Webview, extensionUri: Uri): string {
     const stylesUri = getUri(webview, extensionUri, ["webview-ui", "public", "build", "bundle.css"])
     const scriptUri = getUri(webview, extensionUri, ["webview-ui", "public", "build", "bundle.js"])
+    const codiconCssUri = getUri(webview, extensionUri, [
+      "webview-ui",
+      "public",
+      "build",
+      "codicon.css",
+    ])
 
     const nonce = getNonce()
 
@@ -217,12 +236,21 @@ export class TmcPanel {
                     http-equiv="Content-Security-Policy"
                     content="
                         default-src 'none';
-                        img-src ${webview.cspSource} https:;;
+                        img-src ${webview.cspSource} https:;
+                        font-src ${webview.cspSource};
                         style-src 'nonce-${nonce}';
                         script-src 'nonce-${nonce}';"
                 />
                 <meta property="csp-nonce" content="${nonce}" />
                 <link nonce="${nonce}" rel="stylesheet" type="text/css" href="${stylesUri}" />
+                <!-- id required: vscode-icon clones this stylesheet into each icon's shadow root. -->
+                <link
+                    nonce="${nonce}"
+                    id="vscode-codicon-stylesheet"
+                    rel="stylesheet"
+                    type="text/css"
+                    href="${codiconCssUri}"
+                />
                 <script defer nonce="${nonce}" src="${scriptUri}" />
             </head>
                 <body>
@@ -308,6 +336,7 @@ export class TmcPanel {
                 postMessageToWebview(webview, {
                   type: "exerciseStatusChange",
                   target: message.sourcePanel,
+                  courseId: LocalCourseData.getCourseId(course),
                   exerciseId,
                   status: mapStatus(
                     exData?.status ?? ExerciseStatus.Missing,
@@ -591,7 +620,7 @@ export class TmcPanel {
             break
           }
           case "openCourseWorkspace": {
-            openWorkspace(actionContext, message.courseName)
+            openWorkspace(actionContext, message.courseName, message.backend)
             break
           }
           case "changeTmcDataPath": {
@@ -661,9 +690,15 @@ export class TmcPanel {
             const exercisesToOpen = compact(
               message.ids.map((x) => courseExercises.get(ExerciseIdentifier.toString(x))),
             )
+            // The mooc local listing is keyed by course id (UUID); TMC by course
+            // slug. `getCourseName` returns the slug for both, so pick per backend.
             const localCourseExercises = await langs.val.listLocalCourseExercises(
               message.courseId.kind,
-              LocalCourseData.getCourseName(course),
+              match(
+                course,
+                () => LocalCourseData.getCourseName(course),
+                (mooc) => mooc.id,
+              ),
             )
 
             if (localCourseExercises.err) {
@@ -701,19 +736,22 @@ export class TmcPanel {
                 "Errored while opening selected exercises.",
                 result.val,
               )
+            } else {
+              // Only mark exercises "opened" once `openExercises` actually succeeded.
+              const exerciseStatusChangeMessages: ExtensionToWebview[] = result.val.map((id) => {
+                const statusChange: ExtensionToWebview = {
+                  type: "exerciseStatusChange",
+                  courseId: message.courseId,
+                  exerciseId: id,
+                  status: "opened",
+                  target: {
+                    type: "CourseDetails",
+                  },
+                }
+                return statusChange
+              })
+              TmcPanel.postMessage(...exerciseStatusChangeMessages)
             }
-            const exerciseStatusChangeMessages: ExtensionToWebview[] = message.ids.map((id) => {
-              const statusChange: ExtensionToWebview = {
-                type: "exerciseStatusChange",
-                exerciseId: id,
-                status: "opened",
-                target: {
-                  type: "CourseDetails",
-                },
-              }
-              return statusChange
-            })
-            TmcPanel.postMessage(...exerciseStatusChangeMessages)
             break
           }
           case "refreshCourseDetails": {
@@ -755,7 +793,10 @@ export class TmcPanel {
               message.courseId,
             )
             if (result.err) {
+              // Keep the course-selection side panel open so the user can retry.
               actionContext.dialog.errorNotification("Failed to add new course.", result.val)
+            } else {
+              TmcPanel.sidePanel?.dispose()
             }
             postMessageToWebview(webview, {
               type: "setMyCourses",
@@ -793,14 +834,9 @@ export class TmcPanel {
             break
           }
           case "submitExercise": {
-            await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-              id: randomPanelId(),
-              type: "ExerciseSubmission",
-              course: message.course,
-              exercise: message.exercise,
-            })
+            // commands.submitExercise renders its own ExerciseSubmission side panel;
+            // a pre-render here would just flash a second one that's immediately replaced.
             commands.submitExercise(extensionContext, actionContext, message.exerciseUri)
-
             break
           }
           case "pasteExercise": {
@@ -813,13 +849,20 @@ export class TmcPanel {
                   LocalCourseExercise.getSlug(message.exercise),
                 ),
               () =>
-                Promise.resolve(
-                  Err(new Error("Pasting is not yet supported for courses.mooc.fi exercises.")),
+                pasteMoocExercise(
+                  actionContext,
+                  LocalCourseData.getCourseName(message.course),
+                  LocalCourseExercise.getSlug(message.exercise),
                 ),
             )
             if (pasteResult.err) {
+              const pasteService = match(
+                message.course,
+                () => "TMC Paste",
+                () => "the courses.mooc.fi paste service",
+              )
               actionContext.dialog.errorNotification(
-                "Failed to send to TMC Paste.",
+                `Failed to send to ${pasteService}.`,
                 pasteResult.val,
               )
               TmcPanel.postMessage({
@@ -842,11 +885,83 @@ export class TmcPanel {
             break
           }
           case "selectMoocCourse": {
-            TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-              id: randomPanelId(),
-              type: "SelectMoocCourse",
-              requestingPanel: message.sourcePanel,
+            const { langs } = actionContext
+            if (!langs.ok) {
+              Logger.error("Extension was not initialized properly")
+              return
+            }
+            // Mooc credential state is independent of the tmc `LoggedIn` context
+            // key, so check it directly; if absent, show device-flow login first
+            // (continues to the course flow on success via the `moocLogin` handler).
+            const authed = await langs.val.isMoocAuthenticated()
+            if (authed.ok && authed.val) {
+              await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
+                id: randomPanelId(),
+                type: "SelectMoocCourse",
+                requestingPanel: message.sourcePanel,
+              })
+            } else {
+              await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
+                id: randomPanelId(),
+                type: "MoocLogin",
+                requestingPanel: message.sourcePanel,
+              })
+            }
+            break
+          }
+          case "moocLogin": {
+            const { langs } = actionContext
+            if (!langs.ok) {
+              Logger.error("Extension was not initialized properly")
+              return
+            }
+            const moocLoginPanel = message.sourcePanel
+            // Set below, after `authenticateMooc` returns; the callback fires
+            // asynchronously so it always sees the real id.
+            let invocationId = 0
+            const { result, interrupt } = langs.val.authenticateMooc((info) => {
+              // Stay silent if this attempt was superseded or cancelled.
+              if (!moocLoginRegistry.isCurrent(invocationId)) {
+                return
+              }
+              postMessageToWebview(webview, {
+                type: "moocDeviceCode",
+                target: moocLoginPanel,
+                userCode: info.user_code,
+                verificationUri: info.verification_uri,
+                verificationUriComplete: info.verification_uri_complete,
+                expiresIn: info.expires_in,
+                interval: info.interval,
+              })
             })
+            // Interrupt-and-replaces any login already in flight, so two `mooc
+            // login` processes never race on the credentials file.
+            invocationId = moocLoginRegistry.start(moocLoginPanel.id, interrupt)
+            const loginResult = await result
+            if (!moocLoginRegistry.isCurrent(invocationId)) {
+              // Superseded or cancelled while polling; leave the live attempt's
+              // registry entry untouched.
+              break
+            }
+            moocLoginRegistry.finish(invocationId)
+            if (loginResult.err) {
+              postMessageToWebview(webview, {
+                type: "moocLoginError",
+                target: moocLoginPanel,
+                error: loginResult.val.message,
+              })
+            } else {
+              // Still the current attempt (checked above), so the login panel is still active.
+              await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
+                id: randomPanelId(),
+                type: "SelectMoocCourse",
+                requestingPanel: moocLoginPanel.requestingPanel,
+              })
+            }
+            break
+          }
+          case "cancelMoocLogin": {
+            moocLoginRegistry.cancel(message.sourcePanel.id)
             break
           }
           case "requestSelectMoocCourseData": {
@@ -881,11 +996,17 @@ export class TmcPanel {
             }
             const result = await addNewCourse(
               actionContext,
-              message.organizationSlug,
+              // organizationSlug is a TMC-only concern; addNewCourse's mooc branch
+              // takes the org from the fetched course (moocCourse.organization_name),
+              // so the mooc path passes no slug.
+              "",
               makeMoocKind({ instanceId: message.instanceId }),
             )
             if (result.err) {
+              // Keep the course-selection side panel open so the user can retry.
               actionContext.dialog.errorNotification("Failed to add new course.", result.val)
+            } else {
+              TmcPanel.sidePanel?.dispose()
             }
             postMessageToWebview(webview, {
               type: "setMyCourses",

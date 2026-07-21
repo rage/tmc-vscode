@@ -1,3 +1,4 @@
+import * as tmp from "tmp"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
@@ -10,10 +11,16 @@ type Memento = vscode.Memento & { setKeysForSync: (keys: string[]) => void }
  */
 export function createMockContext(): vscode.ExtensionContext {
   const globalState = createMockMemento()
+  // A real temp dir, so code deriving paths from `globalStoragePath` gets a
+  // usable string rather than an auto-mocked function.
+  const globalStoragePath = tmp.dirSync().name
   return new Proxy(autoMock<vscode.ExtensionContext>(), {
     get(target, prop) {
       if (prop === "globalState") {
         return globalState
+      }
+      if (prop === "globalStoragePath") {
+        return globalStoragePath
       }
       return Reflect.get(target, prop)
     },

@@ -5,9 +5,11 @@ import { vi } from "vitest"
 import Langs from "../../api/langs"
 import {
   AuthorizationError,
+  BottleneckError,
   ConnectionError,
   ForbiddenError,
   InvalidTokenError,
+  NotEnrolledError,
   ObsoleteClientError,
   RuntimeError,
 } from "../../errors"
@@ -65,6 +67,17 @@ function dataOutput(kind: string, data: unknown): OutputData {
   } as unknown as OutputData
 }
 
+// An `executed-command` output that carries no data (e.g. `reset-exercise`).
+function nullOutput(message = "ok"): OutputData {
+  return {
+    "output-kind": "output-data",
+    status: "finished",
+    message,
+    result: "executed-command",
+    data: null,
+  } as unknown as OutputData
+}
+
 function newLangs(): Langs {
   return new Langs("dummy-cli-path", "test-client", "1.0.0")
 }
@@ -113,11 +126,41 @@ suite("Langs class arg building", function () {
     expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "courses"])
   })
 
-  test("getMoocOrganizations", async function () {
+  test("getEnrolledMoocCourseInstances de-duplicates courses by id", async function () {
+    // The backend can return the same course twice (two live enrollments of one
+    // course); since the extension keys courses by course id, the list must be
+    // de-duplicated so the same course never shows up — or gets added — twice.
     const langs = newLangs()
-    const calls = spyOnSpawn(langs)
-    await langs.getMoocOrganizations()
-    expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "get-organizations"])
+    const fixtures = [
+      {
+        id: "dup-id",
+        slug: "python-a",
+        name: "python-a",
+        description: null,
+        organization_name: "mooc.fi",
+      },
+      {
+        id: "dup-id",
+        slug: "python-b",
+        name: "python-b",
+        description: null,
+        organization_name: "mooc.fi",
+      },
+      {
+        id: "other-id",
+        slug: "java",
+        name: "java",
+        description: null,
+        organization_name: "mooc.fi",
+      },
+    ]
+    stubSpawn(langs, () => Ok(dataOutput("mooc-courses", fixtures)))
+    const result = await langs.getEnrolledMoocCourseInstances()
+    expect(result.ok).toBe(true)
+    const courses = result.unwrap()
+    expect(courses.map((c) => c.id)).toEqual(["dup-id", "other-id"])
+    // the first occurrence is kept
+    expect(courses[0]?.slug).toBe("python-a")
   })
 
   test("getMoocOldSubmissions", async function () {
@@ -183,6 +226,99 @@ suite("Langs class arg building", function () {
     ])
   })
 
+  test("submitMoocExerciseAndWaitForResults builds a blocking mooc submit", async function () {
+    const langs = newLangs()
+    const calls = spyOnSpawn(langs)
+    await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex")
+    // Only exercise id + path: the CLI resolves the slide and task ids and owns
+    // the poll loop, and the blocking submit takes no --dont-block flag.
+    expect(calls[0]?.args).toEqual([
+      "mooc",
+      "--client-name",
+      "test-client",
+      "submit",
+      "--exercise-id",
+      "ex-uuid",
+      "--submission-path",
+      "/path/to/ex",
+    ])
+  })
+
+  test("submitMoocExerciseAndWaitForResults returns the grading status", async function () {
+    const langs = newLangs()
+    const grading = {
+      Grading: {
+        grading_progress: "FullyGraded",
+        score_given: 1,
+        grading_started_at: "2026-07-21T00:00:00Z",
+        grading_completed_at: "2026-07-21T00:00:01Z",
+        feedback_json: null,
+        feedback_text: "All tests passed",
+      },
+    }
+    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", grading)))
+    const result = await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex")
+    expect(result.ok).toBe(true)
+    expect(result.unwrap()).toEqual(grading)
+  })
+
+  test("submitMoocExerciseAndWaitForResults forwards progress updates", async function () {
+    const langs = newLangs()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
+      const { onStdout } = commandArgs as {
+        onStdout?: (data: unknown) => void
+      }
+      onStdout?.({
+        "update-data-kind": "none",
+        "percent-done": 0.5,
+        message: "Grading in progress",
+      })
+      return Ok({
+        interrupt: (): void => {},
+        result: Promise.resolve(
+          Ok(dataOutput("mooc-submission-status", "NoGradingYet")) as Result<OutputData, BaseError>,
+        ),
+      })
+    })
+    const progress: { pct: number; message: string | undefined }[] = []
+    await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex", (pct, message) =>
+      progress.push({ pct, message }),
+    )
+    expect(progress).toEqual([{ pct: 50, message: "Grading in progress" }])
+  })
+
+  test("getMoocOldSubmissions parses the mooc-submissions list", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () =>
+      Ok(
+        dataOutput("mooc-submissions", [
+          {
+            id: "sub-2",
+            exercise_id: "ex-uuid",
+            created_at: "2026-07-21T12:00:00Z",
+            score_given: 1,
+            grading_progress: "FullyGraded",
+          },
+          {
+            id: "sub-1",
+            exercise_id: "ex-uuid",
+            created_at: "2026-07-21T10:00:00Z",
+            score_given: 0,
+            grading_progress: "Failed",
+          },
+        ]),
+      ),
+    )
+    const result = await langs.getMoocOldSubmissions("ex-uuid")
+    expect(result.ok).toBe(true)
+    const submissions = result.unwrap()
+    expect(submissions).toHaveLength(2)
+    expect(submissions[0]?.id).toBe("sub-2")
+    expect(submissions[0]?.grading_progress).toBe("FullyGraded")
+    expect(submissions[1]?.score_given).toBe(0)
+  })
+
   test("downloadMoocOldSubmission includes --save-old-state when asked", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
@@ -207,16 +343,361 @@ suite("Langs class arg building", function () {
     const calls = stubSpawn(langs, () =>
       Ok(dataOutput("mooc-exercise-download", { downloaded: [], skipped: [], failed: [] })),
     )
-    await langs.downloadExercises([ExerciseIdentifier.from("task-uuid")], true, () => {})
+    await langs.downloadExercises([ExerciseIdentifier.from("exercise-uuid")], true, () => {})
     expect(calls[0]?.args).toEqual([
       "mooc",
       "--client-name",
       "test-client",
       "download-or-update-course-exercises",
-      "--download-template",
       "--exercise-id",
-      "task-uuid",
+      "exercise-uuid",
     ])
+  })
+
+  test("downloadExercises forwards --course-id for mooc when a course id is given", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () =>
+      Ok(dataOutput("mooc-exercise-download", { downloaded: [], skipped: [], failed: [] })),
+    )
+    await langs.downloadExercises(
+      [ExerciseIdentifier.from("exercise-uuid")],
+      true,
+      () => {},
+      "course-uuid",
+    )
+    expect(calls[0]?.args).toEqual([
+      "mooc",
+      "--client-name",
+      "test-client",
+      "download-or-update-course-exercises",
+      "--course-id",
+      "course-uuid",
+      "--exercise-id",
+      "exercise-uuid",
+    ])
+  })
+
+  test("resetExercise routes tmc ids through the tmc reset-exercise command", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () => Ok(nullOutput()))
+    const result = await langs.resetExercise(ExerciseIdentifier.from(42), "/path/to/ex", false)
+    expect(result.ok).toBe(true)
+    expect(calls[0]?.args).toEqual([
+      "tmc",
+      "--client-name",
+      "test-client",
+      "--client-version",
+      "1.0.0",
+      "reset-exercise",
+      "--exercise-id",
+      "42",
+      "--exercise-path",
+      "/path/to/ex",
+    ])
+  })
+
+  test("resetExercise routes mooc ids through the mooc reset-exercise command", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () => Ok(nullOutput()))
+    const result = await langs.resetExercise(
+      ExerciseIdentifier.from("ex-uuid"),
+      "/path/to/ex",
+      false,
+    )
+    expect(result.ok).toBe(true)
+    expect(calls[0]?.args).toEqual([
+      "mooc",
+      "--client-name",
+      "test-client",
+      "reset-exercise",
+      "--exercise-id",
+      "ex-uuid",
+      "--exercise-path",
+      "/path/to/ex",
+    ])
+  })
+
+  test("resetExercise includes --save-old-state when asked (mooc)", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () => Ok(nullOutput()))
+    await langs.resetExercise(ExerciseIdentifier.from("ex-uuid"), "/path/to/ex", true)
+    expect(calls[0]?.args).toEqual([
+      "mooc",
+      "--client-name",
+      "test-client",
+      "reset-exercise",
+      "--save-old-state",
+      "--exercise-id",
+      "ex-uuid",
+      "--exercise-path",
+      "/path/to/ex",
+    ])
+  })
+
+  test("downloadExercises forwards mooc per-exercise progress updates", async function () {
+    const langs = newLangs()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
+      const { onStdout } = commandArgs as { onStdout?: (data: unknown) => void }
+      onStdout?.({
+        "update-data-kind": "mooc-client-update-data",
+        "percent-done": 0.5,
+        message: "Downloading exercise",
+        data: {
+          "client-update-data-kind": "exercise-download",
+          id: "ex-uuid",
+          path: "/path/to/ex",
+        },
+      })
+      return Ok({
+        interrupt: (): void => {},
+        result: Promise.resolve(
+          Ok(
+            dataOutput("mooc-exercise-download", { downloaded: [], skipped: [], failed: [] }),
+          ) as Result<OutputData, BaseError>,
+        ),
+      })
+    })
+    const downloaded: { id: unknown; percent: number; message?: string }[] = []
+    await langs.downloadExercises([ExerciseIdentifier.from("ex-uuid")], false, (value) =>
+      downloaded.push(value),
+    )
+    expect(downloaded).toHaveLength(1)
+    expect(downloaded[0]?.percent).toBe(0.5)
+    expect(downloaded[0]?.message).toBe("Downloading exercise")
+    expect(downloaded[0]?.id).toEqual(ExerciseIdentifier.from("ex-uuid"))
+  })
+
+  test("authenticateMooc builds the `mooc login` command", async function () {
+    const langs = newLangs()
+    const calls = spyOnSpawn(langs)
+    langs.authenticateMooc(() => {})
+    expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "login"])
+  })
+
+  test("authenticateMooc sets no process timeout (device flow can take minutes)", async function () {
+    const langs = newLangs()
+    let captured: { processTimeout?: number } | undefined
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
+      captured = commandArgs as { processTimeout?: number }
+      return Err(new Error("stopped before spawning a real process"))
+    })
+    langs.authenticateMooc(() => {})
+    expect(captured?.processTimeout).toBeUndefined()
+  })
+
+  test("authenticateMooc surfaces the device-login status update and resolves on success", async function () {
+    const langs = newLangs()
+    const deviceInfo = {
+      verification_uri: "https://courses.mooc.fi/oauth_device",
+      verification_uri_complete: "https://courses.mooc.fi/oauth_device?user_code=ABCD-EFGH",
+      user_code: "ABCD-EFGH",
+      expires_in: 900,
+      interval: 5,
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
+      const { onStdout } = commandArgs as { onStdout?: (data: unknown) => void }
+      onStdout?.({
+        "update-data-kind": "mooc-device-login",
+        finished: false,
+        message: "Waiting for device authorization",
+        "percent-done": 0,
+        time: 0,
+        data: deviceInfo,
+      })
+      return Ok({
+        interrupt: (): void => {},
+        result: Promise.resolve(
+          Ok({
+            "output-kind": "output-data",
+            status: "finished",
+            message: "logged in",
+            result: "logged-in",
+            data: null,
+          }) as Result<OutputData, BaseError>,
+        ),
+      })
+    })
+    const seen: unknown[] = []
+    const { result } = langs.authenticateMooc((info) => seen.push(info))
+    const res = await result
+    expect(res.ok).toBe(true)
+    expect(seen).toEqual([deviceInfo])
+  })
+
+  test("authenticateMooc reports a not-logged-in error on denial/expiry", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () => Ok(errorOutput("not-logged-in")))
+    const { result } = langs.authenticateMooc(() => {})
+    const res = await result
+    expect(res.err).toBe(true)
+    expect(res.val).toBeInstanceOf(AuthorizationError)
+  })
+
+  test("isMoocAuthenticated builds `mooc logged-in` and maps the result", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () =>
+      Ok({
+        "output-kind": "output-data",
+        status: "finished",
+        message: "currently logged in",
+        result: "logged-in",
+        data: null,
+      } as unknown as OutputData),
+    )
+    const res = await langs.isMoocAuthenticated()
+    expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "logged-in"])
+    expect(res.unwrap()).toBe(true)
+  })
+
+  test("isMoocAuthenticated returns false when not logged in", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () =>
+      Ok({
+        "output-kind": "output-data",
+        status: "finished",
+        message: "currently not logged in",
+        result: "not-logged-in",
+        data: null,
+      } as unknown as OutputData),
+    )
+    const res = await langs.isMoocAuthenticated()
+    expect(res.unwrap()).toBe(false)
+  })
+
+  test("deauthenticateMooc builds `mooc logout`", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () =>
+      Ok({
+        "output-kind": "output-data",
+        status: "finished",
+        message: "logged out",
+        result: "logged-out",
+        data: null,
+      } as unknown as OutputData),
+    )
+    const res = await langs.deauthenticateMooc()
+    expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "logout"])
+    expect(res.ok).toBe(true)
+  })
+
+  test("listLocalCourseExercises routes the mooc branch to the mooc subcommand", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () => Ok(dataOutput("local-mooc-exercises", [])))
+    await langs.listLocalCourseExercises("mooc", "course-uuid")
+    expect(calls[0]?.args).toEqual([
+      "mooc",
+      "--client-name",
+      "test-client",
+      "list-local-course-exercises",
+      "--course-id",
+      "course-uuid",
+    ])
+  })
+})
+
+suite("Langs cross-backend independence", function () {
+  test("a tmc submission throttle does not block a mooc submission", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () =>
+      Ok(
+        dataOutput("submission-finished", {
+          status: "ok",
+          all_tests_passed: true,
+          points: [],
+          test_cases: [],
+          feedback_questions: null,
+          missing_review_points: [],
+          validations: null,
+          solution_url: null,
+        }),
+      ),
+    )
+    const firstTmc = await langs.submitTmcExerciseAndWaitForResults(
+      ExerciseIdentifier.from(1),
+      "/path/to/ex",
+    )
+    expect(firstTmc.ok).toBe(true)
+
+    const secondTmc = await langs.submitTmcExerciseAndWaitForResults(
+      ExerciseIdentifier.from(1),
+      "/path/to/ex",
+    )
+    expect(secondTmc.val).toBeInstanceOf(BottleneckError)
+
+    // Throttle state is per-backend, so a mooc submission right after is unaffected.
+    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", "NoGradingYet")))
+    const mooc = await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex")
+    expect(mooc.ok).toBe(true)
+  })
+
+  test("a mooc submission throttle does not block a tmc submission", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", "NoGradingYet")))
+    const firstMooc = await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex")
+    expect(firstMooc.ok).toBe(true)
+
+    const secondMooc = await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex")
+    expect(secondMooc.val).toBeInstanceOf(BottleneckError)
+
+    stubSpawn(langs, () =>
+      Ok(
+        dataOutput("submission-finished", {
+          status: "ok",
+          all_tests_passed: true,
+          points: [],
+          test_cases: [],
+          feedback_questions: null,
+          missing_review_points: [],
+          validations: null,
+          solution_url: null,
+        }),
+      ),
+    )
+    const tmc = await langs.submitTmcExerciseAndWaitForResults(
+      ExerciseIdentifier.from(1),
+      "/path/to/ex",
+    )
+    expect(tmc.ok).toBe(true)
+  })
+
+  test("downloadExercises attempts the mooc leg even when the tmc leg errors", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, (_index, args) => {
+      if (args[0] === "tmc") {
+        return Err(new RuntimeError("tmc download failed"))
+      }
+      return Ok(dataOutput("mooc-exercise-download", { downloaded: [], skipped: [], failed: [] }))
+    })
+    const result = await langs.downloadExercises(
+      [ExerciseIdentifier.from(1), ExerciseIdentifier.from("exercise-uuid")],
+      true,
+      () => {},
+    )
+    // The mooc leg's result comes through alongside the tmc leg's failure.
+    expect(result.mooc).toEqual({ downloaded: [], skipped: [], failed: [] })
+    expect(result.tmcError).toBeInstanceOf(RuntimeError)
+    expect(result.moocError).toBeUndefined()
+  })
+
+  test("downloadExercises attempts the tmc leg even when the mooc leg errors", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, (_index, args) => {
+      if (args[0] === "mooc") {
+        return Err(new RuntimeError("mooc download failed"))
+      }
+      return Ok(dataOutput("tmc-exercise-download", { downloaded: [], skipped: [], failed: [] }))
+    })
+    const result = await langs.downloadExercises(
+      [ExerciseIdentifier.from(1), ExerciseIdentifier.from("exercise-uuid")],
+      true,
+      () => {},
+    )
+    expect(result.tmc).toEqual({ downloaded: [], skipped: [], failed: [] })
+    expect(result.moocError).toBeInstanceOf(RuntimeError)
+    expect(result.tmcError).toBeUndefined()
   })
 })
 
@@ -227,6 +708,7 @@ suite("Langs error-kind mapping", function () {
     ["invalid-token", InvalidTokenError],
     ["not-logged-in", AuthorizationError],
     ["obsolete-client", ObsoleteClientError],
+    ["not-enrolled", NotEnrolledError],
     ["generic", RuntimeError],
   ]
   for (const [kind, errorClass] of cases) {
@@ -239,6 +721,23 @@ suite("Langs error-kind mapping", function () {
     })
   }
 
+  test("not-enrolled names the actual backend the failing command targeted", async function () {
+    // Regression guard: the wording used to hardcode "courses.mooc.fi" regardless
+    // of which backend actually produced the error.
+    const langsMooc = newLangs()
+    stubSpawn(langsMooc, () => Ok(errorOutput("not-enrolled")))
+    const moocResult = await langsMooc.getEnrolledMoocCourseInstances()
+    expect(moocResult.val).toBeInstanceOf(NotEnrolledError)
+    expect((moocResult.val as Error).message).toContain("courses.mooc.fi")
+    expect((moocResult.val as Error).message).not.toContain("tmc.mooc.fi")
+
+    const langsTmc = newLangs()
+    stubSpawn(langsTmc, () => Ok(errorOutput("not-enrolled")))
+    const tmcResult = await langsTmc.getTmcOrganizations()
+    expect(tmcResult.val).toBeInstanceOf(NotEnrolledError)
+    expect((tmcResult.val as Error).message).toContain("tmc.mooc.fi")
+  })
+
   test("a crashed process is reported as an error", async function () {
     const langs = newLangs()
     stubSpawn(langs, () => {
@@ -250,10 +749,12 @@ suite("Langs error-kind mapping", function () {
     expect(result.err).toBe(true)
   })
 
-  test("invalid-token clears the cache and fires the logout event", async function () {
+  test("invalid-token clears the cache and fires the failing backend's logout event", async function () {
     const langs = newLangs()
     const onLogout = vi.fn()
+    const onMoocLogout = vi.fn()
     langs.on("logout", onLogout)
+    langs.on("mooc-logout", onMoocLogout)
     let organizationsCalls = 0
     stubSpawn(langs, (_i, args) => {
       if (args.includes("get-organizations")) {
@@ -269,13 +770,67 @@ suite("Langs error-kind mapping", function () {
     await langs.getTmcOrganizations() // served from cache
     expect(organizationsCalls).toBe(1)
 
+    // Only the mooc event fires, since the failing command targets mooc.
     const result = await langs.getEnrolledMoocCourseInstances()
     expect(result.val).toBeInstanceOf(InvalidTokenError)
-    expect(onLogout).toHaveBeenCalledTimes(1)
+    expect(onMoocLogout).toHaveBeenCalledExactlyOnceWith(false)
+    expect(onLogout).not.toHaveBeenCalled()
 
     // The cache was cleared, so the organizations request must spawn again.
     await langs.getTmcOrganizations()
     expect(organizationsCalls).toBe(2)
+  })
+
+  test("a tmc command's invalid-token fires the tmc logout event as unexpected", async function () {
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    const onMoocLogout = vi.fn()
+    langs.on("logout", onLogout)
+    langs.on("mooc-logout", onMoocLogout)
+    stubSpawn(langs, () => Ok(errorOutput("invalid-token")))
+
+    const result = await langs.getTmcOrganizations()
+    expect(result.val).toBeInstanceOf(InvalidTokenError)
+    expect(onLogout).toHaveBeenCalledExactlyOnceWith(false)
+    expect(onMoocLogout).not.toHaveBeenCalled()
+  })
+
+  test("deauthenticate fires the logout event as expected and stays quiet on auth errors", async function () {
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    langs.on("logout", onLogout)
+    stubSpawn(langs, (i) => Ok(i === 0 ? dataOutput("null", null) : errorOutput("not-logged-in")))
+
+    const logoutResult = await langs.deauthenticate()
+    expect(logoutResult.ok).toBe(true)
+    expect(onLogout).toHaveBeenCalledExactlyOnceWith(true)
+
+    // Errors, but must not fire the unexpected-logout event.
+    const secondResult = await langs.deauthenticate()
+    expect(secondResult.err).toBe(true)
+    expect(onLogout).toHaveBeenCalledTimes(1)
+  })
+
+  test("deauthenticateMooc fires the mooc-logout event as expected", async function () {
+    const langs = newLangs()
+    const onMoocLogout = vi.fn()
+    langs.on("mooc-logout", onMoocLogout)
+    stubSpawn(langs, () => Ok(dataOutput("null", null)))
+
+    const result = await langs.deauthenticateMooc()
+    expect(result.ok).toBe(true)
+    expect(onMoocLogout).toHaveBeenCalledExactlyOnceWith(true)
+  })
+
+  test("a failed tmc login does not fire any logout event", async function () {
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    langs.on("logout", onLogout)
+    stubSpawn(langs, () => Ok(errorOutput("invalid-token")))
+
+    const result = await langs.authenticate("user", "hunter2")
+    expect(result.err).toBe(true)
+    expect(onLogout).not.toHaveBeenCalled()
   })
 })
 
@@ -305,6 +860,35 @@ suite("Langs response cache", function () {
     const refreshed = await langs.checkMoocExerciseUpdates({ forceRefresh: true })
     expect(callCount).toBe(2)
     expect(refreshed.val).toEqual(["ex-2"])
+  })
+
+  test("getMoocCourseInstanceData serves a repeat view from cache", async function () {
+    const langs = newLangs()
+    let callCount = 0
+    stubSpawn(langs, (_i, args) => {
+      callCount += 1
+      return args.includes("course-exercises")
+        ? Ok(dataOutput("mooc-exercise-slides", []))
+        : Ok(dataOutput("mooc-course", { id: "inst-uuid" }))
+    })
+    await langs.getMoocCourseInstanceData("inst-uuid")
+    await langs.getMoocCourseInstanceData("inst-uuid")
+    // Two subcommands on the first view, both served from cache on the second.
+    expect(callCount).toBe(2)
+  })
+
+  test("getMoocCourseInstanceData forceRefresh bypasses the cache", async function () {
+    const langs = newLangs()
+    let callCount = 0
+    stubSpawn(langs, (_i, args) => {
+      callCount += 1
+      return args.includes("course-exercises")
+        ? Ok(dataOutput("mooc-exercise-slides", []))
+        : Ok(dataOutput("mooc-course", { id: "inst-uuid" }))
+    })
+    await langs.getMoocCourseInstanceData("inst-uuid")
+    await langs.getMoocCourseInstanceData("inst-uuid", { forceRefresh: true })
+    expect(callCount).toBe(4)
   })
 
   test("the organizations remapper populates per-organization cache entries", async function () {

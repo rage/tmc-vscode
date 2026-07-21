@@ -14,6 +14,7 @@ import type {
   SubmissionStatusReport,
 } from "../src/api/types"
 import { applicationRouter, langsRounter, oauthRouter } from "./controllers"
+import { registerMoocRoutes } from "./mooc/router"
 import type { BackendCourse, ExerciseWithFile } from "./utils"
 import {
   createCourse,
@@ -26,7 +27,11 @@ import {
   respondWithFile,
 } from "./utils"
 
-const PORT = 4001
+// Port + mooc auth mode are env-overridable so a test can spawn a second mock
+// instance with a different auth posture without disturbing this one. See
+// src/test-integration/tmc_langs_cli.spec.ts (mooc bearer auth).
+const PORT = Number(process.env.PORT ?? 4001)
+const MOOC_REQUIRE_AUTH = process.env.MOOC_MOCK_REQUIRE_AUTH !== "0"
 
 interface DetailsForLangs {
   exercises: {
@@ -145,6 +150,12 @@ app.use(express.urlencoded({ extended: false }))
 app.use("/langs", langsRounter)
 app.use("/oauth", oauthRouter)
 app.use("/api/v8/application", applicationRouter)
+
+// courses.mooc.fi (`/api/v0/exercise-services/client`) mock, plus its
+// spec-exempt `/mooc-archives` stub-download route. Same process/port as the
+// legacy TMC mock -- the two API namespaces (/api/v8, /oauth vs
+// /api/v0/exercise-services/client) do not collide.
+registerMoocRoutes(app, { requireAuth: MOOC_REQUIRE_AUTH })
 
 // getCourseSettings(0)
 for (const course of testCourses) {

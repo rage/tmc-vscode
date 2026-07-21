@@ -92,6 +92,30 @@ export const WORKSPACE_ROOT_FILE_NAME = "TMC-Readme.md"
 export const WORKSPACE_ROOT_FILE_TEXT = FAQ
 export const WORKSPACE_ROOT_FOLDER_NAME = ".tmc"
 
+/**
+ * Settings key for a course's manually-closed exercises, namespaced by
+ * backend since a tmc and mooc course can share a slug. See
+ * `backendNamespacing.ts` for the legacy-key migration.
+ */
+export function closedExercisesSettingKey(backend: "tmc" | "mooc", courseName: string): string {
+  return `closed-exercises-for:${backend}:${courseName}`
+}
+
+/** The pre-namespacing key shape. Only referenced by the migration. */
+export function legacyClosedExercisesSettingKey(courseName: string): string {
+  return `closed-exercises-for:${courseName}`
+}
+
+/** Basename of a course's `.code-workspace` file; backend-tagged for the same collision reason as {@link closedExercisesSettingKey}. */
+export function workspaceFileName(courseName: string, backend: "tmc" | "mooc"): string {
+  return `${courseName}-${backend}.code-workspace`
+}
+
+/** The pre-namespacing workspace filename. Only referenced by the migration. */
+export function legacyWorkspaceFileName(courseName: string): string {
+  return `${courseName}.code-workspace`
+}
+
 export const EXAM_TEST_RESULT: TestResultData = {
   testResult: {
     status: "PASSED",

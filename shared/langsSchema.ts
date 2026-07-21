@@ -28,7 +28,7 @@ import { z } from "zod"
 // vendored schema -- it never re-vendors, since it has no tmc-langs-rust
 // checkout to vendor from.
 //
-// Vendored from tmc-langs-rust rev 95ff44e6431 (branch
+// Vendored from tmc-langs-rust rev c059b3099c7 (branch
 // programming-exercise-migration).
 //
 // Notes on the generated schemas:
@@ -58,6 +58,7 @@ import {
   zCourseData,
   zCourseDetails,
   zCourseExercise,
+  zCourseProgress,
   zDataKind,
   zDownloadOrUpdateMoocCourseExercisesResult,
   zDownloadOrUpdateTmcCourseExercisesResult,
@@ -67,14 +68,19 @@ import {
   zExerciseFile,
   zExercisePackagingConfiguration,
   zExercisePoint,
+  zExerciseSlideSubmissionListItem,
   zExerciseSubmission,
   zExerciseTaskSubmissionResult,
+  zExerciseTaskSubmissionStatus,
   zExerciseType,
+  zGradingProgress,
   zKind,
   zLocalMoocExercise,
   zLocalTmcExercise,
   zModelSolutionSpec,
+  zMoocClientUpdateData,
   zMoocCourse,
+  zMoocDeviceLogin,
   zMoocExerciseDownload,
   zNewSubmission,
   zNotification,
@@ -212,14 +218,24 @@ export type ExercisePackagingConfiguration = z.infer<typeof ExercisePackagingCon
 export const ExercisePoint = zExercisePoint
 export type ExercisePoint = z.infer<typeof ExercisePoint>
 
+/** A past mooc submission of the current user; `id` is the slide-submission id. */
+export const ExerciseSlideSubmissionListItem = zExerciseSlideSubmissionListItem
+export type ExerciseSlideSubmissionListItem = z.infer<typeof ExerciseSlideSubmissionListItem>
+
 export const ExerciseSubmission = zExerciseSubmission
 export type ExerciseSubmission = z.infer<typeof ExerciseSubmission>
 
 export const ExerciseTaskSubmissionResult = zExerciseTaskSubmissionResult
 export type ExerciseTaskSubmissionResult = z.infer<typeof ExerciseTaskSubmissionResult>
 
+export const ExerciseTaskSubmissionStatus = zExerciseTaskSubmissionStatus
+export type ExerciseTaskSubmissionStatus = z.infer<typeof ExerciseTaskSubmissionStatus>
+
 export const ExerciseType = zExerciseType
 export type ExerciseType = z.infer<typeof ExerciseType>
+
+export const GradingProgress = zGradingProgress
+export type GradingProgress = z.infer<typeof GradingProgress>
 
 export const Kind = zKind
 export type Kind = z.infer<typeof Kind>
@@ -233,8 +249,20 @@ export type LocalTmcExercise = z.infer<typeof LocalTmcExercise>
 export const ModelSolutionSpec = zModelSolutionSpec
 export type ModelSolutionSpec = z.infer<typeof ModelSolutionSpec>
 
+/** Per-exercise download progress for `mooc-client-update-data`; mirrors tmc's `ClientUpdateData`/`exercise-download` but keyed by UUID. */
+export const MoocClientUpdateData = zMoocClientUpdateData
+export type MoocClientUpdateData = z.infer<typeof MoocClientUpdateData>
+
 export const MoocCourse = zMoocCourse
 export type MoocCourse = z.infer<typeof MoocCourse>
+
+/** Per-exercise progress for a course, from `mooc course-progress` (`mooc-course-progress` output kind); course totals are derived by summation. */
+export const MoocCourseProgress = zCourseProgress
+export type MoocCourseProgress = z.infer<typeof MoocCourseProgress>
+
+/** RFC 8628 device-authorization data from a `mooc-device-login` status update (verification URL + user code), shown while `mooc login` blocks polling. */
+export const MoocDeviceLogin = zMoocDeviceLogin
+export type MoocDeviceLogin = z.infer<typeof MoocDeviceLogin>
 
 export const MoocExerciseDownload = zMoocExerciseDownload
 export type MoocExerciseDownload = z.infer<typeof MoocExerciseDownload>

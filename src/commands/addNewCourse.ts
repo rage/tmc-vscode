@@ -1,10 +1,14 @@
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
 import type { Organization } from "../shared/langsSchema"
-import type { CourseIdentifier, Enum } from "../shared/shared"
-import { makeMoocKind, makeTmcKind, match } from "../shared/shared"
+import type { CourseIdentifier } from "../shared/shared"
+import { makeTmcKind } from "../shared/shared"
 import { Logger } from "../utilities"
 
+// The courses.mooc.fi backend has no organization concept: a student sees only
+// the courses they are enrolled in, added through the platform-selection
+// webview flow (SelectPlatform -> SelectMoocCourse). This organization-browsing
+// quick pick is therefore TMC-only.
 export async function addNewCourse(actionContext: ActionContext): Promise<void> {
   const { dialog, langs } = actionContext
   Logger.info("Adding new course")
@@ -13,40 +17,27 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
     return
   }
 
-  const tmcOrganizationsResult = await langs.val.getTmcOrganizations()
-  const moocOrganizationsResult = await langs.val.getMoocOrganizations()
-  if (tmcOrganizationsResult.err) {
-    dialog.errorNotification("Failed to fetch organizations.", tmcOrganizationsResult.val)
-    return
-  }
-  if (moocOrganizationsResult.err) {
-    dialog.errorNotification("Failed to fetch organizations.", moocOrganizationsResult.val)
+  const organizationsResult = await langs.val.getTmcOrganizations()
+  if (organizationsResult.err) {
+    dialog.errorNotification("Failed to fetch organizations.", organizationsResult.val)
     return
   }
 
-  const organizations: Enum<Organization, Organization>[] = [
-    ...tmcOrganizationsResult.val.map(makeTmcKind),
-    ...moocOrganizationsResult.val.map(makeMoocKind),
-  ]
-  const chosenOrg = await dialog.selectItem(
-    "Which organization?",
-    ...organizations.map<[string, Enum<Organization, Organization>]>((org) => [org.data.name, org]),
+  const chosenOrg = await dialog.selectItem<Organization>(
+    { title: "Add New Course", placeHolder: "Which organization?" },
+    ...organizationsResult.val.map<[string, Organization]>((org) => [org.name, org]),
   )
   if (chosenOrg === undefined) {
     return
   }
 
-  const courses = await match(
-    chosenOrg,
-    (tmc) => langs.val.getCourses(tmc.slug),
-    (mooc) => langs.val.getCourses(mooc.slug),
-  )
+  const courses = await langs.val.getCourses(chosenOrg.slug)
   if (courses.err) {
-    dialog.errorNotification(`Failed to fetch organization courses for ${chosenOrg}.`)
+    dialog.errorNotification(`Failed to fetch organization courses for ${chosenOrg.name}.`)
     return
   }
   const chosenCourse = await dialog.selectItem<CourseIdentifier>(
-    "Which course?",
+    { title: "Add New Course", placeHolder: "Which course?" },
     ...courses.val.map<[string, CourseIdentifier]>((course) => [
       course.title,
       makeTmcKind({ courseId: course.id }),
@@ -56,7 +47,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
     return
   }
 
-  const result = await actions.addNewCourse(actionContext, chosenOrg.data.slug, chosenCourse)
+  const result = await actions.addNewCourse(actionContext, chosenOrg.slug, chosenCourse)
   if (result.err) {
     dialog.errorNotification("Failed to add course.", result.val)
   }

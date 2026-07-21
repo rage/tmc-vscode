@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
-import { LocalCourseExercise } from "../shared/shared"
+import { ExerciseIdentifier, match } from "../shared/shared"
 import { Logger } from "../utilities"
 
 /**
@@ -25,18 +25,29 @@ export async function resetExercise(
     ? workspaceManager.val.getExerciseByPath(resource)
     : workspaceManager.val.activeExercise
   if (!exercise) {
-    dialog.errorNotification("Currently open editor is not part of a TMC exercise.")
+    dialog.errorNotification("The active editor is not part of a course exercise.")
     return
   }
 
-  const exerciseDetails = userData.val.getExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
+  // Look up by known backend rather than a name-only match, which could
+  // resolve to the wrong backend if a tmc and mooc exercise share a slug.
+  const exerciseDetails =
+    exercise.backend === "mooc"
+      ? userData.val.getMoocExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
+      : userData.val.getTmcExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
   if (!exerciseDetails) {
     dialog.errorNotification(`Missing exercise data for ${exercise.exerciseSlug}.`)
     return
   }
 
+  const id = ExerciseIdentifier.from(exerciseDetails.id)
+  const serverName = match(
+    id,
+    () => "TMC Server",
+    () => "courses.mooc.fi",
+  )
   const submitFirst = await dialog.confirmation(
-    "Do you want to save the current state of the exercise by submitting it to TMC Server?",
+    `Do you want to save the current state of the exercise by submitting it to ${serverName}?`,
   )
   if (submitFirst === undefined) {
     Logger.debug("Answer for submitting first not provided, returning early.")
@@ -45,8 +56,6 @@ export async function resetExercise(
 
   const editor = vscode.window.activeTextEditor
   const document = editor?.document.uri
-
-  const id = LocalCourseExercise.getId(exerciseDetails)
   const resetResult = await langs.val.resetExercise(id, exercise.uri.fsPath, submitFirst)
   if (resetResult.err) {
     dialog.errorNotification("Failed to reset exercise.", resetResult.val)

@@ -54,7 +54,7 @@ export function registerCommands(
       courseId =
         courseId ??
         (await dialog.selectItem(
-          "Which course page do you want to open?",
+          { title: "Course Details", placeHolder: "Which course page do you want to open?" },
           ...courses.map<[string, CourseIdentifier]>((c) => [
             LocalCourseData.getCourseName(c),
             LocalCourseData.getCourseId(c),
@@ -80,32 +80,19 @@ export function registerCommands(
         commands.downloadOldSubmission(actionContext, resource),
     ),
 
+    // Delegates to the platform-selecting login flow, which the old raw
+    // TMC username/password input boxes couldn't use for courses.mooc.fi.
     vscode.commands.registerCommand("tmc.login", async () => {
-      const username = await vscode.window.showInputBox({
-        placeHolder: "Enter username",
-        prompt: "Please enter your TMC username",
-      })
-      const password = await vscode.window.showInputBox({
-        placeHolder: "Enter password",
-        prompt: "Please enter your TMC password",
-        password: true,
-      })
-      if (username && password) {
-        const authed = await actions.login(actionContext, username, password)
-        if (authed.err) {
-          dialog.errorNotification(`Failed to login: ${authed.val.message}.`, authed.val)
-        }
-      }
+      await vscode.commands.executeCommand("tmc.showLogin")
     }),
 
     vscode.commands.registerCommand("tmc.logout", async () => {
       if (await dialog.confirmation("Are you sure you want to log out?")) {
+        // The action layer reports failures itself; only announce success here.
         const deauth = await actions.logout(actionContext)
-        if (deauth.err) {
-          dialog.errorNotification(`Failed to logout: ${deauth.val.message}.`, deauth.val)
-          return
+        if (deauth.ok) {
+          dialog.notification("Logged out from TestMyCode.")
         }
-        dialog.notification("Logged out from TestMyCode.")
       }
     }),
 

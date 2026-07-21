@@ -43,6 +43,9 @@ allowBuilds:
 patchedDependencies:
   ts-results@3.3.0: patches/ts-results@3.3.0.patch
 
+minimumReleaseAgeExclude:
+  - postcss@8.5.19
+
 # This is a single workspace, so we deliberately keep ONE shared lockfile:
 # sharedWorkspaceLockfile / link-protocol settings (linkWorkspacePackages,
 # preferWorkspacePackages, saveWorkspaceProtocol) are omitted on purpose.

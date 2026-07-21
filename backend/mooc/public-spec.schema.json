@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://courses.mooc.fi/mock/public-spec.schema.json",
+  "title": "TmcPublicSpec",
+  "description": "Local guard for the shape of the `public_spec` the mooc fixtures embed. The wire OpenAPI spec treats public_spec as an opaque blob (per the plugin architecture), but the CLI deserialises it into tmc-mooc-client's PublicSpec struct, so the fixture CONTENT must match the tmc editor/browser public spec shape. This schema mirrors that struct (crates/tmc-mooc-client/src/exercise.rs) and is NOT part of the OpenAPI contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "archive_name", "stub_download_url", "student_file_paths", "checksum"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["editor", "browser"]
+    },
+    "archive_name": {
+      "type": "string"
+    },
+    "stub_download_url": {
+      "type": "string"
+    },
+    "student_file_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checksum": {
+      "type": "string"
+    },
+    "browser_test": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime", "script"],
+      "properties": {
+        "runtime": {
+          "type": "string",
+          "enum": ["python"]
+        },
+        "script": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

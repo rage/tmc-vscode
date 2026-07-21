@@ -11,7 +11,7 @@
 </script>
 
 <div class="progress-bar-label">{label}</div>
-<div style="--bar-width: {progress}" class="background">
+<div style:--bar-width={progress} class="background">
   <div class="bar"></div>
 </div>
 

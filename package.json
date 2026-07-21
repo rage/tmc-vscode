@@ -51,6 +51,7 @@
     "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.test.json && tsgo --noEmit -p tsconfig.integration.json && tsgo --noEmit -p webview-ui/tsconfig.json && tsgo --noEmit -p backend/tsconfig.json && tsgo --noEmit -p playwright/tsconfig.json && tsgo --noEmit -p tsconfig.node.json",
     "typecheck:tsc": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.integration.json && tsc --noEmit -p webview-ui/tsconfig.json && tsc --noEmit -p backend/tsconfig.json && tsc --noEmit -p playwright/tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "update-submodules": "git submodule foreach git pull origin master",
+    "vendor:langs-openapi": "bash bin/updateLangsOpenapi.sh",
     "vendor:langs-schema": "bash bin/updateLangsSchema.sh",
     "vscode:prepublish": "cross-env NODE_ENV=production pnpm run build",
     "watch": "node esbuild.mjs --watch",
@@ -233,7 +234,7 @@
       },
       {
         "command": "tmc.wipe",
-        "category": "TMC-WipeMyCode",
+        "category": "TestMyCode",
         "title": "Wipe all extension data"
       },
       {
@@ -244,7 +245,7 @@
       {
         "command": "tmcTreeView.refreshCourses",
         "title": "Fetch Course Updates",
-        "category": "TMC",
+        "category": "TestMyCode",
         "icon": {
           "light": "resources/light/refresh.svg",
           "dark": "resources/dark/refresh.svg"
@@ -253,7 +254,7 @@
       {
         "command": "tmcView.activateEntry",
         "title": "Activate",
-        "category": "TMC"
+        "category": "TestMyCode"
       }
     ],
     "configuration": {
@@ -323,80 +324,54 @@
       "commandPalette": [
         {
           "command": "tmc.addNewCourse",
-          "title": "Add New Course...",
-          "category": "TestMyCode",
           "when": "test-my-code:LoggedIn"
         },
         {
           "command": "tmc.courseDetails",
-          "title": "Go to Course Details...",
-          "category": "TestMyCode",
           "when": "test-my-code:LoggedIn"
         },
         {
           "command": "tmc.downloadNewExercises",
-          "title": "Download New Exercises for Course...",
-          "category": "TestMyCode",
           "when": "test-my-code:LoggedIn"
         },
         {
           "command": "tmc.downloadOldSubmission",
-          "title": "Download Old Submission",
-          "category": "TestMyCode",
           "when": "test-my-code:LoggedIn"
         },
         {
           "command": "tmc.login",
-          "title": "Log In",
-          "category": "TestMyCode",
           "when": "test-my-code:LoggedIn == false"
         },
         {
           "command": "tmc.logout",
-          "title": "Log Out",
-          "category": "TestMyCode",
           "when": "test-my-code:LoggedIn"
         },
         {
           "command": "tmc.myCourses",
-          "title": "Display My Courses",
-          "category": "TestMyCode",
           "when": "test-my-code:LoggedIn"
         },
         {
           "command": "tmc.pasteExercise",
-          "title": "Send Exercise to TMC Paste",
-          "category": "TestMyCode",
           "when": "test-my-code:LoggedIn"
         },
         {
           "command": "tmc.resetExercise",
-          "title": "Reset Exercise",
-          "category": "TestMyCode",
           "when": "test-my-code:LoggedIn"
         },
         {
           "command": "tmc.showLogin",
-          "title": "Show login menu",
-          "category": "TestMyCode",
-          "when": "true"
+          "when": "false"
         },
         {
           "command": "tmc.submitExercise",
-          "title": "Submit Solution",
-          "category": "TestMyCode",
           "when": "test-my-code:LoggedIn"
         },
         {
           "command": "tmc.updateExercises",
-          "title": "Update Exercises",
-          "category": "TestMyCode",
           "when": "test-my-code:LoggedIn"
         },
         {
           "command": "tmc.viewInitializationErrorHelp",
-          "title": "View initialization error help",
-          "category": "TestMyCode",
           "when": "false"
         },
         {
@@ -406,6 +381,22 @@
         {
           "command": "tmcView.activateEntry",
           "when": "false"
+        },
+        {
+          "command": "tmc.testExercise",
+          "when": "test-my-code:WorkspaceActive"
+        },
+        {
+          "command": "tmc.closeExercise",
+          "when": "test-my-code:WorkspaceActive"
+        },
+        {
+          "command": "tmc.cleanExercise",
+          "when": "test-my-code:WorkspaceActive"
+        },
+        {
+          "command": "tmc.debug",
+          "when": "test-my-code:DebugMode"
         }
       ],
       "editor/title": [

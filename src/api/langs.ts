@@ -22,10 +22,10 @@ import {
   ForbiddenError,
   InvalidTokenError,
   LangsResponseSchemaError,
+  NotEnrolledError,
   ObsoleteClientError,
   RuntimeError,
   SpawnError,
-  UnsupportedOperationError,
 } from "../errors"
 import type {
   CombinedCourseData,
@@ -38,7 +38,12 @@ import type {
   DownloadOrUpdateMoocCourseExercisesResult,
   DownloadOrUpdateTmcCourseExercisesResult,
   ExerciseDetails,
+  ExerciseTaskSubmissionStatus,
+  LocalMoocExercise,
   LocalTmcExercise,
+  MoocCourseProgress,
+  MoocDeviceLogin,
+  ExerciseSlideSubmissionListItem,
   Organization,
   OutputData,
   RunResult,
@@ -56,6 +61,7 @@ import {
   BaseError,
   CourseIdentifier,
   ExerciseIdentifier,
+  makeMoocKind,
   makeTmcKind,
   match,
 } from "../shared/shared"
@@ -74,6 +80,12 @@ interface ExecutionOptions {
 
 interface LangsProcessArgs {
   args: string[]
+  /**
+   * Threaded explicitly rather than sniffed from `args[0]`, so an
+   * auth-flavored error can be attributed to the right backend. `undefined`
+   * for backend-agnostic commands (local ops, settings).
+   */
+  backend?: "tmc" | "mooc" | undefined
   env?: Record<string, string> | undefined
   /** Which args should be obfuscated in logs. */
   obfuscate?: number[] | undefined
@@ -81,6 +93,9 @@ interface LangsProcessArgs {
   onStdout?: ((data: StatusUpdateData) => void) | undefined
   stdin?: string | undefined
   processTimeout?: number | undefined
+  /** Set on login/logout commands, where an auth-flavored error is expected rather than a lost session. */
+  suppressAuthEvents?: boolean | undefined
+  onInterruptHandle?: ((interrupt: () => void) => void) | undefined
 }
 
 interface LangsProcessRunner {
@@ -121,11 +136,15 @@ export default class Langs {
   private static readonly _exerciseUpdatesCacheKey = "exercise-updates"
   private static readonly _moocExerciseUpdatesCacheKey = "mooc-exercise-updates"
 
-  private _nextSubmissionAllowedTimestamp: number
+  // Per-backend: tmc.mooc.fi and courses.mooc.fi are unrelated servers, so one must not throttle the other.
+  private _nextTmcSubmissionAllowedTimestamp: number
+  private _nextMoocSubmissionAllowedTimestamp: number
   private readonly _options: Options
   private readonly _responseCache: Map<string, ResponseCacheEntry>
   private _onLogin?: () => void
-  private _onLogout?: () => void
+  private _onLogout?: (expected: boolean) => void
+  private _onMoocLogin?: () => void
+  private _onMoocLogout?: (expected: boolean) => void
 
   /**
    * Creates a new instance of the langs interface class.
@@ -136,7 +155,8 @@ export default class Langs {
     private readonly clientVersion: string,
     options?: Options,
   ) {
-    this._nextSubmissionAllowedTimestamp = 0
+    this._nextTmcSubmissionAllowedTimestamp = 0
+    this._nextMoocSubmissionAllowedTimestamp = 0
     this._options = { ...options }
     this._responseCache = new Map()
   }
@@ -144,16 +164,29 @@ export default class Langs {
   /**
    * Sets the callback to an event. Will overwrite previous callback for the specified event.
    *
+   * `expected` is true for a deliberate logout, false when the backend rejected the credentials mid-session.
+   *
    * @param event Event to subscribe to.
    * @param callback Eventhandler to invoke on event.
    */
-  public on(event: "login" | "logout", callback: () => void): void {
+  public on(event: "login" | "mooc-login", callback: () => void): void
+  public on(event: "logout" | "mooc-logout", callback: (expected: boolean) => void): void
+  public on(
+    event: "login" | "logout" | "mooc-login" | "mooc-logout",
+    callback: (() => void) | ((expected: boolean) => void),
+  ): void {
     switch (event) {
       case "login":
-        this._onLogin = callback
+        this._onLogin = callback as () => void
         break
       case "logout":
-        this._onLogout = callback
+        this._onLogout = callback as (expected: boolean) => void
+        break
+      case "mooc-login":
+        this._onMoocLogin = callback as () => void
+        break
+      case "mooc-logout":
+        this._onMoocLogout = callback as (expected: boolean) => void
         break
     }
   }
@@ -177,9 +210,11 @@ export default class Langs {
     }
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("login", "--base64", "--email", username, "--stdin"),
         obfuscate: [8],
         stdin: Buffer.from(password).toString("base64"),
+        suppressAuthEvents: true,
       },
       null,
     )
@@ -200,6 +235,7 @@ export default class Langs {
   public async isAuthenticated(options?: ExecutionOptions): Promise<Result<boolean, Error>> {
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("logged-in"),
         processTimeout: options?.timeout,
       },
@@ -223,13 +259,95 @@ export default class Langs {
   public async deauthenticate(): Promise<Result<void, Error>> {
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("logout"),
+        suppressAuthEvents: true,
       },
       null,
     )
     return res.andThen(() => {
       this._responseCache.clear()
-      this._onLogout?.()
+      this._onLogout?.(true)
+      return Ok.EMPTY
+    })
+  }
+
+  /**
+   * Logs in via OAuth2 device authorization (RFC 8628) using `mooc login`.
+   * The CLI emits a `mooc-device-login` update with the verification
+   * URL/user code before blocking on approval, surfaced via `onDeviceCode`;
+   * it rejects on deny/expiry (`not-logged-in`). No `processTimeout`: the
+   * user may take minutes to approve in the browser. `interrupt` kills the
+   * process; nothing is persisted until login succeeds.
+   *
+   * @param onDeviceCode Called with the verification URL/user code once the
+   * CLI emits it.
+   */
+  public authenticateMooc(onDeviceCode: (info: MoocDeviceLogin) => void): {
+    result: Promise<Result<void, BaseError | InitializationError>>
+    interrupt: () => void
+  } {
+    const onStdout = (res: StatusUpdateData): void => {
+      if (res["update-data-kind"] === "mooc-device-login" && res.data) {
+        onDeviceCode(res.data)
+      }
+    }
+    const process = this._spawnLangsProcess({
+      backend: "mooc",
+      args: this._moocCmd("login"),
+      onStdout,
+      onStderr: (data) => Logger.info("Rust Langs", data),
+    })
+    if (process.err) {
+      return { result: Promise.resolve(process), interrupt: (): void => {} }
+    }
+    const { interrupt, result } = process.val
+    const loginResult = result.then((res) =>
+      res
+        .andThen((x) => this._checkLangsResponse(x, null))
+        .map(() => {
+          this._onMoocLogin?.()
+          return undefined
+        }),
+    )
+    return { result: loginResult, interrupt }
+  }
+
+  /** Mirrors `isAuthenticated` for the mooc backend (`mooc logged-in`). */
+  public async isMoocAuthenticated(options?: ExecutionOptions): Promise<Result<boolean, Error>> {
+    const res = await this._executeLangsCommand(
+      {
+        backend: "mooc",
+        args: this._moocCmd("logged-in"),
+        processTimeout: options?.timeout,
+      },
+      null,
+    )
+    return res.andThen<boolean, Error>((x) => {
+      switch (x.result) {
+        case "logged-in":
+          return Ok(true)
+        case "not-logged-in":
+          return Ok(false)
+        default:
+          return Err(new Error(`Unexpected langs result: ${x.result}`))
+      }
+    })
+  }
+
+  /** Mirrors `deauthenticate` for the mooc backend (`mooc logout`); fires `mooc-logout` with `expected: true`. */
+  public async deauthenticateMooc(): Promise<Result<void, Error>> {
+    const res = await this._executeLangsCommand(
+      {
+        backend: "mooc",
+        args: this._moocCmd("logout"),
+        suppressAuthEvents: true,
+      },
+      null,
+    )
+    return res.andThen(() => {
+      this._responseCache.clear()
+      this._onMoocLogout?.(true)
       return Ok.EMPTY
     })
   }
@@ -253,24 +371,38 @@ export default class Langs {
   }
 
   /**
-   * Lists local exercises for given course. Uses TMC-langs `list-local-course-exercises`
-   * command internally, which is TMC-only and keyed solely by course slug.
+   * Lists local exercises for a given course. Dispatches on the backend: the TMC
+   * `list-local-course-exercises` core command (keyed by course slug) or the
+   * `mooc list-local-course-exercises` subcommand (keyed by course id, since mooc
+   * configs store no slug). Both return entries with an `exercise-slug` and an
+   * `exercise-path`, the fields the workspace manager needs.
    *
-   * @param _courseKind Kept for call-site symmetry; the CLI command is TMC-only.
-   * @param courseSlug Course which's exercises should be listed.
+   * @param courseKind Which backend the course belongs to.
+   * @param courseIdentifier Course slug for TMC, course id (UUID) for mooc.
    */
   public async listLocalCourseExercises(
-    _courseKind: "tmc" | "mooc",
-    courseSlug: string,
-  ): Promise<Result<LocalTmcExercise[], Error>> {
+    courseKind: "tmc" | "mooc",
+    courseIdentifier: string,
+  ): Promise<Result<(LocalTmcExercise | LocalMoocExercise)[], Error>> {
+    if (courseKind === "mooc") {
+      const res = await this._executeLangsCommand(
+        {
+          backend: "mooc",
+          args: this._moocCmd("list-local-course-exercises", "--course-id", courseIdentifier),
+        },
+        "local-mooc-exercises",
+      )
+      return res.map((x) => x.data["output-data"])
+    }
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: [
           "list-local-course-exercises",
           "--client-name",
           this.clientName,
           "--course-slug",
-          courseSlug,
+          courseIdentifier,
         ],
       },
       "local-tmc-exercises",
@@ -483,6 +615,7 @@ export default class Langs {
   ): Promise<Result<UpdatedExercise[], Error>> {
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("check-exercise-updates"),
       },
       "updated-exercises",
@@ -494,6 +627,7 @@ export default class Langs {
   public async checkMoocExerciseUpdates(options?: CacheOptions): Promise<Result<string[], Error>> {
     const res = await this._executeLangsCommand(
       {
+        backend: "mooc",
         args: this._moocCmd("check-exercise-updates"),
       },
       "mooc-updated-exercises",
@@ -506,6 +640,10 @@ export default class Langs {
    * Downloads multiple exercises to TMC-langs' configured project directory. Uses TMC-langs
    * `download-or-update-course-exercises` core command internally.
    *
+   * tmc and mooc are independent servers: each leg runs regardless of the
+   * other's outcome, with failures reported via `tmcError`/`moocError`
+   * instead of aborting the unaffected leg.
+   *
    * @param ids Ids of the exercises to download.
    * @param downloadTemplate Flag for downloading exercise template instead of latest submission.
    */
@@ -513,12 +651,14 @@ export default class Langs {
     ids: ExerciseIdentifier[],
     downloadTemplate: boolean,
     onDownloaded: (value: { id: ExerciseIdentifier; percent: number; message?: string }) => void,
-  ): Promise<
-    Result<
-      [DownloadOrUpdateTmcCourseExercisesResult, DownloadOrUpdateMoocCourseExercisesResult],
-      Error
-    >
-  > {
+    moocCourseId?: string,
+    onInterruptHandle?: (interrupt: () => void) => void,
+  ): Promise<{
+    tmc: DownloadOrUpdateTmcCourseExercisesResult
+    mooc: DownloadOrUpdateMoocCourseExercisesResult
+    tmcError?: Error | undefined
+    moocError?: Error | undefined
+  }> {
     const onStdout = (res: StatusUpdateData): void => {
       if (
         res["update-data-kind"] === "client-update-data" &&
@@ -526,6 +666,16 @@ export default class Langs {
       ) {
         onDownloaded({
           id: makeTmcKind({ tmcExerciseId: res.data.id }),
+          percent: res["percent-done"],
+          message: res.message ?? undefined,
+        })
+      } else if (
+        // Mooc reports progress under its own status-update kind; mirror the tmc branch above.
+        res["update-data-kind"] === "mooc-client-update-data" &&
+        res.data?.["client-update-data-kind"] === "exercise-download"
+      ) {
+        onDownloaded({
+          id: makeMoocKind({ moocExerciseId: res.data.id }),
           percent: res["percent-done"],
           message: res.message ?? undefined,
         })
@@ -551,10 +701,12 @@ export default class Langs {
       )
       .filter((id) => id !== null)
 
-    let tmcOutputData = null
+    let tmcOutputData: DownloadOrUpdateTmcCourseExercisesResult | null = null
+    let tmcError: Error | undefined
     if (tmcIds.length > 0) {
       const tmcRes = await this._executeLangsCommand(
         {
+          backend: "tmc",
           args: this._tmcCmd(
             "download-or-update-course-exercises",
             ...downloadTemplateArg,
@@ -562,6 +714,7 @@ export default class Langs {
             ...tmcIds.map((id) => id.toString()),
           ),
           onStdout,
+          onInterruptHandle,
         },
         "tmc-exercise-download",
       )
@@ -570,22 +723,36 @@ export default class Langs {
         return Ok(x.data["output-data"])
       })
       if (tmcMappedRes.err) {
-        return Err(tmcMappedRes.val)
+        // Don't abort — the mooc leg is independent and still runs; report via `tmcError`.
+        Logger.error("Failed to download/update tmc exercises.", tmcMappedRes.val)
+        tmcError = tmcMappedRes.val
+      } else {
+        tmcOutputData = tmcMappedRes.val
       }
-      tmcOutputData = tmcMappedRes.val
     }
 
-    let moocOutputData = null
+    let moocOutputData: DownloadOrUpdateMoocCourseExercisesResult | null = null
+    let moocError: Error | undefined
     if (moocIds.length > 0) {
       const moocRes = await this._executeLangsCommand(
         {
+          // NB: no --download-template here. The mooc bulk-download subcommand
+          // has no template concept and rejects the flag (clap error); it is
+          // tmc-only. See the mooc MoocCommand::DownloadOrUpdateCourseExercises
+          // definition in tmc-langs-cli.
+          //
+          // --course-id, when known, lets the CLI fetch just that course's
+          // slides instead of scanning every enrolled course to locate each
+          // exercise.
+          backend: "mooc",
           args: this._moocCmd(
             "download-or-update-course-exercises",
-            ...downloadTemplateArg,
+            ...(moocCourseId ? ["--course-id", moocCourseId] : []),
             "--exercise-id",
             ...moocIds,
           ),
           onStdout,
+          onInterruptHandle,
         },
         "mooc-exercise-download",
       )
@@ -594,14 +761,17 @@ export default class Langs {
         return Ok(x.data["output-data"])
       })
       if (moocMappedRes.err) {
-        return Err(moocMappedRes.val)
+        // Mirrors the tmc leg: don't discard tmc's already-collected results.
+        Logger.error("Failed to download/update mooc exercises.", moocMappedRes.val)
+        moocError = moocMappedRes.val
+      } else {
+        moocOutputData = moocMappedRes.val
       }
-      moocOutputData = moocMappedRes.val
     }
 
     const tmcExercises = tmcOutputData ?? { downloaded: [], skipped: [], failed: [] }
     const moocExercises = moocOutputData ?? { downloaded: [], skipped: [], failed: [] }
-    return Ok([tmcExercises, moocExercises])
+    return { tmc: tmcExercises, mooc: moocExercises, tmcError, moocError }
   }
 
   /**
@@ -631,7 +801,7 @@ export default class Langs {
       "--output-path",
       exercisePath,
     )
-    const res = await this._executeLangsCommand({ args }, null)
+    const res = await this._executeLangsCommand({ args, backend: "tmc" }, null)
     return res.err ? res : Ok.EMPTY
   }
 
@@ -653,7 +823,7 @@ export default class Langs {
       "--output-path",
       exercisePath,
     )
-    const res = await this._executeLangsCommand({ args }, null)
+    const res = await this._executeLangsCommand({ args, backend: "mooc" }, null)
     return res.err ? res : Ok.EMPTY
   }
 
@@ -670,6 +840,7 @@ export default class Langs {
   ): Promise<Result<Course[], Error>> {
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("get-courses", "--organization", organization),
       },
       "courses",
@@ -723,6 +894,7 @@ export default class Langs {
     }
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("get-course-data", "--course-id", courseId.toString()),
       },
       "combined-course-data",
@@ -731,24 +903,48 @@ export default class Langs {
     return res.map((x) => x.data["output-data"])
   }
 
+  /**
+   * Gets a mooc course with its exercise slides. Two sequential CLI calls
+   * (`mooc course`, `mooc course-exercises`) — mooc has no combined endpoint
+   * like tmc's `combined-course-data`. Each is cached by course id; pass
+   * `{ forceRefresh: true }` to bypass.
+   */
   public async getMoocCourseInstanceData(
     courseId: string,
+    options?: CacheOptions,
   ): Promise<Result<[CourseInstance, TmcExerciseSlide[]], Error>> {
     const courseRes = await this._executeLangsCommand(
-      { args: this._moocCmd("course", "--course-id", courseId) },
+      { backend: "mooc", args: this._moocCmd("course", "--course-id", courseId) },
       "mooc-course",
+      { forceRefresh: options?.forceRefresh, key: `mooc-course-${courseId}` },
     )
     if (courseRes.err) {
       return courseRes
     }
     const exercisesRes = await this._executeLangsCommand(
-      { args: this._moocCmd("course-exercises", "--course-id", courseId) },
+      { backend: "mooc", args: this._moocCmd("course-exercises", "--course-id", courseId) },
       "mooc-exercise-slides",
+      { forceRefresh: options?.forceRefresh, key: `mooc-course-exercises-${courseId}` },
     )
     if (exercisesRes.err) {
       return exercisesRes
     }
     return Ok([courseRes.val.data["output-data"], exercisesRes.val.data["output-data"]])
+  }
+
+  /**
+   * Per-exercise progress (points, completion) for a mooc course via
+   * `mooc course-progress`. Course totals are derived by summing the
+   * per-exercise entries, not returned separately.
+   *
+   * @param courseId The course UUID.
+   */
+  public async getMoocCourseProgress(courseId: string): Promise<Result<MoocCourseProgress, Error>> {
+    const res = await this._executeLangsCommand(
+      { backend: "mooc", args: this._moocCmd("course-progress", "--course-id", courseId) },
+      "mooc-course-progress",
+    )
+    return res.map((x) => x.data["output-data"])
   }
 
   /**
@@ -761,10 +957,11 @@ export default class Langs {
   public async getCourseDetails(
     courseId: CourseIdentifier,
     options?: CacheOptions,
-  ): Promise<Result<CourseDetails, Error>> {
+  ): Promise<Result<CourseDetails | CourseInstance, Error>> {
     if (courseId.kind === "tmc") {
       const res = await this._executeLangsCommand(
         {
+          backend: "tmc",
           args: this._tmcCmd(
             "get-course-details",
             "--course-id",
@@ -779,15 +976,16 @@ export default class Langs {
       )
       return res.map((x) => x.data["output-data"])
     } else if (courseId.kind === "mooc") {
+      // The mooc CLI has no `get-course-details` subcommand; `course` returns the
+      // course itself. Callers use this only as a connectivity probe (a failed
+      // result flips the course-details view into offline mode), so the returned
+      // MoocCourse shape is sufficient.
       const res = await this._executeLangsCommand(
         {
-          args: this._moocCmd(
-            "get-course-details",
-            "--course-id",
-            CourseIdentifier.toString(courseId),
-          ),
+          backend: "mooc",
+          args: this._moocCmd("course", "--course-id", CourseIdentifier.toString(courseId)),
         },
-        "course-details",
+        "mooc-course",
         {
           forceRefresh: options?.forceRefresh,
           key: `course-${CourseIdentifier.toString(courseId)}-details`,
@@ -811,6 +1009,7 @@ export default class Langs {
   ): Promise<Result<CourseExercise[], Error>> {
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("get-course-exercises", "--course-id", courseId.toString()),
       },
       "course-exercises",
@@ -832,6 +1031,7 @@ export default class Langs {
   ): Promise<Result<CourseData, Error>> {
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("get-course-settings", "--course-id", courseId.toString()),
       },
       "course-data",
@@ -853,6 +1053,7 @@ export default class Langs {
   ): Promise<Result<ExerciseDetails, Error>> {
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("get-exercise-details", "--exercise-id", exerciseId.toString()),
       },
       "exercise-details",
@@ -871,6 +1072,7 @@ export default class Langs {
   public async getTmcOldSubmissions(exerciseId: number): Promise<Result<Submission[], Error>> {
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("get-exercise-submissions", "--exercise-id", exerciseId.toString()),
       },
       "submissions",
@@ -878,12 +1080,15 @@ export default class Langs {
     return res.map((x) => x.data["output-data"])
   }
 
-  public async getMoocOldSubmissions(exerciseId: string): Promise<Result<Submission[], Error>> {
+  public async getMoocOldSubmissions(
+    exerciseId: string,
+  ): Promise<Result<ExerciseSlideSubmissionListItem[], Error>> {
     const res = await this._executeLangsCommand(
       {
+        backend: "mooc",
         args: this._moocCmd("get-exercise-submissions", "--exercise-id", exerciseId),
       },
-      "submissions",
+      "mooc-submissions",
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -901,6 +1106,7 @@ export default class Langs {
   ): Promise<Result<Organization, Error>> {
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("get-organization", "--organization", organizationSlug),
       },
       "organization",
@@ -917,24 +1123,8 @@ export default class Langs {
   public async getTmcOrganizations(options?: CacheOptions): Promise<Result<Organization[], Error>> {
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("get-organizations"),
-      },
-      "organizations",
-      {
-        forceRefresh: options?.forceRefresh,
-        key: "organizations",
-        remapper: organizationsRemapper,
-      },
-    )
-    return res.map((x) => x.data["output-data"])
-  }
-
-  public async getMoocOrganizations(
-    options?: CacheOptions,
-  ): Promise<Result<Organization[], Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        args: this._moocCmd("get-organizations"),
       },
       "organizations",
       {
@@ -970,15 +1160,25 @@ export default class Langs {
           "--exercise-path",
           exercisePath,
         )
-        const res = await this._executeLangsCommand({ args }, null)
+        const res = await this._executeLangsCommand({ args, backend: "tmc" }, null)
         return res.err ? res : Ok.EMPTY
       },
-      async () =>
-        Err(
-          new UnsupportedOperationError(
-            "Resetting exercises is not yet supported for courses.mooc.fi exercises.",
-          ),
-        ),
+      async (mooc) => {
+        // Mirrors the tmc leg above, against the mooc `reset-exercise`
+        // subcommand. The CLI re-downloads the stub archive before clearing the
+        // directory, so a failed download can't wipe the student's work.
+        const saveOldStateArg = saveOldState ? ["--save-old-state"] : []
+        const args = this._moocCmd(
+          "reset-exercise",
+          ...saveOldStateArg,
+          "--exercise-id",
+          mooc.moocExerciseId,
+          "--exercise-path",
+          exercisePath,
+        )
+        const res = await this._executeLangsCommand({ args, backend: "mooc" }, null)
+        return res.err ? res : Ok.EMPTY
+      },
     )
   }
 
@@ -999,10 +1199,10 @@ export default class Langs {
     onSubmissionUrl?: (url: string) => void,
   ): Promise<Result<SubmissionFinished, Error>> {
     const now = Date.now()
-    if (now < this._nextSubmissionAllowedTimestamp) {
+    if (now < this._nextTmcSubmissionAllowedTimestamp) {
       return Err(new BottleneckError("This command can't be executed at the moment."))
     }
-    this._nextSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
+    this._nextTmcSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
 
     const onStdout = (res: StatusUpdateData): void => {
       progressCallback?.(100 * res["percent-done"], res.message ?? undefined)
@@ -1016,6 +1216,7 @@ export default class Langs {
 
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd(
           "submit",
           "--submission-path",
@@ -1026,6 +1227,51 @@ export default class Langs {
         onStdout,
       },
       "submission-finished",
+    )
+    return res.map((x) => x.data["output-data"])
+  }
+
+  /**
+   * Submits a mooc exercise and waits for its grading, the mooc twin of
+   * {@link submitTmcExerciseAndWaitForResults}. The CLI resolves the slide and
+   * task ids from the exercise id and owns the poll loop, so this only needs the
+   * exercise id and path; it returns the terminal grading status.
+   *
+   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with
+   * `submitMoocExerciseToPaste()`; per-backend, so tmc submit/paste is unaffected.
+   *
+   * @param exerciseId Mooc exercise id (a UUID string).
+   * @param exercisePath Path to the local exercise directory.
+   * @param progressCallback Optional callback for progress reports during grading.
+   */
+  public async submitMoocExerciseAndWaitForResults(
+    exerciseId: string,
+    exercisePath: string,
+    progressCallback?: (progressPct: number, message?: string) => void,
+  ): Promise<Result<ExerciseTaskSubmissionStatus, Error>> {
+    const now = Date.now()
+    if (now < this._nextMoocSubmissionAllowedTimestamp) {
+      return Err(new BottleneckError("This command can't be executed at the moment."))
+    }
+    this._nextMoocSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
+
+    const onStdout = (res: StatusUpdateData): void => {
+      progressCallback?.(100 * res["percent-done"], res.message ?? undefined)
+    }
+
+    const res = await this._executeLangsCommand(
+      {
+        backend: "mooc",
+        args: this._moocCmd(
+          "submit",
+          "--exercise-id",
+          exerciseId,
+          "--submission-path",
+          exercisePath,
+        ),
+        onStdout,
+      },
+      "mooc-submission-status",
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -1045,13 +1291,14 @@ export default class Langs {
     exercisePath: string,
   ): Promise<Result<string, Error>> {
     const now = Date.now()
-    if (now < this._nextSubmissionAllowedTimestamp) {
+    if (now < this._nextTmcSubmissionAllowedTimestamp) {
       return Err(new BottleneckError("This command can't be executed at the moment."))
     }
-    this._nextSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
+    this._nextTmcSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
 
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd(
           "paste",
           "--exercise-id",
@@ -1064,18 +1311,32 @@ export default class Langs {
     )
     return res.map((x) => x.data["output-data"].paste_url)
   }
+  /**
+   * Submits a mooc exercise and shares it, returning a public paste link, the
+   * mooc twin of {@link submitTmcExerciseToPaste}. The CLI `mooc paste`
+   * subcommand submits (non-blocking) then shares the resulting submission in
+   * one shot, resolving the slide/task ids from the exercise id.
+   *
+   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with
+   * `submitMoocExerciseAndWaitForResults()`; per-backend, so tmc submit/paste is unaffected.
+   *
+   * @param exerciseId Mooc exercise id (a UUID string).
+   * @param exercisePath Path to the local exercise directory.
+   * @returns The paste link.
+   */
   public async submitMoocExerciseToPaste(
     exerciseId: string,
     exercisePath: string,
   ): Promise<Result<string, Error>> {
     const now = Date.now()
-    if (now < this._nextSubmissionAllowedTimestamp) {
+    if (now < this._nextMoocSubmissionAllowedTimestamp) {
       return Err(new BottleneckError("This command can't be executed at the moment."))
     }
-    this._nextSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
+    this._nextMoocSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
 
     const res = await this._executeLangsCommand(
       {
+        backend: "mooc",
         args: this._moocCmd(
           "paste",
           "--exercise-id",
@@ -1084,7 +1345,7 @@ export default class Langs {
           exercisePath,
         ),
       },
-      "new-submission",
+      "mooc-paste",
     )
     return res.map((x) => x.data["output-data"].paste_url)
   }
@@ -1106,6 +1367,7 @@ export default class Langs {
     )
     const res = await this._executeLangsCommand(
       {
+        backend: "tmc",
         args: this._tmcCmd("send-feedback", "--feedback-url", feedbackUrl, ...feedbackArgs),
       },
       "submission-feedback-response",
@@ -1113,9 +1375,28 @@ export default class Langs {
     return res.map((r) => r.data["output-data"])
   }
 
+  /**
+   * Lists the courses.mooc.fi courses the user is enrolled in. The backend keys
+   * enrollments by (user, course, instance) and can therefore return the same
+   * course twice when a user has two live enrollments of it; since the extension
+   * keys courses by course id, the list is de-duplicated by `id` (keeping the
+   * first occurrence) so the same course never appears — or is added — twice.
+   */
   public async getEnrolledMoocCourseInstances(): Promise<Result<CourseInstance[], Error>> {
-    const res = await this._executeLangsCommand({ args: this._moocCmd("courses") }, "mooc-courses")
-    return res.map((r) => r.data["output-data"])
+    const res = await this._executeLangsCommand(
+      { backend: "mooc", args: this._moocCmd("courses") },
+      "mooc-courses",
+    )
+    return res.map((r) => {
+      const seen = new Set<string>()
+      return r.data["output-data"].filter((course) => {
+        if (seen.has(course.id)) {
+          return false
+        }
+        seen.add(course.id)
+        return true
+      })
+    })
   }
 
   /**
@@ -1187,9 +1468,12 @@ export default class Langs {
     if (process.err) {
       return process
     }
+    langsArgs.onInterruptHandle?.(process.val.interrupt)
+    // Attribute a lost-session error to the command's backend so the right logout event fires.
+    const authEventTarget = langsArgs.suppressAuthEvents ? undefined : langsArgs.backend
     const res = await process.val.result
     return res
-      .andThen((x) => this._checkLangsResponse(x, outputDataKind))
+      .andThen((x) => this._checkLangsResponse(x, outputDataKind, authEventTarget))
       .andThen((x) => {
         if (x && cacheKey) {
           this._responseCache.set(cacheKey, { response: x, timestamp: currentTime })
@@ -1203,10 +1487,13 @@ export default class Langs {
 
   /**
    * Checks langs response for generic errors.
+   *
+   * @param authEventTarget Backend whose unexpected-logout event to fire on an auth error; undefined fires none.
    */
   private _checkLangsResponse<T extends DataKind["output-data-kind"] | null>(
     langsResponse: OutputData,
     outputDataKind: T,
+    authEventTarget?: "tmc" | "mooc",
   ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, BaseError> {
     if (!dataMatchesKind(langsResponse, outputDataKind)) {
       Logger.error("Unexpected TMC-langs response.", langsResponse)
@@ -1234,13 +1521,30 @@ export default class Langs {
         return Err(new ConnectionError(message, traceString))
       case "forbidden":
         return Err(new ForbiddenError(message, traceString))
+      case "not-enrolled": {
+        // Not hardcoded to courses.mooc.fi: this error kind can come from either backend.
+        const siteName =
+          authEventTarget === "tmc"
+            ? "tmc.mooc.fi"
+            : authEventTarget === "mooc"
+              ? "courses.mooc.fi"
+              : "the server"
+        return Err(
+          new NotEnrolledError(
+            `You are no longer enrolled on this course on ${siteName}, so its` +
+              ` exercises can't be fetched. Enroll on the course again from` +
+              ` ${siteName}, then reload the course here.`,
+            traceString,
+          ),
+        )
+      }
       case "invalid-token":
         this._responseCache.clear()
-        this._onLogout?.()
+        this._fireUnexpectedLogout(authEventTarget)
         return Err(new InvalidTokenError(message))
       case "not-logged-in":
         this._responseCache.clear()
-        this._onLogout?.()
+        this._fireUnexpectedLogout(authEventTarget)
         return Err(new AuthorizationError(message, traceString))
       case "obsolete-client":
         return Err(
@@ -1254,6 +1558,15 @@ export default class Langs {
     }
 
     return Err(new RuntimeError(message, traceString))
+  }
+
+  /** Fires the unexpected-logout (`expected: false`) event for `target`, used when credentials were rejected rather than removed deliberately. */
+  private _fireUnexpectedLogout(target?: "tmc" | "mooc"): void {
+    if (target === "tmc") {
+      this._onLogout?.(false)
+    } else if (target === "mooc") {
+      this._onMoocLogout?.(false)
+    }
   }
 
   /**

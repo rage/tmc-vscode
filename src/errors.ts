@@ -39,6 +39,10 @@ export class InvalidTokenError extends BaseError {
   public override readonly name = "Invalid Token Error"
 }
 
+export class NotEnrolledError extends BaseError {
+  public override readonly name = "Not Enrolled Error"
+}
+
 export class ObsoleteClientError extends BaseError {
   public override readonly name = "Obsolete Client Error"
 }

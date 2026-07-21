@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte"
-  import { writable } from "svelte/store"
 
+  import Button from "../components/Button.svelte"
   import ExercisePart from "../components/ExercisePart.svelte"
   import type { CourseDetailsPanel, TmcExerciseId, MoocExerciseId } from "../shared/shared"
   import {
@@ -22,8 +22,9 @@
 
   let { panel = $bindable() }: Props = $props()
 
-  const totalDownloading = writable<number>(0)
-  const refreshing = writable<boolean>(false)
+  // `refresh()` remounts the panel under a fresh id, so `refreshing` resets on its own
+  // via `{#key}`.
+  let refreshing = $state<boolean>(false)
   let checkedExercises = $state<{
     tmc: Record<TmcExerciseId, boolean>
     mooc: Record<MoocExerciseId, boolean>
@@ -32,6 +33,14 @@
     [...Object.values(checkedExercises.tmc), ...Object.values(checkedExercises.mooc)].filter(
       Boolean,
     ).length,
+  )
+  // Derived from exercise statuses rather than tracked separately, since downloads report
+  // progress back as `exerciseStatusChange` broadcasts, not a return value here.
+  const totalDownloading = $derived(
+    [
+      ...Object.values(panel.exerciseStatuses.tmc),
+      ...Object.values(panel.exerciseStatuses.mooc),
+    ].filter((status) => status === "downloading").length,
   )
   // common course fields, independent of the course's backend
   const course = $derived(panel.course === undefined ? undefined : unwrap(panel.course))
@@ -71,6 +80,12 @@
         break
       }
       case "exerciseStatusChange": {
+        // Broadcast to every CourseDetails panel; only apply it if it's for our course.
+        if (
+          CourseIdentifier.toString(message.courseId) !== CourseIdentifier.toString(panel.courseId)
+        ) {
+          break
+        }
         const exerciseStatuses = match(
           message.exerciseId,
           (tmc) => ({
@@ -93,7 +108,12 @@
         break
       }
       case "setUpdateables": {
-        panel = { ...panel, updateableExercises: message.exerciseIds }
+        // Broadcast to every CourseDetails panel; only apply it if it's for our course.
+        if (
+          CourseIdentifier.toString(message.courseId) === CourseIdentifier.toString(panel.courseId)
+        ) {
+          panel = { ...panel, updateableExercises: message.exerciseIds }
+        }
         break
       }
       default:
@@ -108,7 +128,7 @@
     })
   }
   function refresh(id: CourseIdentifier) {
-    refreshing.set(true)
+    refreshing = true
     vscode.postMessage({
       type: "refreshCourseDetails",
       // `id` is nested in the `$state`-proxied `panel`; snapshot it or posting
@@ -127,10 +147,17 @@
         vscode.postMessage({
           type: "openCourseWorkspace",
           courseName: tmc.name,
+          backend: "tmc",
         })
       },
-      () => {
-        throw new Error("todo")
+      (mooc) => {
+        // The workspace file is created under the course slug; the backend tag disambiguates
+        // it from a tmc course that happens to share the same slug.
+        vscode.postMessage({
+          type: "openCourseWorkspace",
+          courseName: mooc.name,
+          backend: "mooc",
+        })
       },
     )
   }
@@ -175,8 +202,14 @@
           mode: "update",
         })
       },
-      (_mooc) => {
-        throw new Error("todo")
+      (mooc) => {
+        vscode.postMessage({
+          type: "downloadExercises",
+          ids: $state.snapshot(p.updateableExercises ?? []),
+          // mooc CourseIdentifier carries the course id in `instanceId`
+          courseId: makeMoocKind({ instanceId: mooc.id }),
+          mode: "update",
+        })
       },
     )
   }
@@ -205,45 +238,42 @@
     onclick={() => openMyCourses()}
     onkeypress={() => openMyCourses()}
   >
-    My Courses
+    My courses
   </a>
   /
-  {course?.title ?? "Loading course..."}
+  {course?.title ?? "Loading course…"}
 </nav>
 <div class="header">
   {#if course === undefined}
-    <h2>Loading course...</h2>
+    <h1 class="course-heading">Loading course…</h1>
   {:else}
-    <h2>{course.title} <small class="muted">({course.name})</small></h2>
+    <h1 class="course-heading">{course.title} <small class="muted">({course.name})</small></h1>
   {/if}
 
   <div>
-    {course?.description ?? "Loading description..."}
+    {course?.description ?? "Loading description…"}
   </div>
 
   <div>
-    <vscode-button
-      role="button"
-      tabindex="0"
+    <Button
       class="refresh"
       aria-label="Refresh"
       onclick={() => refresh(panel.courseId)}
-      onkeypress={() => refresh(panel.courseId)}
-      disabled={$refreshing || $totalDownloading > 0}
+      disabled={refreshing || totalDownloading > 0}
       secondary
     >
-      {#if $refreshing}
-        Refreshing
+      {#if refreshing}
+        Refreshing <vscode-icon name="loading" spin aria-hidden="true"></vscode-icon>
       {:else}
         Refresh
       {/if}
-    </vscode-button>
+    </Button>
   </div>
 
   <div>
     Points gained: {course
       ? `${course.awardedPoints} / ${course.availablePoints}`
-      : "Loading points..."}
+      : "Loading points…"}
   </div>
 
   {#if course?.materialUrl}
@@ -253,30 +283,15 @@
   {/if}
 
   <div class="open-workspace-button">
-    <vscode-button
-      role="button"
-      tabindex="0"
-      aria-label="Open workspace"
-      onclick={() => openWorkspace(panel)}
-      onkeypress={() => openWorkspace(panel)}
-    >
-      Open workspace
-    </vscode-button>
+    <Button aria-label="Open workspace" onclick={() => openWorkspace(panel)}>Open workspace</Button>
   </div>
 
   <div
     role="alert"
-    hidden={panel.updateableExercises === undefined || panel.updateableExercises.length > 0}
+    hidden={panel.updateableExercises === undefined || panel.updateableExercises.length === 0}
   >
     Updates found for exercises
-    <vscode-button
-      role="button"
-      tabindex="0"
-      onclick={() => updateExercises(panel)}
-      onkeypress={() => updateExercises(panel)}
-    >
-      Update exercises
-    </vscode-button>
+    <Button onclick={() => updateExercises(panel)}>Update exercises</Button>
   </div>
   {#if panel.offlineMode}
     <div role="alert">Unable to fetch exercise data from server. Displaying local exercises.</div>
@@ -305,7 +320,7 @@
     </div>
   {/each}
 {:else}
-  <vscode-progress-ring></vscode-progress-ring>
+  <vscode-progress-ring aria-label="Loading"></vscode-progress-ring>
 {/if}
 
 {#if checkedExercisesCount > 0}
@@ -314,45 +329,12 @@
       <div class="action-bar-text">
         Select action for {checkedExercisesCount} selected items
       </div>
-      <div class="action-bar-buttons">
-        <vscode-button
-          role="button"
-          tabindex="0"
-          class="action-bar-button"
-          onclick={() => downloadExercises(panel, getCheckedExercises())}
-          onkeypress={() => downloadExercises(panel, getCheckedExercises())}
-        >
-          Download
-        </vscode-button>
-        <vscode-button
-          role="button"
-          tabindex="0"
-          class="action-bar-button"
-          onclick={() => openExercises(panel, getCheckedExercises())}
-          onkeypress={() => openExercises(panel, getCheckedExercises())}
-        >
-          Open
-        </vscode-button>
-        <vscode-button
-          role="button"
-          tabindex="0"
-          class="action-bar-button"
-          onclick={() => closeExercises(panel, getCheckedExercises())}
-          onkeypress={() => closeExercises(panel, getCheckedExercises())}
-        >
-          Close
-        </vscode-button>
-        <vscode-button
-          role="button"
-          tabindex="0"
-          class="action-bar-button"
-          secondary
-          onclick={() => clearSelectedExercises()}
-          onkeypress={() => clearSelectedExercises()}
-        >
-          Clear selection
-        </vscode-button>
-      </div>
+      <vscode-button-group class="action-bar-buttons">
+        <Button onclick={() => downloadExercises(panel, getCheckedExercises())}>Download</Button>
+        <Button onclick={() => openExercises(panel, getCheckedExercises())}>Open</Button>
+        <Button onclick={() => closeExercises(panel, getCheckedExercises())}>Close</Button>
+        <Button secondary onclick={() => clearSelectedExercises()}>Clear selection</Button>
+      </vscode-button-group>
     </div>
   </div>
 {/if}
@@ -362,7 +344,13 @@
     position: relative;
     margin-bottom: 0.8rem;
   }
-  .refresh {
+  /* Reserve space so a long title/description does not run under the absolutely-positioned
+     Refresh button. */
+  .course-heading {
+    padding-right: 7rem;
+  }
+  /* Targets the <vscode-button> rendered inside the Button wrapper. */
+  .header :global(.refresh) {
     position: absolute;
     top: 0rem;
     right: 0rem;
@@ -370,28 +358,24 @@
   .action-bar-container {
     position: fixed;
     bottom: 0.8rem;
-    left: 50%;
-    right: 50%;
+    left: 0;
+    right: 0;
     justify-content: center;
     display: flex;
   }
   .action-bar {
     display: flex;
     flex-direction: column;
-    background-color: var(--vscode-editor-background, #1f1f1f);
+    background-color: var(--vscode-editorWidget-background, #252526);
     padding: 0.4rem;
-    border: 1px;
-    border-style: inset;
+    border: 1px solid var(--vscode-widget-border, transparent);
+    border-radius: 0.4rem;
   }
   .action-bar-text {
     text-align: center;
   }
   .action-bar-buttons {
-    display: flex;
-    justify-content: center;
-  }
-  .action-bar-button {
-    margin: 0.4rem;
+    display: block;
   }
   .open-workspace-button {
     margin-top: 0.4rem;
@@ -405,5 +389,12 @@
   }
   .my-courses-link {
     cursor: pointer;
+  }
+  .my-courses-link:hover {
+    text-decoration: underline;
+  }
+  .my-courses-link:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007fd4);
+    outline-offset: 2px;
   }
 </style>

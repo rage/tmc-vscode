@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte"
-  import { writable } from "svelte/store"
 
+  import Button from "../components/Button.svelte"
   import type { LoginPanel } from "../shared/shared"
   import { assertUnreachable } from "../shared/shared"
   import { addMessageListener } from "../utilities/script"
@@ -13,12 +13,21 @@
 
   let { panel }: Props = $props()
 
-  // the vscode-textfield elements; typed structurally by the part we use
-  let usernameField: { value: string } | undefined = $state()
-  let passwordField: { value: string } | undefined = $state()
-  const errorTimeout = writable<NodeJS.Timeout | null>(null)
-  const errorMessage = writable<string | null>(null)
-  const loggingIn = writable(false)
+  // collision-proof ids for the label/field associations
+  const fieldId = $props.id()
+  const usernameId = `${fieldId}-username`
+  const passwordId = `${fieldId}-password`
+  let username = $state("")
+  let password = $state("")
+
+  // vscode-textfield is a custom element, so `bind:value` doesn't apply; mirror manually.
+  function readValue(event: Event): string {
+    return (event.currentTarget as { value: string } | null)?.value ?? ""
+  }
+
+  let errorTimeout: NodeJS.Timeout | null = null
+  let errorMessage = $state<string | null>(null)
+  let loggingIn = $state(false)
 
   onMount(() => {
     vscode.postMessage({
@@ -26,21 +35,18 @@
       sourcePanel: panel,
     })
   })
-  // svelte-ignore state_referenced_locally -- the panel identity (id/type)
-  // is fixed for the lifetime of the component, capturing the initial value is intended
+  // svelte-ignore state_referenced_locally -- panel id/type is fixed for the component's lifetime
   addMessageListener(panel, (message) => {
     switch (message.type) {
       case "loginError": {
-        loggingIn.set(false)
-        errorMessage.set(message.error)
-        errorTimeout.update((val) => {
-          if (val !== null) {
-            clearTimeout(val)
-          }
-          return setTimeout(() => {
-            errorMessage.set(null)
-          }, 7500)
-        })
+        loggingIn = false
+        errorMessage = message.error
+        if (errorTimeout !== null) {
+          clearTimeout(errorTimeout)
+        }
+        errorTimeout = setTimeout(() => {
+          errorMessage = null
+        }, 7500)
         break
       }
       default:
@@ -50,9 +56,7 @@
 
   function onSubmit(event: Event) {
     event.preventDefault()
-    loggingIn.set(true)
-    const username = usernameField?.value ?? ""
-    const password = passwordField?.value ?? ""
+    loggingIn = true
     vscode.postMessage({
       type: "login",
       username,
@@ -70,25 +74,31 @@
 </div>
 <br />
 
-{#if $errorMessage}
-  <div class="error" role="alert">
-    {$errorMessage}
-  </div>
-  <br />
-{/if}
-
 <form onsubmit={onSubmit}>
-  <div>
-    <vscode-label for="username-field">Email or username:</vscode-label>
-    <vscode-textfield id="username-field" class="input" type="text" bind:this={usernameField}
+  <vscode-form-group variant="vertical">
+    <vscode-label for={usernameId}>Email or username:</vscode-label>
+    <vscode-textfield
+      id={usernameId}
+      class="input"
+      type="text"
+      value={username}
+      oninput={(event: Event) => (username = readValue(event))}
     ></vscode-textfield>
-    <vscode-label for="password-field">Password:</vscode-label>
-    <vscode-textfield id="password-field" class="input" type="password" bind:this={passwordField}
+  </vscode-form-group>
+  <vscode-form-group variant="vertical">
+    <vscode-label for={passwordId}>Password:</vscode-label>
+    <vscode-textfield
+      id={passwordId}
+      class="input"
+      type="password"
+      value={password}
+      oninput={(event: Event) => (password = readValue(event))}
     ></vscode-textfield>
-  </div>
-  <vscode-button role="button" tabindex="0" class="button" type="submit" disabled={$loggingIn}>
-    Log in
-  </vscode-button>
+  </vscode-form-group>
+  {#if errorMessage}
+    <vscode-form-helper class="error" role="alert">{errorMessage}</vscode-form-helper>
+  {/if}
+  <Button class="button" type="submit" disabled={loggingIn}>Log in</Button>
 </form>
 
 <style>
@@ -99,7 +109,9 @@
     width: 100%;
     margin-bottom: 0.5rem;
   }
-  .button {
+  /* the login button renders as <vscode-button> inside the Button wrapper, so style
+     through :global */
+  form :global(.button) {
     margin-top: 0.5rem;
   }
 </style>

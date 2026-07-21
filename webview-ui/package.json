@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@vscode-elements/elements": "^2.5.1",
+    "@vscode/codicons": "^0.0.40",
     "zod": "^4.4.3"
   },
   "devDependencies": {

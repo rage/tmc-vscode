@@ -1,4 +1,5 @@
 import { SelectCourse } from "./select-course"
+import { SelectMoocCourse } from "./select-mooc-course"
 import { SelectOrganization } from "./select-organization"
 import { SelectPlatform } from "./select-platform"
 import { TmcPage } from "./tmc"
@@ -25,6 +26,19 @@ export class MyCoursesPage extends TmcPage {
 
     const selectCourse = new SelectCourse(this.page, this.webview)
     await selectCourse.select(name)
+  }
+
+  public async addNewMoocCourse(name: string): Promise<void> {
+    await this.webview.getByRole("button", { name: "Add new course" }).first().click()
+
+    // Adding a course goes through platform selection first; here we pick the
+    // mooc (courses.mooc.fi) platform, then a course from the enrolled list the
+    // mooc mock backend serves.
+    const selectPlatform = new SelectPlatform(this.page, this.webview)
+    await selectPlatform.selectMooc()
+
+    const selectMoocCourse = new SelectMoocCourse(this.page, this.webview)
+    await selectMoocCourse.select(name)
   }
 
   public async selectCourse(name: string): Promise<void> {

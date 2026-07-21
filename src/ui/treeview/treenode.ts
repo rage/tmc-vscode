@@ -14,11 +14,15 @@ export class TmcTreeNode extends vscode.TreeItem {
     contextValue?: string,
     collapsibleState?: vscode.TreeItemCollapsibleState,
     subActions?: TmcTreeNode[],
+    iconId?: string,
   ) {
     super(label, collapsibleState)
     this.id = id
     if (contextValue !== undefined) {
       this.contextValue = contextValue
+    }
+    if (iconId !== undefined) {
+      this.iconPath = new vscode.ThemeIcon(iconId)
     }
     this.command = command
     this.children = new Map<string, TmcTreeNode>()
