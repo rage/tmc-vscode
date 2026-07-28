@@ -36,15 +36,24 @@
   import { addMessageListener } from "./utilities/script"
   import { vscode } from "./utilities/vscode"
 
-  // We shouldn't have any uncaught errors, but if they happen we show the user a
-  // simple message instead of a blank page. `<svelte:window>` declares the
-  // listeners with automatic teardown; the `<svelte:boundary>` below additionally
-  // catches errors thrown while a panel renders, which window handlers cannot see.
+  // Shows the user a message instead of a blank page on an uncaught error. `<svelte:boundary>`
+  // below additionally catches errors thrown while a panel renders, which window handlers miss.
   let crash = $state<{ title: string; message: string; stack: string | undefined } | null>(null)
 
+  // "ResizeObserver loop completed/limit exceeded" is a benign browser notice (deferred resize
+  // callbacks), not a real error, but surfaces as a global `error` event. Responsive
+  // `@vscode-elements` (e.g. `vscode-table`) trigger it during layout, so ignore it rather than
+  // crashing the whole panel.
+  function isBenignError(message: string): boolean {
+    return message.includes("ResizeObserver loop")
+  }
+
   function handleError(event: Event) {
-    console.error("Uncaught error", event)
     const { message, error } = event as ErrorEvent
+    if (isBenignError(message)) {
+      return
+    }
+    console.error("Uncaught error", event)
     crash = {
       title: "Uncaught error",
       message,

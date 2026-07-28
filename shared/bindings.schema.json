@@ -1286,16 +1286,31 @@
             ]
           }
         },
+        "not_attempted": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/MoocExerciseDownload"
+          },
+          "description": "Exercises that were never attempted because the batch stopped early\nafter a permanent mooc auth failure on an earlier exercise (see\n`stopped_for_auth`). Empty in the common case where every requested\nexercise was at least attempted."
+        },
         "skipped": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/MoocExerciseDownload"
           }
+        },
+        "stopped_for_auth": {
+          "type": "boolean",
+          "default": false,
+          "description": "True if the batch stopped before attempting every requested exercise\nbecause a mooc token refresh permanently failed (the user's session is\ngone; retrying the remaining exercises would just fail identically).\nWhen true, `not_attempted` holds the exercises that were skipped as a\nresult."
         }
       },
       "required": [
         "downloaded",
-        "skipped"
+        "skipped",
+        "not_attempted",
+        "stopped_for_auth"
       ]
     },
     "DownloadOrUpdateTmcCourseExercisesResult": {

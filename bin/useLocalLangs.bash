@@ -15,9 +15,10 @@ set -euo pipefail
 # `...-<version>` filename. Rather than split or bump that pin (which would
 # touch the production download path), we install the local build UNDER THE
 # PINNED FILENAME. The real version is still reported by `<cli> --version`
-# (0.39.5 for the migration branch), which is what the integration suite uses
-# to decide whether to run the migration-contract tests. So: pinned name on
-# disk, honest version over --version.
+# (newer than the version pinned in config.js, for the migration branch),
+# which is what the integration suite uses to decide whether to run the
+# migration-contract tests. So: pinned name on disk, honest version over
+# --version.
 #
 # backend/cli is gitignored, so nothing here is ever committed.
 

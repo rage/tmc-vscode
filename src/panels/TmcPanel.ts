@@ -950,13 +950,17 @@ export class TmcPanel {
                 target: moocLoginPanel,
                 error: loginResult.val.message,
               })
-            } else {
+            } else if (moocLoginPanel.requestingPanel) {
               // Still the current attempt (checked above), so the login panel is still active.
               await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
                 id: randomPanelId(),
                 type: "SelectMoocCourse",
                 requestingPanel: moocLoginPanel.requestingPanel,
               })
+            } else {
+              // Standalone login: nothing to navigate back to, so just close and confirm.
+              TmcPanel.sidePanel?.dispose()
+              actionContext.dialog.notification("Logged in to courses.mooc.fi again.")
             }
             break
           }

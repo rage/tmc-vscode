@@ -35,9 +35,9 @@
     "install:all": "pnpm install",
     "lint": "oxlint --fix",
     "lint:ci": "oxlint --max-warnings=0",
-    "playwright-test": "pnpm run webview:build && pnpm run build && xvfb-maybe playwright test",
-    "playwright-test-debug": "pnpm run webview:build && pnpm run build && xvfb-maybe playwright test --debug",
-    "playwright-test:local": "cross-env NODE_ENV=development BACKEND=mockBackend pnpm run playwright-test",
+    "playwright-test": "pnpm run webview:build && cross-env NODE_ENV=development BACKEND=mockBackend pnpm run build && xvfb-maybe -a -- playwright test",
+    "playwright-test-debug": "pnpm run webview:build && cross-env NODE_ENV=development BACKEND=mockBackend pnpm run build && xvfb-maybe -a -- playwright test --debug",
+    "playwright-test:local": "pnpm run playwright-test",
     "prepare": "husky",
     "pretest:integration": "cross-env NODE_ENV=development BACKEND=mockBackend pnpm run build",
     "release": "./bin/publishRelease.sh",
@@ -191,6 +191,11 @@
       {
         "command": "tmc.showLogin",
         "title": "Show Login Menu",
+        "category": "TestMyCode"
+      },
+      {
+        "command": "tmc.showMoocLogin",
+        "title": "Show courses.mooc.fi Login",
         "category": "TestMyCode"
       },
       {
@@ -360,6 +365,10 @@
         },
         {
           "command": "tmc.showLogin",
+          "when": "false"
+        },
+        {
+          "command": "tmc.showMoocLogin",
           "when": "false"
         },
         {

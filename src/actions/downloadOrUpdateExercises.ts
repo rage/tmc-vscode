@@ -115,7 +115,13 @@ export async function downloadOrUpdateExercises(
 
   const {
     tmc: { downloaded: tmcDownloaded, failed: tmcFailed, skipped: tmcSkipped },
-    mooc: { downloaded: moocDownloaded, failed: moocFailed, skipped: moocSkipped },
+    mooc: {
+      downloaded: moocDownloaded,
+      failed: moocFailed,
+      skipped: moocSkipped,
+      not_attempted: moocNotAttempted,
+      stopped_for_auth: moocStoppedForAuth,
+    },
     tmcError,
     moocError,
   } = downloadResult
@@ -125,6 +131,18 @@ export async function downloadOrUpdateExercises(
   }
   if (moocError) {
     dialog.errorNotification("Failed to download exercises from courses.mooc.fi.", moocError)
+  } else if (moocStoppedForAuth) {
+    // Successful response, but the batch stopped early on auth failure; say how far it got.
+    const moocRequested =
+      moocDownloaded.length +
+      moocSkipped.length +
+      (moocFailed?.length ?? 0) +
+      moocNotAttempted.length
+    const moocCompleted = moocDownloaded.length + moocSkipped.length
+    dialog.errorNotification(
+      `Downloaded ${moocCompleted} of ${moocRequested} exercises from courses.mooc.fi, then` +
+        ` your session expired — the rest will be available once you log in again.`,
+    )
   }
   if (tmcSkipped.length > 0) {
     Logger.warn(`${tmcSkipped.length} downloads were skipped.`)
@@ -143,6 +161,13 @@ export async function downloadOrUpdateExercises(
   moocFailed?.forEach(([exercise, reason]) => {
     Logger.error(`Failed to download exercise ${exercise["exercise-id"]}: ${reason}`)
     statuses.set(exercise["exercise-id"], "downloadFailed")
+  })
+  moocNotAttempted.forEach((x) => {
+    Logger.warn(
+      `Did not attempt to download exercise ${x["exercise-id"]}: the batch stopped early` +
+        ` after a mooc auth failure.`,
+    )
+    statuses.set(x["exercise-id"], "downloadFailed")
   })
   postMessages(statuses, resolveCourseId)
   if (tmcFailed && tmcFailed.length > 0) {

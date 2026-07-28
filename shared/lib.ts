@@ -646,12 +646,12 @@ export const SelectMoocCoursePanelSchema = z.object({
 
 export type SelectMoocCoursePanel = z.infer<typeof SelectMoocCoursePanelSchema>
 
-// Shown before the mooc course flow when no mooc credentials exist;
-// `requestingPanel` is where the flow continues on success.
+// Shown before the mooc course flow, or standalone on session expiry.
+// `requestingPanel` is where to continue on success; absent for standalone.
 export const MoocLoginPanelSchema = z.object({
   id: z.number(),
   type: z.literal("MoocLogin"),
-  requestingPanel: targetPanelSchema("MyCourses"),
+  requestingPanel: targetPanelSchema("MyCourses").optional(),
 })
 
 export type MoocLoginPanel = z.infer<typeof MoocLoginPanelSchema>

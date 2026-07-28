@@ -42,6 +42,11 @@ export class MyCoursesPage extends TmcPage {
   }
 
   public async selectCourse(name: string): Promise<void> {
-    await this.webview.getByRole("heading", { name }).click()
+    // The course-selection panel closes asynchronously, and until it does the
+    // webview locator still resolves to it — its course row is an <h3> with the
+    // same title, so clicking it would re-fire the add instead of opening the
+    // course. Wait for My Courses's "Add new course" button first.
+    await this.webview.getByRole("button", { name: "Add new course" }).first().waitFor()
+    await this.webview.getByRole("heading", { name }).first().click()
   }
 }

@@ -16,10 +16,61 @@ const rootPath = resolve(__dirname, "..")
 
 console.log("Loading extension from", rootPath)
 
+const GRACEFUL_CLOSE_TIMEOUT_MS = 10_000
+
+// Chromium's helper processes (gpu/utility/renderer/crashpad) exit once the
+// main process is gone, so killing the main pid is enough to avoid leaking
+// VS Code processes between tests.
+function forceKill(pid: number): void {
+  try {
+    // If Electron leads its own process group this reaps the whole tree.
+    process.kill(-pid, "SIGKILL")
+  } catch {
+    try {
+      process.kill(pid, "SIGKILL")
+    } catch {
+      // Already gone.
+    }
+  }
+}
+
+// Under Xvfb in a headless sandbox, electronApp.close() frequently hangs
+// indefinitely instead of resolving; race it against a timeout and force-kill
+// if needed so teardown always completes. Caller has already flushed tracing.
+async function closeElectron(electronApp: ElectronApplication): Promise<void> {
+  const electronProcess = electronApp.process()
+  // Swallow close() errors/rejections (e.g. if the context is already gone).
+  const gracefulClose = electronApp.close().then(
+    () => true,
+    () => true,
+  )
+  const closedGracefully = await Promise.race([
+    gracefulClose,
+    new Promise<boolean>((r) => {
+      setTimeout(() => r(false), GRACEFUL_CLOSE_TIMEOUT_MS)
+    }),
+  ])
+  if (!closedGracefully && electronProcess.pid !== undefined) {
+    console.warn(
+      `vsCode did not close gracefully within ${GRACEFUL_CLOSE_TIMEOUT_MS}ms; force killing (pid ${electronProcess.pid}).`,
+    )
+    forceKill(electronProcess.pid)
+  }
+}
+
 const userDataDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-user"))
 
 const args = [
   "--disable-gpu-sandbox",
+  // Xvfb has no real display, so Chromium sometimes backgrounds/kills the
+  // renderer for a window it considers occluded, tearing down VS Code mid-test
+  // ("Target page/context/browser has been closed"). These flags keep the
+  // renderer alive and force software GL.
+  "--disable-gpu",
+  "--disable-dev-shm-usage",
+  "--disable-renderer-backgrounding",
+  "--disable-backgrounding-occluded-windows",
+  "--disable-background-timer-throttling",
   "--disable-updates",
   "--extensionDevelopmentPath=" + rootPath,
   "--new-window",
@@ -41,11 +92,9 @@ interface CustomTestFixtures {
 }
 
 interface CustomTestOptions {
-  // Overrides the mooc OAuth client id the CLI authenticates as
-  // (TMC_LANGS_MOOC_CLIENT_ID). The mooc mock selects the device-flow scenario
-  // from this id (see backend/mooc/oauth.ts) — e.g. the cancel spec uses the
-  // "never approves" client so the login stays pending until it is cancelled.
-  // Defaults to unset (the real default client id, which the mock approves).
+  // Overrides TMC_LANGS_MOOC_CLIENT_ID; the mock picks its device-flow
+  // scenario from this id (backend/mooc/oauth.ts), e.g. a "never approves"
+  // client for testing cancellation. Defaults to the real client, which the mock approves.
   moocClientId: string | undefined
 }
 
@@ -54,11 +103,10 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
   vsCode: async ({ moocClientId }, run, testInfo) => {
     const configDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-config"))
     const projectsDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-projects"))
-    // The mock backend (localhost:4001) is one long-lived process shared across
-    // all specs, so its in-memory mooc state (issued device-flow tokens/polls,
-    // submissions) leaks between tests. Reset it before each test the same way
-    // the per-test config/projects dirs isolate on-disk state. Best-effort: if
-    // the backend isn't up yet the individual spec will fail loudly on its own.
+    // The mock backend is a long-lived process shared across specs, so its
+    // in-memory mooc state leaks between tests; reset it here the same way the
+    // per-test config/projects dirs isolate on-disk state. Best-effort — a down
+    // backend will fail the spec anyway.
     try {
       await fetch("http://localhost:4001/mooc-mock/reset", { method: "POST" })
     } catch (error) {
@@ -75,8 +123,11 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
         // backend process (backend/mooc). Overrides the compiled MOOC_BACKEND_URL
         // define.
         TMC_LANGS_MOOC_ROOT_URL: "http://localhost:4001",
-        // Poll the device-flow token endpoint fast so the mooc login e2e does
-        // not wait the real multi-second RFC 8628 interval.
+        // The CLI only attaches its bearer to trusted domains, not localhost, so
+        // without this every mooc resource call would 401 (same knob the
+        // integration bearer-auth suite uses).
+        TMC_LANGS_MOOC_TRUST_LOCALHOST: "1",
+        // Poll fast so the e2e doesn't wait the real RFC 8628 interval.
         TMC_LANGS_MOOC_DEVICE_POLL_INTERVAL_MS: "250",
         ...(moocClientId ? { TMC_LANGS_MOOC_CLIENT_ID: moocClientId } : {}),
         TMC_LANGS_CONFIG_DIR: configDir,
@@ -95,7 +146,7 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
     }
     await electronApp.context().tracing.stop(tracePath ? { path: tracePath } : {})
 
-    await electronApp.close()
+    await closeElectron(electronApp)
   },
   page: async ({ vsCode }, run) => {
     const page = await vsCode.firstWindow()

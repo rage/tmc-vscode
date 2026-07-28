@@ -69,6 +69,42 @@ jobs:
       - name: Unit tests (vitest)
         run: pnpm test
 
+  mock_backend_tests:
+    name: Mooc mock backend tests
+    permissions:
+      contents: read
+    env:
+      CI: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.0
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # These node:test suites check the mooc mock in `backend/mooc` against the
+      # vendored OpenAPI spec, so they are what stops it drifting from the real
+      # courses.mooc.fi API that every other mooc test tier trusts it to imitate.
+      # They talk to nothing but themselves: no submodules, no `backend` setup,
+      # no VS Code download, no xvfb.
+      #
+      # Run from `backend/` rather than via `pnpm --filter`: a filter that
+      # matches no package exits 0 with only a "No projects matched" line, and
+      # `node --test` likewise exits 0 when its glob matches no files. Asserting
+      # a non-zero pass count catches both. `set -euo pipefail` is what keeps a
+      # real test failure propagating through the `tee` instead of being
+      # overwritten by the exit code of the grep that follows it.
+      - name: Mock backend tests (node:test)
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          pnpm test 2>&1 | tee "$RUNNER_TEMP/mock-backend-tests.log"
+          grep -Eq '^(ℹ|#) pass [1-9][0-9]*$' "$RUNNER_TEMP/mock-backend-tests.log"
+
   integration_tests:
     name: Integration tests
     permissions:

@@ -766,11 +766,24 @@ export default class Langs {
         moocError = moocMappedRes.val
       } else {
         moocOutputData = moocMappedRes.val
+        if (moocOutputData.stopped_for_auth) {
+          // No error envelope here for `_checkLangsResponse` to catch, so fire the same
+          // unexpected-logout side effects it would for an invalid-token/not-logged-in error.
+          Logger.error("Mooc exercise download batch stopped early due to auth failure.")
+          this._responseCache.clear()
+          this._fireUnexpectedLogout("mooc")
+        }
       }
     }
 
     const tmcExercises = tmcOutputData ?? { downloaded: [], skipped: [], failed: [] }
-    const moocExercises = moocOutputData ?? { downloaded: [], skipped: [], failed: [] }
+    const moocExercises = moocOutputData ?? {
+      downloaded: [],
+      skipped: [],
+      failed: [],
+      not_attempted: [],
+      stopped_for_auth: false,
+    }
     return { tmc: tmcExercises, mooc: moocExercises, tmcError, moocError }
   }
 

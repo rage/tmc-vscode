@@ -310,7 +310,9 @@ export const zMoocExerciseDownload = z.object({
 export const zDownloadOrUpdateMoocCourseExercisesResult = z.object({
     downloaded: z.array(zMoocExerciseDownload),
     failed: z.array(z.tuple([zMoocExerciseDownload, z.array(z.string())])).nullish(),
-    skipped: z.array(zMoocExerciseDownload)
+    not_attempted: z.array(zMoocExerciseDownload).default([]),
+    skipped: z.array(zMoocExerciseDownload),
+    stopped_for_auth: z.boolean().default(false)
 });
 
 /**

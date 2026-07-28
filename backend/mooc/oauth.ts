@@ -55,11 +55,11 @@ export const MOCK_OAUTH_CLIENT_IDS = {
  * tmc-mooc-client's `DEFAULT_CLIENT_ID` (crates/tmc-mooc-client/src/auth.rs);
  * overridable via `TMC_LANGS_MOOC_CLIENT_ID`.
  */
-export const REAL_CLI_CLIENT_ID = "tmc-cli-vscode"
+export const REAL_VSCODE_CLIENT_ID = "tmc-vscode"
 
 /** client_ids `device_authorization` accepts; anything else -> `invalid_client`. */
 const ALLOWED_CLIENT_IDS = new Set<string>([
-  REAL_CLI_CLIENT_ID,
+  REAL_VSCODE_CLIENT_ID,
   ...Object.values(MOCK_OAUTH_CLIENT_IDS),
 ])
 

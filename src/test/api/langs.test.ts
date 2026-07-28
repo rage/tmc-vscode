@@ -210,6 +210,25 @@ suite("Langs class arg building", function () {
     ])
   })
 
+  test("getMoocCourseProgress builds the command and parses the returned data", async function () {
+    const langs = newLangs()
+    const progress = {
+      exercises: [{ exercise_id: "ex-uuid", completed: true, points: 3 }],
+    }
+    const calls = stubSpawn(langs, () => Ok(dataOutput("mooc-course-progress", progress)))
+    const result = await langs.getMoocCourseProgress("inst-uuid")
+    expect(calls[0]?.args).toEqual([
+      "mooc",
+      "--client-name",
+      "test-client",
+      "course-progress",
+      "--course-id",
+      "inst-uuid",
+    ])
+    expect(result.ok).toBe(true)
+    expect(result.unwrap()).toEqual(progress)
+  })
+
   test("submitMoocExerciseToPaste", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
@@ -793,6 +812,55 @@ suite("Langs error-kind mapping", function () {
     expect(result.val).toBeInstanceOf(InvalidTokenError)
     expect(onLogout).toHaveBeenCalledExactlyOnceWith(false)
     expect(onMoocLogout).not.toHaveBeenCalled()
+  })
+
+  test("downloadExercises fires the mooc logout event when the batch stops early for auth", async function () {
+    // `stopped_for_auth: true` arrives in a *successful* response (no error
+    // envelope for `_checkLangsResponse` to catch), so the event must be fired
+    // explicitly from the success path instead.
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    const onMoocLogout = vi.fn()
+    langs.on("logout", onLogout)
+    langs.on("mooc-logout", onMoocLogout)
+    let organizationsCalls = 0
+    stubSpawn(langs, (_i, args) => {
+      if (args.includes("get-organizations")) {
+        organizationsCalls += 1
+        return Ok(dataOutput("organizations", []))
+      }
+      return Ok(
+        dataOutput("mooc-exercise-download", {
+          downloaded: [{ "exercise-id": "ex-1", path: "/mooc/ex-1" }],
+          skipped: [],
+          failed: [],
+          not_attempted: [{ "exercise-id": "ex-2", path: "/mooc/ex-2" }],
+          stopped_for_auth: true,
+        }),
+      )
+    })
+
+    // Prime an unrelated cache entry so we can observe the full-cache-clear below.
+    await langs.getTmcOrganizations()
+    expect(organizationsCalls).toBe(1)
+    await langs.getTmcOrganizations() // served from cache
+    expect(organizationsCalls).toBe(1)
+
+    const result = await langs.downloadExercises(
+      [ExerciseIdentifier.from("ex-1"), ExerciseIdentifier.from("ex-2")],
+      true,
+      () => {},
+    )
+    // A successful response, not an error -- yet the auth event still fires.
+    expect(result.moocError).toBeUndefined()
+    expect(result.mooc.stopped_for_auth).toBe(true)
+    expect(onMoocLogout).toHaveBeenCalledExactlyOnceWith(false)
+    expect(onLogout).not.toHaveBeenCalled()
+
+    // Mirrors the invalid-token/not-logged-in error path: the whole response
+    // cache is cleared, so the organizations request must spawn again.
+    await langs.getTmcOrganizations()
+    expect(organizationsCalls).toBe(2)
   })
 
   test("deauthenticate fires the logout event as expected and stays quiet on auth errors", async function () {

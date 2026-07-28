@@ -11,7 +11,7 @@ import {
   MOCK_SEEDED_ACCESS_TOKEN,
   MOCK_SEEDED_NOSCOPE_ACCESS_TOKEN,
   MOCK_USER_CODE,
-  REAL_CLI_CLIENT_ID,
+  REAL_VSCODE_CLIENT_ID,
   resetMoocOAuthState,
   setDeviceFlowClock,
 } from "./oauth"
@@ -78,7 +78,7 @@ describe("mooc device-flow oauth mock", () => {
     })
 
   test("device_authorization returns the RFC 8628 fields", async () => {
-    const res = await deviceAuthorization(REAL_CLI_CLIENT_ID)
+    const res = await deviceAuthorization(REAL_VSCODE_CLIENT_ID)
     assert.equal(res.status, 200)
     const body = (await res.json()) as Record<string, unknown>
     assert.equal(typeof body.device_code, "string")
@@ -90,7 +90,7 @@ describe("mooc device-flow oauth mock", () => {
   })
 
   test("default client: pending before the interval elapses, then an approved token pair", async () => {
-    const client = REAL_CLI_CLIENT_ID
+    const client = REAL_VSCODE_CLIENT_ID
     const clock = useClock()
     const auth = (await (await deviceAuthorization(client)).json()) as { device_code: string }
 
@@ -163,7 +163,7 @@ describe("mooc device-flow oauth mock", () => {
   })
 
   test("an issued device code past its lifetime is rejected as expired_token", async () => {
-    const client = REAL_CLI_CLIENT_ID
+    const client = REAL_VSCODE_CLIENT_ID
     const clock = useClock()
     const auth = (await (await deviceAuthorization(client)).json()) as {
       device_code: string
@@ -176,7 +176,7 @@ describe("mooc device-flow oauth mock", () => {
   })
 
   test("unknown device code: expired_token", async () => {
-    const res = await pollToken("no-such-device-code", REAL_CLI_CLIENT_ID)
+    const res = await pollToken("no-such-device-code", REAL_VSCODE_CLIENT_ID)
     assert.equal(res.status, 400)
     assert.equal(((await res.json()) as { error: string }).error, "expired_token")
   })
@@ -191,7 +191,7 @@ describe("mooc device-flow oauth mock", () => {
   })
 
   test("device_authorization accepts the real CLI client id", async () => {
-    const res = await deviceAuthorization(REAL_CLI_CLIENT_ID)
+    const res = await deviceAuthorization(REAL_VSCODE_CLIENT_ID)
     assert.equal(res.status, 200)
   })
 
@@ -199,7 +199,7 @@ describe("mooc device-flow oauth mock", () => {
     const res = await postForm("/token", {
       grant_type: "refresh_token",
       refresh_token: "some-refresh-token",
-      client_id: "tmc-cli-vscode",
+      client_id: "tmc-vscode",
     })
     assert.equal(res.status, 200)
     const token = (await res.json()) as Record<string, unknown>
@@ -212,7 +212,7 @@ describe("mooc device-flow oauth mock", () => {
     const res = await postForm("/token", {
       grant_type: "refresh_token",
       refresh_token: MOCK_INVALID_REFRESH_TOKEN,
-      client_id: "tmc-cli-vscode",
+      client_id: "tmc-vscode",
     })
     assert.equal(res.status, 400)
     const body = (await res.json()) as { error: string; error_description: string }
@@ -292,7 +292,7 @@ describe("mooc resource-endpoint bearer auth mode", () => {
           headers: { "content-type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams(fields).toString(),
         })
-      const client = REAL_CLI_CLIENT_ID
+      const client = REAL_VSCODE_CLIENT_ID
       let t = 1_000_000
       setDeviceFlowClock(() => t)
       const auth = (await (

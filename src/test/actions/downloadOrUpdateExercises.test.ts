@@ -44,7 +44,7 @@ const createDownloadResult = (
   failed: [TmcExerciseDownload, string[]][] | undefined,
 ): DownloadExercisesMockResult => ({
   tmc: { downloaded, failed, skipped },
-  mooc: { downloaded: [], failed: [], skipped: [] },
+  mooc: { downloaded: [], failed: [], skipped: [], not_attempted: [], stopped_for_auth: false },
 })
 
 suite("downloadOrUpdateExercises action", function () {
@@ -177,6 +177,8 @@ suite("downloadOrUpdateExercises action", function () {
         downloaded: [{ "exercise-id": moocExerciseId, path: "/mooc/ex" }],
         failed: [],
         skipped: [],
+        not_attempted: [],
+        stopped_for_auth: false,
       },
     }
     const result = (
@@ -198,6 +200,8 @@ suite("downloadOrUpdateExercises action", function () {
         downloaded: [],
         failed: [[{ "exercise-id": moocExerciseId, path: "/mooc/ex" }, ["boom"]]],
         skipped: [],
+        not_attempted: [],
+        stopped_for_auth: false,
       },
     }
     const result = (
@@ -209,6 +213,118 @@ suite("downloadOrUpdateExercises action", function () {
     ).unwrap()
     expect(result.failed).toEqual([ExerciseIdentifier.from(moocExerciseId)])
     expect(result.successful).toEqual([])
+  })
+
+  test("should mark mooc not_attempted exercises as failed when the batch stops for auth", async function () {
+    const downloadedId = "exercise-uuid-3"
+    const notAttemptedId = "exercise-uuid-4"
+    tmcMockValues.downloadExercises = {
+      tmc: { downloaded: [], failed: [], skipped: [] },
+      mooc: {
+        downloaded: [{ "exercise-id": downloadedId, path: "/mooc/ex" }],
+        failed: [],
+        skipped: [],
+        not_attempted: [{ "exercise-id": notAttemptedId, path: "/mooc/ex2" }],
+        stopped_for_auth: true,
+      },
+    }
+    const result = (
+      await downloadOrUpdateExercises(
+        actionContext(),
+        [ExerciseIdentifier.from(downloadedId), ExerciseIdentifier.from(notAttemptedId)],
+        TEST_COURSE_ID,
+      )
+    ).unwrap()
+    expect(result.successful).toEqual([ExerciseIdentifier.from(downloadedId)])
+    expect(result.failed).toEqual([ExerciseIdentifier.from(notAttemptedId)])
+  })
+
+  test("should not flip an already-closed exercise back to failed when the mooc batch stops for auth", async function () {
+    // The exercise that finished downloading before the batch stopped was
+    // already live-reported as "closed" via the progress callback; it must
+    // stay "closed" in the final broadcast even though the overall mooc
+    // result is now partial. Only the never-attempted exercise should end up
+    // non-"closed".
+    const closedId = "exercise-uuid-5"
+    const notAttemptedId = "exercise-uuid-6"
+    tmcMock.downloadExercises = vi.fn(async (_1, _2, cb) => {
+      cb?.({ id: ExerciseIdentifier.from(closedId), percent: 1 })
+      return {
+        tmc: { downloaded: [], failed: [], skipped: [] },
+        mooc: {
+          downloaded: [{ "exercise-id": closedId, path: "/mooc/ex" }],
+          failed: [],
+          skipped: [],
+          not_attempted: [{ "exercise-id": notAttemptedId, path: "/mooc/ex2" }],
+          stopped_for_auth: true,
+        },
+      }
+    }) as Langs["downloadExercises"]
+
+    await downloadOrUpdateExercises(
+      actionContext(),
+      [ExerciseIdentifier.from(closedId), ExerciseIdentifier.from(notAttemptedId)],
+      TEST_COURSE_ID,
+    )
+    // The last message for each id reflects the final broadcast.
+    const lastMessageFor = (id: string): ExtensionToWebview | undefined =>
+      webviewMessages
+        .filter((m) => "exerciseId" in m && ExerciseIdentifier.unwrap(m.exerciseId) === id)
+        .at(-1)
+    expect(lastMessageFor(closedId)).toEqual(wrapToMessage(closedId, "closed"))
+    expect(lastMessageFor(notAttemptedId)).toEqual(wrapToMessage(notAttemptedId, "downloadFailed"))
+  })
+
+  test("should show a session-expired message with the completed count when the mooc batch stops for auth", async function () {
+    const downloadedId = "exercise-uuid-7"
+    const skippedId = "exercise-uuid-8"
+    const notAttemptedId = "exercise-uuid-9"
+    tmcMockValues.downloadExercises = {
+      tmc: { downloaded: [], failed: [], skipped: [] },
+      mooc: {
+        downloaded: [{ "exercise-id": downloadedId, path: "/mooc/ex" }],
+        failed: [],
+        skipped: [{ "exercise-id": skippedId, path: "/mooc/ex2" }],
+        not_attempted: [{ "exercise-id": notAttemptedId, path: "/mooc/ex3" }],
+        stopped_for_auth: true,
+      },
+    }
+    await downloadOrUpdateExercises(
+      actionContext(),
+      [
+        ExerciseIdentifier.from(downloadedId),
+        ExerciseIdentifier.from(skippedId),
+        ExerciseIdentifier.from(notAttemptedId),
+      ],
+      TEST_COURSE_ID,
+    )
+    // 2 of 3 (downloaded + skipped, out of downloaded + skipped + not_attempted) completed.
+    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
+      "Downloaded 2 of 3 exercises from courses.mooc.fi, then your session expired —" +
+        " the rest will be available once you log in again.",
+    )
+  })
+
+  test("should not show the generic mooc failure message when the batch stops for auth", async function () {
+    tmcMockValues.downloadExercises = {
+      tmc: { downloaded: [], failed: [], skipped: [] },
+      mooc: {
+        downloaded: [],
+        failed: [],
+        skipped: [],
+        not_attempted: [{ "exercise-id": "exercise-uuid-10", path: "/mooc/ex" }],
+        stopped_for_auth: true,
+      },
+    }
+    await downloadOrUpdateExercises(
+      actionContext(),
+      [ExerciseIdentifier.from("exercise-uuid-10")],
+      TEST_COURSE_ID,
+    )
+    expect(dialogMock.errorNotification).not.toHaveBeenCalledWith(
+      expect.stringContaining("Failed to download exercises from courses.mooc.fi."),
+      expect.anything(),
+    )
   })
 
   test("should download template if downloadOldSubmission setting is off", async function () {
@@ -302,7 +418,7 @@ suite("downloadOrUpdateExercises action", function () {
 })
 
 // Mirrors the message the action posts via TmcPanel.postMessage.
-function wrapToMessage(exerciseId: number, status: ExerciseStatus): ExtensionToWebview {
+function wrapToMessage(exerciseId: number | string, status: ExerciseStatus): ExtensionToWebview {
   return {
     type: "exerciseStatusChange",
     target: {

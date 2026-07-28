@@ -150,6 +150,15 @@ export function registerCommands(
       })
     }),
 
+    // Standalone entry point into mooc login, e.g. from a session-expired prompt.
+    // No `requestingPanel`: nothing to return to on success.
+    vscode.commands.registerCommand("tmc.showMoocLogin", async () => {
+      TmcPanel.renderSide(context.extensionUri, context, actionContext, {
+        id: randomPanelId(),
+        type: "MoocLogin",
+      })
+    }),
+
     vscode.commands.registerCommand(
       "tmc.submitExercise",
       async (resource: vscode.Uri | undefined) => {

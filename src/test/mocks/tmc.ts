@@ -50,7 +50,7 @@ export interface TMCMockValues {
 
 const emptyDownloadExercisesResult: DownloadExercisesMockResult = {
   tmc: { downloaded: [], skipped: [], failed: [] },
-  mooc: { downloaded: [], skipped: [], failed: [] },
+  mooc: { downloaded: [], skipped: [], failed: [], not_attempted: [], stopped_for_auth: false },
 }
 
 export function createTMCMock(): [Langs, TMCMockValues] {

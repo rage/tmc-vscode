@@ -32,6 +32,7 @@ import { randomPanelId, TmcPanel } from "./panels/TmcPanel"
 import Storage from "./storage"
 import UI from "./ui/ui"
 import { cliFolder, Logger, LogLevel, semVerCompare } from "./utilities"
+import { createSessionExpiryTracker } from "./utilities/sessionExpiryTracker"
 
 let maintenanceInterval: NodeJS.Timeout | undefined
 
@@ -199,37 +200,43 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
       loggedInNow ? visibilityGroups.loggedIn : visibilityGroups.loggedIn.not,
     ])
   }
-  const sessionExpiredWarning = (): void => {
-    dialog.warningNotification("Your session has expired, please log in.", [
+  const sessionExpiredWarning = (backend: "tmc" | "mooc"): void => {
+    const message =
+      backend === "tmc"
+        ? "Your session has expired, please log in."
+        : "Your courses.mooc.fi session has expired, please log in."
+    const loginCommand = backend === "tmc" ? "tmc.showLogin" : "tmc.showMoocLogin"
+    dialog.warningNotification(message, [
       "Log in",
       (): void => {
-        vscode.commands.executeCommand("tmc.showLogin")
+        vscode.commands.executeCommand(loginCommand)
       },
     ])
   }
 
+  // Seeded from the startup check above; shared with the background poll further down.
+  const sessionExpiry = createSessionExpiryTracker(authStatus, sessionExpiredWarning)
+
   if (langs.ok) {
     langs.val.on("login", async () => {
       authStatus.tmc = true
+      sessionExpiry.onLogin("tmc")
       await applyAuthContext()
     })
     langs.val.on("logout", async (expected) => {
       authStatus.tmc = false
       await applyAuthContext()
-      if (!expected) {
-        sessionExpiredWarning()
-      }
+      sessionExpiry.onLogout("tmc", expected)
     })
     langs.val.on("mooc-login", async () => {
       authStatus.mooc = true
+      sessionExpiry.onLogin("mooc")
       await applyAuthContext()
     })
     langs.val.on("mooc-logout", async (expected) => {
       authStatus.mooc = false
       await applyAuthContext()
-      if (!expected) {
-        sessionExpiredWarning()
-      }
+      sessionExpiry.onLogout("mooc", expected)
     })
   } else {
     Logger.warn("Skipped login command setup")
@@ -336,6 +343,9 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     } else {
       authStatus.mooc = moocAuthRes.val
     }
+    // Proactively catches a session dropping between polls, not just on a failed command.
+    sessionExpiry.onAuthChecked("tmc", authStatus.tmc)
+    sessionExpiry.onAuthChecked("mooc", authStatus.mooc)
     if (authStatus.tmc || authStatus.mooc) {
       vscode.commands.executeCommand("tmc.updateExercises", "silent")
       checkForCourseUpdates(actionContext)

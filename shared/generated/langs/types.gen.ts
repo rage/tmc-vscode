@@ -292,7 +292,22 @@ export type DownloadOrUpdateMoocCourseExercisesResult = {
         MoocExerciseDownload,
         Array<string>
     ]> | null;
+    /**
+     * Exercises that were never attempted because the batch stopped early
+     * after a permanent mooc auth failure on an earlier exercise (see
+     * `stopped_for_auth`). Empty in the common case where every requested
+     * exercise was at least attempted.
+     */
+    not_attempted: Array<MoocExerciseDownload>;
     skipped: Array<MoocExerciseDownload>;
+    /**
+     * True if the batch stopped before attempting every requested exercise
+     * because a mooc token refresh permanently failed (the user's session is
+     * gone; retrying the remaining exercises would just fail identically).
+     * When true, `not_attempted` holds the exercises that were skipped as a
+     * result.
+     */
+    stopped_for_auth: boolean;
 };
 
 export type DownloadOrUpdateTmcCourseExercisesResult = {
