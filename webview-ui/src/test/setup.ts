@@ -11,19 +11,13 @@ interface MockVsCodeApi {
   setState: ReturnType<typeof vi.fn>
 }
 
-// DataCloneError regression guard: VS Code serializes every posted message with
-// the structured clone algorithm, so a non-cloneable value (a Svelte 5 `$state`
+// DataCloneError regression guard: VS Code structured-clones every value passed
+// to `postMessage` and `setState`, so a non-cloneable one (a Svelte 5 `$state`
 // proxy that wasn't `$state.snapshot`-ed, a function, a class instance) crashes
 // the real webview↔host boundary with an opaque `DataCloneError`. Running the
-// same `structuredClone` in the mock's `postMessage` makes such a payload fail
-// loudly inside the test that posted it, right where the assertions are, rather
-// than only in production. The clone result is discarded; the spy still records
-// the original message for shape assertions.
-//
-// Both `postMessage` and `setState` are DataCloneError boundaries: VS Code
-// structured-clones each argument, so a `$state` proxy that wasn't snapshotted
-// crashes them alike. `savePanelState` snapshots before `setState`, so the guard
-// mirrors the contract the code upholds on both channels.
+// same `structuredClone` in the mock makes such a payload fail inside the test
+// that posted it instead of only in production. The clone result is discarded;
+// the spy still records the original message for shape assertions.
 const cloneGuard =
   typeof structuredClone === "function"
     ? structuredClone

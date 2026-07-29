@@ -23,11 +23,7 @@ import { createMoocApp } from "./router"
 //   - response validation FAILS loudly (500) when a handler returns garbage
 //     (fault injection -- exercises the validator itself).
 // It also covers the submit -> poll-grading loop, the old-submission
-// list/download/share endpoints and the spec-exempt .tar.zst archive route,
-// none of which the extension's Langs wrapper can invoke yet (those mooc flows
-// are roadmap items), so they are covered here over HTTP.
-//
-// Run via `pnpm --filter tmc-vscode-mock-backend test`.
+// list/download/share endpoints and the spec-exempt .tar.zst archive route.
 
 const listen = (app: Express): Promise<{ server: Server; base: string }> =>
   new Promise((resolve) => {
@@ -162,8 +158,8 @@ describe("mooc mock conformance", () => {
   })
 
   test("GET exercises/{unknown} returns the spec's 404 not-found", async () => {
-    // An entirely unknown exercise id is a 404 (RecordNotFound), NOT a 422 --
-    // the mock no longer conflates "no such exercise" with "not enrolled".
+    // An entirely unknown exercise id is a 404 (RecordNotFound), not the 422
+    // that a real-but-not-enrolled exercise gets.
     const res = await authFetch(api(`/exercises/${nonexistentExerciseId}`))
     assert.equal(res.status, 404)
     const body = (await res.json()) as { message_key: string }

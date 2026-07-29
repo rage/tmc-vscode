@@ -146,15 +146,11 @@ interface CreateMoocApiOptions {
    */
   injectResponseFault?: string
   /**
-   * Test-only fault injection: when set, EVERY client operation responds with
-   * the spec-documented 426 and a spec-valid `ApiErrorResponse` body
-   * (message_key `obsolete_client`), modelling the backend's obsolete-client
-   * signal (an `X-Client-Version` older than the server minimum). NEVER set in
-   * normal runs -- the real backend's MINIMUM_CLIENT_VERSION is unset, so a live
-   * mock never produces a 426, and the CLI never sends a triggering version.
-   * This lets the otherwise-dormant 426 contract be exercised: the injected 426
-   * body is validated against the spec like any other response, so a passing
-   * (426, not 500) response proves the body conforms to `ApiErrorResponse`.
+   * Test-only fault injection: every client operation responds with the
+   * spec-documented 426 `obsolete_client` error, modelling an `X-Client-Version`
+   * older than the server minimum. Never set in normal runs -- the real
+   * backend's MINIMUM_CLIENT_VERSION is unset, so this contract is otherwise
+   * dormant and untested.
    */
   injectObsoleteClient?: boolean
   /**
@@ -345,9 +341,8 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       const slide = findSlide(id)
       if (!slide) {
         // An entirely unknown exercise id: the backend's get_by_id yields
-        // RecordNotFound -> 404 (the spec documents 404 on this path). This is
-        // distinct from the not-enrolled 422 above -- the mock no longer
-        // conflates "no such exercise" with "not enrolled".
+        // RecordNotFound -> 404 (the spec documents 404 on this path). Distinct
+        // from the not-enrolled 422 above.
         return { status: 404, body: apiError("not_found", `no such exercise: ${id}`) }
       }
       return ok(slide)

@@ -1,5 +1,4 @@
 import getFolderSize from "get-folder-size"
-import { compact } from "lodash"
 import type { Result } from "ts-results"
 import type { Disposable, Webview, WebviewPanel } from "vscode"
 import { Uri, ViewColumn, window } from "vscode"
@@ -9,8 +8,9 @@ import { z } from "zod"
 import {
   addNewCourse,
   closeExercises,
+  downloadAndOpenExercises,
+  downloadExercisesForUi,
   login,
-  openExercises,
   openWorkspace,
   pasteMoocExercise,
   pasteTmcExercise,
@@ -22,7 +22,6 @@ import type { ActionContext } from "../actions/types"
 import { ExerciseStatus } from "../api/workspaceManager"
 import * as commands from "../commands"
 import { TMC_BACKEND_URL } from "../config/constants"
-import { uiDownloadExercises } from "../init"
 import type { ExerciseGroup, ExtensionToWebview, Panel, WebviewToExtension } from "../shared/shared"
 import {
   ExerciseIdentifier,
@@ -659,99 +658,16 @@ export class TmcPanel {
             break
           }
           case "downloadExercises": {
-            await uiDownloadExercises(
-              actionContext.ui,
-              actionContext,
-              message.mode,
-              message.courseId,
-              message.ids,
-            )
+            await downloadExercisesForUi(actionContext, message.mode, message.courseId, message.ids)
             break
           }
           case "openExercises": {
-            const { langs, userData } = actionContext
-            if (!(langs.ok && userData.ok)) {
-              Logger.error("Extension was not initialized properly")
-              return
-            }
-
-            // todo: move to actions
-            // download exercises that don't exist locally
-            const course = userData.val.getCourse(message.courseId)
-            // Key by a primitive: ExerciseIdentifier is a tagged-union object, so a
-            // Map keyed by it would only match on reference identity and always miss
-            // the deserialized ids coming from the webview.
-            const courseExercises = new Map(
-              LocalCourseData.getExercises(course).map((x) => [
-                ExerciseIdentifier.toString(LocalCourseExercise.getId(x)),
-                x,
-              ]),
-            )
-            const exercisesToOpen = compact(
-              message.ids.map((x) => courseExercises.get(ExerciseIdentifier.toString(x))),
-            )
-            // The mooc local listing is keyed by course id (UUID); TMC by course
-            // slug. `getCourseName` returns the slug for both, so pick per backend.
-            const localCourseExercises = await langs.val.listLocalCourseExercises(
-              message.courseId.kind,
-              match(
-                course,
-                () => LocalCourseData.getCourseName(course),
-                (mooc) => mooc.id,
-              ),
-            )
-
-            if (localCourseExercises.err) {
-              actionContext.dialog.errorNotification(
-                "Error trying to list local exercises while opening selected exercises.",
-                localCourseExercises.val,
-              )
-              return
-            }
-            const localCourseExerciseSlugs = localCourseExercises.val.map(
-              (lce) => lce["exercise-slug"],
-            )
-            const exercisesToDownload = exercisesToOpen.filter(
-              (eto) => !localCourseExerciseSlugs.includes(LocalCourseExercise.getSlug(eto)),
-            )
-            if (exercisesToDownload.length > 0) {
-              await uiDownloadExercises(
-                actionContext.ui,
-                actionContext,
-                "",
-                LocalCourseData.getCourseId(course),
-                exercisesToDownload.map((etd) => LocalCourseExercise.getId(etd)),
-              )
-            }
-
-            // now, actually open the exercises
-            const result = await openExercises(
+            await downloadAndOpenExercises(
               extensionContext,
               actionContext,
               message.ids,
               message.courseId,
             )
-            if (result.err) {
-              actionContext.dialog.errorNotification(
-                "Errored while opening selected exercises.",
-                result.val,
-              )
-            } else {
-              // Only mark exercises "opened" once `openExercises` actually succeeded.
-              const exerciseStatusChangeMessages: ExtensionToWebview[] = result.val.map((id) => {
-                const statusChange: ExtensionToWebview = {
-                  type: "exerciseStatusChange",
-                  courseId: message.courseId,
-                  exerciseId: id,
-                  status: "opened",
-                  target: {
-                    type: "CourseDetails",
-                  },
-                }
-                return statusChange
-              })
-              TmcPanel.postMessage(...exerciseStatusChangeMessages)
-            }
             break
           }
           case "refreshCourseDetails": {

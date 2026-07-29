@@ -68,7 +68,7 @@ suite("tmc langs cli spec", function () {
     // MOOC_BACKEND_URL define; _spawnLangsProcess reads it from the env and
     // passes it to the CLI child. Set before any Langs is constructed.
     process.env.TMC_LANGS_MOOC_ROOT_URL = "http://localhost:4001"
-    // The mock now defaults to requiring a bearer; opt this shared instance out
+    // The mock defaults to requiring a bearer; opt this shared instance out
     // since the suite below drives resource endpoints without one (port 4002
     // covers the auth-required path).
     server = await startServer({ MOOC_MOCK_REQUIRE_AUTH: "0" })
@@ -782,8 +782,7 @@ suite("tmc langs cli spec", function () {
         // content. Overwrite the file with the newer content first (as it is on
         // disk after the second submit), then restore the older submission and
         // assert we got the older content back -- not the newer one, and not the
-        // stub. This is the behavior the mock previously could not exercise
-        // (every submission resolved to the same stub archive).
+        // stub.
         const olderId = after[1]!.id
         fs.writeFileSync(studentFile, newerContent)
         ;(

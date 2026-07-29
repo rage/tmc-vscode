@@ -18,7 +18,9 @@ const mockBackend = {
   __TMC_LANGS_CONFIG_DIR__: JSON.stringify(path.join(__dirname, "backend", "cli")),
   __TMC_LANGS_DL_URL__: JSON.stringify("http://localhost:4001/langs/"),
   __TMC_LANGS_VERSION__: JSON.stringify(TMC_LANGS_RUST_VERSION),
-  // no mock mooc backend yet
+  // The bundled mooc mock lives on the same port as the TMC one, but the test
+  // tiers point the CLI at it with TMC_LANGS_MOOC_ROOT_URL, which overrides
+  // this compile-time value anyway.
   __MOOC_BACKEND_URL__: JSON.stringify("https://courses.mooc.fi"),
 }
 

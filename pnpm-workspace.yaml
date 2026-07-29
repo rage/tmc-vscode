@@ -22,6 +22,18 @@ registrySupportsTimeField: false
 preferFrozenLockfile: true
 trustLockfile: true
 
+# Registry resilience. pnpm's built-in defaults (2 retries, 60s request timeout,
+# 60s retry ceiling) are tight enough that a single slow or flaky registry
+# response fails `pnpm install --frozen-lockfile` outright — every CI job in
+# .github/workflows starts with exactly that command, and none of them retry.
+# Setting this here rather than in a workflow keeps it in one place: it applies
+# to all of them, to the nested `backend` install, and to local development.
+fetchRetries: 5
+fetchRetryFactor: 2
+fetchRetryMintimeout: 10000
+fetchRetryMaxtimeout: 120000
+fetchTimeout: 300000
+
 # Auto-run install when node_modules is stale before running a script.
 verifyDepsBeforeRun: install
 

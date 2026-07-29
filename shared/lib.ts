@@ -945,11 +945,7 @@ export type BroadcastExtensionToWebview<T extends PanelType> = Broadcast<Extensi
  * the host → webview relay (`TmcPanel`), instead of only failing silently at
  * runtime when the target webview rejects it on receipt.
  *
- * Uses the non-strict `targetPanelSchema` for `target`, exactly like
- * `ExtensionToWebviewSchema`: some call sites pass a whole panel object as
- * `target`, which is harmless (the receiver only reads `.id`/`.type`), and the
- * `strictTargetPanelSchema` guard is reserved for the `sourcePanel`/
- * `requestingPanel` fields the webview → host direction relies on.
+ * `target` uses the non-strict `targetPanelSchema`, for the reason given there.
  */
 export const WebviewToWebviewSchema = z.discriminatedUnion("type", [
   z.object({

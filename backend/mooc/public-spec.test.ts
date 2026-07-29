@@ -7,7 +7,7 @@ import { Ajv2020 } from "ajv/dist/2020"
 
 import { courses } from "./fixtures"
 
-// W3-opaque guard: the OpenAPI wire spec types `public_spec` as an opaque blob
+// Opaque-blob guard: the OpenAPI wire spec types `public_spec` as an opaque blob
 // (the tmc plugin owns its shape, the host only forwards it), so the mock's
 // response validator does NOT check its content. But the CLI deserialises it
 // into tmc-mooc-client's typed `PublicSpec`, so a fixture whose public_spec

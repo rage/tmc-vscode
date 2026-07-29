@@ -17,26 +17,17 @@ import {
   TmcExerciseSlide,
 } from "../shared/langsSchema"
 
-// Reconciliation test for the structural fault line between two independent
-// descriptions of the same wire:
+// Reconciles the two independently-generated descriptions of the same wire: the
+// mooc mock validates against the OpenAPI spec vendored from
+// secret-project-331, while the extension validates the CLI's stdout against
+// zod schemas generated from tmc-langs-rust's bindings. Nothing else compares
+// them, so a shape that satisfies one and not the other slips through (the
+// submit part-name mismatch was one of those).
 //
-//   * The mooc MOCK routes + validates against the OpenAPI spec vendored from
-//     secret-project-331 (backend/mooc/exercise-services-client.openapi.generated.json).
-//   * The EXTENSION validates the CLI's stdout against zod schemas generated
-//     from tmc-langs-rust's bindings (shared/langsSchema.ts / shared/generated).
+// This boots the mock, drives the shared mooc endpoints over HTTP, and validates
+// each response payload with the extension's zod schema for that type.
 //
-// These are two INDEPENDENTLY-GENERATED descriptions of the same wire, and no
-// other test reconciles them: the mock's conformance suite only checks payloads
-// against the OpenAPI spec, never against the extension's zod schemas. A shape
-// that passes the mock but that the extension's schema would reject (or vice
-// versa) slips through -- exactly the class of bug the submit part-name mismatch
-// belonged to.
-//
-// This test closes that seam: it boots the mock, drives the shared mooc
-// endpoints over HTTP, and validates each response payload with the EXTENSION's
-// zod schema for that type. It fails if either side drifts.
-//
-// Note on id spaces (mirrors the mock/backend): `submit` returns an
+// Id spaces (mirrors the mock/backend): `submit` returns an
 // exercise-TASK-submission id (what /grading is polled with); the submissions
 // list, /download and /share use exercise-SLIDE-submission ids.
 

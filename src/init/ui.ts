@@ -1,12 +1,9 @@
-import { Err, Ok, Result } from "ts-results"
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { downloadOrUpdateExercises, refreshLocalExercises } from "../actions"
 import type { ActionContext } from "../actions/types"
-import { TmcPanel } from "../panels/TmcPanel"
-import type { ExerciseIdentifier } from "../shared/shared"
 import { CourseIdentifier, LocalCourseData } from "../shared/shared"
-import type UI from "../ui/ui"
 import { Logger } from "../utilities/"
 
 /**
@@ -159,75 +156,4 @@ export function registerUiActions(actionContext: ActionContext): Result<void, Er
   )
 
   return Ok.EMPTY
-}
-
-/**
- * Helper function that downloads exercises and creates the appropriate changes in the UI.
- */
-export async function uiDownloadExercises(
-  _ui: UI,
-  actionContext: ActionContext,
-  mode: string,
-  courseId: CourseIdentifier,
-  exerciseIds: ExerciseIdentifier[],
-): Promise<void> {
-  const { userData } = actionContext
-  if (userData.err) {
-    Logger.error("Extension was not initialized properly")
-    return
-  }
-
-  if (mode === "update") {
-    TmcPanel.postMessage({
-      type: "setUpdateables",
-      target: { type: "CourseDetails" },
-      courseId,
-      exerciseIds: [],
-    })
-    const downloadResult = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
-    if (downloadResult.ok) {
-      TmcPanel.postMessage({
-        type: "setUpdateables",
-        target: { type: "CourseDetails" },
-        courseId,
-        exerciseIds: downloadResult.val.failed,
-      })
-    }
-    return
-  }
-
-  TmcPanel.postMessage({
-    type: "setNewExercises",
-    target: {
-      type: "MyCourses",
-    },
-    courseId: courseId,
-    exerciseIds: [],
-  })
-
-  const downloadResult = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
-  if (downloadResult.err) {
-    actionContext.dialog.errorNotification("Failed to download new exercises.", downloadResult.val)
-    return
-  }
-
-  const refreshResult = Result.all(
-    await userData.val.clearFromNewExercises(courseId, downloadResult.val.successful),
-    await refreshLocalExercises(actionContext),
-  )
-  if (refreshResult.err) {
-    actionContext.dialog.errorNotification("Failed to refresh local exercises.", refreshResult.val)
-  }
-
-  TmcPanel.postMessage({
-    type: "setNewExercises",
-    target: { type: "MyCourses" },
-    courseId: courseId,
-    exerciseIds: LocalCourseData.getNewExercises(userData.val.getCourse(courseId)),
-  })
-  // Per-exercise status is already posted by `downloadOrUpdateExercises` keyed by
-  // the correct identifier (exercise id for both backends), so there is no need to
-  // re-post a blanket "closed" for every input id here — doing so used to paper
-  // over the mooc task-id/exercise-id key mismatch and would also wrongly mark
-  // failed downloads as closed.
 }

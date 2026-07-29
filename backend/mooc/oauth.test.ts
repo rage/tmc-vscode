@@ -20,8 +20,6 @@ import { createMoocApp, resetMoocState } from "./router"
 // These endpoints (see backend/mooc/oauth.ts) are outside the vendored
 // exercise-services OpenAPI spec, so — unlike conformance.test.ts — there's no
 // spec to validate against; this test pins the RFC 8628 behavior directly.
-//
-// Run via `pnpm --filter tmc-vscode-mock-backend test`.
 
 const listen = (app: Express): Promise<{ server: Server; base: string }> =>
   new Promise((resolve) => {

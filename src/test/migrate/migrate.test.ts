@@ -45,7 +45,6 @@ suite("Extension data migration", function () {
     expect(result.ok).toBe(true)
   })
 
-  // Not yet written: verify migration tolerates unknown future fields.
   test.todo("should be compatible with extended future data")
 
   suite("from version 0.1.0", function () {
