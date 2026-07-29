@@ -23,6 +23,14 @@ vi.mock("../../panels/TmcPanel", () => ({
   },
 }))
 
+// `submitMoocExercise` ends by refreshing course points through
+// `checkForCourseUpdates` -> `updateCourse`, which would otherwise drive real CLI
+// calls. Stub the module so the refresh is observable without that machinery.
+vi.mock("../../actions/updateCourse", () => ({
+  updateCourse: vi.fn().mockResolvedValue(Ok(true)),
+}))
+
+import { updateCourse } from "../../actions/updateCourse"
 import { TmcPanel } from "../../panels/TmcPanel"
 
 const COURSE_SLUG = "mooc-python-course"
@@ -79,6 +87,7 @@ function contextWith(submitResult: unknown): {
     }) as unknown as ActionContext["langs"],
     userData: Ok({
       getCourseBySlug: () => makeMoocKind(moocCourse),
+      getCourse: () => makeMoocKind(moocCourse),
       getMoocExerciseByName: () => moocCourse.exercises[0],
       setMoocExerciseAsPassed: setPassed,
     }) as unknown as ActionContext["userData"],
@@ -104,6 +113,7 @@ function contextWithErr(error: Error): {
     }) as unknown as ActionContext["langs"],
     userData: Ok({
       getCourseBySlug: () => makeMoocKind(moocCourse),
+      getCourse: () => makeMoocKind(moocCourse),
       getMoocExerciseByName: () => moocCourse.exercises[0],
       setMoocExerciseAsPassed: setPassed,
     }) as unknown as ActionContext["userData"],
@@ -116,6 +126,7 @@ function contextWithErr(error: Error): {
 
 afterEach(() => {
   vi.mocked(TmcPanel.postMessage).mockClear()
+  vi.mocked(updateCourse).mockClear()
 })
 
 suite("submitMoocExercise action", () => {
@@ -143,6 +154,12 @@ suite("submitMoocExercise action", () => {
     )
     // a fully-graded, non-zero score marks the exercise passed
     expect(setPassed).toHaveBeenCalledWith(COURSE_SLUG, EXERCISE_SLUG)
+    // ...and the course is refreshed so the point totals shown in
+    // CourseDetails/MyCourses reflect the submission, as the tmc path does.
+    expect(updateCourse).toHaveBeenCalledWith(
+      actionContext,
+      expect.objectContaining({ kind: "mooc" }),
+    )
   })
 
   test("a failed grading does not mark the exercise passed", async () => {

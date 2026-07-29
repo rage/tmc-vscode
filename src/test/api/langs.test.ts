@@ -984,3 +984,66 @@ suite("Langs response cache", function () {
     expect(single.val).toEqual(orgs[0])
   })
 })
+
+suite("Langs exercise-update cache invalidation", function () {
+  // Regression: the mooc download leg deleted the *tmc* cache key
+  // ("exercise-updates") instead of its own ("mooc-exercise-updates"), so a mooc
+  // update left the stale mooc update list cached for the full cache lifetime and
+  // the just-updated exercises kept showing as outdated.
+  test("a mooc download invalidates the cached mooc exercise-update list", async function () {
+    const langs = newLangs()
+    let updateCheckCalls = 0
+    stubSpawn(langs, (_i, args) => {
+      if (args.includes("check-exercise-updates")) {
+        updateCheckCalls += 1
+        return Ok(dataOutput("mooc-updated-exercises", ["ex-uuid"]))
+      }
+      return Ok(
+        dataOutput("mooc-exercise-download", {
+          downloaded: [],
+          skipped: [],
+          failed: [],
+          not_attempted: [],
+          stopped_for_auth: false,
+        }),
+      )
+    })
+
+    await langs.checkMoocExerciseUpdates()
+    // Served from cache, so no second spawn.
+    await langs.checkMoocExerciseUpdates()
+    expect(updateCheckCalls).toBe(1)
+
+    await langs.downloadExercises([ExerciseIdentifier.from("ex-uuid")], false, () => {})
+
+    // The download must have dropped the mooc entry, forcing a real re-check.
+    await langs.checkMoocExerciseUpdates()
+    expect(updateCheckCalls).toBe(2)
+  })
+
+  test("a mooc download leaves the tmc exercise-update cache intact", async function () {
+    const langs = newLangs()
+    let tmcUpdateCheckCalls = 0
+    stubSpawn(langs, (_i, args) => {
+      if (args.includes("check-exercise-updates")) {
+        tmcUpdateCheckCalls += 1
+        return Ok(dataOutput("updated-exercises", [{ id: 1 }]))
+      }
+      return Ok(
+        dataOutput("mooc-exercise-download", {
+          downloaded: [],
+          skipped: [],
+          failed: [],
+          not_attempted: [],
+          stopped_for_auth: false,
+        }),
+      )
+    })
+
+    await langs.checkTmcExerciseUpdates()
+    // Only mooc exercises are downloaded, so the tmc cache must survive.
+    await langs.downloadExercises([ExerciseIdentifier.from("ex-uuid")], false, () => {})
+    await langs.checkTmcExerciseUpdates()
+    expect(tmcUpdateCheckCalls).toBe(1)
+  })
+})

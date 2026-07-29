@@ -265,7 +265,7 @@ suite("UserData course add/get/update/delete", function () {
     const [userData] = await makeUserData({ courses: [], mooc_courses: [] })
     userData.addCourse(makeTmcKind(tmcCourse({ id: 7, name: "algorithms" })))
     expect(userData.getCourse(CourseIdentifier.from(7)).data.name).toBe("algorithms")
-    expect(userData.getCourseBySlug("algorithms").kind).toBe("tmc")
+    expect(userData.getCourseBySlug("tmc", "algorithms").kind).toBe("tmc")
     expect(userData.getTmcCourseByName("algorithms")?.id).toBe(7)
   })
 
@@ -273,7 +273,7 @@ suite("UserData course add/get/update/delete", function () {
     const [userData] = await makeUserData({ courses: [], mooc_courses: [] })
     userData.addCourse(makeMoocKind(moocCourse({ id: "inst-9", name: "mooc-algo" })))
     expect(userData.getCourse(CourseIdentifier.from("inst-9")).data.name).toBe("mooc-algo")
-    expect(userData.getCourseBySlug("mooc-algo").kind).toBe("mooc")
+    expect(userData.getCourseBySlug("mooc", "mooc-algo").kind).toBe("mooc")
   })
 
   test("rejects adding a duplicate tmc course", async function () {
@@ -413,5 +413,78 @@ suite("UserData persistence round-trip", function () {
     const reloaded = new UserData(store)
     expect(reloaded.getCourse(CourseIdentifier.from(4)).data.name).toBe("persisted-tmc")
     expect(reloaded.getCourse(CourseIdentifier.from("inst-4")).data.name).toBe("persisted-mooc")
+  })
+})
+
+// -------------------------------------------------------------------------------------------------
+// Bug 3 regression: the by-slug lookups scanned tmc courses first and returned as soon as a
+// *course* slug matched, even when the requested exercise was not in that course. A mooc course
+// sharing its slug with a tmc course was therefore unreachable — the tmc course short-circuited
+// the search. Both lookups are now qualified by the backend the caller already knows.
+// -------------------------------------------------------------------------------------------------
+
+suite("UserData slug collision across backends (Bug 3 regression)", function () {
+  /** A tmc course and a mooc course that share the slug `shared-slug`. */
+  async function collidingCourses(): Promise<UserData> {
+    const [userData] = await makeUserData({
+      courses: [
+        tmcCourse({
+          id: 11,
+          name: "shared-slug",
+          exercises: [tmcExercise({ id: 101, name: "tmc_only" })],
+        }),
+      ],
+      mooc_courses: [
+        moocCourse({
+          id: "inst-11",
+          name: "shared-slug",
+          exercises: [moocExercise({ id: "mooc-ex-uuid", name: "mooc_only" })],
+        }),
+      ],
+    })
+    return userData
+  }
+
+  test("finds the mooc exercise of a slug-colliding course", async function () {
+    const userData = await collidingCourses()
+    const exercise = userData.getExerciseByName("mooc", "shared-slug", "mooc_only")
+    expect(exercise?.kind).toBe("mooc")
+    expect(exercise?.data.id).toBe("mooc-ex-uuid")
+  })
+
+  test("finds the tmc exercise of a slug-colliding course", async function () {
+    const userData = await collidingCourses()
+    const exercise = userData.getExerciseByName("tmc", "shared-slug", "tmc_only")
+    expect(exercise?.kind).toBe("tmc")
+    expect(exercise?.data.id).toBe(101)
+  })
+
+  test("does not cross backends: a tmc-only exercise is not found under mooc", async function () {
+    const userData = await collidingCourses()
+    expect(userData.getExerciseByName("mooc", "shared-slug", "tmc_only")).toBeUndefined()
+    expect(userData.getExerciseByName("tmc", "shared-slug", "mooc_only")).toBeUndefined()
+  })
+
+  test("resolves the slug-colliding course itself per backend", async function () {
+    const userData = await collidingCourses()
+    expect(userData.getCourseBySlug("mooc", "shared-slug").data.id).toBe("inst-11")
+    expect(userData.getCourseBySlug("tmc", "shared-slug").data.id).toBe(11)
+  })
+
+  test("keeps searching past a slug-matching course that lacks the exercise", async function () {
+    // Two enrolled mooc *instances* of the same course share a slug; only the
+    // second one holds the exercise being looked up.
+    const [userData] = await makeUserData({
+      courses: [],
+      mooc_courses: [
+        moocCourse({ id: "inst-a", name: "two-instances", exercises: [] }),
+        moocCourse({
+          id: "inst-b",
+          name: "two-instances",
+          exercises: [moocExercise({ id: "late-uuid", name: "mooc_late" })],
+        }),
+      ],
+    })
+    expect(userData.getMoocExerciseByName("two-instances", "mooc_late")?.id).toBe("late-uuid")
   })
 })

@@ -757,7 +757,7 @@ export default class Langs {
         "mooc-exercise-download",
       )
       const moocMappedRes = moocRes.andThen((x) => {
-        this._responseCache.delete(Langs._exerciseUpdatesCacheKey)
+        this._responseCache.delete(Langs._moocExerciseUpdatesCacheKey)
         return Ok(x.data["output-data"])
       })
       if (moocMappedRes.err) {

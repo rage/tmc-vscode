@@ -118,7 +118,7 @@ export async function testExercise(
     return new Err(new InitializationError("Extension was not initialized properly"))
   }
 
-  const course = userData.val.getCourseBySlug(exercise.courseSlug)
+  const course = userData.val.getCourseBySlug(exercise.backend, exercise.courseSlug)
   const courseExercise = LocalCourseData.getExercises(course).find(
     (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
   )
@@ -229,7 +229,7 @@ export async function submitTmcExercise(
   }
   Logger.info(`Submitting exercise ${exercise.exerciseSlug} to server`)
 
-  const course = userData.val.getCourseBySlug(exercise.courseSlug)
+  const course = userData.val.getCourseBySlug("tmc", exercise.courseSlug)
   const courseExercise = LocalCourseData.getExercises(course).find(
     (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
   )
@@ -326,7 +326,7 @@ export async function submitMoocExercise(
   }
   Logger.info(`Submitting mooc exercise ${exercise.exerciseSlug} to server`)
 
-  const course = userData.val.getCourseBySlug(exercise.courseSlug)
+  const course = userData.val.getCourseBySlug("mooc", exercise.courseSlug)
   const courseExercise = LocalCourseData.getExercises(course).find(
     (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
   )
@@ -395,6 +395,14 @@ export async function submitMoocExercise(
     target: panel,
     result: status,
   })
+
+  // Mirror the tail of `submitTmcExercise`. `setMoocExerciseAsPassed` above only
+  // flips the local per-exercise flag; course point totals come from
+  // `getMoocCourseProgress` via `updateCourse`, so without this refresh the
+  // CourseDetails/MyCourses totals stay stale until the user refreshes by hand.
+  const courseId = LocalCourseData.getCourseId(panel.course)
+  await checkForCourseUpdates(actionContext, courseId)
+  vscode.commands.executeCommand("tmc.updateExercises", "silent")
 
   return Ok.EMPTY
 }

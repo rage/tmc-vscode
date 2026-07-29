@@ -119,7 +119,15 @@ export async function updateCourse(
       )
     },
     async (mooc) => {
-      const [_courseInstance, slides] = mooc
+      const [moocCourse, slides] = mooc
+      // The update result and the stored course are looked up from the same
+      // `courseId`, so this holds by construction; assert it to narrow the stored
+      // data off its tmc|mooc union before writing mooc-shaped fields below.
+      if (courseData.kind !== "mooc") {
+        return Err(
+          new Error(`Expected stored course ${moocCourse.id} to be a mooc course but it was tmc`),
+        )
+      }
       // Non-fatal: on a failed fetch, previous local progress is carried over
       // per exercise id so a refresh never wipes known points or passed flags.
       const progressRes = await match(
@@ -130,7 +138,7 @@ export async function updateCourse(
       if (progressRes.err) {
         Logger.warn("Failed to fetch mooc course progress", progressRes.val)
       }
-      const previousExercises = courseData.kind === "mooc" ? courseData.data.exercises : []
+      const previousExercises = courseData.data.exercises
       // One local exercise per slide, keyed by the slide's exercise id (a UUID).
       // The bulk download/update CLI subcommand resolves `--exercise-id` against
       // `slide.exercise_id`, so the exercise id (not the task id) is the identity
@@ -146,6 +154,17 @@ export async function updateCourse(
         ...courseData.data,
         availablePoints,
         awardedPoints,
+        // Refresh the metadata the backend can change, mirroring what the tmc arm
+        // does. `disabled`, `materialUrl` and `perhapsExamMode` have no mooc
+        // equivalent (see `zMoocCourse`), so they are genuinely nothing to do here.
+        //
+        // `name` (the slug) is deliberately NOT refreshed: it is the workspace
+        // folder name and the key for closed-exercise settings and exercise
+        // lookups, so adopting a renamed slug here would desync those from disk
+        // without the accompanying move.
+        description: moocCourse.description,
+        title: moocCourse.name,
+        organization: moocCourse.organization_name,
       }
       await userData.val.updateCourse(courseData)
 

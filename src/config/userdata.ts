@@ -102,18 +102,38 @@ export class UserData {
     }
   }
 
-  public getCourseBySlug(slug: string): LocalCourseData {
-    for (const course of this._tmcCourses.values()) {
-      if (course.name === slug) {
-        return makeTmcKind(course)
+  /**
+   * Looks up a course by its slug **within one backend**.
+   *
+   * Slugs are only unique per backend: the legacy TMC server and
+   * `courses.mooc.fi` can each have a course called e.g. `python-programming`.
+   * The backend is therefore a required argument. A name-only lookup would have
+   * to pick a scan order, and whichever backend came first would silently
+   * shadow the other backend's course of the same slug.
+   */
+  public getCourseBySlug(backend: "tmc" | "mooc", slug: string): LocalCourseData {
+    switch (backend) {
+      case "tmc": {
+        for (const course of this._tmcCourses.values()) {
+          if (course.name === slug) {
+            return makeTmcKind(course)
+          }
+        }
+        break
+      }
+      case "mooc": {
+        for (const course of this._moocCourses.values()) {
+          if (course.name === slug) {
+            return makeMoocKind(course)
+          }
+        }
+        break
+      }
+      default: {
+        assertUnreachable(backend)
       }
     }
-    for (const course of this._moocCourses.values()) {
-      if (course.name === slug) {
-        return makeMoocKind(course)
-      }
-    }
-    throw new Error("nonexistent course")
+    throw new Error(`nonexistent course: no ${backend} course with slug ${slug}`)
   }
 
   public getTmcCourse(id: number): Readonly<TmcLocalCourseData> {
@@ -125,23 +145,35 @@ export class UserData {
     return this.getTmcCourses().find((x) => x.name === name)
   }
 
+  /**
+   * Looks up an exercise by course slug and exercise name **within one backend**,
+   * returning it tagged with that backend.
+   *
+   * As with `getCourseBySlug`, the backend is required rather than inferred.
+   * Every caller comes from a `WorkspaceExercise`, which already records which
+   * backend the exercise on disk belongs to, so there is nothing to guess — and
+   * guessing was actively wrong: the previous name-only version scanned tmc
+   * courses first and returned as soon as a *course* slug matched, so a mooc
+   * course sharing its slug with a tmc course could never be reached.
+   */
   public getExerciseByName(
+    backend: "tmc" | "mooc",
     courseSlug: string,
     exerciseName: string,
   ): Readonly<LocalCourseExercise> | undefined {
-    for (const course of this._tmcCourses.values()) {
-      if (course.name === courseSlug) {
-        const exercise = course.exercises.find((x) => x.name === exerciseName)
+    switch (backend) {
+      case "tmc": {
+        const exercise = this.getTmcExerciseByName(courseSlug, exerciseName)
         return exercise ? makeTmcKind(exercise) : undefined
       }
-    }
-    for (const course of this._moocCourses.values()) {
-      if (course.name === courseSlug) {
-        const exercise = course.exercises.find((x) => x.name === exerciseName)
+      case "mooc": {
+        const exercise = this.getMoocExerciseByName(courseSlug, exerciseName)
         return exercise ? makeMoocKind(exercise) : undefined
       }
+      default: {
+        assertUnreachable(backend)
+      }
     }
-    return undefined
   }
 
   public getTmcExerciseByName(
@@ -150,7 +182,12 @@ export class UserData {
   ): Readonly<TmcLocalCourseExercise> | undefined {
     for (const course of this._tmcCourses.values()) {
       if (course.name === courseSlug) {
-        return course.exercises.find((x) => x.name === exerciseName)
+        const exercise = course.exercises.find((x) => x.name === exerciseName)
+        if (exercise) {
+          return exercise
+        }
+        // Keep scanning: a matching course slug is not proof the exercise lives
+        // there, and slugs are not guaranteed unique across stored entries.
       }
     }
     return undefined
@@ -160,9 +197,15 @@ export class UserData {
     courseSlug: string,
     exerciseName: string,
   ): Readonly<MoocLocalCourseExercise> | undefined {
+    // Mooc courses are keyed by *instance* id, so two enrolled instances of the
+    // same course share a slug — all the more reason not to stop at the first
+    // slug match without checking that it actually holds the exercise.
     for (const course of this._moocCourses.values()) {
       if (course.name === courseSlug) {
-        return course.exercises.find((x) => x.name === exerciseName)
+        const exercise = course.exercises.find((x) => x.name === exerciseName)
+        if (exercise) {
+          return exercise
+        }
       }
     }
     return undefined

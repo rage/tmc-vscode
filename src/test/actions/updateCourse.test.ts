@@ -86,6 +86,21 @@ suite("updateCourse action (mooc)", function () {
     expect(stored?.availablePoints).toBe(1)
   })
 
+  test("refreshes the course metadata that the backend can change", async function () {
+    // The mooc arm used to discard the fetched course entirely and write back only
+    // points, so a renamed or re-described course stayed stale forever. The stored
+    // fixture deliberately disagrees with the fetched one on every field here.
+    const result = await updateCourse(actionContext(), courseId)
+    expect(result.val).toBe(true)
+    const stored = userData.getMoocCourses()[0]
+    expect(stored?.description).toBe("A mooc course")
+    expect(stored?.title).toBe("Mooc Python")
+    expect(stored?.organization).toBe("University of Helsinki")
+    // The slug keys the workspace folder and the closed-exercise settings, so it
+    // must NOT be adopted from the fetched course without an accompanying move.
+    expect(stored?.name).toBe("mooc-python-course")
+  })
+
   test("a failed progress fetch preserves previously known progress", async function () {
     await updateCourse(actionContext(), courseId)
     expect(userData.getMoocCourses()[0]?.exercises[0]?.passed).toBe(true)
