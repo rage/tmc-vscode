@@ -57,6 +57,30 @@ patchedDependencies:
 
 minimumReleaseAgeExclude:
   - postcss@8.5.19
+  # Published 2026-07-19, i.e. comfortably past the 7-day policy in wall-clock
+  # terms. It only trips the check because `resolutionMode: time-based` anchors
+  # the cutoff to the lockfile's timestamp rather than to today, and this is a
+  # security patch we want (see the `overrides` note below).
+  - fast-uri@3.1.4
+
+# Security overrides for advisories in packages we do not depend on directly and
+# whose own parent has not yet released a bump. Every entry here is deliberately
+# scoped to the major line the vulnerable copy resolves to, and every entry is a
+# version the parent's declared range already allows — so this only pulls a
+# security patch forward, it never forces an incompatible major on a dependent.
+#
+# All of these are dev/build/test tooling; none of them are reachable from the
+# packaged extension (see `pnpm audit --prod`).
+overrides:
+  # GHSA-v2hh-gcrm-f6hx: fast-uri mis-parses a backslash authority delimiter.
+  # Reached via ajv (`fast-uri: ^3.0.1`) inside the mock backend's OpenAPI
+  # request/response validation. 3.1.4 is the patch release on the same line.
+  fast-uri@3: 3.1.4
+  # GHSA-52cp-r559-cp3m: js-yaml prototype pollution. Reached via
+  # @hey-api/json-schema-ref-parser, which pins js-yaml exactly at the
+  # vulnerable 4.2.0; 4.3.0 is the security release on the same major and is
+  # exercised by `pnpm run generate:langs-schema`.
+  js-yaml@4: 4.3.0
 
 # This is a single workspace, so we deliberately keep ONE shared lockfile:
 # sharedWorkspaceLockfile / link-protocol settings (linkWorkspacePackages,
