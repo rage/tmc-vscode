@@ -14,7 +14,6 @@ import {
 } from "../config/constants"
 import type { InitializationError } from "../errors"
 import {
-  AuthenticationError,
   AuthorizationError,
   BottleneckError,
   ConnectionError,
@@ -141,7 +140,6 @@ export default class Langs {
   private _nextMoocSubmissionAllowedTimestamp: number
   private readonly _options: Options
   private readonly _responseCache: Map<string, ResponseCacheEntry>
-  private _onLogin?: () => void
   private _onLogout?: (expected: boolean) => void
   private _onMoocLogin?: () => void
   private _onMoocLogout?: (expected: boolean) => void
@@ -169,16 +167,13 @@ export default class Langs {
    * @param event Event to subscribe to.
    * @param callback Eventhandler to invoke on event.
    */
-  public on(event: "login" | "mooc-login", callback: () => void): void
+  public on(event: "mooc-login", callback: () => void): void
   public on(event: "logout" | "mooc-logout", callback: (expected: boolean) => void): void
   public on(
-    event: "login" | "logout" | "mooc-login" | "mooc-logout",
+    event: "logout" | "mooc-login" | "mooc-logout",
     callback: (() => void) | ((expected: boolean) => void),
   ): void {
     switch (event) {
-      case "login":
-        this._onLogin = callback as () => void
-        break
       case "logout":
         this._onLogout = callback as (expected: boolean) => void
         break
@@ -196,41 +191,8 @@ export default class Langs {
   // ---------------------------------------------------------------------------------------------
 
   /**
-   * Authenticates user to TMC services. Uses TMC-langs `login` core command internally.
-   *
-   * This operation will fails if wrong credentials are provided or if the user is already signed
-   * in.
-   *
-   * @param username Username or email.
-   * @param password Password.
-   */
-  public async authenticate(username: string, password: string): Promise<Result<void, Error>> {
-    if (!username || !password) {
-      return Err(new AuthenticationError("Username and password may not be empty."))
-    }
-    const res = await this._executeLangsCommand(
-      {
-        backend: "tmc",
-        args: this._tmcCmd("login", "--base64", "--email", username, "--stdin"),
-        obfuscate: [8],
-        stdin: Buffer.from(password).toString("base64"),
-        suppressAuthEvents: true,
-      },
-      null,
-    )
-    return res
-      .mapErr((x) => new AuthenticationError(x.message))
-      .andThen(() => {
-        this._onLogin?.()
-        return Ok.EMPTY
-      })
-  }
-
-  /**
-   * Returns user's current authentication status. Uses TMC-langs `logged-in` core command
-   * internally.
-   *
-   * @returns Boolean indicating if the user is authenticated.
+   * Whether the tmc backend can be authenticated, via `tmc logged-in`: either a
+   * stored tmc token or a usable courses.mooc.fi access token counts.
    */
   public async isAuthenticated(options?: ExecutionOptions): Promise<Result<boolean, Error>> {
     const res = await this._executeLangsCommand(
@@ -254,7 +216,8 @@ export default class Langs {
   }
 
   /**
-   * Deauthenticates current user. Uses TMC-langs `logout` core command internally.
+   * Removes the stored tmc token (`tmc logout`). The courses.mooc.fi credentials
+   * are untouched, so the user can still be authenticated afterwards.
    */
   public async deauthenticate(): Promise<Result<void, Error>> {
     const res = await this._executeLangsCommand(
@@ -371,11 +334,12 @@ export default class Langs {
   }
 
   /**
-   * Lists local exercises for a given course. Dispatches on the backend: the TMC
-   * `list-local-course-exercises` core command (keyed by course slug) or the
-   * `mooc list-local-course-exercises` subcommand (keyed by course id, since mooc
-   * configs store no slug). Both return entries with an `exercise-slug` and an
-   * `exercise-path`, the fields the workspace manager needs.
+   * Lists local exercises for a given course. Dispatches on the backend: a core
+   * `list-local-tmc-course-exercises` keyed by course slug for TMC, or
+   * `mooc list-local-course-exercises` keyed by course id (mooc configs store
+   * no slug). Both return entries
+   * with an `exercise-slug` and an `exercise-path`, the fields the workspace manager
+   * needs.
    *
    * @param courseKind Which backend the course belongs to.
    * @param courseIdentifier Course slug for TMC, course id (UUID) for mooc.
@@ -398,7 +362,7 @@ export default class Langs {
       {
         backend: "tmc",
         args: [
-          "list-local-course-exercises",
+          "list-local-tmc-course-exercises",
           "--client-name",
           this.clientName,
           "--course-slug",
@@ -1608,6 +1572,17 @@ export default class Langs {
     const tmcBackendUrl = process.env.TMC_LANGS_TMC_ROOT_URL ?? TMC_BACKEND_URL
     const moocBackendUrl = process.env.TMC_LANGS_MOOC_ROOT_URL ?? MOOC_BACKEND_URL
     const tmcLangsConfigDir = process.env.TMC_LANGS_CONFIG_DIR ?? this._options.cliConfigDir
+    // The tmc path authenticates with the courses.mooc.fi access token too, so
+    // the mooc OAuth knobs belong on every command, `tmc` ones included. Without
+    // TMC_LANGS_MOOC_TRUST_LOCALHOST the CLI attaches no bearer to a localhost
+    // backend, which would silently make the mock-backend tiers unauthenticated.
+    const moocEnv: Record<string, string> = {}
+    for (const key of ["TMC_LANGS_MOOC_CLIENT_ID", "TMC_LANGS_MOOC_TRUST_LOCALHOST"] as const) {
+      const value = process.env[key]
+      if (value !== undefined) {
+        moocEnv[key] = value
+      }
+    }
 
     Logger.info(`Running ${loggableCommand}`)
     Logger.debug(`TMC backend at ${tmcBackendUrl}`)
@@ -1626,6 +1601,7 @@ export default class Langs {
           TMC_LANGS_TMC_ROOT_URL: tmcBackendUrl,
           TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
           TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
+          ...moocEnv,
         },
       })
     } catch (error) {

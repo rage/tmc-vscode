@@ -1,62 +1,60 @@
 import { expect } from "@playwright/test"
 
 import { vsCodeTest } from "../fixtures"
-import { LoginPage } from "../pages/login"
+import { migrationTest } from "../migration-gate"
 import { MoocLoginPage } from "../pages/mooc-login"
+import { MyCoursesPage } from "../pages/my-courses"
 import { SelectPlatform } from "../pages/select-platform"
 
-// E2E of the courses.mooc.fi device-flow login. The mock's OAuth endpoints
-// (backend/mooc/oauth.ts) are not part of the vendored exercise-services spec.
+// E2E of the courses.mooc.fi device-flow login, the extension's only login. The
+// mock's OAuth endpoints (backend/mooc/oauth.ts) are not part of the vendored
+// exercise-services spec.
 //
-// tmc login is a separate, unaffected credential state; the student logs in to
-// tmc first because adding any course requires it, then does the mooc login.
+// The fixture seeds tmc credentials, so the extension starts logged in and the
+// tree view's "Log in" entry is hidden; these specs reach the device flow through
+// the mooc course flow, which checks the (separate, absent) mooc credentials.
 
-vsCodeTest("shows the device code and lands in the mooc course flow", async ({ page, webview }) => {
-  const loginPage = new LoginPage(page, webview)
-  const selectPlatform = new SelectPlatform(page, webview)
-  const moocLoginPage = new MoocLoginPage(page, webview)
+migrationTest(
+  "shows the device code and lands in the mooc course flow",
+  async ({ page, webview }) => {
+    const myCoursesPage = new MyCoursesPage(page, webview)
+    const selectPlatform = new SelectPlatform(page, webview)
+    const moocLoginPage = new MoocLoginPage(page, webview)
 
-  await vsCodeTest.step("log in to tmc", async () => {
-    await loginPage.goto()
-    await loginPage.login("student")
-  })
+    await vsCodeTest.step("pick the mooc platform", async () => {
+      await myCoursesPage.goto()
+      await webview.getByRole("button", { name: "Add new course" }).first().click()
+      await selectPlatform.selectMooc()
+    })
 
-  await vsCodeTest.step("pick the mooc platform", async () => {
-    await webview.getByRole("button", { name: "Add new course" }).first().click()
-    await selectPlatform.selectMooc()
-  })
+    await vsCodeTest.step("the device code is shown", async () => {
+      await expect(moocLoginPage.heading()).toBeVisible()
+      await expect(moocLoginPage.userCode()).toBeVisible()
+    })
 
-  await vsCodeTest.step("the device code is shown", async () => {
-    await expect(moocLoginPage.heading()).toBeVisible()
-    await expect(moocLoginPage.userCode()).toBeVisible()
-  })
-
-  await vsCodeTest.step("the mock approves and the flow continues", async () => {
-    await expect(
-      moocLoginPage.getSidePanel().getByRole("heading", { name: "Enrolled courses" }),
-    ).toBeVisible()
-    await expect(
-      moocLoginPage.getSidePanel().getByRole("heading", { name: "MOOC Python Course" }).first(),
-    ).toBeVisible()
-  })
-})
+    await vsCodeTest.step("the mock approves and the flow continues", async () => {
+      await expect(
+        moocLoginPage.getSidePanel().getByRole("heading", { name: "Enrolled courses" }),
+      ).toBeVisible()
+      await expect(
+        moocLoginPage.getSidePanel().getByRole("heading", { name: "MOOC Python Course" }).first(),
+      ).toBeVisible()
+    })
+  },
+)
 
 // This mock client id never approves, so the login stays on the waiting screen
 // until it is cancelled.
 vsCodeTest.describe(() => {
   vsCodeTest.use({ moocClientId: "mooc-mock-never" })
 
-  vsCodeTest("can cancel a pending device login", async ({ page, webview }) => {
-    const loginPage = new LoginPage(page, webview)
+  migrationTest("can cancel a pending device login", async ({ page, webview }) => {
+    const myCoursesPage = new MyCoursesPage(page, webview)
     const selectPlatform = new SelectPlatform(page, webview)
     const moocLoginPage = new MoocLoginPage(page, webview)
 
-    await vsCodeTest.step("log in to tmc", async () => {
-      await loginPage.goto()
-      await loginPage.login("student")
-    })
-
     await vsCodeTest.step("pick the mooc platform", async () => {
+      await myCoursesPage.goto()
       await webview.getByRole("button", { name: "Add new course" }).first().click()
       await selectPlatform.selectMooc()
     })
@@ -74,16 +72,15 @@ vsCodeTest.describe(() => {
 
   // Regression for orphaned/concurrent logins: cancel-then-retry must start a
   // clean attempt, unaffected by the old (killed) invocation resolving late.
-  vsCodeTest(
+  migrationTest(
     "cancel then retry starts a clean login with no error flash",
     async ({ page, webview }) => {
-      const loginPage = new LoginPage(page, webview)
+      const myCoursesPage = new MyCoursesPage(page, webview)
       const selectPlatform = new SelectPlatform(page, webview)
       const moocLoginPage = new MoocLoginPage(page, webview)
 
-      await vsCodeTest.step("log in to tmc and pick the mooc platform", async () => {
-        await loginPage.goto()
-        await loginPage.login("student")
+      await vsCodeTest.step("pick the mooc platform", async () => {
+        await myCoursesPage.goto()
         await webview.getByRole("button", { name: "Add new course" }).first().click()
         await selectPlatform.selectMooc()
       })
@@ -107,6 +104,24 @@ vsCodeTest.describe(() => {
         await moocLoginPage.cancel()
         await expect(moocLoginPage.getSidePanel().getByText("Login cancelled.")).toBeVisible()
       })
+    },
+  )
+})
+
+// The route a brand-new user takes: no credentials at all, so the tree view's
+// "Log in" entry is the only way in. It runs the same command as the Command
+// Palette's "TestMyCode: Log In".
+vsCodeTest.describe(() => {
+  vsCodeTest.use({ seedTmcCredentials: false })
+
+  migrationTest(
+    "the tree view's Log in entry starts the device flow",
+    async ({ page, webview }) => {
+      const moocLoginPage = new MoocLoginPage(page, webview)
+
+      await moocLoginPage.gotoFromTreeView()
+      await expect(moocLoginPage.heading()).toBeVisible()
+      await expect(moocLoginPage.userCode()).toBeVisible()
     },
   )
 })

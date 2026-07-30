@@ -34,10 +34,26 @@ The extension talks to two unrelated backends:
 | Server | `tmc.mooc.fi` (`tmc-server`) | `courses.mooc.fi` (`secret-project-331`)      |
 | API    | REST v8                      | `/api/v0/exercise-services/client`            |
 | Ids    | integers                     | UUID strings                                  |
-| Auth   | username/password grant      | OAuth2 device authorization (RFC 8628) bearer |
+| Auth   | courses.mooc.fi access token | OAuth2 device authorization (RFC 8628) bearer |
 
 Both are supported at the same time; the user picks a platform when adding a
 course, and a course carries its platform with it from then on.
+
+### One login
+
+There is a single login: the courses.mooc.fi device flow (`tmc.showMoocLogin`,
+reached from the Command Palette, the tree view's "Log in" entry and the
+session-expired prompt). The TMC username/password login is gone; `tmc-server`
+accepts courses.mooc.fi access tokens by introspecting them, so the CLI
+authenticates the tmc backend with the same credential. A tmc token already in
+`credentials.json` keeps working until it expires — the extension never creates
+one, and `tmc logout` (the only thing that removes it) does not touch the mooc
+credentials.
+
+Consequence for the CLI environment: the mooc knobs
+(`TMC_LANGS_MOOC_ROOT_URL`, `TMC_LANGS_MOOC_CLIENT_ID`,
+`TMC_LANGS_MOOC_TRUST_LOCALHOST`) apply to `tmc` commands too, not just `mooc`
+ones.
 
 ### Everything goes through tmc-langs-cli
 

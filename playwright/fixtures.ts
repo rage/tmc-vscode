@@ -84,6 +84,25 @@ const args = [
   "--force-disable-user-env",
 ]
 
+// tmc-langs' per-client config directory inside TMC_LANGS_CONFIG_DIR
+// (src/config/constants.ts CLIENT_NAME).
+const CLIENT_CONFIG_DIR_NAME = "tmc-vscode_plugin"
+
+// The extension no longer has a TMC username/password login -- the only login is
+// the courses.mooc.fi device flow, which needs a CLI carrying the mooc contract
+// (see migration-gate.ts). Seeding a tmc token instead is the "existing
+// credentials keep working" path, and it is what lets the tmc specs start from a
+// logged-in extension against the pinned released CLI. The mock backend accepts
+// any token (backend/controllers).
+function seedTmcCredentials(configDir: string): void {
+  const clientConfigDir = join(configDir, CLIENT_CONFIG_DIR_NAME)
+  fs.mkdirSync(clientConfigDir, { recursive: true })
+  fs.writeFileSync(
+    join(clientConfigDir, "credentials.json"),
+    '{"access_token":"1234","token_type":"bearer","scope":"public"}',
+  )
+}
+
 interface CustomTestFixtures {
   vsCode: ElectronApplication
   page: Page
@@ -96,13 +115,20 @@ interface CustomTestOptions {
   // scenario from this id (backend/mooc/oauth.ts), e.g. a "never approves"
   // client for testing cancellation. Defaults to the real client, which the mock approves.
   moocClientId: string | undefined
+  // Set false for specs that need a logged-out extension, e.g. the login entry
+  // points, which are hidden while a session exists.
+  seedTmcCredentials: boolean
 }
 
 export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions> = {
   moocClientId: [undefined, { option: true }],
-  vsCode: async ({ moocClientId }, run, testInfo) => {
+  seedTmcCredentials: [true, { option: true }],
+  vsCode: async ({ moocClientId, seedTmcCredentials: shouldSeedTmcCredentials }, run, testInfo) => {
     const configDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-config"))
     const projectsDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-projects"))
+    if (shouldSeedTmcCredentials) {
+      seedTmcCredentials(configDir)
+    }
     // The mock backend is a long-lived process shared across specs, so its
     // in-memory mooc state leaks between tests; reset it here the same way the
     // per-test config/projects dirs isolate on-disk state. Best-effort — a down

@@ -101,7 +101,7 @@ suite("TmcPanel moocLogin handling", () => {
       expect(TmcPanel.sidePanel).toBeUndefined()
       // ...and a plain confirmation toast is shown.
       expect(actionContext.dialog.notification).toHaveBeenCalledWith(
-        "Logged in to courses.mooc.fi again.",
+        "Logged in to courses.mooc.fi.",
       )
     },
   )

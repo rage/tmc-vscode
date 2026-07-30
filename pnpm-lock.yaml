@@ -92,8 +92,8 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(vitest@4.1.10)
       '@vscode/test-electron':
-        specifier: ^3.0.0
-        version: 3.0.0(supports-color@8.1.1)
+        specifier: ^3.1.0
+        version: 3.1.0
       chai:
         specifier: ^6.0.0
         version: 6.2.2
@@ -1278,8 +1278,8 @@ packages:
   '@vscode/codicons@0.0.40':
     resolution: {integrity: sha512-R8sEDXthD86JHsk3xERrMcTN6sMovbk1AXYB5/tGoEYCE8DWwya6al5VLrAmQYXC1bQhUHIfHALj8ijQUs11cQ==}
 
-  '@vscode/test-electron@3.0.0':
-    resolution: {integrity: sha512-TY5mC7aAjxSLDXsyjhrG8cJHgc/HLdiE5lvtW7hABYQrY24Qwozzr5UoO3HiuAM4Hzz4b7K/eZlwrCILj94CcA==}
+  '@vscode/test-electron@3.1.0':
+    resolution: {integrity: sha512-CRqv5u+YYoseuNVJ6Tyo4k0sF0mx4qnKMihRB0PjsUF8Dc0WKtCXo6CNL6nWWm5esfFQsQA/pejMj4ZbpJVLTw==}
     engines: {node: '>=22'}
 
   abort-controller@3.0.0:
@@ -4220,10 +4220,10 @@ snapshots:
 
   '@vscode/codicons@0.0.40': {}
 
-  '@vscode/test-electron@3.0.0(supports-color@8.1.1)':
+  '@vscode/test-electron@3.1.0':
     dependencies:
-      http-proxy-agent: 7.0.2(supports-color@8.1.1)
-      https-proxy-agent: 7.0.6(supports-color@8.1.1)
+      http-proxy-agent: 7.0.2
+      https-proxy-agent: 7.0.6
       jszip: 3.10.1
       ora: 8.2.0
       semver: 7.8.5
@@ -5027,14 +5027,14 @@ snapshots:
       statuses: 2.0.2
       toidentifier: 1.0.1
 
-  http-proxy-agent@7.0.2(supports-color@8.1.1):
+  http-proxy-agent@7.0.2:
     dependencies:
       agent-base: 7.1.4
       debug: 4.4.3(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
-  https-proxy-agent@7.0.6(supports-color@8.1.1):
+  https-proxy-agent@7.0.6:
     dependencies:
       agent-base: 7.1.4
       debug: 4.4.3(supports-color@8.1.1)
@@ -6343,7 +6343,7 @@ time:
   '@vitest/coverage-v8@4.1.10': '2026-07-06T06:44:13.365Z'
   '@vscode-elements/elements@2.5.1': '2026-02-21T23:42:55.527Z'
   '@vscode/codicons@0.0.40': '2025-09-05T12:27:11.385Z'
-  '@vscode/test-electron@3.0.0': '2026-06-08T18:19:54.566Z'
+  '@vscode/test-electron@3.1.0': '2026-07-24T21:13:39.379Z'
   ajv@8.20.0: '2026-04-24T15:22:16.529Z'
   archiver@8.0.0: '2026-05-08T08:05:23.358Z'
   chai-as-promised@8.0.2: '2025-08-22T17:27:30.232Z'

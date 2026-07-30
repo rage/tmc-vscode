@@ -481,13 +481,6 @@ export const WelcomePanelSchema = z.object({
 
 export type WelcomePanel = z.infer<typeof WelcomePanelSchema>
 
-export const LoginPanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("Login"),
-})
-
-export type LoginPanel = z.infer<typeof LoginPanelSchema>
-
 export const MyCoursesPanelSchema = z.object({
   id: z.number(),
   type: z.literal("MyCourses"),
@@ -525,7 +518,6 @@ export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
 export type PanelType =
   | "App"
   | "Welcome"
-  | "Login"
   | "MyCourses"
   | "CourseDetails"
   | "SelectOrganization"
@@ -664,7 +656,6 @@ export type MoocLoginPanel = z.infer<typeof MoocLoginPanelSchema>
 export const PanelSchema = z.discriminatedUnion("type", [
   AppPanelSchema,
   WelcomePanelSchema,
-  LoginPanelSchema,
   MyCoursesPanelSchema,
   CourseDetailsPanelSchema,
   SelectOrganizationPanelSchema,
@@ -742,11 +733,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     type: z.literal("setTmcDataSize"),
     target: targetPanelSchema("MyCourses"),
     tmcDataSize: z.string(),
-  }),
-  z.object({
-    type: z.literal("loginError"),
-    target: targetPanelSchema("Login"),
-    error: z.string(),
   }),
   z.object({
     type: z.literal("setCourseData"),
@@ -999,10 +985,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     sourcePanel: ExerciseTestsPanelSchema,
   }),
   z.object({
-    type: z.literal("requestLoginData"),
-    sourcePanel: LoginPanelSchema,
-  }),
-  z.object({
     type: z.literal("requestMyCoursesData"),
     sourcePanel: MyCoursesPanelSchema,
   }),
@@ -1017,12 +999,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("requestWelcomeData"),
     sourcePanel: WelcomePanelSchema,
-  }),
-  z.object({
-    type: z.literal("login"),
-    sourcePanel: LoginPanelSchema,
-    username: z.string(),
-    password: z.string(),
   }),
   z.object({
     type: z.literal("selectOrganization"),

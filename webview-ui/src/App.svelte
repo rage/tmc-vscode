@@ -3,7 +3,6 @@
   import ExerciseSubmission from "./panels/ExerciseSubmission.svelte"
   import ExerciseTests from "./panels/ExerciseTests.svelte"
   import InitializationErrorHelp from "./panels/InitializationErrorHelp.svelte"
-  import Login from "./panels/Login.svelte"
   import MoocLogin from "./panels/MoocLogin.svelte"
   import MyCourses from "./panels/MyCourses.svelte"
   import SelectCourse from "./panels/SelectCourse.svelte"
@@ -126,8 +125,6 @@
         {#key appState.panel.id}
           {#if appState.panel.type === "Welcome"}
             <Welcome panel={appState.panel} />
-          {:else if appState.panel.type === "Login"}
-            <Login panel={appState.panel} />
           {:else if appState.panel.type === "MyCourses"}
             <MyCourses panel={appState.panel} />
           {:else if appState.panel.type === "CourseDetails"}

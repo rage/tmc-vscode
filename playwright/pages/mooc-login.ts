@@ -3,6 +3,18 @@ import { TmcPage } from "./tmc"
 // The courses.mooc.fi device-flow login screen, shown when no mooc credentials
 // are stored.
 export class MoocLoginPage extends TmcPage {
+  // Only reachable with no credentials at all: the entry is hidden once the
+  // extension considers the user logged in.
+  public async gotoFromTreeView(): Promise<void> {
+    await this.openMenu()
+    const loginLocator = this.page.getByRole("treeitem", { name: "Log in" }).locator("a")
+    await loginLocator.waitFor()
+    // the menu can be visible before it has fully loaded, and clicking it then errors
+    // oxlint-disable-next-line playwright/no-wait-for-timeout -- deliberate settle-delay while polling flaky VS Code webview UI
+    await this.page.waitForTimeout(100)
+    await loginLocator.click()
+  }
+
   public heading() {
     return this.getSidePanel().getByRole("heading", { name: "Log in to courses.mooc.fi" })
   }

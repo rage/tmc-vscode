@@ -615,6 +615,32 @@ suite("Langs class arg building", function () {
       "course-uuid",
     ])
   })
+
+  test("listLocalCourseExercises routes the tmc branch to the top-level subcommand", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () => Ok(dataOutput("local-tmc-exercises", [])))
+    await langs.listLocalCourseExercises("tmc", "python-course")
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.args).toEqual([
+      "list-local-tmc-course-exercises",
+      "--client-name",
+      "test-client",
+      "--course-slug",
+      "python-course",
+    ])
+  })
+
+  test("listLocalCourseExercises surfaces a tmc subcommand error instead of retrying", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () =>
+      Ok(
+        errorOutput("generic", "error: unrecognized subcommand 'list-local-tmc-course-exercises'"),
+      ),
+    )
+    const res = await langs.listLocalCourseExercises("tmc", "python-course")
+    expect(res.err).toBe(true)
+    expect(calls).toHaveLength(1)
+  })
 })
 
 suite("Langs cross-backend independence", function () {
@@ -890,15 +916,64 @@ suite("Langs error-kind mapping", function () {
     expect(onMoocLogout).toHaveBeenCalledExactlyOnceWith(true)
   })
 
-  test("a failed tmc login does not fire any logout event", async function () {
+  // `tmc logout` only removes credentials.json; the mooc credentials -- which
+  // authenticate both backends -- are `mooc logout`'s to remove.
+  test("deauthenticate runs only `tmc logout` and leaves the mooc session alone", async function () {
     const langs = newLangs()
-    const onLogout = vi.fn()
-    langs.on("logout", onLogout)
-    stubSpawn(langs, () => Ok(errorOutput("invalid-token")))
+    const onMoocLogout = vi.fn()
+    langs.on("mooc-logout", onMoocLogout)
+    const calls = stubSpawn(langs, () => Ok(dataOutput("null", null)))
 
-    const result = await langs.authenticate("user", "hunter2")
-    expect(result.err).toBe(true)
-    expect(onLogout).not.toHaveBeenCalled()
+    const result = await langs.deauthenticate()
+    expect(result.ok).toBe(true)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.args).toEqual([
+      "tmc",
+      "--client-name",
+      "test-client",
+      "--client-version",
+      "1.0.0",
+      "logout",
+    ])
+    expect(onMoocLogout).not.toHaveBeenCalled()
+  })
+
+  test("isAuthenticated builds `tmc logged-in` and maps the result", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () =>
+      Ok({
+        "output-kind": "output-data",
+        status: "finished",
+        message: "currently logged in",
+        result: "logged-in",
+        data: null,
+      } as unknown as OutputData),
+    )
+
+    expect((await langs.isAuthenticated()).val).toBe(true)
+    expect(calls[0]?.args).toEqual([
+      "tmc",
+      "--client-name",
+      "test-client",
+      "--client-version",
+      "1.0.0",
+      "logged-in",
+    ])
+  })
+
+  test("isAuthenticated returns false when not logged in", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () =>
+      Ok({
+        "output-kind": "output-data",
+        status: "finished",
+        message: "currently not logged in",
+        result: "not-logged-in",
+        data: null,
+      } as unknown as OutputData),
+    )
+
+    expect((await langs.isAuthenticated()).val).toBe(false)
   })
 })
 

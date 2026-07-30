@@ -10,7 +10,6 @@ import {
   closeExercises,
   downloadAndOpenExercises,
   downloadExercisesForUi,
-  login,
   openWorkspace,
   pasteMoocExercise,
   pasteTmcExercise,
@@ -395,9 +394,6 @@ export class TmcPanel {
           case "requestExerciseTestsData": {
             break
           }
-          case "requestLoginData": {
-            break
-          }
           case "requestMyCoursesData": {
             const { userData, workspaceManager, resources } = actionContext
             if (userData.err) {
@@ -540,26 +536,6 @@ export class TmcPanel {
               target: message.sourcePanel,
               version,
             })
-            break
-          }
-          case "login": {
-            const result = await login(actionContext, message.username, message.password)
-            if (result.err) {
-              postMessageToWebview(webview, {
-                type: "loginError",
-                target: message.sourcePanel,
-                error: result.val.message,
-              })
-            } else {
-              await renderPanel(
-                {
-                  id: randomPanelId(),
-                  type: "MyCourses",
-                  courseDeadlines: {},
-                },
-                webview,
-              )
-            }
             break
           }
           case "openCourseDetails": {
@@ -876,7 +852,7 @@ export class TmcPanel {
             } else {
               // Standalone login: nothing to navigate back to, so just close and confirm.
               TmcPanel.sidePanel?.dispose()
-              actionContext.dialog.notification("Logged in to courses.mooc.fi again.")
+              actionContext.dialog.notification("Logged in to courses.mooc.fi.")
             }
             break
           }

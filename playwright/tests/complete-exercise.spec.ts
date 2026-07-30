@@ -3,7 +3,6 @@ import { expect } from "@playwright/test"
 import { vsCodeTest } from "../fixtures"
 import { CoursePage } from "../pages/course"
 import { ExplorerPage } from "../pages/explorer"
-import { LoginPage } from "../pages/login"
 import { MyCoursesPage } from "../pages/my-courses"
 import { TestResultsPage } from "../pages/test-results"
 import { TestSubmissionPage } from "../pages/test-submission"
@@ -28,16 +27,15 @@ const exercises: Exercise[] = [
 
 for (const exercise of exercises) {
   vsCodeTest("can complete exercise", async ({ page, webview }) => {
-    const loginPage = new LoginPage(page, webview)
     const myCoursesPage = new MyCoursesPage(page, webview)
     const coursePage = new CoursePage(page, webview)
     const testResultsPage = new TestResultsPage(page, webview)
     const testSubmissionPage = new TestSubmissionPage(page, webview)
     const explorerPage = new ExplorerPage(page)
 
-    await vsCodeTest.step("log in", async () => {
-      await loginPage.goto()
-      await loginPage.login("student")
+    // The session comes from the tmc credentials the fixture seeds (fixtures.ts).
+    await vsCodeTest.step("open My Courses", async () => {
+      await myCoursesPage.goto()
     })
 
     await vsCodeTest.step("open course", async () => {

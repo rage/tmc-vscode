@@ -200,16 +200,17 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
       loggedInNow ? visibilityGroups.loggedIn : visibilityGroups.loggedIn.not,
     ])
   }
+  // Both backends are authenticated by the same courses.mooc.fi credential, so
+  // either one expiring is fixed by the same device-flow login.
   const sessionExpiredWarning = (backend: "tmc" | "mooc"): void => {
     const message =
       backend === "tmc"
         ? "Your session has expired, please log in."
         : "Your courses.mooc.fi session has expired, please log in."
-    const loginCommand = backend === "tmc" ? "tmc.showLogin" : "tmc.showMoocLogin"
     dialog.warningNotification(message, [
       "Log in",
       (): void => {
-        vscode.commands.executeCommand(loginCommand)
+        vscode.commands.executeCommand("tmc.showMoocLogin")
       },
     ])
   }
@@ -218,11 +219,6 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const sessionExpiry = createSessionExpiryTracker(authStatus, sessionExpiredWarning)
 
   if (langs.ok) {
-    langs.val.on("login", async () => {
-      authStatus.tmc = true
-      sessionExpiry.onLogin("tmc")
-      await applyAuthContext()
-    })
     langs.val.on("logout", async (expected) => {
       authStatus.tmc = false
       await applyAuthContext()
@@ -231,6 +227,11 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     langs.val.on("mooc-login", async () => {
       authStatus.mooc = true
       sessionExpiry.onLogin("mooc")
+      // A CLI that authenticates the tmc backend with the mooc token resolves an
+      // earlier tmc expiry too. Whether it does is a property of the pinned CLI,
+      // so drop the stale tmc state rather than claiming a session: the next
+      // background check is what re-arms the warning.
+      sessionExpiry.reset("tmc")
       await applyAuthContext()
     })
     langs.val.on("mooc-logout", async (expected) => {

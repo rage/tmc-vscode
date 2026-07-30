@@ -86,7 +86,7 @@
     "@types/vscode": "~1.100.0",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitest/coverage-v8": "^4.1.10",
-    "@vscode/test-electron": "^3.0.0",
+    "@vscode/test-electron": "^3.1.0",
     "chai": "^6.0.0",
     "chai-as-promised": "^8.0.0",
     "cross-env": "^10.0.0",
@@ -145,11 +145,6 @@
         "category": "TestMyCode"
       },
       {
-        "command": "tmc.login",
-        "title": "Log In",
-        "category": "TestMyCode"
-      },
-      {
         "command": "tmc.logout",
         "title": "Log Out",
         "category": "TestMyCode"
@@ -189,13 +184,8 @@
         "category": "TestMyCode"
       },
       {
-        "command": "tmc.showLogin",
-        "title": "Show Login Menu",
-        "category": "TestMyCode"
-      },
-      {
         "command": "tmc.showMoocLogin",
-        "title": "Show courses.mooc.fi Login",
+        "title": "Log In",
         "category": "TestMyCode"
       },
       {
@@ -344,10 +334,6 @@
           "when": "test-my-code:LoggedIn"
         },
         {
-          "command": "tmc.login",
-          "when": "test-my-code:LoggedIn == false"
-        },
-        {
           "command": "tmc.logout",
           "when": "test-my-code:LoggedIn"
         },
@@ -364,12 +350,8 @@
           "when": "test-my-code:LoggedIn"
         },
         {
-          "command": "tmc.showLogin",
-          "when": "false"
-        },
-        {
           "command": "tmc.showMoocLogin",
-          "when": "false"
+          "when": "test-my-code:LoggedIn == false"
         },
         {
           "command": "tmc.submitExercise",

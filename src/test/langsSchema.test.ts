@@ -92,6 +92,33 @@ suite("Langs CLI output contract", function () {
       }
     })
 
+    test("the vendored schema has no failed-exercise-download error kind", function () {
+      // The released CLI that TMC_LANGS_RUST_VERSION pins still emits it, so
+      // CliOutput normalizes it to `generic` rather than rejecting it. If this
+      // variant reappears upstream, drop that normalization instead of keeping
+      // both paths.
+      const schema = readVendoredSchema()
+      const kinds = JSON.stringify(schema.$defs.Kind)
+      expect(kinds).not.toContain("failed-exercise-download")
+
+      const parsed = CliOutput.parse({
+        "output-kind": "output-data",
+        status: "finished",
+        message: "Failed to download exercises",
+        result: "error",
+        data: {
+          "output-data-kind": "error",
+          "output-data": {
+            kind: { "failed-exercise-download": { completed: [], skipped: [], failed: [] } },
+            trace: ["error"],
+          },
+        },
+      })
+      expect(parsed).toMatchObject({
+        data: { "output-data": { kind: "generic" } },
+      })
+    })
+
     test("CourseDetails is flattened in the vendored schema (serialize contract)", function () {
       // The vendored schema is generated with schemars' serialize
       // contract, so CourseDetails is flat (course fields + unlockables +

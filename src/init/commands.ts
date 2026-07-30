@@ -80,12 +80,6 @@ export function registerCommands(
         commands.downloadOldSubmission(actionContext, resource),
     ),
 
-    // Delegates to the platform-selecting login flow, which the old raw
-    // TMC username/password input boxes couldn't use for courses.mooc.fi.
-    vscode.commands.registerCommand("tmc.login", async () => {
-      await vscode.commands.executeCommand("tmc.showLogin")
-    }),
-
     vscode.commands.registerCommand("tmc.logout", async () => {
       if (await dialog.confirmation("Are you sure you want to log out?")) {
         // The action layer reports failures itself; only announce success here.
@@ -143,14 +137,8 @@ export function registerCommands(
       })
     }),
 
-    vscode.commands.registerCommand("tmc.showLogin", async () => {
-      TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-        id: randomPanelId(),
-        type: "Login",
-      })
-    }),
-
-    // Standalone entry point into mooc login, e.g. from a session-expired prompt.
+    // The only login: courses.mooc.fi device flow. Reached from the Command
+    // Palette, the tree view's "Log in" entry and the session-expired prompt.
     // No `requestingPanel`: nothing to return to on success.
     vscode.commands.registerCommand("tmc.showMoocLogin", async () => {
       TmcPanel.renderSide(context.extensionUri, context, actionContext, {

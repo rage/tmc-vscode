@@ -352,7 +352,7 @@ const validCliOutputFixtures: CliOutputFixture[] = [
     },
   },
   {
-    name: "error: failed-exercise-download",
+    name: "error: failed-exercise-download (released CLI only)",
     value: {
       "output-kind": "output-data",
       status: "finished",

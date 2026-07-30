@@ -68,6 +68,26 @@ suite("createSessionExpiryTracker", () => {
     expect(onExpired).toHaveBeenCalledWith("mooc")
   })
 
+  // What the extension does to tmc's state on a successful mooc login: whether
+  // the mooc token also authenticates tmc is a property of the pinned CLI, so the
+  // stale state is dropped rather than replaced with a claimed session.
+  test("reset clears the warning without arming a new one", () => {
+    const onExpired = vi.fn()
+    const tracker = createSessionExpiryTracker({ tmc: true, mooc: false }, onExpired)
+
+    tracker.onAuthChecked("tmc", false)
+    expect(onExpired).toHaveBeenCalledTimes(1)
+
+    tracker.reset("tmc")
+    tracker.onAuthChecked("tmc", false)
+    expect(onExpired).toHaveBeenCalledTimes(1)
+
+    // A later check that does see a session re-arms the warning.
+    tracker.onAuthChecked("tmc", true)
+    tracker.onAuthChecked("tmc", false)
+    expect(onExpired).toHaveBeenCalledTimes(2)
+  })
+
   test("tracks tmc and mooc independently", () => {
     const onExpired = vi.fn()
     const tracker = createSessionExpiryTracker({ tmc: true, mooc: true }, onExpired)

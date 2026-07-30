@@ -293,19 +293,14 @@ export type DownloadOrUpdateMoocCourseExercisesResult = {
         Array<string>
     ]> | null;
     /**
-     * Exercises that were never attempted because the batch stopped early
-     * after a permanent mooc auth failure on an earlier exercise (see
-     * `stopped_for_auth`). Empty in the common case where every requested
-     * exercise was at least attempted.
+     * Exercises never attempted because the batch stopped early on a permanent auth
+     * failure (see `stopped_for_auth`). Empty unless that happened.
      */
     not_attempted: Array<MoocExerciseDownload>;
     skipped: Array<MoocExerciseDownload>;
     /**
-     * True if the batch stopped before attempting every requested exercise
-     * because a mooc token refresh permanently failed (the user's session is
-     * gone; retrying the remaining exercises would just fail identically).
-     * When true, `not_attempted` holds the exercises that were skipped as a
-     * result.
+     * True if a mooc token refresh permanently failed partway through the batch,
+     * leaving `not_attempted` non-empty.
      */
     stopped_for_auth: boolean;
 };
@@ -492,16 +487,7 @@ export type ExerciseType = 'browser' | 'editor';
 
 export type GradingProgress = 'Failed' | 'NotReady' | 'PendingManual' | 'Pending' | 'FullyGraded';
 
-export type Kind = 'generic' | 'forbidden' | 'not-logged-in' | 'connection-error' | 'obsolete-client' | 'invalid-token' | 'not-enrolled' | {
-    'failed-exercise-download': {
-        completed: Array<TmcExerciseDownload>;
-        failed: Array<[
-            TmcExerciseDownload,
-            Array<string>
-        ]>;
-        skipped: Array<TmcExerciseDownload>;
-    };
-};
+export type Kind = 'generic' | 'forbidden' | 'not-logged-in' | 'connection-error' | 'obsolete-client' | 'invalid-token' | 'not-enrolled';
 
 /**
  * MOOC exercise inside the projects directory.
@@ -534,7 +520,9 @@ export type ModelSolutionSpec = {
 };
 
 /**
- * The update data type for the mooc progress reporter.
+ * Per-exercise download progress, mirroring TMC's `ClientUpdateData`. Surfaced
+ * by the CLI as a `mooc-client-update-data` status update; `id` is a [`Uuid`]
+ * since mooc exercises are UUID-keyed.
  */
 export type MoocClientUpdateData = {
     'client-update-data-kind': 'exercise-download';
@@ -751,7 +739,7 @@ export type StatusUpdate = {
  * The format for all status updates. May contain some data.
  */
 export type StatusUpdate2 = {
-    data: MoocDeviceLogin | null;
+    data: MoocClientUpdateData | null;
     finished: boolean;
     message: string;
     'percent-done': number;
@@ -762,7 +750,7 @@ export type StatusUpdate2 = {
  * The format for all status updates. May contain some data.
  */
 export type StatusUpdate3 = {
-    data: null;
+    data: MoocDeviceLogin | null;
     finished: boolean;
     message: string;
     'percent-done': number;
@@ -773,7 +761,7 @@ export type StatusUpdate3 = {
  * The format for all status updates. May contain some data.
  */
 export type StatusUpdate4 = {
-    data: MoocClientUpdateData | null;
+    data: null;
     finished: boolean;
     message: string;
     'percent-done': number;
@@ -782,11 +770,11 @@ export type StatusUpdate4 = {
 
 export type StatusUpdateData = (StatusUpdate & {
     'update-data-kind': 'client-update-data';
-}) | (StatusUpdate4 & {
-    'update-data-kind': 'mooc-client-update-data';
 }) | (StatusUpdate2 & {
-    'update-data-kind': 'mooc-device-login';
+    'update-data-kind': 'mooc-client-update-data';
 }) | (StatusUpdate3 & {
+    'update-data-kind': 'mooc-device-login';
+}) | (StatusUpdate4 & {
     'update-data-kind': 'none';
 });
 

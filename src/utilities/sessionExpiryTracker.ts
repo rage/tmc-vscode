@@ -7,6 +7,11 @@ export interface SessionExpiryTracker {
   onLogin: (backend: Backend) => void
   /** Call on logout. `expected` (user-initiated) never warns and clears the dedup state; unexpected warns once. */
   onLogout: (backend: Backend, expected: boolean) => void
+  /**
+   * Forgets everything known about `backend` without claiming it has a session.
+   * A later `onAuthChecked` with `true` is what re-arms the expiry warning.
+   */
+  reset: (backend: Backend) => void
 }
 
 /**
@@ -49,6 +54,10 @@ export function createSessionExpiryTracker(
         // authenticated" must not treat this as an expired session.
         hadSession[backend] = false
       }
+    },
+    reset(backend) {
+      hadSession[backend] = false
+      warnedExpired[backend] = false
     },
   }
 }

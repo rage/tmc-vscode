@@ -1287,12 +1287,12 @@
           }
         },
         "not_attempted": {
+          "description": "Exercises never attempted because the batch stopped early on a permanent auth\nfailure (see `stopped_for_auth`). Empty unless that happened.",
           "type": "array",
           "default": [],
           "items": {
             "$ref": "#/$defs/MoocExerciseDownload"
-          },
-          "description": "Exercises that were never attempted because the batch stopped early\nafter a permanent mooc auth failure on an earlier exercise (see\n`stopped_for_auth`). Empty in the common case where every requested\nexercise was at least attempted."
+          }
         },
         "skipped": {
           "type": "array",
@@ -1301,9 +1301,9 @@
           }
         },
         "stopped_for_auth": {
+          "description": "True if a mooc token refresh permanently failed partway through the batch,\nleaving `not_attempted` non-empty.",
           "type": "boolean",
-          "default": false,
-          "description": "True if the batch stopped before attempting every requested exercise\nbecause a mooc token refresh permanently failed (the user's session is\ngone; retrying the remaining exercises would just fail identically).\nWhen true, `not_attempted` holds the exercises that were skipped as a\nresult."
+          "default": false
         }
       },
       "required": [
@@ -1944,57 +1944,6 @@
           "description": "The user is not enrolled on the course this exercise belongs to\n(backend `message_key: \"not_enrolled\"`, HTTP 422)",
           "type": "string",
           "const": "not-enrolled"
-        },
-        {
-          "description": "Failed to download some or all exercises",
-          "type": "object",
-          "properties": {
-            "failed-exercise-download": {
-              "type": "object",
-              "properties": {
-                "completed": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/$defs/TmcExerciseDownload"
-                  }
-                },
-                "failed": {
-                  "type": "array",
-                  "items": {
-                    "type": "array",
-                    "maxItems": 2,
-                    "minItems": 2,
-                    "prefixItems": [
-                      {
-                        "$ref": "#/$defs/TmcExerciseDownload"
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    ]
-                  }
-                },
-                "skipped": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/$defs/TmcExerciseDownload"
-                  }
-                }
-              },
-              "required": [
-                "completed",
-                "skipped",
-                "failed"
-              ]
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "failed-exercise-download"
-          ]
         }
       ]
     },
@@ -2076,7 +2025,7 @@
       ]
     },
     "MoocClientUpdateData": {
-      "description": "The update data type for the mooc progress reporter.",
+      "description": "Per-exercise download progress, mirroring TMC's `ClientUpdateData`. Surfaced\nby the CLI as a `mooc-client-update-data` status update; `id` is a [`Uuid`]\nsince mooc exercises are UUID-keyed.",
       "oneOf": [
         {
           "type": "object",
@@ -2638,7 +2587,7 @@
         "data": {
           "anyOf": [
             {
-              "$ref": "#/$defs/MoocDeviceLogin"
+              "$ref": "#/$defs/MoocClientUpdateData"
             },
             {
               "type": "null"
@@ -2674,7 +2623,14 @@
       "type": "object",
       "properties": {
         "data": {
-          "type": "null"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MoocDeviceLogin"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "finished": {
           "type": "boolean"
@@ -2705,14 +2661,7 @@
       "type": "object",
       "properties": {
         "data": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/MoocClientUpdateData"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "null"
         },
         "finished": {
           "type": "boolean"
@@ -2754,7 +2703,7 @@
           ]
         },
         {
-          "description": "Emitted during a `mooc download-or-update-course-exercises` run, once per\nexercise as it finishes downloading, so the client can report per-exercise\nprogress (mirrors the tmc `client-update-data` / `exercise-download`).",
+          "description": "Mooc's per-exercise download progress, mirroring `ClientUpdateData` for\nmooc's UUID-keyed exercises.",
           "type": "object",
           "properties": {
             "update-data-kind": {
@@ -2762,7 +2711,7 @@
               "const": "mooc-client-update-data"
             }
           },
-          "$ref": "#/$defs/StatusUpdate4",
+          "$ref": "#/$defs/StatusUpdate2",
           "required": [
             "update-data-kind"
           ]
@@ -2776,7 +2725,7 @@
               "const": "mooc-device-login"
             }
           },
-          "$ref": "#/$defs/StatusUpdate2",
+          "$ref": "#/$defs/StatusUpdate3",
           "required": [
             "update-data-kind"
           ]
@@ -2789,7 +2738,7 @@
               "const": "none"
             }
           },
-          "$ref": "#/$defs/StatusUpdate3",
+          "$ref": "#/$defs/StatusUpdate4",
           "required": [
             "update-data-kind"
           ]

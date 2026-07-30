@@ -31,33 +31,6 @@ import { updateCourse } from "./updateCourse"
 export const testInterrupts = new Map<number, (() => void)[]>()
 
 /**
- * Authenticates and logs the user in if credentials are correct.
- */
-export async function login(
-  actionContext: ActionContext,
-  username: string,
-  password: string,
-): Promise<Result<void, Error>> {
-  const { langs, dialog } = actionContext
-  if (langs.err) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
-  Logger.info("Logging in")
-
-  if (!username || !password) {
-    return new Err(new Error("Username and password may not be empty."))
-  }
-
-  const result = await langs.val.authenticate(username, password)
-  if (result.err) {
-    dialog.errorNotification(`Failed to log in: ${result.val.message}`, result.val)
-    return result
-  }
-
-  return Ok.EMPTY
-}
-
-/**
  * Converts a thrown exception into an `Err` Result so a failure in one
  * backend's deauthenticate call can't skip the other in `logout`.
  */

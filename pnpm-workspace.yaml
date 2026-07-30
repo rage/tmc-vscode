@@ -56,6 +56,13 @@ patchedDependencies:
   ts-results@3.3.0: patches/ts-results@3.3.0.patch
 
 minimumReleaseAgeExclude:
+  # VS Code 1.131 renamed the macOS bundle's executable from
+  # `Contents/MacOS/Electron` to `Contents/MacOS/Code`; 3.1.0 is the upstream
+  # fix and without it the macOS integration job cannot launch VS Code at all
+  # (`spawn .../Contents/MacOS/Electron ENOENT`). Test-runner tooling only, not
+  # reachable from the packaged extension. Drop this entry once the release is
+  # older than the 7-day policy.
+  - "@vscode/test-electron@3.1.0"
   - postcss@8.5.19
   # Published 2026-07-19, i.e. comfortably past the 7-day policy in wall-clock
   # terms. It only trips the check because `resolutionMode: time-based` anchors

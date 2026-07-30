@@ -3,10 +3,6 @@ import { BaseError } from "./shared/shared"
 export class ApiError extends BaseError {
   public override readonly name = "API Error"
 }
-export class AuthenticationError extends BaseError {
-  public override readonly name = "Authentication Error"
-}
-
 export class AuthorizationError extends BaseError {
   public override readonly name = "Authorization Error"
 }

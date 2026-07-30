@@ -63,13 +63,12 @@ export function registerUiActions(actionContext: ActionContext): Result<void, Er
 
   // Register UI actions
   if (langs.ok) {
-    // cannot login without tmc
     ui.treeDP.registerAction(
       "Log in",
       "logIn",
       [visibilityGroups.loggedIn.not],
       {
-        command: "tmc.showLogin",
+        command: "tmc.showMoocLogin",
         title: "",
         arguments: [],
       },

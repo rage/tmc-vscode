@@ -112,6 +112,9 @@ jobs:
     env:
       CI: true
     strategy:
+      # A platform-specific failure must not cancel the other two, or their real
+      # state is unknown on exactly the runs where it matters.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}

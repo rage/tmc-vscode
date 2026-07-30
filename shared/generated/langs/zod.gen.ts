@@ -245,6 +245,16 @@ export const zExerciseTaskSubmissionStatus = z.union([
     })
 ]);
 
+export const zKind = z.union([
+    z.literal('generic'),
+    z.literal('forbidden'),
+    z.literal('not-logged-in'),
+    z.literal('connection-error'),
+    z.literal('obsolete-client'),
+    z.literal('invalid-token'),
+    z.literal('not-enrolled')
+]);
+
 /**
  * MOOC exercise inside the projects directory.
  */
@@ -274,7 +284,9 @@ export const zModelSolutionSpec = z.union([
 ]);
 
 /**
- * The update data type for the mooc progress reporter.
+ * Per-exercise download progress, mirroring TMC's `ClientUpdateData`. Surfaced
+ * by the CLI as a `mooc-client-update-data` status update; `id` is a [`Uuid`]
+ * since mooc exercises are UUID-keyed.
  */
 export const zMoocClientUpdateData = z.object({
     'client-update-data-kind': z.literal('exercise-download'),
@@ -439,7 +451,7 @@ export const zStatusUpdate = z.object({
  * The format for all status updates. May contain some data.
  */
 export const zStatusUpdate2 = z.object({
-    data: zMoocDeviceLogin.nullable(),
+    data: zMoocClientUpdateData.nullable(),
     finished: z.boolean(),
     message: z.string(),
     'percent-done': z.number(),
@@ -450,7 +462,7 @@ export const zStatusUpdate2 = z.object({
  * The format for all status updates. May contain some data.
  */
 export const zStatusUpdate3 = z.object({
-    data: z.null(),
+    data: zMoocDeviceLogin.nullable(),
     finished: z.boolean(),
     message: z.string(),
     'percent-done': z.number(),
@@ -461,7 +473,7 @@ export const zStatusUpdate3 = z.object({
  * The format for all status updates. May contain some data.
  */
 export const zStatusUpdate4 = z.object({
-    data: zMoocClientUpdateData.nullable(),
+    data: z.null(),
     finished: z.boolean(),
     message: z.string(),
     'percent-done': z.number(),
@@ -472,13 +484,13 @@ export const zStatusUpdateData = z.union([
     zStatusUpdate.and(z.object({
         'update-data-kind': z.literal('client-update-data')
     })),
-    zStatusUpdate4.and(z.object({
+    zStatusUpdate2.and(z.object({
         'update-data-kind': z.literal('mooc-client-update-data')
     })),
-    zStatusUpdate2.and(z.object({
+    zStatusUpdate3.and(z.object({
         'update-data-kind': z.literal('mooc-device-login')
     })),
-    zStatusUpdate3.and(z.object({
+    zStatusUpdate4.and(z.object({
         'update-data-kind': z.literal('none')
     }))
 ]);
@@ -644,23 +656,6 @@ export const zDownloadOrUpdateTmcCourseExercisesResult = z.object({
     failed: z.array(z.tuple([zTmcExerciseDownload, z.array(z.string())])).nullish(),
     skipped: z.array(zTmcExerciseDownload)
 });
-
-export const zKind = z.union([
-    z.literal('generic'),
-    z.literal('forbidden'),
-    z.literal('not-logged-in'),
-    z.literal('connection-error'),
-    z.literal('obsolete-client'),
-    z.literal('invalid-token'),
-    z.literal('not-enrolled'),
-    z.object({
-        'failed-exercise-download': z.object({
-            completed: z.array(zTmcExerciseDownload),
-            failed: z.array(z.tuple([zTmcExerciseDownload, z.array(z.string())])),
-            skipped: z.array(zTmcExerciseDownload)
-        })
-    })
-]);
 
 export const zTmcExerciseTask = z.object({
     assignment: z.unknown(),
