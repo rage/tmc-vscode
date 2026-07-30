@@ -183,6 +183,15 @@ const apiError = (messageKey: string, message: string): Record<string, unknown> 
   type: null,
 })
 
+/**
+ * The host's answer to every multipart upload rule violation: `controller_err!(BadRequest, …)`,
+ * which maps to 422 with message_key `validation_error` (domain/error.rs).
+ */
+const uploadRejected = (message: string): MockResponse => ({
+  status: 422,
+  body: apiError("validation_error", message),
+})
+
 interface CreateMoocApiOptions {
   /**
    * Test-only fault injection: the named operationId returns a spec-violating
@@ -211,6 +220,16 @@ const findCourse = (id: string) => courses.find((c) => c.course.id === id)
 
 const findSlide = (exerciseId: string): ExerciseSlide | undefined =>
   exerciseById.get(exerciseId)?.slide
+
+/** Slide and task lookups by their OWN ids, for submit's slide/task ownership checks. */
+const slideById = new Map<string, ExerciseSlide>()
+const taskById = new Map<string, { taskId: string; slideId: string }>()
+for (const exercise of exerciseById.values()) {
+  slideById.set(exercise.slide.slide_id, exercise.slide)
+  for (const task of exercise.slide.tasks) {
+    taskById.set(task.task_id, { taskId: task.task_id, slideId: exercise.slide.slide_id })
+  }
+}
 
 // Per-exercise point weight (score_maximum), deliberately heterogeneous across
 // fixtures so progress aggregation exercises differing weights rather than a
@@ -397,11 +416,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
     },
 
     // POST /api/v0/exercise-services/client/exercises/{id}/files  (multipart)
-    uploadClientExerciseFiles: (
-      c: Context,
-      req: Request,
-      res: Response,
-    ): MockResponse | undefined => {
+    uploadClientExerciseFiles: (c: Context, req: Request): MockResponse => {
       const exerciseId = String(c.request.params.id)
       if (exerciseId === notEnrolledExerciseId) {
         // The host authorizes and checks enrollment BEFORE reading the multipart
@@ -412,40 +427,42 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         return { status: 404, body: apiError("not_found", `no such exercise: ${exerciseId}`) }
       }
 
-      // The host raises a plain 400 for every multipart rule violation, and the
-      // spec does not document a 400 here, so these are written directly
-      // (headersSent skips the response validator, same as notFound).
+      // Every multipart rule violation is a `controller_err!(BadRequest, …)` on the
+      // host, which maps to 422 `validation_error` (domain/error.rs) -- NOT 400.
       const files = (req.files as MulterFile[] | undefined) ?? []
-      const reject = (message: string): undefined => {
-        res.status(400).json({ error: message })
-        return undefined
+      // Parts multer classified as plain fields, i.e. parts carrying no filename.
+      // Checked before the file rules because the host's per-part order cannot be
+      // recovered once multer has split the parts into `files` and `body`.
+      // NB multer 2.x silently DROPS a file part whose filename is present but
+      // empty, so that variant stays invisible here and cannot be rejected.
+      if (Object.keys((req.body ?? {}) as Record<string, unknown>).length > 0) {
+        return uploadRejected("Every exercise upload part must be a file with a filename")
       }
-      if (files.length === 0) {
-        return reject("At least one file must be uploaded")
-      }
-      if (files.length > MAX_UPLOAD_FILES) {
-        return reject(`A maximum of ${MAX_UPLOAD_FILES} files can be uploaded at once`)
-      }
-      const seenFieldNames = new Set<string>()
       let batchBytes = 0
-      for (const file of files) {
+      const seenFieldNames = new Set<string>()
+      for (const [index, file] of files.entries()) {
+        // Per-part, as the host counts: a batch that is both over-limit and
+        // malformed reports the malformed part, not the count.
+        if (index >= MAX_UPLOAD_FILES) {
+          return uploadRejected(`A maximum of ${MAX_UPLOAD_FILES} files can be uploaded at once`)
+        }
         if (!UUID_PATTERN.test(file.fieldname)) {
-          return reject("Each exercise upload field name must be a UUID")
+          return uploadRejected("Each exercise upload field name must be a UUID")
         }
         if (seenFieldNames.has(file.fieldname)) {
-          return reject("Duplicate exercise upload field id")
+          return uploadRejected("Duplicate exercise upload field id")
         }
         seenFieldNames.add(file.fieldname)
-        if (!file.originalname) {
-          return reject("Every exercise upload part must be a file with a filename")
-        }
-        if (file.buffer.length > MAX_UPLOAD_FILE_BYTES) {
-          return reject("Exercise upload exceeds the size limit")
-        }
+        // No per-file size check: multer's `fileSize` limit aborts such a part
+        // before the handler sees it, and the error middleware answers it with
+        // the host's message. Only the cross-part batch total is checked here.
         batchBytes += file.buffer.length
         if (batchBytes > MAX_UPLOAD_BATCH_BYTES) {
-          return reject("Exercise upload exceeds the size limit")
+          return uploadRejected(UPLOAD_TOO_LARGE_MESSAGE)
         }
+      }
+      if (files.length === 0) {
+        return uploadRejected("At least one file must be uploaded")
       }
 
       const reaped = expireNextUpload
@@ -468,9 +485,63 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         // this 422 on submit too.
         return { status: 422, body: apiError("not_enrolled", "not enrolled to this course") }
       }
+      if (!exerciseById.has(exerciseId)) {
+        return { status: 404, body: apiError("not_found", `no such exercise: ${exerciseId}`) }
+      }
       // Request validation already enforced the body shape, including that
       // `uploaded_file_ids` is present (it has no default -- omitting it is a 400).
-      const body = c.request.requestBody as { uploaded_file_ids: string[] }
+      const body = c.request.requestBody as {
+        exercise_slide_id: string
+        exercise_task_id: string
+        uploaded_file_ids: string[]
+      }
+      // The URL authorizes only the exercise; the slide and task ids come from the
+      // body, so an unrelated exercise's slide/task must be rejected here or a
+      // client could submit into it (host: verify_slide_and_task_belong).
+      const slide = slideById.get(body.exercise_slide_id)
+      if (!slide) {
+        return {
+          status: 404,
+          body: apiError("not_found", `no such exercise slide: ${body.exercise_slide_id}`),
+        }
+      }
+      const task = taskById.get(body.exercise_task_id)
+      if (!task) {
+        return {
+          status: 404,
+          body: apiError("not_found", `no such exercise task: ${body.exercise_task_id}`),
+        }
+      }
+      if (slide.exercise_id !== exerciseId) {
+        return {
+          status: 422,
+          body: apiError(
+            "validation_error",
+            `Exercise slide ${slide.slide_id} does not belong to exercise ${exerciseId}`,
+          ),
+        }
+      }
+      if (task.slideId !== slide.slide_id) {
+        return {
+          status: 422,
+          body: apiError(
+            "validation_error",
+            `Exercise task ${task.taskId} does not belong to exercise slide ${slide.slide_id}`,
+          ),
+        }
+      }
+      // Deduplicating instead would record one file twice and list it twice in a
+      // download, hiding the client defect (host: verify_uploads_are_distinct).
+      const namedOnce = new Set<string>()
+      for (const fileId of body.uploaded_file_ids) {
+        if (namedOnce.has(fileId)) {
+          return {
+            status: 422,
+            body: apiError("duplicate_upload", `Uploaded file ${fileId} was named more than once`),
+          }
+        }
+        namedOnce.add(fileId)
+      }
       for (const fileId of body.uploaded_file_ids) {
         const upload = uploadsById.get(fileId)
         // A file bound to another exercise is indistinguishable from one that was
@@ -561,10 +632,12 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       }
       // A submission made from no files is a 200 with an empty list, not a 404:
       // the host resolves this from its own upload records, and having none is
-      // not the same as the submission not existing.
+      // not the same as the submission not existing. The host's join filters
+      // soft-deleted rows, so an explicitly reaped file drops out of the listing;
+      // retention never drops a submission's own uploads (see retainUpload).
       const files = record.fileIds
         .map((fileId) => uploadsById.get(fileId))
-        .filter((upload): upload is UploadRecord => upload !== undefined)
+        .filter((upload): upload is UploadRecord => upload !== undefined && !upload.expired)
         .map((upload) => ({
           id: upload.id,
           name: upload.name,
@@ -656,22 +729,33 @@ interface MulterFile {
 const MAX_UPLOAD_FILES = 10
 const MAX_UPLOAD_FILE_BYTES = 100 * 1024 * 1024
 const MAX_UPLOAD_BATCH_BYTES = 100 * 1024 * 1024
+const UPLOAD_TOO_LARGE_MESSAGE = "Exercise upload exceeds the 100 MiB per-file or batch limit"
 
 // The host requires every multipart field name to be a UUID the client picked.
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-// `files` is one over the limit so an over-limit batch reaches the handler and
-// gets the host's 400 rather than multer's LIMIT_FILE_COUNT.
+// `files` is one over the limit so a just-over-limit batch reaches the handler and
+// gets the host's own message. `fileSize` matches the host's per-file cap: the host
+// aborts mid-stream too, and the error middleware below maps the rejection to the
+// host's message, so there is no handler-side per-file check.
 const upload = multer({
   limits: { fileSize: MAX_UPLOAD_FILE_BYTES, files: MAX_UPLOAD_FILES + 1 },
 })
 
+// Host messages for the limits multer enforces before the handler runs.
+const MULTER_ERROR_MESSAGES: Record<string, string> = {
+  LIMIT_FILE_SIZE: UPLOAD_TOO_LARGE_MESSAGE,
+  LIMIT_FILE_COUNT: `A maximum of ${MAX_UPLOAD_FILES} files can be uploaded at once`,
+}
+
 /** Path prefix the host stores client uploads under (`CLIENT_UPLOAD_PATH_PREFIX`). */
 const CLIENT_UPLOAD_PATH_PREFIX = "exercise-services-client"
 
-// Caps retained uploads so a long-lived mock doesn't accumulate them
-// unboundedly; oldest is evicted first, and a download of an evicted upload
-// simply 404s (the restore flow already tolerates that).
+// Caps retained uploads so a long-lived mock doesn't accumulate them unboundedly;
+// oldest is evicted first. Uploads a submission was made from are spared even past
+// the cap, as the host's reaper spares them (`NOT EXISTS … exercise_task_submission_files`):
+// evicting one would silently turn a later restore of that submission into an empty
+// file list, which the CLI rejects rather than tolerates.
 const MAX_RETAINED_UPLOADS = 32
 
 /**
@@ -692,18 +776,36 @@ const retainUpload = (exerciseId: string, file: MulterFile, reaped: boolean): Up
   if (!reaped) {
     uploadBytesByStoredName.set(storedName, file.buffer)
   }
-  while (uploadsById.size > MAX_RETAINED_UPLOADS) {
-    const oldest = uploadsById.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    const evicted = uploadsById.get(oldest)
-    uploadsById.delete(oldest)
-    if (evicted) {
-      uploadBytesByStoredName.delete(evicted.storedName)
+  evictOldUploads()
+  return record
+}
+
+/** Ids named by some submission, which retention must not evict. */
+const submittedUploadIds = (): Set<string> => {
+  const ids = new Set<string>()
+  for (const submission of submissionsByTaskId.values()) {
+    for (const fileId of submission.fileIds) {
+      ids.add(fileId)
     }
   }
-  return record
+  return ids
+}
+
+const evictOldUploads = (): void => {
+  if (uploadsById.size <= MAX_RETAINED_UPLOADS) {
+    return
+  }
+  const submitted = submittedUploadIds()
+  for (const [id, evicted] of uploadsById) {
+    if (uploadsById.size <= MAX_RETAINED_UPLOADS) {
+      return
+    }
+    if (submitted.has(id)) {
+      continue
+    }
+    uploadsById.delete(id)
+    uploadBytesByStoredName.delete(evicted.storedName)
+  }
 }
 
 /**
@@ -838,11 +940,14 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
   moocRouter.post("/exercises/:id/files", upload.any(), handle)
   moocRouter.use(handle)
 
-  // Multer's own limit rejections become the host's plain 400, the status it
-  // raises for every multipart rule violation.
+  // Multer rejects an over-size or over-count part before the handler sees it;
+  // answer it as the host answers the same violation.
   moocRouter.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     if (err instanceof multer.MulterError) {
-      res.status(400).json({ error: `exercise upload rejected: ${err.code}` })
+      const rejection = uploadRejected(
+        MULTER_ERROR_MESSAGES[err.code] ?? `Failed to read multipart field: ${err.code}`,
+      )
+      res.status(rejection.status).json(rejection.body)
       return
     }
     next(err)

@@ -47,6 +47,16 @@ const authFetch = (url: string, init: RequestInit = {}): Promise<Response> =>
     headers: { authorization: `Bearer ${MOCK_SEEDED_ACCESS_TOKEN}`, ...init.headers },
   })
 
+// Every multipart rule violation is a `controller_err!(BadRequest, …)` on the host,
+// which maps to 422 `validation_error` -- so the message is asserted too, because a
+// mock that answers with a different one hides which rule a client actually broke.
+const assertUploadRejected = async (res: Response, message: string): Promise<void> => {
+  assert.equal(res.status, 422)
+  const body = (await res.json()) as { message_key: string; message: string }
+  assert.equal(body.message_key, "validation_error")
+  assert.equal(body.message, message)
+}
+
 describe("mooc mock conformance", () => {
   let server: Server
   let base: string
@@ -266,44 +276,71 @@ describe("mooc mock conformance", () => {
     )
   })
 
-  test("files rejects a field name that is not a UUID with 400", async () => {
+  const postFiles = (form: FormData): Promise<Response> =>
+    authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/files`), {
+      method: "POST",
+      body: form,
+    })
+
+  test("files rejects a field name that is not a UUID", async () => {
     const form = new FormData()
     form.append("file", new Blob([new Uint8Array([1, 2, 3])]), "submission.tar.zst")
-    const res = await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/files`), {
-      method: "POST",
-      body: form,
-    })
-    assert.equal(res.status, 400)
+    await assertUploadRejected(
+      await postFiles(form),
+      "Each exercise upload field name must be a UUID",
+    )
   })
 
-  test("files rejects a part with no filename with 400", async () => {
+  test("files rejects the same field id twice", async () => {
+    const fieldName = randomUUID()
+    const form = new FormData()
+    form.append(fieldName, new Blob([new Uint8Array([1])]), "a.txt")
+    form.append(fieldName, new Blob([new Uint8Array([2])]), "b.txt")
+    await assertUploadRejected(await postFiles(form), "Duplicate exercise upload field id")
+  })
+
+  test("files rejects a part that carries no filename", async () => {
+    // A part with no filename is a plain field, not a file. The distinct message is
+    // the point: reporting the empty-body error here would tell a client its parts
+    // were dropped, not that they were malformed.
     const form = new FormData()
     form.append(randomUUID(), "not-a-file")
-    const res = await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/files`), {
-      method: "POST",
-      body: form,
-    })
-    assert.equal(res.status, 400)
+    form.append(randomUUID(), new Blob([new Uint8Array([1])]), "a.txt")
+    await assertUploadRejected(
+      await postFiles(form),
+      "Every exercise upload part must be a file with a filename",
+    )
   })
 
-  test("files rejects an empty body with 400", async () => {
-    const res = await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/files`), {
-      method: "POST",
-      body: new FormData(),
-    })
-    assert.equal(res.status, 400)
+  test("files rejects an empty body", async () => {
+    await assertUploadRejected(
+      await postFiles(new FormData()),
+      "At least one file must be uploaded",
+    )
   })
 
-  test("files rejects more than the host's ten-file limit with 400", async () => {
+  test("files rejects more than the host's ten-file limit", async () => {
     const form = new FormData()
     for (let i = 0; i < 11; i += 1) {
       form.append(randomUUID(), new Blob([new Uint8Array([1])]), `f${i}.txt`)
     }
-    const res = await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/files`), {
-      method: "POST",
-      body: form,
-    })
-    assert.equal(res.status, 400)
+    await assertUploadRejected(
+      await postFiles(form),
+      "A maximum of 10 files can be uploaded at once",
+    )
+  })
+
+  test("files rejects a batch multer's own part cap stops with the host's message", async () => {
+    // Past multer's `files` limit the handler never runs, so the error middleware is
+    // the only thing that can still produce the host's answer.
+    const form = new FormData()
+    for (let i = 0; i < 12; i += 1) {
+      form.append(randomUUID(), new Blob([new Uint8Array([1])]), `f${i}.txt`)
+    }
+    await assertUploadRejected(
+      await postFiles(form),
+      "A maximum of 10 files can be uploaded at once",
+    )
   })
 
   test("files for a not-enrolled exercise returns the spec's not-enrolled 422", async () => {
@@ -419,6 +456,87 @@ describe("mooc mock conformance", () => {
     assert.equal(res.status, 422)
     const body = (await res.json()) as { message_key: string }
     assert.equal(body.message_key, "upload_expired")
+  })
+
+  test("submit naming the same upload twice returns 422 duplicate_upload", async () => {
+    // Reported rather than deduplicated: dedup would record the file twice under one
+    // submission and list it twice in a download, hiding the client defect.
+    const uploaded = await uploadOne(passingExercise.slide.exercise_id)
+    const res = await postSubmit(passingExercise, [uploaded.id, uploaded.id])
+    assert.equal(res.status, 422)
+    const body = (await res.json()) as { message_key: string }
+    assert.equal(body.message_key, "duplicate_upload")
+  })
+
+  test("submit to an unknown exercise is a spec-documented 404", async () => {
+    const res = await authFetch(api(`/exercises/${nonexistentExerciseId}/submit`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        exercise_slide_id: passingExercise.slide.slide_id,
+        exercise_task_id: passingExercise.slide.tasks[0]!.task_id,
+        uploaded_file_ids: [],
+      }),
+    })
+    assert.equal(res.status, 404)
+  })
+
+  // Submits arbitrary slide/task ids to the passing exercise.
+  const postSubmitWith = (slideId: string, taskId: string): Promise<Response> =>
+    authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submit`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        exercise_slide_id: slideId,
+        exercise_task_id: taskId,
+        uploaded_file_ids: [],
+      }),
+    })
+
+  test("submit naming an unknown slide or task is a spec-documented 404", async () => {
+    const unknownSlide = await postSubmitWith(randomUUID(), passingExercise.slide.tasks[0]!.task_id)
+    assert.equal(unknownSlide.status, 404)
+    const unknownTask = await postSubmitWith(passingExercise.slide.slide_id, randomUUID())
+    assert.equal(unknownTask.status, 404)
+  })
+
+  test("submit naming another exercise's slide returns 422", async () => {
+    // The URL authorizes only the exercise; without this check the body could
+    // redirect the submission into an unrelated exercise's slide.
+    const res = await postSubmitWith(
+      failingExercise.slide.slide_id,
+      passingExercise.slide.tasks[0]!.task_id,
+    )
+    assert.equal(res.status, 422)
+    const body = (await res.json()) as { message_key: string; message: string }
+    assert.equal(body.message_key, "validation_error")
+    assert.match(body.message, /does not belong to exercise /)
+  })
+
+  test("submit naming a task from another slide returns 422", async () => {
+    const res = await postSubmitWith(
+      passingExercise.slide.slide_id,
+      failingExercise.slide.tasks[0]!.task_id,
+    )
+    assert.equal(res.status, 422)
+    const body = (await res.json()) as { message_key: string; message: string }
+    assert.equal(body.message_key, "validation_error")
+    assert.match(body.message, /does not belong to exercise slide /)
+  })
+
+  test("retention never evicts an upload a submission was made from", async () => {
+    // The CLI's restore errors on any file count other than one, so an evicted
+    // upload would turn a download into a silent failure rather than a 404.
+    const { slideSubmissionId } = await submit(passingExercise, [7, 8, 9])
+    for (let i = 0; i < 40; i += 1) {
+      await uploadOne(failingExercise.slide.exercise_id)
+    }
+    const res = await authFetch(api(`/submissions/${slideSubmissionId}/download`))
+    assert.equal(res.status, 200)
+    const { files } = (await res.json()) as { files: UploadedFile[] }
+    assert.equal(files.length, 1)
+    const bytes = await fetch(`${base}${new URL(files[0]!.download_url).pathname}`)
+    assert.deepEqual([...new Uint8Array(await bytes.arrayBuffer())], [7, 8, 9])
   })
 
   test("one bad id fails the whole submit", async () => {
