@@ -44,6 +44,7 @@ import type {
   LocalTmcExercise,
   MoocCourseProgress,
   MoocDeviceLogin,
+  MoocOldSubmissionRestore,
   ExerciseSlideSubmissionListItem,
   Organization,
   OutputData,
@@ -784,13 +785,21 @@ export default class Langs {
     return res.err ? res : Ok.EMPTY
   }
 
+  /**
+   * Restores a past mooc submission at `exercisePath`.
+   *
+   * Resolves to `nothing-to-download` for a submission with no downloadable
+   * files: an exercise's submission list includes answers made in the browser,
+   * which carry no uploaded archive. Nothing on disk (or on the server) is
+   * touched in that case, `saveOldState` included.
+   */
   public async downloadMoocOldSubmission(
     exerciseId: string,
     exercisePath: string,
     submissionId: string,
     saveOldState: boolean,
     _progressCallback?: (downloadedPct: number, increment: number) => void,
-  ): Promise<Result<void, Error>> {
+  ): Promise<Result<MoocOldSubmissionRestore, Error>> {
     const saveOldStateArg = saveOldState ? ["--save-old-state"] : []
     const args = this._moocCmd(
       "download-old-submission",
@@ -802,8 +811,11 @@ export default class Langs {
       "--output-path",
       exercisePath,
     )
-    const res = await this._executeLangsCommand({ args, backend: "mooc" }, null)
-    return res.err ? res : Ok.EMPTY
+    const res = await this._executeLangsCommand(
+      { args, backend: "mooc" },
+      "mooc-old-submission-restore",
+    )
+    return res.map((output) => output.data["output-data"])
   }
 
   /**

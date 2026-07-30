@@ -359,6 +359,23 @@ suite("Langs class arg building", function () {
     ])
   })
 
+  test("downloadMoocOldSubmission reports a submission with no downloadable files", async function () {
+    // A browser-made submission has no uploads, so the CLI reports
+    // `nothing-to-download` instead of failing.
+    const langs = newLangs()
+    stubSpawn(langs, () => Ok(dataOutput("mooc-old-submission-restore", "nothing-to-download")))
+    const result = await langs.downloadMoocOldSubmission("ex-uuid", "/path", "sub-uuid", true)
+    expect(result.ok).toBe(true)
+    expect(result.unwrap()).toBe("nothing-to-download")
+  })
+
+  test("downloadMoocOldSubmission reports a restored submission", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () => Ok(dataOutput("mooc-old-submission-restore", "restored")))
+    const result = await langs.downloadMoocOldSubmission("ex-uuid", "/path", "sub-uuid", false)
+    expect(result.unwrap()).toBe("restored")
+  })
+
   test("downloadExercises routes mooc ids through the mooc subcommand", async function () {
     const langs = newLangs()
     const calls = stubSpawn(langs, () =>

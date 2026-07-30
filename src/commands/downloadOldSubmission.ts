@@ -159,14 +159,16 @@ export async function downloadOldSubmission(
 
   const oldDownloadResult = await match(
     id,
-    (tmc) =>
-      langs.val.downloadTmcOldSubmission(
-        tmc.tmcExerciseId,
-        exercise.uri.fsPath,
-        submission.id as number,
-        submitFirst,
-      ),
-    (mooc) =>
+    (tmc): Promise<Result<"restored" | "nothing-to-download", Error>> =>
+      langs.val
+        .downloadTmcOldSubmission(
+          tmc.tmcExerciseId,
+          exercise.uri.fsPath,
+          submission.id as number,
+          submitFirst,
+        )
+        .then((res) => res.map(() => "restored" as const)),
+    (mooc): Promise<Result<"restored" | "nothing-to-download", Error>> =>
       langs.val.downloadMoocOldSubmission(
         mooc.moocExerciseId,
         exercise.uri.fsPath,
@@ -176,6 +178,13 @@ export async function downloadOldSubmission(
   )
   if (oldDownloadResult.err) {
     dialog.errorNotification("Failed to download old submission.", oldDownloadResult.val)
+  } else if (oldDownloadResult.val === "nothing-to-download") {
+    // A mooc exercise's submission list includes answers made in the browser,
+    // which have no downloadable files. Nothing was changed, so this is ordinary
+    // news rather than a failure.
+    dialog.notification(
+      "That submission has no files to download; it was not made from this editor.",
+    )
   }
 
   if (editor && document) {

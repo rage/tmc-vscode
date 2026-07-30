@@ -808,9 +808,10 @@ suite("tmc langs cli spec", function () {
         // stub.
         const olderId = after[1]!.id
         fs.writeFileSync(studentFile, newerContent)
-        ;(
+        const restore = (
           await tmc.downloadMoocOldSubmission(PASSING_EXERCISE_ID, exercisePath, olderId, false)
         ).unwrap()
+        expect(restore).to.equal("restored")
         expect(fs.existsSync(studentFile)).to.be.true
         const restored = fs.readFileSync(studentFile, "utf8")
         expect(restored).to.equal(olderContent)

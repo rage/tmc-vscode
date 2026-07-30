@@ -40,13 +40,14 @@ suite("Download old submission command (mooc branch)", function () {
 
   let getMoocOldSubmissions: ReturnType<typeof vi.fn>
   let downloadMoocOldSubmission: ReturnType<typeof vi.fn>
+  let notification: ReturnType<typeof vi.fn>
   let selectedLabels: string[]
 
-  function actionContext(): ActionContext {
+  function actionContext(restore: "restored" | "nothing-to-download" = "restored"): ActionContext {
     const base = createMockActionContext()
 
     getMoocOldSubmissions = vi.fn(async () => Ok(moocSubmissions))
-    downloadMoocOldSubmission = vi.fn(async () => Ok.EMPTY)
+    downloadMoocOldSubmission = vi.fn(async () => Ok(restore))
     const langs = {
       getMoocOldSubmissions,
       downloadMoocOldSubmission,
@@ -65,6 +66,7 @@ suite("Download old submission command (mooc branch)", function () {
     } as unknown as WorkspaceManager
 
     selectedLabels = []
+    notification = vi.fn()
     let call = 0
     const dialog = {
       ...base.dialog,
@@ -79,7 +81,7 @@ suite("Download old submission command (mooc branch)", function () {
         return "discard"
       }),
       errorNotification: vi.fn(),
-      notification: vi.fn(),
+      notification,
     } as unknown as ActionContext["dialog"]
 
     return {
@@ -110,5 +112,18 @@ suite("Download old submission command (mooc branch)", function () {
       "sub-older",
       false,
     )
+    expect(notification).not.toHaveBeenCalled()
+  })
+
+  test("tells the user when the picked submission has no files to download", async function () {
+    // A mooc exercise's submission list includes answers made in the browser,
+    // which carry no uploads. That is ordinary news, not an error notification.
+    const context = actionContext("nothing-to-download")
+    await downloadOldSubmission(context, uri)
+
+    expect(downloadMoocOldSubmission).toHaveBeenCalledOnce()
+    expect(context.dialog.errorNotification).not.toHaveBeenCalled()
+    expect(notification).toHaveBeenCalledOnce()
+    expect(String(notification.mock.calls[0]?.[0])).toContain("no files to download")
   })
 })
