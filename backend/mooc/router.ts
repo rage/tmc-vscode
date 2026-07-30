@@ -51,11 +51,12 @@ const SPEC_PATH = path.join(__dirname, "exercise-services-client.openapi.generat
 //
 // The real backend uses TWO distinct submission id spaces, and this mock mirrors
 // the split so the flows exercise the right ids:
-//   - submit returns an EXERCISE-TASK-SUBMISSION id -> the id `/grading` expects.
+//   - `/grading` is polled with the EXERCISE-TASK-SUBMISSION id.
 //   - the submissions list, `/download` and `/share` use the
 //     EXERCISE-SLIDE-SUBMISSION id.
-// Each submit mints one of each; the record is indexed under both so grading
-// resolves by the task-submission id while list/download/share resolve by the
+// Submit returns BOTH, so a client never re-derives one from the other. Each
+// submit mints one of each; the record is indexed under both so grading resolves
+// by the task-submission id while list/download/share resolve by the
 // slide-submission id.
 
 interface SubmissionRecord {
@@ -66,26 +67,44 @@ interface SubmissionRecord {
   slideSubmissionId: string
   polls: number
   createdAt: string
-  /**
-   * File-store URL of the archive that was actually submitted, served back
-   * verbatim by the per-submission archive route. In the real backend
-   * `stub_download_url`/old-submission archive urls are arbitrary absolute
-   * file-store URLs, so a dedicated spec-exempt route (distinct from the stub
-   * `/mooc-archives` route) is faithful.
-   */
-  archiveDownloadUrl: string
+  /** Host file ids the submit named, in request order; what `/download` returns. */
+  fileIds: string[]
 }
 
 const submissionsByTaskId = new Map<string, SubmissionRecord>()
 const submissionsBySlideId = new Map<string, SubmissionRecord>()
 const submissionsByExercise = new Map<string, SubmissionRecord[]>()
-/**
- * The exact archive bytes uploaded with each submission (multer memory buffer),
- * keyed by slide-submission id. Served by the per-submission archive route so an
- * old-submission download returns THAT submission's content -- not the exercise
- * stub -- letting the restore flow be tested end to end.
- */
-const submissionArchivesBySlideId = new Map<string, Buffer>()
+
+// ---- stateful uploads ----
+//
+// `POST exercises/{id}/files` stores files the client names in a later submit.
+// The real host binds each upload to (exercise, user) and reaps unreferenced
+// ones, so the mock models the binding and a soft-delete.
+
+interface UploadRecord {
+  /**
+   * The host's own file id, and the ONLY id a submit may name. Deliberately NOT
+   * the client-chosen multipart field name: the real host echoes that field name
+   * back on a different member and keys the file by its `file_uploads` row id,
+   * so a client that confuses the two must fail here exactly as it would in
+   * production.
+   */
+  id: string
+  name: string
+  /** Path segment under the spec-exempt file-store route, as the real host mints. */
+  storedName: string
+  downloadUrl: string
+  /** A submit naming this file for any other exercise gets `unknown_upload`. */
+  exerciseId: string
+  /** Soft-deleted (reaped): a submit naming it gets `upload_expired`, not `unknown_upload`. */
+  expired: boolean
+}
+
+const uploadsById = new Map<string, UploadRecord>()
+/** Uploaded bytes keyed by stored path segment, served by the file-store route. */
+const uploadBytesByStoredName = new Map<string, Buffer>()
+/** One-shot: the next upload batch is stored already reaped. See {@link expireNextMoocUpload}. */
+let expireNextUpload = false
 
 // ---- auth-mode observation (for cross-process test assertions) ----
 //
@@ -96,14 +115,40 @@ const submissionArchivesBySlideId = new Map<string, Buffer>()
 let lastAuthorization: string | undefined
 let authenticatedRequestCount = 0
 
-/** Clears in-memory submission + auth-observation state (for test isolation). */
+/** Clears in-memory submission/upload + auth-observation state (for test isolation). */
 export const resetMoocState = (): void => {
   submissionsByTaskId.clear()
   submissionsBySlideId.clear()
   submissionsByExercise.clear()
-  submissionArchivesBySlideId.clear()
+  uploadsById.clear()
+  uploadBytesByStoredName.clear()
+  expireNextUpload = false
   lastAuthorization = undefined
   authenticatedRequestCount = 0
+}
+
+/**
+ * Soft-deletes an upload, modelling the host's reaper. Returns false for an
+ * unknown id. Drives the `upload_expired` path, which is otherwise unreachable.
+ */
+export const expireMoocUpload = (fileId: string): boolean => {
+  const upload = uploadsById.get(fileId)
+  if (!upload) {
+    return false
+  }
+  upload.expired = true
+  uploadBytesByStoredName.delete(upload.storedName)
+  return true
+}
+
+/**
+ * Arms the reaper to consume the NEXT upload batch, so the following submit sees
+ * `upload_expired`. This is the only way to hit the race the CLI's upload retry
+ * exists for: the reaper would otherwise have to fire inside the millisecond gap
+ * between the CLI's own two calls.
+ */
+export const expireNextMoocUpload = (): void => {
+  expireNextUpload = true
 }
 
 /**
@@ -256,15 +301,18 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
     validate: true,
   })
 
-  // Validate every request against the spec, EXCEPT the multipart submit: its
-  // requestBody is an opaque `type: string` in the spec, and openapi-backend
+  // Validate every request against the spec, EXCEPT the multipart file upload:
+  // its requestBody is an opaque `type: string` in the spec, and openapi-backend
   // only includes a requestBody in request validation when it is an object or
   // JSON, so a string multipart body always trips a spurious "missing
-  // requestBody". The submit path param is trivial (a uuid) and its response is
-  // still validated by the postResponseHandler -- the drift guard that matters.
+  // requestBody". Its path param is trivial (a uuid), the multipart rules are
+  // enforced in the handler, and its response is still validated by the
+  // postResponseHandler -- the drift guard that matters. Submit IS validated:
+  // its body is plain JSON now, so a submit omitting `uploaded_file_ids`
+  // (required, no default) must be rejected as the real host rejects it.
   // NB: the constructor boolean-coerces the `validate` option, so the predicate
   // is assigned to the property directly (handleRequest honours a function).
-  api.validate = (c: Context) => c.operation?.operationId !== "submitClientExercise"
+  api.validate = (c: Context) => c.operation?.operationId !== "uploadClientExerciseFiles"
 
   const fault = options.injectResponseFault
   const obsoleteClient = options.injectObsoleteClient ?? false
@@ -348,74 +396,123 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       return ok(slide)
     },
 
-    // POST /api/v0/exercise-services/client/exercises/{id}/submit  (multipart)
-    submitClientExercise: (c: Context, req: Request, res: Response): MockResponse | undefined => {
-      // Enforce the part names the real backend's actix `SubmissionForm`
-      // requires: a JSON text part named `submission` and a `file` part.
-      // actix rejects a missing/misnamed part with a 400 the spec does not
-      // document, so the rejection is written directly (headersSent skips the
-      // response validator, same as notFound).
-      const fields = req.body as Record<string, unknown> | undefined
-      const files = req.files as Record<string, unknown[]> | undefined
-      let slideSubmission: Record<string, unknown> | undefined
-      try {
-        slideSubmission =
-          typeof fields?.submission === "string"
-            ? (JSON.parse(fields.submission) as Record<string, unknown>)
-            : undefined
-      } catch {
-        slideSubmission = undefined
+    // POST /api/v0/exercise-services/client/exercises/{id}/files  (multipart)
+    uploadClientExerciseFiles: (
+      c: Context,
+      req: Request,
+      res: Response,
+    ): MockResponse | undefined => {
+      const exerciseId = String(c.request.params.id)
+      if (exerciseId === notEnrolledExerciseId) {
+        // The host authorizes and checks enrollment BEFORE reading the multipart
+        // stream, so enrollment outranks any multipart rule violation below.
+        return { status: 422, body: apiError("not_enrolled", "not enrolled to this course") }
       }
-      if (
-        slideSubmission?.exercise_slide_id === undefined ||
-        slideSubmission.exercise_task_id === undefined ||
-        !files?.file?.length
-      ) {
-        res
-          .status(400)
-          .json({ error: "submit requires a JSON `submission` part and a `file` part" })
+      if (!exerciseById.has(exerciseId)) {
+        return { status: 404, body: apiError("not_found", `no such exercise: ${exerciseId}`) }
+      }
+
+      // The host raises a plain 400 for every multipart rule violation, and the
+      // spec does not document a 400 here, so these are written directly
+      // (headersSent skips the response validator, same as notFound).
+      const files = (req.files as MulterFile[] | undefined) ?? []
+      const reject = (message: string): undefined => {
+        res.status(400).json({ error: message })
         return undefined
       }
+      if (files.length === 0) {
+        return reject("At least one file must be uploaded")
+      }
+      if (files.length > MAX_UPLOAD_FILES) {
+        return reject(`A maximum of ${MAX_UPLOAD_FILES} files can be uploaded at once`)
+      }
+      const seenFieldNames = new Set<string>()
+      let batchBytes = 0
+      for (const file of files) {
+        if (!UUID_PATTERN.test(file.fieldname)) {
+          return reject("Each exercise upload field name must be a UUID")
+        }
+        if (seenFieldNames.has(file.fieldname)) {
+          return reject("Duplicate exercise upload field id")
+        }
+        seenFieldNames.add(file.fieldname)
+        if (!file.originalname) {
+          return reject("Every exercise upload part must be a file with a filename")
+        }
+        if (file.buffer.length > MAX_UPLOAD_FILE_BYTES) {
+          return reject("Exercise upload exceeds the size limit")
+        }
+        batchBytes += file.buffer.length
+        if (batchBytes > MAX_UPLOAD_BATCH_BYTES) {
+          return reject("Exercise upload exceeds the size limit")
+        }
+      }
+
+      const reaped = expireNextUpload
+      expireNextUpload = false
+      const stored = files.map((file) => retainUpload(exerciseId, file, reaped))
+      return ok({
+        files: stored.map((upload) => ({
+          id: upload.id,
+          name: upload.name,
+          download_url: upload.downloadUrl,
+        })),
+      })
+    },
+
+    // POST /api/v0/exercise-services/client/exercises/{id}/submit  (JSON)
+    submitClientExercise: (c: Context): MockResponse => {
       const exerciseId = String(c.request.params.id)
       if (exerciseId === notEnrolledExerciseId) {
         // Consistent with getClientExercise's 422 above; the spec documents
         // this 422 on submit too.
         return { status: 422, body: apiError("not_enrolled", "not enrolled to this course") }
       }
+      // Request validation already enforced the body shape, including that
+      // `uploaded_file_ids` is present (it has no default -- omitting it is a 400).
+      const body = c.request.requestBody as { uploaded_file_ids: string[] }
+      for (const fileId of body.uploaded_file_ids) {
+        const upload = uploadsById.get(fileId)
+        // A file bound to another exercise is indistinguishable from one that was
+        // never uploaded, exactly as in the host: both are `unknown_upload`.
+        if (!upload || upload.exerciseId !== exerciseId) {
+          return {
+            status: 422,
+            body: apiError(
+              "unknown_upload",
+              `Uploaded file ${fileId} was not uploaded for this exercise by this user`,
+            ),
+          }
+        }
+        if (upload.expired) {
+          return {
+            status: 422,
+            body: apiError(
+              "upload_expired",
+              `Uploaded file ${fileId} is no longer available; upload it again`,
+            ),
+          }
+        }
+      }
       const taskSubmissionId = randomUUID()
       const slideSubmissionId = randomUUID()
-      const fixture = exerciseById.get(exerciseId)
-      // Retain the EXACT archive bytes that were submitted (the CLI compresses
-      // the on-disk exercise directory into this `file` part) so the
-      // old-submission download can serve back this submission's own content.
-      const uploaded = (files.file[0] as { buffer?: Buffer } | undefined)?.buffer
-      let archiveDownloadUrl: string
-      if (uploaded) {
-        retainSubmissionArchive(slideSubmissionId, uploaded)
-        // A per-submission archive url on the dedicated spec-exempt route; the
-        // slide-submission id keys the stored bytes.
-        archiveDownloadUrl = `${MOOC_MOCK_BASE_URL}/mooc-submission-archives/${slideSubmissionId}.tar.zst`
-      } else {
-        // Defensive fallback (submit already requires a `file` part): point at
-        // the exercise's stub archive as the previous behavior did.
-        const archiveSlug = fixture?.archiveSlug ?? exerciseId
-        archiveDownloadUrl = `${MOOC_MOCK_BASE_URL}/mooc-archives/${archiveSlug}.tar.zst`
-      }
       const record: SubmissionRecord = {
         exerciseId,
         taskSubmissionId,
         slideSubmissionId,
         polls: 0,
         createdAt: new Date().toISOString(),
-        archiveDownloadUrl,
+        fileIds: [...body.uploaded_file_ids],
       }
       submissionsByTaskId.set(taskSubmissionId, record)
       submissionsBySlideId.set(slideSubmissionId, record)
       const list = submissionsByExercise.get(exerciseId) ?? []
       list.push(record)
       submissionsByExercise.set(exerciseId, list)
-      // submit returns the EXERCISE-TASK-SUBMISSION id (what /grading expects)
-      return ok({ submission_id: taskSubmissionId })
+      return ok({
+        task_submission_id: taskSubmissionId,
+        slide_submission_id: slideSubmissionId,
+      })
     },
 
     // GET /api/v0/exercise-services/client/submissions/{id}/grading
@@ -455,14 +552,25 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
     },
 
     // GET /api/v0/exercise-services/client/submissions/{id}/download
-    // (id = exercise-slide-submission id, from the submissions list)
+    // (id = exercise-slide-submission id, from the submissions list or submit)
     downloadClientSubmission: (c: Context): MockResponse => {
       const id = String(c.request.params.id)
       const record = submissionsBySlideId.get(id)
       if (!record) {
         return { status: 404, body: apiError("not_found", `no such submission: ${id}`) }
       }
-      return ok({ archive_download_url: record.archiveDownloadUrl })
+      // A submission made from no files is a 200 with an empty list, not a 404:
+      // the host resolves this from its own upload records, and having none is
+      // not the same as the submission not existing.
+      const files = record.fileIds
+        .map((fileId) => uploadsById.get(fileId))
+        .filter((upload): upload is UploadRecord => upload !== undefined)
+        .map((upload) => ({
+          id: upload.id,
+          name: upload.name,
+          download_url: upload.downloadUrl,
+        }))
+      return ok({ files })
     },
 
     // POST /api/v0/exercise-services/client/submissions/{id}/share
@@ -536,32 +644,66 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
   return api
 }
 
-// The submit part names, per the backend's `SubmissionForm`
-// (exercise_services/client.rs) and the spec:
-//   - `submission` : JSON ExerciseSlideSubmission (a text field, no filename)
-//   - `file`       : the exercise archive (a file part)
-// multer routes the text field to req.body and the file to req.files; the
-// submit handler enforces both parts like the real backend does.
-//
-// 50 MB is comfortably above any legitimate exercise archive while bounding
-// the memory a malformed/malicious upload can consume; exceeding it raises
-// multer's LIMIT_FILE_SIZE, mapped to a 413 by the error handler below.
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-const upload = multer({ limits: { fileSize: MAX_UPLOAD_BYTES } })
+/** The subset of multer's file shape the upload handler reads. */
+interface MulterFile {
+  fieldname: string
+  originalname: string
+  buffer: Buffer
+}
 
-// Caps retained archives so a long-lived mock doesn't accumulate them
-// unboundedly; oldest is evicted first, and a download of an evicted archive
+// The host's upload limits (controllers/helpers/file_uploading.rs). Kept identical
+// so a client that exceeds them fails here too rather than only in production.
+const MAX_UPLOAD_FILES = 10
+const MAX_UPLOAD_FILE_BYTES = 100 * 1024 * 1024
+const MAX_UPLOAD_BATCH_BYTES = 100 * 1024 * 1024
+
+// The host requires every multipart field name to be a UUID the client picked.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// `files` is one over the limit so an over-limit batch reaches the handler and
+// gets the host's 400 rather than multer's LIMIT_FILE_COUNT.
+const upload = multer({
+  limits: { fileSize: MAX_UPLOAD_FILE_BYTES, files: MAX_UPLOAD_FILES + 1 },
+})
+
+/** Path prefix the host stores client uploads under (`CLIENT_UPLOAD_PATH_PREFIX`). */
+const CLIENT_UPLOAD_PATH_PREFIX = "exercise-services-client"
+
+// Caps retained uploads so a long-lived mock doesn't accumulate them
+// unboundedly; oldest is evicted first, and a download of an evicted upload
 // simply 404s (the restore flow already tolerates that).
-const MAX_RETAINED_ARCHIVES = 32
-const retainSubmissionArchive = (slideSubmissionId: string, bytes: Buffer): void => {
-  submissionArchivesBySlideId.set(slideSubmissionId, bytes)
-  while (submissionArchivesBySlideId.size > MAX_RETAINED_ARCHIVES) {
-    const oldest = submissionArchivesBySlideId.keys().next().value
+const MAX_RETAINED_UPLOADS = 32
+
+/**
+ * Records one uploaded part. The returned `id` is freshly minted and is NEVER the
+ * client's field name -- see {@link UploadRecord.id}.
+ */
+const retainUpload = (exerciseId: string, file: MulterFile, reaped: boolean): UploadRecord => {
+  const storedName = randomUUID().replaceAll("-", "")
+  const record: UploadRecord = {
+    id: randomUUID(),
+    name: file.originalname,
+    storedName,
+    downloadUrl: `${MOOC_MOCK_BASE_URL}/api/v0/files/${CLIENT_UPLOAD_PATH_PREFIX}/${storedName}`,
+    exerciseId,
+    expired: reaped,
+  }
+  uploadsById.set(record.id, record)
+  if (!reaped) {
+    uploadBytesByStoredName.set(storedName, file.buffer)
+  }
+  while (uploadsById.size > MAX_RETAINED_UPLOADS) {
+    const oldest = uploadsById.keys().next().value
     if (oldest === undefined) {
       break
     }
-    submissionArchivesBySlideId.delete(oldest)
+    const evicted = uploadsById.get(oldest)
+    uploadsById.delete(oldest)
+    if (evicted) {
+      uploadBytesByStoredName.delete(evicted.storedName)
+    }
   }
+  return record
 }
 
 /**
@@ -590,14 +732,13 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
       .catch(next)
   })
 
-  // Spec-exempt per-submission archive route: serves the exact bytes uploaded
-  // with a given submission (keyed by slide-submission id). Distinct from the
-  // stub `/mooc-archives` route on purpose -- old-submission archive URLs are
-  // arbitrary absolute file-store URLs in the real backend, and serving the
-  // submitted content (not the stub) is what makes the restore flow testable.
-  app.get("/mooc-submission-archives/:archive", (req, res, next) => {
-    const id = req.params.archive.replace(/\.tar\.zst$/, "")
-    const bytes = submissionArchivesBySlideId.get(id)
+  // Spec-exempt file-store route: serves the exact bytes of a client upload, so
+  // an old-submission download returns THAT submission's own content rather than
+  // the exercise stub, making the restore flow testable end to end. The real
+  // host's upload URLs are `/api/v0/files/<prefix>/<random>` and sit outside the
+  // client spec, so this path shape is faithful and deliberately spec-exempt.
+  app.get(`/api/v0/files/${CLIENT_UPLOAD_PATH_PREFIX}/:name`, (req, res, next) => {
+    const bytes = uploadBytesByStoredName.get(req.params.name)
     if (!bytes) {
       return next()
     }
@@ -616,6 +757,13 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
   app.post("/mooc-mock/reset", (_req, res) => {
     resetMoocState()
     resetMoocOAuthState()
+    res.status(204).end()
+  })
+
+  // Spec-exempt reaper simulation for out-of-process consumers: arms the reaper
+  // on the next upload so the submit that follows it sees `upload_expired`.
+  app.post("/mooc-mock/expire-next-upload", (_req, res) => {
+    expireNextMoocUpload()
     res.status(204).end()
   })
 
@@ -684,15 +832,17 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
     )
   }
 
-  // submit is multipart -> parse it before openapi-backend (which validates but
-  // does not parse binary bodies)
-  moocRouter.post("/exercises/:id/submit", upload.fields([{ name: "file", maxCount: 1 }]), handle)
+  // The file upload is multipart -> parse it before openapi-backend (which
+  // validates but does not parse binary bodies). Field names are client-chosen
+  // UUIDs, so `any()` is the only accepting shape.
+  moocRouter.post("/exercises/:id/files", upload.any(), handle)
   moocRouter.use(handle)
 
-  // Map multer's LIMIT_FILE_SIZE rejection to a 413 instead of a generic 500.
+  // Multer's own limit rejections become the host's plain 400, the status it
+  // raises for every multipart rule violation.
   moocRouter.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
-    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-      res.status(413).json({ error: "uploaded archive exceeds the size limit" })
+    if (err instanceof multer.MulterError) {
+      res.status(400).json({ error: `exercise upload rejected: ${err.code}` })
       return
     }
     next(err)

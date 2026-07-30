@@ -27,9 +27,10 @@ import {
 // This boots the mock, drives the shared mooc endpoints over HTTP, and validates
 // each response payload with the extension's zod schema for that type.
 //
-// Id spaces (mirrors the mock/backend): `submit` returns an
-// exercise-TASK-submission id (what /grading is polled with); the submissions
-// list, /download and /share use exercise-SLIDE-submission ids.
+// Id spaces (mirrors the mock/backend): `submit` returns both an
+// exercise-TASK-submission id (what /grading is polled with) and an
+// exercise-SLIDE-submission id (what the submissions list, /download and /share
+// use). A submission is made in two calls: upload files, then submit naming them.
 
 const listen = (): Promise<{ server: Server; base: string }> =>
   new Promise((resolve) => {
@@ -124,26 +125,41 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     expectValid(TmcExerciseSlide, toCliStdoutSlide(slide), "single exercise slide")
   })
 
-  // Submits an exercise and returns the task-submission id (what /grading polls).
-  const submit = async (exercise: typeof passingExercise): Promise<string> => {
+  // Uploads one file for an exercise and returns the host-assigned file id.
+  const uploadFile = async (exercise: typeof passingExercise): Promise<string> => {
     const form = new FormData()
-    form.append(
-      "submission",
-      JSON.stringify({
-        exercise_slide_id: exercise.slide.slide_id,
-        exercise_task_id: exercise.slide.tasks[0]!.task_id,
-      }),
-    )
-    form.append("file", new Blob([new Uint8Array([1, 2, 3])]), "submission.tar.zst")
-    const res = await fetch(api(`/exercises/${exercise.slide.exercise_id}/submit`), {
+    // Field name is a client-chosen UUID, as the host requires; the id it returns
+    // is its own and is what a submit names.
+    form.append(crypto.randomUUID(), new Blob([new Uint8Array([1, 2, 3])]), "submission.tar.zst")
+    const res = await fetch(api(`/exercises/${exercise.slide.exercise_id}/files`), {
       method: "POST",
       body: form,
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { files: { id: string }[] }
+    return body.files[0]!.id
+  }
+
+  // Uploads then submits, returning both submission ids.
+  const submit = async (
+    exercise: typeof passingExercise,
+  ): Promise<{ taskSubmissionId: string; slideSubmissionId: string }> => {
+    const fileId = await uploadFile(exercise)
+    const res = await fetch(api(`/exercises/${exercise.slide.exercise_id}/submit`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        exercise_slide_id: exercise.slide.slide_id,
+        exercise_task_id: exercise.slide.tasks[0]!.task_id,
+        uploaded_file_ids: [fileId],
+      }),
     })
     expect(res.status).toBe(200)
     const body = (await res.json()) as unknown
     // the submit response is the `submission-finished` payload
     expectValid(ExerciseTaskSubmissionResult, body, "submit result")
-    return (body as { submission_id: string }).submission_id
+    const ids = body as { task_submission_id: string; slide_submission_id: string }
+    return { taskSubmissionId: ids.task_submission_id, slideSubmissionId: ids.slide_submission_id }
   }
 
   test("submit result validates as ExerciseTaskSubmissionResult", async function () {
@@ -151,7 +167,7 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
   })
 
   test("grading status validates as ExerciseTaskSubmissionStatus (both variants)", async function () {
-    const taskSubmissionId = await submit(passingExercise)
+    const { taskSubmissionId } = await submit(passingExercise)
 
     // first poll: the externally-tagged "NoGradingYet" string variant
     const first = await (await fetch(api(`/submissions/${taskSubmissionId}/grading`))).json()
@@ -182,7 +198,7 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
 
   test("old-submissions list items validate as ExerciseSlideSubmissionListItem", async function () {
     const exerciseId = failingExercise.slide.exercise_id
-    const taskSubmissionId = await submit(failingExercise)
+    const { taskSubmissionId } = await submit(failingExercise)
 
     // before grading completes: score/progress are null
     const pending = (await (
@@ -218,25 +234,45 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     expectValid(zPasteResult, body, "share result")
   })
 
-  test("old-submission /download response carries archive_download_url", async function () {
-    // The /download response (`SubmissionArchiveDownloadUrl`, `{archive_download_url}`)
+  test("old-submission /download response carries the submission's files", async function () {
+    // The /download response (`SubmissionFiles`, `{files:[{id,name,download_url}]}`)
     // is consumed by the CLI, not the extension, so langsSchema has no zod schema
     // for it. Its shape is instead reconciled against the vendored spec via the
     // mock's OWN response validation: the mock's postResponseHandler validates
     // every response body against the spec before sending, so a 200 here proves
-    // the payload conforms to the spec's SubmissionArchiveDownloadUrl schema. The
-    // explicit field assertion documents the shape the CLI relies on.
-    const exerciseId = failingExercise.slide.exercise_id
-    await submit(failingExercise)
-    const items = (await (await fetch(api(`/exercises/${exerciseId}/submissions`))).json()) as {
-      id: string
-    }[]
-    const slideSubmissionId = items[0]!.id
+    // the payload conforms to the spec's SubmissionFiles schema. The explicit
+    // field assertions document the shape the CLI relies on -- it takes
+    // `files[0].download_url` and errors on any count other than one.
+    const { slideSubmissionId } = await submit(failingExercise)
     const res = await fetch(api(`/submissions/${slideSubmissionId}/download`))
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { archive_download_url?: unknown }
-    expect(typeof body.archive_download_url).toBe("string")
-    expect((body.archive_download_url as string).length).toBeGreaterThan(0)
+    const body = (await res.json()) as {
+      files: { id: string; name: string; download_url: string }[]
+    }
+    expect(body.files.length).toBe(1)
+    expect(typeof body.files[0]!.id).toBe("string")
+    expect(body.files[0]!.name).toBe("submission.tar.zst")
+    expect(body.files[0]!.download_url.length).toBeGreaterThan(0)
+  })
+
+  test("a submission made from no files downloads as an empty list, not a 404", async function () {
+    // An empty `uploaded_file_ids` is legal, and the host answers its download
+    // with `{"files":[]}` rather than the 404 the archive-shaped contract gave.
+    const exercise = passingExercise
+    const res = await fetch(api(`/exercises/${exercise.slide.exercise_id}/submit`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        exercise_slide_id: exercise.slide.slide_id,
+        exercise_task_id: exercise.slide.tasks[0]!.task_id,
+        uploaded_file_ids: [],
+      }),
+    })
+    expect(res.status).toBe(200)
+    const { slide_submission_id } = (await res.json()) as { slide_submission_id: string }
+    const download = await fetch(api(`/submissions/${slide_submission_id}/download`))
+    expect(download.status).toBe(200)
+    expect(await download.json()).toEqual({ files: [] })
   })
 
   test("a not-enrolled 422 body is a spec-valid ApiErrorResponse", async function () {

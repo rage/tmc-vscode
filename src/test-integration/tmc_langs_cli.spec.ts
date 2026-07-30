@@ -643,6 +643,31 @@ suite("tmc langs cli spec", function () {
     })
 
     migrationTest(
+      "should transparently re-upload when the first upload is reaped before submit",
+      async function () {
+        // The two-step contract (upload files, then submit naming them) has a race
+        // the CLI recovers from by re-uploading once. It cannot be provoked by
+        // timing -- the two calls are milliseconds apart -- so the mock is asked
+        // to reap the next upload. Without the retry this submit fails with
+        // `upload-expired`; with it, the submit succeeds and grades normally.
+        const armed = await fetch("http://localhost:4001/mooc-mock/expire-next-upload", {
+          method: "POST",
+        })
+        expect(armed.status).to.be.equal(204)
+
+        const dir = writeSubmittableProject("mooc-submit-reaped")
+        const status = (
+          await tmc.submitMoocExerciseAndWaitForResults(PASSING_EXERCISE_ID, dir)
+        ).unwrap()
+        expect(status).to.not.equal("NoGradingYet")
+        if (status === "NoGradingYet") {
+          throw new Error("unreachable")
+        }
+        expect(status.Grading.grading_progress).to.equal("FullyGraded")
+      },
+    )
+
+    migrationTest(
       "should submit a mooc exercise to paste and return a share URL",
       async function () {
         const dir = writeSubmittableProject("mooc-paste")

@@ -25,6 +25,8 @@ import {
   ObsoleteClientError,
   RuntimeError,
   SpawnError,
+  UnknownUploadError,
+  UploadExpiredError,
 } from "../errors"
 import type {
   CombinedCourseData,
@@ -1515,6 +1517,21 @@ export default class Langs {
           ),
         )
       }
+      case "upload-expired":
+        // The CLI uploads and submits within one invocation and already retried
+        // the upload once, so there is no user action to suggest -- the user
+        // never uploaded anything, they ran a submit.
+        return Err(
+          new UploadExpiredError(
+            `${message}\nThe submission's files expired on the server before the` +
+              ` submission was accepted. Please try again.`,
+            traceString,
+          ),
+        )
+      case "unknown-upload":
+        // Never a race: the backend has no record of a file the CLI named for
+        // this exercise. Surfaced as-is so it is diagnosable rather than retried.
+        return Err(new UnknownUploadError(message, traceString))
       case "invalid-token":
         this._responseCache.clear()
         this._fireUnexpectedLogout(authEventTarget)

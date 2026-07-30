@@ -469,7 +469,14 @@ export type ExerciseSubmission = {
 };
 
 export type ExerciseTaskSubmissionResult = {
-    submission_id: string;
+    /**
+     * Identifies the slide submission; what downloading and sharing take.
+     */
+    slide_submission_id: string;
+    /**
+     * Identifies the task submission; what grading is polled for.
+     */
+    task_submission_id: string;
 };
 
 export type ExerciseTaskSubmissionStatus = 'NoGradingYet' | {
@@ -487,7 +494,7 @@ export type ExerciseType = 'browser' | 'editor';
 
 export type GradingProgress = 'Failed' | 'NotReady' | 'PendingManual' | 'Pending' | 'FullyGraded';
 
-export type Kind = 'generic' | 'forbidden' | 'not-logged-in' | 'connection-error' | 'obsolete-client' | 'invalid-token' | 'not-enrolled';
+export type Kind = 'generic' | 'forbidden' | 'not-logged-in' | 'connection-error' | 'obsolete-client' | 'invalid-token' | 'not-enrolled' | 'upload-expired' | 'unknown-upload';
 
 /**
  * MOOC exercise inside the projects directory.

@@ -12,6 +12,8 @@ import {
   NotEnrolledError,
   ObsoleteClientError,
   RuntimeError,
+  UnknownUploadError,
+  UploadExpiredError,
 } from "../../errors"
 import type { OutputData } from "../../shared/langsSchema"
 import type { BaseError } from "../../shared/shared"
@@ -754,6 +756,8 @@ suite("Langs error-kind mapping", function () {
     ["not-logged-in", AuthorizationError],
     ["obsolete-client", ObsoleteClientError],
     ["not-enrolled", NotEnrolledError],
+    ["upload-expired", UploadExpiredError],
+    ["unknown-upload", UnknownUploadError],
     ["generic", RuntimeError],
   ]
   for (const [kind, errorClass] of cases) {

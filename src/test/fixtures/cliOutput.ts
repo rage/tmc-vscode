@@ -568,7 +568,10 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   { name: "mooc-exercise-slide", value: outputData("mooc-exercise-slide", moocExerciseSlide) },
   {
     name: "mooc-submission-finished",
-    value: outputData("mooc-submission-finished", { submission_id: UUID_A }),
+    value: outputData("mooc-submission-finished", {
+      task_submission_id: UUID_A,
+      slide_submission_id: UUID_B,
+    }),
   },
   // forward compatibility: unknown extra fields must not fail validation
   {

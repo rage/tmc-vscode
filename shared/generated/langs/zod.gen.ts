@@ -206,7 +206,8 @@ export const zExerciseDetails = z.object({
 });
 
 export const zExerciseTaskSubmissionResult = z.object({
-    submission_id: z.uuid()
+    slide_submission_id: z.uuid(),
+    task_submission_id: z.uuid()
 });
 
 export const zExerciseType = z.enum(['browser', 'editor']);
@@ -252,7 +253,9 @@ export const zKind = z.union([
     z.literal('connection-error'),
     z.literal('obsolete-client'),
     z.literal('invalid-token'),
-    z.literal('not-enrolled')
+    z.literal('not-enrolled'),
+    z.literal('upload-expired'),
+    z.literal('unknown-upload')
 ]);
 
 /**

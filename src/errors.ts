@@ -39,6 +39,16 @@ export class NotEnrolledError extends BaseError {
   public override readonly name = "Not Enrolled Error"
 }
 
+/** A submission named an uploaded file whose retention window had elapsed. */
+export class UploadExpiredError extends BaseError {
+  public override readonly name = "Upload Expired Error"
+}
+
+/** A submission named a file the backend has no upload record of: a client bug. */
+export class UnknownUploadError extends BaseError {
+  public override readonly name = "Unknown Upload Error"
+}
+
 export class ObsoleteClientError extends BaseError {
   public override readonly name = "Obsolete Client Error"
 }
