@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
-import { ExerciseIdentifier, match } from "../shared/shared"
+import { backendName, ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 
 /**
@@ -41,11 +41,7 @@ export async function resetExercise(
   }
 
   const id = ExerciseIdentifier.from(exerciseDetails.id)
-  const serverName = match(
-    id,
-    () => "TMC Server",
-    () => "courses.mooc.fi",
-  )
+  const serverName = backendName(id.kind)
   const submitFirst = await dialog.confirmation(
     `Do you want to save the current state of the exercise by submitting it to ${serverName}?`,
   )

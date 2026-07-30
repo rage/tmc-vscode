@@ -171,6 +171,15 @@ export function matchBackend<A extends { backend: "tmc" | "mooc" }, B, C>(
   }
 }
 
+/**
+ * The name to show the user for a backend. Course slugs and titles are only
+ * unique within one backend, so anything listing courses from both must name
+ * the backend alongside them.
+ */
+export function backendName(kind: "tmc" | "mooc"): string {
+  return kind === "tmc" ? "TMC Server" : "courses.mooc.fi"
+}
+
 export function matchOption<A, B, T extends Enum<A, B> | undefined>(
   data: T,
   tmc: (x: T & TmcKind) => A,

@@ -58,8 +58,8 @@ function createFakeWebviewPanel(): {
 
 suite("TmcPanel moocLogin handling", () => {
   test(
-    "a standalone login (no requestingPanel) closes the side panel and shows a plain " +
-      "confirmation, instead of navigating to SelectMoocCourse",
+    "a standalone login (no requestingPanel) closes the side panel and offers add-new-course, " +
+      "instead of navigating to SelectMoocCourse",
     async () => {
       // Isolate from any panel state a previous test in this file may have left behind.
       TmcPanel.sidePanel?.dispose()
@@ -99,10 +99,22 @@ suite("TmcPanel moocLogin handling", () => {
       // The side panel is closed instead...
       expect(dispose).toHaveBeenCalled()
       expect(TmcPanel.sidePanel).toBeUndefined()
-      // ...and a plain confirmation toast is shown.
+      // ...and a confirmation toast is shown, offering the step the user most
+      // likely came for without forcing it on a session-renewal login.
       expect(actionContext.dialog.notification).toHaveBeenCalledWith(
         "Logged in to courses.mooc.fi.",
+        ["Add new course", expect.any(Function)],
       )
+      const executeCommand = vi
+        .spyOn(vscode.commands, "executeCommand")
+        .mockResolvedValue(undefined)
+      const [, button] = vi.mocked(actionContext.dialog.notification).mock.calls[0] as [
+        string,
+        [string, () => void],
+      ]
+      button[1]()
+      expect(executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
+      executeCommand.mockRestore()
     },
   )
 })

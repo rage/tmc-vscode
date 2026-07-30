@@ -2,7 +2,7 @@ import * as vscode from "vscode"
 
 import { Logger } from "../utilities"
 
-type Item<T> = [label: string, value: T]
+type Item<T> = [label: string, value: T, description?: string]
 
 type NotificationButton = [label: string, callback: () => void]
 
@@ -111,6 +111,10 @@ export default class Dialog {
    *
    * @param prompt The quick pick's placeholder, or an object also giving the
    * pick a title for context.
+   * @param items `[label, value]` tuples, optionally with a third element shown
+   * dimmed next to the label. Items are resolved by identity rather than by
+   * label, so two items may share a label as long as the description
+   * distinguishes them.
    */
   public async selectItem<T>(
     prompt: string | { title: string; placeHolder: string },
@@ -120,12 +124,12 @@ export default class Dialog {
       typeof prompt === "string"
         ? { placeHolder: prompt }
         : { title: prompt.title, placeHolder: prompt.placeHolder }
-    return vscode.window
-      .showQuickPick(
-        items.map((i) => i[0]),
-        options,
-      )
-      .then((selection) => items.find((x) => x[0] === selection)?.[1])
+    const picks = items.map(([label, value, description]) => ({
+      label,
+      value,
+      ...(description !== undefined ? { description } : {}),
+    }))
+    return vscode.window.showQuickPick(picks, options).then((selection) => selection?.value)
   }
 
   /**

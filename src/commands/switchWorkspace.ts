@@ -2,7 +2,7 @@ import * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
-import { LocalCourseData } from "../shared/shared"
+import { backendName, LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 
 export async function switchWorkspace(actionContext: ActionContext): Promise<void> {
@@ -18,10 +18,11 @@ export async function switchWorkspace(actionContext: ActionContext): Promise<voi
   const currentWorkspace = vscode.workspace.name?.split(" ")[0]
   const courseWorkspace = await dialog.selectItem(
     { title: "Switch Course Workspace", placeHolder: "Select a course workspace to open" },
-    ...courses.map<[string, LocalCourseData]>((c) => {
+    ...courses.map<[string, LocalCourseData, string]>((c) => {
       const name = LocalCourseData.getCourseName(c)
       const taggedName = `${name}-${c.kind}`
-      return [taggedName === currentWorkspace ? `${name} (Currently open)` : name, c]
+      const open = taggedName === currentWorkspace
+      return [open ? `${name} (Currently open)` : name, c, backendName(c.kind)]
     }),
   )
   if (courseWorkspace) {

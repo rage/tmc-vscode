@@ -1,7 +1,7 @@
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
 import type { CourseIdentifier } from "../shared/shared"
-import { LocalCourseData } from "../shared/shared"
+import { backendName, LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 
 export async function downloadNewExercises(actionContext: ActionContext): Promise<void> {
@@ -15,9 +15,10 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
   const courses = userData.val.getCourses()
   const courseId = await dialog.selectItem(
     { title: "Download New Exercises", placeHolder: "Download new exercises for course?" },
-    ...courses.map<[string, CourseIdentifier]>((course) => [
+    ...courses.map<[string, CourseIdentifier, string]>((course) => [
       LocalCourseData.getCourseName(course),
       LocalCourseData.getCourseId(course),
+      backendName(course.kind),
     ]),
   )
   if (!courseId) {

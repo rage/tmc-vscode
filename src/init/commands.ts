@@ -6,7 +6,7 @@ import type { ActionContext } from "../actions/types"
 import * as commands from "../commands"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
-import { LocalCourseData } from "../shared/shared"
+import { backendName, LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities/"
 
 export function registerCommands(
@@ -55,9 +55,10 @@ export function registerCommands(
         courseId ??
         (await dialog.selectItem(
           { title: "Course Details", placeHolder: "Which course page do you want to open?" },
-          ...courses.map<[string, CourseIdentifier]>((c) => [
+          ...courses.map<[string, CourseIdentifier, string]>((c) => [
             LocalCourseData.getCourseName(c),
             LocalCourseData.getCourseId(c),
+            backendName(c.kind),
           ]),
         ))
       if (courseId) {

@@ -3,7 +3,7 @@ import * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
 import type { ExerciseSlideSubmissionListItem } from "../shared/langsSchema"
-import { ExerciseIdentifier, match } from "../shared/shared"
+import { backendName, ExerciseIdentifier, match } from "../shared/shared"
 import { dateToString, Logger, parseDate } from "../utilities"
 
 /**
@@ -126,13 +126,7 @@ export async function downloadOldSubmission(
     return
   }
 
-  // Name the backend the submission would go to, so the mooc branch does not say
-  // "TMC Server".
-  const serverName = match(
-    id,
-    () => "TMC Server",
-    () => "courses.mooc.fi",
-  )
+  const serverName = backendName(id.kind)
   const submitFirstSelection = await dialog.selectItem(
     {
       title: "Download Old Submission",

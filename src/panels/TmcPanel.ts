@@ -850,9 +850,18 @@ export class TmcPanel {
                 requestingPanel: moocLoginPanel.requestingPanel,
               })
             } else {
-              // Standalone login: nothing to navigate back to, so just close and confirm.
+              // Standalone login (palette, tree view, expiry prompt): nothing to
+              // navigate back to, so close and confirm. Offer the step the user
+              // most likely came to take rather than making them find it, but as
+              // a button, so a login that was only meant to renew a session is
+              // not hijacked into a course picker.
               TmcPanel.sidePanel?.dispose()
-              actionContext.dialog.notification("Logged in to courses.mooc.fi.")
+              actionContext.dialog.notification("Logged in to courses.mooc.fi.", [
+                "Add new course",
+                (): void => {
+                  vscode.commands.executeCommand("tmc.addNewCourse")
+                },
+              ])
             }
             break
           }

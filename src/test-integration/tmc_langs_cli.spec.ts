@@ -888,9 +888,8 @@ suite("tmc langs cli spec", function () {
       }
     })
 
-    suiteTeardown(function () {
-      authServer && kill(authServer.pid as number)
-      authServer?.kill()
+    suiteTeardown(async function () {
+      await stopServer(authServer)
     })
 
     migrationTest(
@@ -949,10 +948,8 @@ suite("tmc langs cli spec", function () {
     )
   })
 
-  suiteTeardown(function () {
-    server && kill(server.pid as number)
-    // the command above didn't seem to work reliably, so the call below was added
-    server?.kill()
+  suiteTeardown(async function () {
+    await stopServer(server)
   })
 })
 
@@ -1049,6 +1046,10 @@ async function startServer(extraEnv: Record<string, string> = {}): Promise<cp.Ch
     cwd: backendPath,
     shell: "bash",
     env: { ...process.env, ...extraEnv },
+    // The listener is a grandchild (shell -> pnpm -> node). On POSIX its own
+    // process group is what makes the whole chain killable in one signal; see
+    // stopServer.
+    detached: process.platform !== "win32",
   })
   console.info("[server] starting...")
   server.stdout.on("data", (chunk) => {
@@ -1071,4 +1072,36 @@ async function startServer(extraEnv: Record<string, string> = {}): Promise<cp.Ch
 
   clearTimeout(timeout)
   return server
+}
+
+/**
+ * Stops a mock backend started by {@link startServer} and waits for it to go
+ * away. tree-kill walks the pid tree and signals each process it finds, which
+ * loses the node grandchild whenever an intermediate `pnpm` has already
+ * exited -- leaving a listener holding 4001/4002 and failing the next local run
+ * with connection-refused. Signalling the process group instead cannot miss it.
+ */
+async function stopServer(server: cp.ChildProcess | undefined): Promise<void> {
+  if (server?.pid === undefined || server.exitCode !== null || server.signalCode !== null) {
+    return
+  }
+  const exited = new Promise<void>((resolve) => {
+    server.once("exit", () => resolve())
+  })
+  if (process.platform === "win32") {
+    // taskkill /F /T, which does follow the whole tree.
+    kill(server.pid, "SIGKILL")
+  } else {
+    try {
+      process.kill(-server.pid, "SIGKILL")
+    } catch {
+      kill(server.pid, "SIGKILL")
+    }
+  }
+  await Promise.race([
+    exited,
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, 5000)
+    }),
+  ])
 }
