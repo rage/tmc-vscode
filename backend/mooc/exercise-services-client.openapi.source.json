@@ -1,6 +1,6 @@
 {
   "//": "Provenance stamp for the vendored exercise-services client OpenAPI spec. Written by bin/updateLangsOpenapi.sh; do not hand-edit. CI asserts the vendored spec's sha256 matches the value below via 'bin/updateLangsOpenapi.sh --check-stamp', catching a hand-edit that never went through re-vendoring.",
   "source_repo": "secret-project-331",
-  "source_rev": "ffa81f02c98a1c5d9d56ca7fab9b15a073f2e091",
-  "sha256": "346fe0d07c392f91b51027065931f3197b83d034d50e3f3ad5daf438c89c26f1"
+  "source_rev": "fb5aa6c3256ccb8c4163664f44871dfe0e965aef",
+  "sha256": "62fcf36ea992c105bee0362980870949a40ce51481c7c67bcfbad98d62cd3dc1"
 }
