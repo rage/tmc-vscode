@@ -109,11 +109,6 @@ export const zCourseDetails = z.object({
     unlockables: z.array(z.string())
 });
 
-export const zExerciseFile = z.object({
-    contents: z.string(),
-    filepath: z.string()
-});
-
 /**
  * Represents configuration based on which submission may be packaged.
  */
@@ -275,16 +270,16 @@ export const zLocalTmcExercise = z.object({
     'exercise-slug': z.string()
 });
 
-export const zModelSolutionSpec = z.union([
-    z.object({
-        solution_files: z.array(zExerciseFile),
-        type: z.literal('Browser')
-    }),
-    z.object({
-        download_url: z.string(),
-        type: z.literal('Editor')
-    })
-]);
+/**
+ * Mirrors the `tmc` exercise service's `ModelSolutionSpec`
+ * (`services/tmc/src/util/stateInterfaces.ts`). The backend forwards it once
+ * the model solution may be revealed; the solution is an uploaded project
+ * archive for both exercise types.
+ */
+export const zModelSolutionSpec = z.object({
+    solution_download_url: z.string(),
+    type: zExerciseType
+});
 
 /**
  * Per-exercise download progress, mirroring TMC's `ClientUpdateData`. Surfaced
@@ -329,6 +324,14 @@ export const zDownloadOrUpdateMoocCourseExercisesResult = z.object({
     skipped: z.array(zMoocExerciseDownload),
     stopped_for_auth: z.boolean().default(false)
 });
+
+/**
+ * Outcome of restoring a past mooc submission.
+ */
+export const zMoocOldSubmissionRestore = z.union([
+    z.literal('restored'),
+    z.literal('nothing-to-download')
+]);
 
 /**
  * post /api/v8/core/exercises/{exercise_id}/submissions
@@ -949,6 +952,10 @@ export const zDataKind = z.union([
     z.object({
         'output-data': zCourseProgress,
         'output-data-kind': z.literal('mooc-course-progress')
+    }),
+    z.object({
+        'output-data': zMoocOldSubmissionRestore,
+        'output-data-kind': z.literal('mooc-old-submission-restore')
     })
 ]);
 

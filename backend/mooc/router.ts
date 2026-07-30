@@ -19,6 +19,7 @@ import {
   passingExercise,
   pendingManualExercise,
   type ExerciseSlide,
+  type MoocExerciseFixture,
 } from "./fixtures"
 import {
   EXERCISE_SERVICES_SCOPE,
@@ -218,9 +219,6 @@ interface CreateMoocApiOptions {
 
 const findCourse = (id: string) => courses.find((c) => c.course.id === id)
 
-const findSlide = (exerciseId: string): ExerciseSlide | undefined =>
-  exerciseById.get(exerciseId)?.slide
-
 /** Slide and task lookups by their OWN ids, for submit's slide/task ownership checks. */
 const slideById = new Map<string, ExerciseSlide>()
 const taskById = new Map<string, { taskId: string; slideId: string }>()
@@ -246,6 +244,36 @@ const scoreMaximumFor = (exerciseId: string): number =>
 
 /** True once a submission has been polled enough that grading has "completed". */
 const isGraded = (record: SubmissionRecord): boolean => record.polls > 1
+
+/**
+ * The host's reveal rule (`model_solution_should_be_revealed`): full points, or
+ * the try limit exhausted. The mock models the full-points half; no fixture
+ * limits tries.
+ */
+const modelSolutionRevealed = (exerciseId: string): boolean => {
+  const records = submissionsByExercise.get(exerciseId) ?? []
+  return records.some(
+    (record) => isGraded(record) && outcomeOf(record).score_given >= scoreMaximumFor(exerciseId),
+  )
+}
+
+/**
+ * The slide as `GET exercises/{id}` serves it, with each task's model solution
+ * attached once it may be revealed. The list view never reveals one, mirroring
+ * the host's `client_tasks_from_slide` callers.
+ */
+const revealModelSolutions = (exercise: MoocExerciseFixture): ExerciseSlide => {
+  if (!modelSolutionRevealed(exercise.slide.exercise_id)) {
+    return exercise.slide
+  }
+  return {
+    ...exercise.slide,
+    tasks: exercise.slide.tasks.map((task) => ({
+      ...task,
+      model_solution_spec: exercise.modelSolution,
+    })),
+  }
+}
 
 /**
  * Terminal grading outcome per exercise fixture. Shared by the grading-poll
@@ -405,14 +433,14 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         // (domain/error.rs). The spec documents this 422 (ApiErrorResponse).
         return { status: 422, body: apiError("not_enrolled", "not enrolled to this course") }
       }
-      const slide = findSlide(id)
-      if (!slide) {
+      const exercise = exerciseById.get(id)
+      if (!exercise) {
         // An entirely unknown exercise id: the backend's get_by_id yields
         // RecordNotFound -> 404 (the spec documents 404 on this path). Distinct
         // from the not-enrolled 422 above.
         return { status: 404, body: apiError("not_found", `no such exercise: ${id}`) }
       }
-      return ok(slide)
+      return ok(revealModelSolutions(exercise))
     },
 
     // POST /api/v0/exercise-services/client/exercises/{id}/files  (multipart)
@@ -754,8 +782,7 @@ const CLIENT_UPLOAD_PATH_PREFIX = "exercise-services-client"
 // Caps retained uploads so a long-lived mock doesn't accumulate them unboundedly;
 // oldest is evicted first. Uploads a submission was made from are spared even past
 // the cap, as the host's reaper spares them (`NOT EXISTS … exercise_task_submission_files`):
-// evicting one would silently turn a later restore of that submission into an empty
-// file list, which the CLI rejects rather than tolerates.
+// evicting one would silently turn a later restore of that submission into a no-op.
 const MAX_RETAINED_UPLOADS = 32
 
 /**

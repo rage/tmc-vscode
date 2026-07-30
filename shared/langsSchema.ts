@@ -5,7 +5,7 @@ import { z } from "zod"
 // Source of truth: the serde-annotated Rust types in tmc-langs-rust, exported
 // from that repo as a schemars JSON Schema generated with the *serialize*
 // contract, so it describes exactly what the CLI writes to stdout. Vendored
-// from rev 5dec56245fa (branch programming-exercise-migration).
+// from rev b94f8c7f9f7 (branch programming-exercise-migration).
 //
 // This file is a thin shim: the schemas below are generated from that JSON
 // Schema and re-exported under stable public names. Do not hand-edit them;
@@ -39,7 +39,6 @@ import {
   zExercise,
   zExerciseDesc,
   zExerciseDetails,
-  zExerciseFile,
   zExercisePackagingConfiguration,
   zExercisePoint,
   zExerciseSlideSubmissionListItem,
@@ -55,6 +54,7 @@ import {
   zMoocClientUpdateData,
   zMoocCourse,
   zMoocDeviceLogin,
+  zMoocOldSubmissionRestore,
   zMoocExerciseDownload,
   zNewSubmission,
   zNotification,
@@ -227,9 +227,6 @@ export type ExerciseDesc = z.infer<typeof ExerciseDesc>
 export const ExerciseDetails = zExerciseDetails
 export type ExerciseDetails = z.infer<typeof ExerciseDetails>
 
-export const ExerciseFile = zExerciseFile
-export type ExerciseFile = z.infer<typeof ExerciseFile>
-
 export const ExercisePackagingConfiguration = zExercisePackagingConfiguration
 export type ExercisePackagingConfiguration = z.infer<typeof ExercisePackagingConfiguration>
 
@@ -284,6 +281,10 @@ export type MoocDeviceLogin = z.infer<typeof MoocDeviceLogin>
 
 export const MoocExerciseDownload = zMoocExerciseDownload
 export type MoocExerciseDownload = z.infer<typeof MoocExerciseDownload>
+
+/** Outcome of `mooc download-old-submission`: `nothing-to-download` for a submission with no files (an answer made in the browser). */
+export const MoocOldSubmissionRestore = zMoocOldSubmissionRestore
+export type MoocOldSubmissionRestore = z.infer<typeof MoocOldSubmissionRestore>
 
 export const NewSubmission = zNewSubmission
 export type NewSubmission = z.infer<typeof NewSubmission>

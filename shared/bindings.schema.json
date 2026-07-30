@@ -1252,6 +1252,22 @@
             "output-data-kind",
             "output-data"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/MoocOldSubmissionRestore"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-old-submission-restore"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
         }
       ]
     },
@@ -1575,21 +1591,6 @@
         "unlocked_at",
         "deadline",
         "submissions"
-      ]
-    },
-    "ExerciseFile": {
-      "type": "object",
-      "properties": {
-        "contents": {
-          "type": "string"
-        },
-        "filepath": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "filepath",
-        "contents"
       ]
     },
     "ExercisePackagingConfiguration": {
@@ -2003,42 +2004,19 @@
       ]
     },
     "ModelSolutionSpec": {
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "solution_files": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/ExerciseFile"
-              }
-            },
-            "type": {
-              "type": "string",
-              "const": "Browser"
-            }
-          },
-          "required": [
-            "type",
-            "solution_files"
-          ]
+      "description": "Mirrors the `tmc` exercise service's `ModelSolutionSpec`\n(`services/tmc/src/util/stateInterfaces.ts`). The backend forwards it once\nthe model solution may be revealed; the solution is an uploaded project\narchive for both exercise types.",
+      "type": "object",
+      "properties": {
+        "solution_download_url": {
+          "type": "string"
         },
-        {
-          "type": "object",
-          "properties": {
-            "download_url": {
-              "type": "string"
-            },
-            "type": {
-              "type": "string",
-              "const": "Editor"
-            }
-          },
-          "required": [
-            "type",
-            "download_url"
-          ]
+        "type": {
+          "$ref": "#/$defs/ExerciseType"
         }
+      },
+      "required": [
+        "type",
+        "solution_download_url"
       ]
     },
     "MoocClientUpdateData": {
@@ -2153,6 +2131,21 @@
       "required": [
         "exercise-id",
         "path"
+      ]
+    },
+    "MoocOldSubmissionRestore": {
+      "description": "Outcome of restoring a past mooc submission.",
+      "oneOf": [
+        {
+          "description": "The submission's archive was overlaid on a fresh stub.",
+          "type": "string",
+          "const": "restored"
+        },
+        {
+          "description": "The submission has no downloadable files, so nothing on disk was touched.\nAn exercise's submission list includes answers made in the browser, which\ncarry no uploads.",
+          "type": "string",
+          "const": "nothing-to-download"
+        }
       ]
     },
     "NewSubmission": {

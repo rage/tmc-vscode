@@ -254,9 +254,13 @@ const moocExerciseSlide = {
         checksum: "1234abcd",
         browser_test: { runtime: "python", script: "print('hello')", error: null },
       },
+      // The shape the `tmc` exercise service actually emits (pinned there by
+      // services/tmc/src/server/modelSolution.test.ts). A solved exercise's task
+      // carries this, so a wrong shape here would hide the CLI failing on every
+      // later command for that exercise.
       model_solution_spec: {
-        type: "Editor",
-        download_url: "https://courses.mooc.fi/api/v0/files/solution.tar.zst",
+        type: "editor",
+        solution_download_url: "https://courses.mooc.fi/api/v0/files/solution.tar.zst",
       },
       checksum: "1234abcd",
     },
@@ -266,8 +270,8 @@ const moocExerciseSlide = {
       assignment: null,
       public_spec: null,
       model_solution_spec: {
-        type: "Browser",
-        solution_files: [{ filepath: "src/main.rs", contents: "fn main() {}" }],
+        type: "browser",
+        solution_download_url: "https://courses.mooc.fi/api/v0/files/browser-solution.tar.zst",
       },
       checksum: null,
     },
@@ -573,6 +577,14 @@ const validCliOutputFixtures: CliOutputFixture[] = [
       slide_submission_id: UUID_B,
     }),
   },
+  {
+    name: "mooc-old-submission-restore: restored",
+    value: outputData("mooc-old-submission-restore", "restored"),
+  },
+  {
+    name: "mooc-old-submission-restore: nothing-to-download",
+    value: outputData("mooc-old-submission-restore", "nothing-to-download"),
+  },
   // forward compatibility: unknown extra fields must not fail validation
   {
     name: "unknown extra field is tolerated",
@@ -619,6 +631,32 @@ const invalidCliOutputFixtures: CliOutputFixture[] = [
   {
     name: "mooc course with non-uuid id",
     value: outputData("mooc-courses", [{ ...moocCourse, id: 590 }]),
+  },
+  {
+    // The shape langs used to expect but the `tmc` exercise service never emitted;
+    // accepting it again would mean the two have drifted apart once more.
+    name: "mooc exercise slide with a type-tagged Editor model solution",
+    value: outputData("mooc-exercise-slide", {
+      ...moocExerciseSlide,
+      tasks: [
+        {
+          ...moocExerciseSlide.tasks[0],
+          model_solution_spec: { type: "Editor", download_url: "https://x/solution.tar.zst" },
+        },
+      ],
+    }),
+  },
+  {
+    name: "mooc exercise slide with an untagged model solution",
+    value: outputData("mooc-exercise-slide", {
+      ...moocExerciseSlide,
+      tasks: [
+        {
+          ...moocExerciseSlide.tasks[0],
+          model_solution_spec: { solution_download_url: "https://x/solution.tar.zst" },
+        },
+      ],
+    }),
   },
   {
     name: "status-update none with object data",

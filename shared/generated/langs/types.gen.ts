@@ -284,6 +284,9 @@ export type DataKind = {
 } | {
     'output-data': CourseProgress;
     'output-data-kind': 'mooc-course-progress';
+} | {
+    'output-data': MoocOldSubmissionRestore;
+    'output-data-kind': 'mooc-old-submission-restore';
 };
 
 export type DownloadOrUpdateMoocCourseExercisesResult = {
@@ -381,11 +384,6 @@ export type ExerciseDetails = {
     run_tests_locally_action_enabled: boolean;
     submissions: Array<ExerciseSubmission>;
     unlocked_at: string | null;
-};
-
-export type ExerciseFile = {
-    contents: string;
-    filepath: string;
 };
 
 /**
@@ -518,12 +516,15 @@ export type LocalTmcExercise = {
     'exercise-slug': string;
 };
 
+/**
+ * Mirrors the `tmc` exercise service's `ModelSolutionSpec`
+ * (`services/tmc/src/util/stateInterfaces.ts`). The backend forwards it once
+ * the model solution may be revealed; the solution is an uploaded project
+ * archive for both exercise types.
+ */
 export type ModelSolutionSpec = {
-    solution_files: Array<ExerciseFile>;
-    type: 'Browser';
-} | {
-    download_url: string;
-    type: 'Editor';
+    solution_download_url: string;
+    type: ExerciseType;
 };
 
 /**
@@ -581,6 +582,11 @@ export type MoocExerciseDownload = {
     'exercise-id': string;
     path: string;
 };
+
+/**
+ * Outcome of restoring a past mooc submission.
+ */
+export type MoocOldSubmissionRestore = 'restored' | 'nothing-to-download';
 
 /**
  * post /api/v8/core/exercises/{exercise_id}/submissions

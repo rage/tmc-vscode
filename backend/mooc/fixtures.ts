@@ -30,13 +30,26 @@ export interface EditorPublicSpec {
   checksum: string
 }
 
+/**
+ * What the `tmc` exercise service emits (`services/tmc/src/util/stateInterfaces.ts`)
+ * and tmc-mooc-client deserializes. The backend forwards it only once the model
+ * solution may be revealed, so a wrong shape here breaks every command on an
+ * exercise the student has already solved -- see the `model_solution_spec` note
+ * above on why the OpenAPI spec cannot catch that.
+ */
+export interface ModelSolutionSpec {
+  type: "editor" | "browser"
+  solution_download_url: string
+}
+
 export interface ExerciseTask {
   task_id: string
   order_number: number
   assignment: unknown
   exercise_service_slug: string
   public_spec: EditorPublicSpec
-  model_solution_spec: null
+  /** Null as stored; the mock reveals {@link MoocExerciseFixture.modelSolution} per the reveal rule. */
+  model_solution_spec: ModelSolutionSpec | null
 }
 
 export interface ExerciseSlide {
@@ -74,6 +87,8 @@ export interface MoocExerciseFixture {
   sourceDir: string
   /** Grading result the mock returns for this exercise's submissions. */
   gradingOutcome: GradingOutcome
+  /** Served by `GET exercises/{id}` once this exercise has been solved for full points. */
+  modelSolution: ModelSolutionSpec
 }
 
 const ORG = "Test Organization"
@@ -114,6 +129,10 @@ const makeExercise = (params: {
   archiveSlug: params.archiveSlug,
   sourceDir: params.sourceDir,
   gradingOutcome: params.gradingOutcome ?? "passing",
+  modelSolution: {
+    type: "editor",
+    solution_download_url: `${MOOC_MOCK_BASE_URL}/mooc-archives/${params.archiveSlug}.tar.zst`,
+  },
   slide: {
     slide_id: params.slideId,
     exercise_id: params.exerciseId,

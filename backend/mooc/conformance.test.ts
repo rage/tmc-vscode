@@ -395,6 +395,44 @@ describe("mooc mock conformance", () => {
     return graded.Grading
   }
 
+  test("solving an exercise reveals its model solution on GET exercises/{id} only", async () => {
+    // The host attaches the model solution once full points are awarded, and the
+    // list view never does. The blob is opaque to the OpenAPI spec, so nothing but
+    // this asserts the shape the CLI actually deserializes -- and getting it wrong
+    // breaks every later command on an exercise the student has solved.
+    const exerciseId = passingExercise.slide.exercise_id
+    const taskShape = async (url: string): Promise<{ model_solution_spec: unknown }> => {
+      const slide = (await (await authFetch(url)).json()) as {
+        tasks: { model_solution_spec: unknown }[]
+      }
+      return slide.tasks[0]!
+    }
+
+    // Graded, but short of full points: still withheld.
+    const partial = await submitAndGrade(pendingManualExercise)
+    assert.equal(partial.grading_progress, "PendingManual")
+    assert.equal(
+      (await taskShape(api(`/exercises/${pendingManualExercise.slide.exercise_id}`)))
+        .model_solution_spec,
+      null,
+    )
+
+    const grading = await submitAndGrade(passingExercise)
+    assert.equal(grading.grading_progress, "FullyGraded")
+
+    assert.deepEqual((await taskShape(api(`/exercises/${exerciseId}`))).model_solution_spec, {
+      type: "editor",
+      solution_download_url: passingExercise.modelSolution.solution_download_url,
+    })
+
+    // The list view still withholds it (host: `client_tasks_from_slide` is called
+    // with reveal_model_solution: false there).
+    const slides = (await (
+      await authFetch(api(`/courses/${pythonCourse.id}/exercises`))
+    ).json()) as { tasks: { model_solution_spec: unknown }[] }[]
+    assert.equal(slides[0]!.tasks[0]!.model_solution_spec, null)
+  })
+
   test("submit -> poll grading: a failing exercise grades to Failed/zero score", async () => {
     const grading = await submitAndGrade(failingExercise)
     assert.equal(grading.grading_progress, "Failed")
@@ -639,6 +677,14 @@ describe("mooc mock conformance", () => {
     const download = await authFetch(api(`/submissions/${slide_submission_id}/download`))
     assert.equal(download.status, 200)
     assert.deepEqual(await download.json(), { files: [] })
+
+    // It is still listed, so a client picking an old submission to restore can
+    // reach it -- which is why the empty download has to be a first-class
+    // outcome rather than an error.
+    const list = (await (
+      await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submissions`))
+    ).json()) as { id: string }[]
+    assert.ok(list.some((item) => item.id === slide_submission_id))
   })
 
   test("grading of an unknown submission is a spec-documented 404", async () => {
