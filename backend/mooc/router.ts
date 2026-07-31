@@ -128,6 +128,41 @@ export const resetMoocState = (): void => {
   authenticatedRequestCount = 0
 }
 
+/** Records one submission under both of its id spaces and against its exercise. */
+const retainSubmission = (exerciseId: string, fileIds: string[]): SubmissionRecord => {
+  const record: SubmissionRecord = {
+    exerciseId,
+    taskSubmissionId: randomUUID(),
+    slideSubmissionId: randomUUID(),
+    polls: 0,
+    createdAt: new Date().toISOString(),
+    fileIds: [...fileIds],
+  }
+  submissionsByTaskId.set(record.taskSubmissionId, record)
+  submissionsBySlideId.set(record.slideSubmissionId, record)
+  const list = submissionsByExercise.get(exerciseId) ?? []
+  list.push(record)
+  submissionsByExercise.set(exerciseId, list)
+  return record
+}
+
+/**
+ * Seeds a submission carrying no files, as an answer made in the browser leaves
+ * behind: it has no client uploads at all, so its download is an empty list.
+ * The CLI always uploads before submitting, so this outcome is unreachable
+ * through the client API and has to be seeded for a client test to meet it.
+ * Returns undefined for an unknown exercise.
+ */
+export const seedMoocFilelessSubmission = (
+  exerciseId: string,
+): { taskSubmissionId: string; slideSubmissionId: string } | undefined => {
+  if (!exerciseById.has(exerciseId)) {
+    return undefined
+  }
+  const { taskSubmissionId, slideSubmissionId } = retainSubmission(exerciseId, [])
+  return { taskSubmissionId, slideSubmissionId }
+}
+
 /**
  * Soft-deletes an upload, modelling the host's reaper. Returns false for an
  * unknown id. Drives the `upload_expired` path, which is otherwise unreachable.
@@ -593,24 +628,10 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
           }
         }
       }
-      const taskSubmissionId = randomUUID()
-      const slideSubmissionId = randomUUID()
-      const record: SubmissionRecord = {
-        exerciseId,
-        taskSubmissionId,
-        slideSubmissionId,
-        polls: 0,
-        createdAt: new Date().toISOString(),
-        fileIds: [...body.uploaded_file_ids],
-      }
-      submissionsByTaskId.set(taskSubmissionId, record)
-      submissionsBySlideId.set(slideSubmissionId, record)
-      const list = submissionsByExercise.get(exerciseId) ?? []
-      list.push(record)
-      submissionsByExercise.set(exerciseId, list)
+      const record = retainSubmission(exerciseId, body.uploaded_file_ids)
       return ok({
-        task_submission_id: taskSubmissionId,
-        slide_submission_id: slideSubmissionId,
+        task_submission_id: record.taskSubmissionId,
+        slide_submission_id: record.slideSubmissionId,
       })
     },
 
@@ -887,6 +908,21 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
     resetMoocState()
     resetMoocOAuthState()
     res.status(204).end()
+  })
+
+  // Spec-exempt seeding route for out-of-process consumers; see
+  // {@link seedMoocFilelessSubmission}.
+  app.post("/mooc-mock/seed-fileless-submission", (req, res) => {
+    const exerciseId = String((req.body as { exercise_id?: unknown })?.exercise_id ?? "")
+    const seeded = seedMoocFilelessSubmission(exerciseId)
+    if (!seeded) {
+      res.status(404).json({ error: `no such exercise: ${exerciseId}` })
+      return
+    }
+    res.json({
+      task_submission_id: seeded.taskSubmissionId,
+      slide_submission_id: seeded.slideSubmissionId,
+    })
   })
 
   // Spec-exempt reaper simulation for out-of-process consumers: arms the reaper

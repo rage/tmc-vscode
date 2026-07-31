@@ -820,6 +820,55 @@ suite("tmc langs cli spec", function () {
       },
     )
 
+    migrationTest(
+      "should report nothing-to-download for a submission with no files, leaving the exercise alone",
+      async function () {
+        // A browser-made answer has no client uploads, so its download is an empty
+        // list. The CLI always uploads before submitting, so this can only be
+        // reached by seeding it in the mock.
+        await tmc.downloadExercises(
+          [ExerciseIdentifier.from(PASSING_EXERCISE_ID)],
+          false,
+          () => {},
+          PYTHON_COURSE_ID,
+        )
+        const local = (await tmc.listLocalCourseExercises("mooc", PYTHON_COURSE_ID)).unwrap()
+        const entry = local.find(
+          (x) => "exercise-id" in x && x["exercise-id"] === PASSING_EXERCISE_ID,
+        )
+        const exercisePath = (entry as { "exercise-path": string })["exercise-path"]
+        const studentFile = path.join(exercisePath, "src", "passing_exercise.py")
+
+        const seedResponse = await fetch(
+          "http://localhost:4001/mooc-mock/seed-fileless-submission",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ exercise_id: PASSING_EXERCISE_ID }),
+          },
+        )
+        expect(seedResponse.status).to.be.equal(200)
+        const { slide_submission_id: filelessId } = (await seedResponse.json()) as {
+          slide_submission_id: string
+        }
+
+        const onDisk = `${fs.readFileSync(studentFile, "utf8")}\n# must survive the restore\n`
+        fs.writeFileSync(studentFile, onDisk)
+        const before = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
+
+        // `--save-old-state` is on deliberately: the archive url is resolved first,
+        // so the zero-file case must return before submitting the current state and
+        // before the destructive rebuild of the exercise directory.
+        const restore = (
+          await tmc.downloadMoocOldSubmission(PASSING_EXERCISE_ID, exercisePath, filelessId, true)
+        ).unwrap()
+        expect(restore).to.equal("nothing-to-download")
+        expect(fs.readFileSync(studentFile, "utf8")).to.equal(onDisk)
+        const after = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
+        expect(after.length).to.be.equal(before.length)
+      },
+    )
+
     migrationTest("reports mooc login status from the stored credentials file", async function () {
       // `mooc logged-in` only reads credentials_mooc.json; no backend call.
       clearMoocCredentials(configDir)

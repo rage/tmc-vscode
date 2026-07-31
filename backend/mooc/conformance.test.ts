@@ -563,8 +563,9 @@ describe("mooc mock conformance", () => {
   })
 
   test("retention never evicts an upload a submission was made from", async () => {
-    // The CLI's restore errors on any file count other than one, so an evicted
-    // upload would turn a download into a silent failure rather than a 404.
+    // Zero files is a legitimate outcome for the CLI (`nothing-to-download`), so
+    // an evicted upload would silently downgrade a restore to a no-op instead of
+    // failing anywhere a test could see it.
     const { slideSubmissionId } = await submit(passingExercise, [7, 8, 9])
     for (let i = 0; i < 40; i += 1) {
       await uploadOne(failingExercise.slide.exercise_id)
@@ -685,6 +686,41 @@ describe("mooc mock conformance", () => {
       await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submissions`))
     ).json()) as { id: string }[]
     assert.ok(list.some((item) => item.id === slide_submission_id))
+  })
+
+  test("the seeding route produces a listed submission whose download is empty", async () => {
+    // The out-of-process route the integration suite uses to reach the
+    // no-downloadable-files outcome, which the CLI cannot produce itself.
+    const res = await fetch(`${base}/mooc-mock/seed-fileless-submission`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ exercise_id: passingExercise.slide.exercise_id }),
+    })
+    assert.equal(res.status, 200)
+    const seeded = (await res.json()) as {
+      task_submission_id: string
+      slide_submission_id: string
+    }
+    assert.match(seeded.slide_submission_id, /^[0-9a-f-]{36}$/)
+    assert.notEqual(seeded.task_submission_id, seeded.slide_submission_id)
+
+    const download = await authFetch(api(`/submissions/${seeded.slide_submission_id}/download`))
+    assert.equal(download.status, 200)
+    assert.deepEqual(await download.json(), { files: [] })
+
+    const list = (await (
+      await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submissions`))
+    ).json()) as { id: string }[]
+    assert.ok(list.some((item) => item.id === seeded.slide_submission_id))
+  })
+
+  test("seeding a fileless submission for an unknown exercise is a 404", async () => {
+    const res = await fetch(`${base}/mooc-mock/seed-fileless-submission`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ exercise_id: nonexistentExerciseId }),
+    })
+    assert.equal(res.status, 404)
   })
 
   test("grading of an unknown submission is a spec-documented 404", async () => {
