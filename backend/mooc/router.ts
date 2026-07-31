@@ -147,10 +147,10 @@ const retainSubmission = (exerciseId: string, fileIds: string[]): SubmissionReco
 }
 
 /**
- * Seeds a submission carrying no files, as an answer made in the browser leaves
- * behind: it has no client uploads at all, so its download is an empty list.
- * The CLI always uploads before submitting, so this outcome is unreachable
- * through the client API and has to be seeded for a client test to meet it.
+ * Seeds a submission the host has no files for, so its download is an empty
+ * list. The host records an IFrame answer's files too, so this only happens for
+ * an exercise type with no files or a service that cannot enumerate them --
+ * neither reachable through the client API, hence the seed.
  * Returns undefined for an unknown exercise.
  */
 export const seedMoocFilelessSubmission = (

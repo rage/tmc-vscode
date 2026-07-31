@@ -179,12 +179,10 @@ export async function downloadOldSubmission(
   if (oldDownloadResult.err) {
     dialog.errorNotification("Failed to download old submission.", oldDownloadResult.val)
   } else if (oldDownloadResult.val === "nothing-to-download") {
-    // A mooc exercise's submission list includes answers made in the browser,
-    // which have no downloadable files. Nothing was changed, so this is ordinary
-    // news rather than a failure.
-    dialog.notification(
-      "That submission has no files to download; it was not made from this editor.",
-    )
+    // Reachable only for a submission that genuinely has no files, or an exercise
+    // service that cannot enumerate its answers' files. Nothing was changed, so
+    // this is ordinary news rather than a failure.
+    dialog.notification("That submission has no files to download.")
   }
 
   if (editor && document) {

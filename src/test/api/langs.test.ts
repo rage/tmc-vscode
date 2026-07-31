@@ -360,7 +360,7 @@ suite("Langs class arg building", function () {
   })
 
   test("downloadMoocOldSubmission reports a submission with no downloadable files", async function () {
-    // A browser-made submission has no uploads, so the CLI reports
+    // A submission the server has no files for makes the CLI report
     // `nothing-to-download` instead of failing.
     const langs = newLangs()
     stubSpawn(langs, () => Ok(dataOutput("mooc-old-submission-restore", "nothing-to-download")))

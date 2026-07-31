@@ -116,8 +116,8 @@ suite("Download old submission command (mooc branch)", function () {
   })
 
   test("tells the user when the picked submission has no files to download", async function () {
-    // A mooc exercise's submission list includes answers made in the browser,
-    // which carry no uploads. That is ordinary news, not an error notification.
+    // Reachable only for a submission the server has no files for. That is
+    // ordinary news, not an error notification.
     const context = actionContext("nothing-to-download")
     await downloadOldSubmission(context, uri)
 

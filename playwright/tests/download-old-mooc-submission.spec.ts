@@ -7,13 +7,13 @@ import { ExplorerPage } from "../pages/explorer"
 import { MyCoursesPage } from "../pages/my-courses"
 import { QuickPickPage } from "../pages/quick-pick"
 
-// A mooc exercise's submission list includes answers made in the browser, which
-// carry no client uploads and so have nothing to download. That is ordinary news,
-// not an error: the exercise on disk must be left untouched and the user told.
+// A submission the server has no files for has nothing to download. That is
+// ordinary news, not an error: the exercise on disk must be left untouched and
+// the user told.
 //
-// The CLI always uploads before submitting, so this submission shape is
-// unreachable through the client API and has to be seeded in the mock
-// (backend/mooc/router.ts `seedMoocFilelessSubmission`). The integration tier
+// It is unreachable through the client API -- the CLI always uploads before
+// submitting -- so it has to be seeded in the mock (backend/mooc/router.ts
+// `seedMoocFilelessSubmission`). The integration tier
 // covers the CLI's `nothing-to-download` result directly; this walks the UI that
 // reports it -- the explorer context menu and the three quick picks in
 // src/commands/downloadOldSubmission.ts.
@@ -76,7 +76,7 @@ migrationTest(
       await expect(
         page
           .locator(".notifications-toasts")
-          .getByText("That submission has no files to download; it was not made from this editor."),
+          .getByText("That submission has no files to download."),
       ).toBeVisible()
       // Nothing was restored, so the editor still holds the exercise stub.
       await expect(page.getByText(fileContents)).toBeVisible()

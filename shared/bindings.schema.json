@@ -2142,7 +2142,7 @@
           "const": "restored"
         },
         {
-          "description": "The submission has no downloadable files, so nothing on disk was touched.\nAn exercise's submission list includes answers made in the browser, which\ncarry no uploads.",
+          "description": "The host has no files for the submission, so nothing on disk was touched:\nan exercise type with no files, or a service that declares no way to\nenumerate its answers' files.",
           "type": "string",
           "const": "nothing-to-download"
         }

@@ -282,7 +282,7 @@ export type MoocDeviceLogin = z.infer<typeof MoocDeviceLogin>
 export const MoocExerciseDownload = zMoocExerciseDownload
 export type MoocExerciseDownload = z.infer<typeof MoocExerciseDownload>
 
-/** Outcome of `mooc download-old-submission`: `nothing-to-download` for a submission with no files (an answer made in the browser). */
+/** Outcome of `mooc download-old-submission`: `nothing-to-download` for a submission the server has no files for. */
 export const MoocOldSubmissionRestore = zMoocOldSubmissionRestore
 export type MoocOldSubmissionRestore = z.infer<typeof MoocOldSubmissionRestore>
 
