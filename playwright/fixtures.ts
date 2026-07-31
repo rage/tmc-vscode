@@ -58,31 +58,35 @@ async function closeElectron(electronApp: ElectronApplication): Promise<void> {
   }
 }
 
-const userDataDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-user"))
-
-const args = [
-  "--disable-gpu-sandbox",
-  // Xvfb has no real display, so Chromium sometimes backgrounds/kills the
-  // renderer for a window it considers occluded, tearing down VS Code mid-test
-  // ("Target page/context/browser has been closed"). These flags keep the
-  // renderer alive and force software GL.
-  "--disable-gpu",
-  "--disable-dev-shm-usage",
-  "--disable-renderer-backgrounding",
-  "--disable-backgrounding-occluded-windows",
-  "--disable-background-timer-throttling",
-  "--disable-updates",
-  "--extensionDevelopmentPath=" + rootPath,
-  "--new-window",
-  "--no-sandbox",
-  "--profile-temp",
-  "--skip-release-notes",
-  "--skip-welcome",
-  "--user-data-dir=" + userDataDir,
-  // this makes it so vscode will not overwrite the environment
-  // variables we set below in `electron.launch` with values from `~/.bashrc` etc.
-  "--force-disable-user-env",
-]
+// A shared user data dir let VS Code restore the *previous* test's window and
+// workspace state, so e.g. the file explorer rendered a stale projects dir while
+// the editor showed the current one. Must stay per-test, hence built here rather
+// than at module load.
+function launchArgs(userDataDir: string): string[] {
+  return [
+    "--disable-gpu-sandbox",
+    // Xvfb has no real display, so Chromium sometimes backgrounds/kills the
+    // renderer for a window it considers occluded, tearing down VS Code mid-test
+    // ("Target page/context/browser has been closed"). These flags keep the
+    // renderer alive and force software GL.
+    "--disable-gpu",
+    "--disable-dev-shm-usage",
+    "--disable-renderer-backgrounding",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-background-timer-throttling",
+    "--disable-updates",
+    "--extensionDevelopmentPath=" + rootPath,
+    "--new-window",
+    "--no-sandbox",
+    "--profile-temp",
+    "--skip-release-notes",
+    "--skip-welcome",
+    "--user-data-dir=" + userDataDir,
+    // this makes it so vscode will not overwrite the environment
+    // variables we set below in `electron.launch` with values from `~/.bashrc` etc.
+    "--force-disable-user-env",
+  ]
+}
 
 // tmc-langs' per-client config directory inside TMC_LANGS_CONFIG_DIR
 // (src/config/constants.ts CLIENT_NAME).
@@ -126,6 +130,7 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
   vsCode: async ({ moocClientId, seedTmcCredentials: shouldSeedTmcCredentials }, run, testInfo) => {
     const configDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-config"))
     const projectsDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-projects"))
+    const userDataDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-user"))
     if (shouldSeedTmcCredentials) {
       seedTmcCredentials(configDir)
     }
@@ -140,7 +145,7 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
     }
     const electronApp = await electron.launch({
       executablePath: await downloadAndUnzipVSCode(),
-      args,
+      args: launchArgs(userDataDir),
       env: {
         ...process.env,
         RUST_LOG: "TRACE",
@@ -173,6 +178,13 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
     await electronApp.context().tracing.stop(tracePath ? { path: tracePath } : {})
 
     await closeElectron(electronApp)
+
+    // A per-test user data dir is ~50MB of re-extracted VS Code state, on top of
+    // the workspace and config dirs; /tmp here is a 16G tmpfs, so leaking these
+    // fills it within a few suite runs. Only after the process is gone.
+    for (const dir of [userDataDir, configDir, projectsDir]) {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   },
   page: async ({ vsCode }, run) => {
     const page = await vsCode.firstWindow()
