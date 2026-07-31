@@ -1,3 +1,4 @@
+import { expect } from "@playwright/test"
 import type { Page } from "@playwright/test"
 
 export class ExplorerPage {
@@ -39,5 +40,23 @@ export class ExplorerPage {
     for (const file of path) {
       await this.openFile(file)
     }
+  }
+
+  /**
+   * Runs one of the extension's `explorer/context` commands (package.json, group
+   * `TestMyCode`) on a file node. The group renders as flat items in the one
+   * context menu, not a submenu.
+   */
+  public async runContextMenuCommand(filename: string, command: string): Promise<void> {
+    await this.page.locator(".explorer-folders-view").getByText(filename).click({ button: "right" })
+    const item = this.page.locator(".monaco-menu").getByRole("menuitem", { name: command })
+    await expect(item).toBeVisible()
+    // A synthetic click on a monaco menu item does not activate it -- the menu
+    // stays open and the command never runs. Hovering focuses the item, and it
+    // does respond to Enter.
+    await item.hover()
+    await this.page.keyboard.press("Enter")
+    // The menu closing is the only signal the item was actually activated.
+    await expect(item).toBeHidden()
   }
 }
