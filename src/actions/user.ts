@@ -9,7 +9,12 @@ import { BottleneckError, InitializationError } from "../errors";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../shared/shared";
 import { v2 as storage } from "../storage/data";
-import { Logger, parseFeedbackQuestion } from "../utilities/";
+import {
+    acquireSingleFlight,
+    Logger,
+    parseFeedbackQuestion,
+    releaseSingleFlight,
+} from "../utilities/";
 import { getActiveEditorExecutablePath } from "../window";
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse";
 import { ActionContext } from "./types";
@@ -74,7 +79,7 @@ export async function testExercise(
     actionContext: ActionContext,
     exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { tmc, userData } = actionContext;
+    const { dialog, tmc, userData } = actionContext;
     if (!(tmc.ok && userData.ok)) {
         return new Err(new InitializationError("Extension was not initialized properly"));
     }
@@ -89,90 +94,102 @@ export async function testExercise(
         );
     }
 
-    const testRunId = randomPanelId();
-    // render panel
-    const panel: ExerciseTestsPanel = {
-        id: randomPanelId(),
-        type: "ExerciseTests",
-        course: course,
-        exercise: courseExercise,
-        exerciseUri: exercise.uri,
-        testRunId,
-    };
-    await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
-
-    let data: TestResultData = {
-        ...EXAM_TEST_RESULT,
-        id: courseExercise.id,
-        disabled: course.disabled,
-        courseSlug: course.name,
-    };
-
-    if (!course.perhapsExamMode) {
-        const executablePath = getActiveEditorExecutablePath(actionContext);
-        const { process: testRunner, interrupt: testInterrupt } = tmc.val.runTests(
-            exercise.uri.fsPath,
-            executablePath,
-        );
-        const { process: validationRunner, interrupt: validationInterrupt } = tmc.val.runCheckstyle(
-            exercise.uri.fsPath,
-        );
-        testInterrupts.set(testRunId, [testInterrupt, validationInterrupt]);
-        const exerciseName = exercise.exerciseSlug;
-
-        Logger.info(`Running local tests and validations for ${exerciseName}`);
-        const testResults = await testRunner;
-        Logger.info(`Tests finished for ${exerciseName}`);
-
-        if (testResults.err) {
-            TmcPanel.postMessage({
-                type: "testError",
-                target: panel,
-                error: testResults.val,
-            });
-            return Ok.EMPTY;
-        }
-
-        const validationResults = await validationRunner;
-        Logger.info(`Validations finished for ${exerciseName}`);
-
-        if (validationResults.err) {
-            TmcPanel.postMessage({
-                type: "testError",
-                target: panel,
-                error: validationResults.val,
-            });
-            return Ok.EMPTY;
-        }
-
-        data = {
-            testResult: testResults.val,
-            id: courseExercise.id,
-            courseSlug: course.name,
-            exerciseName,
-            tmcLogs: testResults.val.logs,
-            disabled: course.disabled,
-            styleValidationResult: validationResults.val,
-        };
-
-        if (TmcPanel.sidePanel === undefined) {
-            // user closed panel, re-render
-            await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
-        }
-        TmcPanel.postMessage({
-            type: "testResults",
-            target: panel,
-            testResults: data,
-        });
-    } else {
-        // exam
-        TmcPanel.postMessage({
-            type: "willNotRunTestsForExam",
-            target: panel,
-        });
+    // covers the run-tests+checkstyle pair as one unit, so a second click can't start an
+    // overlapping pair for the same exercise
+    const exercisePath = exercise.uri.fsPath;
+    const inFlightKey = `test:${exercisePath}`;
+    if (!acquireSingleFlight(inFlightKey)) {
+        Logger.warn(`Rejected test run, already in flight for ${exercisePath}`);
+        dialog.notification("Tests are already running for this exercise.");
+        return Err(new BottleneckError("Tests are already running for this exercise."));
     }
 
-    return Ok.EMPTY;
+    try {
+        const testRunId = randomPanelId();
+        const panel: ExerciseTestsPanel = {
+            id: randomPanelId(),
+            type: "ExerciseTests",
+            course: course,
+            exercise: courseExercise,
+            exerciseUri: exercise.uri,
+            testRunId,
+        };
+        await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
+
+        let data: TestResultData = {
+            ...EXAM_TEST_RESULT,
+            id: courseExercise.id,
+            disabled: course.disabled,
+            courseSlug: course.name,
+        };
+
+        if (!course.perhapsExamMode) {
+            const executablePath = getActiveEditorExecutablePath(actionContext);
+            const { process: testRunner, interrupt: testInterrupt } = tmc.val.runTests(
+                exercisePath,
+                executablePath,
+            );
+            const { process: validationRunner, interrupt: validationInterrupt } =
+                tmc.val.runCheckstyle(exercisePath);
+            testInterrupts.set(testRunId, [testInterrupt, validationInterrupt]);
+            const exerciseName = exercise.exerciseSlug;
+
+            Logger.info(`Running local tests and validations for ${exerciseName}`);
+            const testResults = await testRunner;
+            Logger.info(`Tests finished for ${exerciseName}`);
+
+            if (testResults.err) {
+                TmcPanel.postMessage({
+                    type: "testError",
+                    target: panel,
+                    error: testResults.val,
+                });
+                return Ok.EMPTY;
+            }
+
+            const validationResults = await validationRunner;
+            Logger.info(`Validations finished for ${exerciseName}`);
+
+            if (validationResults.err) {
+                TmcPanel.postMessage({
+                    type: "testError",
+                    target: panel,
+                    error: validationResults.val,
+                });
+                return Ok.EMPTY;
+            }
+
+            data = {
+                testResult: testResults.val,
+                id: courseExercise.id,
+                courseSlug: course.name,
+                exerciseName,
+                tmcLogs: testResults.val.logs,
+                disabled: course.disabled,
+                styleValidationResult: validationResults.val,
+            };
+
+            if (TmcPanel.sidePanel === undefined) {
+                // user closed panel, re-render
+                await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
+            }
+            TmcPanel.postMessage({
+                type: "testResults",
+                target: panel,
+                testResults: data,
+            });
+        } else {
+            // exam
+            TmcPanel.postMessage({
+                type: "willNotRunTestsForExam",
+                target: panel,
+            });
+        }
+
+        return Ok.EMPTY;
+    } finally {
+        releaseSingleFlight(inFlightKey);
+    }
 }
 
 /**
@@ -184,7 +201,7 @@ export async function submitExercise(
     actionContext: ActionContext,
     exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-    const { exerciseDecorationProvider, tmc, userData } = actionContext;
+    const { dialog, exerciseDecorationProvider, tmc, userData } = actionContext;
     if (!(tmc.ok && userData.ok && exerciseDecorationProvider.ok)) {
         return new Err(new InitializationError("Extension was not initialized properly"));
     }
@@ -200,73 +217,84 @@ export async function submitExercise(
         );
     }
 
-    const panel: ExerciseSubmissionPanel = {
-        id: randomPanelId(),
-        type: "ExerciseSubmission",
-        course,
-        exercise: courseExercise,
-    };
-    await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
+    // shared with pasteExercise: submitting and pasting the same exercise can't overlap either
+    const exercisePath = exercise.uri.fsPath;
+    const inFlightKey = `submit:${exercisePath}`;
+    if (!acquireSingleFlight(inFlightKey)) {
+        Logger.warn(`Rejected submit, already in flight for ${exercisePath}`);
+        dialog.notification("A submission for this exercise is already in progress.");
+        return Err(new BottleneckError("A submission for this exercise is already in progress."));
+    }
 
-    const submissionResult = await tmc.val.submitExerciseAndWaitForResults(
-        courseExercise.id,
-        exercise.uri.fsPath,
-        (progressPercent, message) => {
-            TmcPanel.postMessage({
-                type: "submissionStatusUpdate",
-                target: panel,
-                progressPercent,
-                message,
-            });
-        },
-        (url) => {
-            TmcPanel.postMessage({
-                type: "submissionStatusUrl",
-                target: panel,
-                url,
-            });
-        },
-    );
+    try {
+        const panel: ExerciseSubmissionPanel = {
+            id: randomPanelId(),
+            type: "ExerciseSubmission",
+            course,
+            exercise: courseExercise,
+        };
+        await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
 
-    if (submissionResult.err) {
-        if (submissionResult.val instanceof BottleneckError) {
-            Logger.warn("Submission was cancelled:", submissionResult.val);
-            return Ok.EMPTY;
+        const submissionResult = await tmc.val.submitExerciseAndWaitForResults(
+            courseExercise.id,
+            exercisePath,
+            (progressPercent, message) => {
+                TmcPanel.postMessage({
+                    type: "submissionStatusUpdate",
+                    target: panel,
+                    progressPercent,
+                    message,
+                });
+            },
+            (url) => {
+                TmcPanel.postMessage({
+                    type: "submissionStatusUrl",
+                    target: panel,
+                    url,
+                });
+            },
+        );
+
+        if (submissionResult.err) {
+            TmcPanel.postMessage({
+                type: "submissionStatusError",
+                target: panel,
+                error: submissionResult.val,
+            });
+            return submissionResult;
+        }
+
+        const statusData = submissionResult.val;
+        if (statusData.status === "ok" && statusData.all_tests_passed) {
+            userData.val
+                .setExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug)
+                .then(() => {
+                    exerciseDecorationProvider.val.updateDecorationsForExercises(exercise);
+                });
+        }
+        const questions = statusData.feedback_questions
+            ? parseFeedbackQuestion(statusData.feedback_questions)
+            : [];
+        if (TmcPanel.sidePanel === undefined) {
+            await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
         }
         TmcPanel.postMessage({
-            type: "submissionStatusError",
+            type: "submissionResult",
             target: panel,
-            error: submissionResult.val,
+            result: statusData,
+            questions,
         });
-        return submissionResult;
-    }
 
-    const statusData = submissionResult.val;
-    if (statusData.status === "ok" && statusData.all_tests_passed) {
-        userData.val.setExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug).then(() => {
-            exerciseDecorationProvider.val.updateDecorationsForExercises(exercise);
-        });
-    }
-    const questions = statusData.feedback_questions
-        ? parseFeedbackQuestion(statusData.feedback_questions)
-        : [];
-    if (TmcPanel.sidePanel === undefined) {
-        await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel);
-    }
-    TmcPanel.postMessage({
-        type: "submissionResult",
-        target: panel,
-        result: statusData,
-        questions,
-    });
+        const courseData = userData.val.getCourseByName(
+            exercise.courseSlug,
+        ) as Readonly<storage.LocalCourseData>;
+        await checkForCourseUpdates(actionContext, courseData.id);
+        vscode.commands.executeCommand("tmc.updateExercises", "silent");
 
-    const courseData = userData.val.getCourseByName(
-        exercise.courseSlug,
-    ) as Readonly<storage.LocalCourseData>;
-    await checkForCourseUpdates(actionContext, courseData.id);
-    vscode.commands.executeCommand("tmc.updateExercises", "silent");
-
-    return Ok.EMPTY;
+        return Ok.EMPTY;
+    } finally {
+        releaseSingleFlight(inFlightKey);
+    }
 }
 
 /**
@@ -291,22 +319,34 @@ export async function pasteExercise(
         return Err(new Error("Failed to resolve exercise id"));
     }
 
-    const pasteResult = await tmc.val.submitExerciseToPaste(exerciseId, exercisePath);
-    if (pasteResult.err) {
-        dialog.errorNotification(
-            `Failed to send exercise to TMC Paste: ${pasteResult.val.message}.`,
-            pasteResult.val,
-        );
-        return pasteResult;
+    // same key prefix as submitExercise: submitting and pasting the same exercise can't overlap
+    const inFlightKey = `submit:${exercisePath}`;
+    if (!acquireSingleFlight(inFlightKey)) {
+        Logger.warn(`Rejected paste submit, already in flight for ${exercisePath}`);
+        dialog.notification("A submission for this exercise is already in progress.");
+        return Err(new BottleneckError("A submission for this exercise is already in progress."));
     }
 
-    const pasteLink = pasteResult.val;
-    if (pasteLink === "") {
-        const message = "Didn't receive paste link from server.";
-        return new Err(new Error(`Failed to send exercise to TMC Paste: ${message}`));
-    }
+    try {
+        const pasteResult = await tmc.val.submitExerciseToPaste(exerciseId, exercisePath);
+        if (pasteResult.err) {
+            dialog.errorNotification(
+                `Failed to send exercise to TMC Paste: ${pasteResult.val.message}.`,
+                pasteResult.val,
+            );
+            return pasteResult;
+        }
 
-    return new Ok(pasteLink);
+        const pasteLink = pasteResult.val;
+        if (pasteLink === "") {
+            const message = "Didn't receive paste link from server.";
+            return new Err(new Error(`Failed to send exercise to TMC Paste: ${message}`));
+        }
+
+        return new Ok(pasteLink);
+    } finally {
+        releaseSingleFlight(inFlightKey);
+    }
 }
 
 /**

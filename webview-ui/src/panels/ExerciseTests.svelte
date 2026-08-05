@@ -20,6 +20,9 @@
     const testResults = loadable<TestResultData>();
     const tryingToRunTestsForExam = loadable<boolean>();
 
+    // guards against double-clicks before the panel switches to ExerciseSubmission
+    let submitting = false;
+
     const successPoints = derived(testResults, ($testResults) => {
         return ($testResults?.testResult.testResults ?? [])
             .filter((tr) => tr.successful)
@@ -67,6 +70,11 @@
             }
             case "testError": {
                 testError.set(message.error);
+                submitting = false;
+                break;
+            }
+            case "submitFailed": {
+                submitting = false;
                 break;
             }
             case "willNotRunTestsForExam": {
@@ -88,6 +96,10 @@
         });
     }
     function submit() {
+        if (submitting) {
+            return;
+        }
+        submitting = true;
         vscode.postMessage({
             type: "submitExercise",
             course: panel.course,
@@ -159,7 +171,13 @@
             </div>
         {:else}
             <div class="header-container">
-                <vscode-button role="button" tabindex="0" on:click={submit} on:keypress={submit}>
+                <vscode-button
+                    role="button"
+                    tabindex="0"
+                    disabled={submitting}
+                    on:click={submit}
+                    on:keypress={submit}
+                >
                     Send solution to server
                 </vscode-button>
                 <span class="help-box-container">
@@ -194,7 +212,13 @@
 
     <div>You can submit your answer with the button below.</div>
     <div class="exam-submission-button-container">
-        <vscode-button role="button" tabindex="0" on:click={submit} on:keypress={submit}>
+        <vscode-button
+            role="button"
+            tabindex="0"
+            disabled={submitting}
+            on:click={submit}
+            on:keypress={submit}
+        >
             Submit to server
         </vscode-button>
     </div>

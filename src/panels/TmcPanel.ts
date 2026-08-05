@@ -48,21 +48,29 @@ export class TmcPanel {
     // if true, this is the main panel, otherwise this is the side panel
     private readonly _isMain: boolean;
 
+    // last panel rendered into this webview; resent on "ready" so a reloaded webview can recover
+    private _lastPanel: Panel | undefined;
+
+    // last targeted (non-broadcast) message per (target id, message type) posted since _lastPanel
+    // was set, keyed as `${id}:${type}`; resent after setPanel on "ready" so a reload doesn't lose
+    // one-shot results (testResults, submissionResult, ...) that already fired before the reload
+    private _messageBuffer: Map<string, ExtensionToWebview> = new Map();
+
     private _disposables: Disposable[] = [];
 
     // sends a message to the main and side panels
     public static async postMessage(...messages: Array<ExtensionToWebview>): Promise<void> {
-        Logger.info("Posting message(s) to webview", JSON.stringify(messages, null, 2));
-        const mainWebview = TmcPanel.mainPanel?._panel.webview;
-        const sideWebview = TmcPanel.sidePanel?._panel.webview;
         for (const message of messages) {
-            if (mainWebview) {
-                mainWebview.postMessage(message);
-            }
-            if (sideWebview) {
-                sideWebview.postMessage(message);
-            }
+            TmcPanel.mainPanel?._postMessage(message, "Main webview");
+            TmcPanel.sidePanel?._postMessage(message, "Side webview");
         }
+    }
+
+    private _postMessage(message: ExtensionToWebview, context: string): void {
+        if ("id" in message.target) {
+            this._messageBuffer.set(`${message.target.id}:${message.type}`, message);
+        }
+        postMessageToWebview(this._panel.webview, message, context);
     }
 
     // renders the `panel` in the main panel
@@ -94,7 +102,8 @@ export class TmcPanel {
     ): Promise<void> {
         const column = ViewColumn.Two;
         if (TmcPanel.sidePanel !== undefined) {
-            await renderPanel(panel, TmcPanel.sidePanel._panel.webview);
+            Logger.info(`Revealing existing side panel for "${panel.type}"`);
+            await TmcPanel.sidePanel._renderPanel(panel);
             TmcPanel.sidePanel._panel.reveal(column, false);
         } else {
             const currentPanel = await TmcPanel.renderNew(
@@ -128,6 +137,9 @@ export class TmcPanel {
         }
         const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", column, {
             enableScripts: true,
+            // without this, a hidden-then-revealed panel reloads the webview from scratch,
+            // dropping any fire-and-forget message posted before the reveal
+            retainContextWhenHidden: true,
             localResourceRoots: [
                 Uri.joinPath(extensionUri, "out"),
                 Uri.joinPath(extensionUri, "webview-ui/public/build"),
@@ -142,7 +154,7 @@ export class TmcPanel {
             actionContext,
             isMain,
         );
-        await renderPanel(panel, currentPanel._panel.webview);
+        await currentPanel._renderPanel(panel);
         return currentPanel;
     }
 
@@ -167,10 +179,12 @@ export class TmcPanel {
         );
 
         this._isMain = isMain;
+        Logger.info(`Created ${isMain ? "main" : "side"} panel`);
     }
 
     // disposes the side panel when disposing the main panel as well
     public dispose(): void {
+        Logger.info(`Disposing ${this._isMain ? "main" : "side"} panel`);
         this._panel.dispose();
 
         if (this._isMain) {
@@ -186,6 +200,13 @@ export class TmcPanel {
                 disposable.dispose();
             }
         }
+    }
+
+    // renders `panel` into this webview and remembers it, so it can be resent on "ready"
+    private async _renderPanel(panel: Panel): Promise<void> {
+        this._lastPanel = panel;
+        this._messageBuffer.clear();
+        await renderPanel(panel, this._panel.webview);
     }
 
     private _getWebviewContent(webview: Webview, extensionUri: Uri): string {
@@ -246,6 +267,25 @@ export class TmcPanel {
         webview.onDidReceiveMessage(
             async (message: WebviewToExtension) => {
                 switch (message.type) {
+                    case "ready": {
+                        // webview (re)mounted; resend whatever panel it should be showing
+                        Logger.info(
+                            `Received "ready" from ${this._isMain ? "main" : "side"} webview` +
+                                (this._lastPanel
+                                    ? `, resending panel "${this._lastPanel.type}"`
+                                    : ", no panel to resend"),
+                        );
+                        if (this._lastPanel) {
+                            // resend via renderPanel directly, not this._renderPanel(), which
+                            // would clear the buffer we're about to resend
+                            await renderPanel(this._lastPanel, webview);
+                            const context = this._isMain ? "Main webview" : "Side webview";
+                            for (const buffered of this._messageBuffer.values()) {
+                                postMessageToWebview(webview, buffered, context);
+                            }
+                        }
+                        break;
+                    }
                     case "requestCourseDetailsData": {
                         const { tmc, userData, workspaceManager } = actionContext;
                         if (!(tmc.ok && userData.ok && workspaceManager.ok)) {
@@ -514,26 +554,20 @@ export class TmcPanel {
                                 error: result.val.message,
                             });
                         } else {
-                            await renderPanel(
-                                {
-                                    id: randomPanelId(),
-                                    type: "MyCourses",
-                                    courseDeadlines: {},
-                                },
-                                webview,
-                            );
+                            await this._renderPanel({
+                                id: randomPanelId(),
+                                type: "MyCourses",
+                                courseDeadlines: {},
+                            });
                         }
                         break;
                     }
                     case "openCourseDetails": {
-                        await renderPanel(
-                            {
-                                id: randomPanelId(),
-                                type: "CourseDetails",
-                                courseId: message.courseId,
-                            },
-                            webview,
-                        );
+                        await this._renderPanel({
+                            id: randomPanelId(),
+                            type: "CourseDetails",
+                            courseId: message.courseId,
+                        });
                         break;
                     }
                     case "selectOrganization": {
@@ -559,14 +593,11 @@ export class TmcPanel {
                             )
                         ) {
                             await removeCourse(actionContext, message.id);
-                            await renderPanel(
-                                {
-                                    id: randomPanelId(),
-                                    type: "MyCourses",
-                                    courseDeadlines: {},
-                                },
-                                webview,
-                            );
+                            await this._renderPanel({
+                                id: randomPanelId(),
+                                type: "MyCourses",
+                                courseDeadlines: {},
+                            });
                             actionContext.dialog.notification(
                                 `${course.name} was removed from courses.`,
                             );
@@ -582,14 +613,11 @@ export class TmcPanel {
                         break;
                     }
                     case "openMyCourses": {
-                        await renderPanel(
-                            {
-                                id: randomPanelId(),
-                                type: "MyCourses",
-                                courseDeadlines: {},
-                            },
-                            webview,
-                        );
+                        await this._renderPanel({
+                            id: randomPanelId(),
+                            type: "MyCourses",
+                            courseDeadlines: {},
+                        });
                         break;
                     }
                     case "closeExercises": {
@@ -703,14 +731,11 @@ export class TmcPanel {
                                 updateResult.val,
                             );
                         }
-                        await renderPanel(
-                            {
-                                id: randomPanelId(),
-                                type: "CourseDetails",
-                                courseId: courseId,
-                            },
-                            webview,
-                        );
+                        await this._renderPanel({
+                            id: randomPanelId(),
+                            type: "CourseDetails",
+                            courseId: courseId,
+                        });
                         break;
                     }
                     case "selectCourse": {
@@ -778,18 +803,29 @@ export class TmcPanel {
                         break;
                     }
                     case "submitExercise": {
-                        await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-                            id: randomPanelId(),
-                            type: "ExerciseSubmission",
-                            course: message.course,
-                            exercise: message.exercise,
-                        });
-                        commands.submitExercise(
-                            extensionContext,
-                            actionContext,
-                            message.exerciseUri,
-                        );
-
+                        // actions.submitExercise (called from commands.submitExercise) owns
+                        // rendering the ExerciseSubmission panel itself, gated on its single-flight
+                        // guard - rendering it here first would blow past that guard and orphan
+                        // the panel on a duplicate click
+                        try {
+                            const result = await commands.submitExercise(
+                                extensionContext,
+                                actionContext,
+                                message.exerciseUri,
+                            );
+                            if (result.err) {
+                                TmcPanel.postMessage({
+                                    type: "submitFailed",
+                                    target: { type: "ExerciseTests" },
+                                });
+                            }
+                        } catch (error) {
+                            Logger.error("Unexpected error during exercise submission", error);
+                            TmcPanel.postMessage({
+                                type: "submitFailed",
+                                target: { type: "ExerciseTests" },
+                            });
+                        }
                         break;
                     }
                     case "pasteExercise": {

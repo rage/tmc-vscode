@@ -48,6 +48,10 @@ ${ev.reason.stack}
 </pre>
 `;
         };
+
+        // tells the extension this webview is (re)mounted, so it can resend the panel
+        // it last set (a hidden-then-revealed webview reloads and loses fire-and-forget messages)
+        vscode.postMessage({ type: "ready" });
     });
 
     // here, we register all of the components from VSCode's toolkit that we use

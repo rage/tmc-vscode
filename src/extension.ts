@@ -32,6 +32,7 @@ import { createIs } from "typia";
 import * as vscode from "vscode";
 
 let maintenanceInterval: NodeJS.Timeout | undefined;
+let activeTmc: TMC | undefined;
 
 function initializationError(dialog: Dialog, step: string, error: Error, cliFolder: string): void {
     Logger.errorWithDialog(
@@ -90,6 +91,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
             }),
         );
     }
+    activeTmc = tmc.ok ? tmc.val : undefined;
 
     // check auth status
     let authenticated = false;
@@ -328,4 +330,6 @@ export function deactivate(): void {
     if (maintenanceInterval) {
         clearInterval(maintenanceInterval);
     }
+    // background CLI processes (e.g. submit) would otherwise keep running past shutdown
+    activeTmc?.killAllProcesses();
 }
