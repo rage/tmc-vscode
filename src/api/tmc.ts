@@ -40,7 +40,7 @@ import {
     UpdatedExercise,
 } from "../shared/langsSchema";
 import { BaseError } from "../shared/shared";
-import { Logger } from "../utilities/logger";
+import { Logger, LogLevel } from "../utilities/logger";
 import { SubmissionFeedback } from "./types";
 import * as cp from "child_process";
 import * as kill from "tree-kill";
@@ -101,6 +101,8 @@ export default class TMC {
     private _onLogin?: () => void;
     private _onLogout?: () => void;
 
+    private readonly _activeInterrupts: Set<() => void> = new Set();
+
     /**
      * Creates a new instance of TMC interface class.
      *
@@ -131,6 +133,17 @@ export default class TMC {
             case "logout":
                 this._onLogout = callback;
                 break;
+        }
+    }
+
+    /**
+     * Kills every CLI process spawned so far; ones started afterwards are unaffected.
+     */
+    public killAllProcesses(): void {
+        const interrupts = Array.from(this._activeInterrupts);
+        Logger.info(`Killing ${interrupts.length} active CLI process(es)`);
+        for (const interrupt of interrupts) {
+            interrupt();
         }
     }
 
@@ -276,14 +289,13 @@ export default class TMC {
             env,
             onStdout: (data) =>
                 progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
-            onStderr: (data) => Logger.info("Rust Langs", data),
             processTimeout: CLI_PROCESS_TIMEOUT,
         });
         if (process.err) {
             return { process: Promise.resolve(process), interrupt: (): void => {} };
         }
         const { interrupt, result } = process.val;
-        const postResult = result.then((res) =>
+        const postResult = this._trackInterrupt(interrupt, result).then((res) =>
             res
                 .andThen((x) => this._checkLangsResponse(x, "test-result"))
                 .map((x) => x.data["output-data"]),
@@ -303,14 +315,13 @@ export default class TMC {
             args: ["checkstyle", "--locale", "en", "--exercise-path", exercisePath],
             onStdout: (data) =>
                 progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
-            onStderr: (data) => Logger.info("Rust Langs", data),
             processTimeout: CLI_PROCESS_TIMEOUT,
         });
         if (process.err) {
             return { process: Promise.resolve(process), interrupt: (): void => {} };
         }
         const { interrupt, result } = process.val;
-        const checkstyleResult = result.then((res) =>
+        const checkstyleResult = this._trackInterrupt(interrupt, result).then((res) =>
             res
                 .andThen((x) => this._checkLangsResponse(x, "validation"))
                 .map((x) => x.data["output-data"]),
@@ -966,7 +977,8 @@ export default class TMC {
         if (process.err) {
             return process;
         }
-        const res = await process.val.result;
+        const { interrupt, result } = process.val;
+        const res = await this._trackInterrupt(interrupt, result);
         return res
             .andThen((x) => this._checkLangsResponse(x, outputDataKind))
             .andThen((x) => {
@@ -978,6 +990,18 @@ export default class TMC {
                 }
                 return Ok(x);
             });
+    }
+
+    /**
+     * Exposes `interrupt` to `killAllProcesses()` for the lifetime of `result`.
+     */
+    private async _trackInterrupt<T>(interrupt: () => void, result: Promise<T>): Promise<T> {
+        this._activeInterrupts.add(interrupt);
+        try {
+            return await result;
+        } finally {
+            this._activeInterrupts.delete(interrupt);
+        }
     }
 
     /**
@@ -1064,15 +1088,19 @@ export default class TMC {
         Logger.debug(`MOOC backend at ${moocBackendUrl}`);
         Logger.debug(`Config dir at ${tmcLangsConfigDir}`);
 
+        // debug pulls in j4rs/JNI spam, so only ask for it when the user opted into verbose
+        const cliLogLevel = Logger.level === LogLevel.Verbose ? "debug" : "info";
+
         let active = true;
         let interrupted = false;
         let cprocess;
+        const startTime = Date.now();
         try {
             cprocess = cp.spawn(this.cliPath, args, {
                 env: {
                     ...process.env,
                     ...env,
-                    RUST_LOG: "debug,rustls=warn,reqwest=warn",
+                    RUST_LOG: `${cliLogLevel},rustls=warn,reqwest=warn`,
                     TMC_LANGS_TMC_ROOT_URL: tmcBackendUrl,
                     TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
                     TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
@@ -1114,7 +1142,9 @@ ${error.message}`;
             });
             cprocess.stderr.on("data", (chunk) => {
                 const data = chunk.toString();
-                Logger.warn("stderr", data);
+                // only worth warning about if the process ends up failing, which the
+                // EmptyLangsResponseError path below handles from `stderr`
+                Logger.debug("stderr", data);
                 stderr.push(data);
                 onStderr?.(data);
             });
@@ -1129,6 +1159,9 @@ ${error.message}`;
             });
             cprocess.on("exit", (code) => {
                 resultCode = code ?? 0;
+                Logger.info(
+                    `Process exited with code ${resultCode} after ${Date.now() - startTime}ms: ${loggableCommand}`,
+                );
                 if (stdoutEnded) {
                     if (timeout) {
                         clearTimeout(timeout);

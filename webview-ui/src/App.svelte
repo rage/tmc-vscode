@@ -48,6 +48,9 @@ ${ev.reason.stack}
 </pre>
 `;
         };
+
+        // a reload loses whatever the extension already posted, so ask it to resend
+        vscode.postMessage({ type: "ready" });
     });
 
     // here, we register all of the components from VSCode's toolkit that we use
