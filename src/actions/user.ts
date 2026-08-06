@@ -4,7 +4,12 @@
  * -------------------------------------------------------------------------------------------------
  */
 import { WorkspaceExercise } from "../api/workspaceManager";
-import { EXAM_TEST_RESULT, NOTIFICATION_DELAY } from "../config/constants";
+import {
+    CLI_PROCESS_TIMEOUT,
+    EXAM_TEST_RESULT,
+    NOTIFICATION_DELAY,
+    SUBMIT_PROCESS_TIMEOUT,
+} from "../config/constants";
 import { BottleneckError, InitializationError } from "../errors";
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel";
 import { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../shared/shared";
@@ -97,7 +102,7 @@ export async function testExercise(
     // guards the run-tests + checkstyle pair as one unit against a second click
     const exercisePath = exercise.uri.fsPath;
     const inFlightKey = `test:${exercisePath}`;
-    if (!acquireSingleFlight(inFlightKey)) {
+    if (!acquireSingleFlight(inFlightKey, 2 * CLI_PROCESS_TIMEOUT + 30_000)) {
         Logger.warn(`Rejected test run, already in flight for ${exercisePath}`);
         dialog.notification("Tests are already running for this exercise.");
         return Err(new BottleneckError("Tests are already running for this exercise."));
@@ -219,7 +224,7 @@ export async function submitExercise(
     // key shared with pasteExercise, which must not overlap a submit of the same exercise
     const exercisePath = exercise.uri.fsPath;
     const inFlightKey = `submit:${exercisePath}`;
-    if (!acquireSingleFlight(inFlightKey)) {
+    if (!acquireSingleFlight(inFlightKey, SUBMIT_PROCESS_TIMEOUT + 30_000)) {
         Logger.warn(`Rejected submit, already in flight for ${exercisePath}`);
         dialog.notification("A submission for this exercise is already in progress.");
         return Err(new BottleneckError("A submission for this exercise is already in progress."));
@@ -283,17 +288,18 @@ export async function submitExercise(
             result: statusData,
             questions,
         });
-
-        const courseData = userData.val.getCourseByName(
-            exercise.courseSlug,
-        ) as Readonly<storage.LocalCourseData>;
-        await checkForCourseUpdates(actionContext, courseData.id);
-        vscode.commands.executeCommand("tmc.updateExercises", "silent");
-
-        return Ok.EMPTY;
     } finally {
+        // released once the result is posted, since the panel offers Paste from that point on
         releaseSingleFlight(inFlightKey);
     }
+
+    const courseData = userData.val.getCourseByName(
+        exercise.courseSlug,
+    ) as Readonly<storage.LocalCourseData>;
+    await checkForCourseUpdates(actionContext, courseData.id);
+    vscode.commands.executeCommand("tmc.updateExercises", "silent");
+
+    return Ok.EMPTY;
 }
 
 /**
@@ -320,7 +326,7 @@ export async function pasteExercise(
 
     // key shared with submitExercise, which must not overlap a paste of the same exercise
     const inFlightKey = `submit:${exercisePath}`;
-    if (!acquireSingleFlight(inFlightKey)) {
+    if (!acquireSingleFlight(inFlightKey, CLI_PROCESS_TIMEOUT + 30_000)) {
         Logger.warn(`Rejected paste submit, already in flight for ${exercisePath}`);
         dialog.notification("A submission for this exercise is already in progress.");
         return Err(new BottleneckError("A submission for this exercise is already in progress."));

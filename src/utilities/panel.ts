@@ -1,5 +1,6 @@
+import { DEBUG_MODE } from "../config/constants";
 import { ExtensionToWebview, Panel } from "../shared/shared";
-import { Logger } from "./logger";
+import { Logger, LogLevel } from "./logger";
 import { Webview } from "vscode";
 
 /**
@@ -26,7 +27,10 @@ export function postMessageToWebview(
 ): Thenable<boolean> {
     // payloads can embed whole build logs, too large for info level
     Logger.info(`Posting a message to ${context}: "${message.type}"`);
-    Logger.debug("Message contents", JSON.stringify(message, null, 2));
+    // Logger.debug evaluates its args eagerly, so an ungated stringify would run at every level
+    if (DEBUG_MODE || Logger.level === LogLevel.Verbose) {
+        Logger.debug("Message contents", JSON.stringify(message, null, 2));
+    }
     const sent = webview.postMessage(message);
     sent.then((delivered) => {
         if (!delivered) {

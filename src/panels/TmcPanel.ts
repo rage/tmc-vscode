@@ -51,8 +51,8 @@ export class TmcPanel {
     // resent on "ready" so a reloaded webview can recover
     private _lastPanel: Panel | undefined;
 
-    // latest targeted message per `${id}:${type}` since _lastPanel was set, resent after it
-    // on "ready" so a reload doesn't lose one-shot results that already fired
+    // latest message per type targeted at _lastPanel's id, resent after it on "ready"
+    // so a reload doesn't lose one-shot results that already fired
     private _messageBuffer: Map<string, ExtensionToWebview> = new Map();
 
     private _disposables: Disposable[] = [];
@@ -66,7 +66,8 @@ export class TmcPanel {
     }
 
     private _postMessage(message: ExtensionToWebview, context: string): void {
-        if ("id" in message.target) {
+        // an entry for any other id could never match the resent _lastPanel, nor be cleared
+        if ("id" in message.target && message.target.id === this._lastPanel?.id) {
             this._messageBuffer.set(`${message.target.id}:${message.type}`, message);
         }
         postMessageToWebview(this._panel.webview, message, context);

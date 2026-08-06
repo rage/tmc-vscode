@@ -3,6 +3,7 @@ import {
     CLI_PROCESS_TIMEOUT,
     MINIMUM_SUBMISSION_INTERVAL,
     MOOC_BACKEND_URL,
+    SUBMIT_PROCESS_TIMEOUT,
     TMC_BACKEND_URL,
 } from "../config/constants";
 import {
@@ -66,11 +67,19 @@ interface LangsProcessArgs {
     onStdout?: (data: StatusUpdateData) => void;
     stdin?: string;
     processTimeout?: number;
+    /**
+     * Registers the process with `killAllProcesses()`. Only set for commands with no
+     * partial-write failure mode (network-only submit/paste) -- a killed download or settings
+     * write can corrupt state.
+     */
+    interruptOnDeactivate?: boolean;
 }
 
 interface LangsProcessRunner {
     interrupt(): void;
     result: Promise<Result<OutputData, BaseError>>;
+    /** Raw stderr collected so far; complete once `result` has settled. */
+    getStderr(): string;
 }
 
 interface ResponseCacheEntry {
@@ -137,7 +146,9 @@ export default class TMC {
     }
 
     /**
-     * Kills every CLI process spawned so far; ones started afterwards are unaffected.
+     * Kills every CLI process opted in via `interruptOnDeactivate` (submit, paste, test runs);
+     * downloads, extraction, and settings/credentials writes are left running so a window
+     * reload can't leave them half-written.
      */
     public killAllProcesses(): void {
         const interrupts = Array.from(this._activeInterrupts);
@@ -294,10 +305,10 @@ export default class TMC {
         if (process.err) {
             return { process: Promise.resolve(process), interrupt: (): void => {} };
         }
-        const { interrupt, result } = process.val;
+        const { interrupt, result, getStderr } = process.val;
         const postResult = this._trackInterrupt(interrupt, result).then((res) =>
             res
-                .andThen((x) => this._checkLangsResponse(x, "test-result"))
+                .andThen((x) => this._checkLangsResponse(x, "test-result", getStderr()))
                 .map((x) => x.data["output-data"]),
         );
 
@@ -320,10 +331,10 @@ export default class TMC {
         if (process.err) {
             return { process: Promise.resolve(process), interrupt: (): void => {} };
         }
-        const { interrupt, result } = process.val;
+        const { interrupt, result, getStderr } = process.val;
         const checkstyleResult = this._trackInterrupt(interrupt, result).then((res) =>
             res
-                .andThen((x) => this._checkLangsResponse(x, "validation"))
+                .andThen((x) => this._checkLangsResponse(x, "validation", getStderr()))
                 .map((x) => x.data["output-data"]),
         );
         return { process: checkstyleResult, interrupt };
@@ -848,6 +859,8 @@ export default class TMC {
                     exerciseId.toString(),
                 ),
                 onStdout,
+                processTimeout: SUBMIT_PROCESS_TIMEOUT,
+                interruptOnDeactivate: true,
             },
             "submission-finished",
         );
@@ -883,6 +896,8 @@ export default class TMC {
                     "--submission-path",
                     exercisePath,
                 ),
+                processTimeout: CLI_PROCESS_TIMEOUT,
+                interruptOnDeactivate: true,
             },
             "new-submission",
         );
@@ -977,10 +992,12 @@ export default class TMC {
         if (process.err) {
             return process;
         }
-        const { interrupt, result } = process.val;
-        const res = await this._trackInterrupt(interrupt, result);
+        const { interrupt, result, getStderr } = process.val;
+        const res = langsArgs.interruptOnDeactivate
+            ? await this._trackInterrupt(interrupt, result)
+            : await result;
         return res
-            .andThen((x) => this._checkLangsResponse(x, outputDataKind))
+            .andThen((x) => this._checkLangsResponse(x, outputDataKind, getStderr()))
             .andThen((x) => {
                 if (x && cacheKey) {
                     this._responseCache.set(cacheKey, { response: x, timestamp: currentTime });
@@ -1006,10 +1023,14 @@ export default class TMC {
 
     /**
      * Checks langs response for generic errors.
+     *
+     * @param stderr Raw CLI stderr, appended to the returned error's `details` since neither this
+     * error frame nor an `interrupted` RuntimeError carries it otherwise.
      */
     private _checkLangsResponse<T extends DataKind["output-data-kind"] | null>(
         langsResponse: OutputData,
         outputDataKind: T,
+        stderr: string,
     ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, BaseError> {
         if (!dataMatchesKind(langsResponse, outputDataKind)) {
             Logger.error("Unexpected TMC-langs response.", langsResponse);
@@ -1031,12 +1052,13 @@ export default class TMC {
         const data = langsResponse.data;
         const message = langsResponse.message;
         const traceString = data["output-data"].trace.join("\n");
+        const details = [traceString, stderr && `stderr: ${stderr}`].filter(Boolean).join("\n");
         const errorKind = data["output-data"].kind;
         switch (errorKind) {
             case "connection-error":
-                return Err(new ConnectionError(message, traceString));
+                return Err(new ConnectionError(message, details));
             case "forbidden":
-                return Err(new ForbiddenError(message, traceString));
+                return Err(new ForbiddenError(message, details));
             case "invalid-token":
                 this._responseCache.clear();
                 this._onLogout?.();
@@ -1044,19 +1066,19 @@ export default class TMC {
             case "not-logged-in":
                 this._responseCache.clear();
                 this._onLogout?.();
-                return Err(new AuthorizationError(message, traceString));
+                return Err(new AuthorizationError(message, details));
             case "obsolete-client":
                 return Err(
                     new ObsoleteClientError(
                         message +
                             "\nYour TMC Extension is out of date, please update it." +
                             "\nhttps://code.visualstudio.com/docs/editor/extension-gallery",
-                        traceString,
+                        details,
                     ),
                 );
         }
 
-        return Err(new RuntimeError(message, traceString));
+        return Err(new RuntimeError(message, details));
     }
 
     /**
@@ -1142,8 +1164,8 @@ ${error.message}`;
             });
             cprocess.stderr.on("data", (chunk) => {
                 const data = chunk.toString();
-                // only worth warning about if the process ends up failing, which the
-                // EmptyLangsResponseError path below handles from `stderr`
+                // per-line at debug to keep j4rs/JNI spam out of the log; the failure paths
+                // below attach the collected stderr to the error they return
                 Logger.debug("stderr", data);
                 stderr.push(data);
                 onStderr?.(data);
@@ -1220,11 +1242,11 @@ ${error.message}`;
                 await processResult;
             } catch (error) {
                 // Typing change from update
-                return Err(new RuntimeError(error as string));
+                return Err(new RuntimeError(error as string, stderr.join("\n")));
             }
 
             if (interrupted) {
-                return Err(new RuntimeError("TMC Langs process was killed."));
+                return Err(new RuntimeError("TMC Langs process was killed.", stderr.join("\n")));
             }
 
             if (stdoutBuffer !== "") {
@@ -1250,7 +1272,8 @@ ${error.message}`;
                 kill(cprocess.pid as number);
             }
         };
-        const res = { interrupt, result };
+        const getStderr = (): string => stderr.join("\n");
+        const res = { interrupt, result, getStderr };
         return Ok(res);
     }
 }
