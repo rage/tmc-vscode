@@ -256,11 +256,11 @@ const findCourse = (id: string) => courses.find((c) => c.course.id === id)
 
 /** Slide and task lookups by their OWN ids, for submit's slide/task ownership checks. */
 const slideById = new Map<string, ExerciseSlide>()
-const taskById = new Map<string, { taskId: string; slideId: string }>()
+const slideIdByTaskId = new Map<string, string>()
 for (const exercise of exerciseById.values()) {
   slideById.set(exercise.slide.slide_id, exercise.slide)
   for (const task of exercise.slide.tasks) {
-    taskById.set(task.task_id, { taskId: task.task_id, slideId: exercise.slide.slide_id })
+    slideIdByTaskId.set(task.task_id, exercise.slide.slide_id)
   }
 }
 
@@ -568,8 +568,8 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
           body: apiError("not_found", `no such exercise slide: ${body.exercise_slide_id}`),
         }
       }
-      const task = taskById.get(body.exercise_task_id)
-      if (!task) {
+      const taskSlideId = slideIdByTaskId.get(body.exercise_task_id)
+      if (!taskSlideId) {
         return {
           status: 404,
           body: apiError("not_found", `no such exercise task: ${body.exercise_task_id}`),
@@ -584,12 +584,12 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
           ),
         }
       }
-      if (task.slideId !== slide.slide_id) {
+      if (taskSlideId !== slide.slide_id) {
         return {
           status: 422,
           body: apiError(
             "validation_error",
-            `Exercise task ${task.taskId} does not belong to exercise slide ${slide.slide_id}`,
+            `Exercise task ${body.exercise_task_id} does not belong to exercise slide ${slide.slide_id}`,
           ),
         }
       }

@@ -6,6 +6,7 @@ import { zstdDecompressSync } from "node:zlib"
 
 import type { Express } from "express"
 
+import type { MoocExerciseFixture } from "./fixtures"
 import {
   extraCourse,
   failingExercise,
@@ -207,23 +208,26 @@ describe("mooc mock conformance", () => {
     return files[0]!
   }
 
+  // `ids` overrides the slide/task the exercise itself would name, for the ownership checks that
+  // need a foreign or unknown one.
   const postSubmit = (
-    exercise: { slide: { exercise_id: string; slide_id: string; tasks: { task_id: string }[] } },
+    exercise: MoocExerciseFixture,
     uploadedFileIds: string[],
+    ids: { slideId?: string; taskId?: string } = {},
   ): Promise<Response> =>
     authFetch(api(`/exercises/${exercise.slide.exercise_id}/submit`), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        exercise_slide_id: exercise.slide.slide_id,
-        exercise_task_id: exercise.slide.tasks[0]!.task_id,
+        exercise_slide_id: ids.slideId ?? exercise.slide.slide_id,
+        exercise_task_id: ids.taskId ?? exercise.slide.tasks[0]!.task_id,
         uploaded_file_ids: uploadedFileIds,
       }),
     })
 
   // Uploads an archive then submits it, returning both submission ids.
   const submit = async (
-    exercise: { slide: { exercise_id: string; slide_id: string; tasks: { task_id: string }[] } },
+    exercise: MoocExerciseFixture,
     bytes = [1, 2, 3],
   ): Promise<{ taskSubmissionId: string; slideSubmissionId: string }> => {
     const uploaded = await uploadOne(exercise.slide.exercise_id, bytes)
@@ -239,6 +243,12 @@ describe("mooc mock conformance", () => {
     }
   }
 
+  const postFiles = (form: FormData): Promise<Response> =>
+    authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/files`), {
+      method: "POST",
+      body: form,
+    })
+
   test("the file id the host assigns is never the client's field name", async () => {
     // The host echoes the client's field name back on a different member and keys
     // the file by its own `file_uploads` row id. A mock that reused the field name
@@ -247,10 +257,7 @@ describe("mooc mock conformance", () => {
     const fieldName = randomUUID()
     const form = new FormData()
     form.append(fieldName, new Blob([new Uint8Array([1, 2, 3])]), "submission.tar.zst")
-    const res = await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/files`), {
-      method: "POST",
-      body: form,
-    })
+    const res = await postFiles(form)
     assert.equal(res.status, 200)
     const { files } = (await res.json()) as { files: UploadedFile[] }
     assert.equal(files.length, 1)
@@ -264,10 +271,7 @@ describe("mooc mock conformance", () => {
     for (const name of ["a.txt", "b.txt", "c.txt"]) {
       form.append(randomUUID(), new Blob([new Uint8Array([1])]), name)
     }
-    const res = await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/files`), {
-      method: "POST",
-      body: form,
-    })
+    const res = await postFiles(form)
     assert.equal(res.status, 200)
     const { files } = (await res.json()) as { files: UploadedFile[] }
     assert.deepEqual(
@@ -275,12 +279,6 @@ describe("mooc mock conformance", () => {
       ["a.txt", "b.txt", "c.txt"],
     )
   })
-
-  const postFiles = (form: FormData): Promise<Response> =>
-    authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/files`), {
-      method: "POST",
-      body: form,
-    })
 
   test("files rejects a field name that is not a UUID", async () => {
     const form = new FormData()
@@ -330,7 +328,7 @@ describe("mooc mock conformance", () => {
     )
   })
 
-  test("files rejects a batch multer's own part cap stops with the host's message", async () => {
+  test("files past multer's own part cap still answers with the host's message", async () => {
     // Past multer's `files` limit the handler never runs, so the error middleware is
     // the only thing that can still produce the host's answer.
     const form = new FormData()
@@ -381,9 +379,9 @@ describe("mooc mock conformance", () => {
   })
 
   // Drives a submission through the poll loop and returns the terminal Grading.
-  const submitAndGrade = async (exercise: {
-    slide: { exercise_id: string; slide_id: string; tasks: { task_id: string }[] }
-  }): Promise<{ grading_progress: string; score_given: number | null; feedback_text: string }> => {
+  const submitAndGrade = async (
+    exercise: MoocExerciseFixture,
+  ): Promise<{ grading_progress: string; score_given: number | null; feedback_text: string }> => {
     const { taskSubmissionId } = await submit(exercise)
     // first poll is NoGradingYet, second is terminal
     await authFetch(api(`/submissions/${taskSubmissionId}/grading`))
@@ -521,15 +519,7 @@ describe("mooc mock conformance", () => {
 
   // Submits arbitrary slide/task ids to the passing exercise.
   const postSubmitWith = (slideId: string, taskId: string): Promise<Response> =>
-    authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submit`), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        exercise_slide_id: slideId,
-        exercise_task_id: taskId,
-        uploaded_file_ids: [],
-      }),
-    })
+    postSubmit(passingExercise, [], { slideId, taskId })
 
   test("submit naming an unknown slide or task is a spec-documented 404", async () => {
     const unknownSlide = await postSubmitWith(randomUUID(), passingExercise.slide.tasks[0]!.task_id)
