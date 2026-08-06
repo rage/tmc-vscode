@@ -1530,9 +1530,8 @@ export default class Langs {
         )
       }
       case "upload-expired":
-        // The CLI uploads and submits within one invocation and already retried
-        // the upload once, so there is no user action to suggest -- the user
-        // never uploaded anything, they ran a submit.
+        // The CLI uploads and submits within one invocation and already retried the upload
+        // once, so retrying the submit is the only action left to suggest.
         return Err(
           new UploadExpiredError(
             `${message}\nThe submission's files expired on the server before the` +

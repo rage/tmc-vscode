@@ -58,10 +58,8 @@ async function closeElectron(electronApp: ElectronApplication): Promise<void> {
   }
 }
 
-// A shared user data dir let VS Code restore the *previous* test's window and
-// workspace state, so e.g. the file explorer rendered a stale projects dir while
-// the editor showed the current one. Must stay per-test, hence built here rather
-// than at module load.
+// Must be per-test, hence built here rather than at module load: a shared user data dir makes
+// VS Code restore the previous test's window and workspace state.
 function launchArgs(userDataDir: string): string[] {
   return [
     "--disable-gpu-sandbox",
