@@ -10,6 +10,7 @@ const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."))
 
 export interface WorkspaceManagerMockValues {
   activeCourse?: string | undefined
+  activeCourseBackend?: "tmc" | "mooc" | undefined
   activeExercise?: Readonly<WorkspaceExercise> | undefined
   closeExercises: Result<WorkspaceExercise[], Error>
   getExerciseByPath: Readonly<WorkspaceExercise> | undefined
@@ -21,6 +22,7 @@ export interface WorkspaceManagerMockValues {
 export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManagerMockValues] {
   const values: WorkspaceManagerMockValues = {
     activeCourse: undefined,
+    activeCourseBackend: undefined,
     activeExercise: undefined,
     closeExercises: Ok(workspaceExercises),
     getExerciseByPath: undefined,
@@ -32,6 +34,9 @@ export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManager
   const mock = {
     get activeCourse() {
       return values.activeCourse
+    },
+    get activeCourseBackend() {
+      return values.activeCourseBackend
     },
     get activeExercise() {
       return values.activeExercise

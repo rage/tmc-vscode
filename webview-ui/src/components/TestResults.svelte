@@ -1,6 +1,7 @@
 <script lang="ts">
   import { StyleValidationStrategy, TestCase, TestResult } from "../shared/langsSchema"
   import { vscode } from "../utilities/vscode"
+  import Button from "./Button.svelte"
   import Checkbox from "./Checkbox.svelte"
   import ProgressBar from "./ProgressBar.svelte"
 
@@ -66,36 +67,48 @@
 </div>
 
 <div class="solution-button-container" hidden={solutionUrl === null}>
-  <vscode-button
-    role="button"
-    tabindex="0"
-    onclick={() => solutionUrl && showInBrowser(solutionUrl)}
-    onkeypress={() => solutionUrl && showInBrowser(solutionUrl)}
-  >
+  <Button onclick={() => solutionUrl && showInBrowser(solutionUrl)}>
     Show model solution in browser
-  </vscode-button>
+  </Button>
 </div>
+
+<!-- FAIL vs. non-FAIL differ only in container/heading class and heading text, so
+     share this snippet. -->
+{#snippet validationBlock(
+  path: string,
+  errors: Array<{ column: number; line: number; message: string }>,
+  containerClass: string,
+  headingClass: string,
+  heading: string,
+)}
+  <div class="test {containerClass}">
+    <h2 class={headingClass}>{heading}</h2>
+    <h3>File: {path}</h3>
+    {#each errors as pathValidationError}
+      <pre
+        class="test-message">Line {pathValidationError.line}, column {pathValidationError.column}: {pathValidationError.message}</pre>
+    {/each}
+  </div>
+{/snippet}
 
 <div class="test-results-container">
   {#each validationErrorsEntries as [path, pathValidationErrors]}
     {#if validationStrategy === "FAIL"}
-      <div class="test failed-container">
-        <h2 class="failed">Code quality errors found</h2>
-        <h3>File: {path}</h3>
-        {#each pathValidationErrors as pathValidationError}
-          <pre
-            class="test-message">Line {pathValidationError.line}, column {pathValidationError.column}: {pathValidationError.message}</pre>
-        {/each}
-      </div>
+      {@render validationBlock(
+        path,
+        pathValidationErrors,
+        "failed-container",
+        "failed",
+        "Code quality errors found",
+      )}
     {:else}
-      <div class="test warning-container">
-        <h2 class="warning">Code quality warnings found</h2>
-        <h3>File: {path}</h3>
-        {#each pathValidationErrors as pathValidationError}
-          <pre
-            class="test-message">Line {pathValidationError.line}, column {pathValidationError.column}: {pathValidationError.message}</pre>
-        {/each}
-      </div>
+      {@render validationBlock(
+        path,
+        pathValidationErrors,
+        "warning-container",
+        "warning",
+        "Code quality warnings found",
+      )}
     {/if}
   {/each}
   {#each testResults as testResult}
@@ -138,7 +151,7 @@
     color: var(--vscode-testing-iconQueued, #cca700);
   }
   .warning-container {
-    color: var(--vscode-testing-iconQueued, #cca700);
+    border-color: var(--vscode-testing-iconQueued, #cca700);
   }
   .test-message {
     white-space: break-spaces;

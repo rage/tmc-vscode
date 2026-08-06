@@ -3,10 +3,6 @@ import { BaseError } from "./shared/shared"
 export class ApiError extends BaseError {
   public override readonly name = "API Error"
 }
-export class AuthenticationError extends BaseError {
-  public override readonly name = "Authentication Error"
-}
-
 export class AuthorizationError extends BaseError {
   public override readonly name = "Authorization Error"
 }
@@ -37,6 +33,20 @@ export class HaltForReloadError extends BaseError {
 
 export class InvalidTokenError extends BaseError {
   public override readonly name = "Invalid Token Error"
+}
+
+export class NotEnrolledError extends BaseError {
+  public override readonly name = "Not Enrolled Error"
+}
+
+/** A submission named an uploaded file whose retention window had elapsed. */
+export class UploadExpiredError extends BaseError {
+  public override readonly name = "Upload Expired Error"
+}
+
+/** A submission named a file the backend has no upload record of: a client bug. */
+export class UnknownUploadError extends BaseError {
+  public override readonly name = "Unknown Upload Error"
 }
 
 export class ObsoleteClientError extends BaseError {

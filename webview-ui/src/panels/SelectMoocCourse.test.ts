@@ -67,6 +67,24 @@ suite("SelectMoocCourse panel", () => {
     expect(await screen.findByText(/No enrolled courses found/)).toBeInTheDocument()
   })
 
+  test("always shows the enrolled-only explainer, with and without courses", async () => {
+    render(SelectMoocCourse, { props: { panel } })
+
+    // present once courses have loaded
+    sendCourses([pythonCourse])
+    expect(await screen.findByText("MOOC Python Programming")).toBeInTheDocument()
+    expect(
+      screen.getByText(/These are the courses you're enrolled in on courses\.mooc\.fi/),
+    ).toBeInTheDocument()
+
+    // and still present when the list is empty
+    sendCourses([])
+    await screen.findByText(/No enrolled courses found/)
+    expect(
+      screen.getByText(/These are the courses you're enrolled in on courses\.mooc\.fi/),
+    ).toBeInTheDocument()
+  })
+
   test("shows the error banner when a requestSelectMoocCourseDataError message arrives", async () => {
     render(SelectMoocCourse, { props: { panel } })
     window.dispatchEvent(
@@ -116,11 +134,8 @@ suite("SelectMoocCourse panel", () => {
       message: {
         type: "selectedMoocCourse",
         target: requestingPanel,
-        organizationSlug: "mooc.fi",
-        courseId: MOOC_INSTANCE_ID,
         instanceId: MOOC_INSTANCE_ID,
         courseName: "MOOC Python Programming",
-        instanceName: null,
       },
     })
   })

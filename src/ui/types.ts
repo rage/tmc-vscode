@@ -125,11 +125,6 @@ export interface SetDataFolder {
   diskSize: string
 }
 
-export interface LoginError {
-  command: "loginError"
-  error: string
-}
-
 export interface SetCourseDisabledStatus {
   command: "setCourseDisabledStatus"
   courseId: CourseIdentifier
@@ -167,7 +162,6 @@ export interface SetUpdateables {
 
 export type WebviewMessage =
   | ExerciseStatusChange
-  | LoginError
   | SetBooleanSetting
   | SetCourseDisabledStatus
   | SetDataFolder

@@ -144,6 +144,17 @@ export type CourseExercise = {
     unlocked: boolean;
 };
 
+/**
+ * The current user's progress across every exercise they can see in a course.
+ * Course-level totals (awarded/available points, passed count, percentage) are
+ * not sent separately; derive them by summing over `exercises`, guarding the
+ * percentage against a zero total.
+ */
+export type CourseProgress = {
+    course_id: string;
+    exercises: Array<ExerciseProgress>;
+};
+
 export type DataKind = {
     'output-data': {
         kind: Kind;
@@ -211,6 +222,7 @@ export type DataKind = {
     'output-data': Array<Review>;
     'output-data-kind': 'reviews';
 } | {
+    'output-data': unknown;
     'output-data-kind': 'token';
 } | {
     'output-data': NewSubmission;
@@ -260,6 +272,21 @@ export type DataKind = {
 } | {
     'output-data': ExerciseTaskSubmissionResult;
     'output-data-kind': 'mooc-submission-finished';
+} | {
+    'output-data': ExerciseTaskSubmissionStatus;
+    'output-data-kind': 'mooc-submission-status';
+} | {
+    'output-data': Array<ExerciseSlideSubmissionListItem>;
+    'output-data-kind': 'mooc-submissions';
+} | {
+    'output-data': PasteResult;
+    'output-data-kind': 'mooc-paste';
+} | {
+    'output-data': CourseProgress;
+    'output-data-kind': 'mooc-course-progress';
+} | {
+    'output-data': MoocOldSubmissionRestore;
+    'output-data-kind': 'mooc-old-submission-restore';
 };
 
 export type DownloadOrUpdateMoocCourseExercisesResult = {
@@ -268,7 +295,17 @@ export type DownloadOrUpdateMoocCourseExercisesResult = {
         MoocExerciseDownload,
         Array<string>
     ]> | null;
+    /**
+     * Exercises never attempted because the batch stopped early on a permanent auth
+     * failure (see `stopped_for_auth`). Empty unless that happened.
+     */
+    not_attempted: Array<MoocExerciseDownload>;
     skipped: Array<MoocExerciseDownload>;
+    /**
+     * True if a mooc token refresh permanently failed partway through the batch,
+     * leaving `not_attempted` non-empty.
+     */
+    stopped_for_auth: boolean;
 };
 
 export type DownloadOrUpdateTmcCourseExercisesResult = {
@@ -349,11 +386,6 @@ export type ExerciseDetails = {
     unlocked_at: string | null;
 };
 
-export type ExerciseFile = {
-    contents: string;
-    filepath: string;
-};
-
 /**
  * Represents configuration based on which submission may be packaged.
  */
@@ -373,6 +405,44 @@ export type ExercisePoint = {
     id: number;
     name: string;
     requires_review: boolean;
+};
+
+/**
+ * The current user's progress on a single exercise. The authoritative "passed"
+ * signal is `completed`; `attempted` distinguishes "not started" from "started
+ * but not passed".
+ */
+export type ExerciseProgress = {
+    /**
+     * `true` once the user has started or submitted the exercise.
+     */
+    attempted: boolean;
+    /**
+     * `true` once the exercise reached the `Completed` activity stage.
+     */
+    completed: boolean;
+    exercise_id: string;
+    /**
+     * Points awarded to the user; `0.0` when the user has no state for the
+     * exercise. Can be fractional (partial credit).
+     */
+    score_given: number;
+    /**
+     * The maximum points obtainable from the exercise; can be `0`.
+     */
+    score_maximum: number;
+};
+
+/**
+ * A single past submission of the current user to an exercise. `id` is the
+ * exercise-slide-submission id used to download or share the submission.
+ */
+export type ExerciseSlideSubmissionListItem = {
+    created_at: string;
+    exercise_id: string;
+    grading_progress: GradingProgress | null;
+    id: string;
+    score_given: number | null;
 };
 
 export type ExerciseSubmission = {
@@ -397,21 +467,32 @@ export type ExerciseSubmission = {
 };
 
 export type ExerciseTaskSubmissionResult = {
-    submission_id: string;
+    /**
+     * Identifies the slide submission; what downloading and sharing take.
+     */
+    slide_submission_id: string;
+    /**
+     * Identifies the task submission; what grading is polled for.
+     */
+    task_submission_id: string;
+};
+
+export type ExerciseTaskSubmissionStatus = 'NoGradingYet' | {
+    Grading: {
+        feedback_json: unknown;
+        feedback_text: string | null;
+        grading_completed_at: string | null;
+        grading_progress: GradingProgress;
+        grading_started_at: string | null;
+        score_given: number | null;
+    };
 };
 
 export type ExerciseType = 'browser' | 'editor';
 
-export type Kind = 'generic' | 'forbidden' | 'not-logged-in' | 'connection-error' | 'obsolete-client' | 'invalid-token' | {
-    'failed-exercise-download': {
-        completed: Array<TmcExerciseDownload>;
-        failed: Array<[
-            TmcExerciseDownload,
-            Array<string>
-        ]>;
-        skipped: Array<TmcExerciseDownload>;
-    };
-};
+export type GradingProgress = 'Failed' | 'NotReady' | 'PendingManual' | 'Pending' | 'FullyGraded';
+
+export type Kind = 'generic' | 'forbidden' | 'not-logged-in' | 'connection-error' | 'obsolete-client' | 'invalid-token' | 'not-enrolled' | 'upload-expired' | 'unknown-upload';
 
 /**
  * MOOC exercise inside the projects directory.
@@ -419,6 +500,12 @@ export type Kind = 'generic' | 'forbidden' | 'not-logged-in' | 'connection-error
 export type LocalMoocExercise = {
     'exercise-id': string;
     'exercise-path': string;
+    /**
+     * The exercise's on-disk directory name, used as its slug when building a
+     * workspace entry (mirrors the TMC slug); stable since names are unique per
+     * course.
+     */
+    'exercise-slug': string;
 };
 
 /**
@@ -429,12 +516,26 @@ export type LocalTmcExercise = {
     'exercise-slug': string;
 };
 
+/**
+ * Mirrors the `tmc` exercise service's `ModelSolutionSpec`
+ * (`services/tmc/src/util/stateInterfaces.ts`). The backend forwards it once
+ * the model solution may be revealed; the solution is an uploaded project
+ * archive for both exercise types.
+ */
 export type ModelSolutionSpec = {
-    solution_files: Array<ExerciseFile>;
-    type: 'Browser';
-} | {
-    download_url: string;
-    type: 'Editor';
+    solution_download_url: string;
+    type: ExerciseType;
+};
+
+/**
+ * Per-exercise download progress, mirroring TMC's `ClientUpdateData`. Surfaced
+ * by the CLI as a `mooc-client-update-data` status update; `id` is a [`Uuid`]
+ * since mooc exercises are UUID-keyed.
+ */
+export type MoocClientUpdateData = {
+    'client-update-data-kind': 'exercise-download';
+    id: string;
+    path: string;
 };
 
 export type MoocCourse = {
@@ -445,10 +546,47 @@ export type MoocCourse = {
     slug: string;
 };
 
-export type MoocExerciseDownload = {
-    path: string;
-    'task-id': string;
+/**
+ * The data attached to a `mooc-device-login` status update. Mirrors the
+ * relevant fields of the RFC 8628 device authorization response.
+ */
+export type MoocDeviceLogin = {
+    /**
+     * Seconds until the device/user codes expire.
+     */
+    expires_in: number;
+    /**
+     * Minimum seconds between token-endpoint polls.
+     */
+    interval: number;
+    /**
+     * The code the user enters (or confirms) on the verification page.
+     */
+    user_code: string;
+    /**
+     * URL the user opens to enter the `user_code`.
+     */
+    verification_uri: string;
+    /**
+     * URL that already includes the `user_code`, if the server provided one.
+     */
+    verification_uri_complete: string | null;
 };
+
+export type MoocExerciseDownload = {
+    /**
+     * The requested exercise's id; results are keyed by it so callers can
+     * correlate each download/skip/failure back to the exercise (not the internal
+     * editor task id).
+     */
+    'exercise-id': string;
+    path: string;
+};
+
+/**
+ * Outcome of restoring a past mooc submission.
+ */
+export type MoocOldSubmissionRestore = 'restored' | 'nothing-to-download';
 
 /**
  * post /api/v8/core/exercises/{exercise_id}/submissions
@@ -496,12 +634,18 @@ export type OutputData = {
 
 export type OutputResult = 'logged-in' | 'logged-out' | 'not-logged-in' | 'error' | 'executed-command';
 
+/**
+ * A shareable URL for a submission.
+ */
+export type PasteResult = {
+    paste_url: string;
+};
+
 export type PublicSpec = {
     archive_name: string;
     /**
-     * In-browser test config: script to run in the client and optional error
-     * if the build failed. Omitted for editor exercises or when no script was
-     * built. Serde treats the `Option` field as optional when absent.
+     * In-browser test config; omitted for editor exercises or when no script
+     * was built.
      */
     browser_test: BrowserTestSpec | null;
     checksum: string;
@@ -608,6 +752,28 @@ export type StatusUpdate = {
  * The format for all status updates. May contain some data.
  */
 export type StatusUpdate2 = {
+    data: MoocClientUpdateData | null;
+    finished: boolean;
+    message: string;
+    'percent-done': number;
+    time: number;
+};
+
+/**
+ * The format for all status updates. May contain some data.
+ */
+export type StatusUpdate3 = {
+    data: MoocDeviceLogin | null;
+    finished: boolean;
+    message: string;
+    'percent-done': number;
+    time: number;
+};
+
+/**
+ * The format for all status updates. May contain some data.
+ */
+export type StatusUpdate4 = {
     data: null;
     finished: boolean;
     message: string;
@@ -618,6 +784,10 @@ export type StatusUpdate2 = {
 export type StatusUpdateData = (StatusUpdate & {
     'update-data-kind': 'client-update-data';
 }) | (StatusUpdate2 & {
+    'update-data-kind': 'mooc-client-update-data';
+}) | (StatusUpdate3 & {
+    'update-data-kind': 'mooc-device-login';
+}) | (StatusUpdate4 & {
     'update-data-kind': 'none';
 });
 
@@ -802,6 +972,11 @@ export type TmcExerciseDownload = {
 };
 
 export type TmcExerciseSlide = {
+    /**
+     * The course the exercise belongs to, so a client can locate it without a
+     * separate lookup or an enrolled-course scan.
+     */
+    course_id: string;
     deadline: string | null;
     exercise_id: string;
     exercise_name: string;
@@ -811,6 +986,7 @@ export type TmcExerciseSlide = {
 };
 
 export type TmcExerciseTask = {
+    assignment: unknown;
     checksum: string | null;
     model_solution_spec: ModelSolutionSpec | null;
     order_number: number;

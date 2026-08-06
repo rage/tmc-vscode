@@ -13,18 +13,22 @@ export class CoursePage extends TmcPage {
     }
   }
 
+  // Setting <vscode-collapsible>'s `open` property directly is more reliable
+  // than clicking the toggle it renders in its shadow DOM.
   public async showExercises(): Promise<void> {
-    await this.webview.getByRole("button", { name: "Show exercises" }).first().click()
+    const groups = this.getSidePanel().locator("vscode-collapsible")
+    const count = await groups.count()
+    for (let i = 0; i < count; i++) {
+      await groups.nth(i).evaluate((el) => {
+        ;(el as unknown as { open: boolean }).open = true
+      })
+    }
   }
 
   public async openExercises(names: string[]): Promise<void> {
     for (const name of names) {
-      // The checkbox's actual click target is the wrapping `role="button"`
-      // span in `Checkbox.svelte` — the `<input type="checkbox">` itself is
-      // covered by its `<label>`, so `role="checkbox"` fails Playwright's
-      // actionability check.
-      await this.webview.getByRole("row", { name }).getByRole("button").click()
+      await this.getSidePanel().locator(`vscode-checkbox[aria-label="${name}"]`).click()
     }
-    await this.webview.getByRole("button", { name: "Open", exact: true }).first().click()
+    await this.getSidePanel().getByRole("button", { name: "Open", exact: true }).first().click()
   }
 }

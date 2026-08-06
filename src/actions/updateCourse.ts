@@ -6,9 +6,12 @@ import { TmcPanel } from "../panels/TmcPanel"
 import type { CombinedCourseData, CourseInstance, TmcExerciseSlide } from "../shared/langsSchema"
 import type { CourseIdentifier, Enum, ExerciseIdentifier } from "../shared/shared"
 import { LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
-import type { MoocLocalCourseExercise } from "../storage/data"
 import { Logger } from "../utilities"
-import { combineTmcApiExerciseData } from "../utilities/apiData"
+import {
+  combineMoocApiExerciseData,
+  combineTmcApiExerciseData,
+  sumMoocCoursePoints,
+} from "../utilities/apiData"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ActionContext } from "./types"
 
@@ -66,7 +69,7 @@ export async function updateCourse(
         .then((res) => res.map((x) => makeTmcKind(x))),
     (moocId) =>
       langs.val
-        .getMoocCourseInstanceData(moocId.instanceId)
+        .getMoocCourseInstanceData(moocId.instanceId, { forceRefresh: true })
         .then((res) => res.map((x) => makeMoocKind(x))),
   )
   if (updateResult.err) {
@@ -116,24 +119,59 @@ export async function updateCourse(
       )
     },
     async (mooc) => {
-      const [_courseInstance, slides] = mooc
-      const localExercises = slides
-        .flatMap((s) =>
-          s.tasks.map((t) => {
-            const localExercise: MoocLocalCourseExercise = {
-              id: t.task_id,
-              name: s.exercise_name,
-              deadline: s.deadline,
-              passed: false,
-              softDeadline: s.deadline,
-              availablePoints: 0,
-              awardedPoints: 0,
-            }
-            return localExercise
-          }),
+      const [moocCourse, slides] = mooc
+      // The update result and the stored course are looked up from the same
+      // `courseId`, so this holds by construction; assert it to narrow the stored
+      // data off its tmc|mooc union before writing mooc-shaped fields below.
+      if (courseData.kind !== "mooc") {
+        return Err(
+          new Error(`Expected stored course ${moocCourse.id} to be a mooc course but it was tmc`),
         )
-        .map((x) => makeMoocKind(x))
-      return await userData.val.updateExercises(courseId, localExercises)
+      }
+      // Non-fatal: on a failed fetch, previous local progress is carried over
+      // per exercise id so a refresh never wipes known points or passed flags.
+      const progressRes = await match(
+        courseId,
+        async () => Err<Error>(new Error("not a mooc course")),
+        (moocId) => langs.val.getMoocCourseProgress(moocId.instanceId),
+      )
+      if (progressRes.err) {
+        Logger.warn("Failed to fetch mooc course progress", progressRes.val)
+      }
+      const previousExercises = courseData.data.exercises
+      // One local exercise per slide, keyed by the slide's exercise id (a UUID).
+      // The bulk download/update CLI subcommand resolves `--exercise-id` against
+      // `slide.exercise_id`, so the exercise id (not the task id) is the identity
+      // the extension must carry.
+      const localExercises = combineMoocApiExerciseData(
+        slides,
+        progressRes.ok ? progressRes.val : undefined,
+        previousExercises,
+      )
+
+      const { availablePoints, awardedPoints } = sumMoocCoursePoints(localExercises)
+      courseData.data = {
+        ...courseData.data,
+        availablePoints,
+        awardedPoints,
+        // Refresh the metadata the backend can change, mirroring what the tmc arm
+        // does. `disabled`, `materialUrl` and `perhapsExamMode` have no mooc
+        // equivalent (see `zMoocCourse`), so they are genuinely nothing to do here.
+        //
+        // `name` (the slug) is deliberately NOT refreshed: it is the workspace
+        // folder name and the key for closed-exercise settings and exercise
+        // lookups, so adopting a renamed slug here would desync those from disk
+        // without the accompanying move.
+        description: moocCourse.description,
+        title: moocCourse.name,
+        organization: moocCourse.organization_name,
+      }
+      await userData.val.updateCourse(courseData)
+
+      return await userData.val.updateExercises(
+        courseId,
+        localExercises.map((x) => makeMoocKind(x)),
+      )
     },
   )
   if (updateExercisesResult.err) {
@@ -141,7 +179,10 @@ export async function updateCourse(
   }
 
   const courseName = LocalCourseData.getCourseName(courseData)
-  if (courseName === workspaceManager.val.activeCourse) {
+  if (
+    courseName === workspaceManager.val.activeCourse &&
+    courseData.kind === workspaceManager.val.activeCourseBackend
+  ) {
     exerciseDecorationProvider.val.updateDecorationsForExercises(
       ...workspaceManager.val.getExercisesByCourseSlug(courseName),
     )

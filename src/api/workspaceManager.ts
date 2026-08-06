@@ -75,9 +75,11 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   /**
-   * Currently active course based on active workspace, or `undefined` otherwise.
+   * Parses the open course workspace into its course slug and backend, or
+   * `undefined` when no course workspace is open. Workspace files are named
+   * `<slug>-<backend>.code-workspace` (see `workspaceFileName`).
    */
-  public get activeCourse(): string | undefined {
+  private get _activeCourseWorkspace(): { slug: string; backend: "tmc" | "mooc" } | undefined {
     const workspaceFile = vscode.workspace.workspaceFile
     if (
       !workspaceFile ||
@@ -86,8 +88,34 @@ export default class WorkspaceManager implements vscode.Disposable {
       return undefined
     }
 
-    // Strip "(workspace)" part of the name
-    return vscode.workspace.name?.split(" ")[0]
+    // Strip the "(workspace)" suffix VS Code appends to `workspace.name`.
+    const baseName = vscode.workspace.name?.split(" ")[0]
+    if (!baseName) {
+      return undefined
+    }
+    if (baseName.endsWith("-mooc")) {
+      return { slug: baseName.slice(0, -"-mooc".length), backend: "mooc" }
+    }
+    if (baseName.endsWith("-tmc")) {
+      return { slug: baseName.slice(0, -"-tmc".length), backend: "tmc" }
+    }
+    // Legacy un-tagged workspace file, from before backend-namespacing; treat as tmc.
+    return { slug: baseName, backend: "tmc" }
+  }
+
+  /**
+   * Currently active course slug based on the active workspace, or `undefined`
+   * otherwise.
+   */
+  public get activeCourse(): string | undefined {
+    return this._activeCourseWorkspace?.slug
+  }
+
+  /**
+   * Backend of the currently active course workspace, or `undefined` otherwise.
+   */
+  public get activeCourseBackend(): "tmc" | "mooc" | undefined {
+    return this._activeCourseWorkspace?.backend
   }
 
   /**
@@ -205,8 +233,12 @@ export default class WorkspaceManager implements vscode.Disposable {
   /**
    * Adds extension recommendations to current course workspace.
    */
-  public addWorkspaceRecommendation(workspace: string, extensions: string[]): void {
-    const pathToWorkspace = path.join(this._resources.getWorkspaceFilePath(workspace))
+  public addWorkspaceRecommendation(
+    workspace: string,
+    backend: "tmc" | "mooc",
+    extensions: string[],
+  ): void {
+    const pathToWorkspace = path.join(this._resources.getWorkspaceFilePath(workspace, backend))
     const workspaceData = JSON.parse(fs.readFileSync(pathToWorkspace, "utf-8"))
     let recommendations: string[] | undefined = workspaceData.extensions?.recommendations
     if (recommendations) {
@@ -221,8 +253,8 @@ export default class WorkspaceManager implements vscode.Disposable {
     fs.writeFileSync(pathToWorkspace, JSON.stringify(workspaceDataRecommend))
   }
 
-  public createWorkspaceFile(courseName: string): void {
-    const tmcWorkspaceFilePath = this._resources.getWorkspaceFilePath(courseName)
+  public createWorkspaceFile(courseName: string, backend: "tmc" | "mooc"): void {
+    const tmcWorkspaceFilePath = this._resources.getWorkspaceFilePath(courseName, backend)
     if (!fs.existsSync(tmcWorkspaceFilePath)) {
       fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS))
       Logger.info("Created tmc workspace file at", tmcWorkspaceFilePath)
@@ -273,8 +305,8 @@ export default class WorkspaceManager implements vscode.Disposable {
    * @param value The new value
    */
   public async updateWorkspaceSetting(section: string, value: unknown): Promise<void> {
-    const activeCourse = this.activeCourse
-    if (activeCourse) {
+    const activeCourseWorkspace = this._activeCourseWorkspace
+    if (activeCourseWorkspace) {
       let newValue = value
       if (value instanceof Object) {
         const oldValue = this.getWorkspaceSettings(section)
@@ -283,7 +315,12 @@ export default class WorkspaceManager implements vscode.Disposable {
       await vscode.workspace
         .getConfiguration(
           undefined,
-          vscode.Uri.file(this._resources.getWorkspaceFilePath(activeCourse)),
+          vscode.Uri.file(
+            this._resources.getWorkspaceFilePath(
+              activeCourseWorkspace.slug,
+              activeCourseWorkspace.backend,
+            ),
+          ),
         )
         .update(section, newValue, vscode.ConfigurationTarget.Workspace)
     }
@@ -346,16 +383,21 @@ export default class WorkspaceManager implements vscode.Disposable {
    * the top and then lists all that course's open exercises in alphanumeric order.
    */
   private async _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
-    const workspaceName = this.activeCourse
+    const activeCourseWorkspace = this._activeCourseWorkspace
     const workspaceFolders = vscode.workspace.workspaceFolders
-    if (!workspaceName || !workspaceFolders) {
+    if (!activeCourseWorkspace || !workspaceFolders) {
       Logger.warn("Attempted refresh for a non-course workspace.")
       return Ok.EMPTY
     }
 
     const rootFolder = this._resources.workspaceRootFolder
     const openExercises = this._exercises
-      .filter((x) => x.courseSlug === workspaceName && x.status === ExerciseStatus.Open)
+      .filter(
+        (x) =>
+          x.courseSlug === activeCourseWorkspace.slug &&
+          x.backend === activeCourseWorkspace.backend &&
+          x.status === ExerciseStatus.Open,
+      )
       .toSorted((a, b) => a.exerciseSlug.localeCompare(b.exerciseSlug))
       .map((x) => ({ uri: x.uri }))
     const correctStructure = [{ uri: rootFolder }, ...openExercises]
@@ -383,14 +425,17 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   private _onDidChangeWorkspaceFolders(e: vscode.WorkspaceFoldersChangeEvent): void {
-    const activeCourse = this.activeCourse
+    const activeCourseWorkspace = this._activeCourseWorkspace
 
     let incorrectFolderAdded = false
     e.added.forEach((added) => {
       const exercise = this._exercises.find((x) => x.uri.fsPath === added.uri.fsPath)
       if (!exercise) {
         incorrectFolderAdded = true
-      } else if (exercise.courseSlug === activeCourse) {
+      } else if (
+        exercise.courseSlug === activeCourseWorkspace?.slug &&
+        exercise.backend === activeCourseWorkspace?.backend
+      ) {
         exercise.status = ExerciseStatus.Open
       }
     })
@@ -404,7 +449,7 @@ export default class WorkspaceManager implements vscode.Disposable {
 
     if (incorrectFolderAdded) {
       Logger.warn(
-        `Folders added that are not part of course ${activeCourse}. These may be removed later.`,
+        `Folders added that are not part of course ${activeCourseWorkspace?.slug}. These may be removed later.`,
       )
     }
     if (e.added.length > 5) {
@@ -413,10 +458,11 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   private _onDidOpenTextDocument(e: vscode.TextDocument): void {
-    const activeCourse = this.activeCourse
-    if (!activeCourse) {
+    const activeCourseWorkspace = this._activeCourseWorkspace
+    if (!activeCourseWorkspace) {
       return
     }
+    const { slug: activeCourse, backend: activeBackend } = activeCourseWorkspace
 
     // TODO: Check that document is a valid exercise
     const isCode = this._resources.editorKind === EditorKind.Code
@@ -427,12 +473,12 @@ export default class WorkspaceManager implements vscode.Disposable {
       case "objective-c":
       case "objective-cpp":
         if (isCode && !vscode.extensions.getExtension("ms-vscode.cpptools")) {
-          this.addWorkspaceRecommendation(activeCourse, ["ms-vscode.cpptools"])
+          this.addWorkspaceRecommendation(activeCourse, activeBackend, ["ms-vscode.cpptools"])
         }
         break
       case "csharp":
         if (isCode && !vscode.extensions.getExtension("ms-dotnettools.csharp")) {
-          this.addWorkspaceRecommendation(activeCourse, ["ms-dotnettools.csharp"])
+          this.addWorkspaceRecommendation(activeCourse, activeBackend, ["ms-dotnettools.csharp"])
         }
         break
       case "markdown":
@@ -440,25 +486,25 @@ export default class WorkspaceManager implements vscode.Disposable {
         break
       case "r":
         if (!vscode.extensions.getExtension("ikuyadeu.r")) {
-          this.addWorkspaceRecommendation(activeCourse, ["ikuyadeu.r"])
+          this.addWorkspaceRecommendation(activeCourse, activeBackend, ["ikuyadeu.r"])
         }
         break
       case "python":
         if (!vscode.extensions.getExtension("ms-python.python")) {
           if (isCode && !vscode.extensions.getExtension("ms-python.vscode-pylance")) {
-            this.addWorkspaceRecommendation(activeCourse, [
+            this.addWorkspaceRecommendation(activeCourse, activeBackend, [
               "ms-python.vscode-pylance",
               "ms-python.python",
             ])
           } else {
-            this.addWorkspaceRecommendation(activeCourse, ["ms-python.python"])
+            this.addWorkspaceRecommendation(activeCourse, activeBackend, ["ms-python.python"])
           }
         }
 
         break
       case "java":
         if (isCode && !vscode.extensions.getExtension("vscjava.vscode-java-pack")) {
-          this.addWorkspaceRecommendation(activeCourse, ["vscjava.vscode-java-pack"])
+          this.addWorkspaceRecommendation(activeCourse, activeBackend, ["vscjava.vscode-java-pack"])
         }
         break
     }

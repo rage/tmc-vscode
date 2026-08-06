@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/svelte"
 import type { Uri } from "vscode"
 
 import type { ExerciseTestsPanel } from "../shared/shared"
+import { getButton } from "../test/dom"
 import { testResultData, tmcLocalCourse, tmcLocalExercise } from "../test/fixtures"
 import { postedMessages } from "../test/setup"
 import ExerciseTests from "./ExerciseTests.svelte"
@@ -29,7 +30,7 @@ suite("ExerciseTests panel", () => {
   test("cancelling posts cancelTests and closes the panel", () => {
     render(ExerciseTests, { props: { panel } })
     postedMessages.mockClear()
-    screen.getByRole("button", { name: "Cancel" }).click()
+    getButton("Cancel").click()
 
     expect(postedMessages).toHaveBeenCalledWith({ type: "cancelTests", testRunId: 1 })
     expect(postedMessages).toHaveBeenCalledWith({ type: "closeSidePanel" })
@@ -49,7 +50,7 @@ suite("ExerciseTests panel", () => {
 
     expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
 
-    const submit = screen.getByRole("button", { name: "Send solution to server" })
+    const submit = getButton("Submit to server")
     postedMessages.mockClear()
     submit.click()
 

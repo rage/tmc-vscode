@@ -109,11 +109,6 @@ export const zCourseDetails = z.object({
     unlockables: z.array(z.string())
 });
 
-export const zExerciseFile = z.object({
-    contents: z.string(),
-    filepath: z.string()
-});
-
 /**
  * Represents configuration based on which submission may be packaged.
  */
@@ -151,6 +146,30 @@ export const zCombinedCourseData = z.object({
     settings: zCourseData
 });
 
+/**
+ * The current user's progress on a single exercise. The authoritative "passed"
+ * signal is `completed`; `attempted` distinguishes "not started" from "started
+ * but not passed".
+ */
+export const zExerciseProgress = z.object({
+    attempted: z.boolean(),
+    completed: z.boolean(),
+    exercise_id: z.uuid(),
+    score_given: z.number(),
+    score_maximum: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
+});
+
+/**
+ * The current user's progress across every exercise they can see in a course.
+ * Course-level totals (awarded/available points, passed count, percentage) are
+ * not sent separately; derive them by summing over `exercises`, guarding the
+ * percentage against a zero total.
+ */
+export const zCourseProgress = z.object({
+    course_id: z.uuid(),
+    exercises: z.array(zExerciseProgress)
+});
+
 export const zExerciseSubmission = z.object({
     all_tests_passed: z.boolean(),
     course_id: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }),
@@ -182,17 +201,65 @@ export const zExerciseDetails = z.object({
 });
 
 export const zExerciseTaskSubmissionResult = z.object({
-    submission_id: z.uuid()
+    slide_submission_id: z.uuid(),
+    task_submission_id: z.uuid()
 });
 
 export const zExerciseType = z.enum(['browser', 'editor']);
+
+export const zGradingProgress = z.union([
+    z.literal('Failed'),
+    z.literal('NotReady'),
+    z.literal('PendingManual'),
+    z.literal('Pending'),
+    z.literal('FullyGraded')
+]);
+
+/**
+ * A single past submission of the current user to an exercise. `id` is the
+ * exercise-slide-submission id used to download or share the submission.
+ */
+export const zExerciseSlideSubmissionListItem = z.object({
+    created_at: z.string(),
+    exercise_id: z.uuid(),
+    grading_progress: zGradingProgress.nullable(),
+    id: z.uuid(),
+    score_given: z.number().nullable()
+});
+
+export const zExerciseTaskSubmissionStatus = z.union([
+    z.enum(['NoGradingYet']),
+    z.object({
+        Grading: z.object({
+            feedback_json: z.unknown(),
+            feedback_text: z.string().nullable(),
+            grading_completed_at: z.string().nullable(),
+            grading_progress: zGradingProgress,
+            grading_started_at: z.string().nullable(),
+            score_given: z.number().nullable()
+        })
+    })
+]);
+
+export const zKind = z.union([
+    z.literal('generic'),
+    z.literal('forbidden'),
+    z.literal('not-logged-in'),
+    z.literal('connection-error'),
+    z.literal('obsolete-client'),
+    z.literal('invalid-token'),
+    z.literal('not-enrolled'),
+    z.literal('upload-expired'),
+    z.literal('unknown-upload')
+]);
 
 /**
  * MOOC exercise inside the projects directory.
  */
 export const zLocalMoocExercise = z.object({
     'exercise-id': z.uuid(),
-    'exercise-path': z.string()
+    'exercise-path': z.string(),
+    'exercise-slug': z.string()
 });
 
 /**
@@ -203,16 +270,27 @@ export const zLocalTmcExercise = z.object({
     'exercise-slug': z.string()
 });
 
-export const zModelSolutionSpec = z.union([
-    z.object({
-        solution_files: z.array(zExerciseFile),
-        type: z.literal('Browser')
-    }),
-    z.object({
-        download_url: z.string(),
-        type: z.literal('Editor')
-    })
-]);
+/**
+ * Mirrors the `tmc` exercise service's `ModelSolutionSpec`
+ * (`services/tmc/src/util/stateInterfaces.ts`). The backend forwards it once
+ * the model solution may be revealed; the solution is an uploaded project
+ * archive for both exercise types.
+ */
+export const zModelSolutionSpec = z.object({
+    solution_download_url: z.string(),
+    type: zExerciseType
+});
+
+/**
+ * Per-exercise download progress, mirroring TMC's `ClientUpdateData`. Surfaced
+ * by the CLI as a `mooc-client-update-data` status update; `id` is a [`Uuid`]
+ * since mooc exercises are UUID-keyed.
+ */
+export const zMoocClientUpdateData = z.object({
+    'client-update-data-kind': z.literal('exercise-download'),
+    id: z.uuid(),
+    path: z.string()
+});
 
 export const zMoocCourse = z.object({
     description: z.string().nullable(),
@@ -222,16 +300,38 @@ export const zMoocCourse = z.object({
     slug: z.string()
 });
 
+/**
+ * The data attached to a `mooc-device-login` status update. Mirrors the
+ * relevant fields of the RFC 8628 device authorization response.
+ */
+export const zMoocDeviceLogin = z.object({
+    expires_in: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }),
+    interval: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }),
+    user_code: z.string(),
+    verification_uri: z.string(),
+    verification_uri_complete: z.string().nullable()
+});
+
 export const zMoocExerciseDownload = z.object({
-    path: z.string(),
-    'task-id': z.uuid()
+    'exercise-id': z.uuid(),
+    path: z.string()
 });
 
 export const zDownloadOrUpdateMoocCourseExercisesResult = z.object({
     downloaded: z.array(zMoocExerciseDownload),
     failed: z.array(z.tuple([zMoocExerciseDownload, z.array(z.string())])).nullish(),
-    skipped: z.array(zMoocExerciseDownload)
+    not_attempted: z.array(zMoocExerciseDownload).default([]),
+    skipped: z.array(zMoocExerciseDownload),
+    stopped_for_auth: z.boolean().default(false)
 });
+
+/**
+ * Outcome of restoring a past mooc submission.
+ */
+export const zMoocOldSubmissionRestore = z.union([
+    z.literal('restored'),
+    z.literal('nothing-to-download')
+]);
 
 /**
  * post /api/v8/core/exercises/{exercise_id}/submissions
@@ -282,6 +382,13 @@ export const zOutputResult = z.enum([
     'error',
     'executed-command'
 ]);
+
+/**
+ * A shareable URL for a submission.
+ */
+export const zPasteResult = z.object({
+    paste_url: z.string()
+});
 
 export const zPublicSpec = z.object({
     archive_name: z.string(),
@@ -350,6 +457,28 @@ export const zStatusUpdate = z.object({
  * The format for all status updates. May contain some data.
  */
 export const zStatusUpdate2 = z.object({
+    data: zMoocClientUpdateData.nullable(),
+    finished: z.boolean(),
+    message: z.string(),
+    'percent-done': z.number(),
+    time: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' })
+});
+
+/**
+ * The format for all status updates. May contain some data.
+ */
+export const zStatusUpdate3 = z.object({
+    data: zMoocDeviceLogin.nullable(),
+    finished: z.boolean(),
+    message: z.string(),
+    'percent-done': z.number(),
+    time: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' })
+});
+
+/**
+ * The format for all status updates. May contain some data.
+ */
+export const zStatusUpdate4 = z.object({
     data: z.null(),
     finished: z.boolean(),
     message: z.string(),
@@ -362,6 +491,12 @@ export const zStatusUpdateData = z.union([
         'update-data-kind': z.literal('client-update-data')
     })),
     zStatusUpdate2.and(z.object({
+        'update-data-kind': z.literal('mooc-client-update-data')
+    })),
+    zStatusUpdate3.and(z.object({
+        'update-data-kind': z.literal('mooc-device-login')
+    })),
+    zStatusUpdate4.and(z.object({
         'update-data-kind': z.literal('none')
     }))
 ]);
@@ -528,23 +663,8 @@ export const zDownloadOrUpdateTmcCourseExercisesResult = z.object({
     skipped: z.array(zTmcExerciseDownload)
 });
 
-export const zKind = z.union([
-    z.literal('generic'),
-    z.literal('forbidden'),
-    z.literal('not-logged-in'),
-    z.literal('connection-error'),
-    z.literal('obsolete-client'),
-    z.literal('invalid-token'),
-    z.object({
-        'failed-exercise-download': z.object({
-            completed: z.array(zTmcExerciseDownload),
-            failed: z.array(z.tuple([zTmcExerciseDownload, z.array(z.string())])),
-            skipped: z.array(zTmcExerciseDownload)
-        })
-    })
-]);
-
 export const zTmcExerciseTask = z.object({
+    assignment: z.unknown(),
     checksum: z.string().nullable(),
     model_solution_spec: zModelSolutionSpec.nullable(),
     order_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
@@ -553,6 +673,7 @@ export const zTmcExerciseTask = z.object({
 });
 
 export const zTmcExerciseSlide = z.object({
+    course_id: z.uuid(),
     deadline: z.string().nullable(),
     exercise_id: z.uuid(),
     exercise_name: z.string(),
@@ -749,6 +870,7 @@ export const zDataKind = z.union([
         'output-data-kind': z.literal('reviews')
     }),
     z.object({
+        'output-data': z.unknown(),
         'output-data-kind': z.literal('token')
     }),
     z.object({
@@ -814,6 +936,26 @@ export const zDataKind = z.union([
     z.object({
         'output-data': zExerciseTaskSubmissionResult,
         'output-data-kind': z.literal('mooc-submission-finished')
+    }),
+    z.object({
+        'output-data': zExerciseTaskSubmissionStatus,
+        'output-data-kind': z.literal('mooc-submission-status')
+    }),
+    z.object({
+        'output-data': z.array(zExerciseSlideSubmissionListItem),
+        'output-data-kind': z.literal('mooc-submissions')
+    }),
+    z.object({
+        'output-data': zPasteResult,
+        'output-data-kind': z.literal('mooc-paste')
+    }),
+    z.object({
+        'output-data': zCourseProgress,
+        'output-data-kind': z.literal('mooc-course-progress')
+    }),
+    z.object({
+        'output-data': zMoocOldSubmissionRestore,
+        'output-data-kind': z.literal('mooc-old-submission-restore')
     })
 ]);
 

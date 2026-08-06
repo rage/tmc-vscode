@@ -39,6 +39,7 @@ export default class TmcMenuTree {
     command: vscode.Command,
     collapsibleState?: vscode.TreeItemCollapsibleState,
     children?: { label: string; id: string; command: vscode.Command }[],
+    iconId?: string,
   ): void {
     // Use internal classes
     this._visibility.registerAction(id, groups)
@@ -49,6 +50,7 @@ export default class TmcMenuTree {
       this._visibility.getVisible(id),
       collapsibleState,
       children,
+      iconId,
     )
   }
 
@@ -172,7 +174,17 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
   }
 
   public addChildWithId(parentId: string, childId: string, node: TmcTreeNode): void {
-    this._actions.get(parentId)?.action.children.set(childId, node)
+    const parent = this._actions.get(parentId)?.action
+    if (parent) {
+      parent.children.set(childId, node)
+      // Expand on the first child so e.g. a freshly added course is visible.
+      if (
+        parent.children.size === 1 &&
+        parent.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed
+      ) {
+        parent.collapsibleState = vscode.TreeItemCollapsibleState.Expanded
+      }
+    }
     this.refresh()
   }
 
@@ -200,6 +212,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
     visible: boolean,
     collapsibleState?: vscode.TreeItemCollapsibleState,
     children?: { label: string; id: string; command: vscode.Command }[],
+    iconId?: string,
   ): void {
     if (this._actions.get(label) !== undefined) {
       throw new Error("Action already registered")
@@ -212,6 +225,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
         "parent",
         collapsibleState,
         children?.map((c) => new TmcTreeNode(c.label, c.id, c.command, "child")),
+        iconId,
       ),
       visible,
     })

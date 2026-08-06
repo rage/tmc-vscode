@@ -32,6 +32,7 @@ import { randomPanelId, TmcPanel } from "./panels/TmcPanel"
 import Storage from "./storage"
 import UI from "./ui/ui"
 import { cliFolder, Logger, LogLevel, semVerCompare } from "./utilities"
+import { createSessionExpiryTracker } from "./utilities/sessionExpiryTracker"
 
 let maintenanceInterval: NodeJS.Timeout | undefined
 
@@ -63,7 +64,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   } catch (e) {
     // this should never occur, we always want to activate the extension even if only partially
     Logger.error("Fatal error during initialization:", e)
-    vscode.window.showErrorMessage(`Fatal error during TestMyCode extension initialization: ${e}`)
+    const message = e instanceof Error ? e.message : String(e)
+    vscode.window.showErrorMessage(
+      `Fatal error during TestMyCode extension initialization: ${message}`,
+    )
     Logger.show()
   }
 }
@@ -75,6 +79,9 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   Logger.info(`${vscode.env.appName} version: ${vscode.version}`)
   Logger.info(`${EXTENSION_ID} version: ${extensionVersion}`)
   Logger.info(`Currently open workspace: ${vscode.workspace.name}`)
+
+  // Gates the developer-only palette entries (e.g. "Show Debug View").
+  await vscode.commands.executeCommand("setContext", "test-my-code:DebugMode", DEBUG_MODE)
 
   const dialog = new Dialog()
   const cliFolderPath = cliFolder(context)
@@ -98,21 +105,27 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     )
   }
 
-  // check auth status
-  let authenticated = false
+  // tmc and mooc credential states are independent; the UI treats the user
+  // as logged in when either backend is authenticated.
+  const authStatus = { tmc: false, mooc: false }
   if (langs.ok) {
     const authenticatedResult = await langs.val.isAuthenticated({ timeout: 15000 })
     if (authenticatedResult.err) {
       initializationError(dialog, "authentication check", authenticatedResult.val, cliFolderPath)
-      await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false)
     } else {
-      authenticated = authenticatedResult.val
-      await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated)
+      authStatus.tmc = authenticatedResult.val
+    }
+    const moocAuthenticatedResult = await langs.val.isMoocAuthenticated({ timeout: 15000 })
+    if (moocAuthenticatedResult.err) {
+      Logger.warn("Could not check mooc login status", moocAuthenticatedResult.val)
+    } else {
+      authStatus.mooc = moocAuthenticatedResult.val
     }
   } else {
     Logger.warn("Could not check login status")
-    await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false)
   }
+  const authenticated = authStatus.tmc || authStatus.mooc
+  await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated)
 
   // migrate data between versions
   const storage = new Storage(context)
@@ -180,19 +193,51 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     loggedIn,
   }
 
+  const applyAuthContext = async (): Promise<void> => {
+    const loggedInNow = authStatus.tmc || authStatus.mooc
+    await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", loggedInNow)
+    ui.treeDP.updateVisibility([
+      loggedInNow ? visibilityGroups.loggedIn : visibilityGroups.loggedIn.not,
+    ])
+  }
+  // Both backends are authenticated by the same courses.mooc.fi credential, so
+  // either one expiring is fixed by the same device-flow login.
+  const sessionExpiredWarning = (backend: "tmc" | "mooc"): void => {
+    const message =
+      backend === "tmc"
+        ? "Your session has expired, please log in."
+        : "Your courses.mooc.fi session has expired, please log in."
+    dialog.warningNotification(message, [
+      "Log in",
+      (): void => {
+        vscode.commands.executeCommand("tmc.showMoocLogin")
+      },
+    ])
+  }
+
+  // Seeded from the startup check above; shared with the background poll further down.
+  const sessionExpiry = createSessionExpiryTracker(authStatus, sessionExpiredWarning)
+
   if (langs.ok) {
-    langs.val.on("login", async () => {
-      await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", true)
-      ui.treeDP.updateVisibility([visibilityGroups.loggedIn])
+    langs.val.on("logout", async (expected) => {
+      authStatus.tmc = false
+      await applyAuthContext()
+      sessionExpiry.onLogout("tmc", expected)
     })
-    langs.val.on("logout", async () => {
-      dialog.warningNotification("Your TMC session has expired, please log in.")
-      await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false)
-      ui.treeDP.updateVisibility([visibilityGroups.loggedIn.not])
-      TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-        type: "Login",
-        id: randomPanelId(),
-      })
+    langs.val.on("mooc-login", async () => {
+      authStatus.mooc = true
+      sessionExpiry.onLogin("mooc")
+      // A CLI that authenticates the tmc backend with the mooc token resolves an
+      // earlier tmc expiry too. Whether it does is a property of the pinned CLI,
+      // so drop the stale tmc state rather than claiming a session: the next
+      // background check is what re-arms the warning.
+      sessionExpiry.reset("tmc")
+      await applyAuthContext()
+    })
+    langs.val.on("mooc-logout", async (expected) => {
+      authStatus.mooc = false
+      await applyAuthContext()
+      sessionExpiry.onLogout("mooc", expected)
     })
   } else {
     Logger.warn("Skipped login command setup")
@@ -290,11 +335,23 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     const authRes = langs.ok ? await langs.val.isAuthenticated() : Ok(false)
     if (authRes.err) {
       Logger.error("Failed to check if authenticated", authRes.val)
-    } else if (authRes.val) {
+    } else {
+      authStatus.tmc = authRes.val
+    }
+    const moocAuthRes = langs.ok ? await langs.val.isMoocAuthenticated() : Ok(false)
+    if (moocAuthRes.err) {
+      Logger.error("Failed to check if mooc authenticated", moocAuthRes.val)
+    } else {
+      authStatus.mooc = moocAuthRes.val
+    }
+    // Proactively catches a session dropping between polls, not just on a failed command.
+    sessionExpiry.onAuthChecked("tmc", authStatus.tmc)
+    sessionExpiry.onAuthChecked("mooc", authStatus.mooc)
+    if (authStatus.tmc || authStatus.mooc) {
       vscode.commands.executeCommand("tmc.updateExercises", "silent")
       checkForCourseUpdates(actionContext)
     }
-    await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authRes.val)
+    await applyAuthContext()
   }, EXERCISE_CHECK_INTERVAL)
 
   if (showWelcome) {

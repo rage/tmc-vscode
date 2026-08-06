@@ -1,12 +1,9 @@
-import { Err, Ok, Result } from "ts-results"
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { downloadOrUpdateExercises, refreshLocalExercises } from "../actions"
 import type { ActionContext } from "../actions/types"
-import { TmcPanel } from "../panels/TmcPanel"
-import type { ExerciseIdentifier, ExtensionToWebview } from "../shared/shared"
 import { CourseIdentifier, LocalCourseData } from "../shared/shared"
-import type UI from "../ui/ui"
 import { Logger } from "../utilities/"
 
 /**
@@ -49,23 +46,36 @@ export function registerUiActions(actionContext: ActionContext): Result<void, Er
         command: "tmc.viewInitializationErrorHelp",
         title: "Open help message for the extension initialization error",
       },
+      undefined,
+      undefined,
+      "warning",
     )
     ui.treeDP.registerAction(
       "Restart extension host",
       "workbench.action.restartExtensionHost",
       [],
       { command: "workbench.action.restartExtensionHost", title: "Restart extension host" },
+      undefined,
+      undefined,
+      "debug-restart",
     )
   }
 
   // Register UI actions
   if (langs.ok) {
-    // cannot login without tmc
-    ui.treeDP.registerAction("Log in", "logIn", [visibilityGroups.loggedIn.not], {
-      command: "tmc.showLogin",
-      title: "",
-      arguments: [],
-    })
+    ui.treeDP.registerAction(
+      "Log in",
+      "logIn",
+      [visibilityGroups.loggedIn.not],
+      {
+        command: "tmc.showMoocLogin",
+        title: "",
+        arguments: [],
+      },
+      undefined,
+      undefined,
+      "sign-in",
+    )
   }
 
   if (userData.ok) {
@@ -90,101 +100,59 @@ export function registerUiActions(actionContext: ActionContext): Result<void, Er
           arguments: [LocalCourseData.getCourseId(course)],
         },
       })),
+      "book",
     )
   }
 
-  ui.treeDP.registerAction("Settings", "settings", [], {
-    command: "tmc.settings",
-    title: "Go to TMC Settings",
-  })
-  ui.treeDP.registerAction("Open TMC Exercises Folder", "tmcDataFolder", [], {
-    command: "tmc.openTMCExercisesFolder",
-    title: "Open TMC Exercises Folder",
-  })
-  ui.treeDP.registerAction("Open TMC Extension Logs", "logs", [], {
-    command: "tmc.logs",
-    title: "Open TMC Extension Logs",
-  })
-  ui.treeDP.registerAction("Log out", "logOut", [visibilityGroups.loggedIn], {
-    command: "tmc.logout",
-    title: "Log out",
-  })
+  ui.treeDP.registerAction(
+    "Settings",
+    "settings",
+    [],
+    {
+      command: "tmc.settings",
+      title: "Open TestMyCode settings",
+    },
+    undefined,
+    undefined,
+    "settings-gear",
+  )
+  // Label is backend-neutral: the folder holds both tmc and mooc exercises.
+  ui.treeDP.registerAction(
+    "Open Exercises Folder",
+    "tmcDataFolder",
+    [],
+    {
+      command: "tmc.openTMCExercisesFolder",
+      title: "Open Exercises Folder",
+    },
+    undefined,
+    undefined,
+    "folder-opened",
+  )
+  ui.treeDP.registerAction(
+    "Show Extension Logs",
+    "logs",
+    [],
+    {
+      command: "tmc.logs",
+      title: "Show Extension Logs",
+    },
+    undefined,
+    undefined,
+    "output",
+  )
+  ui.treeDP.registerAction(
+    "Log out",
+    "logOut",
+    [visibilityGroups.loggedIn],
+    {
+      command: "tmc.logout",
+      title: "Log out",
+    },
+    undefined,
+    undefined,
+    "sign-out",
+  )
 
   return Ok.EMPTY
-}
-
-/**
- * Helper function that downloads exercises and creates the appropriate changes in the UI.
- */
-export async function uiDownloadExercises(
-  _ui: UI,
-  actionContext: ActionContext,
-  mode: string,
-  courseId: CourseIdentifier,
-  exerciseIds: ExerciseIdentifier[],
-): Promise<void> {
-  const { userData } = actionContext
-  if (userData.err) {
-    Logger.error("Extension was not initialized properly")
-    return
-  }
-
-  if (mode === "update") {
-    TmcPanel.postMessage({
-      type: "setUpdateables",
-      target: { type: "CourseDetails" },
-      exerciseIds: [],
-    })
-    const downloadResult = await downloadOrUpdateExercises(actionContext, exerciseIds)
-    if (downloadResult.ok) {
-      TmcPanel.postMessage({
-        type: "setUpdateables",
-        target: { type: "CourseDetails" },
-        exerciseIds: downloadResult.val.failed,
-      })
-    }
-    return
-  }
-
-  TmcPanel.postMessage({
-    type: "setNewExercises",
-    target: {
-      type: "MyCourses",
-    },
-    courseId: courseId,
-    exerciseIds: [],
-  })
-
-  const downloadResult = await downloadOrUpdateExercises(actionContext, exerciseIds)
-  if (downloadResult.err) {
-    actionContext.dialog.errorNotification("Failed to download new exercises.", downloadResult.val)
-    return
-  }
-
-  const refreshResult = Result.all(
-    await userData.val.clearFromNewExercises(courseId, downloadResult.val.successful),
-    await refreshLocalExercises(actionContext),
-  )
-  if (refreshResult.err) {
-    actionContext.dialog.errorNotification("Failed to refresh local exercises.", refreshResult.val)
-  }
-
-  TmcPanel.postMessage({
-    type: "setNewExercises",
-    target: { type: "MyCourses" },
-    courseId: courseId,
-    exerciseIds: LocalCourseData.getNewExercises(userData.val.getCourse(courseId)),
-  })
-  const exerciseStatusChangeMessages = exerciseIds.map((id) => {
-    const message: ExtensionToWebview = {
-      type: "exerciseStatusChange",
-      target: {
-        type: "CourseDetails",
-      },
-      exerciseId: id,
-      status: "closed",
-    }
-    return message
-  })
-  TmcPanel.postMessage(...exerciseStatusChangeMessages)
 }

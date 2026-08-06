@@ -76,9 +76,6 @@ suite("moveExtensionDataPath action", function () {
     expect(workspaceManagerMock.setExercises).toHaveBeenCalledTimes(1)
   })
 
-  // Closing the active course's exercises before the move was removed
-  // deliberately (commit d39605f) as unnecessary on current VS Code, so the
-  // move must not close anything even when a course workspace is active.
   test("should not close exercises before moving", async function () {
     await moveExtensionDataPath(actionContext(), emptyFolder(root))
     expect(workspaceManagerMock.closeCourseExercises).not.toHaveBeenCalled()

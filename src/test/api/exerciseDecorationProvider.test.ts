@@ -71,6 +71,26 @@ suite("ExerciseDecoratorProvider class", function () {
     expect(decoration).toBeUndefined()
   })
 
+  test("should decorate a mooc exercise from the mooc course data", function () {
+    // Regression: the provider used to look the exercise up with
+    // `getTmcExerciseByName` regardless of backend, so every mooc exercise missed
+    // and got the "not found in course" badge instead of its real decoration.
+    workspaceManagerMockValues.getExerciseByPath = { ...exerciseHelloWorld, backend: "mooc" }
+    userDataMockValues.getExerciseByName = undefined
+    userDataMockValues.getMoocExerciseByName = {
+      id: "mooc-ex-1",
+      name: "hello_world",
+      availablePoints: 1,
+      awardedPoints: 1,
+      deadline: null,
+      passed: true,
+      softDeadline: null,
+    }
+    const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
+    expect((decoration as vscode.FileDecoration).badge).toBe("⬤")
+    expect(userDataMock.getTmcExerciseByName).not.toHaveBeenCalled()
+  })
+
   test("should not attempt to decorate a non-exercise", function () {
     const notExercise = vscode.Uri.file("something.txt")
     const decoration = exerciseDecorationProvider.provideFileDecoration(notExercise)

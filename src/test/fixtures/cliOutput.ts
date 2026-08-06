@@ -237,6 +237,7 @@ const moocCourse = {
 const moocExerciseSlide = {
   slide_id: UUID_A,
   exercise_id: UUID_B,
+  course_id: UUID_A,
   exercise_name: "Best exercise",
   exercise_order_number: 1,
   deadline: "2026-08-19T23:59:59.999999Z",
@@ -253,9 +254,13 @@ const moocExerciseSlide = {
         checksum: "1234abcd",
         browser_test: { runtime: "python", script: "print('hello')", error: null },
       },
+      // The shape the `tmc` exercise service actually emits (pinned there by
+      // services/tmc/src/server/modelSolution.test.ts). A solved exercise's task
+      // carries this, so a wrong shape here would hide the CLI failing on every
+      // later command for that exercise.
       model_solution_spec: {
-        type: "Editor",
-        download_url: "https://courses.mooc.fi/api/v0/files/solution.tar.zst",
+        type: "editor",
+        solution_download_url: "https://courses.mooc.fi/api/v0/files/solution.tar.zst",
       },
       checksum: "1234abcd",
     },
@@ -265,8 +270,8 @@ const moocExerciseSlide = {
       assignment: null,
       public_spec: null,
       model_solution_spec: {
-        type: "Browser",
-        solution_files: [{ filepath: "src/main.rs", contents: "fn main() {}" }],
+        type: "browser",
+        solution_download_url: "https://courses.mooc.fi/api/v0/files/browser-solution.tar.zst",
       },
       checksum: null,
     },
@@ -351,7 +356,7 @@ const validCliOutputFixtures: CliOutputFixture[] = [
     },
   },
   {
-    name: "error: failed-exercise-download",
+    name: "error: failed-exercise-download (released CLI only)",
     value: {
       "output-kind": "output-data",
       status: "finished",
@@ -530,7 +535,7 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   {
     name: "local-mooc-exercises",
     value: outputData("local-mooc-exercises", [
-      { "exercise-id": UUID_B, "exercise-path": "/p/mooc-ex" },
+      { "exercise-slug": "mooc-ex", "exercise-id": UUID_B, "exercise-path": "/p/mooc-ex" },
     ]),
   },
   {
@@ -549,8 +554,8 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   {
     name: "mooc-exercise-download",
     value: outputData("mooc-exercise-download", {
-      downloaded: [{ "task-id": UUID_C, path: "/p/mooc-ex" }],
-      skipped: [{ "task-id": UUID_B, path: "/p/mooc-ex2" }],
+      downloaded: [{ "exercise-id": UUID_C, path: "/p/mooc-ex" }],
+      skipped: [{ "exercise-id": UUID_B, path: "/p/mooc-ex2" }],
     }),
   },
   { name: "tmc-config", value: outputData("tmc-config", { projects_dir: "/projects" }) },
@@ -567,7 +572,18 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   { name: "mooc-exercise-slide", value: outputData("mooc-exercise-slide", moocExerciseSlide) },
   {
     name: "mooc-submission-finished",
-    value: outputData("mooc-submission-finished", { submission_id: UUID_A }),
+    value: outputData("mooc-submission-finished", {
+      task_submission_id: UUID_A,
+      slide_submission_id: UUID_B,
+    }),
+  },
+  {
+    name: "mooc-old-submission-restore: restored",
+    value: outputData("mooc-old-submission-restore", "restored"),
+  },
+  {
+    name: "mooc-old-submission-restore: nothing-to-download",
+    value: outputData("mooc-old-submission-restore", "nothing-to-download"),
   },
   // forward compatibility: unknown extra fields must not fail validation
   {
@@ -615,6 +631,32 @@ const invalidCliOutputFixtures: CliOutputFixture[] = [
   {
     name: "mooc course with non-uuid id",
     value: outputData("mooc-courses", [{ ...moocCourse, id: 590 }]),
+  },
+  {
+    // The shape langs used to expect but the `tmc` exercise service never emitted;
+    // accepting it again would mean the two have drifted apart once more.
+    name: "mooc exercise slide with a type-tagged Editor model solution",
+    value: outputData("mooc-exercise-slide", {
+      ...moocExerciseSlide,
+      tasks: [
+        {
+          ...moocExerciseSlide.tasks[0],
+          model_solution_spec: { type: "Editor", download_url: "https://x/solution.tar.zst" },
+        },
+      ],
+    }),
+  },
+  {
+    name: "mooc exercise slide with an untagged model solution",
+    value: outputData("mooc-exercise-slide", {
+      ...moocExerciseSlide,
+      tasks: [
+        {
+          ...moocExerciseSlide.tasks[0],
+          model_solution_spec: { solution_download_url: "https://x/solution.tar.zst" },
+        },
+      ],
+    }),
   },
   {
     name: "status-update none with object data",

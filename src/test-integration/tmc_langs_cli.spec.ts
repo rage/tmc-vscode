@@ -10,8 +10,8 @@ import type { Result } from "ts-results"
 
 import Langs from "../api/langs"
 import type { SubmissionFeedback } from "../api/types"
-import { CLIENT_NAME, TMC_LANGS_VERSION } from "../config/constants"
-import { AuthenticationError, AuthorizationError, BottleneckError, RuntimeError } from "../errors"
+import { CLIENT_NAME, MINIMUM_SUBMISSION_INTERVAL, TMC_LANGS_VERSION } from "../config/constants"
+import { AuthorizationError, BottleneckError, RuntimeError } from "../errors"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { getLangsCLIForPlatform, getPlatform, semVerCompare } from "../utilities/"
 
@@ -24,10 +24,6 @@ const BACKEND_FOLDER = path.join(PROJECT_ROOT, "backend")
 const CLI_PATH = path.join(BACKEND_FOLDER, "cli")
 const CLI_FILE = path.join(CLI_PATH, getLangsCLIForPlatform(getPlatform(), TMC_LANGS_VERSION))
 const FEEDBACK_URL = "http://localhost:4001/feedback"
-
-// Example backend credentials
-const USERNAME = "TestMyExtension"
-const PASSWORD = "hunter2"
 
 // Config dir name must follow conventions mandated by TMC-langs.
 const CLIENT_CONFIG_DIR_NAME = `tmc-${CLIENT_NAME}`
@@ -63,7 +59,20 @@ suite("tmc langs cli spec", function () {
 
   suiteSetup(async function () {
     this.timeout(30000)
-    server = await startServer()
+    // Route mooc (courses.mooc.fi) CLI calls at the mock mounted in the same
+    // backend process (backend/mooc). This overrides the compiled
+    // MOOC_BACKEND_URL define; _spawnLangsProcess reads it from the env and
+    // passes it to the CLI child. Set before any Langs is constructed.
+    process.env.TMC_LANGS_MOOC_ROOT_URL = "http://localhost:4001"
+    // The tmc code path authenticates with the mooc access token, and the CLI
+    // only attaches that bearer to a localhost backend when localhost is
+    // trusted. Without this the whole tier would run the tmc path
+    // unauthenticated once the pinned CLI carries that change.
+    process.env.TMC_LANGS_MOOC_TRUST_LOCALHOST = "1"
+    // The mock defaults to requiring a bearer; opt this shared instance out
+    // since the suite below drives resource endpoints without one (port 4002
+    // covers the auth-required path).
+    server = await startServer({ MOOC_MOCK_REQUIRE_AUTH: "0" })
   })
 
   let testDir: string
@@ -79,9 +88,11 @@ suite("tmc langs cli spec", function () {
     testDir = path.join(ARTIFACT_FOLDER, testDirName)
   })
 
+  // A user with a pre-existing tmc token in credentials.json: still supported,
+  // and after the TMC login UI's removal the only tmc credential the extension
+  // itself never creates.
   suite("authenticated user", function () {
     let configDir: string
-    let onLoggedInCalls: number
     let onLoggedOutCalls: number
     let projectsDir: string
     let tmc: Langs
@@ -89,19 +100,12 @@ suite("tmc langs cli spec", function () {
     setup(function () {
       configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME)
       writeCredentials(configDir)
-      onLoggedInCalls = 0
       onLoggedOutCalls = 0
       projectsDir = setupProjectsDir(configDir, path.join(testDir, "tmcdata"))
       tmc = new Langs(CLI_FILE, CLIENT_NAME, "test", {
         cliConfigDir: testDir,
       })
-      tmc.on("login", () => onLoggedInCalls++)
       tmc.on("logout", () => onLoggedOutCalls++)
-    })
-
-    test("should not be able to re-authenticate", async function () {
-      const result = await tmc.authenticate(USERNAME, PASSWORD)
-      expect(result.val).to.be.instanceOf(AuthenticationError)
     })
 
     test("should be able to deauthenticate", async function () {
@@ -110,8 +114,6 @@ suite("tmc langs cli spec", function () {
 
       const result = await unwrapResult(tmc.isAuthenticated())
       expect(result).to.be.false
-
-      expect(onLoggedInCalls).to.be.equal(0)
     })
 
     test("should be able to read and change settings", async function () {
@@ -136,14 +138,16 @@ suite("tmc langs cli spec", function () {
 
     test("should be able to download an existing exercise", async function () {
       const result = await tmc.downloadExercises([ExerciseIdentifier.from(1)], true, () => {})
-      result.err && expect.fail(`Expected operation to succeed: ${result.val.message}`)
+      result.tmcError && expect.fail(`Expected operation to succeed: ${result.tmcError.message}`)
     }).timeout(10000)
 
     // Ids missing from the server are missing from the response.
     test.skip("should not be able to download a non-existent exercise", async function () {
-      const [tmcDownloads] = (
-        await tmc.downloadExercises([ExerciseIdentifier.from(404)], true, () => {})
-      ).unwrap()
+      const { tmc: tmcDownloads } = await tmc.downloadExercises(
+        [ExerciseIdentifier.from(404)],
+        true,
+        () => {},
+      )
       expect(tmcDownloads.failed?.length).to.be.equal(1)
     })
 
@@ -221,9 +225,11 @@ suite("tmc langs cli spec", function () {
 
       setup(async function () {
         deleteSync(projectsDir, { force: true })
-        const [tmcRes] = (
-          await tmc.downloadExercises([ExerciseIdentifier.from(1)], true, () => {})
-        ).unwrap()
+        const { tmc: tmcRes } = await tmc.downloadExercises(
+          [ExerciseIdentifier.from(1)],
+          true,
+          () => {},
+        )
         const downloaded = tmcRes.downloaded[0]
         if (!downloaded) {
           throw new Error("expected an exercise to have been downloaded")
@@ -235,7 +241,7 @@ suite("tmc langs cli spec", function () {
         await unwrapResult(tmc.clean(exercisePath))
       })
 
-      migrationTest("should be able to list local exercises", async function () {
+      test("should be able to list local exercises", async function () {
         const result = await unwrapResult(tmc.listLocalCourseExercises("tmc", "python-course"))
         expect(result.length).to.be.equal(1)
         expect(first(result)?.["exercise-path"]).to.be.equal(exercisePath)
@@ -393,7 +399,6 @@ suite("tmc langs cli spec", function () {
   })
 
   suite("unauthenticated user", function () {
-    let onLoggedInCalls: number
     let onLoggedOutCalls: number
     let configDir: string
     let projectsDir: string
@@ -402,40 +407,45 @@ suite("tmc langs cli spec", function () {
     setup(function () {
       configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME)
       clearCredentials(configDir)
-      onLoggedInCalls = 0
+      clearMoocCredentials(configDir)
       onLoggedOutCalls = 0
       projectsDir = setupProjectsDir(configDir, path.join(testDir, "tmcdata"))
       tmc = new Langs(CLI_FILE, CLIENT_NAME, "test", {
         cliConfigDir: testDir,
       })
-      tmc.on("login", () => onLoggedInCalls++)
       tmc.on("logout", () => onLoggedOutCalls++)
     })
 
-    // TODO: There was something fishy with this test
-    test("should not be able to authenticate with empty credentials", async function () {
-      const result = await tmc.authenticate("", "")
-      expect(result.val).to.be.instanceOf(AuthenticationError)
-    })
-
-    test("should not be able to authenticate with incorrect credentials", async function () {
-      const result = await tmc.authenticate(USERNAME, "batman123")
-      expect(result.val).to.be.instanceOf(AuthenticationError)
-    })
-
-    test("should be able to authenticate with correct credentials", async function () {
-      await unwrapResult(tmc.authenticate(USERNAME, PASSWORD))
-      expect(onLoggedInCalls).to.be.equal(1)
-
-      const result2 = await unwrapResult(tmc.isAuthenticated())
-      expect(result2).to.be.true
-
+    // `mooc logged-in` is migration-contract, so the mooc half of this lives in
+    // the mooc suite below.
+    test("reports not logged in without credentials", async function () {
+      expect(await unwrapResult(tmc.isAuthenticated())).to.be.false
       expect(onLoggedOutCalls).to.be.equal(0)
+    })
+
+    // The device flow is the only login left, so a mooc credential is what
+    // authenticates BOTH backends. This is the CLI contract that replaced
+    // `tmc login`.
+    migrationTest("a stored mooc credential authenticates the tmc backend", async function () {
+      writeMoocCredentials(configDir)
+      expect(await unwrapResult(tmc.isAuthenticated())).to.be.true
+      expect(await unwrapResult(tmc.isMoocAuthenticated())).to.be.true
+    })
+
+    migrationTest("tmc logout leaves the mooc credentials in place", async function () {
+      writeCredentials(configDir)
+      writeMoocCredentials(configDir)
+      await unwrapResult(tmc.deauthenticate())
+      expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
+      // `tmc logout` owns credentials.json only; the mooc session survives it
+      // and keeps authenticating both backends.
+      expect(await unwrapResult(tmc.isMoocAuthenticated())).to.be.true
+      expect(await unwrapResult(tmc.isAuthenticated())).to.be.true
     })
 
     test("should not be able to download an exercise", async function () {
       const result = await tmc.downloadExercises([ExerciseIdentifier.from(1)], true, () => {})
-      expect(result.val).to.be.instanceOf(RuntimeError)
+      expect(result.tmcError).to.be.instanceOf(RuntimeError)
     })
 
     // The mock backend doesn't enforce auth, so unauthenticated calls surface as
@@ -493,9 +503,11 @@ suite("tmc langs cli spec", function () {
       setup(async function () {
         deleteSync(projectsDir, { force: true })
         writeCredentials(configDir)
-        const [tmcRes] = (
-          await tmc.downloadExercises([ExerciseIdentifier.from(1)], true, () => {})
-        ).unwrap()
+        const { tmc: tmcRes } = await tmc.downloadExercises(
+          [ExerciseIdentifier.from(1)],
+          true,
+          () => {},
+        )
         clearCredentials(configDir)
         const downloaded = tmcRes.downloaded[0]
         if (!downloaded) {
@@ -509,7 +521,7 @@ suite("tmc langs cli spec", function () {
         expect(result).to.be.undefined
       })
 
-      migrationTest("should be able to list local exercises", async function () {
+      test("should be able to list local exercises", async function () {
         const result = await unwrapResult(tmc.listLocalCourseExercises("tmc", "python-course"))
         expect(result.length).to.be.equal(1)
         expect(first(result)?.["exercise-path"]).to.be.equal(exercisePath)
@@ -546,10 +558,473 @@ suite("tmc langs cli spec", function () {
     })
   })
 
-  suiteTeardown(function () {
-    server && kill(server.pid as number)
-    // the command above didn't seem to work reliably, so the call below was added
-    server?.kill()
+  // courses.mooc.fi mock (backend/mooc). All cases are migration-contract
+  // (mooc subcommands + UUID ids) that the released 0.39.4 CLI lacks, so they
+  // run only against a locally-built CLI (migrationTest) and skip on CI's
+  // released CLI -- keeping CI green. Fixture ids are the fixed UUIDs from
+  // backend/mooc/fixtures.ts.
+  suite("mooc backend", function () {
+    this.timeout(20000)
+
+    // fixed fixture ids (backend/mooc/fixtures.ts)
+    const PYTHON_COURSE_ID = "11111111-1111-4111-8111-111111111111"
+    const PASSING_EXERCISE_ID = "a1a1a1a1-0000-4000-8000-000000000001"
+    const FAILING_EXERCISE_ID = "b2b2b2b2-0000-4000-8000-000000000001"
+    const NONEXISTENT_EXERCISE_ID = "ffffffff-0000-4000-8000-000000000000"
+
+    let configDir: string
+    let tmc: Langs
+
+    setup(function () {
+      configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME)
+      writeCredentials(configDir)
+      const projectsDir = path.join(testDir, "tmcdata")
+      deleteSync(projectsDir, { force: true })
+      setupProjectsDir(configDir, projectsDir)
+      // Poll grading fast so the blocking submit tests don't wait the real ~2 s
+      // interval; the CLI inherits process.env (see Langs._spawnLangsProcess).
+      process.env.TMC_LANGS_MOOC_POLL_INTERVAL_MS = "50"
+      tmc = new Langs(CLI_FILE, CLIENT_NAME, "test", { cliConfigDir: testDir })
+    })
+
+    migrationTest("should list the enrolled mooc courses", async function () {
+      const courses = (await tmc.getEnrolledMoocCourseInstances()).unwrap()
+      expect(courses.length).to.be.equal(2)
+      expect(courses.some((c) => c.name === "MOOC Python Course")).to.be.true
+    })
+
+    migrationTest("should get mooc course data with exercise slides", async function () {
+      const [course, slides] = (await tmc.getMoocCourseInstanceData(PYTHON_COURSE_ID)).unwrap()
+      expect(course.name).to.be.equal("MOOC Python Course")
+      expect(slides.length).to.be.equal(1)
+      expect(slides[0]?.exercise_id).to.be.equal(PASSING_EXERCISE_ID)
+      expect(slides[0]?.tasks[0]?.public_spec).to.not.be.undefined
+    })
+
+    // Writes a minimal submittable python project (the `requirements.txt` marker
+    // makes tmc-langs recognise it) and returns its path.
+    const writeSubmittableProject = (name: string): string => {
+      const dir = path.join(testDir, name)
+      fs.mkdirSync(path.join(dir, "src"), { recursive: true })
+      fs.writeFileSync(path.join(dir, "requirements.txt"), "")
+      fs.writeFileSync(path.join(dir, "src", "main.py"), "print('hi')\n")
+      return dir
+    }
+
+    migrationTest(
+      "should submit a mooc exercise and block for a fully-graded result",
+      async function () {
+        const dir = writeSubmittableProject("mooc-submit-passing")
+        const status = (
+          await tmc.submitMoocExerciseAndWaitForResults(PASSING_EXERCISE_ID, dir)
+        ).unwrap()
+        // the blocking submit resolves slide/task from the exercise id, polls the
+        // grading through the real CLI, and returns a terminal FullyGraded status
+        expect(status).to.not.equal("NoGradingYet")
+        if (status === "NoGradingYet") {
+          throw new Error("unreachable")
+        }
+        expect(status.Grading.grading_progress).to.equal("FullyGraded")
+        expect(status.Grading.score_given).to.equal(1)
+      },
+    )
+
+    migrationTest("should submit a failing mooc exercise and report Failed", async function () {
+      const dir = writeSubmittableProject("mooc-submit-failing")
+      const status = (
+        await tmc.submitMoocExerciseAndWaitForResults(FAILING_EXERCISE_ID, dir)
+      ).unwrap()
+      expect(status).to.not.equal("NoGradingYet")
+      if (status === "NoGradingYet") {
+        throw new Error("unreachable")
+      }
+      expect(status.Grading.grading_progress).to.equal("Failed")
+      expect(status.Grading.score_given).to.equal(0)
+    })
+
+    migrationTest(
+      "should transparently re-upload when the first upload is reaped before submit",
+      async function () {
+        // The two-step contract (upload files, then submit naming them) has a race
+        // the CLI recovers from by re-uploading once. It cannot be provoked by
+        // timing -- the two calls are milliseconds apart -- so the mock is asked
+        // to reap the next upload. Without the retry this submit fails with
+        // `upload-expired`; with it, the submit succeeds and grades normally.
+        const armed = await fetch("http://localhost:4001/mooc-mock/expire-next-upload", {
+          method: "POST",
+        })
+        expect(armed.status).to.be.equal(204)
+
+        const dir = writeSubmittableProject("mooc-submit-reaped")
+        const status = (
+          await tmc.submitMoocExerciseAndWaitForResults(PASSING_EXERCISE_ID, dir)
+        ).unwrap()
+        expect(status).to.not.equal("NoGradingYet")
+        if (status === "NoGradingYet") {
+          throw new Error("unreachable")
+        }
+        expect(status.Grading.grading_progress).to.equal("FullyGraded")
+      },
+    )
+
+    migrationTest(
+      "should submit a mooc exercise to paste and return a share URL",
+      async function () {
+        const dir = writeSubmittableProject("mooc-paste")
+        // `mooc paste` submits (non-blocking) then shares the resulting submission,
+        // resolving the slide-submission id from the exercise's submissions list.
+        const pasteUrl = (await tmc.submitMoocExerciseToPaste(PASSING_EXERCISE_ID, dir)).unwrap()
+        expect(pasteUrl).to.match(/\/shared-submissions\/[0-9a-f-]+$/)
+      },
+    )
+
+    migrationTest("should download mooc exercises then skip them by checksum", async function () {
+      const ids = [
+        ExerciseIdentifier.from(PASSING_EXERCISE_ID),
+        ExerciseIdentifier.from(FAILING_EXERCISE_ID),
+      ]
+      const { mooc: firstMooc } = await tmc.downloadExercises(ids, false, () => {})
+      expect(firstMooc.downloaded.length).to.be.equal(2)
+      expect(firstMooc.skipped.length).to.be.equal(0)
+
+      // second run: identical checksums -> skipped, nothing re-downloaded
+      const { mooc: secondMooc } = await tmc.downloadExercises(ids, false, () => {})
+      expect(secondMooc.downloaded.length).to.be.equal(0)
+      expect(secondMooc.skipped.length).to.be.equal(2)
+    })
+
+    migrationTest(
+      "should report a failed entry for a nonexistent mooc exercise",
+      async function () {
+        const { mooc } = await tmc.downloadExercises(
+          [ExerciseIdentifier.from(NONEXISTENT_EXERCISE_ID)],
+          false,
+          () => {},
+        )
+        expect(mooc.failed?.length).to.be.equal(1)
+      },
+    )
+
+    migrationTest(
+      "should key mooc download results by the requested exercise id",
+      async function () {
+        // Regression guard for the task_id/exercise_id confusion: the result must
+        // be addressable by the exercise id the caller passed in.
+        const { mooc } = await tmc.downloadExercises(
+          [ExerciseIdentifier.from(PASSING_EXERCISE_ID)],
+          false,
+          () => {},
+        )
+        expect(mooc.downloaded.length).to.be.equal(1)
+        expect(mooc.downloaded[0]?.["exercise-id"]).to.be.equal(PASSING_EXERCISE_ID)
+      },
+    )
+
+    migrationTest(
+      "should download with --course-id and then list the local mooc exercise with its slug",
+      async function () {
+        // Passing the course id drives the single-course resolution path; the
+        // downloaded exercise must then surface via the mooc list-local command
+        // (looked up by course id) with a slug + path so the workspace manager
+        // can track it.
+        const downloaded = await tmc.downloadExercises(
+          [ExerciseIdentifier.from(PASSING_EXERCISE_ID)],
+          false,
+          () => {},
+          PYTHON_COURSE_ID,
+        )
+        expect(downloaded.mooc.downloaded.length).to.be.equal(1)
+
+        const local = (await tmc.listLocalCourseExercises("mooc", PYTHON_COURSE_ID)).unwrap()
+        const entry = local.find(
+          (x) => "exercise-id" in x && x["exercise-id"] === PASSING_EXERCISE_ID,
+        )
+        expect(entry, "the downloaded exercise should be listed locally").to.not.be.undefined
+        expect(entry?.["exercise-slug"]).to.be.a("string").and.not.be.empty
+        expect(entry?.["exercise-path"]).to.be.a("string").and.not.be.empty
+      },
+    )
+
+    migrationTest(
+      "should submit twice, list both newest-first, and restore an old submission",
+      async function () {
+        // Get a real local exercise path to submit and restore into.
+        await tmc.downloadExercises(
+          [ExerciseIdentifier.from(PASSING_EXERCISE_ID)],
+          false,
+          () => {},
+          PYTHON_COURSE_ID,
+        )
+        const local = (await tmc.listLocalCourseExercises("mooc", PYTHON_COURSE_ID)).unwrap()
+        const entry = local.find(
+          (x) => "exercise-id" in x && x["exercise-id"] === PASSING_EXERCISE_ID,
+        )
+        const exercisePath = (entry as { "exercise-path": string })["exercise-path"]
+        const studentFile = path.join(exercisePath, "src", "passing_exercise.py")
+        expect(fs.existsSync(studentFile)).to.be.true
+
+        // The mock accumulates submissions for the suite's lifetime, so measure
+        // relative to whatever is already there.
+        const before = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
+
+        // Make the two submissions CONTENT-DISTINCT so restoring the older one is
+        // provably serving that submission's own content -- not the exercise stub
+        // and not the newer submission. The stub content is what's on disk right
+        // after download; the two submissions each get a distinct marker.
+        const stubContent = fs.readFileSync(studentFile, "utf8")
+        const olderContent = `${stubContent}\n# older submission marker (restore target)\n`
+        const newerContent = `${stubContent}\n# newer submission marker (must not be restored)\n`
+        expect(olderContent).to.not.equal(newerContent)
+        expect(olderContent).to.not.equal(stubContent)
+
+        // Two submissions of the same exercise. The CLI compresses the on-disk
+        // directory into the submitted archive, so each submission captures the
+        // student file content at submit time. Consecutive submits within
+        // MINIMUM_SUBMISSION_INTERVAL are throttled by design (the TMC suite
+        // asserts the BottleneckError), so wait the interval out in between.
+        fs.writeFileSync(studentFile, olderContent)
+        ;(await tmc.submitMoocExerciseAndWaitForResults(PASSING_EXERCISE_ID, exercisePath)).unwrap()
+        await new Promise((resolve) => {
+          setTimeout(resolve, MINIMUM_SUBMISSION_INTERVAL + 100)
+        })
+        fs.writeFileSync(studentFile, newerContent)
+        ;(await tmc.submitMoocExerciseAndWaitForResults(PASSING_EXERCISE_ID, exercisePath)).unwrap()
+
+        const after = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
+        expect(after.length).to.be.equal(before.length + 2)
+        // newest first: the two we just submitted lead the list, distinct ids,
+        // and created_at is non-increasing down the list
+        expect(after[0]?.id).to.not.equal(after[1]?.id)
+        for (let i = 1; i < after.length; i++) {
+          expect(new Date(after[i - 1]!.created_at).getTime()).to.be.at.least(
+            new Date(after[i]!.created_at).getTime(),
+          )
+        }
+
+        // Downloading the OLDER of the two must restore the OLDER submission's
+        // content. Overwrite the file with the newer content first (as it is on
+        // disk after the second submit), then restore the older submission and
+        // assert we got the older content back -- not the newer one, and not the
+        // stub.
+        const olderId = after[1]!.id
+        fs.writeFileSync(studentFile, newerContent)
+        const restore = (
+          await tmc.downloadMoocOldSubmission(PASSING_EXERCISE_ID, exercisePath, olderId, false)
+        ).unwrap()
+        expect(restore).to.equal("restored")
+        expect(fs.existsSync(studentFile)).to.be.true
+        const restored = fs.readFileSync(studentFile, "utf8")
+        expect(restored).to.equal(olderContent)
+        expect(restored).to.not.equal(newerContent)
+        expect(restored).to.not.equal(stubContent)
+      },
+    )
+
+    migrationTest(
+      "should report nothing-to-download for a submission with no files, leaving the exercise alone",
+      async function () {
+        // Only an exercise type with no files, or a service that declares no way to enumerate
+        // its answers' files, downloads as an empty list. The CLI always uploads before
+        // submitting, so this can only be reached by seeding it in the mock.
+        await tmc.downloadExercises(
+          [ExerciseIdentifier.from(PASSING_EXERCISE_ID)],
+          false,
+          () => {},
+          PYTHON_COURSE_ID,
+        )
+        const local = (await tmc.listLocalCourseExercises("mooc", PYTHON_COURSE_ID)).unwrap()
+        const entry = local.find(
+          (x) => "exercise-id" in x && x["exercise-id"] === PASSING_EXERCISE_ID,
+        )
+        const exercisePath = (entry as { "exercise-path": string })["exercise-path"]
+        const studentFile = path.join(exercisePath, "src", "passing_exercise.py")
+
+        const seedResponse = await fetch(
+          "http://localhost:4001/mooc-mock/seed-fileless-submission",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ exercise_id: PASSING_EXERCISE_ID }),
+          },
+        )
+        expect(seedResponse.status).to.be.equal(200)
+        const { slide_submission_id: filelessId } = (await seedResponse.json()) as {
+          slide_submission_id: string
+        }
+
+        const onDisk = `${fs.readFileSync(studentFile, "utf8")}\n# must survive the restore\n`
+        fs.writeFileSync(studentFile, onDisk)
+        const before = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
+
+        // `--save-old-state` is on deliberately: the archive url is resolved first,
+        // so the zero-file case must return before submitting the current state and
+        // before the destructive rebuild of the exercise directory.
+        const restore = (
+          await tmc.downloadMoocOldSubmission(PASSING_EXERCISE_ID, exercisePath, filelessId, true)
+        ).unwrap()
+        expect(restore).to.equal("nothing-to-download")
+        expect(fs.readFileSync(studentFile, "utf8")).to.equal(onDisk)
+        const after = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
+        expect(after.length).to.be.equal(before.length)
+      },
+    )
+
+    migrationTest("reports mooc login status from the stored credentials file", async function () {
+      // `mooc logged-in` only reads credentials_mooc.json; no backend call.
+      clearMoocCredentials(configDir)
+      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+      writeMoocCredentials(configDir)
+      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+    })
+
+    migrationTest("deauthenticateMooc removes the stored mooc credentials", async function () {
+      writeMoocCredentials(configDir)
+      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      ;(await tmc.deauthenticateMooc()).unwrap()
+      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+    })
+
+    migrationTest(
+      "authenticateMooc runs the device flow and stores credentials",
+      async function () {
+        clearMoocCredentials(configDir)
+        // Poll fast; the mock only approves the pending grant after ~5s of
+        // wall-clock time (backend/mooc/oauth.ts).
+        process.env.TMC_LANGS_MOOC_DEVICE_POLL_INTERVAL_MS = "50"
+        let deviceInfo: { user_code: string; verification_uri: string } | undefined
+        const { result } = tmc.authenticateMooc((info) => {
+          deviceInfo = info
+        })
+        const res = await result
+        expect(res.ok, res.err ? `login failed: ${res.val.message}` : "").to.be.true
+        // the CLI emitted the device code before blocking on the poll loop
+        expect(deviceInfo?.user_code).to.equal("WXYZ-1234")
+        expect(deviceInfo?.verification_uri).to.contain("/oauth_device")
+        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      },
+    )
+  })
+
+  // Second mock with bearer validation ON, reached via
+  // TMC_LANGS_MOOC_TRUST_LOCALHOST=1 (without it the CLI never attaches a
+  // bearer to localhost). Pins the 401/403 -> refresh-retry/delete path.
+  suite("mooc backend (bearer auth)", function () {
+    this.timeout(30000)
+
+    const AUTH_PORT = 4002
+    const AUTH_BASE = `http://localhost:${AUTH_PORT}`
+    // Tokens the auth-mode mock recognises (backend/mooc/oauth.ts).
+    const SEEDED_ACCESS_TOKEN = "mock-seeded-access-token"
+    const INVALID_REFRESH_TOKEN = "mock-invalid-refresh-token"
+
+    let authServer: cp.ChildProcess | undefined
+    let configDir: string
+    let savedRootUrl: string | undefined
+    let savedTrust: string | undefined
+    let tmc: Langs
+
+    suiteSetup(async function () {
+      // All cases skip against the released CLI, so skip starting the mock too.
+      if (!cliSupportsMigrationContract) {
+        return
+      }
+      this.timeout(30000)
+      authServer = await startServer({
+        PORT: String(AUTH_PORT),
+        MOOC_MOCK_REQUIRE_AUTH: "1",
+        MOOC_MOCK_BASE_URL: AUTH_BASE,
+      })
+    })
+
+    setup(function () {
+      // Trust localhost so the CLI actually attaches a bearer; env vars are
+      // saved/restored so the other suites (auth-less 4001 mock) are unaffected.
+      savedRootUrl = process.env.TMC_LANGS_MOOC_ROOT_URL
+      savedTrust = process.env.TMC_LANGS_MOOC_TRUST_LOCALHOST
+      process.env.TMC_LANGS_MOOC_ROOT_URL = AUTH_BASE
+      process.env.TMC_LANGS_MOOC_TRUST_LOCALHOST = "1"
+      configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME)
+      const projectsDir = path.join(testDir, "tmcdata")
+      deleteSync(projectsDir, { force: true })
+      setupProjectsDir(configDir, projectsDir)
+      tmc = new Langs(CLI_FILE, CLIENT_NAME, "test", { cliConfigDir: testDir })
+    })
+
+    teardown(function () {
+      if (savedRootUrl === undefined) {
+        delete process.env.TMC_LANGS_MOOC_ROOT_URL
+      } else {
+        process.env.TMC_LANGS_MOOC_ROOT_URL = savedRootUrl
+      }
+      if (savedTrust === undefined) {
+        delete process.env.TMC_LANGS_MOOC_TRUST_LOCALHOST
+      } else {
+        process.env.TMC_LANGS_MOOC_TRUST_LOCALHOST = savedTrust
+      }
+    })
+
+    suiteTeardown(async function () {
+      await stopServer(authServer)
+    })
+
+    migrationTest(
+      "attaches the bearer to a resource call and succeeds; the mock records it",
+      async function () {
+        writeMoocCredentials(configDir, { accessToken: SEEDED_ACCESS_TOKEN })
+        const courses = (await tmc.getEnrolledMoocCourseInstances()).unwrap()
+        expect(courses.length).to.be.greaterThan(0)
+        // Cross-process proof the CLI attached the bearer; without
+        // TMC_LANGS_MOOC_TRUST_LOCALHOST this call would have 401'd.
+        const state = (await (await fetch(`${AUTH_BASE}/mooc-mock/auth-state`)).json()) as {
+          lastAuthorization: string
+          authenticatedRequestCount: number
+        }
+        expect(state.lastAuthorization).to.equal(`Bearer ${SEEDED_ACCESS_TOKEN}`)
+        expect(state.authenticatedRequestCount).to.be.greaterThan(0)
+      },
+    )
+
+    migrationTest(
+      "refreshes an expired stored token, then retries without a visible auth error",
+      async function () {
+        writeMoocCredentials(configDir, {
+          // Unrecognised token; the expired lifetime forces the CLI's proactive
+          // refresh before the resource call.
+          accessToken: "mock-access-expired",
+          // Any non-sentinel value; the mock's refresh grant mints a fresh
+          // valid access token from it.
+          refreshToken: "mock-refresh-valid",
+          expiresIn: 3600,
+          obtainedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+        })
+        const courses = (await tmc.getEnrolledMoocCourseInstances()).unwrap()
+        expect(courses.length).to.be.greaterThan(0)
+        // The refreshed credentials were retained -> still logged in.
+        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      },
+    )
+
+    migrationTest(
+      "deletes credentials and reports logged-out when the refresh is rejected",
+      async function () {
+        writeMoocCredentials(configDir, {
+          accessToken: "mock-access-expired",
+          // The sentinel the mock rejects with a permanent `invalid_grant`.
+          refreshToken: INVALID_REFRESH_TOKEN,
+          expiresIn: 3600,
+          obtainedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+        })
+        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+        // Refresh is rejected, so langs deletes the creds and proceeds unauthenticated.
+        const res = await tmc.getEnrolledMoocCourseInstances()
+        expect(res.err).to.be.true
+        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+      },
+    )
+  })
+
+  suiteTeardown(async function () {
+    await stopServer(server)
   })
 })
 
@@ -565,6 +1040,61 @@ function writeCredentials(configDir: string): void {
 
 function clearCredentials(configDir: string): void {
   deleteSync(path.join(configDir, "credentials.json"), { force: true })
+}
+
+// Seeds the mooc credentials as a successful `mooc login` would, skipping the
+// device flow. Mirrors the stored `{token, obtained_at}` wrapper (token is a
+// serialized oauth2 StandardTokenResponse); kept separate from the legacy
+// `credentials.json` that `writeCredentials` seeds.
+//
+// Writes the shared `credentials_mooc.json` name, which newer langs adopts by
+// MOVING it to `credentials_mooc_<host>.json`. Once TMC_LANGS_RUST_VERSION pins
+// a CLI carrying that change, seeding the per-host name directly is the more
+// honest fixture (`clearMoocCredentials` already handles both).
+function writeMoocCredentials(
+  configDir: string,
+  options?: {
+    accessToken?: string
+    refreshToken?: string
+    expiresIn?: number
+    // Defaults to now; a past value plus `expiresIn` makes the token
+    // already-expired, forcing a refresh on the next command.
+    obtainedAt?: string
+  },
+): void {
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir, { recursive: true })
+  }
+  const token: Record<string, unknown> = {
+    access_token: options?.accessToken ?? "mooc-access-token",
+    token_type: "bearer",
+    scope: "exercise-services",
+  }
+  if (options?.expiresIn !== undefined) {
+    token.expires_in = options.expiresIn
+  }
+  if (options?.refreshToken !== undefined) {
+    token.refresh_token = options.refreshToken
+  }
+  fs.writeFileSync(
+    path.join(configDir, "credentials_mooc.json"),
+    JSON.stringify({ token, obtained_at: options?.obtainedAt ?? new Date().toISOString() }),
+  )
+}
+
+// Removes the shared-name file and any per-host one. Newer langs keys the mooc
+// credentials per host (`credentials_mooc_<host>.json`) and ADOPTS the shared
+// name by moving it, so which of the two exists depends on the pinned CLI --
+// and on whether a previous command in the same config dir already adopted it.
+function clearMoocCredentials(configDir: string): void {
+  if (!fs.existsSync(configDir)) {
+    return
+  }
+  for (const entry of fs.readdirSync(configDir)) {
+    if (/^credentials_mooc(_.*)?\.json$/.test(entry)) {
+      deleteSync(path.join(configDir, entry), { force: true })
+    }
+  }
 }
 
 function setupProjectsDir(configDir: string, projectsDir: string): string {
@@ -583,13 +1113,18 @@ async function unwrapResult<T>(result: Promise<Result<T, Error>>): Promise<T> {
   return res.val
 }
 
-async function startServer(): Promise<cp.ChildProcess> {
+async function startServer(extraEnv: Record<string, string> = {}): Promise<cp.ChildProcess> {
   let ready = false
   const backendPath = path.join(__dirname, "..", "backend")
-  console.log("Running pnpm start at", backendPath)
+  console.log("Running pnpm start at", backendPath, "with env", extraEnv)
   const server = cp.spawn("pnpm", ["start"], {
     cwd: backendPath,
     shell: "bash",
+    env: { ...process.env, ...extraEnv },
+    // The listener is a grandchild (shell -> pnpm -> node). On POSIX its own
+    // process group is what makes the whole chain killable in one signal; see
+    // stopServer.
+    detached: process.platform !== "win32",
   })
   console.info("[server] starting...")
   server.stdout.on("data", (chunk) => {
@@ -612,4 +1147,36 @@ async function startServer(): Promise<cp.ChildProcess> {
 
   clearTimeout(timeout)
   return server
+}
+
+/**
+ * Stops a mock backend started by {@link startServer} and waits for it to go
+ * away. tree-kill walks the pid tree and signals each process it finds, which
+ * loses the node grandchild whenever an intermediate `pnpm` has already
+ * exited -- leaving a listener holding 4001/4002 and failing the next local run
+ * with connection-refused. Signalling the process group instead cannot miss it.
+ */
+async function stopServer(server: cp.ChildProcess | undefined): Promise<void> {
+  if (server?.pid === undefined || server.exitCode !== null || server.signalCode !== null) {
+    return
+  }
+  const exited = new Promise<void>((resolve) => {
+    server.once("exit", () => resolve())
+  })
+  if (process.platform === "win32") {
+    // taskkill /F /T, which does follow the whole tree.
+    kill(server.pid, "SIGKILL")
+  } else {
+    try {
+      process.kill(-server.pid, "SIGKILL")
+    } catch {
+      kill(server.pid, "SIGKILL")
+    }
+  }
+  await Promise.race([
+    exited,
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, 5000)
+    }),
+  ])
 }

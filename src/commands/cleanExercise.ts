@@ -18,7 +18,7 @@ export async function cleanExercise(
   }
 
   if (resource && !workspaceManager.val.uriIsExercise(resource)) {
-    dialog.errorNotification("Currently open editor is not part of a TMC exercise.")
+    dialog.errorNotification("The active editor is not part of a course exercise.")
     return
   }
 

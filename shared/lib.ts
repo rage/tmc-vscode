@@ -19,6 +19,7 @@ import { z } from "zod"
  */
 import {
   Course,
+  ExerciseTaskSubmissionStatus,
   MoocCourse,
   Organization,
   RunResult,
@@ -170,6 +171,15 @@ export function matchBackend<A extends { backend: "tmc" | "mooc" }, B, C>(
   }
 }
 
+/**
+ * The name to show the user for a backend. Course slugs and titles are only
+ * unique within one backend, so anything listing courses from both must name
+ * the backend alongside them.
+ */
+export function backendName(kind: "tmc" | "mooc"): string {
+  return kind === "tmc" ? "TMC Server" : "courses.mooc.fi"
+}
+
 export function matchOption<A, B, T extends Enum<A, B> | undefined>(
   data: T,
   tmc: (x: T & TmcKind) => A,
@@ -261,15 +271,14 @@ export const SharedMoocCourseExerciseSchema = z.object({
 export type SharedMoocCourseExercise = z.infer<typeof SharedMoocCourseExerciseSchema>
 
 export const SharedMoocCourseDataSchema = z.object({
-  // instance id
+  // The courses.mooc.fi course id. There is no separate course-instance concept
+  // on this backend (the backend resolves the enrolled instance from the user's
+  // identity), so the course id is the sole client-side course key.
   id: z.string(),
-  courseId: z.string(),
   // course slug
   name: z.string(),
-  instanceName: z.string().nullable(),
   title: z.string(),
   description: z.string().nullable(),
-  courseDescription: z.string().nullable(),
   organization: z.string(),
   exercises: z.array(SharedMoocCourseExerciseSchema),
   availablePoints: z.number(),
@@ -332,7 +341,9 @@ export namespace LocalCourseData {
     return match(
       lcd,
       (tmc) => makeTmcKind({ courseId: tmc.id }),
-      (mooc) => makeMoocKind({ instanceId: mooc.courseId }),
+      // mooc has no instance concept; the course id is the identifier (carried
+      // under the `instanceId` label on the CourseIdentifier mooc arm)
+      (mooc) => makeMoocKind({ instanceId: mooc.id }),
     )
   }
 
@@ -376,46 +387,6 @@ export function getCourseExercises(
 /*
  * ======== additional types ========
  */
-
-export const NewExerciseSchema = z.object({
-  id: z.number(),
-})
-
-export type NewExercise = z.infer<typeof NewExerciseSchema>
-
-export const TmcCourseDataSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  title: z.string(),
-  description: z.string(),
-  organization: z.string(),
-  awardedPoints: z.number(),
-  availablePoints: z.number(),
-  exercises: z.array(NewExerciseSchema),
-  newExercises: z.array(z.number()),
-  disabled: z.boolean(),
-  materialUrl: z.string().nullable(),
-  perhapsExamMode: z.boolean(),
-})
-
-export type TmcCourseData = z.infer<typeof TmcCourseDataSchema>
-
-export const MoocCourseDataSchema = z.object({
-  courseId: z.string(),
-  instanceId: z.string(),
-  courseName: z.string(),
-  instanceName: z.string().nullable(),
-  description: z.string(),
-  awardedPoints: z.number(),
-  availablePoints: z.number(),
-  materialUrl: z.string(),
-})
-
-export type MoocCourseData = z.infer<typeof MoocCourseDataSchema>
-
-export const CourseDataSchema = EnumSchema(TmcCourseDataSchema, MoocCourseDataSchema)
-
-export type CourseData = Enum<TmcCourseData, MoocCourseData>
 
 export const ExerciseStatusSchema = z.enum([
   "closed",
@@ -519,13 +490,6 @@ export const WelcomePanelSchema = z.object({
 
 export type WelcomePanel = z.infer<typeof WelcomePanelSchema>
 
-export const LoginPanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("Login"),
-})
-
-export type LoginPanel = z.infer<typeof LoginPanelSchema>
-
 export const MyCoursesPanelSchema = z.object({
   id: z.number(),
   type: z.literal("MyCourses"),
@@ -563,7 +527,6 @@ export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
 export type PanelType =
   | "App"
   | "Welcome"
-  | "Login"
   | "MyCourses"
   | "CourseDetails"
   | "SelectOrganization"
@@ -572,6 +535,7 @@ export type PanelType =
   | "ExerciseSubmission"
   | "SelectPlatform"
   | "SelectMoocCourse"
+  | "MoocLogin"
   | "InitializationErrorHelp"
 
 // used to define messages that should only be sent to a specific instance of a panel
@@ -683,6 +647,16 @@ export const SelectMoocCoursePanelSchema = z.object({
 
 export type SelectMoocCoursePanel = z.infer<typeof SelectMoocCoursePanelSchema>
 
+// Shown before the mooc course flow, or standalone on session expiry.
+// `requestingPanel` is where to continue on success; absent for standalone.
+export const MoocLoginPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("MoocLogin"),
+  requestingPanel: targetPanelSchema("MyCourses").optional(),
+})
+
+export type MoocLoginPanel = z.infer<typeof MoocLoginPanelSchema>
+
 /**
  * Represents a panel that is rendered by the webview.
  *
@@ -691,7 +665,6 @@ export type SelectMoocCoursePanel = z.infer<typeof SelectMoocCoursePanelSchema>
 export const PanelSchema = z.discriminatedUnion("type", [
   AppPanelSchema,
   WelcomePanelSchema,
-  LoginPanelSchema,
   MyCoursesPanelSchema,
   CourseDetailsPanelSchema,
   SelectOrganizationPanelSchema,
@@ -700,6 +673,7 @@ export const PanelSchema = z.discriminatedUnion("type", [
   ExerciseSubmissionPanelSchema,
   SelectPlatformPanelSchema,
   SelectMoocCoursePanelSchema,
+  MoocLoginPanelSchema,
   InitializationErrorHelpPanelSchema,
 ])
 
@@ -770,11 +744,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     tmcDataSize: z.string(),
   }),
   z.object({
-    type: z.literal("loginError"),
-    target: targetPanelSchema("Login"),
-    error: z.string(),
-  }),
-  z.object({
     type: z.literal("setCourseData"),
     target: targetPanelSchema("CourseDetails"),
     courseData: LocalCourseDataSchema,
@@ -794,12 +763,16 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("exerciseStatusChange"),
     target: broadcastPanelSchema("CourseDetails"),
+    // Scopes the broadcast to the CourseDetails panel showing this course (main/side can differ).
+    courseId: CourseIdentifierSchema,
     exerciseId: ExerciseIdentifierSchema,
     status: ExerciseStatusSchema,
   }),
   z.object({
     type: z.literal("setUpdateables"),
     target: broadcastPanelSchema("CourseDetails"),
+    // Scopes the broadcast to the CourseDetails panel showing this course (main/side can differ).
+    courseId: CourseIdentifierSchema,
     exerciseIds: z.array(ExerciseIdentifierSchema),
   }),
   z.object({
@@ -859,6 +832,14 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     result: SubmissionFinished,
     questions: z.array(FeedbackQuestionSchema),
   }),
+  // Mooc grading has no per-test breakdown or feedback questions, so its result
+  // is a reduced shape (overall grading progress, score, feedback text) posted
+  // through a separate message rather than reusing the TMC `submissionResult`.
+  z.object({
+    type: z.literal("moocSubmissionResult"),
+    target: targetPanelSchema("ExerciseSubmission"),
+    result: ExerciseTaskSubmissionStatus,
+  }),
   z.object({
     type: z.literal("submissionStatusError"),
     target: targetPanelSchema("ExerciseSubmission"),
@@ -892,6 +873,21 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("requestSelectMoocCourseDataError"),
     target: targetPanelSchema("SelectMoocCourse"),
+    error: z.string(),
+  }),
+  // Device-authorization info the CLI emits before blocking on polling; snake_case CLI fields mapped to camelCase.
+  z.object({
+    type: z.literal("moocDeviceCode"),
+    target: targetPanelSchema("MoocLogin"),
+    userCode: z.string(),
+    verificationUri: z.string(),
+    verificationUriComplete: z.string().nullable(),
+    expiresIn: z.number(),
+    interval: z.number(),
+  }),
+  z.object({
+    type: z.literal("moocLoginError"),
+    target: targetPanelSchema("MoocLogin"),
     error: z.string(),
   }),
   z.object({
@@ -936,19 +932,15 @@ export type BroadcastExtensionToWebview<T extends PanelType> = Broadcast<Extensi
  * extension host inside a `relayToWebview` envelope (see below) and delivered
  * by `postMessageToWebview` / received by `addMessageListener` in the webview.
  *
- * Defined here (rather than webview-only, as it used to be) so the relay
- * envelope's `message` field can reference it and be validated on BOTH sides of
- * the boundary. A reshaped relayed payload (e.g. renaming `selectedMoocCourse`'s
- * `instanceId`) then fails at build time — producers post the inferred
- * `WebviewToWebview` type — and at `safeParse` time on the webview → host post
- * (`vscode.ts`) and the host → webview relay (`TmcPanel`), instead of only
- * failing silently at runtime when the target webview rejects it on receipt.
+ * Defined here (rather than webview-only) so the relay envelope's `message`
+ * field can reference it and be validated on BOTH sides of the boundary. A
+ * reshaped relayed payload (e.g. renaming `selectedMoocCourse`'s `instanceId`)
+ * then fails at build time — producers post the inferred `WebviewToWebview`
+ * type — and at `safeParse` time on the webview → host post (`vscode.ts`) and
+ * the host → webview relay (`TmcPanel`), instead of only failing silently at
+ * runtime when the target webview rejects it on receipt.
  *
- * Uses the non-strict `targetPanelSchema` for `target`, exactly like
- * `ExtensionToWebviewSchema`: some call sites pass a whole panel object as
- * `target`, which is harmless (the receiver only reads `.id`/`.type`), and the
- * `strictTargetPanelSchema` guard is reserved for the `sourcePanel`/
- * `requestingPanel` fields the webview → host direction relies on.
+ * `target` uses the non-strict `targetPanelSchema`, for the reason given there.
  */
 export const WebviewToWebviewSchema = z.discriminatedUnion("type", [
   z.object({
@@ -965,11 +957,12 @@ export const WebviewToWebviewSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("selectedMoocCourse"),
     target: targetPanelSchema("MyCourses"),
-    organizationSlug: z.string(),
-    courseId: z.string(),
+    // mooc has no course-instance concept, so the course id doubles as the
+    // instance id and is the sole key. (A prior duplicate `courseId` field and a
+    // vestigial `organizationSlug` — mooc takes its org from the fetched course,
+    // not the wire — were dropped.)
     instanceId: z.string(),
     courseName: z.string(),
-    instanceName: z.string().nullable(),
   }),
 ])
 
@@ -1001,10 +994,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     sourcePanel: ExerciseTestsPanelSchema,
   }),
   z.object({
-    type: z.literal("requestLoginData"),
-    sourcePanel: LoginPanelSchema,
-  }),
-  z.object({
     type: z.literal("requestMyCoursesData"),
     sourcePanel: MyCoursesPanelSchema,
   }),
@@ -1021,12 +1010,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     sourcePanel: WelcomePanelSchema,
   }),
   z.object({
-    type: z.literal("login"),
-    sourcePanel: LoginPanelSchema,
-    username: z.string(),
-    password: z.string(),
-  }),
-  z.object({
     type: z.literal("selectOrganization"),
     sourcePanel: strictTargetPanelSchema("MyCourses"),
   }),
@@ -1037,6 +1020,9 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("openCourseWorkspace"),
     courseName: z.string(),
+    // Workspace files are namespaced by backend (`<slug>-<backend>.code-workspace`);
+    // a bare slug is ambiguous if a tmc and mooc course share a name.
+    backend: z.enum(["tmc", "mooc"]),
   }),
   z.object({
     type: z.literal("downloadExercises"),
@@ -1135,12 +1121,21 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     sourcePanel: SelectMoocCoursePanelSchema,
   }),
   z.object({
+    // Posted on MoocLogin mount; starts the CLI device-flow login, streamed back as `moocDeviceCode`.
+    type: z.literal("moocLogin"),
+    sourcePanel: MoocLoginPanelSchema,
+  }),
+  z.object({
+    // Kills the in-progress device-flow login CLI process, keyed by panel id.
+    type: z.literal("cancelMoocLogin"),
+    sourcePanel: strictTargetPanelSchema("MoocLogin"),
+  }),
+  z.object({
     type: z.literal("addMoocCourse"),
-    organizationSlug: z.string(),
-    courseId: z.string(),
+    // The course id (== instance id) is the sole key; a redundant `courseId` and
+    // a vestigial `organizationSlug` were dropped (see `selectedMoocCourse`).
     instanceId: z.string(),
     courseName: z.string(),
-    instanceName: z.string().nullable(),
     requestingPanel: strictTargetPanelSchema("MyCourses"),
   }),
 ])

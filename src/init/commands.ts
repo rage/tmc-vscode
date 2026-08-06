@@ -6,7 +6,7 @@ import type { ActionContext } from "../actions/types"
 import * as commands from "../commands"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
-import { LocalCourseData } from "../shared/shared"
+import { backendName, LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities/"
 
 export function registerCommands(
@@ -54,10 +54,11 @@ export function registerCommands(
       courseId =
         courseId ??
         (await dialog.selectItem(
-          "Which course page do you want to open?",
-          ...courses.map<[string, CourseIdentifier]>((c) => [
+          { title: "Course Details", placeHolder: "Which course page do you want to open?" },
+          ...courses.map<[string, CourseIdentifier, string]>((c) => [
             LocalCourseData.getCourseName(c),
             LocalCourseData.getCourseId(c),
+            backendName(c.kind),
           ]),
         ))
       if (courseId) {
@@ -80,32 +81,13 @@ export function registerCommands(
         commands.downloadOldSubmission(actionContext, resource),
     ),
 
-    vscode.commands.registerCommand("tmc.login", async () => {
-      const username = await vscode.window.showInputBox({
-        placeHolder: "Enter username",
-        prompt: "Please enter your TMC username",
-      })
-      const password = await vscode.window.showInputBox({
-        placeHolder: "Enter password",
-        prompt: "Please enter your TMC password",
-        password: true,
-      })
-      if (username && password) {
-        const authed = await actions.login(actionContext, username, password)
-        if (authed.err) {
-          dialog.errorNotification(`Failed to login: ${authed.val.message}.`, authed.val)
-        }
-      }
-    }),
-
     vscode.commands.registerCommand("tmc.logout", async () => {
       if (await dialog.confirmation("Are you sure you want to log out?")) {
+        // The action layer reports failures itself; only announce success here.
         const deauth = await actions.logout(actionContext)
-        if (deauth.err) {
-          dialog.errorNotification(`Failed to logout: ${deauth.val.message}.`, deauth.val)
-          return
+        if (deauth.ok) {
+          dialog.notification("Logged out from TestMyCode.")
         }
-        dialog.notification("Logged out from TestMyCode.")
       }
     }),
 
@@ -156,10 +138,13 @@ export function registerCommands(
       })
     }),
 
-    vscode.commands.registerCommand("tmc.showLogin", async () => {
-      TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+    // The only login: courses.mooc.fi device flow. Reached from the Command
+    // Palette, the tree view's "Log in" entry and the session-expired prompt.
+    // No `requestingPanel`: nothing to return to on success.
+    vscode.commands.registerCommand("tmc.showMoocLogin", async () => {
+      TmcPanel.renderSide(context.extensionUri, context, actionContext, {
         id: randomPanelId(),
-        type: "Login",
+        type: "MoocLogin",
       })
     }),
 

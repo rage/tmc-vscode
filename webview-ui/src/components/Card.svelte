@@ -16,7 +16,6 @@
     border-radius: 0.4rem;
     margin-top: 0.4rem;
     margin-bottom: 1rem;
-    cursor: pointer;
     padding: 0.8rem;
     border: 1px solid var(--vscode-button-border, transparent);
   }

@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/svelte"
 import { vi } from "vitest"
 
 import { makeTmcKind } from "../shared/shared"
+import { getButton } from "../test/dom"
 import { tmcExerciseGroup } from "../test/fixtures"
 import ExercisePart from "./ExercisePart.svelte"
 
@@ -9,7 +10,7 @@ const noop = () => {}
 
 suite("ExercisePart component", () => {
   test("renders the group name and completion counts", () => {
-    render(ExercisePart, {
+    const { container } = render(ExercisePart, {
       props: {
         exerciseGroup: tmcExerciseGroup(),
         onDownloadAll: noop,
@@ -20,7 +21,8 @@ suite("ExercisePart component", () => {
       },
     })
 
-    expect(screen.getByRole("heading", { name: "part01" })).toBeInTheDocument()
+    // The heading lives in shadow DOM, which doesn't upgrade under jsdom, so assert the attribute.
+    expect(container.querySelector("vscode-collapsible")?.getAttribute("heading")).toBe("part01")
     expect(screen.getByText("Completed: 1 / 1")).toBeInTheDocument()
   })
 
@@ -36,7 +38,8 @@ suite("ExercisePart component", () => {
       },
     })
 
-    expect(screen.getByText("opened")).toBeInTheDocument()
+    // The raw "opened" enum is rendered as a friendly label.
+    expect(screen.getByText("Opened")).toBeInTheDocument()
   })
 
   test("Download all passes every exercise identifier back to the callback", () => {
@@ -52,7 +55,7 @@ suite("ExercisePart component", () => {
       },
     })
 
-    screen.getByRole("button", { name: "Download all" }).click()
+    getButton("Download all").click()
 
     expect(onDownloadAll).toHaveBeenCalledWith([makeTmcKind({ tmcExerciseId: 101 })])
   })

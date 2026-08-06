@@ -124,15 +124,14 @@ suite("LocalCourseExercise / LocalCourseData namespaces", function () {
     expect(LCE.getSlug(moocExercise)).toBe("mooc-ex")
   })
 
-  test("LocalCourseData.getCourseId uses course id for tmc, courseId for mooc", function () {
+  test("LocalCourseData.getCourseId uses the course id for both backends", function () {
     const tmcCourse = makeTmcKind({ id: 9 }) as unknown as LocalCourseData
     const moocCourse = makeMoocKind({
-      courseId: "c-uuid",
-      id: "i-uuid",
+      id: "course-uuid",
     }) as unknown as LocalCourseData
     expect(LCD.getCourseId(tmcCourse)).toEqual(CourseIdentifier.from(9))
-    // mooc getCourseId keys on courseId, not the instance id
-    expect(LCD.getCourseId(moocCourse)).toEqual(CourseIdentifier.from("c-uuid"))
+    // mooc has no instance concept; getCourseId keys on the sole course id
+    expect(LCD.getCourseId(moocCourse)).toEqual(CourseIdentifier.from("course-uuid"))
   })
 
   test("LocalCourseData.getNewExercises maps ids to identifiers", function () {

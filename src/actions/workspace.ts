@@ -10,11 +10,13 @@ import type * as vscode from "vscode"
  * -------------------------------------------------------------------------------------------------
  */
 import { ExerciseStatus } from "../api/workspaceManager"
+import { closedExercisesSettingKey } from "../config/constants"
 import { InitializationError } from "../errors"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseDetailsPanel, CourseIdentifier, ExtensionToWebview } from "../shared/shared"
 import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise, match } from "../shared/shared"
 import { Logger } from "../utilities"
+import { downloadExercisesForUi } from "./downloadExercisesForUi"
 import type { ActionContext } from "./types"
 
 /**
@@ -59,7 +61,7 @@ export async function openExercises(
     .filter((x) => x.status === ExerciseStatus.Closed)
     .map((x) => x.exerciseSlug)
   const settingsResult = await langs.val.setSetting(
-    `closed-exercises-for:${courseName}`,
+    closedExercisesSettingKey(course.kind, courseName),
     closedExerciseNames,
   )
   if (settingsResult.err) {
@@ -98,6 +100,7 @@ export async function openExercises(
   TmcPanel.postMessage(
     ...exerciseIdsToOpen.map<ExtensionToWebview>((id) => ({
       type: "exerciseStatusChange",
+      courseId,
       exerciseId: id,
       status: "opened",
       target: {
@@ -107,6 +110,76 @@ export async function openExercises(
   )
 
   return new Ok(exerciseIdsToOpen)
+}
+
+/**
+ * Opens given exercises, first downloading any of them that are not present locally.
+ *
+ * This is what the webview's "open exercises" action maps to: the user can check an
+ * exercise that has never been downloaded, so opening it has to fetch it first.
+ */
+export async function downloadAndOpenExercises(
+  context: vscode.ExtensionContext,
+  actionContext: ActionContext,
+  exerciseIdsToOpen: ExerciseIdentifier[],
+  courseId: CourseIdentifier,
+): Promise<Result<ExerciseIdentifier[], Error>> {
+  const { langs, userData, dialog } = actionContext
+  if (!(langs.ok && userData.ok)) {
+    return Err(new InitializationError("Extension was not initialized properly"))
+  }
+
+  const course = userData.val.getCourse(courseId)
+  // Key by a primitive: ExerciseIdentifier is a tagged-union object, so a
+  // Map keyed by it would only match on reference identity and always miss
+  // the deserialized ids coming from the webview.
+  const courseExercises = new Map(
+    LocalCourseData.getExercises(course).map((x) => [
+      ExerciseIdentifier.toString(LocalCourseExercise.getId(x)),
+      x,
+    ]),
+  )
+  const exercisesToOpen = compact(
+    exerciseIdsToOpen.map((x) => courseExercises.get(ExerciseIdentifier.toString(x))),
+  )
+  // The mooc local listing is keyed by course id (UUID); TMC by course
+  // slug. `getCourseName` returns the slug for both, so pick per backend.
+  const localCourseExercises = await langs.val.listLocalCourseExercises(
+    courseId.kind,
+    match(
+      course,
+      () => LocalCourseData.getCourseName(course),
+      (mooc) => mooc.id,
+    ),
+  )
+  if (localCourseExercises.err) {
+    dialog.errorNotification(
+      "Error trying to list local exercises while opening selected exercises.",
+      localCourseExercises.val,
+    )
+    return localCourseExercises
+  }
+
+  const localCourseExerciseSlugs = localCourseExercises.val.map((lce) => lce["exercise-slug"])
+  const exercisesToDownload = exercisesToOpen.filter(
+    (eto) => !localCourseExerciseSlugs.includes(LocalCourseExercise.getSlug(eto)),
+  )
+  if (exercisesToDownload.length > 0) {
+    await downloadExercisesForUi(
+      actionContext,
+      "",
+      courseId,
+      exercisesToDownload.map((etd) => LocalCourseExercise.getId(etd)),
+    )
+  }
+
+  // `openExercises` is responsible for posting the resulting "opened" status
+  // changes back to the webview, so don't duplicate that here.
+  const openResult = await openExercises(context, actionContext, exerciseIdsToOpen, courseId)
+  if (openResult.err) {
+    dialog.errorNotification("Errored while opening selected exercises.", openResult.val)
+  }
+  return openResult
 }
 
 /**
@@ -131,11 +204,8 @@ export async function closeExercises(
       if (!exercise) {
         return undefined
       }
-      return match(
-        exercise,
-        (tmc) => tmc.name,
-        (mooc) => mooc.id,
-      )
+      // The workspace manager expects a slug, not the mooc exercise's raw uuid id.
+      return LocalCourseExercise.getSlug(exercise)
     }),
   )
 
@@ -164,7 +234,7 @@ export async function closeExercises(
     .filter((x) => x.status === ExerciseStatus.Closed)
     .map((x) => x.exerciseSlug)
   const settingsResult = await langs.val.setSetting(
-    `closed-exercises-for:${courseName}`,
+    closedExercisesSettingKey(course.kind, courseName),
     closedExerciseNames,
   )
   if (settingsResult.err) {
@@ -174,6 +244,7 @@ export async function closeExercises(
   TmcPanel.postMessage(
     ...closedIds.map<ExtensionToWebview>((id) => ({
       type: "exerciseStatusChange",
+      courseId,
       exerciseId: id,
       status: "closed",
       target: {

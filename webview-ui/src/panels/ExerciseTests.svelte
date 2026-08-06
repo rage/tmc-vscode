@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte"
-  import { derived } from "svelte/store"
 
+  import Button from "../components/Button.svelte"
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
   import TestResults from "../components/TestResults.svelte"
   import type { ExerciseTestsPanel, TestResultData } from "../shared/shared"
   import { BaseError, assertUnreachable, unwrap } from "../shared/shared"
-  import { addMessageListener, loadable } from "../utilities/script"
+  import { addMessageListener } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -19,30 +19,30 @@
   const course = $derived(unwrap(panel.course))
   const exercise = $derived(unwrap(panel.exercise))
 
-  const testError = loadable<BaseError>()
-  const pasteResult = loadable<string>()
-  const pasteError = loadable<string>()
-  const testResults = loadable<TestResultData>()
-  const tryingToRunTestsForExam = loadable<boolean>()
+  let testError = $state<BaseError | undefined>(undefined)
+  let pasteResult = $state<string | undefined>(undefined)
+  let pasteError = $state<string | undefined>(undefined)
+  let testResults = $state<TestResultData | undefined>(undefined)
+  let tryingToRunTestsForExam = $state<boolean | undefined>(undefined)
 
-  const successPoints = derived(testResults, ($testResults) => {
-    return ($testResults?.testResult.testResults ?? [])
+  const successPoints = $derived(
+    (testResults?.testResult.testResults ?? [])
       .filter((tr) => tr.successful)
       .map((tr) => tr.points.length)
-      .reduce((prev, curr) => prev + curr, 0)
-  })
-  const totalPoints = derived(testResults, ($testResults) => {
-    return ($testResults?.testResult.testResults ?? [])
+      .reduce((prev, curr) => prev + curr, 0),
+  )
+  const totalPoints = $derived(
+    (testResults?.testResult.testResults ?? [])
       .map((tr) => tr.points.length)
-      .reduce((prev, curr) => prev + curr, 0)
-  })
-  const allSuccessful = derived(testResults, ($testResults) => {
-    return $testResults && !$testResults.testResult.testResults.some((tr) => !tr.successful)
-  })
-  const validationsFailed = derived(testResults, ($testResults) => {
-    const validationStrategy = $testResults?.styleValidationResult?.strategy
+      .reduce((prev, curr) => prev + curr, 0),
+  )
+  const allSuccessful = $derived(
+    testResults && !testResults.testResult.testResults.some((tr) => !tr.successful),
+  )
+  const validationsFailed = $derived.by(() => {
+    const validationStrategy = testResults?.styleValidationResult?.strategy
     const validationErrors = Object.entries(
-      $testResults?.styleValidationResult?.validation_errors ?? {},
+      testResults?.styleValidationResult?.validation_errors ?? {},
     ).length
     return validationStrategy === "FAIL" && validationErrors > 0
   })
@@ -58,23 +58,23 @@
   addMessageListener(panel, (message) => {
     switch (message.type) {
       case "testResults": {
-        testResults.set(message.testResults)
+        testResults = message.testResults
         break
       }
       case "pasteResult": {
-        pasteResult.set(message.pasteLink)
+        pasteResult = message.pasteLink
         break
       }
       case "pasteError": {
-        pasteError.set(message.error)
+        pasteError = message.error
         break
       }
       case "testError": {
-        testError.set(message.error)
+        testError = message.error
         break
       }
       case "willNotRunTestsForExam": {
-        tryingToRunTestsForExam.set(true)
+        tryingToRunTestsForExam = true
         break
       }
       default:
@@ -91,7 +91,14 @@
       type: "closeSidePanel",
     })
   }
+  // Guards against a rapid double-click sending two submits; the submission
+  // panel replaces this one, so the flag never needs resetting.
+  let submitting = $state(false)
   function submit() {
+    if (submitting) {
+      return
+    }
+    submitting = true
     vscode.postMessage({
       type: "submitExercise",
       course: panel.course,
@@ -101,110 +108,97 @@
   }
 </script>
 
-{#if !$tryingToRunTestsForExam && !$testError}
-  <h1>{exercise.name}</h1>
-  {#if $testResults === undefined}
-    <h2>Running tests</h2>
-  {:else if $testResults.testResult.status === "PASSED"}
-    <h2>Tests passed</h2>
-  {:else if $testResults.testResult.status === "TESTS_FAILED"}
-    <h2>Tests failed</h2>
-  {:else if $testResults.testResult.status === "COMPILE_FAILED"}
-    <h2>Compilation failed</h2>
-  {:else if $testResults.testResult.status === "TESTRUN_INTERRUPTED"}
-    <h2>The test run was interrupted</h2>
-  {:else if $testResults.testResult.status === "GENERIC_ERROR"}
-    <h2>An error occurred during the test run</h2>
-  {:else}
-    {assertUnreachable($testResults.testResult.status)}
-  {/if}
-  {#if $validationsFailed}
-    <h2>Code quality checks failed</h2>
-  {/if}
+{#if !tryingToRunTestsForExam && !testError}
+  <h1 class="exercise-heading">{exercise.name}</h1>
+  <div role="status">
+    {#if testResults === undefined}
+      <h2>Running tests</h2>
+    {:else if testResults.testResult.status === "PASSED"}
+      <h2>Tests passed</h2>
+    {:else if testResults.testResult.status === "TESTS_FAILED"}
+      <h2>Tests failed</h2>
+    {:else if testResults.testResult.status === "COMPILE_FAILED"}
+      <h2>Compilation failed</h2>
+    {:else if testResults.testResult.status === "TESTRUN_INTERRUPTED"}
+      <h2>The test run was interrupted</h2>
+    {:else if testResults.testResult.status === "GENERIC_ERROR"}
+      <h2>An error occurred during the test run</h2>
+    {:else}
+      {assertUnreachable(testResults.testResult.status)}
+    {/if}
+    {#if validationsFailed}
+      <h2>Code quality checks failed</h2>
+    {/if}
+  </div>
 
-  <vscode-button
-    role="button"
-    tabindex="0"
-    class="close-button"
-    secondary
-    onclick={closePanel}
-    onkeypress={closePanel}
-  >
-    ×
-  </vscode-button>
+  <div class="close-button">
+    <Button secondary aria-label="Close" onclick={closePanel}>
+      <vscode-icon name="close" aria-hidden="true"></vscode-icon>
+    </Button>
+  </div>
 
-  {#if $testResults === undefined}
+  {#if testResults === undefined}
     <div class="button-container">
-      <vscode-button
-        role="button"
-        tabindex="0"
-        secondary
-        onclick={closePanel}
-        onkeypress={closePanel}
-      >
-        Run in background
-      </vscode-button>
-      <vscode-button
-        role="button"
-        tabindex="0"
-        secondary
-        onclick={cancelTests}
-        onkeypress={cancelTests}
-      >
-        Cancel
-      </vscode-button>
+      <Button secondary onclick={closePanel}>Run in background</Button>
+      <Button secondary onclick={cancelTests}>Cancel</Button>
     </div>
-    <vscode-progress-ring></vscode-progress-ring>
+    <vscode-progress-ring aria-label="Running tests"></vscode-progress-ring>
   {:else}
     {#if course.disabled}
       <div>
-        Sending the solution or pasting to the TMC server is not available for this exercise,
-        because the course is disabled.
+        Sending the solution or pasting to the server is not available for this exercise, because
+        the course is disabled.
       </div>
     {:else}
       <div class="header-container">
-        <vscode-button role="button" tabindex="0" onclick={submit} onkeypress={submit}>
-          Send solution to server
-        </vscode-button>
+        <Button onclick={submit} disabled={submitting}>Submit to server</Button>
         <span class="help-box-container">
           <PasteHelpBox
-            hidden={$allSuccessful ?? true}
+            hidden={allSuccessful ?? true}
             course={panel.course}
             exercise={panel.exercise}
             sourcePanel={{ id: panel.id, type: panel.type }}
-            pasteUrl={$pasteResult}
-            pasteError={$pasteError}
+            pasteUrl={pasteResult}
+            {pasteError}
+            onPaste={() => {
+              pasteResult = undefined
+              pasteError = undefined
+            }}
           />
         </span>
       </div>
     {/if}
     <TestResults
-      totalPoints={$totalPoints}
-      successPoints={$successPoints}
-      testResults={$testResults.testResult.testResults}
-      validationResult={$testResults.styleValidationResult ?? null}
+      {totalPoints}
+      {successPoints}
+      testResults={testResults.testResult.testResults}
+      validationResult={testResults.styleValidationResult ?? null}
       solutionUrl={null}
     />
   {/if}
 {:else}
-  <h1>{course.title}: {exercise.name}</h1>
+  <h1 class="exercise-heading">{exercise.name}</h1>
 
-  {#if $testError}
-    <h2>Error while trying to run tests</h2>
-    <code>
-      {$testError.details}
-    </code>
+  {#if testError}
+    <div role="status">
+      <h2>Error while trying to run tests</h2>
+      <code>
+        {testError.details}
+      </code>
+    </div>
   {/if}
 
   <div>You can submit your answer with the button below.</div>
   <div class="exam-submission-button-container">
-    <vscode-button role="button" tabindex="0" onclick={submit} onkeypress={submit}>
-      Submit to server
-    </vscode-button>
+    <Button onclick={submit} disabled={submitting}>Submit to server</Button>
   </div>
 {/if}
 
 <style>
+  .exercise-heading {
+    /* leave room for the absolutely-positioned close button */
+    padding-right: 2.5rem;
+  }
   .close-button {
     position: absolute;
     top: 0.4rem;

@@ -2,7 +2,11 @@ import * as path from "path"
 
 import * as vscode from "vscode"
 
-import { WORKSPACE_ROOT_FILE_NAME, WORKSPACE_ROOT_FOLDER_NAME } from "./constants"
+import {
+  WORKSPACE_ROOT_FILE_NAME,
+  WORKSPACE_ROOT_FOLDER_NAME,
+  workspaceFileName,
+} from "./constants"
 
 export enum EditorKind {
   Code = 0,
@@ -43,7 +47,7 @@ export default class Resources {
     )
   }
 
-  public getWorkspaceFilePath(courseName: string): string {
-    return path.join(this.workspaceFileFolder, courseName + ".code-workspace")
+  public getWorkspaceFilePath(courseName: string, backend: "tmc" | "mooc"): string {
+    return path.join(this.workspaceFileFolder, workspaceFileName(courseName, backend))
   }
 }

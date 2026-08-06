@@ -44,4 +44,52 @@ suite("InitializationErrorHelp panel", () => {
     ).toBeInTheDocument()
     expect(screen.getByText(/\/tmp\/cli/)).toBeInTheDocument()
   })
+
+  test("reports a non-tmc error without also claiming there is no error data", async () => {
+    render(InitializationErrorHelp, { props: { panel } })
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: "initializationErrors",
+          target: { type: "InitializationErrorHelp", id: panel.id },
+          cliFolder: "/tmp/cli",
+          initializationErrors: {
+            tmc: noError,
+            userData: noError,
+            workspaceManager: { error: "workspace boom", stack: "at bar" },
+            exerciseDecorationProvider: noError,
+            resources: noError,
+          },
+        },
+      }),
+    )
+
+    expect(
+      await screen.findByText(/Failed to initialize workspace manager: workspace boom/),
+    ).toBeInTheDocument()
+    // the guard must not contradict itself and print the empty-state message too
+    expect(screen.queryByText("No error data found")).not.toBeInTheDocument()
+  })
+
+  test("shows the empty-state message only when every error is null", async () => {
+    render(InitializationErrorHelp, { props: { panel } })
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: "initializationErrors",
+          target: { type: "InitializationErrorHelp", id: panel.id },
+          cliFolder: "/tmp/cli",
+          initializationErrors: {
+            tmc: noError,
+            userData: noError,
+            workspaceManager: noError,
+            exerciseDecorationProvider: noError,
+            resources: noError,
+          },
+        },
+      }),
+    )
+
+    expect(await screen.findByText("No error data found")).toBeInTheDocument()
+  })
 })

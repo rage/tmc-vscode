@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { writable } from "svelte/store"
-
   import type {
     ExerciseGroup,
     ExerciseStatus,
@@ -8,7 +6,7 @@
     TmcExerciseId,
   } from "../shared/shared"
   import { ExerciseIdentifier, match } from "../shared/shared"
-  import Card from "./Card.svelte"
+  import Button from "./Button.svelte"
   import Checkbox from "./Checkbox.svelte"
 
   // checked/status records for exercises, keyed by the backend-specific exercise id
@@ -35,7 +33,15 @@
     exerciseStatuses,
   }: Props = $props()
 
-  const expanded = writable<boolean>(false)
+  const statusLabels: Record<ExerciseStatus, string> = {
+    closed: "Closed",
+    downloading: "Downloading",
+    downloadFailed: "Download failed",
+    expired: "Expired",
+    missing: "Not downloaded",
+    new: "New",
+    opened: "Opened",
+  }
 
   function getStatus(id: ExerciseIdentifier): ExerciseStatus | undefined {
     return match(
@@ -43,6 +49,10 @@
       (tmc) => exerciseStatuses.tmc[tmc.tmcExerciseId],
       (mooc) => exerciseStatuses.mooc[mooc.moocExerciseId],
     )
+  }
+  function getStatusLabel(id: ExerciseIdentifier): string {
+    const status = getStatus(id)
+    return status === undefined ? "Loading…" : statusLabels[status]
   }
   function isChecked(id: ExerciseIdentifier): boolean {
     return match(
@@ -82,14 +92,17 @@
   const allExercisesAreChecked = $derived(
     exerciseGroup.exercises.every((exercise) => isChecked(exercise.id)),
   )
+  const someExercisesAreChecked = $derived(
+    exerciseGroup.exercises.some((exercise) => isChecked(exercise.id)),
+  )
 
   function getHardDeadlineInformation(deadline: string) {
     return (
-      "This is a soft deadline and it can be exceeded." +
-      "&#013Exercises can be submitted after the soft deadline has passed, " +
-      "but you receive only 75% of the exercise points." +
-      `&#013;Hard deadline for this exercise is: ${deadline}.` +
-      "&#013;Hard deadline can not be exceeded."
+      "This is a soft deadline and it can be exceeded. " +
+      "Exercises can be submitted after the soft deadline has passed, " +
+      "but you receive only 75% of the exercise points. " +
+      `Hard deadline for this exercise is: ${deadline}. ` +
+      "Hard deadline can not be exceeded."
     )
   }
   function checkAllExercises(checked: boolean) {
@@ -100,212 +113,143 @@
   }
 </script>
 
-<Card>
-  <div class="part-header">
-    <h2 class="part-title">
-      {exerciseGroup.name}
-    </h2>
-    <div class="part-buttons">
-      <vscode-button
-        role="button"
-        tabindex="0"
-        class="part-button"
-        secondary
-        onclick={() => onDownloadAll(exerciseGroup.exercises.map((e) => e.id))}
-        onkeypress={() => onDownloadAll(exerciseGroup.exercises.map((e) => e.id))}
-      >
+<vscode-collapsible class="exercise-part" heading={exerciseGroup.name}>
+  <vscode-badge slot="decorations">Completed {completedExercises}/{totalExercises}</vscode-badge>
+
+  <div class="part-body">
+    <vscode-button-group class="part-buttons">
+      <Button secondary onclick={() => onDownloadAll(exerciseGroup.exercises.map((e) => e.id))}>
         Download all
-      </vscode-button>
-      <vscode-button
-        role="button"
-        tabindex="0"
-        class="part-button"
-        secondary
-        onclick={() => onOpenAll(exerciseGroup.exercises.map((e) => e.id))}
-        onkeypress={() => onOpenAll(exerciseGroup.exercises.map((e) => e.id))}
-      >
+      </Button>
+      <Button secondary onclick={() => onOpenAll(exerciseGroup.exercises.map((e) => e.id))}>
         Open all
-      </vscode-button>
-      <vscode-button
-        role="button"
-        tabindex="0"
-        class="part-button"
-        secondary
-        onclick={() => onCloseAll(exerciseGroup.exercises.map((e) => e.id))}
-        onkeypress={() => onCloseAll(exerciseGroup.exercises.map((e) => e.id))}
-      >
+      </Button>
+      <Button secondary onclick={() => onCloseAll(exerciseGroup.exercises.map((e) => e.id))}>
         Close all
-      </vscode-button>
+      </Button>
+    </vscode-button-group>
+
+    <div class="part-counts">
+      <div>Completed: {completedExercises} / {totalExercises}</div>
+      <div>Downloaded: {downloadedExercises} / {totalExercises}</div>
+      <div>Opened: {openedExercises} / {totalExercises}</div>
     </div>
+
+    <div class="next-deadline">{exerciseGroup.nextDeadlineString}</div>
+
+    <vscode-table zebra responsive breakpoint="480">
+      <vscode-table-header slot="header">
+        <vscode-table-header-cell class="checkbox-cell">
+          <Checkbox
+            aria-label="Select all exercises"
+            checked={allExercisesAreChecked}
+            indeterminate={someExercisesAreChecked && !allExercisesAreChecked}
+            onClick={(checked) => {
+              checkAllExercises(checked)
+            }}
+          />
+        </vscode-table-header-cell>
+        <vscode-table-header-cell>Exercise</vscode-table-header-cell>
+        <vscode-table-header-cell>Deadline</vscode-table-header-cell>
+        <vscode-table-header-cell>Completed</vscode-table-header-cell>
+        <vscode-table-header-cell>Status</vscode-table-header-cell>
+      </vscode-table-header>
+      <vscode-table-body slot="body">
+        {#each exerciseGroup.exercises as exercise}
+          <vscode-table-row id={ExerciseIdentifier.toString(exercise.id)}>
+            <vscode-table-cell class="checkbox-cell">
+              <Checkbox
+                aria-label={exercise.name}
+                checked={isChecked(exercise.id)}
+                onClick={(checked) => {
+                  setChecked([exercise.id], checked)
+                }}
+              />
+            </vscode-table-cell>
+            <vscode-table-cell>{exercise.name}</vscode-table-cell>
+            <vscode-table-cell>
+              {#if exercise.isHard}
+                {exercise.hardDeadlineString}
+              {:else}
+                <span class="soft-deadline">
+                  {exercise.softDeadlineString}
+                  <span
+                    class="deadline-info"
+                    title={getHardDeadlineInformation(exercise.hardDeadlineString)}
+                  >
+                    <vscode-icon name="info"></vscode-icon>
+                  </span>
+                  <span class="visually-hidden">
+                    {getHardDeadlineInformation(exercise.hardDeadlineString)}
+                  </span>
+                </span>
+              {/if}
+            </vscode-table-cell>
+            <vscode-table-cell>
+              {#if exercise.passed}
+                <vscode-icon name="pass-filled" class="pass-icon"></vscode-icon>
+                <span class="visually-hidden">Passed</span>
+              {:else}
+                <vscode-icon name="error" class="fail-icon"></vscode-icon>
+                <span class="visually-hidden">Not passed</span>
+              {/if}
+            </vscode-table-cell>
+            <vscode-table-cell>
+              <vscode-badge>{getStatusLabel(exercise.id)}</vscode-badge>
+            </vscode-table-cell>
+          </vscode-table-row>
+        {/each}
+      </vscode-table-body>
+    </vscode-table>
   </div>
-  <div>
-    <div>
-      Completed: {completedExercises} / {totalExercises}
-    </div>
-    <div>
-      Downloaded: {downloadedExercises} / {totalExercises}
-    </div>
-    <div>
-      Opened: {openedExercises} / {totalExercises}
-    </div>
-  </div>
-  <br />
-  <div>{exerciseGroup.nextDeadlineString}</div>
-  <div class="show-exercises-container">
-    <vscode-button
-      role="button"
-      tabindex="0"
-      onclick={() => expanded.update((e) => !e)}
-      onkeypress={() => expanded.update((e) => !e)}
-      secondary
-    >
-      {#if $expanded}
-        Hide exercises
-      {:else}
-        Show exercises
-      {/if}
-    </vscode-button>
-  </div>
-  <div>
-    <div hidden={!$expanded}>
-      <vscode-divider></vscode-divider>
-      <div>
-        <table class="exercise-table">
-          <thead>
-            <tr>
-              <th class="exercise-table-header checkbox-header">
-                <Checkbox
-                  checked={allExercisesAreChecked}
-                  onClick={(checked) => {
-                    checkAllExercises(checked)
-                  }}
-                />
-              </th>
-              <th class="exercise-table-header">Exercise</th>
-              <th class="exercise-table-header deadline-header">Deadline</th>
-              <th class="exercise-table-header completed-header">Completed</th>
-              <th class="exercise-table-header status-header">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each exerciseGroup.exercises as exercise}
-              <tr id={ExerciseIdentifier.toString(exercise.id)} class="exercise-row">
-                <td class="exercise-table-cell">
-                  <Checkbox
-                    checked={isChecked(exercise.id)}
-                    onClick={(checked) => {
-                      setChecked([exercise.id], checked)
-                    }}
-                  />
-                </td>
-                <td class="exercise-table-cell"> {exercise.name}</td>
-                <td class="exercise-table-cell">
-                  {#if exercise.isHard}
-                    {exercise.hardDeadlineString}
-                  {:else}
-                    <div>
-                      {exercise.softDeadlineString}
-                      <span title={getHardDeadlineInformation(exercise.hardDeadlineString)}>
-                        ⓘ
-                      </span>
-                      <span class="codicon codicon-add"></span>
-                    </div>
-                  {/if}
-                </td>
-                {#if exercise.passed}
-                  <td class="success-icon exercise-table-cell"> ✔ </td>
-                {:else}
-                  <td class="cross-icon exercise-table-cell"> ❌ </td>
-                {/if}
-                <td class="exercise-table-cell">
-                  <vscode-badge>
-                    {getStatus(exercise.id) ?? "Loading..."}
-                  </vscode-badge>
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</Card>
+</vscode-collapsible>
 
 <style>
-  .part-header {
-    display: flex;
-    flex-direction: column;
-    text-transform: capitalize;
+  .exercise-part {
+    display: block;
+    margin-bottom: 1rem;
   }
-  .part-title {
-    flex-grow: 1;
+  .part-body {
+    padding: 0.4rem;
   }
   .part-buttons {
-    display: flex;
-    align-items: center;
-    flex-direction: column;
-  }
-  .part-button {
-    margin: 0.4rem;
-    width: 90%;
-    box-sizing: border-box;
-  }
-  .show-exercises-container {
-    padding: 0.4rem;
-    display: flex;
-    justify-content: center;
-  }
-  .success-icon {
-    font-size: 1.3rem;
-  }
-  .cross-icon {
-    font-size: 0.7rem;
-  }
-  .exercise-row:nth-child(odd) {
-    background-color: var(--vscode-editor-background, #1f1f1f);
-    border-radius: 0.4rem;
-    overflow: hidden;
-  }
-  .exercise-table-header {
-    padding: 0.8rem;
-    overflow: hidden;
-    text-align: left;
-  }
-  .exercise-table-cell {
-    padding: 0.8rem;
-    word-wrap: break-word;
-    overflow: hidden;
-  }
-  .exercise-table {
+    display: block;
     width: 100%;
-    table-layout: fixed;
-    border-collapse: collapse;
+    margin-bottom: 0.8rem;
   }
-  .checkbox-header {
-    width: 1rem;
+  .part-counts {
+    margin-bottom: 0.4rem;
   }
-  .deadline-header {
-    width: 20%;
+  .next-deadline {
+    margin-bottom: 0.8rem;
   }
-  .completed-header {
-    width: 4rem;
+  .checkbox-cell {
+    width: 2rem;
   }
-  .status-header {
-    width: 4rem;
+  .soft-deadline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
   }
-
-  @media (min-width: 30rem) {
-    .part-header {
-      flex-direction: row;
-    }
-    .part-buttons {
-      flex-direction: row;
-    }
-    .part-button {
-      width: auto;
-    }
-    .exercise-table {
-      border-collapse: collapse;
-    }
+  .deadline-info {
+    display: inline-flex;
+    cursor: help;
+  }
+  .pass-icon {
+    color: var(--vscode-testing-iconPassed, #73c991);
+  }
+  .fail-icon {
+    color: var(--vscode-testing-iconFailed, #f14c4c);
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>

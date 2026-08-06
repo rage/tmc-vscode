@@ -1,16 +1,15 @@
 import { expect } from "@playwright/test"
 
 import { vsCodeTest } from "../fixtures"
-import { LoginPage } from "../pages/login"
 import { MyCoursesPage } from "../pages/my-courses"
 
+// The session comes from the tmc credentials the fixture seeds; the extension has
+// no TMC login screen any more (see fixtures.ts).
 vsCodeTest("can add new course", async ({ page, webview }) => {
-  const loginPage = new LoginPage(page, webview)
   const myCoursesPage = new MyCoursesPage(page, webview)
 
-  await vsCodeTest.step("log in", async () => {
-    await loginPage.goto()
-    await loginPage.login("student")
+  await vsCodeTest.step("open My Courses", async () => {
+    await myCoursesPage.goto()
   })
 
   await vsCodeTest.step("add new course", async () => {

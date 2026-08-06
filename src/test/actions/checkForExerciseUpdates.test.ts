@@ -23,12 +23,9 @@ const tmcOutdated = {
 
 const moocCourse: MoocLocalCourseData = {
   id: "instance-uuid-1",
-  courseId: "course-uuid-1",
   name: "mooc-python-course",
-  instanceName: null,
   title: "Mooc Python",
   description: null,
-  courseDescription: null,
   organization: "mooc",
   exercises: [
     {
@@ -114,15 +111,46 @@ suite("checkForExerciseUpdates action", function () {
     expect(result.val).toEqual([tmcOutdated, moocOutdated])
   })
 
-  test("should result in error if the tmc Langs operation fails", async function () {
+  test("should NOT discard mooc results when the tmc check fails", async function () {
+    userDataMockValues.getCourses = [
+      ...userDataMockValues.getCourses,
+      makeMoocKind(moocCourse) as LocalCourseData,
+    ]
     tmcMockValues.checkExerciseUpdates = Err(new Error())
+    tmcMockValues.checkMoocExerciseUpdates = Ok(["mooc-ex-1"])
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result.val).toBeInstanceOf(Error)
+    expect(result.ok).toBe(true)
+    expect(result.val).toEqual([moocOutdated])
   })
 
-  test("should result in error if the mooc Langs operation fails", async function () {
+  test("should NOT discard tmc results when the mooc check fails", async function () {
+    userDataMockValues.getCourses = [
+      ...userDataMockValues.getCourses,
+      makeMoocKind(moocCourse) as LocalCourseData,
+    ]
     tmcMockValues.checkMoocExerciseUpdates = Err(new Error())
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result.val).toBeInstanceOf(Error)
+    expect(result.ok).toBe(true)
+    expect(result.val).toEqual([tmcOutdated])
+  })
+
+  test("should skip the mooc check entirely when not authenticated", async function () {
+    userDataMockValues.getCourses = [
+      ...userDataMockValues.getCourses,
+      makeMoocKind(moocCourse) as LocalCourseData,
+    ]
+    tmcMockValues.isMoocAuthenticated = Ok(false)
+    tmcMockValues.checkMoocExerciseUpdates = Ok(["mooc-ex-1"])
+    const result = await checkForExerciseUpdates(actionContext())
+    expect(result.val).toEqual([tmcOutdated])
+    expect(tmcMock.checkMoocExerciseUpdates).not.toHaveBeenCalled()
+  })
+
+  test("should not error when the mooc auth check itself fails", async function () {
+    tmcMockValues.isMoocAuthenticated = Err(new Error())
+    const result = await checkForExerciseUpdates(actionContext())
+    expect(result.ok).toBe(true)
+    expect(result.val).toEqual([tmcOutdated])
+    expect(tmcMock.checkMoocExerciseUpdates).not.toHaveBeenCalled()
   })
 })

@@ -9,6 +9,7 @@ import type {
   LocalCourseData,
   LocalCourseExercise,
   SharedMoocCourseData,
+  SharedMoocCourseExercise,
   SharedTmcCourseData,
   SharedTmcCourseExercise,
   TestResultData,
@@ -54,12 +55,9 @@ export function moocCourseData(
 ): SharedMoocCourseData {
   return {
     id: MOOC_INSTANCE_ID,
-    courseId: MOOC_COURSE_ID,
     name: "mooc-python",
-    instanceName: null,
     title: "MOOC Python",
     description: "A mooc.fi course about Python.",
-    courseDescription: "A mooc.fi course about Python.",
     organization: "mooc",
     exercises: [
       {
@@ -89,6 +87,21 @@ export function tmcLocalCourse(overrides: Partial<SharedTmcCourseData> = {}): Lo
 
 export function moocLocalCourse(overrides: Partial<SharedMoocCourseData> = {}): LocalCourseData {
   return makeMoocKind(moocCourseData(overrides))
+}
+
+export function moocLocalExercise(
+  overrides: Partial<SharedMoocCourseExercise> = {},
+): LocalCourseExercise {
+  return makeMoocKind({
+    id: MOOC_EXERCISE_ID,
+    availablePoints: 3,
+    awardedPoints: 0,
+    name: "loops",
+    deadline: null,
+    passed: false,
+    softDeadline: null,
+    ...overrides,
+  })
 }
 
 // a single-part exercise group referencing a tmc exercise id

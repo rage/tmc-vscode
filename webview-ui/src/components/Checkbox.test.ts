@@ -1,46 +1,61 @@
-import { fireEvent, render, screen } from "@testing-library/svelte"
+import { fireEvent, render, waitFor } from "@testing-library/svelte"
 import { vi } from "vitest"
 
 import Checkbox from "./Checkbox.svelte"
 
-// The real double-fire this guards against comes from `vscode-checkbox`'s
-// internal `<label for=input>`, whose default click action re-fires a synthetic
-// click on the inner input. That custom element is not upgraded under jsdom, so
-// the doubling itself cannot be reproduced here; instead we pin the invariant
-// that stops it — `onClickWrapper` calls `preventDefault()` and toggles exactly
-// once per click. Reverting the `preventDefault()` fix flips these assertions.
-suite("Checkbox component", () => {
-  test("fires onClick exactly once per click, with the toggled value", async () => {
-    const onClick = vi.fn()
-    render(Checkbox, { props: { checked: false, onClick } })
+type CheckboxElement = HTMLElement & { checked: boolean; indeterminate: boolean }
 
-    const box = screen.getByRole("button")
-    await fireEvent.click(box)
+// vscode-checkbox is inert under jsdom, so setting `.checked` and dispatching `change`
+// stands in for a real user toggle.
+function renderCheckbox(props: Record<string, unknown>): {
+  el: CheckboxElement
+  container: HTMLElement
+} {
+  const { container } = render(Checkbox, { props })
+  const el = container.querySelector("vscode-checkbox") as CheckboxElement
+  return { el, container }
+}
+
+suite("Checkbox component", () => {
+  test("renders a single checkbox element, not a role=button span", () => {
+    const { el, container } = renderCheckbox({ checked: false })
+    expect(el).not.toBeNull()
+    // the old span+role="button" wrapper (two tab stops, wrong role) is gone
+    expect(container.querySelector('[role="button"]')).toBeNull()
+  })
+
+  test("exposes an accessible name via aria-label", () => {
+    const { el } = renderCheckbox({ checked: false, "aria-label": "Select all exercises" })
+    expect(el.getAttribute("aria-label")).toBe("Select all exercises")
+  })
+
+  test("mirrors the controlled checked/indeterminate props onto the element", async () => {
+    const { el } = renderCheckbox({ checked: true, indeterminate: true })
+    await waitFor(() => {
+      expect(el.checked).toBe(true)
+      expect(el.indeterminate).toBe(true)
+    })
+  })
+
+  test("fires onClick exactly once with the toggled value on change", async () => {
+    const onClick = vi.fn()
+    const { el } = renderCheckbox({ checked: false, onClick })
+
+    el.checked = true
+    await fireEvent.change(el)
 
     expect(onClick).toHaveBeenCalledTimes(1)
     expect(onClick).toHaveBeenLastCalledWith(true)
   })
 
-  test("cancels the click's default action (the anti-double-fire guard)", async () => {
+  test("reports the new value on each successive toggle", async () => {
     const onClick = vi.fn()
-    render(Checkbox, { props: { checked: false, onClick } })
+    const { el } = renderCheckbox({ checked: false, onClick })
 
-    const box = screen.getByRole("button")
-    // fireEvent returns false when a handler called preventDefault on a
-    // cancelable event
-    const notCancelled = await fireEvent.click(box)
-
-    expect(notCancelled).toBe(false)
-    expect(onClick).toHaveBeenCalledTimes(1)
-  })
-
-  test("toggles back and forth across successive clicks", async () => {
-    const onClick = vi.fn()
-    render(Checkbox, { props: { checked: false, onClick } })
-
-    const box = screen.getByRole("button")
-    await fireEvent.click(box)
-    await fireEvent.click(box)
+    el.checked = true
+    await fireEvent.change(el)
+    el.checked = false
+    await fireEvent.change(el)
 
     expect(onClick.mock.calls).toEqual([[true], [false]])
   })

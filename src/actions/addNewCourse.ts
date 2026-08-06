@@ -5,7 +5,11 @@ import { InitializationError } from "../errors"
 import { CourseIdentifier, match } from "../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import { Logger } from "../utilities"
-import { combineTmcApiExerciseData } from "../utilities/apiData"
+import {
+  combineMoocApiExerciseData,
+  combineTmcApiExerciseData,
+  sumMoocCoursePoints,
+} from "../utilities/apiData"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ActionContext } from "./types"
 
@@ -60,7 +64,7 @@ export async function addNewCourse(
         title: "Go To Course Details",
         arguments: [CourseIdentifier.from(localData.id)],
       })
-      workspaceManager.val.createWorkspaceFile(courseData.details.name)
+      workspaceManager.val.createWorkspaceFile(courseData.details.name, "tmc")
       return refreshLocalExercises(actionContext)
     },
     async (mooc) => {
@@ -70,33 +74,53 @@ export async function addNewCourse(
       if (courseRes.err) {
         return courseRes
       }
-      const [moocCourse, _] = courseRes.val
+      const [moocCourse, slides] = courseRes.val
+
+      // Non-fatal: a failed fetch just starts the course with zeroed progress.
+      const progressRes = await langs.val.getMoocCourseProgress(mooc.instanceId)
+      if (progressRes.err) {
+        Logger.warn("Failed to fetch mooc course progress", progressRes.val)
+      }
+
+      // One local exercise per slide, keyed by the slide's exercise id (a UUID).
+      // The bulk download/update CLI subcommand resolves `--exercise-id` against
+      // `slide.exercise_id`, so the exercise id (not the task id) is the identity
+      // the extension must carry.
+      const exercises = combineMoocApiExerciseData(
+        slides,
+        progressRes.ok ? progressRes.val : undefined,
+      )
+      const { availablePoints, awardedPoints } = sumMoocCoursePoints(exercises)
 
       const localData: MoocLocalCourseData = {
         id: moocCourse.id,
-        courseId: moocCourse.id,
         name: moocCourse.slug,
-        instanceName: null,
         description: moocCourse.description,
-        courseDescription: moocCourse.description,
         title: moocCourse.name,
         organization: moocCourse.organization_name,
-        awardedPoints: 0,
-        availablePoints: 0,
+        awardedPoints,
+        availablePoints,
         disabled: false,
         materialUrl: null,
-        exercises: [],
+        exercises,
         newExercises: [],
         notifyAfter: 0,
         perhapsExamMode: false,
       }
-      userData.val.addCourse({ kind: "mooc", data: localData })
+      // A duplicate enrollment of the same course can surface twice from the
+      // backend, and re-adding an already-added course id throws; fail gracefully
+      // instead of crashing the add flow.
+      try {
+        userData.val.addCourse({ kind: "mooc", data: localData })
+      } catch (e) {
+        return Err(e instanceof Error ? e : new Error(String(e)))
+      }
       ui.treeDP.addChildWithId("myCourses", localData.id, localData.name, {
         command: "tmc.courseDetails",
         title: "Go To Course Details",
         arguments: [CourseIdentifier.from(localData.id)],
       })
-      workspaceManager.val.createWorkspaceFile(moocCourse.slug)
+      workspaceManager.val.createWorkspaceFile(moocCourse.slug, "mooc")
       return refreshLocalExercises(actionContext)
     },
   )

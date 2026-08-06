@@ -1,4 +1,9 @@
-import type { CourseInstance, LocalTmcExercise, TmcExerciseSlide } from "../../shared/langsSchema"
+import type {
+  CourseInstance,
+  LocalTmcExercise,
+  MoocCourseProgress,
+  TmcExerciseSlide,
+} from "../../shared/langsSchema"
 
 const checkExerciseUpdates: { id: number }[] = [{ id: 2 }]
 
@@ -38,6 +43,7 @@ const moocExerciseSlides: TmcExerciseSlide[] = [
   {
     slide_id: MOOC_INSTANCE_UUID,
     exercise_id: MOOC_EXERCISE_UUID,
+    course_id: MOOC_INSTANCE_UUID,
     exercise_name: "mooc_hello",
     exercise_order_number: 0,
     deadline: null,
@@ -48,12 +54,28 @@ const moocExerciseSlides: TmcExerciseSlide[] = [
         public_spec: null,
         model_solution_spec: null,
         checksum: null,
+        assignment: null,
       },
     ],
   },
 ]
 
 const moocEnrolledCourseInstances: CourseInstance[] = [moocCourseInstance]
+
+// The user's progress for `moocCourseInstance`: the one exercise passed with
+// full points.
+const moocCourseProgress: MoocCourseProgress = {
+  course_id: MOOC_INSTANCE_UUID,
+  exercises: [
+    {
+      exercise_id: MOOC_EXERCISE_UUID,
+      score_given: 1,
+      score_maximum: 1,
+      completed: true,
+      attempted: true,
+    },
+  ],
+}
 
 export {
   checkExerciseUpdates,
@@ -64,6 +86,7 @@ export {
   MOOC_INSTANCE_UUID,
   MOOC_TASK_UUID,
   moocCourseInstance,
+  moocCourseProgress,
   moocEnrolledCourseInstances,
   moocExerciseSlides,
 }
