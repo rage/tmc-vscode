@@ -9,6 +9,7 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { downloadOldSubmission } from "../../commands/downloadOldSubmission"
 import type { UserData } from "../../config/userdata"
+import type { MoocOldSubmissionRestore } from "../../shared/langsSchema"
 import { createMockActionContext } from "../mocks/actionContext"
 
 suite("Download old submission command (mooc branch)", function () {
@@ -43,7 +44,7 @@ suite("Download old submission command (mooc branch)", function () {
   let notification: ReturnType<typeof vi.fn>
   let selectedLabels: string[]
 
-  function actionContext(restore: "restored" | "nothing-to-download" = "restored"): ActionContext {
+  function actionContext(restore: MoocOldSubmissionRestore = "restored"): ActionContext {
     const base = createMockActionContext()
 
     getMoocOldSubmissions = vi.fn(async () => Ok(moocSubmissions))

@@ -2,7 +2,10 @@ import type { Result } from "ts-results"
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
-import type { ExerciseSlideSubmissionListItem } from "../shared/langsSchema"
+import type {
+  ExerciseSlideSubmissionListItem,
+  MoocOldSubmissionRestore,
+} from "../shared/langsSchema"
 import { backendName, ExerciseIdentifier, match } from "../shared/shared"
 import { dateToString, Logger, parseDate } from "../utilities"
 
@@ -157,9 +160,11 @@ export async function downloadOldSubmission(
   const editor = vscode.window.activeTextEditor
   const document = editor?.document.uri
 
-  const oldDownloadResult = await match(
+  // The tmc CLI reports no outcome, and only ever restores, so both backends are read as the
+  // mooc outcome the UI below branches on.
+  const oldDownloadResult: Result<MoocOldSubmissionRestore, Error> = await match(
     id,
-    (tmc): Promise<Result<"restored" | "nothing-to-download", Error>> =>
+    (tmc) =>
       langs.val
         .downloadTmcOldSubmission(
           tmc.tmcExerciseId,
@@ -168,7 +173,7 @@ export async function downloadOldSubmission(
           submitFirst,
         )
         .then((res) => res.map(() => "restored" as const)),
-    (mooc): Promise<Result<"restored" | "nothing-to-download", Error>> =>
+    (mooc) =>
       langs.val.downloadMoocOldSubmission(
         mooc.moocExerciseId,
         exercise.uri.fsPath,
