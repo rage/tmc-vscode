@@ -8,6 +8,7 @@ import { first } from "lodash"
 import kill from "tree-kill"
 import type { Result } from "ts-results"
 
+import { TMC_ARCHIVE_MIME } from "../../backend/mooc/fixtures"
 import Langs from "../api/langs"
 import type { SubmissionFeedback } from "../api/types"
 import { CLIENT_NAME, MINIMUM_SUBMISSION_INTERVAL, TMC_LANGS_VERSION } from "../config/constants"
@@ -637,6 +638,32 @@ suite("tmc langs cli spec", function () {
         }
         expect(status.Grading.grading_progress).to.equal("FullyGraded")
         expect(status.Grading.score_given).to.equal(1)
+      },
+    )
+
+    migrationTest(
+      "should submit its archive with the tmc answer-archive content type",
+      async function () {
+        // The multipart part's Content-Type is the one value only a real end-to-end run
+        // can observe. reqwest infers it from the path extension, the archive the CLI
+        // submits is an extensionless temp file, and the host stores whatever arrives
+        // without checking it -- so a wrong one is invisible until a teacher opens the
+        // exported answer-file zip, whose entry extensions come from this.
+        const dir = writeSubmittableProject("mooc-submit-mime")
+        ;(await tmc.submitMoocExerciseAndWaitForResults(PASSING_EXERCISE_ID, dir)).unwrap()
+
+        // Read it back off the host's own record rather than through the extension:
+        // `mime` is part of the wire contract but nothing in the extension consumes it.
+        const submissions = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
+        const newest = first(submissions)
+        expect(newest, "the submit must be listed").to.not.be.undefined
+        const download = await fetch(
+          `http://localhost:4001/api/v0/exercise-services/client/submissions/${newest!.id}/download`,
+        )
+        expect(download.status).to.equal(200)
+        const body = (await download.json()) as { data_files: { name: string; mime: string }[] }
+        expect(body.data_files).to.have.lengthOf(1)
+        expect(body.data_files[0]?.mime).to.equal(TMC_ARCHIVE_MIME)
       },
     )
 
