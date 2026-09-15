@@ -31,16 +31,22 @@ const CLIENT_CONFIG_DIR_NAME = `tmc-${CLIENT_NAME}`
 const isString = (object: unknown): object is string => typeof object === "string"
 
 // Some tests exercise the migration-client contract (--course-type, object
-// CourseIdentifier, newer error kinds) that the released 0.39.4 CLI rejects.
-// They run only when backend/cli holds a newer migration-branch CLI (installed
-// via bin/useLocalLangs.bash) and skip gracefully against the released CLI so
-// CI stays green. Detection uses the CLI's own reported version, not the
-// filename — useLocalLangs.bash installs the local build under the pinned name.
+// CourseIdentifier, newer error kinds) that no released CLI has yet. They run
+// only when backend/cli holds a migration-branch CLI (installed via
+// bin/useLocalLangs.bash) and skip gracefully otherwise so CI stays green.
+// Detection uses the CLI's own reported version, not the filename —
+// useLocalLangs.bash installs the local build under the pinned name.
+//
+// Anchored to the first release that will carry the contract rather than to
+// whatever is pinned today, so bumping TMC_LANGS_RUST_VERSION for an unrelated
+// fix cannot silently switch these on. Keep in step with
+// `SCHEMA_SUBCOMMAND_VERSION` in src/init/verifyCliSchema.ts.
+const MIGRATION_CONTRACT_VERSION = "0.40.0"
 const cliSupportsMigrationContract = ((): boolean => {
   try {
     const version = cp.execFileSync(CLI_FILE, ["--version"], { encoding: "utf-8" })
-    const cmp = semVerCompare(version, "0.39.4", "patch")
-    return cmp !== undefined && cmp > 0
+    const cmp = semVerCompare(version, MIGRATION_CONTRACT_VERSION, "patch")
+    return cmp !== undefined && cmp >= 0
   } catch (error) {
     console.warn(
       "Could not determine tmc-langs CLI version; skipping migration-contract tests:",
@@ -374,13 +380,18 @@ suite("tmc langs cli spec", function () {
         expect(result.val).to.be.instanceOf(RuntimeError)
       })
 
-      test("should encounter an error when trying to reset it", async function () {
+      // Since 0.39.6 directory locks live in a central locks dir instead of a
+      // `.tmc.lock` inside the exercise, so this no longer fails just because the
+      // directory is missing -- it re-downloads the exercise, like the old-submission
+      // case above.
+      test("should re-download the exercise when trying to reset it", async function () {
         const result = await tmc.resetExercise(
           ExerciseIdentifier.from(1),
           missingExercisePath,
           false,
         )
-        expect(result.val).to.be.instanceOf(RuntimeError)
+        expect(result.ok).to.be.true
+        expect(fs.existsSync(missingExercisePath)).to.be.true
       })
 
       test("should encounter an error when trying to submit it", async function () {
@@ -559,7 +570,7 @@ suite("tmc langs cli spec", function () {
   })
 
   // courses.mooc.fi mock (backend/mooc). All cases are migration-contract
-  // (mooc subcommands + UUID ids) that the released 0.39.4 CLI lacks, so they
+  // (mooc subcommands + UUID ids) that no released CLI has yet, so they
   // run only against a locally-built CLI (migrationTest) and skip on CI's
   // released CLI -- keeping CI green. Fixture ids are the fixed UUIDs from
   // backend/mooc/fixtures.ts.

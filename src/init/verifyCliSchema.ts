@@ -5,8 +5,8 @@ import * as path from "path"
 import { TMC_LANGS_VERSION } from "../config/constants"
 import { Logger, semVerCompare } from "../utilities"
 
-// First tmc-langs-cli release with a `schema` subcommand. 0.39.4, the last
-// release before it, only errors out on `schema`.
+// First tmc-langs-cli release with a `schema` subcommand; every release before
+// it, the pinned one included, only errors out on `schema`.
 const SCHEMA_SUBCOMMAND_VERSION = "0.40.0"
 
 /**

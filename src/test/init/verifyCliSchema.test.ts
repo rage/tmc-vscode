@@ -48,13 +48,13 @@ suite("verifyCliSchema", function () {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  // The released 0.39.4 the extension pins has no `schema` subcommand, so before
+  // The released CLI the extension pins has no `schema` subcommand, so before
   // this gate the check warned on every single activation about something the
   // user could not act on.
   test("does not warn for a pinned CLI older than the `schema` subcommand", async function () {
     writeVendoredSchema(dir, "{}")
 
-    await verifyCliSchema("fake-cli", dir, "0.39.4")
+    await verifyCliSchema("fake-cli", dir, "0.39.6")
 
     expect(warn).not.toHaveBeenCalled()
   })
