@@ -36,6 +36,9 @@ import { createSessionExpiryTracker } from "./utilities/sessionExpiryTracker"
 
 let maintenanceInterval: NodeJS.Timeout | undefined
 
+// module-level so `deactivate` can reach the instance `activate` built
+let activeLangs: Langs | undefined
+
 function initializationError(
   dialog: Dialog,
   step: string,
@@ -98,11 +101,10 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   } else {
     // fire-and-forget: verify the CLI's output contract matches this build's schema
     void init.verifyCliSchema(cliPathResult.val, context.extensionPath)
-    langs = new Ok(
-      new Langs(cliPathResult.val, CLIENT_NAME, extensionVersion, {
-        cliConfigDir: TMC_LANGS_CONFIG_DIR,
-      }),
-    )
+    activeLangs = new Langs(cliPathResult.val, CLIENT_NAME, extensionVersion, {
+      cliConfigDir: TMC_LANGS_CONFIG_DIR,
+    })
+    langs = new Ok(activeLangs)
   }
 
   // tmc and mooc credential states are independent; the UI treats the user
@@ -378,4 +380,6 @@ export function deactivate(): void {
   if (maintenanceInterval) {
     clearInterval(maintenanceInterval)
   }
+  // a submit or paste would otherwise keep polling the backend past shutdown
+  activeLangs?.killAllProcesses()
 }

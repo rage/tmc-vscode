@@ -1143,3 +1143,75 @@ suite("Langs exercise-update cache invalidation", function () {
     expect(tmcUpdateCheckCalls).toBe(1)
   })
 })
+
+// Holds the spawn open so the process counts as in flight, and reports whether the
+// returned interrupt was called.
+function stubPendingSpawn(langs: Langs): {
+  interrupted: () => boolean
+  optedIn: () => boolean | undefined
+  settle: () => void
+} {
+  let interrupted = false
+  let optedIn: boolean | undefined
+  let settle!: () => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
+    optedIn = (commandArgs as { interruptOnDeactivate?: boolean }).interruptOnDeactivate
+    const result = new Promise<Result<OutputData, BaseError>>((resolve) => {
+      settle = () => resolve(Err(new RuntimeError("stopped")))
+    })
+    return Ok({
+      interrupt: () => {
+        interrupted = true
+        settle()
+      },
+      result,
+    })
+  })
+  return { interrupted: () => interrupted, optedIn: () => optedIn, settle: () => settle() }
+}
+
+suite("Langs process interruption on deactivate", function () {
+  test("killAllProcesses interrupts an in-flight submit", async function () {
+    const langs = newLangs()
+    const spawn = stubPendingSpawn(langs)
+
+    const submitting = langs.submitTmcExerciseAndWaitForResults(
+      ExerciseIdentifier.from(101),
+      "/ex",
+      () => {},
+      () => {},
+    )
+    expect(spawn.optedIn()).toBe(true)
+
+    langs.killAllProcesses()
+    expect(spawn.interrupted()).toBe(true)
+    expect((await submitting).err).toBe(true)
+  })
+
+  test("leaves processes that did not opt in alone, so a download can't be cut in half", async function () {
+    const langs = newLangs()
+    const spawn = stubPendingSpawn(langs)
+
+    const fetching = langs.getCourseDetails(CourseIdentifier.from(42))
+    expect(spawn.optedIn()).toBeUndefined()
+
+    langs.killAllProcesses()
+    expect(spawn.interrupted()).toBe(false)
+
+    spawn.settle()
+    expect((await fetching).err).toBe(true)
+  })
+
+  test("stops tracking a process once it settles", async function () {
+    const langs = newLangs()
+    const spawn = stubPendingSpawn(langs)
+
+    const pasting = langs.submitTmcExerciseToPaste(101, "/ex")
+    spawn.settle()
+    await pasting
+
+    langs.killAllProcesses()
+    expect(spawn.interrupted()).toBe(false)
+  })
+})

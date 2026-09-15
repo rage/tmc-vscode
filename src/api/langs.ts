@@ -10,6 +10,7 @@ import {
   CLI_PROCESS_TIMEOUT,
   MINIMUM_SUBMISSION_INTERVAL,
   MOOC_BACKEND_URL,
+  SUBMIT_PROCESS_TIMEOUT,
   TMC_BACKEND_URL,
 } from "../config/constants"
 import type { InitializationError } from "../errors"
@@ -98,6 +99,12 @@ interface LangsProcessArgs {
   /** Set on login/logout commands, where an auth-flavored error is expected rather than a lost session. */
   suppressAuthEvents?: boolean | undefined
   onInterruptHandle?: ((interrupt: () => void) => void) | undefined
+  /**
+   * Registers the process with {@link Langs.killAllProcesses}. Only set for commands with no
+   * partial-write failure mode (network-only submit/paste) -- a killed download or settings
+   * write can corrupt state.
+   */
+  interruptOnDeactivate?: boolean | undefined
 }
 
 interface LangsProcessRunner {
@@ -147,6 +154,8 @@ export default class Langs {
   private _onMoocLogin?: () => void
   private _onMoocLogout?: (expected: boolean) => void
 
+  private readonly _activeInterrupts = new Set<() => void>()
+
   /**
    * Creates a new instance of the langs interface class.
    */
@@ -160,6 +169,19 @@ export default class Langs {
     this._nextMoocSubmissionAllowedTimestamp = 0
     this._options = { ...options }
     this._responseCache = new Map()
+  }
+
+  /**
+   * Kills every CLI process opted in via `interruptOnDeactivate` (submit and paste);
+   * downloads, extraction, and settings/credentials writes are left running so a window
+   * reload can't leave them half-written.
+   */
+  public killAllProcesses(): void {
+    const interrupts = Array.from(this._activeInterrupts)
+    Logger.info(`Killing ${interrupts.length} active CLI process(es)`)
+    for (const interrupt of interrupts) {
+      interrupt()
+    }
   }
 
   /**
@@ -1216,6 +1238,8 @@ export default class Langs {
           ExerciseIdentifier.toString(exerciseId),
         ),
         onStdout,
+        processTimeout: SUBMIT_PROCESS_TIMEOUT,
+        interruptOnDeactivate: true,
       },
       "submission-finished",
     )
@@ -1261,6 +1285,8 @@ export default class Langs {
           exercisePath,
         ),
         onStdout,
+        processTimeout: SUBMIT_PROCESS_TIMEOUT,
+        interruptOnDeactivate: true,
       },
       "mooc-submission-status",
     )
@@ -1297,6 +1323,8 @@ export default class Langs {
           "--submission-path",
           exercisePath,
         ),
+        processTimeout: CLI_PROCESS_TIMEOUT,
+        interruptOnDeactivate: true,
       },
       "new-submission",
     )
@@ -1335,6 +1363,8 @@ export default class Langs {
           "--submission-path",
           exercisePath,
         ),
+        processTimeout: CLI_PROCESS_TIMEOUT,
+        interruptOnDeactivate: true,
       },
       "mooc-paste",
     )
@@ -1462,7 +1492,10 @@ export default class Langs {
     langsArgs.onInterruptHandle?.(process.val.interrupt)
     // Attribute a lost-session error to the command's backend so the right logout event fires.
     const authEventTarget = langsArgs.suppressAuthEvents ? undefined : langsArgs.backend
-    const res = await process.val.result
+    const { interrupt, result } = process.val
+    const res = langsArgs.interruptOnDeactivate
+      ? await this._trackInterrupt(interrupt, result)
+      : await result
     return res
       .andThen((x) => this._checkLangsResponse(x, outputDataKind, authEventTarget))
       .andThen((x) => {
@@ -1474,6 +1507,16 @@ export default class Langs {
         }
         return Ok(x)
       })
+  }
+
+  /** Keeps `interrupt` reachable from {@link killAllProcesses} for as long as the process runs. */
+  private async _trackInterrupt<T>(interrupt: () => void, result: Promise<T>): Promise<T> {
+    this._activeInterrupts.add(interrupt)
+    try {
+      return await result
+    } finally {
+      this._activeInterrupts.delete(interrupt)
+    }
   }
 
   /**
