@@ -30,7 +30,8 @@ import {
 // Id spaces (mirrors the mock/backend): `submit` returns both an
 // exercise-TASK-submission id (what /grading is polled with) and an
 // exercise-SLIDE-submission id (what the submissions list, /download and /share
-// use). A submission is made in two calls: upload files, then submit naming them.
+// use). A submission is made in two calls: upload files, then submit an
+// `answer_kind: "file"` body naming them.
 
 const listen = (): Promise<{ server: Server; base: string }> =>
   new Promise((resolve) => {
@@ -136,8 +137,8 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
       body: form,
     })
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { files: { id: string }[] }
-    return body.files[0]!.id
+    const body = (await res.json()) as { data_files: { id: string }[] }
+    return body.data_files[0]!.id
   }
 
   // Uploads then submits, returning both submission ids.
@@ -151,7 +152,8 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
       body: JSON.stringify({
         exercise_slide_id: exercise.slide.slide_id,
         exercise_task_id: exercise.slide.tasks[0]!.task_id,
-        uploaded_file_ids: [fileId],
+        answer_kind: "file",
+        data_files: [fileId],
       }),
     })
     expect(res.status).toBe(200)
@@ -235,29 +237,31 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
   })
 
   test("old-submission /download response carries the submission's files", async function () {
-    // The /download response (`SubmissionFiles`, `{files:[{id,name,download_url}]}`)
-    // is consumed by the CLI, not the extension, so langsSchema has no zod schema
-    // for it. Its shape is instead reconciled against the vendored spec via the
-    // mock's OWN response validation: the mock's postResponseHandler validates
-    // every response body against the spec before sending, so a 200 here proves
-    // the payload conforms to the spec's SubmissionFiles schema. The explicit
-    // field assertions document the shape the CLI relies on -- it takes
-    // `files[0].download_url` and errors on any count other than one.
+    // The /download response (`SubmissionFiles`, `{data_files:[AnswerFile]}`) is
+    // consumed by the CLI, not the extension, so langsSchema has no zod schema for
+    // it. Its shape is instead reconciled against the vendored spec via the mock's
+    // OWN response validation: the mock's postResponseHandler validates every
+    // response body against the spec before sending, so a 200 here proves the
+    // payload conforms to the spec's SubmissionFiles schema. The explicit field
+    // assertions document the shape the CLI relies on -- it takes
+    // `data_files[0].url` and refuses any count other than one.
     const { slideSubmissionId } = await submit(failingExercise)
     const res = await fetch(api(`/submissions/${slideSubmissionId}/download`))
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
-      files: { id: string; name: string; download_url: string }[]
+      data_files: { id: string; name: string; mime: string; url: string }[]
     }
-    expect(body.files.length).toBe(1)
-    expect(typeof body.files[0]!.id).toBe("string")
-    expect(body.files[0]!.name).toBe("submission.tar.zst")
-    expect(body.files[0]!.download_url.length).toBeGreaterThan(0)
+    expect(body.data_files.length).toBe(1)
+    expect(typeof body.data_files[0]!.id).toBe("string")
+    expect(body.data_files[0]!.name).toBe("submission.tar.zst")
+    expect(body.data_files[0]!.url.length).toBeGreaterThan(0)
   })
 
   test("a submission made from no files downloads as an empty list, not a 404", async function () {
-    // An empty `uploaded_file_ids` is legal, and the host answers its download
-    // with `{"files":[]}` rather than the 404 the archive-shaped contract gave.
+    // A submit naming no files at all is a json answer, and the host answers its
+    // download with `{"data_files":[]}` rather than the 404 the archive-shaped
+    // contract gave. A tmc submission always names its archive, so this is only
+    // reachable here, not through the CLI.
     const exercise = passingExercise
     const res = await fetch(api(`/exercises/${exercise.slide.exercise_id}/submit`), {
       method: "POST",
@@ -265,14 +269,13 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
       body: JSON.stringify({
         exercise_slide_id: exercise.slide.slide_id,
         exercise_task_id: exercise.slide.tasks[0]!.task_id,
-        uploaded_file_ids: [],
       }),
     })
     expect(res.status).toBe(200)
     const { slide_submission_id } = (await res.json()) as { slide_submission_id: string }
     const download = await fetch(api(`/submissions/${slide_submission_id}/download`))
     expect(download.status).toBe(200)
-    expect(await download.json()).toEqual({ files: [] })
+    expect(await download.json()).toEqual({ data_files: [] })
   })
 
   test("a not-enrolled 422 body is a spec-valid ApiErrorResponse", async function () {

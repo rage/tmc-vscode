@@ -187,15 +187,18 @@ describe("mooc mock conformance", () => {
     assert.equal(body.message_key, "not_enrolled")
   })
 
-  interface UploadedFile {
+  interface AnswerFile {
     id: string
     name: string
-    download_url: string
+    mime: string
+    size_bytes: number | null
+    order_number: number | null
+    url: string
   }
 
   // Uploads one file for an exercise. The field name is a fresh client-chosen
   // UUID, as the host requires; the returned `id` is the host's own.
-  const uploadOne = async (exerciseId: string, bytes = [1, 2, 3]): Promise<UploadedFile> => {
+  const uploadOne = async (exerciseId: string, bytes = [1, 2, 3]): Promise<AnswerFile> => {
     const form = new FormData()
     form.append(randomUUID(), new Blob([new Uint8Array(bytes)]), "submission.tar.zst")
     const res = await authFetch(api(`/exercises/${exerciseId}/files`), {
@@ -203,16 +206,16 @@ describe("mooc mock conformance", () => {
       body: form,
     })
     assert.equal(res.status, 200)
-    const { files } = (await res.json()) as { files: UploadedFile[] }
-    assert.equal(files.length, 1)
-    return files[0]!
+    const { data_files } = (await res.json()) as { data_files: AnswerFile[] }
+    assert.equal(data_files.length, 1)
+    return data_files[0]!
   }
 
-  // `ids` overrides the slide/task the exercise itself would name, for the ownership checks that
-  // need a foreign or unknown one.
+  // Submits a file answer naming `dataFiles`. `ids` overrides the slide/task the exercise
+  // itself would name, for the ownership checks that need a foreign or unknown one.
   const postSubmit = (
     exercise: MoocExerciseFixture,
-    uploadedFileIds: string[],
+    dataFiles: string[],
     ids: { slideId?: string; taskId?: string } = {},
   ): Promise<Response> =>
     authFetch(api(`/exercises/${exercise.slide.exercise_id}/submit`), {
@@ -221,7 +224,24 @@ describe("mooc mock conformance", () => {
       body: JSON.stringify({
         exercise_slide_id: ids.slideId ?? exercise.slide.slide_id,
         exercise_task_id: ids.taskId ?? exercise.slide.tasks[0]!.task_id,
-        uploaded_file_ids: uploadedFileIds,
+        answer_kind: "file",
+        data_files: dataFiles,
+      }),
+    })
+
+  // Submits a JSON answer, the shape an omitted `answer_kind` means.
+  const postJsonSubmit = (
+    exercise: MoocExerciseFixture,
+    body: Record<string, unknown> = {},
+    ids: { slideId?: string; taskId?: string } = {},
+  ): Promise<Response> =>
+    authFetch(api(`/exercises/${exercise.slide.exercise_id}/submit`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        exercise_slide_id: ids.slideId ?? exercise.slide.slide_id,
+        exercise_task_id: ids.taskId ?? exercise.slide.tasks[0]!.task_id,
+        ...body,
       }),
     })
 
@@ -259,11 +279,11 @@ describe("mooc mock conformance", () => {
     form.append(fieldName, new Blob([new Uint8Array([1, 2, 3])]), "submission.tar.zst")
     const res = await postFiles(form)
     assert.equal(res.status, 200)
-    const { files } = (await res.json()) as { files: UploadedFile[] }
-    assert.equal(files.length, 1)
-    assert.notEqual(files[0]!.id, fieldName)
-    assert.match(files[0]!.id, /^[0-9a-f-]{36}$/)
-    assert.equal(files[0]!.name, "submission.tar.zst")
+    const { data_files } = (await res.json()) as { data_files: AnswerFile[] }
+    assert.equal(data_files.length, 1)
+    assert.notEqual(data_files[0]!.id, fieldName)
+    assert.match(data_files[0]!.id, /^[0-9a-f-]{36}$/)
+    assert.equal(data_files[0]!.name, "submission.tar.zst")
   })
 
   test("files returns one entry per part, in request-part order", async () => {
@@ -273,9 +293,9 @@ describe("mooc mock conformance", () => {
     }
     const res = await postFiles(form)
     assert.equal(res.status, 200)
-    const { files } = (await res.json()) as { files: UploadedFile[] }
+    const { data_files } = (await res.json()) as { data_files: AnswerFile[] }
     assert.deepEqual(
-      files.map((f) => f.name),
+      data_files.map((f) => f.name),
       ["a.txt", "b.txt", "c.txt"],
     )
   })
@@ -444,26 +464,34 @@ describe("mooc mock conformance", () => {
     assert.equal(grading.score_given, 0.5)
   })
 
-  test("submit omitting uploaded_file_ids fails request validation", async () => {
-    // The field is required with no default: a submit that leaves it out must be
-    // rejected rather than treated as an empty list.
-    const res = await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submit`), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        exercise_slide_id: passingExercise.slide.slide_id,
-        exercise_task_id: passingExercise.slide.tasks[0]!.task_id,
-      }),
-    })
-    assert.equal(res.status, 400)
-  })
-
-  test("submit with an empty uploaded_file_ids is accepted", async () => {
-    const res = await postSubmit(passingExercise, [])
+  test("submit naming no answer at all is a json answer, and is accepted", async () => {
+    // All three answer members are optional and an absent `answer_kind` means json,
+    // so the slide and task alone are a complete request.
+    const res = await postJsonSubmit(passingExercise)
     assert.equal(res.status, 200)
     const body = (await res.json()) as { task_submission_id: string; slide_submission_id: string }
     assert.match(body.task_submission_id, /^[0-9a-f-]{36}$/)
     assert.notEqual(body.task_submission_id, body.slide_submission_id)
+  })
+
+  test("submit of a json answer that names files is rejected", async () => {
+    // The one combination the flat body allows but the answer model does not: the
+    // files would be silently dropped.
+    const uploaded = await uploadOne(passingExercise.slide.exercise_id)
+    const res = await postJsonSubmit(passingExercise, { data_files: [uploaded.id] })
+    assert.equal(res.status, 422)
+    const body = (await res.json()) as { message_key: string; message: string }
+    assert.equal(body.message_key, "validation_error")
+    assert.match(body.message, /json answer cannot name uploaded files/)
+  })
+
+  test("submit of a file answer that names nothing is rejected", async () => {
+    // The named files ARE the answer, so naming none is a claim with no content.
+    const res = await postSubmit(passingExercise, [])
+    assert.equal(res.status, 422)
+    const body = (await res.json()) as { message_key: string; message: string }
+    assert.equal(body.message_key, "validation_error")
+    assert.match(body.message, /must name at least one uploaded file/)
   })
 
   test("submit naming a file that was never uploaded returns 422 unknown_upload", async () => {
@@ -511,15 +539,15 @@ describe("mooc mock conformance", () => {
       body: JSON.stringify({
         exercise_slide_id: passingExercise.slide.slide_id,
         exercise_task_id: passingExercise.slide.tasks[0]!.task_id,
-        uploaded_file_ids: [],
       }),
     })
     assert.equal(res.status, 404)
   })
 
-  // Submits arbitrary slide/task ids to the passing exercise.
+  // Submits arbitrary slide/task ids to the passing exercise. A json answer, because
+  // the host checks slide/task ownership before the answer shape.
   const postSubmitWith = (slideId: string, taskId: string): Promise<Response> =>
-    postSubmit(passingExercise, [], { slideId, taskId })
+    postJsonSubmit(passingExercise, {}, { slideId, taskId })
 
   test("submit naming an unknown slide or task is a spec-documented 404", async () => {
     const unknownSlide = await postSubmitWith(randomUUID(), passingExercise.slide.tasks[0]!.task_id)
@@ -562,9 +590,9 @@ describe("mooc mock conformance", () => {
     }
     const res = await authFetch(api(`/submissions/${slideSubmissionId}/download`))
     assert.equal(res.status, 200)
-    const { files } = (await res.json()) as { files: UploadedFile[] }
-    assert.equal(files.length, 1)
-    const bytes = await fetch(`${base}${new URL(files[0]!.download_url).pathname}`)
+    const { data_files } = (await res.json()) as { data_files: AnswerFile[] }
+    assert.equal(data_files.length, 1)
+    const bytes = await fetch(`${base}${new URL(data_files[0]!.url).pathname}`)
     assert.deepEqual([...new Uint8Array(await bytes.arrayBuffer())], [7, 8, 9])
   })
 
@@ -592,7 +620,6 @@ describe("mooc mock conformance", () => {
       body: JSON.stringify({
         exercise_slide_id: passingExercise.slide.slide_id,
         exercise_task_id: passingExercise.slide.tasks[0]!.task_id,
-        uploaded_file_ids: [],
       }),
     })
     assert.equal(res.status, 422)
@@ -622,17 +649,17 @@ describe("mooc mock conformance", () => {
     assert.notEqual(slideSubmissionId, taskSubmissionId)
 
     // download resolves the slide-submission id to the files the submission was
-    // made from, and each download_url serves back the EXACT bytes that were
+    // made from, and each url serves back the EXACT bytes that were
     // uploaded -- so an old-submission download returns that submission's own
     // content, not the exercise stub.
     const downloadRes = await authFetch(api(`/submissions/${slideSubmissionId}/download`))
     assert.equal(downloadRes.status, 200)
-    const { files } = (await downloadRes.json()) as { files: UploadedFile[] }
-    assert.equal(files.length, 1)
-    assert.equal(files[0]!.name, "submission.tar.zst")
-    // The download_url carries the fixed MOOC_MOCK_BASE_URL host; fetch its path
-    // against this test server (on a random port) to read the bytes.
-    const filePath = new URL(files[0]!.download_url).pathname
+    const { data_files } = (await downloadRes.json()) as { data_files: AnswerFile[] }
+    assert.equal(data_files.length, 1)
+    assert.equal(data_files[0]!.name, "submission.tar.zst")
+    // The url carries the fixed MOOC_MOCK_BASE_URL host; fetch its path against
+    // this test server (on a random port) to read the bytes.
+    const filePath = new URL(data_files[0]!.url).pathname
     const fileRes = await fetch(`${base}${filePath}`)
     assert.equal(fileRes.status, 200)
     const fileBytes = new Uint8Array(await fileRes.arrayBuffer())
@@ -662,12 +689,12 @@ describe("mooc mock conformance", () => {
   })
 
   test("download of a submission made from no files is an empty list, not a 404", async () => {
-    const res = await postSubmit(passingExercise, [])
+    const res = await postJsonSubmit(passingExercise)
     assert.equal(res.status, 200)
     const { slide_submission_id } = (await res.json()) as { slide_submission_id: string }
     const download = await authFetch(api(`/submissions/${slide_submission_id}/download`))
     assert.equal(download.status, 200)
-    assert.deepEqual(await download.json(), { files: [] })
+    assert.deepEqual(await download.json(), { data_files: [] })
 
     // It is still listed, so a client picking an old submission to restore can
     // reach it -- which is why the empty download has to be a first-class
@@ -696,7 +723,7 @@ describe("mooc mock conformance", () => {
 
     const download = await authFetch(api(`/submissions/${seeded.slide_submission_id}/download`))
     assert.equal(download.status, 200)
-    assert.deepEqual(await download.json(), { files: [] })
+    assert.deepEqual(await download.json(), { data_files: [] })
 
     const list = (await (
       await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submissions`))
