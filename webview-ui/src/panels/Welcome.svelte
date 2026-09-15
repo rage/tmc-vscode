@@ -4,7 +4,7 @@
   import Button from "../components/Button.svelte"
   import type { WelcomePanel } from "../shared/shared"
   import { assertUnreachable } from "../shared/shared"
-  import { addMessageListener, savePanelState } from "../utilities/script"
+  import { addMessageListener } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -24,7 +24,6 @@
       case "setWelcomeData": {
         // props aren't deeply reactive in Svelte 5, so panel is reassigned rather than mutated
         panel = { ...panel, version: message.version }
-        savePanelState(panel)
         break
       }
       default:

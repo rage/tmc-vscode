@@ -3,8 +3,7 @@ import { uniq } from "lodash"
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
 import { NOTIFICATION_DELAY } from "../config/constants"
-import { TmcPanel } from "../panels/TmcPanel"
-import type { ExtensionToWebview } from "../shared/shared"
+import { postUpdateables } from "../panels/updateablesRegistry"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 
@@ -44,22 +43,22 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
     const coursesToUpdate = new Map(
       exercisesToUpdate.map((x) => [CourseIdentifier.toString(x.courseId), x.courseId]),
     )
-    const exerciseIdsByCourse = (exerciseIds: ExerciseIdentifier[]): ExtensionToWebview[] => {
+    const postUpdateablesByCourse = (exerciseIds: ExerciseIdentifier[]): void => {
       const wanted = new Set(exerciseIds.map((x) => ExerciseIdentifier.unwrap(x)))
-      return Array.from(coursesToUpdate.entries()).map<ExtensionToWebview>(([key, courseId]) => ({
-        type: "setUpdateables",
-        target: { type: "CourseDetails" },
-        courseId,
-        exerciseIds: exercisesToUpdate
-          .filter(
-            (x) =>
-              CourseIdentifier.toString(x.courseId) === key &&
-              wanted.has(ExerciseIdentifier.unwrap(x.exerciseId)),
-          )
-          .map((x) => x.exerciseId),
-      }))
+      for (const [key, courseId] of coursesToUpdate) {
+        postUpdateables(
+          courseId,
+          exercisesToUpdate
+            .filter(
+              (x) =>
+                CourseIdentifier.toString(x.courseId) === key &&
+                wanted.has(ExerciseIdentifier.unwrap(x.exerciseId)),
+            )
+            .map((x) => x.exerciseId),
+        )
+      }
     }
-    TmcPanel.postMessage(...exerciseIdsByCourse([]))
+    postUpdateablesByCourse([])
     const downloadResult = await actions.downloadOrUpdateExercises(
       actionContext,
       exercisesToUpdate.map((x) => x.exerciseId),
@@ -69,7 +68,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
       return
     }
 
-    TmcPanel.postMessage(...exerciseIdsByCourse(downloadResult.val.failed))
+    postUpdateablesByCourse(downloadResult.val.failed)
   }
 
   if (settings.getAutomaticallyUpdateExercises()) {

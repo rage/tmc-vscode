@@ -7,17 +7,15 @@ import { afterEach, vi } from "vitest"
 // minimal in-memory implementation whose postMessage is a spy the tests read.
 interface MockVsCodeApi {
   postMessage: ReturnType<typeof vi.fn>
-  getState: ReturnType<typeof vi.fn>
-  setState: ReturnType<typeof vi.fn>
 }
 
 // DataCloneError regression guard: VS Code structured-clones every value passed
-// to `postMessage` and `setState`, so a non-cloneable one (a Svelte 5 `$state`
-// proxy that wasn't `$state.snapshot`-ed, a function, a class instance) crashes
-// the real webview↔host boundary with an opaque `DataCloneError`. Running the
-// same `structuredClone` in the mock makes such a payload fail inside the test
-// that posted it instead of only in production. The clone result is discarded;
-// the spy still records the original message for shape assertions.
+// to `postMessage`, so a non-cloneable one (a Svelte 5 `$state` proxy that wasn't
+// `$state.snapshot`-ed, a function, a class instance) crashes the real
+// webview<->host boundary with an opaque `DataCloneError`. Running the same
+// `structuredClone` in the mock makes such a payload fail inside the test that
+// posted it instead of only in production. The clone result is discarded; the spy
+// still records the original message for shape assertions.
 const cloneGuard =
   typeof structuredClone === "function"
     ? structuredClone
@@ -28,11 +26,6 @@ const cloneGuard =
 const vsCodeApi: MockVsCodeApi = {
   postMessage: vi.fn((message: unknown) => {
     cloneGuard(message)
-  }),
-  getState: vi.fn(() => undefined),
-  setState: vi.fn((state: unknown) => {
-    cloneGuard(state)
-    return state
   }),
 }
 
@@ -92,12 +85,7 @@ if (typeof document !== "undefined" && !document.querySelector("#vscode-codicon-
 /** The messages the component under test has posted back to the extension host. */
 export const postedMessages = vsCodeApi.postMessage
 
-/** The persisted-state writes the component under test has made via `setState`. */
-export const savedStates = vsCodeApi.setState
-
 afterEach(() => {
   cleanup()
   vsCodeApi.postMessage.mockClear()
-  vsCodeApi.getState.mockClear()
-  vsCodeApi.setState.mockClear()
 })

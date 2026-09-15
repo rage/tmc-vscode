@@ -6,7 +6,8 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import { UserData } from "../../config/userdata"
 import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import { randomPanelId, TmcPanel } from "../../panels/TmcPanel"
-import { makeTmcKind } from "../../shared/shared"
+import { postUpdateables, updateablesRegistry } from "../../panels/updateablesRegistry"
+import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
 import Storage from "../../storage"
 import type UI from "../../ui/ui"
 import { MOOC_EXERCISE_UUID, MOOC_INSTANCE_UUID, moocCourseInstance } from "../fixtures/tmc"
@@ -458,6 +459,88 @@ suite("TmcPanel ready handshake", () => {
       expect.anything(),
       expect.anything(),
       expect.objectContaining({ retainContextWhenHidden: true }),
+    )
+  })
+})
+
+suite("TmcPanel requestCourseDetailsData updateables", () => {
+  const COURSE_ID = CourseIdentifier.from(42)
+  const OTHER_COURSE_ID = CourseIdentifier.from(43)
+
+  const localCourse = makeTmcKind({
+    id: 42,
+    name: "python-course",
+    title: "Python Course",
+    description: "",
+    organization: "mooc",
+    exercises: [],
+    availablePoints: 0,
+    awardedPoints: 0,
+    perhapsExamMode: false,
+    newExercises: [],
+    notifyAfter: 0,
+    disabled: false,
+    materialUrl: null,
+  })
+
+  function contextWithCourse(): ReturnType<typeof createMockActionContext> {
+    return {
+      ...createMockActionContext(),
+      langs: Ok({
+        getCourseDetails: vi.fn().mockResolvedValue(Err(new Error("offline"))),
+      } as unknown as Langs),
+      userData: Ok({
+        getCourse: () => localCourse,
+      }) as unknown as ReturnType<typeof createMockActionContext>["userData"],
+      workspaceManager: Ok({
+        getExerciseBySlug: () => undefined,
+      }) as unknown as ReturnType<typeof createMockActionContext>["workspaceManager"],
+    }
+  }
+
+  afterEach(() => {
+    updateablesRegistry.clear()
+  })
+
+  test("answers with the course's own updateables, not another course's", async () => {
+    // A reloaded CourseDetails panel can only get this from the extension: re-deriving
+    // it would mean re-running checkForExerciseUpdates.
+    postUpdateables(COURSE_ID, [ExerciseIdentifier.from(101)])
+    postUpdateables(OTHER_COURSE_ID, [ExerciseIdentifier.from(202), ExerciseIdentifier.from(203)])
+
+    const actionContext = contextWithCourse()
+    const { panel, listener } = await mountSidePanel(actionContext)
+    const sourcePanel = {
+      id: 5,
+      type: "CourseDetails" as const,
+      courseId: COURSE_ID,
+      exerciseStatuses: { tmc: {}, mooc: {} },
+    }
+
+    await listener({ type: "requestCourseDetailsData", sourcePanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith({
+      type: "setUpdateables",
+      target: sourcePanel,
+      courseId: COURSE_ID,
+      exerciseIds: [ExerciseIdentifier.from(101)],
+    })
+  })
+
+  test("answers with an empty list for a course that has no updates", async () => {
+    const actionContext = contextWithCourse()
+    const { panel, listener } = await mountSidePanel(actionContext)
+    const sourcePanel = {
+      id: 5,
+      type: "CourseDetails" as const,
+      courseId: COURSE_ID,
+      exerciseStatuses: { tmc: {}, mooc: {} },
+    }
+
+    await listener({ type: "requestCourseDetailsData", sourcePanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "setUpdateables", exerciseIds: [] }),
     )
   })
 })

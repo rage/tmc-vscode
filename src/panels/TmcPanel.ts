@@ -43,6 +43,7 @@ import { getNonce } from "../utilities/getNonce"
 import { getUri } from "../utilities/getUri"
 import { postMessageToWebview, renderPanel } from "../utilities/panel"
 import { moocLoginRegistry } from "./moocLoginRegistry"
+import { updateablesRegistry } from "./updateablesRegistry"
 
 /**
  * Manages the rendering of the extension webview panels.
@@ -338,6 +339,16 @@ export class TmcPanel {
               type: "setCourseData",
               target: message.sourcePanel,
               courseData: course,
+            })
+            // Deriving this here would mean re-running `checkForExerciseUpdates`, which
+            // spawns several CLI processes, so it is answered from what was last posted.
+            // Targeted at the requesting panel although the schema is a broadcast one --
+            // `setCourseDisabledStatus` below does the same.
+            postMessageToWebview(webview, {
+              type: "setUpdateables",
+              target: message.sourcePanel,
+              courseId: message.sourcePanel.courseId,
+              exerciseIds: updateablesRegistry.get(message.sourcePanel.courseId),
             })
 
             langs.val.getCourseDetails(message.sourcePanel.courseId).then((apiCourse) => {

@@ -13,7 +13,7 @@
     CourseIdentifier,
     ExerciseIdentifier,
   } from "../shared/shared"
-  import { addMessageListener, savePanelState } from "../utilities/script"
+  import { addMessageListener } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -104,7 +104,6 @@
           }),
         )
         panel = { ...panel, exerciseStatuses }
-        savePanelState(panel)
         break
       }
       case "setUpdateables": {
@@ -119,7 +118,6 @@
       default:
         assertUnreachable(message)
     }
-    savePanelState(panel)
   })
 
   function openMyCourses() {

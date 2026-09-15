@@ -14,7 +14,7 @@
     match,
     unwrap,
   } from "../shared/shared"
-  import { addMessageListener, savePanelState } from "../utilities/script"
+  import { addMessageListener } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -34,17 +34,14 @@
     switch (message.type) {
       case "setMyCourses": {
         panel = { ...panel, courses: message.courses }
-        savePanelState(panel)
         break
       }
       case "setTmcDataPath": {
         panel = { ...panel, tmcDataPath: message.tmcDataPath }
-        savePanelState(panel)
         break
       }
       case "setTmcDataSize": {
         panel = { ...panel, tmcDataSize: message.tmcDataSize }
-        savePanelState(panel)
         break
       }
       case "selectedOrganization": {
@@ -93,7 +90,6 @@
             },
           )
           panel = { ...panel }
-          savePanelState(panel)
         }
         break
       }
@@ -102,7 +98,6 @@
         if (course) {
           unwrap(course).disabled = message.disabled
           panel = { ...panel }
-          savePanelState(panel)
         }
         break
       }
@@ -114,7 +109,6 @@
             [CourseIdentifier.toString(message.courseId)]: message.deadline,
           },
         }
-        savePanelState(panel)
         break
       }
       default:
