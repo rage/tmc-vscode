@@ -15,6 +15,7 @@ import {
   passingExercise,
   pendingManualExercise,
   pythonCourse,
+  TMC_ARCHIVE_MIME,
 } from "./fixtures"
 import { MOCK_SEEDED_ACCESS_TOKEN } from "./oauth"
 import { createMoocApp, expireMoocUpload } from "./router"
@@ -200,7 +201,11 @@ describe("mooc mock conformance", () => {
   // UUID, as the host requires; the returned `id` is the host's own.
   const uploadOne = async (exerciseId: string, bytes = [1, 2, 3]): Promise<AnswerFile> => {
     const form = new FormData()
-    form.append(randomUUID(), new Blob([new Uint8Array(bytes)]), "submission.tar.zst")
+    form.append(
+      randomUUID(),
+      new Blob([new Uint8Array(bytes)], { type: TMC_ARCHIVE_MIME }),
+      "submission.tar.zst",
+    )
     const res = await authFetch(api(`/exercises/${exerciseId}/files`), {
       method: "POST",
       body: form,
@@ -603,6 +608,36 @@ describe("mooc mock conformance", () => {
     assert.equal(data_files.length, 1)
     const bytes = await readAnswerFile(data_files[0]!)
     assert.deepEqual([...new Uint8Array(await bytes.arrayBuffer())], [7, 8, 9])
+  })
+
+  test("mime is the part's own Content-Type, echoed rather than inferred", async () => {
+    // The host echoes the part's declared type into `AnswerFile.mime` and checks
+    // nothing, so an archive the CLI sends untyped is stored `application/octet-stream`
+    // -- and the teacher-facing answer-file zip derives entry extensions from that.
+    // The extension is not the type: `submission.tar.zst` says nothing here.
+    const typed = await uploadOne(passingExercise.slide.exercise_id)
+    assert.equal(typed.mime, TMC_ARCHIVE_MIME)
+
+    const form = new FormData()
+    form.append(randomUUID(), new Blob([new Uint8Array([1])]), "submission.tar.zst")
+    const res = await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/files`), {
+      method: "POST",
+      body: form,
+    })
+    assert.equal(res.status, 200)
+    const { data_files } = (await res.json()) as { data_files: AnswerFile[] }
+    assert.equal(data_files[0]!.mime, "application/octet-stream")
+  })
+
+  test("mime and size survive a submit into the download", async () => {
+    const { slideSubmissionId } = await submit(passingExercise, [1, 2, 3, 4])
+    const res = await authFetch(api(`/submissions/${slideSubmissionId}/download`))
+    assert.equal(res.status, 200)
+    const { data_files } = (await res.json()) as { data_files: AnswerFile[] }
+    assert.equal(data_files[0]!.mime, TMC_ARCHIVE_MIME)
+    assert.equal(data_files[0]!.size_bytes, 4)
+    // Position in the answer, which an upload does not have yet.
+    assert.equal(data_files[0]!.order_number, 0)
   })
 
   test("an answer file's url is an expiring claim, not a path to the object", async () => {

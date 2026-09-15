@@ -20,6 +20,13 @@ import path from "path"
 // the mock's spec-exempt archive route. Overridable for out-of-process reuse.
 export const MOOC_MOCK_BASE_URL = process.env.MOOC_MOCK_BASE_URL ?? "http://localhost:4001"
 
+// Content-Type the CLI sends for a submission archive, and what the tmc exercise
+// service writes for the same archive made in its IFrame. The host echoes the part's
+// type into `AnswerFile.mime` without checking it, so nothing rejects a wrong one --
+// the only guard is that all three repos spell it the same. Keep in step with
+// tmc-langs-rust's ANSWER_ARCHIVE_MIME and services/tmc/src/util/answerArchive.ts.
+export const TMC_ARCHIVE_MIME = "application/x-zstd-compressed-tar"
+
 const RESOURCES = path.resolve(__dirname, "..", "resources", "test-python-course")
 
 export interface EditorPublicSpec {

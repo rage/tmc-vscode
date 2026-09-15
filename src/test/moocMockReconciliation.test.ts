@@ -5,6 +5,7 @@ import {
   notEnrolledExerciseId,
   passingExercise,
   pythonCourse,
+  TMC_ARCHIVE_MIME,
 } from "../../backend/mooc/fixtures"
 import type { ExerciseSlide } from "../../backend/mooc/fixtures"
 import { createMoocApp, resetMoocState } from "../../backend/mooc/router"
@@ -130,8 +131,13 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
   const uploadFile = async (exercise: typeof passingExercise): Promise<string> => {
     const form = new FormData()
     // Field name is a client-chosen UUID, as the host requires; the id it returns
-    // is its own and is what a submit names.
-    form.append(crypto.randomUUID(), new Blob([new Uint8Array([1, 2, 3])]), "submission.tar.zst")
+    // is its own and is what a submit names. The part's type is what the CLI sends,
+    // since the host echoes it into `AnswerFile.mime` unchecked.
+    form.append(
+      crypto.randomUUID(),
+      new Blob([new Uint8Array([1, 2, 3])], { type: TMC_ARCHIVE_MIME }),
+      "submission.tar.zst",
+    )
     const res = await fetch(api(`/exercises/${exercise.slide.exercise_id}/files`), {
       method: "POST",
       body: form,
@@ -254,6 +260,10 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     expect(body.data_files.length).toBe(1)
     expect(typeof body.data_files[0]!.id).toBe("string")
     expect(body.data_files[0]!.name).toBe("submission.tar.zst")
+    // The one value no repo can check for another: tmc-langs sends this Content-Type,
+    // the host stores it verbatim, and the tmc plugin writes the same one for an
+    // IFrame answer. A mismatch is only visible where all three meet.
+    expect(body.data_files[0]!.mime).toBe(TMC_ARCHIVE_MIME)
     expect(body.data_files[0]!.url.length).toBeGreaterThan(0)
   })
 
