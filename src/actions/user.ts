@@ -14,15 +14,17 @@ import type {
   WorkspaceExercise as WorkspaceTmcExercise,
 } from "../api/workspaceManager"
 import {
+  CLI_PROCESS_TIMEOUT,
   closedExercisesSettingKey,
   EXAM_TEST_RESULT,
   NOTIFICATION_DELAY,
+  SUBMIT_PROCESS_TIMEOUT,
 } from "../config/constants"
-import { BottleneckError, InitializationError } from "../errors"
+import { InitializationError } from "../errors"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../shared/shared"
 import { CourseIdentifier, LocalCourseData, LocalCourseExercise } from "../shared/shared"
-import { Logger, parseFeedbackQuestion } from "../utilities/"
+import { Logger, parseFeedbackQuestion, runSingleFlight } from "../utilities/"
 import { getActiveEditorExecutablePath } from "../window"
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse"
 import type { ActionContext } from "./types"
@@ -86,7 +88,7 @@ export async function testExercise(
   actionContext: ActionContext,
   exercise: WorkspaceTmcExercise,
 ): Promise<Result<void, Error>> {
-  const { langs, userData } = actionContext
+  const { dialog, langs, userData } = actionContext
   if (!(langs.ok && userData.ok)) {
     return new Err(new InitializationError("Extension was not initialized properly"))
   }
@@ -101,90 +103,101 @@ export async function testExercise(
     )
   }
 
-  const testRunId = randomPanelId()
-  // render panel
-  const panel: ExerciseTestsPanel = {
-    id: randomPanelId(),
-    type: "ExerciseTests",
-    course: course,
-    exercise: courseExercise,
-    exerciseUri: exercise.uri,
-    testRunId,
-  }
-  await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
-
-  let data: TestResultData = {
-    ...EXAM_TEST_RESULT,
-    id: LocalCourseExercise.getId(courseExercise),
-    disabled: course.data.disabled,
-    courseSlug: LocalCourseData.getCourseName(course),
-  }
-
-  if (!course.data.perhapsExamMode) {
-    const executablePath = getActiveEditorExecutablePath(actionContext)
-    const { process: testRunner, interrupt: testInterrupt } = langs.val.runTests(
-      exercise.uri.fsPath,
-      executablePath,
-    )
-    const { process: validationRunner, interrupt: validationInterrupt } = langs.val.runCheckstyle(
-      exercise.uri.fsPath,
-    )
-    testInterrupts.set(testRunId, [testInterrupt, validationInterrupt])
-    const exerciseName = exercise.exerciseSlug
-
-    Logger.info(`Running local tests and validations for ${exerciseName}`)
-    const testResults = await testRunner
-    Logger.info(`Tests finished for ${exerciseName}`)
-
-    if (testResults.err) {
-      TmcPanel.postMessage({
-        type: "testError",
-        target: panel,
-        error: testResults.val,
-      })
-      return Ok.EMPTY
-    }
-
-    const validationResults = await validationRunner
-    Logger.info(`Validations finished for ${exerciseName}`)
-
-    if (validationResults.err) {
-      TmcPanel.postMessage({
-        type: "testError",
-        target: panel,
-        error: validationResults.val,
-      })
-      return Ok.EMPTY
-    }
-
-    data = {
-      testResult: testResults.val,
-      id: LocalCourseExercise.getId(courseExercise),
-      courseSlug: LocalCourseData.getCourseName(course),
-      exerciseName,
-      tmcLogs: testResults.val.logs,
-      disabled: course.data.disabled,
-      styleValidationResult: validationResults.val,
-    }
-
-    if (TmcPanel.sidePanel === undefined) {
-      // user closed panel, re-render
+  // guards the run-tests + checkstyle pair as one unit against a second click
+  const exercisePath = exercise.uri.fsPath
+  return runSingleFlight(
+    {
+      key: `test:${exercisePath}`,
+      maxHoldMs: 2 * CLI_PROCESS_TIMEOUT + 30_000,
+      busyMessage: "Tests are already running for this exercise.",
+      onBusy: (message) => dialog.notification(message),
+    },
+    async () => {
+      const testRunId = randomPanelId()
+      // render panel
+      const panel: ExerciseTestsPanel = {
+        id: randomPanelId(),
+        type: "ExerciseTests",
+        course: course,
+        exercise: courseExercise,
+        exerciseUri: exercise.uri,
+        testRunId,
+      }
       await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
-    }
-    TmcPanel.postMessage({
-      type: "testResults",
-      target: panel,
-      testResults: data,
-    })
-  } else {
-    // exam
-    TmcPanel.postMessage({
-      type: "willNotRunTestsForExam",
-      target: panel,
-    })
-  }
 
-  return Ok.EMPTY
+      let data: TestResultData = {
+        ...EXAM_TEST_RESULT,
+        id: LocalCourseExercise.getId(courseExercise),
+        disabled: course.data.disabled,
+        courseSlug: LocalCourseData.getCourseName(course),
+      }
+
+      if (!course.data.perhapsExamMode) {
+        const executablePath = getActiveEditorExecutablePath(actionContext)
+        const { process: testRunner, interrupt: testInterrupt } = langs.val.runTests(
+          exercise.uri.fsPath,
+          executablePath,
+        )
+        const { process: validationRunner, interrupt: validationInterrupt } =
+          langs.val.runCheckstyle(exercise.uri.fsPath)
+        testInterrupts.set(testRunId, [testInterrupt, validationInterrupt])
+        const exerciseName = exercise.exerciseSlug
+
+        Logger.info(`Running local tests and validations for ${exerciseName}`)
+        const testResults = await testRunner
+        Logger.info(`Tests finished for ${exerciseName}`)
+
+        if (testResults.err) {
+          TmcPanel.postMessage({
+            type: "testError",
+            target: panel,
+            error: testResults.val,
+          })
+          return Ok.EMPTY
+        }
+
+        const validationResults = await validationRunner
+        Logger.info(`Validations finished for ${exerciseName}`)
+
+        if (validationResults.err) {
+          TmcPanel.postMessage({
+            type: "testError",
+            target: panel,
+            error: validationResults.val,
+          })
+          return Ok.EMPTY
+        }
+
+        data = {
+          testResult: testResults.val,
+          id: LocalCourseExercise.getId(courseExercise),
+          courseSlug: LocalCourseData.getCourseName(course),
+          exerciseName,
+          tmcLogs: testResults.val.logs,
+          disabled: course.data.disabled,
+          styleValidationResult: validationResults.val,
+        }
+
+        if (TmcPanel.sidePanel === undefined) {
+          // user closed panel, re-render
+          await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+        }
+        TmcPanel.postMessage({
+          type: "testResults",
+          target: panel,
+          testResults: data,
+        })
+      } else {
+        // exam
+        TmcPanel.postMessage({
+          type: "willNotRunTestsForExam",
+          target: panel,
+        })
+      }
+
+      return Ok.EMPTY
+    },
+  )
 }
 
 /**
@@ -196,7 +209,7 @@ export async function submitTmcExercise(
   actionContext: ActionContext,
   exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-  const { exerciseDecorationProvider, langs, userData } = actionContext
+  const { dialog, exerciseDecorationProvider, langs, userData } = actionContext
   if (!(langs.ok && userData.ok && exerciseDecorationProvider.ok)) {
     return new Err(new InitializationError("Extension was not initialized properly"))
   }
@@ -212,68 +225,83 @@ export async function submitTmcExercise(
     )
   }
 
-  const panel: ExerciseSubmissionPanel = {
-    id: randomPanelId(),
-    type: "ExerciseSubmission",
-    course,
-    exercise: courseExercise,
-  }
-  await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
-
-  const submissionResult = await langs.val.submitTmcExerciseAndWaitForResults(
-    LocalCourseExercise.getId(courseExercise),
-    exercise.uri.fsPath,
-    (progressPercent, message) => {
-      TmcPanel.postMessage({
-        type: "submissionStatusUpdate",
-        target: panel,
-        progressPercent,
-        message,
-      })
+  // Key shared with the paste actions, which must not overlap a submit of the same exercise.
+  // Held only until the result is posted: the panel offers Paste from that point on, so
+  // covering the course-update tail below would reject a legitimate click.
+  const exercisePath = exercise.uri.fsPath
+  const submitted = await runSingleFlight(
+    {
+      key: `submit:${exercisePath}`,
+      maxHoldMs: SUBMIT_PROCESS_TIMEOUT + 30_000,
+      busyMessage: "A submission for this exercise is already in progress.",
+      onBusy: (message) => dialog.notification(message),
     },
-    (url) => {
+    async () => {
+      const panel: ExerciseSubmissionPanel = {
+        id: randomPanelId(),
+        type: "ExerciseSubmission",
+        course,
+        exercise: courseExercise,
+      }
+      await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+
+      const submissionResult = await langs.val.submitTmcExerciseAndWaitForResults(
+        LocalCourseExercise.getId(courseExercise),
+        exercise.uri.fsPath,
+        (progressPercent, message) => {
+          TmcPanel.postMessage({
+            type: "submissionStatusUpdate",
+            target: panel,
+            progressPercent,
+            message,
+          })
+        },
+        (url) => {
+          TmcPanel.postMessage({
+            type: "submissionStatusUrl",
+            target: panel,
+            url,
+          })
+        },
+      )
+
+      if (submissionResult.err) {
+        TmcPanel.postMessage({
+          type: "submissionStatusError",
+          target: panel,
+          error: submissionResult.val,
+        })
+        return submissionResult
+      }
+
+      const statusData = submissionResult.val
+      if (statusData.status === "ok" && statusData.all_tests_passed) {
+        userData.val.setExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug).then(() => {
+          exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
+        })
+      }
+      const questions = statusData.feedback_questions
+        ? parseFeedbackQuestion(statusData.feedback_questions)
+        : []
+      if (TmcPanel.sidePanel === undefined) {
+        await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+      }
       TmcPanel.postMessage({
-        type: "submissionStatusUrl",
+        type: "submissionResult",
         target: panel,
-        url,
+        result: statusData,
+        questions,
       })
+
+      return Ok.EMPTY
     },
   )
-
-  if (submissionResult.err) {
-    if (submissionResult.val instanceof BottleneckError) {
-      Logger.warn("Submission was cancelled:", submissionResult.val)
-      return Ok.EMPTY
-    }
-    TmcPanel.postMessage({
-      type: "submissionStatusError",
-      target: panel,
-      error: submissionResult.val,
-    })
-    return submissionResult
+  if (submitted.err) {
+    return submitted
   }
-
-  const statusData = submissionResult.val
-  if (statusData.status === "ok" && statusData.all_tests_passed) {
-    userData.val.setExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug).then(() => {
-      exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
-    })
-  }
-  const questions = statusData.feedback_questions
-    ? parseFeedbackQuestion(statusData.feedback_questions)
-    : []
-  if (TmcPanel.sidePanel === undefined) {
-    await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
-  }
-  TmcPanel.postMessage({
-    type: "submissionResult",
-    target: panel,
-    result: statusData,
-    questions,
-  })
 
   const courseData = userData.val.getCourse(
-    LocalCourseData.getCourseId(panel.course),
+    LocalCourseData.getCourseId(course),
   ) as Readonly<LocalCourseData>
   const courseId = LocalCourseData.getCourseId(courseData)
   await checkForCourseUpdates(actionContext, courseId)
@@ -293,7 +321,7 @@ export async function submitMoocExercise(
   actionContext: ActionContext,
   exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-  const { exerciseDecorationProvider, langs, userData } = actionContext
+  const { dialog, exerciseDecorationProvider, langs, userData } = actionContext
   if (!(langs.ok && userData.ok && exerciseDecorationProvider.ok)) {
     return new Err(new InitializationError("Extension was not initialized properly"))
   }
@@ -314,66 +342,83 @@ export async function submitMoocExercise(
     return Err(new Error(`ID for exercise ${exercise.exerciseSlug} was not found.`))
   }
 
-  const panel: ExerciseSubmissionPanel = {
-    id: randomPanelId(),
-    type: "ExerciseSubmission",
-    course,
-    exercise: courseExercise,
-  }
-  await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+  // Key shared with the paste actions, which must not overlap a submit of the same exercise.
+  // Held only until the result is posted: the panel offers Paste from that point on, so
+  // covering the course-update tail below would reject a legitimate click.
+  const exercisePath = exercise.uri.fsPath
+  const submitted = await runSingleFlight(
+    {
+      key: `submit:${exercisePath}`,
+      maxHoldMs: SUBMIT_PROCESS_TIMEOUT + 30_000,
+      busyMessage: "A submission for this exercise is already in progress.",
+      onBusy: (message) => dialog.notification(message),
+    },
+    async () => {
+      const panel: ExerciseSubmissionPanel = {
+        id: randomPanelId(),
+        type: "ExerciseSubmission",
+        course,
+        exercise: courseExercise,
+      }
+      await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
 
-  const submissionResult = await langs.val.submitMoocExerciseAndWaitForResults(
-    exerciseId,
-    exercise.uri.fsPath,
-    (progressPercent, message) => {
+      const submissionResult = await langs.val.submitMoocExerciseAndWaitForResults(
+        exerciseId,
+        exercise.uri.fsPath,
+        (progressPercent, message) => {
+          TmcPanel.postMessage({
+            type: "submissionStatusUpdate",
+            target: panel,
+            progressPercent,
+            message,
+          })
+        },
+      )
+
+      if (submissionResult.err) {
+        TmcPanel.postMessage({
+          type: "submissionStatusError",
+          target: panel,
+          error: submissionResult.val,
+        })
+        return submissionResult
+      }
+
+      const status = submissionResult.val
+      if (
+        status !== "NoGradingYet" &&
+        status.Grading.grading_progress === "FullyGraded" &&
+        status.Grading.score_given !== null &&
+        status.Grading.score_given > 0
+      ) {
+        userData.val
+          .setMoocExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug)
+          .then(() => {
+            exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
+          })
+      }
+
+      if (TmcPanel.sidePanel === undefined) {
+        await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+      }
       TmcPanel.postMessage({
-        type: "submissionStatusUpdate",
+        type: "moocSubmissionResult",
         target: panel,
-        progressPercent,
-        message,
+        result: status,
       })
+
+      return Ok.EMPTY
     },
   )
-
-  if (submissionResult.err) {
-    if (submissionResult.val instanceof BottleneckError) {
-      Logger.warn("Submission was cancelled:", submissionResult.val)
-      return Ok.EMPTY
-    }
-    TmcPanel.postMessage({
-      type: "submissionStatusError",
-      target: panel,
-      error: submissionResult.val,
-    })
-    return submissionResult
+  if (submitted.err) {
+    return submitted
   }
-
-  const status = submissionResult.val
-  if (
-    status !== "NoGradingYet" &&
-    status.Grading.grading_progress === "FullyGraded" &&
-    status.Grading.score_given !== null &&
-    status.Grading.score_given > 0
-  ) {
-    userData.val.setMoocExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug).then(() => {
-      exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
-    })
-  }
-
-  if (TmcPanel.sidePanel === undefined) {
-    await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
-  }
-  TmcPanel.postMessage({
-    type: "moocSubmissionResult",
-    target: panel,
-    result: status,
-  })
 
   // Mirror the tail of `submitTmcExercise`. `setMoocExerciseAsPassed` above only
   // flips the local per-exercise flag; course point totals come from
   // `getMoocCourseProgress` via `updateCourse`, so without this refresh the
   // CourseDetails/MyCourses totals stay stale until the user refreshes by hand.
-  const courseId = LocalCourseData.getCourseId(panel.course)
+  const courseId = LocalCourseData.getCourseId(course)
   await checkForCourseUpdates(actionContext, courseId)
   vscode.commands.executeCommand("tmc.updateExercises", "silent")
 
@@ -402,22 +447,33 @@ export async function pasteTmcExercise(
     return Err(new Error("Failed to resolve exercise id"))
   }
 
-  const pasteResult = await langs.val.submitTmcExerciseToPaste(exerciseId, exercisePath)
-  if (pasteResult.err) {
-    dialog.errorNotification(
-      `Failed to send exercise to TMC Paste: ${pasteResult.val.message}.`,
-      pasteResult.val,
-    )
-    return pasteResult
-  }
+  // key shared with the submit actions, which must not overlap a paste of the same exercise
+  return runSingleFlight(
+    {
+      key: `submit:${exercisePath}`,
+      maxHoldMs: CLI_PROCESS_TIMEOUT + 30_000,
+      busyMessage: "A submission for this exercise is already in progress.",
+      onBusy: (message) => dialog.notification(message),
+    },
+    async () => {
+      const pasteResult = await langs.val.submitTmcExerciseToPaste(exerciseId, exercisePath)
+      if (pasteResult.err) {
+        dialog.errorNotification(
+          `Failed to send exercise to TMC Paste: ${pasteResult.val.message}.`,
+          pasteResult.val,
+        )
+        return pasteResult
+      }
 
-  const pasteLink = pasteResult.val
-  if (pasteLink === "") {
-    const message = "Didn't receive paste link from server."
-    return new Err(new Error(`Failed to send exercise to TMC Paste: ${message}`))
-  }
+      const pasteLink = pasteResult.val
+      if (pasteLink === "") {
+        const message = "Didn't receive paste link from server."
+        return new Err(new Error(`Failed to send exercise to TMC Paste: ${message}`))
+      }
 
-  return new Ok(pasteLink)
+      return new Ok(pasteLink)
+    },
+  )
 }
 
 export async function pasteMoocExercise(
@@ -437,24 +493,35 @@ export async function pasteMoocExercise(
     return Err(new Error("Failed to resolve exercise id"))
   }
 
-  const pasteResult = await langs.val.submitMoocExerciseToPaste(exerciseId, exercisePath)
-  if (pasteResult.err) {
-    dialog.errorNotification(
-      `Failed to send exercise to the courses.mooc.fi paste service: ${pasteResult.val.message}`,
-      pasteResult.val,
-    )
-    return pasteResult
-  }
+  // key shared with the submit actions, which must not overlap a paste of the same exercise
+  return runSingleFlight(
+    {
+      key: `submit:${exercisePath}`,
+      maxHoldMs: CLI_PROCESS_TIMEOUT + 30_000,
+      busyMessage: "A submission for this exercise is already in progress.",
+      onBusy: (message) => dialog.notification(message),
+    },
+    async () => {
+      const pasteResult = await langs.val.submitMoocExerciseToPaste(exerciseId, exercisePath)
+      if (pasteResult.err) {
+        dialog.errorNotification(
+          `Failed to send exercise to the courses.mooc.fi paste service: ${pasteResult.val.message}`,
+          pasteResult.val,
+        )
+        return pasteResult
+      }
 
-  const pasteLink = pasteResult.val
-  if (pasteLink === "") {
-    const message = "Didn't receive paste link from server."
-    return new Err(
-      new Error(`Failed to send exercise to the courses.mooc.fi paste service: ${message}`),
-    )
-  }
+      const pasteLink = pasteResult.val
+      if (pasteLink === "") {
+        const message = "Didn't receive paste link from server."
+        return new Err(
+          new Error(`Failed to send exercise to the courses.mooc.fi paste service: ${message}`),
+        )
+      }
 
-  return new Ok(pasteLink)
+      return new Ok(pasteLink)
+    },
+  )
 }
 
 /**

@@ -2,6 +2,7 @@ import type * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
+import { BottleneckError } from "../errors"
 import { Logger } from "../utilities"
 
 export async function testExercise(
@@ -26,6 +27,11 @@ export async function testExercise(
 
   const result = await actions.testExercise(context, actionContext, exercise)
   if (result.err) {
+    if (result.val instanceof BottleneckError) {
+      Logger.warn("Test run was rejected:", result.val)
+      return
+    }
+
     dialog.errorNotification("Exercise test run failed.", result.val)
   }
 }

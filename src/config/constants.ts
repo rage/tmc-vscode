@@ -30,6 +30,12 @@ export const NOTIFICATION_DELAY = 30 * 60 * 1000
 
 export const API_CACHE_LIFETIME = 5 * 60 * 1000
 export const CLI_PROCESS_TIMEOUT = 2 * 60 * 1000
+
+/**
+ * The CLI polls for test results with no timeout of its own, so this is the only bound on a submit;
+ * keep it above the worst realistic sandbox queue wait or a queued submission gets killed.
+ */
+export const SUBMIT_PROCESS_TIMEOUT = 2 * 60 * 60 * 1000
 export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000
 
 /** Minimum time that should be waited between submission attempts. */
