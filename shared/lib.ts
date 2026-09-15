@@ -227,6 +227,12 @@ export type ExtensionToWebview =
           target: TargetPanel<ExerciseTestsPanel>;
           error: BaseError;
       }
+    // submission failed before the panel could switch to ExerciseSubmission; re-enables
+    // the submit button, which would otherwise stay disabled with no feedback
+    | {
+          type: "submitFailed";
+          target: BroadcastPanel<ExerciseTestsPanel>;
+      }
     | {
           type: "pasteResult";
           target: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
@@ -438,6 +444,9 @@ export type WebviewToExtension =
     | {
           type: "requestInitializationErrors";
           sourcePanel: InitializationErrorHelpPanel;
+      }
+    | {
+          type: "ready";
       };
 
 /*
