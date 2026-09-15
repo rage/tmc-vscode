@@ -834,9 +834,9 @@ suite("tmc langs cli spec", function () {
     migrationTest(
       "should report nothing-to-download for a submission with no files, leaving the exercise alone",
       async function () {
-        // Only an exercise type with no files, or a service that declares no way to enumerate
-        // its answers' files, downloads as an empty list. The CLI always uploads before
-        // submitting, so this can only be reached by seeding it in the mock.
+        // Only an exercise type with no files at all downloads as an empty list. The CLI
+        // always uploads before submitting, so this can only be reached by seeding it in
+        // the mock.
         await tmc.downloadExercises(
           [ExerciseIdentifier.from(PASSING_EXERCISE_ID)],
           false,

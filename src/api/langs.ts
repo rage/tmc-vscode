@@ -809,9 +809,8 @@ export default class Langs {
    * Restores a past mooc submission at `exercisePath`.
    *
    * Resolves to `nothing-to-download` for a submission the server has no files
-   * for: an exercise type with none, or an exercise service that cannot
-   * enumerate its answers' files. Nothing on disk (or on the server) is touched
-   * in that case, `saveOldState` included.
+   * for, which only an exercise type with no files at all can be. Nothing on disk
+   * (or on the server) is touched in that case, `saveOldState` included.
    */
   public async downloadMoocOldSubmission(
     exerciseId: string,
