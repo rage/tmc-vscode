@@ -3,7 +3,7 @@
 ## [3.5.4] - 2026-09-15
 
 - Fixed the exercise panel getting stuck on "Loading TestMyCode..." when it had been hidden and reopened before its contents arrived.
-- Fixed submissions failing with "Access is denied (os error 5)" on Windows once an exercise had been submitted before, by updating TMC-langs to 0.39.5.
+- Fixed submissions failing with "Access is denied (os error 5)" on Windows once an exercise had been submitted before, by updating TMC-langs to 0.39.6.
 - Fixed overlapping test runs and submissions for the same exercise racing each other against the same directory; duplicate attempts are now rejected with a notification.
 
 ## [3.5.3] - 2026-06-12
