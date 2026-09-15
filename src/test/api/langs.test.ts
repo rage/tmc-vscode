@@ -37,6 +37,7 @@ function spyOnSpawn(langs: Langs): { args: string[] }[] {
 function stubSpawn(
   langs: Langs,
   respond: (callIndex: number, args: string[]) => Result<OutputData, BaseError>,
+  stderr = "",
 ): { args: string[] }[] {
   const calls: { args: string[] }[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,7 +45,11 @@ function stubSpawn(
     const args = (commandArgs as { args: string[] }).args
     const index = calls.length
     calls.push({ args })
-    return Ok({ interrupt: (): void => {}, result: Promise.resolve(respond(index, args)) })
+    return Ok({
+      interrupt: (): void => {},
+      result: Promise.resolve(respond(index, args)),
+      getStderr: (): string => stderr,
+    })
   })
   return calls
 }
@@ -297,6 +302,7 @@ suite("Langs class arg building", function () {
       })
       return Ok({
         interrupt: (): void => {},
+        getStderr: (): string => "",
         result: Promise.resolve(
           Ok(dataOutput("mooc-submission-status", "NoGradingYet")) as Result<OutputData, BaseError>,
         ),
@@ -489,6 +495,7 @@ suite("Langs class arg building", function () {
       })
       return Ok({
         interrupt: (): void => {},
+        getStderr: (): string => "",
         result: Promise.resolve(
           Ok(
             dataOutput("mooc-exercise-download", { downloaded: [], skipped: [], failed: [] }),
@@ -547,6 +554,7 @@ suite("Langs class arg building", function () {
       })
       return Ok({
         interrupt: (): void => {},
+        getStderr: (): string => "",
         result: Promise.resolve(
           Ok({
             "output-kind": "output-data",
@@ -785,6 +793,19 @@ suite("Langs error-kind mapping", function () {
       expect(result.err).toBe(true)
       expect(result.val).toBeInstanceOf(errorClass)
     })
+
+    // invalid-token is excluded deliberately: it means the stored credential was
+    // rejected, which is a clean signal that needs no diagnostics attached.
+    if (kind !== "invalid-token") {
+      test(`${String(kind)} carries the CLI trace and the process stderr`, async function () {
+        const langs = newLangs()
+        stubSpawn(langs, () => Ok(errorOutput(kind)), "stderr line")
+        const result = await langs.getEnrolledMoocCourseInstances()
+        const details = (result.val as BaseError).details ?? ""
+        expect(details).toContain("trace line")
+        expect(details).toContain("stderr line")
+      })
+    }
   }
 
   test("not-enrolled names the actual backend the failing command targeted", async function () {
@@ -1213,5 +1234,49 @@ suite("Langs process interruption on deactivate", function () {
 
     langs.killAllProcesses()
     expect(spawn.interrupted()).toBe(false)
+  })
+})
+
+// Drives `_executeLangsCommand` with a caller-chosen result and stderr, so the
+// assertions are about what reaches the returned error rather than about spawning.
+function stubSpawnWithStderr(
+  langs: Langs,
+  result: Result<OutputData, BaseError>,
+  stderr: string,
+): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation(() =>
+    Ok({
+      interrupt: (): void => {},
+      result: Promise.resolve(result),
+      getStderr: (): string => stderr,
+    }),
+  )
+}
+
+suite("Langs error diagnostics", function () {
+  test("an error response carries both the CLI trace and the process stderr", async function () {
+    const langs = newLangs()
+    stubSpawnWithStderr(
+      langs,
+      Ok({
+        "output-kind": "output-data",
+        status: "finished",
+        message: "something went wrong",
+        result: "error",
+        data: {
+          "output-data-kind": "error",
+          "output-data": { kind: "generic", trace: ["frame one", "frame two"] },
+        },
+      } as unknown as OutputData),
+      "thread 'main' panicked",
+    )
+
+    const result = await langs.getCourseDetails(CourseIdentifier.from(42))
+
+    expect(result.err).toBe(true)
+    const details = (result.val as BaseError).details ?? ""
+    expect(details).toContain("frame one")
+    expect(details).toContain("thread 'main' panicked")
   })
 })
