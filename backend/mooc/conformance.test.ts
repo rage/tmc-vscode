@@ -211,6 +211,15 @@ describe("mooc mock conformance", () => {
     return data_files[0]!
   }
 
+  // Reads an answer file through its own `url`. The url carries the fixed
+  // MOOC_MOCK_BASE_URL host, so its path AND query (the claim lives in the query) are
+  // replayed against this test server, which listens on a random port. fetch follows
+  // the claim route's relative redirect to the object.
+  const readAnswerFile = (file: AnswerFile): Promise<Response> => {
+    const url = new URL(file.url)
+    return fetch(`${base}${url.pathname}${url.search}`)
+  }
+
   // Submits a file answer naming `dataFiles`. `ids` overrides the slide/task the exercise
   // itself would name, for the ownership checks that need a foreign or unknown one.
   const postSubmit = (
@@ -592,8 +601,49 @@ describe("mooc mock conformance", () => {
     assert.equal(res.status, 200)
     const { data_files } = (await res.json()) as { data_files: AnswerFile[] }
     assert.equal(data_files.length, 1)
-    const bytes = await fetch(`${base}${new URL(data_files[0]!.url).pathname}`)
+    const bytes = await readAnswerFile(data_files[0]!)
     assert.deepEqual([...new Uint8Array(await bytes.arrayBuffer())], [7, 8, 9])
+  })
+
+  test("an answer file's url is an expiring claim, not a path to the object", async () => {
+    // The host mints a one-hour capability for that one file and redirects to the
+    // store; a client must treat the url as opaque and follow the redirect. Asserting
+    // the shape is what keeps the mock from handing back a plain path, which would let
+    // a client that persisted or rewrote the url pass here and fail in production.
+    const uploaded = await uploadOne(passingExercise.slide.exercise_id, [4, 5, 6])
+    const url = new URL(uploaded.url)
+    assert.equal(url.pathname, `/api/v0/files/claimed/${uploaded.id}`)
+    assert.ok(url.searchParams.get("download-claim"), "the url must carry a claim")
+
+    const redirect = await fetch(`${base}${url.pathname}${url.search}`, { redirect: "manual" })
+    assert.equal(redirect.status, 302)
+    assert.equal(redirect.headers.get("cache-control"), "max-age=300, private")
+    // Relative, so it resolves against whichever host the request arrived on.
+    assert.ok(!redirect.headers.get("location")?.startsWith("http"))
+
+    const followed = await readAnswerFile(uploaded)
+    assert.equal(followed.status, 200)
+    assert.deepEqual([...new Uint8Array(await followed.arrayBuffer())], [4, 5, 6])
+  })
+
+  test("a claim URL without a claim, or with a forged one, opens nothing", async () => {
+    const uploaded = await uploadOne(passingExercise.slide.exercise_id)
+    const bare = await fetch(`${base}/api/v0/files/claimed/${uploaded.id}`)
+    assert.equal(bare.status, 400)
+    const forged = await fetch(
+      `${base}/api/v0/files/claimed/${uploaded.id}?download-claim=9999999999.${"0".repeat(64)}`,
+    )
+    assert.equal(forged.status, 422)
+  })
+
+  test("a claim minted for one file does not open another", async () => {
+    // The claim names its file, so replaying it against a different id must fail --
+    // otherwise one answer's url would be a handle on every stored file.
+    const mine = await uploadOne(passingExercise.slide.exercise_id)
+    const other = await uploadOne(passingExercise.slide.exercise_id)
+    const claim = new URL(mine.url).search
+    const res = await fetch(`${base}/api/v0/files/claimed/${other.id}${claim}`)
+    assert.equal(res.status, 422)
   })
 
   test("one bad id fails the whole submit", async () => {
@@ -657,10 +707,7 @@ describe("mooc mock conformance", () => {
     const { data_files } = (await downloadRes.json()) as { data_files: AnswerFile[] }
     assert.equal(data_files.length, 1)
     assert.equal(data_files[0]!.name, "submission.tar.zst")
-    // The url carries the fixed MOOC_MOCK_BASE_URL host; fetch its path against
-    // this test server (on a random port) to read the bytes.
-    const filePath = new URL(data_files[0]!.url).pathname
-    const fileRes = await fetch(`${base}${filePath}`)
+    const fileRes = await readAnswerFile(data_files[0]!)
     assert.equal(fileRes.status, 200)
     const fileBytes = new Uint8Array(await fileRes.arrayBuffer())
     assert.deepEqual([...fileBytes], [1, 2, 3])
