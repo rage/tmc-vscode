@@ -71,6 +71,11 @@
       }
       case "testError": {
         testError = message.error
+        submitting = false
+        break
+      }
+      case "submitFailed": {
+        submitting = false
         break
       }
       case "willNotRunTestsForExam": {
@@ -91,8 +96,9 @@
       type: "closeSidePanel",
     })
   }
-  // Guards against a rapid double-click sending two submits; the submission
-  // panel replaces this one, so the flag never needs resetting.
+  // Guards against a rapid double-click sending two submits. Normally the submission
+  // panel replaces this one, but a submit that never starts leaves this panel on
+  // screen, so `submitFailed` resets the flag.
   let submitting = $state(false)
   function submit() {
     if (submitting) {

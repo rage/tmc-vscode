@@ -65,6 +65,30 @@ if (typeof Element !== "undefined" && typeof Element.prototype.animate !== "func
   Element.prototype.animate = animateStub
 }
 
+// jsdom's ElementInternals omits the form-associated methods, which `@vscode-elements`
+// form controls call on every update. The resulting TypeError escapes as a global
+// `error` event, so App renders its crash view instead of the panel under test.
+if (
+  typeof ElementInternals !== "undefined" &&
+  typeof ElementInternals.prototype.setFormValue !== "function"
+) {
+  ElementInternals.prototype.setFormValue = () => {}
+  ElementInternals.prototype.setValidity = () => {}
+}
+
+// `<vscode-icon>` warns when the codicons stylesheet is missing, passing the element
+// itself as `%o`. Node's inspect of that element reaches `document.styleSheets`, whose
+// jsdom `href` getter throws on a non-branded receiver; the throw escapes as a global
+// `error` event, so App renders its crash view instead of the panel under test. The
+// stylesheet only has to exist -- nothing here asserts on glyphs.
+if (typeof document !== "undefined" && !document.querySelector("#vscode-codicon-stylesheet")) {
+  const codicons = document.createElement("link")
+  codicons.id = "vscode-codicon-stylesheet"
+  codicons.rel = "stylesheet"
+  codicons.href = "codicon.css"
+  document.head.append(codicons)
+}
+
 /** The messages the component under test has posted back to the extension host. */
 export const postedMessages = vsCodeApi.postMessage
 

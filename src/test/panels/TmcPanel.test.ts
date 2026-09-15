@@ -6,6 +6,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import { UserData } from "../../config/userdata"
 import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import { randomPanelId, TmcPanel } from "../../panels/TmcPanel"
+import { makeTmcKind } from "../../shared/shared"
 import Storage from "../../storage"
 import type UI from "../../ui/ui"
 import { MOOC_EXERCISE_UUID, MOOC_INSTANCE_UUID, moocCourseInstance } from "../fixtures/tmc"
@@ -31,7 +32,9 @@ function createFakeWebviewPanel(): {
   const webview = {
     html: "",
     cspSource: "self",
-    postMessage: vi.fn(),
+    // the real API resolves to whether the webview received it; `postMessageToWebview`
+    // reads that to warn about undelivered messages
+    postMessage: vi.fn(() => Promise.resolve(true)),
     asWebviewUri: (uri: vscode.Uri) => uri,
     onDidReceiveMessage: vi.fn((callback: (message: unknown) => Promise<void>) => {
       listener = callback
@@ -338,5 +341,123 @@ suite("TmcPanel addMoocCourse handling", () => {
       expect.any(Error),
     )
     expect(userData.getMoocCourses()).toEqual([])
+  })
+})
+
+suite("TmcPanel ready handshake", () => {
+  test("resends the last rendered panel", async () => {
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "ready" })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setPanel",
+        panel: expect.objectContaining({ type: "MyCourses" }),
+      }),
+    )
+  })
+
+  test("resends whichever panel was rendered last, not the one mounted with", async () => {
+    // A stale _lastPanel is the way this feature makes things worse than the bug it
+    // fixes, so every render path has to keep it current.
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "openCourseDetails", courseId: makeTmcKind({ courseId: 1 }) })
+    vi.mocked(panel.webview.postMessage).mockClear()
+    await listener({ type: "ready" })
+
+    const setPanels = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([message]) => message as { type: string; panel?: { type: string } })
+      .filter((message) => message.type === "setPanel")
+    expect(setPanels).toHaveLength(1)
+    expect(setPanels[0]?.panel?.type).toBe("CourseDetails")
+  })
+
+  test("replays a buffered message for the current panel, after the panel itself", async () => {
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    const lastPanel = (TmcPanel.sidePanel as unknown as { _lastPanel: { id: number } })._lastPanel
+    TmcPanel.postMessage({
+      type: "setTmcDataSize",
+      target: { id: lastPanel.id, type: "MyCourses" },
+      tmcDataSize: "1.2 MB",
+    })
+    vi.mocked(panel.webview.postMessage).mockClear()
+
+    await listener({ type: "ready" })
+
+    const types = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([message]) => (message as { type: string }).type)
+    expect(types).toEqual(["setPanel", "setTmcDataSize"])
+  })
+
+  test("does not replay a message aimed at a panel that is no longer shown", async () => {
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    // an id that was never rendered here; buffering it would resend it to a panel
+    // that cannot interpret it
+    TmcPanel.postMessage({
+      type: "setTmcDataSize",
+      target: { id: 9999, type: "MyCourses" },
+      tmcDataSize: "1.2 MB",
+    })
+    vi.mocked(panel.webview.postMessage).mockClear()
+
+    await listener({ type: "ready" })
+
+    const types = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([message]) => (message as { type: string }).type)
+    expect(types).toEqual(["setPanel"])
+  })
+
+  test("rendering a new panel drops the previous panel's buffered messages", async () => {
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    const lastPanel = (TmcPanel.sidePanel as unknown as { _lastPanel: { id: number } })._lastPanel
+    TmcPanel.postMessage({
+      type: "setTmcDataSize",
+      target: { id: lastPanel.id, type: "MyCourses" },
+      tmcDataSize: "1.2 MB",
+    })
+    await listener({ type: "openCourseDetails", courseId: makeTmcKind({ courseId: 1 }) })
+    vi.mocked(panel.webview.postMessage).mockClear()
+
+    await listener({ type: "ready" })
+
+    const types = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([message]) => (message as { type: string }).type)
+    expect(types).toEqual(["setPanel"])
+  })
+
+  test("a webview that has rendered nothing gets nothing resent", async () => {
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+    ;(TmcPanel.sidePanel as unknown as { _lastPanel: undefined })._lastPanel = undefined
+
+    await listener({ type: "ready" })
+
+    expect(panel.webview.postMessage).not.toHaveBeenCalled()
+  })
+
+  test("keeps hidden webviews alive, so a reveal does not reload them", async () => {
+    const actionContext = createMockActionContext()
+    await mountSidePanel(actionContext)
+
+    expect(vi.mocked(vscode.window.createWebviewPanel)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ retainContextWhenHidden: true }),
+    )
   })
 })

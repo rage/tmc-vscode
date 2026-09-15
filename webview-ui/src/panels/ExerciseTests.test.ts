@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/svelte"
+import { tick } from "svelte"
 import type { Uri } from "vscode"
 
 import type { ExerciseTestsPanel } from "../shared/shared"
@@ -60,5 +61,89 @@ suite("ExerciseTests panel", () => {
       exercise: panel.exercise,
       exerciseUri,
     })
+  })
+
+  test("a second click while a submit is pending posts nothing", async () => {
+    render(ExerciseTests, { props: { panel } })
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: "testResults",
+          target: { type: "ExerciseTests", id: panel.id },
+          testResults: testResultData(),
+        },
+      }),
+    )
+    expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
+
+    const submit = getButton("Submit to server")
+    submit.click()
+    postedMessages.mockClear()
+    submit.click()
+
+    expect(postedMessages).not.toHaveBeenCalled()
+  })
+
+  test("submitFailed re-enables submitting, since no submission panel replaced this one", async () => {
+    render(ExerciseTests, { props: { panel } })
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: "testResults",
+          target: { type: "ExerciseTests", id: panel.id },
+          testResults: testResultData(),
+        },
+      }),
+    )
+    expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
+
+    const submit = getButton("Submit to server")
+    submit.click()
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: { type: "submitFailed", target: { type: "ExerciseTests" } },
+      }),
+    )
+    await tick()
+
+    postedMessages.mockClear()
+    getButton("Submit to server").click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "submitExercise",
+      course: panel.course,
+      exercise: panel.exercise,
+      exerciseUri,
+    })
+  })
+
+  test("testError re-enables submitting", async () => {
+    render(ExerciseTests, { props: { panel } })
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: "testResults",
+          target: { type: "ExerciseTests", id: panel.id },
+          testResults: testResultData(),
+        },
+      }),
+    )
+    expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
+    getButton("Submit to server").click()
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: "testError",
+          target: { type: "ExerciseTests", id: panel.id },
+          error: new Error("boom"),
+        },
+      }),
+    )
+    await tick()
+
+    postedMessages.mockClear()
+    getButton("Submit to server").click()
+    expect(postedMessages).toHaveBeenCalledWith(expect.objectContaining({ type: "submitExercise" }))
   })
 })

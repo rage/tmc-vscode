@@ -59,21 +59,33 @@ export class TmcPanel {
   // if true, this is the main panel, otherwise this is the side panel
   private readonly _isMain: boolean
 
+  // resent on "ready" so a reloaded webview can recover. Per-instance: the main and
+  // side panels show different panels.
+  private _lastPanel: Panel | undefined
+
+  // latest message per type targeted at _lastPanel's id, resent after it on "ready"
+  // so a reload doesn't lose one-shot results that already fired
+  private _messageBuffer = new Map<string, ExtensionToWebview>()
+
   private _disposables: Disposable[] = []
 
   // sends a message to the main and side panels
   public static async postMessage(...messages: ExtensionToWebview[]): Promise<void> {
-    Logger.info("Posting message(s) to webview", JSON.stringify(messages, null, 2))
-    const mainWebview = TmcPanel.mainPanel?._panel.webview
-    const sideWebview = TmcPanel.sidePanel?._panel.webview
     for (const message of messages) {
-      if (mainWebview) {
-        mainWebview.postMessage(message)
-      }
-      if (sideWebview) {
-        sideWebview.postMessage(message)
-      }
+      TmcPanel.mainPanel?._postMessage(message, "Main webview")
+      TmcPanel.sidePanel?._postMessage(message, "Side webview")
     }
+  }
+
+  private _postMessage(message: ExtensionToWebview, context: string): void {
+    // Only id-carrying targets are buffered. A broadcast target has no id, and the
+    // delta messages that use one (setUpdateables, setNewExercises) are posted once
+    // per course, so they would all collapse onto one key and only the last would
+    // survive; those are restored from the extension's own state instead.
+    if ("id" in message.target && message.target.id === this._lastPanel?.id) {
+      this._messageBuffer.set(`${message.target.id}:${message.type}`, message)
+    }
+    postMessageToWebview(this._panel.webview, message, context)
   }
 
   // renders the `panel` in the main panel
@@ -111,7 +123,8 @@ export class TmcPanel {
       moocLoginRegistry.cancelAll()
     }
     if (TmcPanel.sidePanel !== undefined) {
-      await renderPanel(panel, TmcPanel.sidePanel._panel.webview)
+      Logger.info(`Revealing existing side panel for "${panel.type}"`)
+      await TmcPanel.sidePanel._renderPanel(panel)
       TmcPanel.sidePanel._panel.reveal(column, false)
     } else {
       const currentPanel = await TmcPanel.renderNew(
@@ -145,6 +158,9 @@ export class TmcPanel {
     }
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", column, {
       enableScripts: true,
+      // otherwise a hidden-then-revealed panel reloads and drops messages posted
+      // before the reveal
+      retainContextWhenHidden: true,
       localResourceRoots: [
         Uri.joinPath(extensionUri, "out"),
         Uri.joinPath(extensionUri, "webview-ui/public/build"),
@@ -159,7 +175,7 @@ export class TmcPanel {
       actionContext,
       isMain,
     )
-    await renderPanel(panel, currentPanel._panel.webview)
+    await currentPanel._renderPanel(panel)
     return currentPanel
   }
 
@@ -209,6 +225,13 @@ export class TmcPanel {
         disposable.dispose()
       }
     }
+  }
+
+  // remembers `panel` so "ready" can resend it
+  private async _renderPanel(panel: Panel): Promise<void> {
+    this._lastPanel = panel
+    this._messageBuffer.clear()
+    await renderPanel(panel, this._panel.webview)
   }
 
   private _getWebviewContent(webview: Webview, extensionUri: Uri): string {
@@ -284,6 +307,26 @@ export class TmcPanel {
         // zod strips unknown fields, so the original message is used instead of the parse result
         const message = untrustedMessage as WebviewToExtension
         switch (message.type) {
+          case "ready": {
+            Logger.info(
+              `Received "ready" from ${this._isMain ? "main" : "side"} webview` +
+                (this._lastPanel
+                  ? `, resending panel "${this._lastPanel.type}"`
+                  : ", no panel to resend"),
+            )
+            if (this._lastPanel) {
+              // Resending MoocLogin deliberately restarts the device flow: the reloaded
+              // webview has lost the code it was showing, and MoocLogin's mount posts
+              // `moocLogin` again, which interrupts the now-unreachable CLI process.
+              // not this._renderPanel(), which would clear the buffer we're about to resend
+              await renderPanel(this._lastPanel, webview)
+              const context = this._isMain ? "Main webview" : "Side webview"
+              for (const buffered of this._messageBuffer.values()) {
+                postMessageToWebview(webview, buffered, context)
+              }
+            }
+            break
+          }
           case "requestCourseDetailsData": {
             const { langs, userData, workspaceManager } = actionContext
             if (!(langs.ok && userData.ok && workspaceManager.ok)) {
@@ -539,15 +582,12 @@ export class TmcPanel {
             break
           }
           case "openCourseDetails": {
-            await renderPanel(
-              {
-                id: randomPanelId(),
-                type: "CourseDetails",
-                courseId: message.courseId,
-                exerciseStatuses: { tmc: {}, mooc: {} },
-              },
-              webview,
-            )
+            await this._renderPanel({
+              id: randomPanelId(),
+              type: "CourseDetails",
+              courseId: message.courseId,
+              exerciseStatuses: { tmc: {}, mooc: {} },
+            })
             break
           }
           case "selectPlatform": {
@@ -582,14 +622,11 @@ export class TmcPanel {
               )
             ) {
               await removeCourse(actionContext, message.id)
-              await renderPanel(
-                {
-                  id: randomPanelId(),
-                  type: "MyCourses",
-                  courseDeadlines: {},
-                },
-                webview,
-              )
+              await this._renderPanel({
+                id: randomPanelId(),
+                type: "MyCourses",
+                courseDeadlines: {},
+              })
               actionContext.dialog.notification(`${courseName} was removed from courses.`)
             }
             break
@@ -603,14 +640,11 @@ export class TmcPanel {
             break
           }
           case "openMyCourses": {
-            await renderPanel(
-              {
-                id: randomPanelId(),
-                type: "MyCourses",
-                courseDeadlines: {},
-              },
-              webview,
-            )
+            await this._renderPanel({
+              id: randomPanelId(),
+              type: "MyCourses",
+              courseDeadlines: {},
+            })
             break
           }
           case "closeExercises": {
@@ -652,15 +686,12 @@ export class TmcPanel {
             if (updateResult.err) {
               actionContext.dialog.errorNotification("Failed to update course.", updateResult.val)
             }
-            await renderPanel(
-              {
-                id: randomPanelId(),
-                type: "CourseDetails",
-                courseId,
-                exerciseStatuses: { tmc: {}, mooc: {} },
-              },
-              webview,
-            )
+            await this._renderPanel({
+              id: randomPanelId(),
+              type: "CourseDetails",
+              courseId,
+              exerciseStatuses: { tmc: {}, mooc: {} },
+            })
             break
           }
           case "selectCourse": {
@@ -698,6 +729,8 @@ export class TmcPanel {
             break
           }
           case "relayToWebview": {
+            // Deliberately unbuffered: this is a live hand-off between two open
+            // webviews, so replaying it into a reloaded one would be meaningless.
             if (this._isMain) {
               // relay msg from main panel to side panel
               if (TmcPanel.sidePanel) {
@@ -728,7 +761,21 @@ export class TmcPanel {
           case "submitExercise": {
             // commands.submitExercise renders its own ExerciseSubmission side panel;
             // a pre-render here would just flash a second one that's immediately replaced.
-            commands.submitExercise(extensionContext, actionContext, message.exerciseUri)
+            // When it fails there is no such panel, so the ExerciseTests panel still on
+            // screen has to be told, or its Submit button stays disabled forever.
+            try {
+              const result = await commands.submitExercise(
+                extensionContext,
+                actionContext,
+                message.exerciseUri,
+              )
+              if (result.err) {
+                TmcPanel.postMessage({ type: "submitFailed", target: { type: "ExerciseTests" } })
+              }
+            } catch (error) {
+              Logger.error("Unexpected error during exercise submission", error)
+              TmcPanel.postMessage({ type: "submitFailed", target: { type: "ExerciseTests" } })
+            }
             break
           }
           case "pasteExercise": {

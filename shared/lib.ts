@@ -805,6 +805,12 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     target: targetPanelSchema("ExerciseTests"),
     error: z.custom<BaseError>(),
   }),
+  // the submit never started, so the panel it would have opened never appears;
+  // tells the ExerciseTests panel still on screen to re-enable its buttons
+  z.object({
+    type: z.literal("submitFailed"),
+    target: broadcastPanelSchema("ExerciseTests"),
+  }),
   z.object({
     type: z.literal("pasteResult"),
     target: targetPanelSchema("ExerciseTests", "ExerciseSubmission"),
@@ -981,6 +987,11 @@ export type WebviewToWebview = z.infer<typeof WebviewToWebviewSchema>
  * Handled by the extension host in `TmcPanel`.
  */
 export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
+  // a reloaded webview has lost whatever was already posted to it; asks the
+  // extension to resend the current panel
+  z.object({
+    type: z.literal("ready"),
+  }),
   z.object({
     type: z.literal("requestCourseDetailsData"),
     sourcePanel: CourseDetailsPanelSchema,

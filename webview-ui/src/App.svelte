@@ -95,6 +95,10 @@
     }
   })
 
+  // A reload loses whatever the extension already posted, so ask it to resend. Posted
+  // after the listener above is registered, or the reply could arrive unheard.
+  vscode.postMessage({ type: "ready" })
+
   // "transient" panels which shouldn't be saved/loaded
   function isTransient(panel: Panel) {
     return (
