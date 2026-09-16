@@ -22,14 +22,13 @@ import {
 } from "../config/constants"
 import { InitializationError } from "../errors"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
-import type { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../shared/shared"
-import {
+import type {
   CourseIdentifier,
-  LocalCourseData,
-  LocalCourseExercise,
-  match,
-  toWebviewError,
+  ExerciseSubmissionPanel,
+  ExerciseTestsPanel,
+  TestResultData,
 } from "../shared/shared"
+import { LocalCourseData, LocalCourseExercise, match, toWebviewError } from "../shared/shared"
 import { Logger, parseFeedbackQuestion, runSingleFlight } from "../utilities/"
 import { getActiveEditorExecutablePath } from "../window"
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse"
@@ -810,7 +809,7 @@ export async function removeCourse(
     )
     return
   }
-  ui.treeDP.removeChildWithId("myCourses", CourseIdentifier.toString(id))
+  ui.treeDP.refresh()
 
   if (
     workspaceManager.val.activeCourse === courseName &&

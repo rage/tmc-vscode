@@ -65,15 +65,17 @@ for (const exercise of exercises) {
     await vsCodeTest.step("run tests", async () => {
       const expectedString = expectedResultInTestView(exercise.expected_result)
       await page.getByText(exercise.file_contents).click()
-      const successMessage = testResultsPage
+      const resultMessage = testResultsPage
         .getWebview()
         .getByRole("heading", { name: expectedString })
-      await expect(successMessage).toBeHidden()
-      // wait for the extension to recognise that we have opened an exercise
-      // oxlint-disable-next-line playwright/no-wait-for-timeout -- deliberate settle-delay while polling flaky VS Code webview UI
-      await page.waitForTimeout(500)
-      await page.getByLabel("Run Tests (Ctrl+Shift+T)").click()
-      await expect(successMessage).toBeVisible()
+      await expect(resultMessage).toBeHidden()
+      // The editor-title action is contributed under `test-my-code:WorkspaceActive`
+      // (package.json), so it renders only once the extension has recognised the
+      // open exercise.
+      const runTests = page.getByLabel("Run Tests (Ctrl+Shift+T)")
+      await expect(runTests).toBeVisible()
+      await runTests.click()
+      await expect(resultMessage).toBeVisible()
     })
 
     await vsCodeTest.step("submit exercise", async () => {

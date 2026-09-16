@@ -1187,8 +1187,19 @@ async function unwrapResult<T>(result: Promise<Result<T, Error>>): Promise<T> {
   return res.val
 }
 
+const SERVER_READY_MARKER = "Server listening to"
+const SERVER_START_TIMEOUT_MS = 20_000
+
+/**
+ * Starts the bundled mock backend (backend/index.ts) and resolves once it
+ * reports that it is listening. Rejects, having killed it, if it exits first or
+ * stays silent past {@link SERVER_START_TIMEOUT_MS}, so a backend that cannot
+ * start fails the suite instead of hanging it.
+ *
+ * `extraEnv` is layered over the current environment, not a replacement for it;
+ * a second instance needs at least a `PORT`.
+ */
 async function startServer(extraEnv: Record<string, string> = {}): Promise<cp.ChildProcess> {
-  let ready = false
   const backendPath = path.join(__dirname, "..", "backend")
   console.log("Running pnpm start at", backendPath, "with env", extraEnv)
   const server = cp.spawn("pnpm", ["start"], {
@@ -1201,25 +1212,59 @@ async function startServer(extraEnv: Record<string, string> = {}): Promise<cp.Ch
     detached: process.platform !== "win32",
   })
   console.info("[server] starting...")
-  server.stdout.on("data", (chunk) => {
-    console.info(`[server] ${chunk.toString()}`)
-    if (chunk.toString().startsWith("Server listening to")) {
-      ready = true
-    }
+
+  let stdout = ""
+  const listening = new Promise<void>((resolve) => {
+    server.stdout.on("data", (chunk: Buffer) => {
+      const text = chunk.toString()
+      console.info(`[server] ${text}`)
+      // Matched against everything read so far: the marker can straddle a chunk
+      // boundary and need not start one.
+      stdout += text
+      if (stdout.includes(SERVER_READY_MARKER)) {
+        resolve()
+      }
+    })
+  })
+  // An unread stderr pipe eventually fills and blocks the child, and it is
+  // where a backend that fails to start says why.
+  server.stderr.on("data", (chunk: Buffer) => console.error(`[server] ${chunk.toString()}`))
+
+  let onExit: ((code: number | null, signal: NodeJS.Signals | null) => void) | undefined
+  const exited = new Promise<never>((_resolve, reject) => {
+    onExit = (code, signal) =>
+      reject(
+        new Error(
+          `The mock backend exited before it was listening (code ${code}, signal ${signal})`,
+        ),
+      )
+    server.once("exit", onExit)
+  })
+  let deadline: NodeJS.Timeout | undefined
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    deadline = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `The mock backend did not report "${SERVER_READY_MARKER}" within ${SERVER_START_TIMEOUT_MS}ms`,
+          ),
+        ),
+      SERVER_START_TIMEOUT_MS,
+    )
   })
 
-  const timeout = setTimeout(() => {
-    throw new Error("Failed to start server")
-  }, 20000)
-
-  // oxlint-disable-next-line no-unmodified-loop-condition -- `ready` is flipped by the server's stdout listener while we poll
-  while (!ready) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 1000)
-    })
+  try {
+    await Promise.race([listening, exited, timedOut])
+  } catch (error) {
+    await stopServer(server)
+    throw error
+  } finally {
+    clearTimeout(deadline)
+    // Without this, the teardown kill rejects a promise nobody is awaiting.
+    if (onExit) {
+      server.removeListener("exit", onExit)
+    }
   }
-
-  clearTimeout(timeout)
   return server
 }
 

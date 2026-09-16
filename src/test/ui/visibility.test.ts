@@ -1,5 +1,3 @@
-import * as assert from "assert"
-
 import { Visibility } from "../../ui/treeview/visibility"
 import type { VisibilityGroup } from "../../ui/types"
 
@@ -21,89 +19,71 @@ function before(): {
 suite("Treeview Visibility tests", () => {
   test("Registered action ids must be unique", () => {
     const { visibility, g0, g1 } = before()
-    assert.doesNotThrow(() => visibility.registerAction("a0", [g0]))
-    assert.throws(() => visibility.registerAction("a0", [g0]))
-    assert.throws(() => visibility.registerAction("a0", [g1]))
+    visibility.registerAction("a0", [g0])
+    expect(() => visibility.registerAction("a0", [g0])).toThrow()
+    expect(() => visibility.registerAction("a0", [g1])).toThrow()
   })
 
   test("Action with no dependencies always visible", () => {
     const { visibility } = before()
-    assert.doesNotThrow(() => visibility.registerAction("a0", []))
-    assert.strictEqual(visibility.getVisible("a0"), true)
+    visibility.registerAction("a0", [])
+    expect(visibility.getVisible("a0")).toBe(true)
   })
 
   test("Single group dependency works correctly", () => {
     const { visibility, g0 } = before()
-    assert.doesNotThrow(() => visibility.registerAction("a0", [g0]))
-    assert.strictEqual(visibility.getVisible("a0"), false)
-    let changes: [string, boolean][] = []
-    assert.doesNotThrow(() => {
-      changes = visibility.setGroupVisible(g0)
-    })
-    assert.deepStrictEqual(changes, [["a0", true]])
-    assert.strictEqual(visibility.getVisible("a0"), true)
+    visibility.registerAction("a0", [g0])
+    expect(visibility.getVisible("a0")).toBe(false)
+    expect(visibility.setGroupVisible(g0)).toEqual([["a0", true]])
+    expect(visibility.getVisible("a0")).toBe(true)
   })
 
   test("Negated group dependency works correctly", () => {
     const { visibility, g0 } = before()
-    assert.doesNotThrow(() => visibility.registerAction("a0", [g0.not]))
-    assert.strictEqual(visibility.getVisible("a0"), true)
-    let changes: [string, boolean][] = []
-    assert.doesNotThrow(() => {
-      changes = visibility.setGroupVisible(g0)
-    })
-    assert.deepStrictEqual(changes, [["a0", false]])
-    assert.strictEqual(visibility.getVisible("a0"), false)
+    visibility.registerAction("a0", [g0.not])
+    expect(visibility.getVisible("a0")).toBe(true)
+    expect(visibility.setGroupVisible(g0)).toEqual([["a0", false]])
+    expect(visibility.getVisible("a0")).toBe(false)
   })
 
   test("Multiple actions with multiple dependencies work correctly", () => {
     const { visibility, g0, g1, g2 } = before()
-    let changes: [string, boolean][] = []
 
-    assert.doesNotThrow(() => visibility.registerAction("a0", [g0.not, g1, g2]))
-    assert.doesNotThrow(() => visibility.registerAction("a1", [g0.not, g1.not, g2]))
-    assert.doesNotThrow(() => visibility.registerAction("a2", [g0, g1, g2]))
-    assert.doesNotThrow(() => visibility.registerAction("a3", [g0.not, g1.not, g2.not]))
+    visibility.registerAction("a0", [g0.not, g1, g2])
+    visibility.registerAction("a1", [g0.not, g1.not, g2])
+    visibility.registerAction("a2", [g0, g1, g2])
+    visibility.registerAction("a3", [g0.not, g1.not, g2.not])
 
-    assert.strictEqual(visibility.getVisible("a0"), false)
-    assert.strictEqual(visibility.getVisible("a1"), false)
-    assert.strictEqual(visibility.getVisible("a2"), false)
-    assert.strictEqual(visibility.getVisible("a3"), true)
+    expect(visibility.getVisible("a0")).toBe(false)
+    expect(visibility.getVisible("a1")).toBe(false)
+    expect(visibility.getVisible("a2")).toBe(false)
+    expect(visibility.getVisible("a3")).toBe(true)
 
-    assert.doesNotThrow(() => {
-      changes = visibility.setGroupVisible(g2)
-    })
-    assert.deepStrictEqual(changes, [
+    expect(visibility.setGroupVisible(g2)).toEqual([
       ["a1", true],
       ["a3", false],
     ])
-    assert.strictEqual(visibility.getVisible("a0"), false)
-    assert.strictEqual(visibility.getVisible("a1"), true)
-    assert.strictEqual(visibility.getVisible("a2"), false)
-    assert.strictEqual(visibility.getVisible("a3"), false)
+    expect(visibility.getVisible("a0")).toBe(false)
+    expect(visibility.getVisible("a1")).toBe(true)
+    expect(visibility.getVisible("a2")).toBe(false)
+    expect(visibility.getVisible("a3")).toBe(false)
 
-    assert.doesNotThrow(() => {
-      changes = visibility.setGroupVisible(g1)
-    })
-    assert.deepStrictEqual(changes, [
+    expect(visibility.setGroupVisible(g1)).toEqual([
       ["a0", true],
       ["a1", false],
     ])
-    assert.strictEqual(visibility.getVisible("a0"), true)
-    assert.strictEqual(visibility.getVisible("a1"), false)
-    assert.strictEqual(visibility.getVisible("a2"), false)
-    assert.strictEqual(visibility.getVisible("a3"), false)
+    expect(visibility.getVisible("a0")).toBe(true)
+    expect(visibility.getVisible("a1")).toBe(false)
+    expect(visibility.getVisible("a2")).toBe(false)
+    expect(visibility.getVisible("a3")).toBe(false)
 
-    assert.doesNotThrow(() => {
-      changes = visibility.setGroupVisible(g0)
-    })
-    assert.deepStrictEqual(changes, [
+    expect(visibility.setGroupVisible(g0)).toEqual([
       ["a2", true],
       ["a0", false],
     ])
-    assert.strictEqual(visibility.getVisible("a0"), false)
-    assert.strictEqual(visibility.getVisible("a1"), false)
-    assert.strictEqual(visibility.getVisible("a2"), true)
-    assert.strictEqual(visibility.getVisible("a3"), false)
+    expect(visibility.getVisible("a0")).toBe(false)
+    expect(visibility.getVisible("a1")).toBe(false)
+    expect(visibility.getVisible("a2")).toBe(true)
+    expect(visibility.getVisible("a3")).toBe(false)
   })
 })

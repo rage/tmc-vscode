@@ -4,6 +4,28 @@ import type { VisibilityGroup, VisibilityGroupNegated } from "../types"
 import { TmcTreeNode } from "./treenode"
 import { Visibility } from "./visibility"
 
+/** A leaf under a tree entry, such as one course under "My Courses". */
+export interface TreeEntryChild {
+  label: string
+  id: string
+  command: vscode.Command
+}
+
+export interface TreeEntry {
+  label: string
+  /** Unique across the tree; registering the same id twice throws. */
+  id: string
+  command: vscode.Command
+  /** Visibility groups that must all hold for the entry to show; empty means always. */
+  groups: (VisibilityGroup | VisibilityGroupNegated)[]
+  /**
+   * Called on every render, so the children track their source without a separate
+   * update path; call `refresh` once that source changes. A leaf entry omits it.
+   */
+  children?: () => TreeEntryChild[]
+  iconId?: string
+}
+
 /**
  * A class for managing the TMC menu treeview.
  */
@@ -29,65 +51,18 @@ export default class TmcMenuTree {
   }
 
   /**
-   * Register an action to be shown in the action treeview.
+   * Registers an action to be shown in the action treeview.
    *
-   * @param label A label, displayed in the treeview
-   * @param id Action id
-   * @param groups Determines when the action should be visible in the treeview
-   * @param command The command invoked when the action is clicked
-   * @param collapsibleState Optional collapsible state for the tree item
-   * @param children Optional child nodes
+   * @throws if `entry.id` is already registered.
    */
-  public registerAction(
-    label: string,
-    id: string,
-    groups: (VisibilityGroup | VisibilityGroupNegated)[],
-    command: vscode.Command,
-    collapsibleState?: vscode.TreeItemCollapsibleState,
-    children?: { label: string; id: string; command: vscode.Command }[],
-    iconId?: string,
-  ): void {
-    // Use internal classes
-    this._visibility.registerAction(id, groups)
-    this._treeDP.registerAction(
-      label,
-      id,
-      command,
-      this._visibility.getVisible(id),
-      collapsibleState,
-      children,
-      iconId,
-    )
+  public registerAction(entry: TreeEntry): void {
+    this._visibility.registerAction(entry.id, entry.groups)
+    this._treeDP.registerAction(entry, this._visibility.getVisible(entry.id))
   }
 
-  /**
-   * Removes child from TreeView item.
-   * @param parentId Parent node ID
-   * @param removeId Child node ID
-   */
-  public removeChildWithId(parentId: string, removeId: string): void {
-    this._treeDP.removeChildWithId(parentId, removeId)
-  }
-
-  /**
-   * Adds a child to the TreeView item.
-   * @param parentId Parent ID in treeview
-   * @param childId Child ID in treeview
-   * @param title Human readable text for child item, e.g. course title or name
-   * @param command The vscode command to be called when pressing the child node.
-   */
-  public addChildWithId(
-    parentId: string,
-    childId: number | string,
-    title: string,
-    command: vscode.Command,
-  ): void {
-    const childIdString = childId.toString()
-    this._treeDP.addChildWithId(
-      parentId,
-      childIdString,
-      new TmcTreeNode(title, childIdString, command, "child"),
-    )
+  /** Re-renders the tree, picking up whatever the entries' `children` now yield. */
+  public refresh(): void {
+    this._treeDP.refresh()
   }
 
   /**
@@ -131,7 +106,7 @@ export default class TmcMenuTree {
 /**
  * A class required by VSCode to fulfill the role of a data provider for the action treeview
  */
-class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
+export class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
   /**
    * @implements {vscode.TreeDataProvider<TmcTreeNode>}
    */
@@ -142,7 +117,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
    */
   private readonly _refreshEventEmitter: vscode.EventEmitter<TmcTreeNode | undefined>
 
-  private _actions: Map<string, { action: TmcTreeNode; visible: boolean }>
+  private _entries: Map<string, { entry: TreeEntry; visible: boolean }>
 
   /**
    * Creates new instance of TMC treeview.
@@ -150,7 +125,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
   public constructor() {
     this._refreshEventEmitter = new vscode.EventEmitter<TmcTreeNode | undefined>()
     this.onDidChangeTreeData = this._refreshEventEmitter.event
-    this._actions = new Map<string, { action: TmcTreeNode; visible: boolean }>()
+    this._entries = new Map<string, { entry: TreeEntry; visible: boolean }>()
   }
 
   public dispose(): void {
@@ -161,41 +136,20 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
    * @implements {vscode.TreeDataProvider<TmcTreeNode>}
    */
   public getChildren(element?: TmcTreeNode): Thenable<TmcTreeNode[]> {
-    const actionList: TmcTreeNode[] = []
     if (element) {
-      for (const action of this._actions) {
-        if (action[1].visible) {
-          action[1].action.children?.forEach((child) => actionList.push(child))
-        }
+      const parent = this._entries.get(element.id)
+      if (!parent?.visible) {
+        return Promise.resolve([])
       }
-      return Promise.resolve(actionList)
+      const children = parent.entry.children?.() ?? []
+      return Promise.resolve(
+        children.map((child) => new TmcTreeNode(child.label, child.id, child.command, "child")),
+      )
     }
-    for (const action of this._actions) {
-      if (action[1].visible) {
-        actionList.push(action[1].action)
-      }
-    }
-    return Promise.resolve(actionList)
-  }
-
-  public removeChildWithId(parentId: string, childId: string): void {
-    this._actions.get(parentId)?.action.children.delete(childId)
-    this.refresh()
-  }
-
-  public addChildWithId(parentId: string, childId: string, node: TmcTreeNode): void {
-    const parent = this._actions.get(parentId)?.action
-    if (parent) {
-      parent.children.set(childId, node)
-      // Expand on the first child so e.g. a freshly added course is visible.
-      if (
-        parent.children.size === 1 &&
-        parent.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed
-      ) {
-        parent.collapsibleState = vscode.TreeItemCollapsibleState.Expanded
-      }
-    }
-    this.refresh()
+    const roots = [...this._entries.values()]
+      .filter(({ visible }) => visible)
+      .map(({ entry }) => TmcMenuTreeDataProvider._rootNode(entry))
+    return Promise.resolve(roots)
   }
 
   /**
@@ -215,41 +169,22 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
   /**
    * Internal logic for TmcMenuTree.registerAction
    */
-  public registerAction(
-    label: string,
-    id: string,
-    command: vscode.Command,
-    visible: boolean,
-    collapsibleState?: vscode.TreeItemCollapsibleState,
-    children?: { label: string; id: string; command: vscode.Command }[],
-    iconId?: string,
-  ): void {
-    if (this._actions.get(label) !== undefined) {
-      throw new Error("Action already registered")
+  public registerAction(entry: TreeEntry, visible: boolean): void {
+    if (this._entries.get(entry.id) !== undefined) {
+      throw new Error(`Action "${entry.id}" already registered`)
     }
-    this._actions.set(id, {
-      action: new TmcTreeNode(
-        label,
-        id,
-        command,
-        "parent",
-        collapsibleState,
-        children?.map((c) => new TmcTreeNode(c.label, c.id, c.command, "child")),
-        iconId,
-      ),
-      visible,
-    })
+    this._entries.set(entry.id, { entry, visible })
     this.refresh()
   }
 
   /**
-   * Internal logic for TmcMenuTree.registerAction
+   * Internal logic for TmcMenuTree.updateVisibility
    */
   public setVisibility(id: string, visible: boolean): void {
-    const action = this._actions.get(id)
+    const entry = this._entries.get(id)
 
-    if (action) {
-      action.visible = visible
+    if (entry) {
+      entry.visible = visible
     } else {
       throw new Error("Visibility logic very badly broken.")
     }
@@ -262,12 +197,21 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
     this._refreshEventEmitter.fire(undefined)
   }
 
-  /**
-   * Returns an action by id
-   *
-   * @param id
-   */
-  public getAction(id: string): { action: TmcTreeNode; visible: boolean } | undefined {
-    return this._actions.get(id)
+  private static _rootNode(entry: TreeEntry): TmcTreeNode {
+    const childCount = entry.children?.().length
+    const collapsibleState =
+      childCount === undefined
+        ? vscode.TreeItemCollapsibleState.None
+        : childCount > 0
+          ? vscode.TreeItemCollapsibleState.Expanded
+          : vscode.TreeItemCollapsibleState.Collapsed
+    return new TmcTreeNode(
+      entry.label,
+      entry.id,
+      entry.command,
+      "parent",
+      collapsibleState,
+      entry.iconId,
+    )
   }
 }

@@ -1,22 +1,13 @@
 import * as path from "path"
 
-import * as fs from "fs-extra"
 import { last } from "lodash"
-import type { Result } from "ts-results"
-import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 import { z } from "zod"
 
 // All access to VSCode's storage should be done through this module.
 import type Dialog from "../api/dialog"
 import type Langs from "../api/langs"
-import {
-  WORKSPACE_ROOT_FILE_NAME,
-  WORKSPACE_ROOT_FILE_TEXT,
-  WORKSPACE_ROOT_FOLDER_NAME,
-  WORKSPACE_SETTINGS,
-} from "../config/constants"
-import { CorruptStoredDataError, HaltForReloadError } from "../errors"
+import { CorruptStoredDataError } from "../errors"
 import { Logger } from "../utilities"
 import * as storage from "./data"
 import { v0 } from "./data"
@@ -101,23 +92,24 @@ export default class Storage {
     await this.updateUserData(undefined)
   }
 
+  /**
+   * Brings every stored key up to the current schema.
+   *
+   * A window whose workspace still lives in the pre-2.0 data folder cannot be
+   * migrated in place, so this reports `needsReload` with the workspace to
+   * reopen and writes nothing; the caller owns reopening the window.
+   */
   public async migrateToLatest(
     context: vscode.ExtensionContext,
     dialog: Dialog,
     tmc: Langs,
     settings: vscode.WorkspaceConfiguration,
-  ): Promise<Result<void, Error>> {
+  ): Promise<MigrationOutcome> {
     const memento = context.globalState
 
     const activeOldWorkspaceName = getActiveOldWorkspaceName(context.globalState)
     if (activeOldWorkspaceName) {
-      const workspaceFileFolder = path.join(context.globalStoragePath, "workspaces")
-      createInitializationFiles(workspaceFileFolder, activeOldWorkspaceName)
-      await vscode.commands.executeCommand(
-        "vscode.openFolder",
-        vscode.Uri.file(path.join(workspaceFileFolder, activeOldWorkspaceName)),
-      )
-      return Err(new HaltForReloadError("Restart to start migration."))
+      return { kind: "needsReload", workspaceName: activeOldWorkspaceName }
     }
 
     try {
@@ -156,12 +148,18 @@ export default class Storage {
       }
     } catch (e) {
       // Typing change from update
-      return Err(e as Error)
+      return { kind: "failed", error: e as Error }
     }
 
-    return Ok.EMPTY
+    return { kind: "done" }
   }
 }
+
+/** What {@link Storage.migrateToLatest} settled on; see its doc for `needsReload`. */
+export type MigrationOutcome =
+  | { kind: "done" }
+  | { kind: "needsReload"; workspaceName: string }
+  | { kind: "failed"; error: Error }
 
 function getActiveOldWorkspaceName(memento: vscode.Memento): string | undefined {
   interface ExtensionSettingsPartial {
@@ -179,18 +177,4 @@ function getActiveOldWorkspaceName(memento: vscode.Memento): string | undefined 
     path.join("..", "..")
     ? last(workspaceFile?.fsPath.split(path.sep))
     : undefined
-}
-
-// Copypaste code from resource initialization because that code isn't accessed yet.
-function createInitializationFiles(workspaceFileFolder: string, workspaceName: string): void {
-  fs.ensureDirSync(workspaceFileFolder)
-
-  const workspaceFile = path.join(workspaceFileFolder, workspaceName)
-  fs.writeFileSync(workspaceFile, JSON.stringify(WORKSPACE_SETTINGS))
-
-  const rootFolder = path.join(workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME)
-  fs.ensureDirSync(rootFolder)
-
-  const rootFile = path.join(rootFolder, WORKSPACE_ROOT_FILE_NAME)
-  fs.writeFileSync(rootFile, WORKSPACE_ROOT_FILE_TEXT)
 }

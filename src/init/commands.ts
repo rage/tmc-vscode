@@ -3,7 +3,7 @@ import * as vscode from "vscode"
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
 import * as commands from "../commands"
-import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
+import { randomPanelId, registerWebviewHandlers, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
 import { backendName, LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities/"
@@ -14,6 +14,27 @@ export function registerCommands(
 ): void {
   const { dialog, ui, userData, resources } = actionContext
   Logger.info("Registering TMC VSCode commands")
+
+  registerWebviewHandlers({
+    cancelTests: (testRunId) => {
+      const interrupts = actions.testInterrupts.get(testRunId)
+      if (interrupts) {
+        for (const interrupt of interrupts) {
+          interrupt()
+        }
+        actions.testInterrupts.delete(testRunId)
+      }
+    },
+    closeExercises: actions.closeExercises,
+    downloadAndOpenExercises: actions.downloadAndOpenExercises,
+    downloadExercisesForUi: actions.downloadExercisesForUi,
+    openWorkspace: actions.openWorkspace,
+    pasteMoocExercise: actions.pasteMoocExercise,
+    pasteTmcExercise: actions.pasteTmcExercise,
+    removeCourse: actions.removeCourse,
+    submitExercise: commands.submitExercise,
+    updateCourse: actions.updateCourse,
+  })
 
   // Commands not shown to user in Command Palette / TMC Action menu
   context.subscriptions.push(

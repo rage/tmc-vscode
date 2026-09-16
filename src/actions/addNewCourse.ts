@@ -2,13 +2,15 @@ import type { Result } from "ts-results"
 import { Err } from "ts-results"
 
 import { InitializationError } from "../errors"
-import { CourseIdentifier, match } from "../shared/shared"
+import type { CourseIdentifier } from "../shared/shared"
+import { match } from "../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import { Logger } from "../utilities"
 import {
   combineMoocApiExerciseData,
   combineTmcApiExerciseData,
-  sumMoocCoursePoints,
+  sumCoursePoints,
+  sumTmcApiCoursePoints,
 } from "../utilities/apiData"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ActionContext } from "./types"
@@ -36,12 +38,7 @@ export async function addNewCourse(
       }
       const courseData = courseDataResult.val
 
-      let availablePoints = 0
-      let awardedPoints = 0
-      courseData.exercises.forEach((x) => {
-        availablePoints += x.available_points.length
-        awardedPoints += x.awarded_points.length
-      })
+      const { availablePoints, awardedPoints } = sumTmcApiCoursePoints(courseData.exercises)
 
       const localData: TmcLocalCourseData = {
         description: courseData.details.description || "",
@@ -50,8 +47,8 @@ export async function addNewCourse(
         name: courseData.details.name,
         title: courseData.details.title,
         organization: organizationSlug,
-        availablePoints: availablePoints,
-        awardedPoints: awardedPoints,
+        availablePoints,
+        awardedPoints,
         perhapsExamMode: courseData.settings.hide_submission_results,
         newExercises: [],
         notifyAfter: 0,
@@ -62,11 +59,7 @@ export async function addNewCourse(
       if (addResult.err) {
         return addResult
       }
-      ui.treeDP.addChildWithId("myCourses", localData.id, localData.title, {
-        command: "tmc.courseDetails",
-        title: "Go To Course Details",
-        arguments: [CourseIdentifier.from(localData.id)],
-      })
+      ui.treeDP.refresh()
       workspaceManager.val.createWorkspaceFile(courseData.details.name, "tmc")
       return refreshLocalExercises(actionContext)
     },
@@ -93,7 +86,7 @@ export async function addNewCourse(
         slides,
         progressRes.ok ? progressRes.val : undefined,
       )
-      const { availablePoints, awardedPoints } = sumMoocCoursePoints(exercises)
+      const { availablePoints, awardedPoints } = sumCoursePoints(exercises)
 
       const localData: MoocLocalCourseData = {
         id: moocCourse.id,
@@ -116,11 +109,7 @@ export async function addNewCourse(
       if (addResult.err) {
         return addResult
       }
-      ui.treeDP.addChildWithId("myCourses", localData.id, localData.name, {
-        command: "tmc.courseDetails",
-        title: "Go To Course Details",
-        arguments: [CourseIdentifier.from(localData.id)],
-      })
+      ui.treeDP.refresh()
       workspaceManager.val.createWorkspaceFile(moocCourse.slug, "mooc")
       return refreshLocalExercises(actionContext)
     },

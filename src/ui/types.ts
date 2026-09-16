@@ -142,12 +142,6 @@ export interface SetLogLevel {
   level: LogLevel
 }
 
-export interface SetNextCourseDeadline {
-  command: "setNextCourseDeadline"
-  deadline: string
-  courseId: number
-}
-
 export interface SetNewExercises {
   command: "setNewExercises"
   courseId: number
@@ -165,7 +159,6 @@ export type WebviewMessage =
   | SetBooleanSetting
   | SetCourseDisabledStatus
   | SetDataFolder
-  | SetNextCourseDeadline
   | SetNewExercises
   | SetLogLevel
   | SetUpdateables

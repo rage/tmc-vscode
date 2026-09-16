@@ -137,12 +137,15 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
     }
     // The mock backend is a long-lived process shared across specs, so its
     // in-memory mooc state leaks between tests; reset it here the same way the
-    // per-test config/projects dirs isolate on-disk state. Best-effort — a down
-    // backend will fail the spec anyway.
-    try {
-      await fetch("http://localhost:4001/mooc-mock/reset", { method: "POST" })
-    } catch (error) {
-      console.warn("Could not reset mooc mock state (is the mock backend running?):", error)
+    // per-test config/projects dirs isolate on-disk state. A reset that did not
+    // happen leaves the previous test's state in place, which is a silent
+    // cross-test dependency rather than a missing nicety.
+    const reset = await fetch("http://localhost:4001/mooc-mock/reset", { method: "POST" })
+    if (!reset.ok) {
+      throw new Error(
+        `Could not reset the mooc mock state: ${reset.status} ${reset.statusText}. ` +
+          "The test would have run against the previous test's state.",
+      )
     }
     const electronApp = await electron.launch({
       executablePath: await downloadAndUnzipVSCode(),

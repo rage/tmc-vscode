@@ -1,7 +1,6 @@
-import * as vscode from "vscode"
-
 import type { ActionContext } from "../actions/types"
 import { CourseIdentifier, LocalCourseData } from "../shared/shared"
+import type { TreeEntryChild } from "../ui/treeview/treeview"
 import { Logger } from "../utilities/"
 
 /**
@@ -32,118 +31,104 @@ export function registerUiActions(actionContext: ActionContext): void {
       workspaceManager.ok
     )
   ) {
-    ui.treeDP.registerAction(
-      "View initialization error help",
-      "tmc.viewInitializationErrorHelp",
-      [],
-      {
+    ui.treeDP.registerAction({
+      label: "View initialization error help",
+      id: "tmc.viewInitializationErrorHelp",
+      groups: [],
+      command: {
         command: "tmc.viewInitializationErrorHelp",
         title: "Open help message for the extension initialization error",
       },
-      undefined,
-      undefined,
-      "warning",
-    )
-    ui.treeDP.registerAction(
-      "Restart extension host",
-      "workbench.action.restartExtensionHost",
-      [],
-      { command: "workbench.action.restartExtensionHost", title: "Restart extension host" },
-      undefined,
-      undefined,
-      "debug-restart",
-    )
+      iconId: "warning",
+    })
+    ui.treeDP.registerAction({
+      label: "Restart extension host",
+      id: "workbench.action.restartExtensionHost",
+      groups: [],
+      command: {
+        command: "workbench.action.restartExtensionHost",
+        title: "Restart extension host",
+      },
+      iconId: "debug-restart",
+    })
   }
 
   if (langs.ok) {
-    ui.treeDP.registerAction(
-      "Log in",
-      "logIn",
-      [visibilityGroups.loggedIn.not],
-      {
+    ui.treeDP.registerAction({
+      label: "Log in",
+      id: "logIn",
+      groups: [visibilityGroups.loggedIn.not],
+      command: {
         command: "tmc.showMoocLogin",
         title: "",
         arguments: [],
       },
-      undefined,
-      undefined,
-      "sign-in",
-    )
+      iconId: "sign-in",
+    })
   }
 
   if (userData.ok) {
-    const userCourses = userData.val.getCourses()
-    ui.treeDP.registerAction(
-      "My Courses",
-      "myCourses",
-      [visibilityGroups.loggedIn],
-      {
+    ui.treeDP.registerAction({
+      label: "My Courses",
+      id: "myCourses",
+      groups: [visibilityGroups.loggedIn],
+      command: {
         command: "tmc.myCourses",
         title: "Go to My Courses",
       },
-      userCourses.length > 0
-        ? vscode.TreeItemCollapsibleState.Expanded
-        : vscode.TreeItemCollapsibleState.Collapsed,
-      userCourses.map<{ label: string; id: string; command: vscode.Command }>((course) => ({
-        label: LocalCourseData.getCourseName(course),
-        id: CourseIdentifier.toString(LocalCourseData.getCourseId(course)),
-        command: {
-          command: "tmc.courseDetails",
-          title: "Go to course details",
-          arguments: [LocalCourseData.getCourseId(course)],
-        },
-      })),
-      "book",
-    )
+      children: (): TreeEntryChild[] =>
+        userData.val.getCourses().map((course) => ({
+          label: LocalCourseData.getCourseTitle(course),
+          id: CourseIdentifier.toString(LocalCourseData.getCourseId(course)),
+          command: {
+            command: "tmc.courseDetails",
+            title: "Go to course details",
+            arguments: [LocalCourseData.getCourseId(course)],
+          },
+        })),
+      iconId: "book",
+    })
   }
 
-  ui.treeDP.registerAction(
-    "Settings",
-    "settings",
-    [],
-    {
+  ui.treeDP.registerAction({
+    label: "Settings",
+    id: "settings",
+    groups: [],
+    command: {
       command: "tmc.settings",
       title: "Open TestMyCode settings",
     },
-    undefined,
-    undefined,
-    "settings-gear",
-  )
+    iconId: "settings-gear",
+  })
   // Label is backend-neutral: the folder holds both tmc and mooc exercises.
-  ui.treeDP.registerAction(
-    "Open Exercises Folder",
-    "tmcDataFolder",
-    [],
-    {
+  ui.treeDP.registerAction({
+    label: "Open Exercises Folder",
+    id: "tmcDataFolder",
+    groups: [],
+    command: {
       command: "tmc.openTMCExercisesFolder",
       title: "Open Exercises Folder",
     },
-    undefined,
-    undefined,
-    "folder-opened",
-  )
-  ui.treeDP.registerAction(
-    "Show Extension Logs",
-    "logs",
-    [],
-    {
+    iconId: "folder-opened",
+  })
+  ui.treeDP.registerAction({
+    label: "Show Extension Logs",
+    id: "logs",
+    groups: [],
+    command: {
       command: "tmc.logs",
       title: "Show Extension Logs",
     },
-    undefined,
-    undefined,
-    "output",
-  )
-  ui.treeDP.registerAction(
-    "Log out",
-    "logOut",
-    [visibilityGroups.loggedIn],
-    {
+    iconId: "output",
+  })
+  ui.treeDP.registerAction({
+    label: "Log out",
+    id: "logOut",
+    groups: [visibilityGroups.loggedIn],
+    command: {
       command: "tmc.logout",
       title: "Log out",
     },
-    undefined,
-    undefined,
-    "sign-out",
-  )
+    iconId: "sign-out",
+  })
 }

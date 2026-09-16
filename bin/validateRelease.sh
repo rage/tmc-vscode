@@ -37,7 +37,6 @@ validateRelease() {
         exitCode=1
     fi
 
-    # Changelog must have entry matching [X.Y.Z] - YYYY-MM-DD
     local changelogEntry
     changelogEntry=$(grep -Ec "\[$tagVersion\] - [0-9]{4}(-[0-9]{2}){2}$" CHANGELOG.md)
     if [[ $changelogEntry != 1 ]]
@@ -46,7 +45,6 @@ validateRelease() {
         exitCode=1
     fi
 
-    # Welcome panel must have entry matching <h3>X.Y.Z - YYYY-MM-DD</h3>
     local welcomeEntry
     welcomeEntry=$(grep -Ec "<h3>$tagVersion - [0-9]{4}(-[0-9]{2}){2}</h3>" webview-ui/src/panels/Welcome.svelte)
     if [[ $welcomeEntry != 1 ]]

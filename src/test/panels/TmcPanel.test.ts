@@ -3,7 +3,8 @@ import * as vscode from "vscode"
 
 import type Langs from "../../api/langs"
 import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
-import { randomPanelId, TmcPanel } from "../../panels/TmcPanel"
+import type { WebviewHandlers } from "../../panels/TmcPanel"
+import { randomPanelId, registerWebviewHandlers, TmcPanel } from "../../panels/TmcPanel"
 import { postUpdateables, updateablesRegistry } from "../../panels/updateablesRegistry"
 import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -175,6 +176,52 @@ suite("TmcPanel initialization guards", () => {
     } finally {
       executeCommand.mockRestore()
     }
+  })
+})
+
+// The panel layer cannot import `src/actions` or `src/commands` without recreating the
+// runtime import cycle, so every one of those calls goes through this record instead.
+function stubHandlers(): { [K in keyof WebviewHandlers]: ReturnType<typeof vi.fn> } {
+  return {
+    cancelTests: vi.fn(),
+    closeExercises: vi.fn().mockResolvedValue(Err(new Error("could not close"))),
+    downloadAndOpenExercises: vi.fn().mockResolvedValue(Ok([])),
+    downloadExercisesForUi: vi.fn().mockResolvedValue(undefined),
+    openWorkspace: vi.fn().mockResolvedValue(undefined),
+    pasteMoocExercise: vi.fn().mockResolvedValue(Ok("link")),
+    pasteTmcExercise: vi.fn().mockResolvedValue(Ok("link")),
+    removeCourse: vi.fn().mockResolvedValue(undefined),
+    submitExercise: vi.fn().mockResolvedValue(Ok(undefined)),
+    updateCourse: vi.fn().mockResolvedValue(Ok(true)),
+  }
+}
+
+suite("TmcPanel handler dispatch", () => {
+  test("closes exercises through the registered handler and reports its failure", async () => {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createMockActionContext()
+    const { listener } = await mountSidePanel(actionContext)
+    const courseId = CourseIdentifier.from(42)
+    const ids = [ExerciseIdentifier.from(101)]
+
+    await listener({ type: "closeExercises", ids, courseId })
+
+    expect(handlers.closeExercises).toHaveBeenCalledWith(actionContext, ids, courseId)
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      "Errored while closing selected exercises.",
+      expect.any(Error),
+    )
+  })
+
+  test("cancels a test run through the registered handler", async () => {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const { listener } = await mountSidePanel(createMockActionContext())
+
+    await listener({ type: "cancelTests", testRunId: 7 })
+
+    expect(handlers.cancelTests).toHaveBeenCalledWith(7)
   })
 })
 
@@ -359,7 +406,7 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
         getCourse: () => Ok(localCourse),
       }) as unknown as ReturnType<typeof createMockActionContext>["userData"],
       workspaceManager: Ok({
-        getExerciseBySlug: () => undefined,
+        getExercises: () => [],
       }) as unknown as ReturnType<typeof createMockActionContext>["workspaceManager"],
     }
   }

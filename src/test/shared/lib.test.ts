@@ -1,6 +1,10 @@
+import { z } from "zod"
+
 import type { LocalCourseData, LocalCourseExercise } from "../../shared/shared"
 import {
   CourseIdentifier,
+  EnumSchema,
+  enumSchemaKinds,
   ExerciseIdentifier,
   LocalCourseData as LCD,
   LocalCourseExercise as LCE,
@@ -10,6 +14,24 @@ import {
   matchBackend,
   matchOption,
 } from "../../shared/shared"
+
+suite("EnumSchema", function () {
+  // `EnumSchema`'s annotated return type hides zod's `.options`, so the arm list is a
+  // constant; this is what keeps it honest.
+  test("enumSchemaKinds lists exactly the kinds an enum schema accepts", function () {
+    const schema = EnumSchema(z.object({ courseId: z.number() }), z.object({ id: z.string() }))
+    const samples = {
+      tmc: { kind: "tmc", data: { courseId: 1 } },
+      mooc: { kind: "mooc", data: { id: "uuid" } },
+    }
+
+    expect(enumSchemaKinds()).toEqual(["tmc", "mooc"])
+    for (const kind of enumSchemaKinds()) {
+      expect(schema.safeParse(samples[kind]).success).toBe(true)
+    }
+    expect(schema.safeParse({ kind: "other", data: {} }).success).toBe(false)
+  })
+})
 
 suite("CourseIdentifier", function () {
   test("from(number) builds a tmc identifier, from(string) a mooc one", function () {

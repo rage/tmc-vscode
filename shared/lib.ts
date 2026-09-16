@@ -52,10 +52,18 @@ export function EnumSchema<Tmc extends z.ZodType, Mooc extends z.ZodType>(
   // in zod's inferred object types simplify to `Enum`'s members while `Tmc` and
   // `Mooc` are still generic; every call site is checked against the annotated
   // return type above
+  //
+  // the price of the annotation is that zod's own `.options` and `.extend()` are
+  // no longer visible on the result — use `enumSchemaKinds` for the arms
   return z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("tmc"), data: tmc }),
     z.object({ kind: z.literal("mooc"), data: mooc }),
   ]) as unknown as z.ZodType<Enum<z.output<Tmc>, z.output<Mooc>>>
+}
+
+/** The arms every `EnumSchema` carries, in declaration order. */
+export function enumSchemaKinds(): readonly ["tmc", "mooc"] {
+  return ["tmc", "mooc"]
 }
 
 export namespace Enum {
@@ -172,6 +180,11 @@ export function matchBackend<A extends { backend: "tmc" | "mooc" }, B, C>(
  * The name to show the user for a backend. Course slugs and titles are only
  * unique within one backend, so anything listing courses from both must name
  * the backend alongside them.
+ *
+ * This is the only place those names are spelled: no component, panel or message
+ * writes "TMC Server", "TestMyCode", "courses.mooc.fi" or "Courses MOOC" itself.
+ * Backend base URLs follow the same rule and come from the `__TMC_BACKEND_URL__`
+ * and `__MOOC_BACKEND_URL__` build defines in `config.js`, never from a literal.
  */
 export function backendName(kind: "tmc" | "mooc"): string {
   return kind === "tmc" ? "TMC Server" : "courses.mooc.fi"
