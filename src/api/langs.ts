@@ -113,6 +113,17 @@ interface LangsProcessArgs {
   interruptOnDeactivate?: boolean | undefined
 }
 
+/** How an auth failure in a CLI response is attributed. */
+interface AuthAttribution {
+  /**
+   * The backend the command talked to. Only its cached responses are dropped when it
+   * rejects our credentials, and it names the site in a not-enrolled message.
+   */
+  backend?: "tmc" | "mooc" | undefined
+  /** Set on login/logout commands, where an auth error means no session was lost. */
+  expected?: boolean | undefined
+}
+
 interface LangsProcessRunner {
   interrupt: () => void
   result: Promise<Result<OutputData, BaseError>>
@@ -136,10 +147,32 @@ interface CacheConfig {
   remapper?: ((response: OutputData) => [string, OutputData][]) | undefined
 }
 
+/**
+ * Builds a response-cache key.
+ *
+ * Every key starts with the backend, because tmc.mooc.fi and courses.mooc.fi share an id
+ * space here — both arrive as strings — and because {@link Langs} drops one backend's
+ * entries without touching the other's by matching that prefix.
+ *
+ * @param resource What the entry holds, e.g. `course-details`. One resource name per CLI
+ * output-data kind, so two commands returning the same thing share an entry.
+ * @param parts The ids the entry is keyed by, in the order the resource names them.
+ */
+function cacheKey(
+  backend: "tmc" | "mooc",
+  resource: string,
+  ...parts: (string | number)[]
+): string {
+  return [backend, resource, ...parts].join(":")
+}
+
+/** Bounds the cache so a long session that visits many courses cannot grow it without limit. */
+const MAX_CACHED_RESPONSES = 128
+
 const organizationsRemapper: CacheConfig["remapper"] = (res) => {
   if (res.data?.["output-data-kind"] === "organizations") {
     return res.data["output-data"].map((x) => [
-      `organization-${x.slug}`,
+      cacheKey("tmc", "organization", x.slug),
       { ...res, data: { "output-data-kind": "organization", "output-data": x } },
     ])
   }
@@ -218,11 +251,6 @@ class BoundedStderr {
  * A Class that provides an interface to all langs functionality.
  */
 export default class Langs {
-  /** tmc.mooc.fi and courses.mooc.fi are unrelated servers, so their update checks cache and invalidate separately. */
-  private static _exerciseUpdatesCacheKey(backend: "tmc" | "mooc"): string {
-    return `${backend}-exercise-updates`
-  }
-
   // Per-backend: tmc.mooc.fi and courses.mooc.fi are unrelated servers, so one must not throttle the other.
   private _nextTmcSubmissionAllowedTimestamp: number
   private _nextMoocSubmissionAllowedTimestamp: number
@@ -342,7 +370,7 @@ export default class Langs {
       null,
     )
     return res.andThen(() => {
-      this._responseCache.clear()
+      this._clearBackendCache("tmc")
       this._onLogout?.(true)
       return Ok.EMPTY
     })
@@ -379,7 +407,9 @@ export default class Langs {
     const { interrupt, result, getStderr } = process.val
     const loginResult = result.then((res) =>
       res
-        .andThen((x) => this._checkLangsResponse(x, null, undefined, getStderr()))
+        .andThen((x) =>
+          this._checkLangsResponse(x, null, { backend: "mooc", expected: true }, getStderr()),
+        )
         .map(() => {
           this._onMoocLogin?.()
           return undefined
@@ -421,7 +451,7 @@ export default class Langs {
       null,
     )
     return res.andThen(() => {
-      this._responseCache.clear()
+      this._clearBackendCache("mooc")
       this._onMoocLogout?.(true)
       return Ok.EMPTY
     })
@@ -535,7 +565,7 @@ export default class Langs {
     const { interrupt, result, getStderr } = process.val
     const postResult = result.then((res) =>
       res
-        .andThen((x) => this._checkLangsResponse(x, "test-result", undefined, getStderr()))
+        .andThen((x) => this._checkLangsResponse(x, "test-result", {}, getStderr()))
         .map((x) => x.data["output-data"]),
     )
 
@@ -562,7 +592,7 @@ export default class Langs {
     const { interrupt, result, getStderr } = process.val
     const checkstyleResult = result.then((res) =>
       res
-        .andThen((x) => this._checkLangsResponse(x, "validation", undefined, getStderr()))
+        .andThen((x) => this._checkLangsResponse(x, "validation", {}, getStderr()))
         .map((x) => x.data["output-data"]),
     )
     return { process: checkstyleResult, interrupt }
@@ -713,7 +743,7 @@ export default class Langs {
   ): Promise<Result<ExerciseIdentifier[], Error>> {
     const cacheConfig = {
       forceRefresh: options?.forceRefresh,
-      key: Langs._exerciseUpdatesCacheKey(backend),
+      key: cacheKey(backend, "exercise-updates"),
     }
     if (backend === "mooc") {
       const res = await this._executeLangsCommand(
@@ -818,7 +848,7 @@ export default class Langs {
         "tmc-exercise-download",
       )
       const tmcMappedRes = tmcRes.andThen((x) => {
-        this._responseCache.delete(Langs._exerciseUpdatesCacheKey("tmc"))
+        this._responseCache.delete(cacheKey("tmc", "exercise-updates"))
         return Ok(x.data["output-data"])
       })
       if (tmcMappedRes.err) {
@@ -856,7 +886,7 @@ export default class Langs {
         "mooc-exercise-download",
       )
       const moocMappedRes = moocRes.andThen((x) => {
-        this._responseCache.delete(Langs._exerciseUpdatesCacheKey("mooc"))
+        this._responseCache.delete(cacheKey("mooc", "exercise-updates"))
         return Ok(x.data["output-data"])
       })
       if (moocMappedRes.err) {
@@ -955,7 +985,7 @@ export default class Langs {
       "courses",
       {
         forceRefresh: options?.forceRefresh,
-        key: `organization-${organization}-courses`,
+        key: cacheKey("tmc", "organization-courses", organization),
       },
     )
     return res.map((x) => x.data["output-data"])
@@ -979,21 +1009,21 @@ export default class Langs {
       const { details, exercises, settings } = response.data["output-data"]
       return [
         [
-          `course-${courseId}-details`,
+          cacheKey("tmc", "course-details", courseId),
           {
             ...response,
             data: { "output-data-kind": "course-details", "output-data": details },
           },
         ],
         [
-          `course-${courseId}-exercises`,
+          cacheKey("tmc", "course-exercises", courseId),
           {
             ...response,
             data: { "output-data-kind": "course-exercises", "output-data": exercises },
           },
         ],
         [
-          `course-${courseId}-settings`,
+          cacheKey("tmc", "course-settings", courseId),
           {
             ...response,
             data: { "output-data-kind": "course-data", "output-data": settings },
@@ -1007,7 +1037,11 @@ export default class Langs {
         args: this._tmcCmd("get-course-data", "--course-id", courseId.toString()),
       },
       "combined-course-data",
-      { forceRefresh: options?.forceRefresh, key: `course-${courseId}-data`, remapper },
+      {
+        forceRefresh: options?.forceRefresh,
+        key: cacheKey("tmc", "course-data", courseId),
+        remapper,
+      },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -1025,7 +1059,7 @@ export default class Langs {
     const courseRes = await this._executeLangsCommand(
       { backend: "mooc", args: this._moocCmd("course", "--course-id", courseId) },
       "mooc-course",
-      { forceRefresh: options?.forceRefresh, key: `mooc-course-${courseId}` },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("mooc", "course", courseId) },
     )
     if (courseRes.err) {
       return courseRes
@@ -1033,7 +1067,7 @@ export default class Langs {
     const exercisesRes = await this._executeLangsCommand(
       { backend: "mooc", args: this._moocCmd("course-exercises", "--course-id", courseId) },
       "mooc-exercise-slides",
-      { forceRefresh: options?.forceRefresh, key: `mooc-course-exercises-${courseId}` },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("mooc", "course-exercises", courseId) },
     )
     if (exercisesRes.err) {
       return exercisesRes
@@ -1080,7 +1114,7 @@ export default class Langs {
         "course-details",
         {
           forceRefresh: options?.forceRefresh,
-          key: `course-${CourseIdentifier.toString(courseId)}-details`,
+          key: cacheKey("tmc", "course-details", CourseIdentifier.toString(courseId)),
         },
       )
       return res.map((x) => x.data["output-data"])
@@ -1088,7 +1122,8 @@ export default class Langs {
       // The mooc CLI has no `get-course-details` subcommand; `course` returns the
       // course itself. Callers use this only as a connectivity probe (a failed
       // result flips the course-details view into offline mode), so the returned
-      // MoocCourse shape is sufficient.
+      // MoocCourse shape is sufficient. It shares getMoocCourseInstanceData's entry,
+      // being the same command against the same course.
       const res = await this._executeLangsCommand(
         {
           backend: "mooc",
@@ -1097,7 +1132,7 @@ export default class Langs {
         "mooc-course",
         {
           forceRefresh: options?.forceRefresh,
-          key: `course-${CourseIdentifier.toString(courseId)}-details`,
+          key: cacheKey("mooc", "course", CourseIdentifier.toString(courseId)),
         },
       )
       return res.map((x) => x.data["output-data"])
@@ -1122,7 +1157,7 @@ export default class Langs {
         args: this._tmcCmd("get-course-exercises", "--course-id", courseId.toString()),
       },
       "course-exercises",
-      { forceRefresh: options?.forceRefresh, key: `course-${courseId}-exercises` },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "course-exercises", courseId) },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -1144,7 +1179,7 @@ export default class Langs {
         args: this._tmcCmd("get-course-settings", "--course-id", courseId.toString()),
       },
       "course-data",
-      { forceRefresh: options?.forceRefresh, key: `course-${courseId}-settings` },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "course-settings", courseId) },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -1166,7 +1201,7 @@ export default class Langs {
         args: this._tmcCmd("get-exercise-details", "--exercise-id", exerciseId.toString()),
       },
       "exercise-details",
-      { forceRefresh: options?.forceRefresh, key: `exercise-${exerciseId}-details` },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "exercise-details", exerciseId) },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -1219,7 +1254,10 @@ export default class Langs {
         args: this._tmcCmd("get-organization", "--organization", organizationSlug),
       },
       "organization",
-      { forceRefresh: options?.forceRefresh, key: `organization-${organizationSlug}` },
+      {
+        forceRefresh: options?.forceRefresh,
+        key: cacheKey("tmc", "organization", organizationSlug),
+      },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -1238,7 +1276,7 @@ export default class Langs {
       "organizations",
       {
         forceRefresh: options?.forceRefresh,
-        key: "organizations",
+        key: cacheKey("tmc", "organizations"),
         remapper: organizationsRemapper,
       },
     )
@@ -1564,22 +1602,20 @@ export default class Langs {
   ): Promise<
     Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, Error>
   > {
-    const cacheKey = cacheConfig?.key
+    const key = cacheConfig?.key
     const currentTime = Date.now()
-    if (!cacheConfig?.forceRefresh && cacheKey) {
-      const cachedEntry = this._responseCache.get(cacheKey)
+    if (!cacheConfig?.forceRefresh && key) {
+      const cachedEntry = this._readCachedResponse(key)
       if (cachedEntry) {
         const { response, timestamp } = cachedEntry
         const cachedDataLifeLeft = timestamp + API_CACHE_LIFETIME - currentTime
         if (cachedDataLifeLeft > 0 && dataMatchesKind(response, outputDataKind)) {
           const prettySecondsLeft = Math.ceil(cachedDataLifeLeft / 1000)
-          Logger.info(
-            `Using cached data for key: ${cacheKey}. Still valid for ${prettySecondsLeft}s`,
-          )
+          Logger.info(`Using cached data for key: ${key}. Still valid for ${prettySecondsLeft}s`)
           return Ok(response)
         }
-        Logger.debug(`Discarding invalidated cache data for key: ${cacheKey}`)
-        this._responseCache.delete(cacheKey)
+        Logger.debug(`Discarding invalidated cache data for key: ${key}`)
+        this._responseCache.delete(key)
       }
     }
 
@@ -1588,32 +1624,75 @@ export default class Langs {
       return process
     }
     langsArgs.onInterruptHandle?.(process.val.interrupt)
-    // Attribute a lost-session error to the command's backend so the right logout event fires.
-    const authEventTarget = langsArgs.suppressAuthEvents ? undefined : langsArgs.backend
+    const auth: AuthAttribution = {
+      backend: langsArgs.backend,
+      expected: langsArgs.suppressAuthEvents,
+    }
     const { result, getStderr } = process.val
     const res = await result
     return res
-      .andThen((x) => this._checkLangsResponse(x, outputDataKind, authEventTarget, getStderr()))
+      .andThen((x) => this._checkLangsResponse(x, outputDataKind, auth, getStderr()))
       .andThen((x) => {
-        if (x && cacheKey) {
-          this._responseCache.set(cacheKey, { response: x, timestamp: currentTime })
-          cacheConfig?.remapper?.(x).forEach(([key, response]) => {
-            this._responseCache.set(key, { response, timestamp: currentTime })
+        if (x && key) {
+          this._writeCachedResponse(key, { response: x, timestamp: currentTime })
+          cacheConfig?.remapper?.(x).forEach(([remappedKey, response]) => {
+            this._writeCachedResponse(remappedKey, { response, timestamp: currentTime })
           })
         }
         return Ok(x)
       })
   }
 
+  /** Reads an entry and marks it most recently used, so {@link _writeCachedResponse} evicts it last. */
+  private _readCachedResponse(key: string): ResponseCacheEntry | undefined {
+    const entry = this._responseCache.get(key)
+    if (entry) {
+      // A Map iterates in insertion order, so re-inserting moves the entry to the back.
+      this._responseCache.delete(key)
+      this._responseCache.set(key, entry)
+    }
+    return entry
+  }
+
+  /** Stores an entry, evicting the least recently used ones once the cache is over its cap. */
+  private _writeCachedResponse(key: string, entry: ResponseCacheEntry): void {
+    this._responseCache.delete(key)
+    this._responseCache.set(key, entry)
+    for (const oldest of this._responseCache.keys()) {
+      if (this._responseCache.size <= MAX_CACHED_RESPONSES) {
+        break
+      }
+      this._responseCache.delete(oldest)
+    }
+  }
+
+  /**
+   * Drops every cached response belonging to `backend`, leaving the other backend's alone:
+   * the two servers are unrelated, so one rejecting our credentials says nothing about the
+   * other's data. An unattributed failure drops everything, having ruled nothing out.
+   */
+  private _clearBackendCache(backend: "tmc" | "mooc" | undefined): void {
+    if (backend === undefined) {
+      this._responseCache.clear()
+      return
+    }
+    const prefix = `${backend}:`
+    for (const key of this._responseCache.keys()) {
+      if (key.startsWith(prefix)) {
+        this._responseCache.delete(key)
+      }
+    }
+  }
+
   /**
    * Checks langs response for generic errors.
    *
-   * @param authEventTarget Backend whose unexpected-logout event to fire on an auth error; undefined fires none.
+   * @param auth How an auth failure in this response is attributed; see {@link AuthAttribution}.
    */
   private _checkLangsResponse<T extends DataKind["output-data-kind"] | null>(
     langsResponse: OutputData,
     outputDataKind: T,
-    authEventTarget?: "tmc" | "mooc",
+    auth: AuthAttribution = {},
     stderr = "",
   ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, BaseError> {
     // The CLI's panic handler emits `status: "crashed"` with no data, so narrowing on the
@@ -1653,9 +1732,9 @@ export default class Langs {
       case "not-enrolled": {
         // Not hardcoded to courses.mooc.fi: this error kind can come from either backend.
         const siteName =
-          authEventTarget === "tmc"
+          auth.backend === "tmc"
             ? "tmc.mooc.fi"
-            : authEventTarget === "mooc"
+            : auth.backend === "mooc"
               ? "courses.mooc.fi"
               : "the server"
         return Err(
@@ -1682,12 +1761,16 @@ export default class Langs {
         // this exercise. Surfaced as-is so it is diagnosable rather than retried.
         return Err(new UnknownUploadError(message, details))
       case "invalid-token":
-        this._responseCache.clear()
-        this._fireUnexpectedLogout(authEventTarget)
+        this._clearBackendCache(auth.backend)
+        if (!auth.expected) {
+          this._fireUnexpectedLogout(auth.backend)
+        }
         return Err(new InvalidTokenError(message))
       case "not-logged-in":
-        this._responseCache.clear()
-        this._fireUnexpectedLogout(authEventTarget)
+        this._clearBackendCache(auth.backend)
+        if (!auth.expected) {
+          this._fireUnexpectedLogout(auth.backend)
+        }
         return Err(new AuthorizationError(message, details))
       case "obsolete-client":
         return Err(
