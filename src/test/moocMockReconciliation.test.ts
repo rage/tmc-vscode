@@ -66,6 +66,23 @@ const toCliStdoutSlide = (wire: ExerciseSlide): unknown => ({
   })),
 })
 
+// The CLI does not relay the wire grading status verbatim either: its
+// `From<api::ExerciseTaskSubmissionStatus> for ExerciseTaskSubmissionStatus`
+// (tmc-langs-rust/crates/tmc-mooc-client/src/lib.rs) re-tags the enum
+// internally and drops `feedback_json`, which only the exercise service that
+// produced it can interpret. This function IS that reconciliation for the
+// grading shape; if the wire drifts so the conversion can no longer produce a
+// valid ExerciseTaskSubmissionStatus, the assertion below fails.
+const toCliStdoutGradingStatus = (wire: unknown): unknown => {
+  if (wire === "NoGradingYet") {
+    return { status: "no-grading-yet" }
+  }
+  const { feedback_json: _pluginPrivate, ...grading } = (
+    wire as { Grading: Record<string, unknown> }
+  ).Grading
+  return { status: "grading", grading }
+}
+
 // Asserts a payload validates against a zod schema, surfacing the issues on
 // failure so a drift is easy to diagnose.
 const expectValid = (
@@ -177,31 +194,28 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
   test("grading status validates as ExerciseTaskSubmissionStatus (both variants)", async function () {
     const { taskSubmissionId } = await submit(passingExercise)
 
-    // first poll: the externally-tagged "NoGradingYet" string variant
+    // first poll: the wire's externally-tagged "NoGradingYet" string variant
     const first = await (await fetch(api(`/submissions/${taskSubmissionId}/grading`))).json()
     expect(first).toBe("NoGradingYet")
-    expectValid(ExerciseTaskSubmissionStatus, first, "grading (NoGradingYet)")
+    expectValid(
+      ExerciseTaskSubmissionStatus,
+      toCliStdoutGradingStatus(first),
+      "grading (no-grading-yet)",
+    )
 
-    // second poll: the externally-tagged { Grading: { ... } } object variant
+    // second poll: the wire's externally-tagged { Grading: { ... } } object variant
     const second = (await (
       await fetch(api(`/submissions/${taskSubmissionId}/grading`))
-    ).json()) as unknown
-    expectValid(ExerciseTaskSubmissionStatus, second, "grading (Grading)")
+    ).json()) as { Grading: Record<string, unknown> }
+    expectValid(ExerciseTaskSubmissionStatus, toCliStdoutGradingStatus(second), "grading (grading)")
 
-    // The `feedback_json` field is REQUIRED on the Grading wire shape but is
-    // any-typed (schemars emits `true`). The zod generator used to silently drop
-    // such properties, and because zod strips unknown keys, a parse still
-    // "succeeds" while dropping the field -- so merely asserting the schema
-    // parses (above) is blind to this class of drift. This asserts the field
-    // SURVIVES parsing: the mock emits a distinctive non-null sentinel, and the
-    // parsed result must still carry it. Against the pre-fix generated schema
-    // (which omitted `feedback_json`), zod strips it and `parsed.Grading
-    // .feedback_json` is `undefined`, failing this assertion.
-    const parsed = ExerciseTaskSubmissionStatus.safeParse(second)
-    expect(parsed.success, "grading payload must parse").toBe(true)
-    const grading = (parsed.data as { Grading: Record<string, unknown> }).Grading
-    expect("feedback_json" in grading, "feedback_json must survive zod parsing").toBe(true)
-    expect(grading.feedback_json).toEqual({ mock_feedback: "reconciliation sentinel" })
+    // The wire carries plugin-private structured feedback that only the exercise
+    // service producing it can interpret; the CLI drops it rather than relaying an
+    // opaque blob. The mock emits a distinctive sentinel so a schema that started
+    // accepting the field again is visible here.
+    expect(second.Grading.feedback_json).toEqual({ mock_feedback: "reconciliation sentinel" })
+    const parsed = ExerciseTaskSubmissionStatus.parse(toCliStdoutGradingStatus(second))
+    expect(JSON.stringify(parsed)).not.toContain("reconciliation sentinel")
   })
 
   test("old-submissions list items validate as ExerciseSlideSubmissionListItem", async function () {

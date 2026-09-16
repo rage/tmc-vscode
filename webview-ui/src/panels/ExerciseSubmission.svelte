@@ -31,9 +31,7 @@
   // mooc grading has no per-test breakdown, so it is stored separately and
   // rendered as a reduced result (overall progress, score, feedback text)
   let moocResult = $state<ExerciseTaskSubmissionStatus | undefined>(undefined)
-  const moocGrading = $derived(
-    moocResult !== undefined && moocResult !== "NoGradingYet" ? moocResult.Grading : undefined,
-  )
+  const moocGrading = $derived(moocResult?.status === "grading" ? moocResult.grading : undefined)
   // Terminal = no more updates coming; only `FullyGraded`/`Failed` qualify, everything
   // else (including no result yet) can still change.
   const moocGradingIsTerminal = $derived(

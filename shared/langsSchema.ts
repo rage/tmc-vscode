@@ -46,8 +46,10 @@ import {
   zExerciseTaskSubmissionResult,
   zExerciseTaskSubmissionStatus,
   zExerciseType,
+  zGrading,
   zGradingProgress,
   zKind,
+  zLocalExercise,
   zLocalMoocExercise,
   zLocalTmcExercise,
   zModelSolutionSpec,
@@ -56,6 +58,7 @@ import {
   zMoocDeviceLogin,
   zMoocOldSubmissionRestore,
   zMoocExerciseDownload,
+  zMoocUpdatedExercise,
   zNewSubmission,
   zNotification,
   zNotificationKind,
@@ -105,12 +108,6 @@ export type Locale = z.infer<typeof Locale>
 
 export const Compression = z.enum(["tar", "zip", "zstd"])
 export type Compression = z.infer<typeof Compression>
-
-export const LocalExercise = z.union([
-  z.object({ tmc: zLocalTmcExercise }),
-  z.object({ mooc: zLocalMoocExercise }),
-])
-export type LocalExercise = z.infer<typeof LocalExercise>
 
 /**
  * The released CLI that `TMC_LANGS_RUST_VERSION` pins reports a partially failed
@@ -249,11 +246,17 @@ export type ExerciseTaskSubmissionStatus = z.infer<typeof ExerciseTaskSubmission
 export const ExerciseType = zExerciseType
 export type ExerciseType = z.infer<typeof ExerciseType>
 
+export const Grading = zGrading
+export type Grading = z.infer<typeof Grading>
+
 export const GradingProgress = zGradingProgress
 export type GradingProgress = z.infer<typeof GradingProgress>
 
 export const Kind = zKind
 export type Kind = z.infer<typeof Kind>
+
+export const LocalExercise = zLocalExercise
+export type LocalExercise = z.infer<typeof LocalExercise>
 
 export const LocalMoocExercise = zLocalMoocExercise
 export type LocalMoocExercise = z.infer<typeof LocalMoocExercise>
@@ -285,6 +288,10 @@ export type MoocExerciseDownload = z.infer<typeof MoocExerciseDownload>
 /** Outcome of `mooc download-old-submission`: `nothing-to-download` for a submission the server has no files for, which only an exercise type with no files at all can be. */
 export const MoocOldSubmissionRestore = zMoocOldSubmissionRestore
 export type MoocOldSubmissionRestore = z.infer<typeof MoocOldSubmissionRestore>
+
+/** A local mooc exercise whose server-side version has changed; shaped like `UpdatedExercise` so both backends' update checks parse the same way. */
+export const MoocUpdatedExercise = zMoocUpdatedExercise
+export type MoocUpdatedExercise = z.infer<typeof MoocUpdatedExercise>
 
 export const NewSubmission = zNewSubmission
 export type NewSubmission = z.infer<typeof NewSubmission>

@@ -80,23 +80,28 @@ suite("checkForExerciseUpdates action", function () {
   test("should respect forceRefresh option", async function () {
     for (const forceRefresh of [true, false]) {
       await checkForExerciseUpdates(actionContext(), { forceRefresh })
-      expect(tmcMock.checkTmcExerciseUpdates).toHaveBeenCalledWith(
+      expect(tmcMock.checkExerciseUpdates).toHaveBeenCalledWith(
+        "tmc",
         expect.objectContaining({ forceRefresh }),
       )
-      expect(tmcMock.checkMoocExerciseUpdates).toHaveBeenCalledWith(
+      expect(tmcMock.checkExerciseUpdates).toHaveBeenCalledWith(
+        "mooc",
         expect.objectContaining({ forceRefresh }),
       )
     }
   })
 
   test("should return empty array when there are no updates", async function () {
-    tmcMockValues.checkExerciseUpdates = Ok([])
+    tmcMockValues.tmcExerciseUpdates = Ok([])
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.val).toEqual([])
   })
 
   test("should filter out unknown exercise ids", async function () {
-    tmcMockValues.checkExerciseUpdates = Ok([{ id: 2 }, { id: 404 }])
+    tmcMockValues.tmcExerciseUpdates = Ok([
+      ExerciseIdentifier.from(2),
+      ExerciseIdentifier.from(404),
+    ])
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.val).toEqual([tmcOutdated])
   })
@@ -106,7 +111,7 @@ suite("checkForExerciseUpdates action", function () {
       ...userDataMockValues.getCourses,
       makeMoocKind(moocCourse) as LocalCourseData,
     ]
-    tmcMockValues.checkMoocExerciseUpdates = Ok(["mooc-ex-1"])
+    tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.val).toEqual([tmcOutdated, moocOutdated])
   })
@@ -116,8 +121,8 @@ suite("checkForExerciseUpdates action", function () {
       ...userDataMockValues.getCourses,
       makeMoocKind(moocCourse) as LocalCourseData,
     ]
-    tmcMockValues.checkExerciseUpdates = Err(new Error())
-    tmcMockValues.checkMoocExerciseUpdates = Ok(["mooc-ex-1"])
+    tmcMockValues.tmcExerciseUpdates = Err(new Error())
+    tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.ok).toBe(true)
     expect(result.val).toEqual([moocOutdated])
@@ -128,7 +133,7 @@ suite("checkForExerciseUpdates action", function () {
       ...userDataMockValues.getCourses,
       makeMoocKind(moocCourse) as LocalCourseData,
     ]
-    tmcMockValues.checkMoocExerciseUpdates = Err(new Error())
+    tmcMockValues.moocExerciseUpdates = Err(new Error())
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.ok).toBe(true)
     expect(result.val).toEqual([tmcOutdated])
@@ -140,10 +145,10 @@ suite("checkForExerciseUpdates action", function () {
       makeMoocKind(moocCourse) as LocalCourseData,
     ]
     tmcMockValues.isMoocAuthenticated = Ok(false)
-    tmcMockValues.checkMoocExerciseUpdates = Ok(["mooc-ex-1"])
+    tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.val).toEqual([tmcOutdated])
-    expect(tmcMock.checkMoocExerciseUpdates).not.toHaveBeenCalled()
+    expect(tmcMock.checkExerciseUpdates).not.toHaveBeenCalledWith("mooc", expect.anything())
   })
 
   test("should not error when the mooc auth check itself fails", async function () {
@@ -151,6 +156,6 @@ suite("checkForExerciseUpdates action", function () {
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.ok).toBe(true)
     expect(result.val).toEqual([tmcOutdated])
-    expect(tmcMock.checkMoocExerciseUpdates).not.toHaveBeenCalled()
+    expect(tmcMock.checkExerciseUpdates).not.toHaveBeenCalledWith("mooc", expect.anything())
   })
 })

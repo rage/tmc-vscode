@@ -356,10 +356,9 @@ const gradingStatus = (record: SubmissionRecord): unknown => {
       score_given: grading.score_given,
       grading_started_at: now,
       grading_completed_at: outcome === "pendingManual" ? null : now,
-      // A distinctive non-null value: the reconciliation test asserts this
-      // survives zod parsing, which catches the generated schema dropping the
-      // required-but-any-typed `feedback_json` field (it would otherwise be
-      // silently stripped). The field is otherwise unconsumed today.
+      // Plugin-private structured feedback the CLI deliberately drops. A
+      // distinctive non-null value, so the reconciliation test can assert it
+      // never reaches the CLI-stdout schema.
       feedback_json: { mock_feedback: "reconciliation sentinel" },
       feedback_text: grading.feedback_text,
     },

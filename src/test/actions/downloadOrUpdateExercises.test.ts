@@ -8,6 +8,7 @@ import type { ActionContext } from "../../actions/types"
 import Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type Settings from "../../config/settings"
+import { InvalidTokenError } from "../../errors"
 import { TmcPanel } from "../../panels/TmcPanel"
 import type { TmcExerciseDownload } from "../../shared/langsSchema"
 import type { ExtensionToWebview } from "../../shared/shared"
@@ -45,7 +46,7 @@ const createDownloadResult = (
   failed: [TmcExerciseDownload, string[]][] | undefined,
 ): DownloadExercisesMockResult => ({
   tmc: { downloaded, failed, skipped },
-  mooc: { downloaded: [], failed: [], skipped: [], not_attempted: [], stopped_for_auth: false },
+  mooc: { downloaded: [], failed: [], skipped: [] },
 })
 
 suite("downloadOrUpdateExercises action", function () {
@@ -178,8 +179,6 @@ suite("downloadOrUpdateExercises action", function () {
         downloaded: [{ "exercise-id": moocExerciseId, path: "/mooc/ex" }],
         failed: [],
         skipped: [],
-        not_attempted: [],
-        stopped_for_auth: false,
       },
     }
     const result = (
@@ -201,8 +200,6 @@ suite("downloadOrUpdateExercises action", function () {
         downloaded: [],
         failed: [[{ "exercise-id": moocExerciseId, path: "/mooc/ex" }, ["boom"]]],
         skipped: [],
-        not_attempted: [],
-        stopped_for_auth: false,
       },
     }
     const result = (
@@ -216,55 +213,55 @@ suite("downloadOrUpdateExercises action", function () {
     expect(result.successful).toEqual([])
   })
 
-  test("should mark mooc not_attempted exercises as failed when the batch stops for auth", async function () {
+  test("should report a permanent mooc auth failure and leave its exercises failed", async function () {
+    // The CLI now fails the whole mooc batch on a permanent auth failure rather
+    // than returning a partial result, so it arrives as an ordinary leg error.
     const downloadedId = "exercise-uuid-3"
-    const notAttemptedId = "exercise-uuid-4"
+    const undownloadedId = "exercise-uuid-4"
+    const moocError = new InvalidTokenError("401 unauthorized")
     tmcMockValues.downloadExercises = {
       tmc: { downloaded: [], failed: [], skipped: [] },
-      mooc: {
-        downloaded: [{ "exercise-id": downloadedId, path: "/mooc/ex" }],
-        failed: [],
-        skipped: [],
-        not_attempted: [{ "exercise-id": notAttemptedId, path: "/mooc/ex2" }],
-        stopped_for_auth: true,
-      },
+      mooc: { downloaded: [], failed: [], skipped: [] },
+      moocError,
     }
+
     const result = (
       await downloadOrUpdateExercises(
         actionContext(),
-        [ExerciseIdentifier.from(downloadedId), ExerciseIdentifier.from(notAttemptedId)],
+        [ExerciseIdentifier.from(downloadedId), ExerciseIdentifier.from(undownloadedId)],
         TEST_COURSE_ID,
       )
     ).unwrap()
-    expect(result.successful).toEqual([ExerciseIdentifier.from(downloadedId)])
-    expect(result.failed).toEqual([ExerciseIdentifier.from(notAttemptedId)])
+
+    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
+      "Failed to download exercises from courses.mooc.fi.",
+      moocError,
+    )
+    expect(result.successful).toEqual([])
+    expect(result.failed).toEqual([
+      ExerciseIdentifier.from(downloadedId),
+      ExerciseIdentifier.from(undownloadedId),
+    ])
   })
 
-  test("should not flip an already-closed exercise back to failed when the mooc batch stops for auth", async function () {
-    // The exercise that finished downloading before the batch stopped was
-    // already live-reported as "closed" via the progress callback; it must
-    // stay "closed" in the final broadcast even though the overall mooc
-    // result is now partial. Only the never-attempted exercise should end up
-    // non-"closed".
+  test("should keep an already-downloaded exercise closed when the mooc leg errors", async function () {
+    // An exercise that finished before the batch failed was already live-reported
+    // as "closed" via the progress callback; it must stay closed in the final
+    // broadcast even though the leg as a whole failed.
     const closedId = "exercise-uuid-5"
-    const notAttemptedId = "exercise-uuid-6"
+    const undownloadedId = "exercise-uuid-6"
     tmcMock.downloadExercises = vi.fn(async (_1, _2, cb) => {
       cb?.({ id: ExerciseIdentifier.from(closedId), percent: 1 })
       return {
         tmc: { downloaded: [], failed: [], skipped: [] },
-        mooc: {
-          downloaded: [{ "exercise-id": closedId, path: "/mooc/ex" }],
-          failed: [],
-          skipped: [],
-          not_attempted: [{ "exercise-id": notAttemptedId, path: "/mooc/ex2" }],
-          stopped_for_auth: true,
-        },
+        mooc: { downloaded: [], failed: [], skipped: [] },
+        moocError: new InvalidTokenError("401 unauthorized"),
       }
     }) as Langs["downloadExercises"]
 
     await downloadOrUpdateExercises(
       actionContext(),
-      [ExerciseIdentifier.from(closedId), ExerciseIdentifier.from(notAttemptedId)],
+      [ExerciseIdentifier.from(closedId), ExerciseIdentifier.from(undownloadedId)],
       TEST_COURSE_ID,
     )
     // The last message for each id reflects the final broadcast.
@@ -273,59 +270,7 @@ suite("downloadOrUpdateExercises action", function () {
         .filter((m) => "exerciseId" in m && ExerciseIdentifier.unwrap(m.exerciseId) === id)
         .at(-1)
     expect(lastMessageFor(closedId)).toEqual(wrapToMessage(closedId, "closed"))
-    expect(lastMessageFor(notAttemptedId)).toEqual(wrapToMessage(notAttemptedId, "downloadFailed"))
-  })
-
-  test("should show a session-expired message with the completed count when the mooc batch stops for auth", async function () {
-    const downloadedId = "exercise-uuid-7"
-    const skippedId = "exercise-uuid-8"
-    const notAttemptedId = "exercise-uuid-9"
-    tmcMockValues.downloadExercises = {
-      tmc: { downloaded: [], failed: [], skipped: [] },
-      mooc: {
-        downloaded: [{ "exercise-id": downloadedId, path: "/mooc/ex" }],
-        failed: [],
-        skipped: [{ "exercise-id": skippedId, path: "/mooc/ex2" }],
-        not_attempted: [{ "exercise-id": notAttemptedId, path: "/mooc/ex3" }],
-        stopped_for_auth: true,
-      },
-    }
-    await downloadOrUpdateExercises(
-      actionContext(),
-      [
-        ExerciseIdentifier.from(downloadedId),
-        ExerciseIdentifier.from(skippedId),
-        ExerciseIdentifier.from(notAttemptedId),
-      ],
-      TEST_COURSE_ID,
-    )
-    // 2 of 3 (downloaded + skipped, out of downloaded + skipped + not_attempted) completed.
-    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
-      "Downloaded 2 of 3 exercises from courses.mooc.fi, then your session expired —" +
-        " the rest will be available once you log in again.",
-    )
-  })
-
-  test("should not show the generic mooc failure message when the batch stops for auth", async function () {
-    tmcMockValues.downloadExercises = {
-      tmc: { downloaded: [], failed: [], skipped: [] },
-      mooc: {
-        downloaded: [],
-        failed: [],
-        skipped: [],
-        not_attempted: [{ "exercise-id": "exercise-uuid-10", path: "/mooc/ex" }],
-        stopped_for_auth: true,
-      },
-    }
-    await downloadOrUpdateExercises(
-      actionContext(),
-      [ExerciseIdentifier.from("exercise-uuid-10")],
-      TEST_COURSE_ID,
-    )
-    expect(dialogMock.errorNotification).not.toHaveBeenCalledWith(
-      expect.stringContaining("Failed to download exercises from courses.mooc.fi."),
-      expect.anything(),
-    )
+    expect(lastMessageFor(undownloadedId)).toEqual(wrapToMessage(undownloadedId, "downloadFailed"))
   })
 
   test("should download template if downloadOldSubmission setting is off", async function () {
@@ -445,8 +390,6 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
     downloaded: [],
     failed: [],
     skipped: [],
-    not_attempted: [],
-    stopped_for_auth: false,
   }
 
   // Mirrors what the CLI reports back for a leg that downloaded everything it was given.
@@ -474,8 +417,6 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
             })),
             failed: [],
             skipped: [],
-            not_attempted: [],
-            stopped_for_auth: false,
           },
         }
 

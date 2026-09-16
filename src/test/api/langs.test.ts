@@ -114,10 +114,10 @@ suite("Langs class arg building", function () {
     expect(args.some((arg) => arg.includes("[object Object]"))).toBe(false)
   })
 
-  test("checkMoocExerciseUpdates", async function () {
+  test("checkExerciseUpdates (mooc)", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
-    await langs.checkMoocExerciseUpdates()
+    await langs.checkExerciseUpdates("mooc")
     expect(calls[0]?.args).toEqual([
       "mooc",
       "--client-name",
@@ -273,12 +273,12 @@ suite("Langs class arg building", function () {
   test("submitMoocExerciseAndWaitForResults returns the grading status", async function () {
     const langs = newLangs()
     const grading = {
-      Grading: {
+      status: "grading",
+      grading: {
         grading_progress: "FullyGraded",
         score_given: 1,
         grading_started_at: "2026-07-21T00:00:00Z",
         grading_completed_at: "2026-07-21T00:00:01Z",
-        feedback_json: null,
         feedback_text: "All tests passed",
       },
     }
@@ -304,7 +304,10 @@ suite("Langs class arg building", function () {
         interrupt: (): void => {},
         getStderr: (): string => "",
         result: Promise.resolve(
-          Ok(dataOutput("mooc-submission-status", "NoGradingYet")) as Result<OutputData, BaseError>,
+          Ok(dataOutput("mooc-submission-status", { status: "no-grading-yet" })) as Result<
+            OutputData,
+            BaseError
+          >,
         ),
       })
     })
@@ -700,14 +703,14 @@ suite("Langs cross-backend independence", function () {
     expect(secondTmc.val).toBeInstanceOf(BottleneckError)
 
     // Throttle state is per-backend, so a mooc submission right after is unaffected.
-    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", "NoGradingYet")))
+    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", { status: "no-grading-yet" })))
     const mooc = await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex")
     expect(mooc.ok).toBe(true)
   })
 
   test("a mooc submission throttle does not block a tmc submission", async function () {
     const langs = newLangs()
-    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", "NoGradingYet")))
+    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", { status: "no-grading-yet" })))
     const firstMooc = await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex")
     expect(firstMooc.ok).toBe(true)
 
@@ -882,55 +885,6 @@ suite("Langs error-kind mapping", function () {
     expect(onMoocLogout).not.toHaveBeenCalled()
   })
 
-  test("downloadExercises fires the mooc logout event when the batch stops early for auth", async function () {
-    // `stopped_for_auth: true` arrives in a *successful* response (no error
-    // envelope for `_checkLangsResponse` to catch), so the event must be fired
-    // explicitly from the success path instead.
-    const langs = newLangs()
-    const onLogout = vi.fn()
-    const onMoocLogout = vi.fn()
-    langs.on("logout", onLogout)
-    langs.on("mooc-logout", onMoocLogout)
-    let organizationsCalls = 0
-    stubSpawn(langs, (_i, args) => {
-      if (args.includes("get-organizations")) {
-        organizationsCalls += 1
-        return Ok(dataOutput("organizations", []))
-      }
-      return Ok(
-        dataOutput("mooc-exercise-download", {
-          downloaded: [{ "exercise-id": "ex-1", path: "/mooc/ex-1" }],
-          skipped: [],
-          failed: [],
-          not_attempted: [{ "exercise-id": "ex-2", path: "/mooc/ex-2" }],
-          stopped_for_auth: true,
-        }),
-      )
-    })
-
-    // Prime an unrelated cache entry so we can observe the full-cache-clear below.
-    await langs.getTmcOrganizations()
-    expect(organizationsCalls).toBe(1)
-    await langs.getTmcOrganizations() // served from cache
-    expect(organizationsCalls).toBe(1)
-
-    const result = await langs.downloadExercises(
-      [ExerciseIdentifier.from("ex-1"), ExerciseIdentifier.from("ex-2")],
-      true,
-      () => {},
-    )
-    // A successful response, not an error -- yet the auth event still fires.
-    expect(result.moocError).toBeUndefined()
-    expect(result.mooc.stopped_for_auth).toBe(true)
-    expect(onMoocLogout).toHaveBeenCalledExactlyOnceWith(false)
-    expect(onLogout).not.toHaveBeenCalled()
-
-    // Mirrors the invalid-token/not-logged-in error path: the whole response
-    // cache is cleared, so the organizations request must spawn again.
-    await langs.getTmcOrganizations()
-    expect(organizationsCalls).toBe(2)
-  })
-
   test("deauthenticate fires the logout event as expected and stays quiet on auth errors", async function () {
     const langs = newLangs()
     const onLogout = vi.fn()
@@ -1025,13 +979,13 @@ suite("Langs response cache", function () {
     let callCount = 0
     stubSpawn(langs, () => {
       callCount += 1
-      return Ok(dataOutput("mooc-updated-exercises", [`ex-${callCount}`]))
+      return Ok(dataOutput("mooc-updated-exercises", [{ id: `ex-${callCount}` }]))
     })
-    const first = await langs.checkMoocExerciseUpdates()
-    const second = await langs.checkMoocExerciseUpdates()
+    const first = await langs.checkExerciseUpdates("mooc")
+    const second = await langs.checkExerciseUpdates("mooc")
     expect(callCount).toBe(1)
-    expect(first.val).toEqual(["ex-1"])
-    expect(second.val).toEqual(["ex-1"])
+    expect(first.val).toEqual([ExerciseIdentifier.from("ex-1")])
+    expect(second.val).toEqual([ExerciseIdentifier.from("ex-1")])
   })
 
   test("forceRefresh bypasses the cache", async function () {
@@ -1039,12 +993,12 @@ suite("Langs response cache", function () {
     let callCount = 0
     stubSpawn(langs, () => {
       callCount += 1
-      return Ok(dataOutput("mooc-updated-exercises", [`ex-${callCount}`]))
+      return Ok(dataOutput("mooc-updated-exercises", [{ id: `ex-${callCount}` }]))
     })
-    await langs.checkMoocExerciseUpdates()
-    const refreshed = await langs.checkMoocExerciseUpdates({ forceRefresh: true })
+    await langs.checkExerciseUpdates("mooc")
+    const refreshed = await langs.checkExerciseUpdates("mooc", { forceRefresh: true })
     expect(callCount).toBe(2)
-    expect(refreshed.val).toEqual(["ex-2"])
+    expect(refreshed.val).toEqual([ExerciseIdentifier.from("ex-2")])
   })
 
   test("getMoocCourseInstanceData serves a repeat view from cache", async function () {
@@ -1113,28 +1067,26 @@ suite("Langs exercise-update cache invalidation", function () {
     stubSpawn(langs, (_i, args) => {
       if (args.includes("check-exercise-updates")) {
         updateCheckCalls += 1
-        return Ok(dataOutput("mooc-updated-exercises", ["ex-uuid"]))
+        return Ok(dataOutput("mooc-updated-exercises", [{ id: "ex-uuid" }]))
       }
       return Ok(
         dataOutput("mooc-exercise-download", {
           downloaded: [],
           skipped: [],
           failed: [],
-          not_attempted: [],
-          stopped_for_auth: false,
         }),
       )
     })
 
-    await langs.checkMoocExerciseUpdates()
+    await langs.checkExerciseUpdates("mooc")
     // Served from cache, so no second spawn.
-    await langs.checkMoocExerciseUpdates()
+    await langs.checkExerciseUpdates("mooc")
     expect(updateCheckCalls).toBe(1)
 
     await langs.downloadExercises([ExerciseIdentifier.from("ex-uuid")], false, () => {})
 
     // The download must have dropped the mooc entry, forcing a real re-check.
-    await langs.checkMoocExerciseUpdates()
+    await langs.checkExerciseUpdates("mooc")
     expect(updateCheckCalls).toBe(2)
   })
 
@@ -1151,16 +1103,14 @@ suite("Langs exercise-update cache invalidation", function () {
           downloaded: [],
           skipped: [],
           failed: [],
-          not_attempted: [],
-          stopped_for_auth: false,
         }),
       )
     })
 
-    await langs.checkTmcExerciseUpdates()
+    await langs.checkExerciseUpdates("tmc")
     // Only mooc exercises are downloaded, so the tmc cache must survive.
     await langs.downloadExercises([ExerciseIdentifier.from("ex-uuid")], false, () => {})
-    await langs.checkTmcExerciseUpdates()
+    await langs.checkExerciseUpdates("tmc")
     expect(tmcUpdateCheckCalls).toBe(1)
   })
 })

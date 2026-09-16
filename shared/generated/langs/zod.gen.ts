@@ -227,17 +227,27 @@ export const zExerciseSlideSubmissionListItem = z.object({
     score_given: z.number().nullable()
 });
 
+/**
+ * A task submission's grading record.
+ */
+export const zGrading = z.object({
+    feedback_text: z.string().nullable(),
+    grading_completed_at: z.string().nullable(),
+    grading_progress: zGradingProgress,
+    grading_started_at: z.string().nullable(),
+    score_given: z.number().nullable()
+});
+
+/**
+ * The grading status of a task submission, as polled after `submit`.
+ */
 export const zExerciseTaskSubmissionStatus = z.union([
-    z.enum(['NoGradingYet']),
     z.object({
-        Grading: z.object({
-            feedback_json: z.unknown(),
-            feedback_text: z.string().nullable(),
-            grading_completed_at: z.string().nullable(),
-            grading_progress: zGradingProgress,
-            grading_started_at: z.string().nullable(),
-            score_given: z.number().nullable()
-        })
+        status: z.literal('no-grading-yet')
+    }),
+    z.object({
+        grading: zGrading,
+        status: z.literal('grading')
     })
 ]);
 
@@ -257,18 +267,36 @@ export const zKind = z.union([
  * MOOC exercise inside the projects directory.
  */
 export const zLocalMoocExercise = z.object({
+    'course-id': z.uuid(),
+    'course-slug': z.string(),
     'exercise-id': z.uuid(),
     'exercise-path': z.string(),
     'exercise-slug': z.string()
 });
 
 /**
- * TMC eercise inside the projects directory.
+ * TMC exercise inside the projects directory.
  */
 export const zLocalTmcExercise = z.object({
+    'course-slug': z.string(),
+    'exercise-id': z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }),
     'exercise-path': z.string(),
     'exercise-slug': z.string()
 });
+
+/**
+ * An exercise in the projects directory, tagged with the backend it came from.
+ * Both arms carry the ids needed to identify the exercise and its course, so a
+ * client can key off them without a second lookup.
+ */
+export const zLocalExercise = z.union([
+    zLocalTmcExercise.and(z.object({
+        backend: z.literal('tmc')
+    })),
+    zLocalMoocExercise.and(z.object({
+        backend: z.literal('mooc')
+    }))
+]);
 
 /**
  * Mirrors the `tmc` exercise service's `ModelSolutionSpec`
@@ -320,9 +348,7 @@ export const zMoocExerciseDownload = z.object({
 export const zDownloadOrUpdateMoocCourseExercisesResult = z.object({
     downloaded: z.array(zMoocExerciseDownload),
     failed: z.array(z.tuple([zMoocExerciseDownload, z.array(z.string())])).nullish(),
-    not_attempted: z.array(zMoocExerciseDownload).default([]),
-    skipped: z.array(zMoocExerciseDownload),
-    stopped_for_auth: z.boolean().default(false)
+    skipped: z.array(zMoocExerciseDownload)
 });
 
 /**
@@ -332,6 +358,15 @@ export const zMoocOldSubmissionRestore = z.union([
     z.literal('restored'),
     z.literal('nothing-to-download')
 ]);
+
+/**
+ * A local mooc exercise whose server-side version has changed. Shaped like
+ * [`UpdatedExercise`] so clients can treat the two backends' update checks
+ * alike; only the id type differs.
+ */
+export const zMoocUpdatedExercise = z.object({
+    id: z.uuid()
+});
 
 /**
  * post /api/v8/core/exercises/{exercise_id}/submissions
@@ -777,6 +812,9 @@ export const zUpdateResult = z.object({
     updated: z.array(zExercise)
 });
 
+/**
+ * A local TMC exercise whose server-side version has changed.
+ */
 export const zUpdatedExercise = z.object({
     id: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' })
 });
@@ -898,6 +936,10 @@ export const zDataKind = z.union([
         'output-data-kind': z.literal('submission-sandbox')
     }),
     z.object({
+        'output-data': z.array(zLocalExercise),
+        'output-data-kind': z.literal('local-exercises')
+    }),
+    z.object({
         'output-data': z.array(zLocalTmcExercise),
         'output-data-kind': z.literal('local-tmc-exercises')
     }),
@@ -910,7 +952,7 @@ export const zDataKind = z.union([
         'output-data-kind': z.literal('tmc-config')
     }),
     z.object({
-        'output-data': z.array(z.uuid()),
+        'output-data': z.array(zMoocUpdatedExercise),
         'output-data-kind': z.literal('mooc-updated-exercises')
     }),
     z.object({

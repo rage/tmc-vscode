@@ -56,7 +56,6 @@ import type {
   SubmissionFeedbackResponse,
   SubmissionFinished,
   TmcExerciseSlide,
-  UpdatedExercise,
 } from "../shared/langsSchema"
 import { CliOutput } from "../shared/langsSchema"
 import {
@@ -143,8 +142,10 @@ const organizationsRemapper: CacheConfig["remapper"] = (res) => {
  * A Class that provides an interface to all langs functionality.
  */
 export default class Langs {
-  private static readonly _exerciseUpdatesCacheKey = "exercise-updates"
-  private static readonly _moocExerciseUpdatesCacheKey = "mooc-exercise-updates"
+  /** tmc.mooc.fi and courses.mooc.fi are unrelated servers, so their update checks cache and invalidate separately. */
+  private static _exerciseUpdatesCacheKey(backend: "tmc" | "mooc"): string {
+    return `${backend}-exercise-updates`
+  }
 
   // Per-backend: tmc.mooc.fi and courses.mooc.fi are unrelated servers, so one must not throttle the other.
   private _nextTmcSubmissionAllowedTimestamp: number
@@ -594,33 +595,38 @@ export default class Langs {
   // ---------------------------------------------------------------------------------------------
 
   /**
-   * Checks for updates for all exercises in this client's context. Uses TMC-langs
-   * `check-exercise-updates` core command internally.
+   * Lists the locally downloaded exercises of `backend` that have a newer version on the server.
+   *
+   * The result is cached per backend; `forceRefresh` bypasses that cache. A caller
+   * wanting both backends calls this twice, so one server being unreachable does not
+   * discard the other's answer.
    */
-  public async checkTmcExerciseUpdates(
+  public async checkExerciseUpdates(
+    backend: "tmc" | "mooc",
     options?: CacheOptions,
-  ): Promise<Result<UpdatedExercise[], Error>> {
+  ): Promise<Result<ExerciseIdentifier[], Error>> {
+    const cacheConfig = {
+      forceRefresh: options?.forceRefresh,
+      key: Langs._exerciseUpdatesCacheKey(backend),
+    }
+    if (backend === "mooc") {
+      const res = await this._executeLangsCommand(
+        { backend, args: this._moocCmd("check-exercise-updates") },
+        "mooc-updated-exercises",
+        cacheConfig,
+      )
+      return res.map((x) =>
+        x.data["output-data"].map((exercise) => makeMoocKind({ moocExerciseId: exercise.id })),
+      )
+    }
     const res = await this._executeLangsCommand(
-      {
-        backend: "tmc",
-        args: this._tmcCmd("check-exercise-updates"),
-      },
+      { backend, args: this._tmcCmd("check-exercise-updates") },
       "updated-exercises",
-      { forceRefresh: options?.forceRefresh, key: Langs._exerciseUpdatesCacheKey },
+      cacheConfig,
     )
-    return res.map((x) => x.data["output-data"])
-  }
-
-  public async checkMoocExerciseUpdates(options?: CacheOptions): Promise<Result<string[], Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        backend: "mooc",
-        args: this._moocCmd("check-exercise-updates"),
-      },
-      "mooc-updated-exercises",
-      { forceRefresh: options?.forceRefresh, key: Langs._moocExerciseUpdatesCacheKey },
+    return res.map((x) =>
+      x.data["output-data"].map((exercise) => makeTmcKind({ tmcExerciseId: exercise.id })),
     )
-    return res.map((x) => x.data["output-data"])
   }
 
   /**
@@ -706,7 +712,7 @@ export default class Langs {
         "tmc-exercise-download",
       )
       const tmcMappedRes = tmcRes.andThen((x) => {
-        this._responseCache.delete(Langs._exerciseUpdatesCacheKey)
+        this._responseCache.delete(Langs._exerciseUpdatesCacheKey("tmc"))
         return Ok(x.data["output-data"])
       })
       if (tmcMappedRes.err) {
@@ -744,7 +750,7 @@ export default class Langs {
         "mooc-exercise-download",
       )
       const moocMappedRes = moocRes.andThen((x) => {
-        this._responseCache.delete(Langs._moocExerciseUpdatesCacheKey)
+        this._responseCache.delete(Langs._exerciseUpdatesCacheKey("mooc"))
         return Ok(x.data["output-data"])
       })
       if (moocMappedRes.err) {
@@ -753,24 +759,11 @@ export default class Langs {
         moocError = moocMappedRes.val
       } else {
         moocOutputData = moocMappedRes.val
-        if (moocOutputData.stopped_for_auth) {
-          // No error envelope here for `_checkLangsResponse` to catch, so fire the same
-          // unexpected-logout side effects it would for an invalid-token/not-logged-in error.
-          Logger.error("Mooc exercise download batch stopped early due to auth failure.")
-          this._responseCache.clear()
-          this._fireUnexpectedLogout("mooc")
-        }
       }
     }
 
     const tmcExercises = tmcOutputData ?? { downloaded: [], skipped: [], failed: [] }
-    const moocExercises = moocOutputData ?? {
-      downloaded: [],
-      skipped: [],
-      failed: [],
-      not_attempted: [],
-      stopped_for_auth: false,
-    }
+    const moocExercises = moocOutputData ?? { downloaded: [], skipped: [], failed: [] }
     return { tmc: tmcExercises, mooc: moocExercises, tmcError, moocError }
   }
 

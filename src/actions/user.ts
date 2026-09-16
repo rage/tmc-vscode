@@ -402,10 +402,10 @@ export async function submitMoocExercise(
 
       const status = submissionResult.val
       if (
-        status !== "NoGradingYet" &&
-        status.Grading.grading_progress === "FullyGraded" &&
-        status.Grading.score_given !== null &&
-        status.Grading.score_given > 0
+        status.status === "grading" &&
+        status.grading.grading_progress === "FullyGraded" &&
+        status.grading.score_given !== null &&
+        status.grading.score_given > 0
       ) {
         const passedResult = await userData.val.setExerciseAsPassed(
           "mooc",
