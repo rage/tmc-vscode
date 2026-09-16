@@ -16,7 +16,6 @@ export interface WorkspaceManagerMockValues {
   getExerciseByPath: Readonly<WorkspaceExercise> | undefined
   getExercisesByCoursePythonCourse: readonly WorkspaceExercise[]
   setExercises: Result<void, Error>
-  uriIsExercise: boolean
 }
 
 export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManagerMockValues] {
@@ -28,7 +27,6 @@ export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManager
     getExerciseByPath: undefined,
     getExercisesByCoursePythonCourse: workspaceExercises,
     setExercises: Ok.EMPTY,
-    uriIsExercise: true,
   }
 
   const mock = {
@@ -53,7 +51,6 @@ export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManager
         : [],
     ),
     setExercises: vi.fn(async () => values.setExercises),
-    uriIsExercise: vi.fn(() => values.uriIsExercise),
   }
 
   return [mock as unknown as WorkspaceManager, values]

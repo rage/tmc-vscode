@@ -197,19 +197,6 @@ export default class WorkspaceManager implements vscode.Disposable {
     return this._exercises.filter((x) => x.backend === backend && x.courseSlug === courseSlug)
   }
 
-  /**
-   * Checks whether or not the given `Uri` is an exercise or not.
-   */
-  public uriIsExercise(uri: vscode.Uri): boolean {
-    const exerciseFolderPath = this._resources.projectsDirectory
-    if (exerciseFolderPath) {
-      const relation = path.relative(exerciseFolderPath, uri.fsPath)
-      return !relation.startsWith("..")
-    }
-    Logger.error("Extension was not initialized properly")
-    return false
-  }
-
   public openCourseExercises(
     backend: "tmc" | "mooc",
     courseSlug: string,
