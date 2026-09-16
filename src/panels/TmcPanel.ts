@@ -807,7 +807,6 @@ function assertUnreachable(x: never): never {
   throw new Error(`unreachable ${x}`)
 }
 
-// helper to generate a random ids when creating panels
 function mapStatus(status: ExerciseStatus, expired: boolean): UITypes.ExerciseStatus {
   switch (status) {
     case ExerciseStatus.Closed:
@@ -819,8 +818,13 @@ function mapStatus(status: ExerciseStatus, expired: boolean): UITypes.ExerciseSt
   }
 }
 
+let nextPanelId = 0
+
+// identifies a panel for the lifetime of the extension host, so a buffered message can be
+// matched against the panel currently rendered
 export function randomPanelId(): number {
-  return Math.floor(Math.random() * 100_000_000)
+  nextPanelId += 1
+  return nextPanelId
 }
 
 function formatError(res: Result<unknown, Error>): { error: string; stack: string } | null {

@@ -503,3 +503,38 @@ suite("TmcPanel main panel lifecycle", () => {
     expect(TmcPanel.mainPanel).toBeUndefined()
   })
 })
+
+// Returns the document `TmcPanel`'s constructor hands the webview host.
+async function mountedWebviewHtml(): Promise<string> {
+  resetPanels()
+  const { panel } = createFakeWebviewPanel()
+  vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+
+  await TmcPanel.renderMain(
+    vscode.Uri.file("/ext"),
+    createMockContext(),
+    createMockActionContext(),
+    { id: randomPanelId(), type: "MyCourses", courseDeadlines: {} },
+  )
+  return panel.webview.html
+}
+
+function nonceOf(html: string): string {
+  const nonce = /<meta property="csp-nonce" content="([^"]*)"/.exec(html)?.[1]
+  if (nonce === undefined) {
+    throw new Error("the document declares no csp-nonce")
+  }
+  return nonce
+}
+
+suite("TmcPanel webview document", () => {
+  afterEach(resetPanels)
+
+  test("gives every document its own unguessable nonce", async () => {
+    const first = nonceOf(await mountedWebviewHtml())
+    const second = nonceOf(await mountedWebviewHtml())
+
+    expect(first).toMatch(/^[\w-]{32}$/)
+    expect(second).not.toBe(first)
+  })
+})
