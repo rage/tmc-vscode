@@ -4,13 +4,17 @@ import { vi } from "vitest"
 import type Settings from "../../config/settings"
 import { LogLevel } from "../../utilities/logger"
 
-/** What the settings currently read as; assign to any field to change one. */
+/**
+ * What the settings currently read as, keyed by `testMyCode.*` setting name like
+ * {@link SettingsMockChanges}. Assign to any field to change one without
+ * notifying a subscriber.
+ */
 export interface SettingsMockValues {
-  getDownloadOldSubmission: boolean
-  getAutomaticallyUpdateExercises: boolean
-  getJavaHome: string
-  getLogLevel: LogLevel
-  isInsider: boolean
+  downloadOldSubmission: boolean
+  updateExercisesAutomatically: boolean
+  javaHome: string
+  logLevel: LogLevel
+  insiderVersion: boolean
 }
 
 /**
@@ -27,11 +31,11 @@ export interface SettingsMockChanges {
 
 export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMockChanges] {
   const values: SettingsMockValues = {
-    getDownloadOldSubmission: false,
-    getAutomaticallyUpdateExercises: false,
-    getJavaHome: "",
-    getLogLevel: LogLevel.Errors,
-    isInsider: false,
+    downloadOldSubmission: false,
+    updateExercisesAutomatically: false,
+    javaHome: "",
+    logLevel: LogLevel.Errors,
+    insiderVersion: false,
   }
 
   let onChangeDownloadOldSubmission: ((value: boolean) => void) | undefined
@@ -39,13 +43,13 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
   let onChangeUpdateExercisesAutomatically: ((value: boolean) => void) | undefined
 
   const mock = {
-    getDownloadOldSubmission: vi.fn(() => values.getDownloadOldSubmission),
-    getAutomaticallyUpdateExercises: vi.fn(() => values.getAutomaticallyUpdateExercises),
-    getJavaHome: vi.fn(() => values.getJavaHome),
-    getLogLevel: vi.fn(() => values.getLogLevel),
-    isInsider: vi.fn(() => values.isInsider),
+    getDownloadOldSubmission: vi.fn(() => values.downloadOldSubmission),
+    getAutomaticallyUpdateExercises: vi.fn(() => values.updateExercisesAutomatically),
+    getJavaHome: vi.fn(() => values.javaHome),
+    getLogLevel: vi.fn(() => values.logLevel),
+    isInsider: vi.fn(() => values.insiderVersion),
     configureIsInsider: vi.fn(async (value: boolean) => {
-      values.isInsider = value
+      values.insiderVersion = value
     }),
     dispose: vi.fn(),
     set onChangeDownloadOldSubmission(callback: (value: boolean) => void) {
@@ -61,12 +65,12 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
 
   const changes: SettingsMockChanges = {
     downloadOldSubmission: (value) => {
-      values.getDownloadOldSubmission = value
+      values.downloadOldSubmission = value
       onChangeDownloadOldSubmission?.(value)
     },
     hideMetaFiles: (value) => onChangeHideMetaFiles?.(value),
     updateExercisesAutomatically: (value) => {
-      values.getAutomaticallyUpdateExercises = value
+      values.updateExercisesAutomatically = value
       onChangeUpdateExercisesAutomatically?.(value)
     },
   }

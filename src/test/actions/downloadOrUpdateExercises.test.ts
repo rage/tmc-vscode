@@ -275,7 +275,7 @@ suite("downloadOrUpdateExercises action", function () {
 
   test("should download template if downloadOldSubmission setting is off", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [], undefined)
-    settingsMockValues.getDownloadOldSubmission = false
+    settingsMockValues.downloadOldSubmission = false
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
     expect(tmcMock.downloadExercises).toHaveBeenCalledWith(
       expect.anything(),
@@ -295,7 +295,7 @@ suite("downloadOrUpdateExercises action", function () {
 
   test("should not necessarily download template if downloadOldSubmission setting is on", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [], undefined)
-    settingsMockValues.getDownloadOldSubmission = true
+    settingsMockValues.downloadOldSubmission = true
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
     expect(tmcMock.downloadExercises).not.toHaveBeenCalledWith(
       expect.anything(),
