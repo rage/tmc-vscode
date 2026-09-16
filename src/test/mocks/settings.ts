@@ -47,7 +47,6 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
     configureIsInsider: vi.fn(async (value: boolean) => {
       values.isInsider = value
     }),
-    updateExtensionSettingsToStorage: vi.fn(async () => {}),
     dispose: vi.fn(),
     set onChangeDownloadOldSubmission(callback: (value: boolean) => void) {
       onChangeDownloadOldSubmission = callback
