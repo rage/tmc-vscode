@@ -133,6 +133,7 @@ const submissions: (OldSubmission & { file: string })[] = [
       exerciseName: pythonExercisePassing.exercise.name,
       id: submissionId++,
       passed: true,
+      points: pythonExercisePassing.exercise.name,
       timestamp: new Date(2000, 1, 1),
       userId: 1,
     }),
