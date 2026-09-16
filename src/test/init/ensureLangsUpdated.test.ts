@@ -339,6 +339,27 @@ suite("ensureLangsUpdated end-to-end", function () {
     expect(state.hits.sha).toBe(0)
   })
 
+  test("leaves no partial checksum behind: the .sha256 appears only once complete", async function () {
+    const cli = Buffer.from("fake cli binary contents")
+    const state: ServeState = {
+      cli,
+      shaFor: () => `${sha256(cli)}  ${executable}`,
+      hits: { cli: 0, sha: 0 },
+    }
+    server = await startLangsServer(state)
+    const [dialog] = createDialogMock()
+    const folder = path.join(tmpDir.name, "cli")
+
+    const result = await ensureLangsUpdated(folder, dialog, {
+      downloadUrl: serverUrl(server),
+      version,
+    })
+
+    expect(result.ok).toBe(true)
+    // The temp file the checksum is renamed from must not survive.
+    expect(fs.existsSync(path.join(folder, executable + ".sha256.tmp"))).toBe(false)
+  })
+
   test("a cached CLI whose checksum file is missing recovers via redownload instead of throwing", async function () {
     // Simulates a prior run that downloaded+renamed the CLI but failed to
     // write its .sha256: the binary exists on disk, the checksum does not.

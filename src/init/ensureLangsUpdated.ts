@@ -25,6 +25,10 @@ export function parseSha256Sum(contents: string): string {
  * `.sha256` file at `shaPath`. Used both for the initial check and for
  * re-verification after a redownload.
  *
+ * The checksum is served by the same origin as the binary, so a match proves the
+ * download is intact, not that it is the build we published: this detects
+ * corruption and truncation, never substitution.
+ *
  * The CLI is hashed as a stream so a large binary is never read fully into
  * memory and the hashing doesn't block the event loop in one burst during
  * activation. A missing or unreadable CLI/checksum file is reported as a
@@ -65,8 +69,7 @@ function hashFile(filePath: string): Promise<string> {
     const stream = fs.createReadStream(filePath)
     stream.on("error", reject)
     stream.on("data", (chunk) => hash.update(chunk))
-    // windows returns the calculated hash in uppercase for some reason...
-    stream.on("end", () => resolve(Buffer.from(hash.digestSync()).toString("hex").toLowerCase()))
+    stream.on("end", () => resolve(Buffer.from(hash.digestSync()).toString("hex")))
   })
 }
 
@@ -157,8 +160,8 @@ async function ensureLangsUpdated(
       )
     }
 
-    // Re-verify after the redownload so we never hand back an unverified
-    // binary; a persistent mismatch is fatal.
+    // Re-verify after the redownload so we never hand back a binary that does
+    // not match its checksum; a persistent mismatch is fatal.
     const recheck = await verifyCli(cliPath, shaPath)
     if (!recheck.match) {
       return Err(
@@ -241,14 +244,15 @@ async function downloadLangs(
   }
   await fs.rename(tempPath, cliPath)
 
-  // download shasum if necessary
-  if (!fs.existsSync(shaPath)) {
-    const result = await downloadFile(shaUrl, shaPath)
-    if (result.err) {
-      Logger.error("An error occurred while downloading the checksum for TMC-langs:", result.val)
-      return Err(result.val)
-    }
+  // Same temp-then-rename as the binary: a checksum file that exists is complete.
+  const shaTempPath = shaPath + ".tmp"
+  const shaResult = await downloadFile(shaUrl, shaTempPath)
+  if (shaResult.err) {
+    Logger.error("An error occurred while downloading the checksum for TMC-langs:", shaResult.val)
+    return Err(shaResult.val)
   }
+  await fs.rename(shaTempPath, shaPath)
+
   return Ok.EMPTY
 }
 
