@@ -23,7 +23,7 @@ suite("addNewCourse action (mooc)", function () {
   let userData: UserData
   let workspaceManagerMock: WorkspaceManager
   let uiMock: UI
-  let addChildWithId: ReturnType<typeof vi.fn>
+  let refresh: ReturnType<typeof vi.fn>
   let createWorkspaceFile: ReturnType<typeof vi.fn>
 
   const actionContext = (): ActionContext => ({
@@ -39,8 +39,8 @@ suite("addNewCourse action (mooc)", function () {
     ;[workspaceManagerMock] = createWorkspaceMangerMock()
     createWorkspaceFile = vi.fn()
     workspaceManagerMock.createWorkspaceFile = createWorkspaceFile as never
-    addChildWithId = vi.fn()
-    uiMock = { treeDP: { addChildWithId } } as unknown as UI
+    refresh = vi.fn()
+    uiMock = { treeDP: { refresh } } as unknown as UI
     const storage = new Storage(createMockContext())
     await storage.updateUserData({ courses: [], mooc_courses: [] })
     userData = new UserData(storage)
@@ -65,7 +65,7 @@ suite("addNewCourse action (mooc)", function () {
     // Organization comes from organization_name, not the passed slug.
     expect(stored?.organization).toBe(moocCourseInstance.organization_name)
     expect(createWorkspaceFile).toHaveBeenCalledWith(moocCourseInstance.slug, "mooc")
-    expect(addChildWithId).toHaveBeenCalledTimes(1)
+    expect(refresh).toHaveBeenCalledTimes(1)
     // The fetched exercise slides are recorded, keyed by their exercise id (the
     // identity the bulk download subcommand resolves `--exercise-id` against),
     // so the course-details view can render them for download.

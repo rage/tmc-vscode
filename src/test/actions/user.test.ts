@@ -138,7 +138,7 @@ function contextWith(
   userData: Partial<UserData>,
 ): [ActionContext, Dialog, ReturnType<typeof vi.fn>] {
   const [dialog] = createDialogMock()
-  const removeChildWithId = vi.fn()
+  const refresh = vi.fn()
   return [
     {
       ...createMockActionContext(),
@@ -147,14 +147,14 @@ function contextWith(
         unsetSetting: vi.fn(async () => Ok.EMPTY),
       }) as unknown as ActionContext["langs"],
       userData: Ok(userData) as unknown as ActionContext["userData"],
-      ui: { treeDP: { removeChildWithId } } as unknown as ActionContext["ui"],
+      ui: { treeDP: { refresh } } as unknown as ActionContext["ui"],
       workspaceManager: Ok({
         activeCourse: undefined,
         activeCourseBackend: undefined,
       }) as unknown as ActionContext["workspaceManager"],
     },
     dialog,
-    removeChildWithId,
+    refresh,
   ]
 }
 
@@ -190,7 +190,7 @@ suite("removeCourse action", function () {
 
   test("tells the user when the removal could not be persisted", async function () {
     const error = new Error("globalState is full")
-    const [actionContext, dialog, removeChildWithId] = contextWith({
+    const [actionContext, dialog, refresh] = contextWith({
       getCourse: () => Ok(course),
       deleteCourse: vi.fn(async () => Err(error)),
     } as unknown as Partial<UserData>)
@@ -198,11 +198,11 @@ suite("removeCourse action", function () {
     await removeCourse(actionContext, CourseIdentifier.from(1))
 
     expect(dialog.errorNotification).toHaveBeenCalledWith(expect.any(String), error)
-    expect(removeChildWithId).not.toHaveBeenCalled()
+    expect(refresh).not.toHaveBeenCalled()
   })
 
   test("drops the course from the tree once the removal is persisted", async function () {
-    const [actionContext, dialog, removeChildWithId] = contextWith({
+    const [actionContext, dialog, refresh] = contextWith({
       getCourse: () => Ok(course),
       deleteCourse: vi.fn(async () => Ok.EMPTY),
     } as unknown as Partial<UserData>)
@@ -210,7 +210,7 @@ suite("removeCourse action", function () {
     await removeCourse(actionContext, CourseIdentifier.from(1))
 
     expect(dialog.errorNotification).not.toHaveBeenCalled()
-    expect(removeChildWithId).toHaveBeenCalledWith("myCourses", expect.any(String))
+    expect(refresh).toHaveBeenCalled()
   })
 })
 

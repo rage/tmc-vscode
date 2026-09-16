@@ -1,18 +1,12 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
-import type * as vscode from "vscode"
 
 import type { ActionContext } from "../../actions/types"
 import { registerUiActions } from "../../init/ui"
+import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
+import type { TreeEntry } from "../../ui/treeview/treeview"
 import type UI from "../../ui/ui"
 import { createMockActionContext } from "../mocks/actionContext"
-
-interface RegisteredAction {
-  label: string
-  id: string
-  groups: unknown[]
-  command: vscode.Command
-}
 
 const healthyResults = {
   userData: Ok({ getCourses: () => [] }) as never,
@@ -22,13 +16,11 @@ const healthyResults = {
   workspaceManager: Ok({}) as never,
 }
 
-function registerAndCollect(overrides: Partial<ActionContext> = {}): RegisteredAction[] {
-  const actions: RegisteredAction[] = []
-  const registerAction = vi.fn(
-    (label: string, id: string, groups: unknown[], command: vscode.Command) => {
-      actions.push({ label, id, groups, command })
-    },
-  )
+function registerAndCollect(overrides: Partial<ActionContext> = {}): TreeEntry[] {
+  const entries: TreeEntry[] = []
+  const registerAction = vi.fn((entry: TreeEntry) => {
+    entries.push(entry)
+  })
   const ui = { treeDP: { registerAction } } as unknown as UI
   const loggedIn = { id: 1, not: { id: 1, negated: true } }
 
@@ -39,24 +31,55 @@ function registerAndCollect(overrides: Partial<ActionContext> = {}): RegisteredA
     visibilityGroups: { loggedIn } as never,
     ...overrides,
   })
-  return actions
+  return entries
 }
 
 suite("registerUiActions", function () {
   // The tree view is the entry point for a user with no credentials at all, so it
   // must point at the courses.mooc.fi device flow -- the only login left.
   test("the Log in entry runs the mooc device-flow login", function () {
-    const logIn = registerAndCollect().find((action) => action.id === "logIn")
+    const logIn = registerAndCollect().find((entry) => entry.id === "logIn")
     expect(logIn?.label).toBe("Log in")
     expect(logIn?.command.command).toBe("tmc.showMoocLogin")
   })
 
   test("the Log in entry is shown only while logged out", function () {
-    const actions = registerAndCollect()
-    const logIn = actions.find((action) => action.id === "logIn")
-    const logOut = actions.find((action) => action.id === "logOut")
+    const entries = registerAndCollect()
+    const logIn = entries.find((entry) => entry.id === "logIn")
+    const logOut = entries.find((entry) => entry.id === "logOut")
     expect(logIn?.groups).toEqual([{ id: 1, negated: true }])
     expect(logOut?.groups).toEqual([{ id: 1, not: { id: 1, negated: true } }])
+  })
+
+  // The tree is the one place a course is labelled, and it shows the title: the slug
+  // belongs to paths, workspace file names and setting keys.
+  test("courses are listed under My Courses by title, on both backends", function () {
+    const courses = [
+      makeTmcKind({ id: 1, name: "tmc-slug", title: "The Python Course" }),
+      makeMoocKind({ id: "course-uuid", name: "mooc-slug", title: "Introduction to CS" }),
+    ]
+    const myCourses = registerAndCollect({
+      userData: Ok({ getCourses: () => courses }) as never,
+    }).find((entry) => entry.id === "myCourses")
+
+    expect(myCourses?.children?.()).toEqual([
+      {
+        label: "The Python Course",
+        id: "1",
+        command: expect.objectContaining({
+          command: "tmc.courseDetails",
+          arguments: [CourseIdentifier.from(1)],
+        }),
+      },
+      {
+        label: "Introduction to CS",
+        id: "course-uuid",
+        command: expect.objectContaining({
+          command: "tmc.courseDetails",
+          arguments: [CourseIdentifier.from("course-uuid")],
+        }),
+      },
+    ])
   })
 
   // A failed activation is the one state whose entire remaining purpose is to let the
@@ -68,7 +91,7 @@ suite("registerUiActions", function () {
       resources: failure,
       workspaceManager: failure,
       exerciseDecorationProvider: failure,
-    }).map((action) => action.id)
+    }).map((entry) => entry.id)
 
     expect(ids).toContain("tmc.viewInitializationErrorHelp")
     expect(ids).toContain("workbench.action.restartExtensionHost")
@@ -77,7 +100,7 @@ suite("registerUiActions", function () {
   })
 
   test("the healthy tree offers no recovery entries", function () {
-    const ids = registerAndCollect().map((action) => action.id)
+    const ids = registerAndCollect().map((entry) => entry.id)
     expect(ids).not.toContain("tmc.viewInitializationErrorHelp")
     expect(ids).not.toContain("workbench.action.restartExtensionHost")
   })
@@ -94,7 +117,7 @@ suite("registerUiActions", function () {
         }
       })
 
-      const ids = registerAndCollect(overrides).map((action) => action.id)
+      const ids = registerAndCollect(overrides).map((entry) => entry.id)
       expect(new Set(ids).size, `duplicate entry for ${JSON.stringify(overrides)}`).toBe(ids.length)
     }
   })

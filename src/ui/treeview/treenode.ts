@@ -4,7 +4,6 @@ import * as vscode from "vscode"
  * Data class representing an item in the action treeview
  */
 export class TmcTreeNode extends vscode.TreeItem {
-  public children: Map<string, TmcTreeNode>
   public override readonly id: string
 
   public constructor(
@@ -13,7 +12,6 @@ export class TmcTreeNode extends vscode.TreeItem {
     command: vscode.Command,
     contextValue?: string,
     collapsibleState?: vscode.TreeItemCollapsibleState,
-    subActions?: TmcTreeNode[],
     iconId?: string,
   ) {
     super(label, collapsibleState)
@@ -25,9 +23,5 @@ export class TmcTreeNode extends vscode.TreeItem {
       this.iconPath = new vscode.ThemeIcon(iconId)
     }
     this.command = command
-    this.children = new Map<string, TmcTreeNode>()
-    if (subActions) {
-      subActions.forEach((child) => this.children.set(child.id, child))
-    }
   }
 }

@@ -2,7 +2,8 @@ import type { Result } from "ts-results"
 import { Err } from "ts-results"
 
 import { InitializationError } from "../errors"
-import { CourseIdentifier, match } from "../shared/shared"
+import type { CourseIdentifier } from "../shared/shared"
+import { match } from "../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import { Logger } from "../utilities"
 import {
@@ -62,11 +63,7 @@ export async function addNewCourse(
       if (addResult.err) {
         return addResult
       }
-      ui.treeDP.addChildWithId("myCourses", localData.id, localData.title, {
-        command: "tmc.courseDetails",
-        title: "Go To Course Details",
-        arguments: [CourseIdentifier.from(localData.id)],
-      })
+      ui.treeDP.refresh()
       workspaceManager.val.createWorkspaceFile(courseData.details.name, "tmc")
       return refreshLocalExercises(actionContext)
     },
@@ -116,11 +113,7 @@ export async function addNewCourse(
       if (addResult.err) {
         return addResult
       }
-      ui.treeDP.addChildWithId("myCourses", localData.id, localData.name, {
-        command: "tmc.courseDetails",
-        title: "Go To Course Details",
-        arguments: [CourseIdentifier.from(localData.id)],
-      })
+      ui.treeDP.refresh()
       workspaceManager.val.createWorkspaceFile(moocCourse.slug, "mooc")
       return refreshLocalExercises(actionContext)
     },
