@@ -200,3 +200,61 @@ suite("registerCommands", function () {
     expect(missing).toEqual([])
   })
 })
+
+// VS Code's own Windows/Linux defaults, transcribed. An extension binding of
+// equal specificity outranks a default, so any key claimed from here is
+// shadowed wherever the binding's `when` holds.
+const vsCodeDefaultKeys: Record<string, string> = {
+  "ctrl+shift+b": "workbench.action.tasks.build",
+  "ctrl+shift+c": "workbench.action.terminal.openNativeConsole",
+  "ctrl+shift+d": "workbench.view.debug",
+  "ctrl+shift+e": "workbench.view.explorer",
+  "ctrl+shift+f": "workbench.view.search",
+  "ctrl+shift+g": "workbench.view.scm",
+  "ctrl+shift+h": "editor.action.startFindReplaceAction",
+  "ctrl+shift+i": "editor.action.formatDocument",
+  "ctrl+shift+k": "editor.action.deleteLines",
+  "ctrl+shift+l": "editor.action.selectHighlights",
+  "ctrl+shift+m": "workbench.actions.view.problems",
+  "ctrl+shift+n": "workbench.action.newWindow",
+  "ctrl+shift+o": "workbench.action.gotoSymbol",
+  "ctrl+shift+p": "workbench.action.showCommands",
+  "ctrl+shift+s": "workbench.action.files.saveAs",
+  "ctrl+shift+t": "workbench.action.reopenClosedEditor",
+  "ctrl+shift+u": "workbench.action.output.toggleOutput",
+  "ctrl+shift+v": "markdown.showPreview",
+  "ctrl+shift+w": "workbench.action.closeWindow",
+  "ctrl+shift+x": "workbench.view.extensions",
+  "ctrl+shift+y": "workbench.debug.action.toggleRepl",
+  "ctrl+shift+z": "redo",
+}
+
+// Shadowing kept deliberately: both keys shipped years ago and students have
+// learned them, which outweighs losing the defaults inside a course workspace.
+const acceptedShadowedKeys = ["ctrl+shift+c", "ctrl+shift+t"]
+
+suite("keybindings", function () {
+  // Adding a binding means editing this list, which is what puts the shadowing
+  // check below in front of whoever adds it.
+  test("claims exactly the reviewed keys", function () {
+    expect(packageJson().contributes.keybindings).toEqual([
+      { command: "tmc.closeExercise", key: "ctrl+shift+c", when: "test-my-code:WorkspaceActive" },
+      { command: "tmc.selectAction", key: "ctrl+shift+a", when: "test-my-code:WorkspaceActive" },
+      { command: "tmc.testExercise", key: "ctrl+shift+t", when: "test-my-code:WorkspaceActive" },
+    ])
+  })
+
+  test("shadows no VS Code default beyond the two accepted ones", function () {
+    const shadowed = (packageJson().contributes.keybindings ?? [])
+      .map((x) => x.key)
+      .filter((key) => key in vsCodeDefaultKeys && !acceptedShadowedKeys.includes(key))
+    expect(shadowed).toEqual([])
+  })
+
+  // A binding with no `when` applies in every window, course workspace or not.
+  test("gates every key on an open course workspace", function () {
+    for (const binding of packageJson().contributes.keybindings ?? []) {
+      expect(binding.when).toBe("test-my-code:WorkspaceActive")
+    }
+  })
+})
