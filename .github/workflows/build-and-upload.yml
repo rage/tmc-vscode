@@ -43,6 +43,15 @@ jobs:
         with:
           name: packaged-extension
           path: extension/
+      # The vsix excludes these, so this run is the only place the maps for the
+      # build it produced ever exist. Without them a production stack trace is
+      # minified column numbers.
+      - name: Upload source maps
+        uses: actions/upload-artifact@v4.4.0
+        if: success()
+        with:
+          name: source-maps
+          path: dist/*.map
       - name: Publish to Visual Studio Marketplace
         if: success() && github.event_name == 'release'
         run: |
