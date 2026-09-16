@@ -8,7 +8,8 @@ import {
   TMC_ARCHIVE_MIME,
 } from "../../backend/mooc/fixtures"
 import type { ExerciseSlide } from "../../backend/mooc/fixtures"
-import { createMoocApp, resetMoocState } from "../../backend/mooc/router"
+import type { MoocMockControls } from "../../backend/mooc/router"
+import { createMoocApp, moocMockOf } from "../../backend/mooc/router"
 import { zPasteResult } from "../shared/generated/langs/zod.gen"
 import {
   ExerciseSlideSubmissionListItem,
@@ -35,16 +36,17 @@ import {
 // use). A submission is made in two calls: upload files, then submit an
 // `answer_kind: "file"` body naming them.
 
-const listen = (): Promise<{ server: Server; base: string }> =>
+const listen = (): Promise<{ server: Server; base: string; mock: MoocMockControls }> =>
   new Promise((resolve) => {
     // This suite reconciles response shapes, not auth; the mock enforces a
     // bearer token by default, so turn it off here.
-    const server = createMoocApp({ requireAuth: false }).listen(0, "127.0.0.1", () => {
+    const app = createMoocApp({ requireAuth: false })
+    const server = app.listen(0, "127.0.0.1", () => {
       const addr = server.address()
       if (!addr || typeof addr === "string") {
         throw new Error("expected a TCP address")
       }
-      resolve({ server, base: `http://127.0.0.1:${addr.port}` })
+      resolve({ server, base: `http://127.0.0.1:${addr.port}`, mock: moocMockOf(app) })
     })
   })
 
@@ -103,9 +105,10 @@ const expectValid = (
 suite("mooc mock <-> langsSchema reconciliation", function () {
   let server: Server
   let base: string
+  let mock: MoocMockControls
 
   beforeAll(async function () {
-    ;({ server, base } = await listen())
+    ;({ server, base, mock } = await listen())
   })
 
   afterAll(function () {
@@ -113,7 +116,7 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
   })
 
   beforeEach(function () {
-    resetMoocState()
+    mock.reset()
   })
 
   const api = (p: string): string => `${base}/api/v0/exercise-services/client${p}`

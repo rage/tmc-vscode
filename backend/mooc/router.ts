@@ -205,20 +205,6 @@ export interface MoocMockControls {
   rebase: (baseUrl: string) => void
 }
 
-// Every mock alive in this process, so resetMoocState can reach the ones whose
-// app a caller does not hold.
-const liveMocks = new Set<MoocMockControls>()
-
-/**
- * Clears every mooc mock in this process. A caller holding the app should reset
- * just that one via {@link moocMockOf} instead.
- */
-export const resetMoocState = (): void => {
-  for (const mock of liveMocks) {
-    mock.reset()
-  }
-}
-
 /** Records one submission under both of its id spaces and against its exercise. */
 const retainSubmission = (
   state: MoocMockState,
@@ -1017,7 +1003,6 @@ export const registerMoocRoutes = (
 ): MoocMockControls => {
   const state = createMoocMockState(options.baseUrl ?? DEFAULT_MOOC_MOCK_BASE_URL)
   const controls = createMoocMockControls(state)
-  liveMocks.add(controls)
   app.locals.moocMock = controls
   const api = createMoocApi(state, options)
 
