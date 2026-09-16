@@ -4,8 +4,8 @@
   import Button from "../components/Button.svelte"
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
   import TestResults from "../components/TestResults.svelte"
-  import type { ExerciseTestsPanel, TestResultData } from "../shared/shared"
-  import { BaseError, assertUnreachable, unwrap } from "../shared/shared"
+  import type { ExerciseTestsPanel, TestResultData, WebviewError } from "../shared/shared"
+  import { assertUnreachable, unwrap } from "../shared/shared"
   import { addMessageListener } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
@@ -19,7 +19,7 @@
   const course = $derived(unwrap(panel.course))
   const exercise = $derived(unwrap(panel.exercise))
 
-  let testError = $state<BaseError | undefined>(undefined)
+  let testError = $state<WebviewError | undefined>(undefined)
   let pasteResult = $state<string | undefined>(undefined)
   let pasteError = $state<string | undefined>(undefined)
   let testResults = $state<TestResultData | undefined>(undefined)
@@ -188,9 +188,10 @@
   {#if testError}
     <div role="alert">
       <h2>Error while trying to run tests</h2>
-      <code>
-        {testError.details}
-      </code>
+      <div class="error-message">{testError.message}</div>
+      {#if testError.details}
+        <code>{testError.details}</code>
+      {/if}
     </div>
     <div>
       The tests could not be run locally. You can still submit your answer to the server, or close
@@ -228,6 +229,7 @@
     margin-top: 1rem;
     margin-bottom: 1rem;
   }
+  .error-message,
   code {
     white-space: pre-wrap;
   }

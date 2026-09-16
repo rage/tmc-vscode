@@ -135,6 +135,7 @@ suite("ExerciseTests panel", () => {
     postTestError({ message: "Failed to run tests", details: "no compiler on PATH" })
 
     const alert = await screen.findByRole("alert")
+    expect(alert).toHaveTextContent("Failed to run tests")
     expect(alert).toHaveTextContent("no compiler on PATH")
     expect(screen.getByText(/You can still submit your answer to the server/)).toBeInTheDocument()
 
