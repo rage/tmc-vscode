@@ -1,4 +1,4 @@
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
 import type { ActionContext } from "../../actions/types"
@@ -14,10 +14,11 @@ import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 const checkForExerciseUpdates = vi.hoisted(() => vi.fn())
+const downloadOrUpdateExercises = vi.hoisted(() => vi.fn())
 
 vi.mock("../../actions", () => ({
   checkForExerciseUpdates,
-  downloadOrUpdateExercises: vi.fn(),
+  downloadOrUpdateExercises,
 }))
 
 vi.mock("../../panels/updateablesRegistry", () => ({
@@ -66,6 +67,7 @@ suite("updateExercises command", function () {
   beforeEach(function () {
     vi.mocked(postUpdateables).mockClear()
     checkForExerciseUpdates.mockReset()
+    downloadOrUpdateExercises.mockReset()
   })
 
   test("postpones the reminder once per course, not once per exercise", async function () {
@@ -85,5 +87,34 @@ suite("updateExercises command", function () {
         CourseIdentifierNs.toString(id as CourseIdentifier),
       ),
     ).toEqual(["1", "2"])
+  })
+
+  test("puts the updateable exercises back when the download fails", async function () {
+    checkForExerciseUpdates.mockResolvedValue(Ok([outdated(1, 10), outdated(1, 11)]))
+    downloadOrUpdateExercises.mockResolvedValue(Err(new Error("download failed")))
+    const [actionContext, dialog] = contextWith(true)
+
+    await updateExercises(actionContext, "loud")
+
+    const postedLists = vi
+      .mocked(postUpdateables)
+      .mock.calls.map(([, exerciseIds]) => exerciseIds.map((x) => ExerciseIdentifierNs.unwrap(x)))
+    expect(postedLists).toEqual([[], [10, 11]])
+    expect(dialog.errorNotification).toHaveBeenCalled()
+  })
+
+  test("reports only the exercises that failed when the download succeeds", async function () {
+    checkForExerciseUpdates.mockResolvedValue(Ok([outdated(1, 10), outdated(1, 11)]))
+    downloadOrUpdateExercises.mockResolvedValue(
+      Ok({ successful: [], failed: [ExerciseIdentifierNs.from(11)] }),
+    )
+    const [actionContext] = contextWith(true)
+
+    await updateExercises(actionContext, "loud")
+
+    const postedLists = vi
+      .mocked(postUpdateables)
+      .mock.calls.map(([, exerciseIds]) => exerciseIds.map((x) => ExerciseIdentifierNs.unwrap(x)))
+    expect(postedLists).toEqual([[], [11]])
   })
 })

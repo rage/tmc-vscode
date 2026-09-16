@@ -64,6 +64,9 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
       exercisesToUpdate.map((x) => x.exerciseId),
     )
     if (downloadResult.err) {
+      // The lists were emptied before starting; leaving them that way would tell
+      // the student the exercises are up to date when nothing was downloaded.
+      postUpdateablesByCourse(exercisesToUpdate.map((x) => x.exerciseId))
       dialog.errorNotification("Failed to update exercises.", downloadResult.val)
       return
     }
