@@ -56,9 +56,8 @@
       }
       case "submissionStatusUpdate": {
         progressPercent = message.progressPercent
-        // Mooc grading polls every 2 s for up to 3 minutes with an unchanged status text,
-        // so only a changed message starts a new line; the cap bounds any status that
-        // alternates instead of repeating.
+        // Mooc grading polls every 2 s for up to 3 minutes reporting the same text, so
+        // only a changed message starts a new line; the cap bounds an alternating one.
         if (message.message !== undefined && message.message !== progressMessages.at(-1)) {
           progressMessages.push(message.message)
           if (progressMessages.length > progressMessageLimit) {
