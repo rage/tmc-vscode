@@ -4,7 +4,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { checkForCourseUpdates, refreshLocalExercises } from "./actions"
+import { refreshEverything, refreshLocalExercises } from "./actions"
 import type { ActionContext } from "./actions/types"
 import Dialog from "./api/dialog"
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider"
@@ -344,8 +344,9 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   }
 
   if (authenticated) {
-    vscode.commands.executeCommand("tmc.updateExercises", "silent")
-    checkForCourseUpdates(actionContext)
+    void refreshEverything(actionContext, { silent: true }).catch((e) =>
+      Logger.error("Background refresh failed", e),
+    )
   }
 
   if (maintenanceInterval) {
@@ -369,8 +370,9 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     sessionExpiry.onAuthChecked("tmc", authStatus.tmc)
     sessionExpiry.onAuthChecked("mooc", authStatus.mooc)
     if (authStatus.tmc || authStatus.mooc) {
-      vscode.commands.executeCommand("tmc.updateExercises", "silent")
-      checkForCourseUpdates(actionContext)
+      void refreshEverything(actionContext, { silent: true }).catch((e) =>
+        Logger.error("Background refresh failed", e),
+      )
     }
     await applyAuthContext()
   }, EXERCISE_CHECK_INTERVAL)

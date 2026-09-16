@@ -38,6 +38,9 @@ export class UserData {
   // ExerciseIdentifier object itself — a `Set` of objects only ever matches on
   // reference identity, so membership would silently never hit.
   private _passedExercises = new Set<string>()
+  // Storage writes are chained rather than issued concurrently; see
+  // `_updatePersistentData`.
+  private _pendingWrite: Promise<Result<void, Error>> = Promise.resolve(Ok.EMPTY)
   private _storage: Storage
   public constructor(storage: Storage) {
     const persistentData = storage.getUserData()
@@ -496,16 +499,26 @@ export class UserData {
    * The in-memory maps are already mutated by the time this runs, so an `Err`
    * means the two copies have diverged and the caller must tell the user —
    * dropping it silently reverts their action at the next restart.
+   *
+   * Every write rewrites the entire catalogue, so concurrent callers are chained
+   * onto one another rather than run in parallel; without that, two overlapping
+   * background refreshes each persist their own snapshot and the later write
+   * silently drops the earlier one's changes.
    */
   private async _updatePersistentData(): Promise<Result<void, Error>> {
-    try {
-      await this._storage.updateUserData({
-        courses: Array.from(this._tmcCourses.values()),
-        mooc_courses: Array.from(this._moocCourses.values()),
-      })
-      return Ok.EMPTY
-    } catch (e) {
-      return Err(e instanceof Error ? e : new Error(String(e)))
+    const snapshot = {
+      courses: Array.from(this._tmcCourses.values()),
+      mooc_courses: Array.from(this._moocCourses.values()),
     }
+    const write = this._pendingWrite.then(async (): Promise<Result<void, Error>> => {
+      try {
+        await this._storage.updateUserData(snapshot)
+        return Ok.EMPTY
+      } catch (e) {
+        return Err(e instanceof Error ? e : new Error(String(e)))
+      }
+    })
+    this._pendingWrite = write
+    return write
   }
 }

@@ -17,6 +17,7 @@ import {
   CLI_PROCESS_TIMEOUT,
   closedExercisesSettingKey,
   EXAM_TEST_RESULT,
+  EXERCISE_CHECK_INTERVAL,
   NOTIFICATION_DELAY,
   SUBMIT_PROCESS_TIMEOUT,
 } from "../config/constants"
@@ -321,8 +322,7 @@ export async function submitTmcExercise(
   }
 
   const courseId = LocalCourseData.getCourseId(course)
-  await checkForCourseUpdates(actionContext, courseId)
-  vscode.commands.executeCommand("tmc.updateExercises", "silent")
+  await refreshEverything(actionContext, { silent: true, courseId })
 
   return Ok.EMPTY
 }
@@ -445,8 +445,7 @@ export async function submitMoocExercise(
   // `getMoocCourseProgress` via `updateCourse`, so without this refresh the
   // CourseDetails/MyCourses totals stay stale until the user refreshes by hand.
   const courseId = LocalCourseData.getCourseId(course)
-  await checkForCourseUpdates(actionContext, courseId)
-  vscode.commands.executeCommand("tmc.updateExercises", "silent")
+  await refreshEverything(actionContext, { silent: true, courseId })
 
   return Ok.EMPTY
 }
@@ -635,6 +634,45 @@ export async function checkForCourseUpdates(
       )
     }
   }
+}
+
+/**
+ * The extension's one background refresh: course data first, then the exercise
+ * update check.
+ *
+ * Activation, the maintenance poll, the tree view's refresh button and the tail
+ * of each submit all want this, and they used to fire the two halves
+ * independently and unawaited — so two passes could interleave over `UserData`
+ * and prompt twice about the same exercises. They now coalesce on one key:
+ * a call made while another is running is rejected with a `BottleneckError`
+ * rather than queued.
+ *
+ * @param courseId Refresh only that course's data; the exercise update check
+ * always covers every course.
+ * @param silent Suppresses both the "already refreshing" notice and the
+ * exercise update check's own notifications.
+ */
+export async function refreshEverything(
+  actionContext: ActionContext,
+  options: { silent: boolean; courseId?: CourseIdentifier },
+): Promise<Result<void, Error>> {
+  const { dialog } = actionContext
+  const { silent, courseId } = options
+  return runSingleFlight(
+    {
+      key: "refresh:all",
+      // A wedged refresh releases the key by the time the next poll wants it.
+      maxHoldMs: EXERCISE_CHECK_INTERVAL,
+      busyMessage: "A refresh is already in progress.",
+      onBusy: silent ? (): void => {} : (message): void => void dialog.notification(message),
+    },
+    async () => {
+      await checkForCourseUpdates(actionContext, courseId)
+      // Through the command, so `actions` doesn't have to import `commands`.
+      await vscode.commands.executeCommand("tmc.updateExercises", silent ? "silent" : "loud")
+      return Ok.EMPTY
+    },
+  )
 }
 
 /**
