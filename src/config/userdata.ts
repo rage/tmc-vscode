@@ -38,8 +38,7 @@ export class UserData {
   // ExerciseIdentifier object itself — a `Set` of objects only ever matches on
   // reference identity, so membership would silently never hit.
   private _passedExercises = new Set<string>()
-  // Storage writes are chained rather than issued concurrently; see
-  // `_updatePersistentData`.
+  /** Tail of the serialized write chain; see {@link _updatePersistentData}. */
   private _pendingWrite: Promise<Result<void, Error>> = Promise.resolve(Ok.EMPTY)
   private _storage: Storage
   public constructor(storage: Storage) {

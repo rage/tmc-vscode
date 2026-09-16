@@ -613,9 +613,9 @@ export async function checkForCourseUpdates(
     }
   }
 
-  // `notifyAfter` throttles this toast only. The refresh above has to run
-  // regardless, or one "Remind me later" click freezes course metadata and point
-  // totals for the whole delay, including the refresh each submit asks for.
+  // `notifyAfter` throttles this toast only: gating the refresh above on it too
+  // would freeze course metadata and point totals for the whole delay, including
+  // the refresh each submit asks for.
   const now = Date.now()
   for (const course of updatedCourses) {
     const newExercises = LocalCourseData.getNewExercises(course)
@@ -663,11 +663,10 @@ export async function checkForCourseUpdates(
  * update check.
  *
  * Activation, the maintenance poll, the tree view's refresh button and the tail
- * of each submit all want this, and they used to fire the two halves
- * independently and unawaited — so two passes could interleave over `UserData`
- * and prompt twice about the same exercises. They now coalesce on one key:
- * a call made while another is running is rejected with a `BottleneckError`
- * rather than queued.
+ * of each submit all want this, and two passes overlapping would interleave
+ * writes to `UserData` and prompt twice about the same exercises. They share one
+ * key, so a call made while another is running comes back as a
+ * `BottleneckError` rather than queueing.
  *
  * @param courseId Refresh only that course's data; the exercise update check
  * always covers every course.
