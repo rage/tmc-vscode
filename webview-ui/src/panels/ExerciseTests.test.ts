@@ -5,7 +5,7 @@ import type { Uri } from "vscode"
 import type { ExerciseTestsPanel } from "../shared/shared"
 import { findButton, getButton } from "../test/dom"
 import { testResult, testResultData, tmcLocalCourse, tmcLocalExercise } from "../test/fixtures"
-import { postedMessages } from "../test/setup"
+import { dispatchToWebview, postedMessages } from "../test/setup"
 import ExerciseTests from "./ExerciseTests.svelte"
 
 const exerciseUri = { fsPath: "/ex", scheme: "file" } as unknown as Uri
@@ -18,17 +18,20 @@ const panel: ExerciseTestsPanel = {
   testRunId: 1,
 }
 
-// Posts the error that ends a failed test run, through the same JSON serialization the
-// webview bridge applies -- a live `Error` would arrive without its `message`.
 function postTestError(error: { message: string; details?: string }): void {
-  const message = {
+  dispatchToWebview({
     type: "testError",
     target: { type: "ExerciseTests", id: panel.id },
     error,
-  }
-  window.dispatchEvent(
-    new MessageEvent("message", { data: JSON.parse(JSON.stringify(message)) as unknown }),
-  )
+  })
+}
+
+function postTestResults(testResults: unknown): void {
+  dispatchToWebview({
+    type: "testResults",
+    target: { type: "ExerciseTests", id: panel.id },
+    testResults,
+  })
 }
 
 suite("ExerciseTests panel", () => {
@@ -52,15 +55,7 @@ suite("ExerciseTests panel", () => {
 
   test("shows the passed state and submits the solution", async () => {
     render(ExerciseTests, { props: { panel } })
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "testResults",
-          target: { type: "ExerciseTests", id: panel.id },
-          testResults: testResultData(),
-        },
-      }),
-    )
+    postTestResults(testResultData())
 
     expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
 
@@ -78,15 +73,7 @@ suite("ExerciseTests panel", () => {
 
   test("a second click while a submit is pending posts nothing", async () => {
     render(ExerciseTests, { props: { panel } })
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "testResults",
-          target: { type: "ExerciseTests", id: panel.id },
-          testResults: testResultData(),
-        },
-      }),
-    )
+    postTestResults(testResultData())
     expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
 
     const submit = getButton("Submit to server")
@@ -99,24 +86,12 @@ suite("ExerciseTests panel", () => {
 
   test("submitFailed re-enables submitting, since no submission panel replaced this one", async () => {
     render(ExerciseTests, { props: { panel } })
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "testResults",
-          target: { type: "ExerciseTests", id: panel.id },
-          testResults: testResultData(),
-        },
-      }),
-    )
+    postTestResults(testResultData())
     expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
 
     const submit = getButton("Submit to server")
     submit.click()
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: { type: "submitFailed", target: { type: "ExerciseTests" } },
-      }),
-    )
+    dispatchToWebview({ type: "submitFailed", target: { type: "ExerciseTests" } })
     await tick()
 
     postedMessages.mockClear()
@@ -132,30 +107,16 @@ suite("ExerciseTests panel", () => {
 
   test("offers paste help only when a test failed", async () => {
     render(ExerciseTests, { props: { panel } })
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "testResults",
-          target: { type: "ExerciseTests", id: panel.id },
-          testResults: testResultData(),
-        },
-      }),
-    )
+    postTestResults(testResultData())
     expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
     expect(screen.queryByText("Need help?")).not.toBeInTheDocument()
 
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "testResults",
-          target: { type: "ExerciseTests", id: panel.id },
-          testResults: testResultData({
-            testResult: {
-              logs: {},
-              status: "TESTS_FAILED",
-              testResults: [testResult({ successful: false, message: "boom" })],
-            },
-          }),
+    postTestResults(
+      testResultData({
+        testResult: {
+          logs: {},
+          status: "TESTS_FAILED",
+          testResults: [testResult({ successful: false, message: "boom" })],
         },
       }),
     )
@@ -178,15 +139,7 @@ suite("ExerciseTests panel", () => {
 
   test("testError re-enables submitting", async () => {
     render(ExerciseTests, { props: { panel } })
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "testResults",
-          target: { type: "ExerciseTests", id: panel.id },
-          testResults: testResultData(),
-        },
-      }),
-    )
+    postTestResults(testResultData())
     expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
     getButton("Submit to server").click()
 

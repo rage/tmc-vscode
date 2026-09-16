@@ -11,7 +11,7 @@ import {
   tmcExerciseGroup,
   tmcLocalCourse,
 } from "../test/fixtures"
-import { postedMessages } from "../test/setup"
+import { dispatchToWebview as dispatch, postedMessages } from "../test/setup"
 import CourseDetails from "./CourseDetails.svelte"
 
 // vscode-checkbox is inert under jsdom, so set `.checked` and dispatch `change` directly;
@@ -51,10 +51,6 @@ function moocPanel(): CourseDetailsPanel {
     courseId: makeMoocKind({ instanceId: MOOC_INSTANCE_ID }),
     exerciseStatuses: { tmc: {}, mooc: {} },
   }
-}
-
-function dispatch(data: unknown) {
-  window.dispatchEvent(new MessageEvent("message", { data }))
 }
 
 suite("CourseDetails panel", () => {

@@ -4,7 +4,7 @@ import { tick } from "svelte"
 import App from "./App.svelte"
 import { findButton } from "./test/dom"
 import { tmcLocalCourse } from "./test/fixtures"
-import { postedMessages } from "./test/setup"
+import { dispatchToWebview, postedMessages } from "./test/setup"
 
 suite("App global error handling", () => {
   test("renders the loading placeholder for the initial App panel", () => {
@@ -74,26 +74,18 @@ suite("App reload handshake", () => {
     render(App)
     const course = tmcLocalCourse({ title: "Ordering Course" })
 
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "setPanel",
-          target: { id: 0, type: "App" },
-          panel: { id: 7, type: "MyCourses", courseDeadlines: {} },
-        },
-      }),
-    )
+    dispatchToWebview({
+      type: "setPanel",
+      target: { id: 0, type: "App" },
+      panel: { id: 7, type: "MyCourses", courseDeadlines: {} },
+    })
     await tick()
 
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "setMyCourses",
-          target: { id: 7, type: "MyCourses" },
-          courses: [course],
-        },
-      }),
-    )
+    dispatchToWebview({
+      type: "setMyCourses",
+      target: { id: 7, type: "MyCourses" },
+      courses: [course],
+    })
 
     expect(await screen.findByText("Ordering Course")).toBeInTheDocument()
   })

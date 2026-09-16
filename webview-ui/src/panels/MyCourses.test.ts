@@ -4,14 +4,10 @@ import type { MyCoursesPanel } from "../shared/shared"
 import { makeTmcKind } from "../shared/shared"
 import { findButton } from "../test/dom"
 import { moocLocalCourse, tmcLocalCourse } from "../test/fixtures"
-import { postedMessages } from "../test/setup"
+import { dispatchToWebview as dispatch, postedMessages } from "../test/setup"
 import MyCourses from "./MyCourses.svelte"
 
 const panel: MyCoursesPanel = { id: 7, type: "MyCourses", courseDeadlines: {} }
-
-function dispatch(data: unknown) {
-  window.dispatchEvent(new MessageEvent("message", { data }))
-}
 
 suite("MyCourses panel", () => {
   // Adding a course is the extension host's quick pick, so the button asks for the
