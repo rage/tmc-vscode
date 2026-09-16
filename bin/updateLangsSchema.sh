@@ -14,9 +14,9 @@
 #
 # For now this copies from a local tmc-langs-rust checkout, because the
 # extension currently tracks the unreleased `programming-exercise-migration`
-# branch. Once a tmc-langs release ships the schema, switch this script to
-# fetch from GitHub releases/raw for the pinned TMC_LANGS_RUST_VERSION, the
-# same way bin/updateLangs.bash fetches bindings.d.ts:
+# branch. Once a tmc-langs release ships the schema, point SOURCE at the raw URL
+# for the TMC_LANGS_RUST_VERSION config.js pins, so the vendored schema is the
+# one the shipped binary actually emits:
 #   https://raw.githubusercontent.com/rage/tmc-langs-rust/<version>/crates/tmc-langs-cli/bindings.schema.json
 #
 # Run via `npm run vendor:langs-schema`. This step alone only re-vendors the
