@@ -89,7 +89,7 @@ function contextWith(submitResult: unknown): {
       getCourseBySlug: () => makeMoocKind(moocCourse),
       getCourse: () => makeMoocKind(moocCourse),
       getMoocExerciseByName: () => moocCourse.exercises[0],
-      setMoocExerciseAsPassed: setPassed,
+      setExerciseAsPassed: setPassed,
     }) as unknown as ActionContext["userData"],
     exerciseDecorationProvider: Ok({
       updateDecorationsForExercises: vi.fn(),
@@ -115,7 +115,7 @@ function contextWithErr(error: Error): {
       getCourseBySlug: () => makeMoocKind(moocCourse),
       getCourse: () => makeMoocKind(moocCourse),
       getMoocExerciseByName: () => moocCourse.exercises[0],
-      setMoocExerciseAsPassed: setPassed,
+      setExerciseAsPassed: setPassed,
     }) as unknown as ActionContext["userData"],
     exerciseDecorationProvider: Ok({
       updateDecorationsForExercises: vi.fn(),
@@ -153,7 +153,7 @@ suite("submitMoocExercise action", () => {
       expect.objectContaining({ type: "moocSubmissionResult", result: grading }),
     )
     // a fully-graded, non-zero score marks the exercise passed
-    expect(setPassed).toHaveBeenCalledWith(COURSE_SLUG, EXERCISE_SLUG)
+    expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
     // ...and the course is refreshed so the point totals shown in
     // CourseDetails/MyCourses reflect the submission, as the tmc path does.
     expect(updateCourse).toHaveBeenCalledWith(

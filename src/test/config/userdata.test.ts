@@ -488,3 +488,50 @@ suite("UserData slug collision across backends (Bug 3 regression)", function () 
     expect(userData.getMoocExerciseByName("two-instances", "mooc_late")?.id).toBe("late-uuid")
   })
 })
+
+// -------------------------------------------------------------------------------------------------
+// The in-memory catalogue and the persisted one must agree: `getPassed` answers from a set that a
+// single-exercise write has to update too.
+// -------------------------------------------------------------------------------------------------
+
+suite("UserData setExerciseAsPassed", function () {
+  test("a passed tmc exercise reads back as passed from memory and from storage", async function () {
+    const [userData, store] = await makeUserData({
+      courses: [tmcCourse({ exercises: [tmcExercise({ id: 1, name: "hello_world" })] })],
+      mooc_courses: [],
+    })
+    await userData.setExerciseAsPassed("tmc", "test-python-course", "hello_world")
+    expect(userData.getPassed(ExerciseIdentifier.from(1))).toBe(true)
+    expect(store.getUserData()?.courses[0]?.exercises[0]?.passed).toBe(true)
+  })
+
+  test("a passed mooc exercise reads back as passed from memory and from storage", async function () {
+    const [userData, store] = await makeUserData({
+      courses: [],
+      mooc_courses: [
+        moocCourse({ exercises: [moocExercise({ id: "exercise-uuid-1", name: "mooc_hello" })] }),
+      ],
+    })
+    await userData.setExerciseAsPassed("mooc", "mooc-python-course", "mooc_hello")
+    expect(userData.getPassed(ExerciseIdentifier.from("exercise-uuid-1"))).toBe(true)
+    expect(store.getUserData()?.mooc_courses[0]?.exercises[0]?.passed).toBe(true)
+  })
+
+  test("does not reach across backends for a shared slug and exercise name", async function () {
+    const [userData] = await makeUserData({
+      courses: [
+        tmcCourse({ id: 11, name: "shared", exercises: [tmcExercise({ id: 1, name: "ex" })] }),
+      ],
+      mooc_courses: [
+        moocCourse({
+          id: "inst-11",
+          name: "shared",
+          exercises: [moocExercise({ id: "m", name: "ex" })],
+        }),
+      ],
+    })
+    await userData.setExerciseAsPassed("mooc", "shared", "ex")
+    expect(userData.getPassed(ExerciseIdentifier.from("m"))).toBe(true)
+    expect(userData.getPassed(ExerciseIdentifier.from(1))).toBe(false)
+  })
+})

@@ -276,9 +276,8 @@ export async function submitTmcExercise(
 
       const statusData = submissionResult.val
       if (statusData.status === "ok" && statusData.all_tests_passed) {
-        userData.val.setExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug).then(() => {
-          exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
-        })
+        await userData.val.setExerciseAsPassed("tmc", exercise.courseSlug, exercise.exerciseSlug)
+        exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
       }
       const questions = statusData.feedback_questions
         ? parseFeedbackQuestion(statusData.feedback_questions)
@@ -391,11 +390,8 @@ export async function submitMoocExercise(
         status.Grading.score_given !== null &&
         status.Grading.score_given > 0
       ) {
-        userData.val
-          .setMoocExerciseAsPassed(exercise.courseSlug, exercise.exerciseSlug)
-          .then(() => {
-            exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
-          })
+        await userData.val.setExerciseAsPassed("mooc", exercise.courseSlug, exercise.exerciseSlug)
+        exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
       }
 
       if (TmcPanel.sidePanel === undefined) {
@@ -414,7 +410,7 @@ export async function submitMoocExercise(
     return submitted
   }
 
-  // Mirror the tail of `submitTmcExercise`. `setMoocExerciseAsPassed` above only
+  // Mirror the tail of `submitTmcExercise`. `setExerciseAsPassed` above only
   // flips the local per-exercise flag; course point totals come from
   // `getMoocCourseProgress` via `updateCourse`, so without this refresh the
   // CourseDetails/MyCourses totals stay stale until the user refreshes by hand.

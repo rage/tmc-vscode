@@ -46,18 +46,10 @@ export class UserData {
       this._moocCourses = new Map(persistentData.mooc_courses.map((x) => [x.id, x]))
 
       persistentData.courses.forEach((x) =>
-        x.exercises.forEach((y) => {
-          if (y.passed) {
-            this._passedExercises.add(passedExerciseKey(ExerciseIdentifier.from(y.id)))
-          }
-        }),
+        x.exercises.forEach((y) => this._setPassed(ExerciseIdentifier.from(y.id), y.passed)),
       )
       persistentData.mooc_courses.forEach((x) =>
-        x.exercises.forEach((y) => {
-          if (y.passed) {
-            this._passedExercises.add(passedExerciseKey(ExerciseIdentifier.from(y.id)))
-          }
-        }),
+        x.exercises.forEach((y) => this._setPassed(ExerciseIdentifier.from(y.id), y.passed)),
       )
     } else {
       this._tmcCourses = new Map()
@@ -211,30 +203,21 @@ export class UserData {
     return undefined
   }
 
-  public async setExerciseAsPassed(courseSlug: string, exerciseName: string): Promise<void> {
-    for (const course of this._tmcCourses.values()) {
-      if (course.name === courseSlug) {
-        const exercise = course.exercises.find((x) => x.name === exerciseName)
-        if (exercise) {
-          exercise.passed = true
-          await this._updatePersistentData()
-          break
-        }
-      }
+  /** Records a single exercise as passed, in memory and in storage. */
+  public async setExerciseAsPassed(
+    backend: "tmc" | "mooc",
+    courseSlug: string,
+    exerciseName: string,
+  ): Promise<void> {
+    const exercise = this.getExerciseByName(backend, courseSlug, exerciseName)
+    if (!exercise) {
+      return
     }
-  }
-
-  public async setMoocExerciseAsPassed(courseSlug: string, exerciseName: string): Promise<void> {
-    for (const course of this._moocCourses.values()) {
-      if (course.name === courseSlug) {
-        const exercise = course.exercises.find((x) => x.name === exerciseName)
-        if (exercise) {
-          exercise.passed = true
-          await this._updatePersistentData()
-          break
-        }
-      }
-    }
+    // `getExerciseByName` hands back the stored record, not a copy, so writing
+    // through it is what updates the catalogue.
+    exercise.data.passed = true
+    this._setPassed(ExerciseIdentifier.from(exercise.data.id), true)
+    await this._updatePersistentData()
   }
 
   public addCourse(data: LocalCourseData): void {
@@ -346,10 +329,7 @@ export class UserData {
         `Found ${courseData.data.newExercises.length} new exercises for ${LocalCourseData.getNewExercises(courseData)}`,
       )
     }
-    exercises.forEach((x) => {
-      const key = passedExerciseKey(ExerciseIdentifier.from(x.data.id))
-      return x.data.passed ? this._passedExercises.add(key) : this._passedExercises.delete(key)
-    })
+    exercises.forEach((x) => this._setPassed(ExerciseIdentifier.from(x.data.id), x.data.passed))
     match(
       courseData,
       (tmcCourse) => {
@@ -385,6 +365,16 @@ export class UserData {
 
   public getPassed(exerciseId: ExerciseIdentifier): boolean {
     return this._passedExercises.has(passedExerciseKey(exerciseId))
+  }
+
+  /** The only writer of `_passedExercises`, so the set cannot drift from the stored flags. */
+  private _setPassed(exerciseId: ExerciseIdentifier, passed: boolean): void {
+    const key = passedExerciseKey(exerciseId)
+    if (passed) {
+      this._passedExercises.add(key)
+    } else {
+      this._passedExercises.delete(key)
+    }
   }
 
   /**
