@@ -2,12 +2,8 @@ import * as cp from "child_process"
 import * as fs from "fs"
 import * as path from "path"
 
-import { TMC_LANGS_VERSION } from "../config/constants"
+import { MIGRATION_CONTRACT_VERSION, TMC_LANGS_VERSION } from "../config/constants"
 import { Logger, semVerCompare } from "../utilities"
-
-// First tmc-langs-cli release with a `schema` subcommand; every release before
-// it, the pinned one included, only errors out on `schema`.
-const SCHEMA_SUBCOMMAND_VERSION = "0.40.0"
 
 /**
  * Startup self-check for the tmc-langs-cli output contract.
@@ -22,7 +18,7 @@ const SCHEMA_SUBCOMMAND_VERSION = "0.40.0"
  * Diagnostic only: never throws; a mismatch is reported via `Logger.warn`
  * instead of failing activation.
  *
- * Skipped for a pinned CLI older than {@link SCHEMA_SUBCOMMAND_VERSION}, which
+ * Skipped for a pinned CLI older than {@link MIGRATION_CONTRACT_VERSION}, which
  * has no `schema` subcommand: the check cannot run there, and warning about it
  * on every activation is noise the user can do nothing about.
  */
@@ -31,11 +27,11 @@ export async function verifyCliSchema(
   extensionPath: string,
   cliVersion: string = TMC_LANGS_VERSION,
 ): Promise<void> {
-  const comparison = semVerCompare(cliVersion, SCHEMA_SUBCOMMAND_VERSION, "patch")
+  const comparison = semVerCompare(cliVersion, MIGRATION_CONTRACT_VERSION, "patch")
   if (comparison === undefined || comparison < 0) {
     Logger.debug(
       `Skipping the tmc-langs-cli output schema check: ${cliVersion} predates the ` +
-        `\`schema\` subcommand (added in ${SCHEMA_SUBCOMMAND_VERSION}).`,
+        `\`schema\` subcommand (added in ${MIGRATION_CONTRACT_VERSION}).`,
     )
     return
   }

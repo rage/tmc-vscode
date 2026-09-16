@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process"
 import { existsSync } from "node:fs"
 import { join, resolve } from "node:path"
 
-import { productionApi } from "../config"
+import { MIGRATION_CONTRACT_VERSION, productionApi } from "../config"
 import { getLangsCLIForPlatform, getPlatform } from "../src/utilities/env"
 import { semVerCompare } from "../src/utilities/semanticVersion"
 import { vsCodeTest } from "./fixtures"
@@ -14,11 +14,6 @@ import { vsCodeTest } from "./fixtures"
 // binary that `backend`'s setup downloads, or a migration-branch build
 // installed under the same name by bin/useLocalLangs.bash. Mirrors the
 // integration tier's `migrationTest` (src/test-integration/tmc_langs_cli.spec.ts).
-//
-// Anchored to the first release that will carry the contract rather than to
-// whatever is pinned today, so bumping TMC_LANGS_RUST_VERSION for an unrelated
-// fix cannot silently switch these on.
-const MOOC_CONTRACT_VERSION = "0.40.0"
 
 // The pinned filename, not whatever the directory happens to hold: a stale
 // binary left beside the current one would otherwise be picked at random.
@@ -52,7 +47,7 @@ function probeCli(): CliProbe {
   }
   // `--version` prints `tmc-langs-cli <version>`, so the version is embedded in
   // the line rather than being the whole of it; semVerCompare matches unanchored.
-  const comparison = semVerCompare(reported, MOOC_CONTRACT_VERSION, "patch")
+  const comparison = semVerCompare(reported, MIGRATION_CONTRACT_VERSION, "patch")
   if (comparison === undefined) {
     return { kind: "broken", cause: `\`--version\` printed ${JSON.stringify(reported)}` }
   }
@@ -72,7 +67,7 @@ if (!cliSupportsMoocContract) {
       ? `no CLI at ${CLI_PATH} (run \`pnpm --dir backend run setup\`)`
       : `backend/cli reports ${probe.version}, which does not implement the mooc CLI contract`
   console.warn(
-    `Skipping the mooc e2e specs: ${reason} (needs >= ${MOOC_CONTRACT_VERSION}). ` +
+    `Skipping the mooc e2e specs: ${reason} (needs >= ${MIGRATION_CONTRACT_VERSION}). ` +
       "Install a migration-branch build with bin/useLocalLangs.bash to run them.",
   )
 }

@@ -10,6 +10,7 @@ declare const __TMC_LANGS_DL_URL__: string
 declare const __TMC_LANGS_VERSION__: string
 declare const __MOOC_BACKEND_URL__: string
 declare const __EXTENSION_VERSION__: string
+declare const __MIGRATION_CONTRACT_VERSION__: string
 
 export const DEBUG_MODE = __DEBUG_MODE__
 export const TMC_BACKEND_URL = __TMC_BACKEND_URL__
@@ -20,6 +21,16 @@ export const MOOC_BACKEND_URL = __MOOC_BACKEND_URL__
 
 /** This build's `package.json` version, inlined so it needs no extension-registry lookup. */
 export const EXTENSION_VERSION = __EXTENSION_VERSION__
+
+/**
+ * First tmc-langs-cli release carrying the post-migration contract: the `mooc`
+ * subcommand tree, the `schema` subcommand, the newer error kinds.
+ *
+ * Deliberately not {@link TMC_LANGS_VERSION}. Everything gated on this stays off
+ * until a release actually carries the contract, so bumping the pin for an
+ * unrelated fix cannot switch the gates on behind whoever bumped it.
+ */
+export const MIGRATION_CONTRACT_VERSION = __MIGRATION_CONTRACT_VERSION__
 
 export const CLIENT_NAME = "vscode_plugin"
 export const EXTENSION_ID = "moocfi.test-my-code"
