@@ -69,6 +69,9 @@ export class TmcPanel {
 
   private _disposables: Disposable[] = []
 
+  // `_panel.dispose()` fires `onDidDispose`, which calls back into `dispose()`
+  private _isDisposed = false
+
   // sends a message to the main and side panels
   public static async postMessage(...messages: ExtensionToWebview[]): Promise<void> {
     for (const message of messages) {
@@ -96,16 +99,18 @@ export class TmcPanel {
     panel: Panel,
   ): Promise<void> {
     if (TmcPanel.mainPanel !== undefined) {
-      TmcPanel.mainPanel._panel.dispose()
+      Logger.info(`Revealing existing main panel for "${panel.type}"`)
+      await TmcPanel.mainPanel._renderPanel(panel)
+      TmcPanel.mainPanel._panel.reveal(ViewColumn.One, false)
+    } else {
+      TmcPanel.mainPanel = await TmcPanel.renderNew(
+        extensionUri,
+        extensionContext,
+        actionContext,
+        panel,
+        true,
+      )
     }
-    const currentPanel = await TmcPanel.renderNew(
-      extensionUri,
-      extensionContext,
-      actionContext,
-      panel,
-      true,
-    )
-    TmcPanel.mainPanel = currentPanel
   }
 
   // renders the `panel` in the side panel
@@ -199,20 +204,21 @@ export class TmcPanel {
 
   // disposes the side panel when disposing the main panel as well
   public dispose(): void {
-    this._panel.dispose()
-
-    // Interrupt any in-flight mooc login on side-panel dispose (close/reload)
-    // so no orphaned CLI process keeps polling.
-    if (!this._isMain) {
-      moocLoginRegistry.cancelAll()
+    if (this._isDisposed) {
+      return
     }
+    this._isDisposed = true
+    this._panel.dispose()
 
     if (this._isMain) {
       TmcPanel.mainPanel = undefined
-      // if we're disposing the main panel, we'll dispose the side panel as well
       TmcPanel.sidePanel?.dispose()
+    } else {
+      TmcPanel.sidePanel = undefined
+      // Interrupt any in-flight mooc login on side-panel dispose (close/reload)
+      // so no orphaned CLI process keeps polling.
+      moocLoginRegistry.cancelAll()
     }
-    TmcPanel.sidePanel = undefined
 
     while (this._disposables.length > 0) {
       const disposable = this._disposables.pop()
