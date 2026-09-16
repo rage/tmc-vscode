@@ -10,6 +10,8 @@
     ExerciseIdentifier,
     LocalCourseData,
     assertUnreachable,
+    makeMoocKind,
+    makeTmcKind,
     match,
     unwrap,
   } from "../shared/shared"
@@ -44,31 +46,35 @@
         break
       }
       case "setNewExercises": {
-        const course = findCourse(message.courseId)
-        if (course) {
+        replaceCourse(message.courseId, (course) =>
           match(
             course,
-            (tmc) => {
-              tmc.newExercises = message.exerciseIds.flatMap((id) =>
-                id.kind === "tmc" ? [id.data.tmcExerciseId] : [],
-              )
-            },
-            (mooc) => {
-              mooc.newExercises = message.exerciseIds.flatMap((id) =>
-                id.kind === "mooc" ? [id.data.moocExerciseId] : [],
-              )
-            },
-          )
-          panel = { ...panel }
-        }
+            (tmc) =>
+              makeTmcKind({
+                ...tmc,
+                newExercises: message.exerciseIds.flatMap((id) =>
+                  id.kind === "tmc" ? [id.data.tmcExerciseId] : [],
+                ),
+              }),
+            (mooc) =>
+              makeMoocKind({
+                ...mooc,
+                newExercises: message.exerciseIds.flatMap((id) =>
+                  id.kind === "mooc" ? [id.data.moocExerciseId] : [],
+                ),
+              }),
+          ),
+        )
         break
       }
       case "setCourseDisabledStatus": {
-        const course = findCourse(message.courseId)
-        if (course) {
-          unwrap(course).disabled = message.disabled
-          panel = { ...panel }
-        }
+        replaceCourse(message.courseId, (course) =>
+          match(
+            course,
+            (tmc) => makeTmcKind({ ...tmc, disabled: message.disabled }),
+            (mooc) => makeMoocKind({ ...mooc, disabled: message.disabled }),
+          ),
+        )
         break
       }
       default:
@@ -76,11 +82,19 @@
     }
   })
 
-  function findCourse(courseId: CourseIdentifier): LocalCourseDataType | undefined {
+  function replaceCourse(
+    courseId: CourseIdentifier,
+    replacement: (course: LocalCourseDataType) => LocalCourseDataType,
+  ) {
     const courseKey = CourseIdentifier.toString(courseId)
-    return (panel.courses ?? []).find(
-      (c) => CourseIdentifier.toString(LocalCourseData.getCourseId(c)) === courseKey,
-    )
+    panel = {
+      ...panel,
+      courses: (panel.courses ?? []).map((course) =>
+        CourseIdentifier.toString(LocalCourseData.getCourseId(course)) === courseKey
+          ? replacement(course)
+          : course,
+      ),
+    }
   }
   function addNewCourse() {
     vscode.postMessage({

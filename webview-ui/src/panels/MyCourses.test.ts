@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/svelte"
 
 import type { MyCoursesPanel } from "../shared/shared"
+import { makeTmcKind } from "../shared/shared"
 import { findButton } from "../test/dom"
 import { moocLocalCourse, tmcLocalCourse } from "../test/fixtures"
 import { postedMessages } from "../test/setup"
@@ -58,6 +59,47 @@ suite("MyCourses panel", () => {
       type: "setMyCourses",
       target: { id: panel.id, type: "MyCourses" },
       courses: [tmcLocalCourse({ disabled: true, newExercises: [101] })],
+    })
+
+    expect(await screen.findByText(/This course has been disabled/)).toBeInTheDocument()
+  })
+
+  test("updates only the addressed course when new exercises arrive", async () => {
+    render(MyCourses, { props: { panel } })
+
+    dispatch({
+      type: "setMyCourses",
+      target: { id: panel.id, type: "MyCourses" },
+      courses: [tmcLocalCourse(), moocLocalCourse()],
+    })
+    await screen.findByRole("heading", { name: /Python Course/ })
+
+    dispatch({
+      type: "setNewExercises",
+      target: { type: "MyCourses" },
+      courseId: makeTmcKind({ courseId: 42 }),
+      exerciseIds: [makeTmcKind({ tmcExerciseId: 101 }), makeTmcKind({ tmcExerciseId: 102 })],
+    })
+
+    expect(await screen.findByText(/2 new exercises found for this course/)).toBeInTheDocument()
+    expect(screen.getAllByText(/new exercises found for this course/)).toHaveLength(1)
+  })
+
+  test("renders the disabled notice when a course is disabled after load", async () => {
+    render(MyCourses, { props: { panel } })
+
+    dispatch({
+      type: "setMyCourses",
+      target: { id: panel.id, type: "MyCourses" },
+      courses: [tmcLocalCourse()],
+    })
+    await screen.findByRole("heading", { name: /Python Course/ })
+
+    dispatch({
+      type: "setCourseDisabledStatus",
+      target: { type: "MyCourses" },
+      courseId: makeTmcKind({ courseId: 42 }),
+      disabled: true,
     })
 
     expect(await screen.findByText(/This course has been disabled/)).toBeInTheDocument()
