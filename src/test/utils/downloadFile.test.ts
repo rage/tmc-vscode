@@ -81,8 +81,8 @@ suite("downloadFile", function () {
     const out = path.join(tmpDir.name, "prog.bin")
     const percents: number[] = []
 
-    const result = await downloadFile(serverUrl(server), out, undefined, (percent) => {
-      percents.push(percent)
+    const result = await downloadFile(serverUrl(server), out, {
+      onProgress: (percent) => percents.push(percent),
     })
 
     expect(result.ok).toBe(true)
@@ -154,5 +154,50 @@ suite("downloadFile", function () {
 
     expect(threw, "downloadFile should not throw").toBe(false)
     expect(result?.err).toBe(true)
+  })
+
+  test("returns Err within the stall budget when the server sends headers and then nothing", async function () {
+    server = await startServer((_req, res) => {
+      res.writeHead(200, { "content-type": "application/octet-stream" })
+      // Deliberately never writes a byte and never ends the response.
+    })
+    const out = path.join(tmpDir.name, "stalled.bin")
+
+    const started = Date.now()
+    const result = await downloadFile(serverUrl(server), out, { stallTimeoutMs: 200 })
+
+    expect(result.err).toBe(true)
+    expect(Date.now() - started).toBeLessThan(5000)
+  })
+
+  test("returns Err when the body stops short of its declared content-length", async function () {
+    const declared = 4096
+    server = await startServer((_req, res) => {
+      res.writeHead(200, { "content-length": String(declared) })
+      res.end(Buffer.alloc(declared / 2, 1))
+    })
+    const out = path.join(tmpDir.name, "short.bin")
+
+    const result = await downloadFile(serverUrl(server), out, { stallTimeoutMs: 1000 })
+
+    expect(result.err).toBe(true)
+  })
+
+  test("returns Err when the caller's signal aborts mid-download", async function () {
+    server = await startServer((_req, res) => {
+      res.writeHead(200, { "content-length": String(64 * 1024 * 1024) })
+      res.write(Buffer.alloc(1024))
+      // Leaves the rest undelivered so the abort, not the body, ends the download.
+    })
+    const out = path.join(tmpDir.name, "aborted.bin")
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(), 50)
+
+    const result = await downloadFile(serverUrl(server), out, {
+      signal: controller.signal,
+      stallTimeoutMs: 10_000,
+    })
+
+    expect(result.err).toBe(true)
   })
 })

@@ -7,7 +7,11 @@ import { Err, Ok } from "ts-results"
 
 import type Dialog from "../api/dialog"
 import { FileSystemError, InitializationError } from "../errors"
-import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger } from "../utilities"
+import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger, sleep } from "../utilities"
+
+/** Extra attempts after the first, for the one download too large to redo cheaply. */
+const DOWNLOAD_RETRIES = 2
+const RETRY_BACKOFF_MS = 500
 
 /**
  * Parses the hash out of a `.sha256` file's contents and normalizes it to
@@ -215,12 +219,30 @@ async function downloadLangs(
   const message = `Downloading TMC-langs ${version}...`
   const langsDownloadResult = await dialog.progressNotification(
     message,
-    async (progress) =>
-      await downloadFile(cliUrl, tempPath, undefined, (percent) => {
-        // downloadFile gives both percent between 0-100 and discrete increment.
-        // Divide here at least until deciding if "increments" are no longer necessary.
-        progress.report({ message, percent: percent / 100 })
-      }),
+    async (progress, token) => {
+      const cancellation = new AbortController()
+      const subscription = token.onCancellationRequested(() => cancellation.abort())
+      const attempt = async (): Promise<Result<void, Error>> =>
+        await downloadFile(cliUrl, tempPath, {
+          signal: cancellation.signal,
+          onProgress: (percent) => progress.report({ message, percent: percent / 100 }),
+        })
+      try {
+        let result = await attempt()
+        for (let retry = 1; retry <= DOWNLOAD_RETRIES; retry++) {
+          if (result.ok || token.isCancellationRequested) {
+            break
+          }
+          Logger.warn("Download of TMC-langs failed, retrying in a moment:", result.val)
+          await sleep(RETRY_BACKOFF_MS * retry)
+          result = await attempt()
+        }
+        return result
+      } finally {
+        subscription.dispose()
+      }
+    },
+    { cancellable: true },
   )
   if (langsDownloadResult.err) {
     Logger.error("An error occurred while downloading TMC-langs:", langsDownloadResult.val)
