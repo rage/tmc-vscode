@@ -1,7 +1,5 @@
 // @ts-expect-error "No module found" error even though the file exists
 import FAQ from "../../docs/FAQ.md"
-import type { TestResultData } from "../shared/shared"
-import { ExerciseIdentifier } from "../shared/shared"
 
 // Build time only globals defined in the esbuild configuration (esbuild.mjs
 // `define`, sourced from config.js). These values are inlined when bundling.
@@ -116,27 +114,4 @@ export function workspaceFileName(courseName: string, backend: "tmc" | "mooc"): 
 /** The pre-namespacing workspace filename. Only referenced by the migration. */
 export function legacyWorkspaceFileName(courseName: string): string {
   return `${courseName}.code-workspace`
-}
-
-export const EXAM_TEST_RESULT: TestResultData = {
-  testResult: {
-    status: "PASSED",
-    testResults: [
-      {
-        name: "Hidden Exam Test: hidden_test",
-        successful: true,
-        message: "Remember to submit your solution to the server for evaluation.",
-        points: [],
-        exception: [],
-      },
-    ],
-    logs: {},
-  },
-  id: ExerciseIdentifier.from(0),
-  courseSlug: "",
-  exerciseName: "part01-exam01",
-  tmcLogs: {
-    stdout: "",
-    stderr: "",
-  },
 }
