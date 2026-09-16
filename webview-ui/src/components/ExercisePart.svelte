@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { SvelteMap } from "svelte/reactivity"
+
   import type {
     ExerciseGroup,
     ExerciseStatus,
@@ -9,7 +11,7 @@
   import Button from "./Button.svelte"
   import Checkbox from "./Checkbox.svelte"
 
-  // checked/status records for exercises, keyed by the backend-specific exercise id
+  // exercise statuses, keyed by the backend-specific exercise id
   type PerBackend<T> = {
     tmc: Record<TmcExerciseId, T>
     mooc: Record<MoocExerciseId, T>
@@ -20,7 +22,8 @@
     onDownloadAll: (exerciseIds: Array<ExerciseIdentifier>) => void
     onOpenAll: (exerciseIds: Array<ExerciseIdentifier>) => void
     onCloseAll: (exerciseIds: Array<ExerciseIdentifier>) => void
-    checkedExercises: PerBackend<boolean>
+    // The panel's selection, mutated in place: a `SvelteMap` propagates its own changes.
+    checkedExercises: SvelteMap<string, ExerciseIdentifier>
     exerciseStatuses: PerBackend<ExerciseStatus>
   }
 
@@ -29,7 +32,7 @@
     onDownloadAll,
     onOpenAll,
     onCloseAll,
-    checkedExercises = $bindable(),
+    checkedExercises,
     exerciseStatuses,
   }: Props = $props()
 
@@ -55,27 +58,17 @@
     return status === undefined ? "Loading…" : statusLabels[status]
   }
   function isChecked(id: ExerciseIdentifier): boolean {
-    return match(
-      id,
-      (tmc) => checkedExercises.tmc[tmc.tmcExerciseId] ?? false,
-      (mooc) => checkedExercises.mooc[mooc.moocExerciseId] ?? false,
-    )
+    return checkedExercises.has(ExerciseIdentifier.toString(id))
   }
   function setChecked(ids: Array<ExerciseIdentifier>, checked: boolean) {
-    const next = { tmc: { ...checkedExercises.tmc }, mooc: { ...checkedExercises.mooc } }
     for (const id of ids) {
-      match(
-        id,
-        (tmc) => {
-          next.tmc[tmc.tmcExerciseId] = checked
-        },
-        (mooc) => {
-          next.mooc[mooc.moocExerciseId] = checked
-        },
-      )
+      const key = ExerciseIdentifier.toString(id)
+      if (checked) {
+        checkedExercises.set(key, id)
+      } else {
+        checkedExercises.delete(key)
+      }
     }
-    // reassigned (not mutated) so that the change propagates through the binding
-    checkedExercises = next
   }
 
   const completedExercises = $derived(exerciseGroup.exercises.filter((e) => e.passed).length)
@@ -89,6 +82,7 @@
     exerciseGroup.exercises.filter((e) => getStatus(e.id) === "opened").length,
   )
   const totalExercises = $derived(exerciseGroup.exercises.length)
+  const hasSoftDeadline = $derived(exerciseGroup.exercises.some((exercise) => !exercise.isHard))
   const allExercisesAreChecked = $derived(
     exerciseGroup.exercises.every((exercise) => isChecked(exercise.id)),
   )
@@ -96,15 +90,6 @@
     exerciseGroup.exercises.some((exercise) => isChecked(exercise.id)),
   )
 
-  function getHardDeadlineInformation(deadline: string) {
-    return (
-      "This is a soft deadline and it can be exceeded. " +
-      "Exercises can be submitted after the soft deadline has passed, " +
-      "but you receive only 75% of the exercise points. " +
-      `Hard deadline for this exercise is: ${deadline}. ` +
-      "Hard deadline can not be exceeded."
-    )
-  }
   function checkAllExercises(checked: boolean) {
     setChecked(
       exerciseGroup.exercises.map((exercise) => exercise.id),
@@ -136,6 +121,13 @@
     </div>
 
     <div class="next-deadline">{exerciseGroup.nextDeadlineString}</div>
+
+    {#if hasSoftDeadline}
+      <div class="deadline-policy">
+        A soft deadline can be exceeded: exercises submitted after it still count, but award only
+        75% of the exercise points. A hard deadline cannot be exceeded.
+      </div>
+    {/if}
 
     <vscode-table zebra responsive breakpoint="480">
       <vscode-table-header slot="header">
@@ -175,12 +167,14 @@
                   {exercise.softDeadlineString}
                   <span
                     class="deadline-info"
-                    title={getHardDeadlineInformation(exercise.hardDeadlineString)}
+                    title={`Hard deadline: ${exercise.hardDeadlineString}`}
                   >
                     <vscode-icon name="info"></vscode-icon>
                   </span>
+                  <!-- `title` is unreachable without a pointer, so the same text is also
+                       exposed to assistive technology. -->
                   <span class="visually-hidden">
-                    {getHardDeadlineInformation(exercise.hardDeadlineString)}
+                    Hard deadline: {exercise.hardDeadlineString}
                   </span>
                 </span>
               {/if}
@@ -222,6 +216,10 @@
   }
   .next-deadline {
     margin-bottom: 0.8rem;
+  }
+  .deadline-policy {
+    margin-bottom: 0.8rem;
+    opacity: 90%;
   }
   .checkbox-cell {
     width: 2rem;

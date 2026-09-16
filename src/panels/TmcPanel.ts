@@ -69,6 +69,9 @@ export class TmcPanel {
 
   private _disposables: Disposable[] = []
 
+  // `_panel.dispose()` fires `onDidDispose`, which calls back into `dispose()`
+  private _isDisposed = false
+
   // sends a message to the main and side panels
   public static async postMessage(...messages: ExtensionToWebview[]): Promise<void> {
     for (const message of messages) {
@@ -96,16 +99,18 @@ export class TmcPanel {
     panel: Panel,
   ): Promise<void> {
     if (TmcPanel.mainPanel !== undefined) {
-      TmcPanel.mainPanel._panel.dispose()
+      Logger.info(`Revealing existing main panel for "${panel.type}"`)
+      await TmcPanel.mainPanel._renderPanel(panel)
+      TmcPanel.mainPanel._panel.reveal(ViewColumn.One, false)
+    } else {
+      TmcPanel.mainPanel = await TmcPanel.renderNew(
+        extensionUri,
+        extensionContext,
+        actionContext,
+        panel,
+        true,
+      )
     }
-    const currentPanel = await TmcPanel.renderNew(
-      extensionUri,
-      extensionContext,
-      actionContext,
-      panel,
-      true,
-    )
-    TmcPanel.mainPanel = currentPanel
   }
 
   // renders the `panel` in the side panel
@@ -161,12 +166,7 @@ export class TmcPanel {
       // otherwise a hidden-then-revealed panel reloads and drops messages posted
       // before the reveal
       retainContextWhenHidden: true,
-      localResourceRoots: [
-        Uri.joinPath(extensionUri, "out"),
-        Uri.joinPath(extensionUri, "webview-ui/public/build"),
-        Uri.joinPath(extensionUri, "media"),
-        Uri.joinPath(extensionUri, "resources"),
-      ],
+      localResourceRoots: [Uri.joinPath(extensionUri, "webview-ui/public/build")],
     })
     const currentPanel = new TmcPanel(
       webviewPanel,
@@ -199,20 +199,21 @@ export class TmcPanel {
 
   // disposes the side panel when disposing the main panel as well
   public dispose(): void {
-    this._panel.dispose()
-
-    // Interrupt any in-flight mooc login on side-panel dispose (close/reload)
-    // so no orphaned CLI process keeps polling.
-    if (!this._isMain) {
-      moocLoginRegistry.cancelAll()
+    if (this._isDisposed) {
+      return
     }
+    this._isDisposed = true
+    this._panel.dispose()
 
     if (this._isMain) {
       TmcPanel.mainPanel = undefined
-      // if we're disposing the main panel, we'll dispose the side panel as well
       TmcPanel.sidePanel?.dispose()
+    } else {
+      TmcPanel.sidePanel = undefined
+      // Interrupt any in-flight mooc login on side-panel dispose (close/reload)
+      // so no orphaned CLI process keeps polling.
+      moocLoginRegistry.cancelAll()
     }
-    TmcPanel.sidePanel = undefined
 
     while (this._disposables.length > 0) {
       const disposable = this._disposables.pop()
@@ -252,7 +253,7 @@ export class TmcPanel {
                     http-equiv="Content-Security-Policy"
                     content="
                         default-src 'none';
-                        img-src ${webview.cspSource} https:;
+                        img-src ${webview.cspSource};
                         font-src ${webview.cspSource};
                         style-src 'nonce-${nonce}';
                         script-src 'nonce-${nonce}';"
@@ -267,18 +268,10 @@ export class TmcPanel {
                     type="text/css"
                     href="${codiconCssUri}"
                 />
-                <script defer nonce="${nonce}" src="${scriptUri}" />
+                <script defer nonce="${nonce}" src="${scriptUri}"></script>
             </head>
-                <body>
-                </body>
+            <body></body>
             </html>
-
-            <style>
-                body {
-                    /* ensures no layout shift during loading */
-                    scrollbar-gutter: stable;
-                }
-            </style>
       `
   }
 
@@ -801,7 +794,6 @@ function assertUnreachable(x: never): never {
   throw new Error(`unreachable ${x}`)
 }
 
-// helper to generate a random ids when creating panels
 function mapStatus(status: ExerciseStatus, expired: boolean): UITypes.ExerciseStatus {
   switch (status) {
     case ExerciseStatus.Closed:
@@ -813,8 +805,13 @@ function mapStatus(status: ExerciseStatus, expired: boolean): UITypes.ExerciseSt
   }
 }
 
+let nextPanelId = 0
+
+// identifies a panel for the lifetime of the extension host, so a buffered message can be
+// matched against the panel currently rendered
 export function randomPanelId(): number {
-  return Math.floor(Math.random() * 100_000_000)
+  nextPanelId += 1
+  return nextPanelId
 }
 
 function formatError(res: Result<unknown, Error>): { error: string; stack: string } | null {

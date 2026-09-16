@@ -59,10 +59,7 @@ export class Logger {
   public static set level(value: LogLevel) {
     this._level = value
     if (value === LogLevel.None) {
-      if (this.output !== undefined) {
-        this.output.dispose()
-        this.output = undefined
-      }
+      this.dispose()
     } else {
       this.output = this.output || window.createOutputChannel(OUTPUT_CHANNEL_NAME)
     }
@@ -117,6 +114,12 @@ export class Logger {
       )
     }
     this.output.show()
+  }
+
+  /** Closes the output channel; `show()` or a non-`none` level creates a fresh one. */
+  public static dispose(): void {
+    this.output?.dispose()
+    this.output = undefined
   }
 
   public static toLoggable(p: unknown): string {

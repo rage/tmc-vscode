@@ -1,16 +1,12 @@
+import { randomBytes } from "node:crypto"
+
 /**
- * A helper function that returns a unique alphanumeric identifier called a nonce.
+ * Generates a nonce for a single webview document's CSP `script-src`/`style-src`.
  *
- * @remarks This function is primarily used to help enforce content security
- * policies for resources/scripts being executed in a webview context.
- *
- * @returns A nonce
+ * @returns 32 base64url characters — 192 bits, safe unquoted in an HTML attribute and
+ * in a CSP `'nonce-…'` source. Call it once per document: a nonce reused across
+ * documents no longer bounds which scripts may run.
  */
 export function getNonce(): string {
-  let text = ""
-  const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-  for (let i = 0; i < 32; i++) {
-    text += possible.charAt(Math.floor(Math.random() * possible.length))
-  }
-  return text
+  return randomBytes(24).toString("base64url")
 }

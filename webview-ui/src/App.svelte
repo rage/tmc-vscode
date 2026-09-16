@@ -138,6 +138,11 @@
 </main>
 
 <style>
+  :global(body) {
+    /* ensures no layout shift during loading */
+    scrollbar-gutter: stable;
+  }
+
   .container {
     /*
             locks the side margins to be at most 20vw,

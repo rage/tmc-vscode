@@ -21,7 +21,16 @@ function createFakeWebviewPanel(): {
   getMessageListener: () => (message: unknown) => Promise<void>
 } {
   let listener: ((message: unknown) => Promise<void>) | undefined
-  const dispose = vi.fn()
+  let disposeListener: (() => void) | undefined
+  let panelDisposed = false
+  // the real host calls back into `TmcPanel.dispose()` from here, once
+  const dispose = vi.fn(() => {
+    if (panelDisposed) {
+      return
+    }
+    panelDisposed = true
+    disposeListener?.()
+  })
   const webview = {
     html: "",
     cspSource: "self",
@@ -36,7 +45,10 @@ function createFakeWebviewPanel(): {
   }
   const panel = {
     webview,
-    onDidDispose: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidDispose: vi.fn((callback: () => void) => {
+      disposeListener = callback
+      return { dispose: vi.fn() }
+    }),
     reveal: vi.fn(),
     dispose,
   }
@@ -396,5 +408,182 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: "setUpdateables", exerciseIds: [] }),
     )
+  })
+})
+
+// Discards whatever panels a previous test left mounted.
+function resetPanels(): void {
+  TmcPanel.mainPanel?.dispose()
+  TmcPanel.mainPanel = undefined
+  TmcPanel.sidePanel?.dispose()
+  TmcPanel.sidePanel = undefined
+}
+
+suite("TmcPanel main panel lifecycle", () => {
+  beforeEach(resetPanels)
+  afterEach(resetPanels)
+
+  test("navigating the main panel reuses its webview instead of recreating it", async () => {
+    const { panel, dispose } = createFakeWebviewPanel()
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+    createWebviewPanel.mockClear()
+    createWebviewPanel.mockReturnValue(panel)
+
+    const extensionContext = createMockContext()
+    const extensionUri = vscode.Uri.file("/ext")
+    const actionContext = createMockActionContext()
+
+    await TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
+      id: randomPanelId(),
+      type: "MyCourses",
+      courseDeadlines: {},
+    })
+    vi.mocked(panel.webview.postMessage).mockClear()
+    await TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
+      id: randomPanelId(),
+      type: "Welcome",
+    })
+
+    expect(createWebviewPanel).toHaveBeenCalledTimes(1)
+    expect(dispose).not.toHaveBeenCalled()
+    expect(panel.reveal).toHaveBeenCalledWith(vscode.ViewColumn.One, false)
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setPanel",
+        panel: expect.objectContaining({ type: "Welcome" }),
+      }),
+    )
+  })
+
+  test("navigating the main panel leaves the side panel standing", async () => {
+    const extensionContext = createMockContext()
+    const extensionUri = vscode.Uri.file("/ext")
+    const actionContext = createMockActionContext()
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+
+    createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
+    await TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
+      id: randomPanelId(),
+      type: "MyCourses",
+      courseDeadlines: {},
+    })
+    const side = createFakeWebviewPanel()
+    createWebviewPanel.mockReturnValue(side.panel)
+    await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
+      id: randomPanelId(),
+      type: "MyCourses",
+      courseDeadlines: {},
+    })
+
+    await TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
+      id: randomPanelId(),
+      type: "Welcome",
+    })
+
+    expect(side.dispose).not.toHaveBeenCalled()
+    expect(TmcPanel.sidePanel).toBeDefined()
+  })
+
+  test("re-entering dispose tears the panel down only once", async () => {
+    const { panel, dispose } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+
+    await TmcPanel.renderMain(
+      vscode.Uri.file("/ext"),
+      createMockContext(),
+      createMockActionContext(),
+      { id: randomPanelId(), type: "MyCourses", courseDeadlines: {} },
+    )
+    const mainPanel = TmcPanel.mainPanel
+    expect(mainPanel).toBeDefined()
+
+    mainPanel?.dispose()
+
+    expect(dispose).toHaveBeenCalledTimes(1)
+    expect(TmcPanel.mainPanel).toBeUndefined()
+  })
+})
+
+// Returns the document `TmcPanel`'s constructor hands the webview host.
+async function mountedWebviewHtml(): Promise<string> {
+  resetPanels()
+  const { panel } = createFakeWebviewPanel()
+  vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+
+  await TmcPanel.renderMain(
+    vscode.Uri.file("/ext"),
+    createMockContext(),
+    createMockActionContext(),
+    { id: randomPanelId(), type: "MyCourses", courseDeadlines: {} },
+  )
+  return panel.webview.html
+}
+
+function nonceOf(html: string): string {
+  const nonce = /<meta property="csp-nonce" content="([^"]*)"/.exec(html)?.[1]
+  if (nonce === undefined) {
+    throw new Error("the document declares no csp-nonce")
+  }
+  return nonce
+}
+
+function contentSecurityPolicyOf(html: string): string {
+  const policy = /http-equiv="Content-Security-Policy"[\s\S]*?content="([^"]*)"/.exec(html)?.[1]
+  if (policy === undefined) {
+    throw new Error("the document declares no content security policy")
+  }
+  return policy
+}
+
+suite("TmcPanel webview document", () => {
+  afterEach(resetPanels)
+
+  test("gives every document its own unguessable nonce", async () => {
+    const first = nonceOf(await mountedWebviewHtml())
+    const second = nonceOf(await mountedWebviewHtml())
+
+    expect(first).toMatch(/^[\w-]{32}$/)
+    expect(second).not.toBe(first)
+  })
+
+  test("names no scheme-wide source, so no directive reaches an arbitrary host", async () => {
+    const sources = contentSecurityPolicyOf(await mountedWebviewHtml())
+      .split(";")
+      .flatMap((directive) => directive.trim().split(/\s+/))
+
+    expect(sources).not.toContain("https:")
+    expect(sources).not.toContain("http:")
+    expect(sources).not.toContain("*")
+  })
+
+  test("closes every script tag, so nothing after one is swallowed as its content", async () => {
+    const html = await mountedWebviewHtml()
+
+    const opened = html.match(/<script\b/g) ?? []
+    expect(opened.length).toBeGreaterThan(0)
+    expect(html.match(/<\/script>/g) ?? []).toHaveLength(opened.length)
+    expect(html.trimEnd().endsWith("</html>")).toBe(true)
+  })
+
+  test("nonces every script and stylesheet, which style-src and script-src require", async () => {
+    const html = await mountedWebviewHtml()
+    const nonce = nonceOf(html)
+
+    const tags = html.match(/<(?:script|style|link)\b[^>]*>/g) ?? []
+    expect(tags.length).toBeGreaterThan(0)
+    for (const tag of tags) {
+      expect(tag).toContain(`nonce="${nonce}"`)
+    }
+  })
+
+  test("is granted only the directory the three files it loads live in", async () => {
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+    createWebviewPanel.mockClear()
+    await mountedWebviewHtml()
+
+    const roots = createWebviewPanel.mock.calls[0]?.[3]?.localResourceRoots
+    expect(roots?.map(String)).toEqual([
+      String(vscode.Uri.joinPath(vscode.Uri.file("/ext"), "webview-ui/public/build")),
+    ])
   })
 })

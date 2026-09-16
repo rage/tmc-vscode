@@ -146,7 +146,7 @@ suite("CourseDetails panel", () => {
     expect(await screen.findByText(/Unable to fetch exercise data from server/)).toBeInTheDocument()
   })
 
-  test("posts downloadExercises with a numeric tmc identifier parsed from the checkbox record key", async () => {
+  test("posts downloadExercises with the selected tmc identifier", async () => {
     const panel = tmcPanel()
     const { container } = render(CourseDetails, { props: { panel } })
     dispatch({
@@ -163,7 +163,7 @@ suite("CourseDetails panel", () => {
     postedMessages.mockClear()
     download.click()
 
-    // the tmc id must come back as a number, not the "101" string record key
+    // the tmc id stays a number and survives the postMessage clone
     expect(postedMessages).toHaveBeenCalledWith({
       type: "downloadExercises",
       ids: [makeTmcKind({ tmcExerciseId: 101 })],
@@ -172,7 +172,7 @@ suite("CourseDetails panel", () => {
     })
   })
 
-  test("posts downloadExercises with a string mooc identifier from the checkbox record key", async () => {
+  test("posts downloadExercises with the selected mooc identifier", async () => {
     const panel = moocPanel()
     const { container } = render(CourseDetails, { props: { panel } })
     dispatch({
@@ -208,18 +208,18 @@ suite("CourseDetails panel", () => {
     })
     await findExerciseGroup(container)
 
-    const banner = screen.getByText(/Updates found for exercises/)
-    // No setUpdateables yet (undefined) -> hidden.
-    expect(banner).not.toBeVisible()
+    // The live region is mounted from the start, empty, so the announcement is a change
+    // inside it rather than the insertion of an already-populated region.
+    expect(screen.getAllByRole("alert").length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Updates found for exercises/)).not.toBeInTheDocument()
 
-    // A non-empty updateable list -> the banner must be shown.
     dispatch({
       type: "setUpdateables",
       target: { type: "CourseDetails" },
       courseId: makeTmcKind({ courseId: 42 }),
       exerciseIds: [makeTmcKind({ tmcExerciseId: 101 })],
     })
-    await waitFor(() => expect(banner).toBeVisible())
+    expect(await screen.findByText(/Updates found for exercises/)).toBeInTheDocument()
 
     // A broadcast for a DIFFERENT course must not touch this panel's list.
     dispatch({
@@ -231,16 +231,77 @@ suite("CourseDetails panel", () => {
     await new Promise((resolve) => {
       setTimeout(resolve, 20)
     })
-    expect(banner).toBeVisible()
+    expect(screen.getByText(/Updates found for exercises/)).toBeInTheDocument()
 
-    // An empty list for our course (e.g. after everything updated) -> hidden again.
     dispatch({
       type: "setUpdateables",
       target: { type: "CourseDetails" },
       courseId: makeTmcKind({ courseId: 42 }),
       exerciseIds: [],
     })
-    await waitFor(() => expect(banner).not.toBeVisible())
+    await waitFor(() =>
+      expect(screen.queryByText(/Updates found for exercises/)).not.toBeInTheDocument(),
+    )
+  })
+
+  test("opens the workspace under the course's own backend", async () => {
+    const panel = moocPanel()
+    render(CourseDetails, { props: { panel } })
+    dispatch({
+      type: "setCourseData",
+      target: { type: "CourseDetails", id: panel.id },
+      courseData: moocLocalCourse(),
+    })
+    await screen.findByRole("heading", { name: /MOOC Python/ })
+
+    const open = await findButton("Open workspace")
+    postedMessages.mockClear()
+    open.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openCourseWorkspace",
+      courseName: "mooc-python",
+      backend: "mooc",
+    })
+  })
+
+  test("posts the panel's own course id when updating exercises", async () => {
+    const panel = moocPanel()
+    render(CourseDetails, { props: { panel } })
+    dispatch({
+      type: "setCourseData",
+      target: { type: "CourseDetails", id: panel.id },
+      courseData: moocLocalCourse(),
+    })
+    dispatch({
+      type: "setUpdateables",
+      target: { type: "CourseDetails" },
+      courseId: makeMoocKind({ instanceId: MOOC_INSTANCE_ID }),
+      exerciseIds: [makeMoocKind({ moocExerciseId: MOOC_EXERCISE_ID })],
+    })
+
+    const update = await findButton("Update exercises")
+    postedMessages.mockClear()
+    update.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "downloadExercises",
+      ids: [makeMoocKind({ moocExerciseId: MOOC_EXERCISE_ID })],
+      courseId: panel.courseId,
+      mode: "update",
+    })
+  })
+
+  test("navigates back with a real button rather than a keypress handler", async () => {
+    render(CourseDetails, { props: { panel: tmcPanel() } })
+    postedMessages.mockClear()
+
+    const back = screen.getByRole("button", { name: "My courses" })
+    expect(back.tagName).toBe("BUTTON")
+    expect(back).not.toHaveAttribute("tabindex")
+    back.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({ type: "openMyCourses" })
   })
 
   test("posts refreshCourseDetails with a snapshotted course id", async () => {

@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte"
+  import { SvelteMap } from "svelte/reactivity"
 
   import Button from "../components/Button.svelte"
   import ExercisePart from "../components/ExercisePart.svelte"
-  import type { CourseDetailsPanel, TmcExerciseId, MoocExerciseId } from "../shared/shared"
+  import type { CourseDetailsPanel } from "../shared/shared"
   import {
     assertUnreachable,
     makeMoocKind,
@@ -25,15 +26,9 @@
   // `refresh()` remounts the panel under a fresh id, so `refreshing` resets on its own
   // via `{#key}`.
   let refreshing = $state<boolean>(false)
-  let checkedExercises = $state<{
-    tmc: Record<TmcExerciseId, boolean>
-    mooc: Record<MoocExerciseId, boolean>
-  }>({ tmc: {}, mooc: {} })
-  const checkedExercisesCount = $derived(
-    [...Object.values(checkedExercises.tmc), ...Object.values(checkedExercises.mooc)].filter(
-      Boolean,
-    ).length,
-  )
+  // Membership is the checked state; the key keeps a tmc and a mooc exercise apart.
+  const checkedExercises = new SvelteMap<string, ExerciseIdentifier>()
+  const checkedExercisesCount = $derived(checkedExercises.size)
   // Derived from exercise statuses rather than tracked separately, since downloads report
   // progress back as `exerciseStatusChange` broadcasts, not a return value here.
   const totalDownloading = $derived(
@@ -139,25 +134,13 @@
     if (p.course === undefined) {
       return
     }
-    match(
-      p.course,
-      (tmc) => {
-        vscode.postMessage({
-          type: "openCourseWorkspace",
-          courseName: tmc.name,
-          backend: "tmc",
-        })
-      },
-      (mooc) => {
-        // The workspace file is created under the course slug; the backend tag disambiguates
-        // it from a tmc course that happens to share the same slug.
-        vscode.postMessage({
-          type: "openCourseWorkspace",
-          courseName: mooc.name,
-          backend: "mooc",
-        })
-      },
-    )
+    vscode.postMessage({
+      type: "openCourseWorkspace",
+      courseName: unwrap(p.course).name,
+      // The workspace file is named after the course slug; the backend tag disambiguates it
+      // from a course on the other backend that happens to share the slug.
+      backend: p.course.kind,
+    })
   }
   function downloadExercises(p: CourseDetailsPanel, ids: Array<ExerciseIdentifier>) {
     vscode.postMessage({
@@ -184,60 +167,25 @@
     })
   }
   function clearSelectedExercises() {
-    checkedExercises = { tmc: {}, mooc: {} }
+    checkedExercises.clear()
   }
   function updateExercises(p: CourseDetailsPanel) {
-    if (p.course === undefined) {
-      return
-    }
-    match(
-      p.course,
-      (tmc) => {
-        vscode.postMessage({
-          type: "downloadExercises",
-          ids: $state.snapshot(p.updateableExercises ?? []),
-          courseId: makeTmcKind({ courseId: tmc.id }),
-          mode: "update",
-        })
-      },
-      (mooc) => {
-        vscode.postMessage({
-          type: "downloadExercises",
-          ids: $state.snapshot(p.updateableExercises ?? []),
-          // mooc CourseIdentifier carries the course id in `instanceId`
-          courseId: makeMoocKind({ instanceId: mooc.id }),
-          mode: "update",
-        })
-      },
-    )
+    vscode.postMessage({
+      type: "downloadExercises",
+      ids: $state.snapshot(p.updateableExercises ?? []),
+      courseId: $state.snapshot(p.courseId),
+      mode: "update",
+    })
   }
   function getCheckedExercises(): Array<ExerciseIdentifier> {
-    const onlyCheckedExercises: Array<ExerciseIdentifier> = []
-    Object.entries(checkedExercises.tmc).forEach(([id, checked]) => {
-      if (checked) {
-        onlyCheckedExercises.push(makeTmcKind({ tmcExerciseId: Math.trunc(Number(id)) }))
-      }
-    })
-    Object.entries(checkedExercises.mooc).forEach(([id, checked]) => {
-      if (checked) {
-        onlyCheckedExercises.push(makeMoocKind({ moocExerciseId: id }))
-      }
-    })
-    return onlyCheckedExercises
+    return [...checkedExercises.values()]
   }
 </script>
 
 <nav>
-  <a
-    id="back-to-my-courses"
-    role="button"
-    class="my-courses-link"
-    tabindex="0"
-    onclick={() => openMyCourses()}
-    onkeypress={() => openMyCourses()}
-  >
+  <button id="back-to-my-courses" type="button" class="my-courses-link" onclick={openMyCourses}>
     My courses
-  </a>
+  </button>
   /
   {course?.title ?? "Loading course…"}
 </nav>
@@ -284,24 +232,26 @@
     <Button aria-label="Open workspace" onclick={() => openWorkspace(panel)}>Open workspace</Button>
   </div>
 
-  <div
-    role="alert"
-    hidden={panel.updateableExercises === undefined || panel.updateableExercises.length === 0}
-  >
-    Updates found for exercises
-    <Button onclick={() => updateExercises(panel)}>Update exercises</Button>
+  <!-- Both live regions stay mounted and empty until there is something to say: a screen
+       reader announces a change inside a region it already knows, not one inserted
+       already populated, and not one that merely stops being `hidden`. -->
+  <div role="alert">
+    {#if (panel.updateableExercises?.length ?? 0) > 0}
+      Updates found for exercises
+      <Button onclick={() => updateExercises(panel)}>Update exercises</Button>
+    {/if}
   </div>
-  {#if panel.offlineMode}
-    <div role="alert">Unable to fetch exercise data from server. Displaying local exercises.</div>
-  {/if}
-  {#if course?.perhapsExamMode}
-    <div role="alert">This is an exam. Exercise submission results will not be shown.</div>
-  {/if}
-  {#if course?.disabled}
-    <div role="alert">
-      This course has been disabled. Exercises cannot be downloaded or submitted.
-    </div>
-  {/if}
+  <div role="alert">
+    {#if panel.offlineMode}
+      <div>Unable to fetch exercise data from server. Displaying local exercises.</div>
+    {/if}
+    {#if course?.perhapsExamMode}
+      <div>This is an exam. Exercise submission results will not be shown.</div>
+    {/if}
+    {#if course?.disabled}
+      <div>This course has been disabled. Exercises cannot be downloaded or submitted.</div>
+    {/if}
+  </div>
 </div>
 
 {#if panel.exerciseGroups !== undefined}
@@ -310,7 +260,7 @@
       <ExercisePart
         {exerciseGroup}
         exerciseStatuses={panel.exerciseStatuses}
-        bind:checkedExercises
+        {checkedExercises}
         onDownloadAll={(exercises) => downloadExercises(panel, exercises)}
         onOpenAll={(exercises) => openExercises(panel, exercises)}
         onCloseAll={(exercises) => closeExercises(panel, exercises)}
@@ -385,8 +335,13 @@
   .exercise-part {
     margin-bottom: 1rem;
   }
+  /* Resets the native button to look like the plain nav text around it. */
   .my-courses-link {
+    all: unset;
     cursor: pointer;
+    color: inherit;
+    font: inherit;
+    display: inline;
   }
   .my-courses-link:hover {
     text-decoration: underline;

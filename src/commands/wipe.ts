@@ -4,7 +4,6 @@ import * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
 import { FileSystemError } from "../errors"
-import { deactivate } from "../extension"
 import { Logger } from "../utilities"
 
 export async function wipe(
@@ -105,7 +104,6 @@ and every setting and course this extension has stored will be cleared.",
   await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", undefined)
   await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", undefined)
 
-  deactivate()
   for (const sub of context.subscriptions) {
     try {
       sub.dispose()
