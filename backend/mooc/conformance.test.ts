@@ -21,7 +21,8 @@ import {
   TMC_ARCHIVE_MIME,
 } from "./fixtures"
 import { MOCK_SEEDED_ACCESS_TOKEN, MOCK_SEEDED_NOSCOPE_ACCESS_TOKEN } from "./oauth"
-import { createMoocApp, expireMoocUpload } from "./router"
+import type { MoocMockControls } from "./router"
+import { createMoocApp, moocMockOf } from "./router"
 
 // Conformance smoke test for the mooc mock. Boots the mock in-process and drives
 // every spec operation with a direct HTTP client, proving:
@@ -31,14 +32,14 @@ import { createMoocApp, expireMoocUpload } from "./router"
 // It also covers the two-step upload -> submit flow, the poll-grading loop, the
 // old-submission list/download/share endpoints and the spec-exempt archive routes.
 
-const listen = (app: Express): Promise<{ server: Server; base: string }> =>
+const listen = (app: Express): Promise<{ server: Server; base: string; mock: MoocMockControls }> =>
   new Promise((resolve) => {
     const server = app.listen(0, () => {
       const addr = server.address()
       if (!addr || typeof addr === "string") {
         throw new Error("expected a TCP address")
       }
-      resolve({ server, base: `http://localhost:${addr.port}` })
+      resolve({ server, base: `http://localhost:${addr.port}`, mock: moocMockOf(app) })
     })
   })
 
@@ -65,9 +66,10 @@ const assertUploadRejected = async (res: Response, message: string): Promise<voi
 describe("mooc mock conformance", () => {
   let server: Server
   let base: string
+  let mock: MoocMockControls
 
   before(async () => {
-    ;({ server, base } = await listen(createMoocApp()))
+    ;({ server, base, mock } = await listen(createMoocApp()))
   })
 
   after(() => {
@@ -217,15 +219,6 @@ describe("mooc mock conformance", () => {
     const { data_files } = (await res.json()) as { data_files: AnswerFile[] }
     assert.equal(data_files.length, 1)
     return data_files[0]!
-  }
-
-  // Reads an answer file through its own `url`. The url carries the fixed
-  // MOOC_MOCK_BASE_URL host, so its path AND query (the claim lives in the query) are
-  // replayed against this test server, which listens on a random port. fetch follows
-  // the claim route's relative redirect to the object.
-  const readAnswerFile = (file: AnswerFile): Promise<Response> => {
-    const url = new URL(file.url)
-    return fetch(`${base}${url.pathname}${url.search}`)
   }
 
   // Submits a file answer naming `dataFiles`. `ids` overrides the slide/task the exercise
@@ -457,7 +450,7 @@ describe("mooc mock conformance", () => {
 
     assert.deepEqual((await taskShape(api(`/exercises/${exerciseId}`))).model_solution_spec, {
       type: "editor",
-      solution_download_url: passingExercise.modelSolution.solution_download_url,
+      solution_download_url: `${base}/mooc-archives/${passingExercise.archiveSlug}.tar.zst`,
     })
 
     // The list view still withholds it (host: `client_tasks_from_slide` is called
@@ -532,7 +525,7 @@ describe("mooc mock conformance", () => {
     // A soft-deleted binding is what makes "reaped" distinguishable from "never
     // yours"; only the former is a race a client can recover from.
     const uploaded = await uploadOne(passingExercise.slide.exercise_id)
-    assert.ok(expireMoocUpload(uploaded.id))
+    assert.ok(mock.expireUpload(uploaded.id))
     const res = await postSubmit(passingExercise, [uploaded.id])
     assert.equal(res.status, 422)
     const body = (await res.json()) as { message_key: string }
@@ -609,7 +602,7 @@ describe("mooc mock conformance", () => {
     assert.equal(res.status, 200)
     const { data_files } = (await res.json()) as { data_files: AnswerFile[] }
     assert.equal(data_files.length, 1)
-    const bytes = await readAnswerFile(data_files[0]!)
+    const bytes = await fetch(data_files[0]!.url)
     assert.deepEqual([...new Uint8Array(await bytes.arrayBuffer())], [7, 8, 9])
   })
 
@@ -650,6 +643,9 @@ describe("mooc mock conformance", () => {
     // a client that persisted or rewrote the url pass here and fail in production.
     const uploaded = await uploadOne(passingExercise.slide.exercise_id, [4, 5, 6])
     const url = new URL(uploaded.url)
+    // The mock names the address it bound, not the default port -- a suite on an
+    // ephemeral port would otherwise hand out urls pointing at another process.
+    assert.equal(url.origin, base)
     assert.equal(url.pathname, `/api/v0/files/claimed/${uploaded.id}`)
     assert.ok(url.searchParams.get("download-claim"), "the url must carry a claim")
 
@@ -659,7 +655,7 @@ describe("mooc mock conformance", () => {
     // Relative, so it resolves against whichever host the request arrived on.
     assert.ok(!redirect.headers.get("location")?.startsWith("http"))
 
-    const followed = await readAnswerFile(uploaded)
+    const followed = await fetch(uploaded.url)
     assert.equal(followed.status, 200)
     assert.deepEqual([...new Uint8Array(await followed.arrayBuffer())], [4, 5, 6])
   })
@@ -745,7 +741,7 @@ describe("mooc mock conformance", () => {
     const { data_files } = (await downloadRes.json()) as { data_files: AnswerFile[] }
     assert.equal(data_files.length, 1)
     assert.equal(data_files[0]!.name, "submission.tar.zst")
-    const fileRes = await readAnswerFile(data_files[0]!)
+    const fileRes = await fetch(data_files[0]!.url)
     assert.equal(fileRes.status, 200)
     const fileBytes = new Uint8Array(await fileRes.arrayBuffer())
     assert.deepEqual([...fileBytes], [1, 2, 3])
@@ -906,6 +902,48 @@ describe("mooc mock response-validation guard", () => {
   })
 })
 
+describe("mooc mock instance isolation", () => {
+  test("two mocks share no state and each hands out urls naming itself", async () => {
+    // The suites run several mocks at once, and the out-of-process tiers reach a
+    // long-lived one on a fixed port. State shared between instances would let one
+    // test's submissions decide another's assertions, and a url naming the default
+    // port would send a client that followed it to whatever else is serving there.
+    const one = await listen(createMoocApp())
+    const other = await listen(createMoocApp())
+    const exerciseId = passingExercise.slide.exercise_id
+    const submissionsOf = async (origin: string): Promise<unknown[]> =>
+      (await (
+        await authFetch(
+          `${origin}/api/v0/exercise-services/client/exercises/${exerciseId}/submissions`,
+        )
+      ).json()) as unknown[]
+    const stubUrlOf = async (origin: string): Promise<string> => {
+      const slide = (await (
+        await authFetch(`${origin}/api/v0/exercise-services/client/exercises/${exerciseId}`)
+      ).json()) as { tasks: { public_spec: { stub_download_url: string } }[] }
+      return slide.tasks[0]!.public_spec.stub_download_url
+    }
+
+    try {
+      assert.ok(one.mock.seedFilelessSubmission(exerciseId))
+      assert.equal((await submissionsOf(one.base)).length, 1)
+      assert.equal((await submissionsOf(other.base)).length, 0)
+
+      assert.equal(await stubUrlOf(one.base), `${one.base}/mooc-archives/passing-exercise.tar.zst`)
+      assert.equal(
+        await stubUrlOf(other.base),
+        `${other.base}/mooc-archives/passing-exercise.tar.zst`,
+      )
+
+      one.mock.reset()
+      assert.equal((await submissionsOf(one.base)).length, 0)
+    } finally {
+      one.server.close()
+      other.server.close()
+    }
+  })
+})
+
 interface ErrorResponse {
   status: number
   body: Record<string, unknown>
@@ -923,9 +961,10 @@ const read = async (res: Response): Promise<ErrorResponse> => ({
 describe("mooc mock error envelopes", () => {
   let server: Server
   let base: string
+  let mock: MoocMockControls
 
   before(async () => {
-    ;({ server, base } = await listen(createMoocApp()))
+    ;({ server, base, mock } = await listen(createMoocApp()))
   })
 
   after(() => {
@@ -1027,7 +1066,7 @@ describe("mooc mock error envelopes", () => {
       messageKey: "upload_expired",
       run: async () => {
         const fileId = await uploadFor(passingExercise.slide.exercise_id)
-        expireMoocUpload(fileId)
+        mock.expireUpload(fileId)
         return read(await submitNaming([fileId]))
       },
     },

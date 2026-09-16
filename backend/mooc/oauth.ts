@@ -3,7 +3,7 @@ import { randomUUID } from "crypto"
 import type { Express, Request, Response } from "express"
 import express from "express"
 
-import { MOOC_MOCK_BASE_URL } from "./fixtures"
+import { DEFAULT_MOOC_MOCK_BASE_URL } from "./fixtures"
 
 // Mock of the courses.mooc.fi OAuth2 device-authorization endpoints
 // (`/api/v0/main-frontend/oauth/*`, RFC 8628) backing the mooc device-flow login.
@@ -277,7 +277,7 @@ const formField = (req: Request, name: string): string => {
   return typeof value === "string" ? value : ""
 }
 
-const handleDeviceAuthorization = (req: Request, res: Response): void => {
+const handleDeviceAuthorization = (baseUrl: string, req: Request, res: Response): void => {
   const clientId = formField(req, "client_id")
   if (!ALLOWED_CLIENT_IDS.has(clientId)) {
     res.status(400).json(oauthError("invalid_client"))
@@ -302,8 +302,8 @@ const handleDeviceAuthorization = (req: Request, res: Response): void => {
   res.status(200).json({
     device_code: deviceCode,
     user_code: MOCK_USER_CODE,
-    verification_uri: `${MOOC_MOCK_BASE_URL}/oauth_device`,
-    verification_uri_complete: `${MOOC_MOCK_BASE_URL}/oauth_device?user_code=${MOCK_USER_CODE}`,
+    verification_uri: `${baseUrl}/oauth_device`,
+    verification_uri_complete: `${baseUrl}/oauth_device?user_code=${MOCK_USER_CODE}`,
     expires_in: DEVICE_EXPIRES_IN_SECONDS,
     // Tests override this via TMC_LANGS_MOOC_DEVICE_POLL_INTERVAL_MS to stay fast.
     interval: DEVICE_INTERVAL_SECONDS,
@@ -410,12 +410,20 @@ const handleToken = (req: Request, res: Response): void => {
 }
 
 /**
- * Mounts the mooc device-flow OAuth mock. Parses urlencoded bodies itself so it
- * works whether or not the host app already registered a urlencoded parser
- * (body-parser skips re-parsing an already-parsed body).
+ * Mounts the mooc device-flow OAuth mock. `baseUrl` yields the address the mock
+ * is reachable at, read per request because a standalone app only learns it once
+ * it binds; the verification URIs advertised to the user are built from it.
+ * Parses urlencoded bodies itself so it works whether or not the host app
+ * already registered a urlencoded parser (body-parser skips re-parsing an
+ * already-parsed body).
  */
-export const registerMoocOAuthRoutes = (app: Express): void => {
+export const registerMoocOAuthRoutes = (
+  app: Express,
+  baseUrl: () => string = () => DEFAULT_MOOC_MOCK_BASE_URL,
+): void => {
   const form = express.urlencoded({ extended: false })
-  app.post(`${OAUTH_BASE}/device_authorization`, form, handleDeviceAuthorization)
+  app.post(`${OAUTH_BASE}/device_authorization`, form, (req, res) =>
+    handleDeviceAuthorization(baseUrl(), req, res),
+  )
   app.post(`${OAUTH_BASE}/token`, form, handleToken)
 }
