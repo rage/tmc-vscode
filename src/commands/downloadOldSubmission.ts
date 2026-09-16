@@ -3,6 +3,7 @@ import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
+import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
@@ -16,7 +17,7 @@ import {
   makeTmcKind,
   match,
 } from "../shared/shared"
-import { dateToString, Logger, parseDate } from "../utilities"
+import { dateToString, Logger, parseDate, runSingleFlight } from "../utilities"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 import { failure, runForExercise } from "./runForExercise"
 
@@ -164,42 +165,54 @@ export async function downloadOldSubmission(
         return Ok.EMPTY
       }
 
-      const editor = vscode.window.activeTextEditor
-      const document = editor?.document.uri
+      // Key shared with the submit and paste actions: restoring overwrites the directory a
+      // submission of the same exercise is reading, and with `submitFirst` it submits itself.
+      return runSingleFlight(
+        {
+          key: `submit:${exercise.uri.fsPath}`,
+          maxHoldMs: CLI_PROCESS_TIMEOUT + 30_000,
+          busyMessage: "A submission for this exercise is already in progress.",
+          onBusy: (message) => dialog.notification(message),
+        },
+        async () => {
+          const editor = vscode.window.activeTextEditor
+          const document = editor?.document.uri
 
-      // The tmc CLI reports no outcome, and only ever restores, so both backends are read as the
-      // mooc outcome the UI below branches on.
-      const restoreResult: Result<MoocOldSubmissionRestore, Error> = await match(
-        submission.target,
-        (tmc) =>
-          langs.val
-            .downloadTmcOldSubmission(
-              tmc.exerciseId,
-              exercise.uri.fsPath,
-              tmc.submissionId,
-              submitFirst,
-            )
-            .then((res) => res.map(() => "restored" as const)),
-        (mooc) =>
-          langs.val.downloadMoocOldSubmission(
-            mooc.exerciseId,
-            exercise.uri.fsPath,
-            mooc.submissionId,
-            submitFirst,
-          ),
+          // The tmc CLI reports no outcome, and only ever restores, so both backends are read
+          // as the mooc outcome the UI below branches on.
+          const restoreResult: Result<MoocOldSubmissionRestore, Error> = await match(
+            submission.target,
+            (tmc) =>
+              langs.val
+                .downloadTmcOldSubmission(
+                  tmc.exerciseId,
+                  exercise.uri.fsPath,
+                  tmc.submissionId,
+                  submitFirst,
+                )
+                .then((res) => res.map(() => "restored" as const)),
+            (mooc) =>
+              langs.val.downloadMoocOldSubmission(
+                mooc.exerciseId,
+                exercise.uri.fsPath,
+                mooc.submissionId,
+                submitFirst,
+              ),
+          )
+          if (editor && document) {
+            await vscode.commands.executeCommand("workbench.action.files.revert", document)
+          }
+          if (restoreResult.err) {
+            return failure("Failed to download old submission.", restoreResult.val)
+          }
+          if (restoreResult.val === "nothing-to-download") {
+            // Reachable only for an exercise type with no files at all, so never for a tmc
+            // exercise. Nothing was changed, so this is ordinary news rather than a failure.
+            dialog.notification("That submission has no files to download.")
+          }
+          return Ok.EMPTY
+        },
       )
-      if (editor && document) {
-        await vscode.commands.executeCommand("workbench.action.files.revert", document)
-      }
-      if (restoreResult.err) {
-        return failure("Failed to download old submission.", restoreResult.val)
-      }
-      if (restoreResult.val === "nothing-to-download") {
-        // Reachable only for an exercise type with no files at all, so never for a tmc
-        // exercise. Nothing was changed, so this is ordinary news rather than a failure.
-        dialog.notification("That submission has no files to download.")
-      }
-      return Ok.EMPTY
     },
   )
 }

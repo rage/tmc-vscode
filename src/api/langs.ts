@@ -263,8 +263,7 @@ class BoundedStderr {
  */
 export default class Langs {
   // Per-backend: tmc.mooc.fi and courses.mooc.fi are unrelated servers, so one must not throttle the other.
-  private _nextTmcSubmissionAllowedTimestamp: number
-  private _nextMoocSubmissionAllowedTimestamp: number
+  private readonly _nextSubmissionAllowedTimestamp: Record<"tmc" | "mooc", number>
   private readonly _options: Options
   private readonly _responseCache: Map<string, ResponseCacheEntry>
   private _onLogout?: (expected: boolean) => void
@@ -285,8 +284,7 @@ export default class Langs {
     private readonly clientVersion: string,
     options?: Options,
   ) {
-    this._nextTmcSubmissionAllowedTimestamp = 0
-    this._nextMoocSubmissionAllowedTimestamp = 0
+    this._nextSubmissionAllowedTimestamp = { tmc: 0, mooc: 0 }
     this._options = { ...options }
     this._responseCache = new Map()
   }
@@ -918,7 +916,9 @@ export default class Langs {
    * @param exerciseId  Id of the exercise.
    * @param exercisePath Filepath where the old submission should be downloaded to.
    * @param submissionId Id of the exercise submission to download.
-   * @param saveOldState Whether to submit the current state of the exercise beforehand.
+   * @param saveOldState Whether to submit the current state of the exercise beforehand. That
+   * submission takes a slot in the tmc throttle, so asking for it can make this err with a
+   * `BottleneckError` without touching the exercise.
    */
   public async downloadTmcOldSubmission(
     exerciseId: number,
@@ -927,6 +927,12 @@ export default class Langs {
     saveOldState: boolean,
     _progressCallback?: (downloadedPct: number, increment: number) => void,
   ): Promise<Result<void, Error>> {
+    if (saveOldState) {
+      const submissionSlot = this._claimSubmissionSlot("tmc")
+      if (submissionSlot.err) {
+        return submissionSlot
+      }
+    }
     const saveOldStateArg = saveOldState ? ["--save-old-state"] : []
     const args = this._tmcCmd(
       "download-old-submission",
@@ -948,6 +954,9 @@ export default class Langs {
    * Resolves to `nothing-to-download` for a submission the server has no files
    * for, which only an exercise type with no files at all can be. Nothing on disk
    * (or on the server) is touched in that case, `saveOldState` included.
+   *
+   * `saveOldState` takes a slot in the mooc submission throttle, so asking for it can make
+   * this err with a `BottleneckError` without touching the exercise.
    */
   public async downloadMoocOldSubmission(
     exerciseId: string,
@@ -956,6 +965,12 @@ export default class Langs {
     saveOldState: boolean,
     _progressCallback?: (downloadedPct: number, increment: number) => void,
   ): Promise<Result<MoocOldSubmissionRestore, Error>> {
+    if (saveOldState) {
+      const submissionSlot = this._claimSubmissionSlot("mooc")
+      if (submissionSlot.err) {
+        return submissionSlot
+      }
+    }
     const saveOldStateArg = saveOldState ? ["--save-old-state"] : []
     const args = this._moocCmd(
       "download-old-submission",
@@ -1297,12 +1312,20 @@ export default class Langs {
    *
    * @param exerciseId Id of the exercise.
    * @param saveOldState Whether to submit current state of the exercise before reseting it.
+   * That submission takes a slot in the backend's submission throttle, so asking for it can
+   * make this err with a `BottleneckError` without touching the exercise.
    */
   public async resetExercise(
     exerciseId: ExerciseIdentifier,
     exercisePath: string,
     saveOldState: boolean,
   ): Promise<Result<void, Error>> {
+    if (saveOldState) {
+      const submissionSlot = this._claimSubmissionSlot(exerciseId.kind)
+      if (submissionSlot.err) {
+        return submissionSlot
+      }
+    }
     return match(
       exerciseId,
       async (tmc) => {
@@ -1341,8 +1364,9 @@ export default class Langs {
    * Submits an exercise to server and waits for test results. Uses TMC-langs `submit` core
    * command internally.
    *
-   * This function can only be called once per `MINIMUM_SUBMISSION_INTERVAL` and this limitation
-   * is shared with `submitTmcExerciseToPaste()`.
+   * Throttled to one call per `MINIMUM_SUBMISSION_INTERVAL` shared with every other tmc call
+   * that submits — paste, and `--save-old-state` on reset and restore — and errs with a
+   * `BottleneckError` over that rate rather than waiting.
    *
    * @param exerciseId Id of the exercise.
    * @param progressCallback Optional callback function that can be used to get status reports.
@@ -1353,11 +1377,10 @@ export default class Langs {
     progressCallback?: (progressPct: number, message?: string) => void,
     onSubmissionUrl?: (url: string) => void,
   ): Promise<Result<SubmissionFinished, Error>> {
-    const now = Date.now()
-    if (now < this._nextTmcSubmissionAllowedTimestamp) {
-      return Err(new BottleneckError("This command can't be executed at the moment."))
+    const submissionSlot = this._claimSubmissionSlot("tmc")
+    if (submissionSlot.err) {
+      return submissionSlot
     }
-    this._nextTmcSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
 
     const onStdout = (res: StatusUpdateData): void => {
       progressCallback?.(100 * res["percent-done"], res.message ?? undefined)
@@ -1395,8 +1418,8 @@ export default class Langs {
    * task ids from the exercise id and owns the poll loop, so this only needs the
    * exercise id and path; it returns the terminal grading status.
    *
-   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with
-   * `submitMoocExerciseToPaste()`; per-backend, so tmc submit/paste is unaffected.
+   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with every other mooc call that
+   * submits; per-backend, so the tmc path is unaffected.
    *
    * @param exerciseId Mooc exercise id (a UUID string).
    * @param exercisePath Path to the local exercise directory.
@@ -1407,11 +1430,10 @@ export default class Langs {
     exercisePath: string,
     progressCallback?: (progressPct: number, message?: string) => void,
   ): Promise<Result<ExerciseTaskSubmissionStatus, Error>> {
-    const now = Date.now()
-    if (now < this._nextMoocSubmissionAllowedTimestamp) {
-      return Err(new BottleneckError("This command can't be executed at the moment."))
+    const submissionSlot = this._claimSubmissionSlot("mooc")
+    if (submissionSlot.err) {
+      return submissionSlot
     }
-    this._nextMoocSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
 
     const onStdout = (res: StatusUpdateData): void => {
       progressCallback?.(100 * res["percent-done"], res.message ?? undefined)
@@ -1441,8 +1463,9 @@ export default class Langs {
    * Submits given exercise to TMC Paste and provides a link to it. Uses TMC-langs `paste` core
    * command internally.
    *
-   * This function can only be called once per `MINIMUM_SUBMISSION_INTERVAL` and this limitation
-   * is shared with `submitTmcExerciseAndWaitForResults()`.
+   * Throttled to one call per `MINIMUM_SUBMISSION_INTERVAL` shared with every other tmc call
+   * that submits — submit, and `--save-old-state` on reset and restore — and errs with a
+   * `BottleneckError` over that rate rather than waiting.
    *
    * @param exerciseId Id of the exercise.
    * @returns TMC paste link.
@@ -1451,11 +1474,10 @@ export default class Langs {
     exerciseId: number,
     exercisePath: string,
   ): Promise<Result<string, Error>> {
-    const now = Date.now()
-    if (now < this._nextTmcSubmissionAllowedTimestamp) {
-      return Err(new BottleneckError("This command can't be executed at the moment."))
+    const submissionSlot = this._claimSubmissionSlot("tmc")
+    if (submissionSlot.err) {
+      return submissionSlot
     }
-    this._nextTmcSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
 
     const res = await this._executeLangsCommand(
       {
@@ -1480,8 +1502,8 @@ export default class Langs {
    * subcommand submits (non-blocking) then shares the resulting submission in
    * one shot, resolving the slide/task ids from the exercise id.
    *
-   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with
-   * `submitMoocExerciseAndWaitForResults()`; per-backend, so tmc submit/paste is unaffected.
+   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with every other mooc call that
+   * submits; per-backend, so the tmc path is unaffected.
    *
    * @param exerciseId Mooc exercise id (a UUID string).
    * @param exercisePath Path to the local exercise directory.
@@ -1491,11 +1513,10 @@ export default class Langs {
     exerciseId: string,
     exercisePath: string,
   ): Promise<Result<string, Error>> {
-    const now = Date.now()
-    if (now < this._nextMoocSubmissionAllowedTimestamp) {
-      return Err(new BottleneckError("This command can't be executed at the moment."))
+    const submissionSlot = this._claimSubmissionSlot("mooc")
+    if (submissionSlot.err) {
+      return submissionSlot
     }
-    this._nextMoocSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
 
     const res = await this._executeLangsCommand(
       {
@@ -1562,6 +1583,23 @@ export default class Langs {
         return true
       })
     })
+  }
+
+  /**
+   * Claims the next submission slot for `backend`, or errs when one was claimed less than
+   * `MINIMUM_SUBMISSION_INTERVAL` ago.
+   *
+   * Every call that makes the CLI submit claims a slot — the submit and paste commands, and
+   * `--save-old-state` on reset and old-submission restore — so they throttle each other
+   * rather than only their own kind.
+   */
+  private _claimSubmissionSlot(backend: "tmc" | "mooc"): Result<void, Error> {
+    const now = Date.now()
+    if (now < this._nextSubmissionAllowedTimestamp[backend]) {
+      return Err(new BottleneckError("This command can't be executed at the moment."))
+    }
+    this._nextSubmissionAllowedTimestamp[backend] = now + MINIMUM_SUBMISSION_INTERVAL
+    return Ok.EMPTY
   }
 
   /**

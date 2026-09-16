@@ -13,6 +13,7 @@ import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
 } from "../../shared/langsSchema"
+import { acquireSingleFlight, releaseSingleFlight } from "../../utilities"
 import { createMockActionContext } from "../mocks/actionContext"
 
 suite("Download old submission command (mooc branch)", function () {
@@ -178,5 +179,21 @@ suite("Download old submission command (mooc branch)", function () {
     )
 
     expect(downloadMoocOldSubmission).not.toHaveBeenCalled()
+  })
+
+  test("refuses to restore while a submission of the same exercise is in flight", async function () {
+    // The key the submit and paste actions hold; claiming it here stands in for one of them.
+    const submitKey = `submit:${uri.fsPath}`
+    expect(acquireSingleFlight(submitKey, 60_000)).toBe(true)
+    try {
+      await downloadOldSubmission(actionContext({ answers: ["Submit to server"] }), uri)
+    } finally {
+      releaseSingleFlight(submitKey)
+    }
+
+    expect(downloadMoocOldSubmission).not.toHaveBeenCalled()
+    expect(notification).toHaveBeenCalledExactlyOnceWith(
+      "A submission for this exercise is already in progress.",
+    )
   })
 })
