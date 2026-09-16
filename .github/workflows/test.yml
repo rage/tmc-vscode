@@ -51,6 +51,9 @@ jobs:
       - name: Vendored OpenAPI spec stamp
         run: pnpm run vendor:langs-openapi -- --check-stamp
 
+      - name: Release tag validation (bin/validateRelease.test.sh)
+        run: bash bin/validateRelease.test.sh
+
   unit_tests:
     name: Unit tests
     permissions:
