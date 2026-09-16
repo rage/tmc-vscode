@@ -151,9 +151,9 @@ export default class WorkspaceManager implements vscode.Disposable {
    * The exercise `uri` belongs to — its own folder, or any path inside it.
    *
    * `undefined` for a path outside every known exercise, including a course
-   * folder and a sibling whose name an exercise name prefixes. Runs in the
-   * path's depth, not the exercise count: every explorer row decorated goes
-   * through here.
+   * folder and a sibling whose name an exercise name prefixes. Costs the path's
+   * depth rather than the exercise count: file decoration calls this for every
+   * row the explorer renders.
    */
   public getExerciseByPath(uri: vscode.Uri): WorkspaceExercise | undefined {
     let candidate = uri.fsPath

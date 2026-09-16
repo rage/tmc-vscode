@@ -8,6 +8,7 @@ import multer from "multer"
 import type { Context, Document } from "openapi-backend"
 import { OpenAPIBackend } from "openapi-backend"
 
+import { API_ERRORS, type ApiErrorMessageKey } from "./apiErrors"
 import { buildTarZst } from "./archive"
 import {
   courses,
@@ -38,6 +39,8 @@ import {
 // loud HTTP 500, so the mock provably cannot drift from the contract (a drift
 // is a failing test). See backend/mooc/exercise-services-client.openapi.generated.json
 // (vendored from secret-project-331; re-vendor with `pnpm run vendor:langs-openapi`).
+// That covers success bodies only: the spec's ApiErrorResponse constrains no
+// member, so error envelopes are pinned against ./apiErrors instead.
 //
 // Auth: by default every resource endpoint requires a valid `Authorization:
 // Bearer <token>` (see the auth middleware in registerMoocRoutes), mirroring the
@@ -188,20 +191,6 @@ export const expireNextMoocUpload = (): void => {
   expireNextUpload = true
 }
 
-/**
- * The sp331 auth-error envelope (domain/error.rs `ApiErrorResponse`),
- * byte-faithful to `UserFromOAuthToken`: the live serializer omits an empty
- * `errors` array and absent `metadata`, so those aren't emitted here either.
- */
-const authError = (
-  type: "unauthorized" | "forbidden",
-  message: string,
-): Record<string, unknown> => ({
-  type,
-  message_key: type,
-  message,
-})
-
 // ---- response envelope threaded through the postResponseHandler ----
 
 interface MockResponse {
@@ -211,23 +200,33 @@ interface MockResponse {
 
 const ok = (body: unknown): MockResponse => ({ status: 200, body })
 
-/** A spec-valid `ApiErrorResponse` body for the documented error statuses. */
-const apiError = (messageKey: string, message: string): Record<string, unknown> => ({
-  errors: [],
-  message,
+/**
+ * The host's `ApiErrorResponse` envelope for `messageKey`. The live serializer
+ * omits an empty `errors` array and an absent `metadata`, so neither is emitted.
+ */
+const apiErrorBody = (
+  messageKey: ApiErrorMessageKey,
+  message: string,
+): Record<string, unknown> => ({
+  type: API_ERRORS[messageKey].type,
   message_key: messageKey,
-  metadata: null,
-  type: null,
+  message,
 })
 
 /**
- * The host's answer to every multipart upload rule violation: `controller_err!(BadRequest, …)`,
- * which maps to 422 with message_key `validation_error` (domain/error.rs).
+ * A controlled error, status included: the host derives both the envelope's
+ * `type` and the status from the variant the key names, so a handler that picked
+ * its own status could disagree with the host while still satisfying the spec.
  */
-const uploadRejected = (message: string): MockResponse => ({
-  status: 422,
-  body: apiError("validation_error", message),
+const apiError = (messageKey: ApiErrorMessageKey, message: string): MockResponse => ({
+  status: API_ERRORS[messageKey].status,
+  body: apiErrorBody(messageKey, message),
 })
+
+/** Writes a {@link MockResponse} from a plain handler, outside the spec router. */
+const send = (res: Response, { status, body }: MockResponse): void => {
+  res.status(status).json(body)
+}
 
 interface CreateMoocApiOptions {
   /**
@@ -414,7 +413,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       const id = String(c.request.params.id)
       const found = findCourse(id)
       if (!found) {
-        return { status: 404, body: apiError("not_found", `no such course: ${id}`) }
+        return apiError("not_found", `no such course: ${id}`)
       }
       return ok(found.course)
     },
@@ -424,7 +423,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       const id = String(c.request.params.id)
       const found = findCourse(id)
       if (!found) {
-        return { status: 404, body: apiError("not_found", `no such course: ${id}`) }
+        return apiError("not_found", `no such course: ${id}`)
       }
       return ok(found.exercises.map((e) => e.slide))
     },
@@ -434,7 +433,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       const id = String(c.request.params.id)
       const found = findCourse(id)
       if (!found) {
-        return { status: 404, body: apiError("not_found", `no such course: ${id}`) }
+        return apiError("not_found", `no such course: ${id}`)
       }
       // One zeroed entry per exercise, like the real backend, derived from this
       // run's submissions: attempted once submitted, completed/scored once a
@@ -466,14 +465,14 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         // resolves the slide but its course context is inaccessible, raising a
         // BadRequest that maps to 422 with message_key `not_enrolled`
         // (domain/error.rs). The spec documents this 422 (ApiErrorResponse).
-        return { status: 422, body: apiError("not_enrolled", "not enrolled to this course") }
+        return apiError("not_enrolled", "not enrolled to this course")
       }
       const exercise = exerciseById.get(id)
       if (!exercise) {
         // An entirely unknown exercise id: the backend's get_by_id yields
         // RecordNotFound -> 404 (the spec documents 404 on this path). Distinct
         // from the not-enrolled 422 above.
-        return { status: 404, body: apiError("not_found", `no such exercise: ${id}`) }
+        return apiError("not_found", `no such exercise: ${id}`)
       }
       return ok(revealModelSolutions(exercise))
     },
@@ -484,10 +483,10 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       if (exerciseId === notEnrolledExerciseId) {
         // The host authorizes and checks enrollment BEFORE reading the multipart
         // stream, so enrollment outranks any multipart rule violation below.
-        return { status: 422, body: apiError("not_enrolled", "not enrolled to this course") }
+        return apiError("not_enrolled", "not enrolled to this course")
       }
       if (!exerciseById.has(exerciseId)) {
-        return { status: 404, body: apiError("not_found", `no such exercise: ${exerciseId}`) }
+        return apiError("not_found", `no such exercise: ${exerciseId}`)
       }
 
       // Every multipart rule violation is a `controller_err!(BadRequest, …)` on the
@@ -499,7 +498,10 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       // NB multer 2.x silently DROPS a file part whose filename is present but
       // empty, so that variant stays invisible here and cannot be rejected.
       if (Object.keys((req.body ?? {}) as Record<string, unknown>).length > 0) {
-        return uploadRejected("Every exercise upload part must be a file with a filename")
+        return apiError(
+          "validation_error",
+          "Every exercise upload part must be a file with a filename",
+        )
       }
       let batchBytes = 0
       const seenFieldNames = new Set<string>()
@@ -507,13 +509,16 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         // Per-part, as the host counts: a batch that is both over-limit and
         // malformed reports the malformed part, not the count.
         if (index >= MAX_UPLOAD_FILES) {
-          return uploadRejected(`A maximum of ${MAX_UPLOAD_FILES} files can be uploaded at once`)
+          return apiError(
+            "validation_error",
+            `A maximum of ${MAX_UPLOAD_FILES} files can be uploaded at once`,
+          )
         }
         if (!UUID_PATTERN.test(file.fieldname)) {
-          return uploadRejected("Each exercise upload field name must be a UUID")
+          return apiError("validation_error", "Each exercise upload field name must be a UUID")
         }
         if (seenFieldNames.has(file.fieldname)) {
-          return uploadRejected("Duplicate exercise upload field id")
+          return apiError("validation_error", "Duplicate exercise upload field id")
         }
         seenFieldNames.add(file.fieldname)
         // No per-file size check: multer's `fileSize` limit aborts such a part
@@ -521,11 +526,11 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         // the host's message. Only the cross-part batch total is checked here.
         batchBytes += file.buffer.length
         if (batchBytes > MAX_UPLOAD_BATCH_BYTES) {
-          return uploadRejected(UPLOAD_TOO_LARGE_MESSAGE)
+          return apiError("validation_error", UPLOAD_TOO_LARGE_MESSAGE)
         }
       }
       if (files.length === 0) {
-        return uploadRejected("At least one file must be uploaded")
+        return apiError("validation_error", "At least one file must be uploaded")
       }
 
       const reaped = expireNextUpload
@@ -540,10 +545,10 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       if (exerciseId === notEnrolledExerciseId) {
         // Consistent with getClientExercise's 422 above; the spec documents
         // this 422 on submit too.
-        return { status: 422, body: apiError("not_enrolled", "not enrolled to this course") }
+        return apiError("not_enrolled", "not enrolled to this course")
       }
       if (!exerciseById.has(exerciseId)) {
-        return { status: 404, body: apiError("not_found", `no such exercise: ${exerciseId}`) }
+        return apiError("not_found", `no such exercise: ${exerciseId}`)
       }
       // Request validation enforced the body shape. Only the slide and task are
       // required: all three answer members are optional, and omitting them all is a
@@ -560,35 +565,23 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       // client could submit into it (host: verify_slide_and_task_belong).
       const slide = slideById.get(body.exercise_slide_id)
       if (!slide) {
-        return {
-          status: 404,
-          body: apiError("not_found", `no such exercise slide: ${body.exercise_slide_id}`),
-        }
+        return apiError("not_found", `no such exercise slide: ${body.exercise_slide_id}`)
       }
       const taskSlideId = slideIdByTaskId.get(body.exercise_task_id)
       if (!taskSlideId) {
-        return {
-          status: 404,
-          body: apiError("not_found", `no such exercise task: ${body.exercise_task_id}`),
-        }
+        return apiError("not_found", `no such exercise task: ${body.exercise_task_id}`)
       }
       if (slide.exercise_id !== exerciseId) {
-        return {
-          status: 422,
-          body: apiError(
-            "validation_error",
-            `Exercise slide ${slide.slide_id} does not belong to exercise ${exerciseId}`,
-          ),
-        }
+        return apiError(
+          "validation_error",
+          `Exercise slide ${slide.slide_id} does not belong to exercise ${exerciseId}`,
+        )
       }
       if (taskSlideId !== slide.slide_id) {
-        return {
-          status: 422,
-          body: apiError(
-            "validation_error",
-            `Exercise task ${body.exercise_task_id} does not belong to exercise slide ${slide.slide_id}`,
-          ),
-        }
+        return apiError(
+          "validation_error",
+          `Exercise task ${body.exercise_task_id} does not belong to exercise slide ${slide.slide_id}`,
+        )
       }
       // The two answer shapes the flat body allows but the answer model does not.
       // Checked here, after the slide/task ownership checks and before the per-upload
@@ -596,29 +589,20 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       const namedFiles = body.data_files ?? []
       if ((body.answer_kind ?? "json") === "json") {
         if (namedFiles.length > 0) {
-          return {
-            status: 422,
-            body: apiError(
-              "validation_error",
-              "A json answer cannot name uploaded files. Send answer_kind 'file' to submit files.",
-            ),
-          }
+          return apiError(
+            "validation_error",
+            "A json answer cannot name uploaded files. Send answer_kind 'file' to submit files.",
+          )
         }
       } else if (namedFiles.length === 0) {
-        return {
-          status: 422,
-          body: apiError("validation_error", "A file answer must name at least one uploaded file."),
-        }
+        return apiError("validation_error", "A file answer must name at least one uploaded file.")
       }
       // Deduplicating instead would record one file twice and list it twice in a
       // download, hiding the client defect (host: verify_uploads_are_distinct).
       const namedOnce = new Set<string>()
       for (const fileId of namedFiles) {
         if (namedOnce.has(fileId)) {
-          return {
-            status: 422,
-            body: apiError("duplicate_upload", `Uploaded file ${fileId} was named more than once`),
-          }
+          return apiError("duplicate_upload", `Uploaded file ${fileId} was named more than once`)
         }
         namedOnce.add(fileId)
       }
@@ -627,22 +611,16 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         // A file bound to another exercise is indistinguishable from one that was
         // never uploaded, exactly as in the host: both are `unknown_upload`.
         if (!upload || upload.exerciseId !== exerciseId) {
-          return {
-            status: 422,
-            body: apiError(
-              "unknown_upload",
-              `Uploaded file ${fileId} was not uploaded for this exercise by this user`,
-            ),
-          }
+          return apiError(
+            "unknown_upload",
+            `Uploaded file ${fileId} was not uploaded for this exercise by this user`,
+          )
         }
         if (upload.expired) {
-          return {
-            status: 422,
-            body: apiError(
-              "upload_expired",
-              `Uploaded file ${fileId} is no longer available; upload it again`,
-            ),
-          }
+          return apiError(
+            "upload_expired",
+            `Uploaded file ${fileId} is no longer available; upload it again`,
+          )
         }
       }
       const record = retainSubmission(exerciseId, namedFiles)
@@ -661,7 +639,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         // Unknown submission: the backend's get_by_id yields RecordNotFound ->
         // 404 (the spec now documents 404 on this path). Mirrors the real
         // backend rather than the previous synthetic 200 NoGradingYet.
-        return { status: 404, body: apiError("not_found", `no such submission: ${id}`) }
+        return apiError("not_found", `no such submission: ${id}`)
       }
       record.polls += 1
       return ok(gradingStatus(record))
@@ -694,7 +672,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       const id = String(c.request.params.id)
       const record = submissionsBySlideId.get(id)
       if (!record) {
-        return { status: 404, body: apiError("not_found", `no such submission: ${id}`) }
+        return apiError("not_found", `no such submission: ${id}`)
       }
       // A submission made from no files is a 200 with an empty list, not a 404:
       // the host resolves this from its own upload records, and having none is
@@ -719,9 +697,11 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       const id = String(c.request.params.id)
       const record = submissionsBySlideId.get(id)
       if (!record) {
-        // The real backend loads the submission then checks ownership; an id
-        // that is not the current user's yields the spec-documented 403.
-        return { status: 403, body: apiError("forbidden", `cannot share submission: ${id}`) }
+        // The backend looks the submission up before it can check ownership, so an
+        // id it has no row for is a 404 here exactly as it is on grading and
+        // download. The 403 belongs to a submission that exists and is someone
+        // else's, which this mock has no way to produce yet.
+        return apiError("not_found", `no such submission: ${id}`)
       }
       const token = randomUUID()
       return ok({ paste_url: `${MOOC_MOCK_BASE_URL}/shared-submissions/${token}` })
@@ -753,12 +733,14 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
     }
     let { status, body } = c.response as MockResponse
     // Test-only obsolete-client fault: rewrite any operation's response to the
-    // spec-documented 426 with an ApiErrorResponse body. Validated below like
-    // any other response, so a 426 (not a 500) proves the 426 body conforms to
-    // the spec's ApiErrorResponse schema.
+    // spec-documented 426. Validation below only proves 426 is a documented
+    // status for the operation -- the spec's ApiErrorResponse constrains no
+    // member, so the envelope itself is pinned against ./apiErrors instead.
     if (obsoleteClient && c.operation?.operationId) {
-      status = 426
-      body = apiError("obsolete_client", "the client is obsolete and must be upgraded")
+      ;({ status, body } = apiError(
+        "obsolete_client",
+        "the client is obsolete and must be upgraded",
+      ))
     }
     if (c.operation?.operationId) {
       const validation = c.api.validateResponse(body, c.operation, status)
@@ -966,12 +948,11 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
     const claim = req.query[DOWNLOAD_CLAIM_PARAM]
     if (typeof claim !== "string") {
       // actix's query extractor rejects the missing parameter before the handler.
-      return res.status(400).json(apiError("validation_error", "Missing download claim"))
+      return res.status(400).json(apiErrorBody("validation_error", "Missing download claim"))
     }
     if (!claimAuthorizes(claim, req.params.id)) {
-      return res
-        .status(422)
-        .json(apiError("validation_error", "Download claim does not authorize this file"))
+      const rejected = apiError("validation_error", "Download claim does not authorize this file")
+      return res.status(rejected.status).json(rejected.body)
     }
     const stored = uploadsById.get(req.params.id)
     if (!stored || !uploadBytesByStoredName.has(stored.storedName)) {
@@ -1046,25 +1027,22 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
           ? header.slice("Bearer ".length)
           : undefined
       if (!token) {
-        res.status(401).json(authError("unauthorized", "Missing bearer token"))
+        send(res, apiError("unauthorized", "Missing bearer token"))
         return
       }
       const scopes = scopesForBearer(token)
       if (!scopes) {
-        res
-          .status(401)
-          .json(authError("unauthorized", "The access token is missing, invalid, or expired."))
+        send(res, apiError("unauthorized", "The access token is missing, invalid, or expired."))
         return
       }
       if (!scopes.includes(EXERCISE_SERVICES_SCOPE)) {
-        res
-          .status(403)
-          .json(
-            authError(
-              "forbidden",
-              "The access token does not grant the required exercise-services scope.",
-            ),
-          )
+        send(
+          res,
+          apiError(
+            "forbidden",
+            "The access token does not grant the required exercise-services scope.",
+          ),
+        )
         return
       }
       lastAuthorization = header
@@ -1106,10 +1084,13 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
   // answer it as the host answers the same violation.
   moocRouter.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     if (err instanceof multer.MulterError) {
-      const rejection = uploadRejected(
-        MULTER_ERROR_MESSAGES[err.code] ?? `Failed to read multipart field: ${err.code}`,
+      send(
+        res,
+        apiError(
+          "validation_error",
+          MULTER_ERROR_MESSAGES[err.code] ?? `Failed to read multipart field: ${err.code}`,
+        ),
       )
-      res.status(rejection.status).json(rejection.body)
       return
     }
     next(err)

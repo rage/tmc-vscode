@@ -1,11 +1,14 @@
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
+import fs from "node:fs"
 import type { Server } from "node:http"
+import path from "node:path"
 import { after, before, describe, test } from "node:test"
 import { zstdDecompressSync } from "node:zlib"
 
 import type { Express } from "express"
 
+import { API_ERRORS, type ApiErrorMessageKey } from "./apiErrors"
 import type { MoocExerciseFixture } from "./fixtures"
 import {
   extraCourse,
@@ -17,7 +20,7 @@ import {
   pythonCourse,
   TMC_ARCHIVE_MIME,
 } from "./fixtures"
-import { MOCK_SEEDED_ACCESS_TOKEN } from "./oauth"
+import { MOCK_SEEDED_ACCESS_TOKEN, MOCK_SEEDED_NOSCOPE_ACCESS_TOKEN } from "./oauth"
 import { createMoocApp, expireMoocUpload } from "./router"
 
 // Conformance smoke test for the mooc mock. Boots the mock in-process and drives
@@ -836,11 +839,11 @@ describe("mooc mock conformance", () => {
     assert.equal(res.status, 404)
   })
 
-  test("share of an unknown (foreign) submission is a spec-documented 403", async () => {
+  test("share of an unknown submission is a spec-documented 404", async () => {
     const res = await authFetch(api(`/submissions/${nonexistentExerciseId}/share`), {
       method: "POST",
     })
-    assert.equal(res.status, 403)
+    assert.equal(res.status, 404)
   })
 
   test("archive route serves a valid .tar.zst (spec-exempt)", async () => {
@@ -867,9 +870,9 @@ describe("mooc mock obsolete-client (426) fault", () => {
     // The 426 obsolete-client contract is documented on every endpoint but is
     // dormant in normal runs (the backend's MINIMUM_CLIENT_VERSION is unset, so
     // no live response ever produces it). This test-only fault makes every
-    // operation respond 426; the response is validated against the spec like any
-    // other, so a 426 (rather than a 500 from the validator) PROVES the 426 body
-    // conforms to the spec's ApiErrorResponse schema.
+    // operation respond 426, which the validator accepts only because 426 is a
+    // documented status for the operation -- the envelope's own members are
+    // checked in the error-envelope walk below.
     const { server, base } = await listen(createMoocApp({ injectObsoleteClient: true }))
     try {
       // Seeded bearer gets past auth so the injected 426 (not a 401) is observed.
@@ -899,6 +902,201 @@ describe("mooc mock response-validation guard", () => {
       assert.match(body.error, /failed spec validation/)
     } finally {
       server.close()
+    }
+  })
+})
+
+interface ErrorResponse {
+  status: number
+  body: Record<string, unknown>
+}
+
+const read = async (res: Response): Promise<ErrorResponse> => ({
+  status: res.status,
+  body: (await res.json()) as Record<string, unknown>,
+})
+
+// The vendored spec's ApiErrorResponse constrains no member, so response
+// validation proves only that the status is documented. This walk is what pins
+// the envelope itself: every error the client API can answer with, checked
+// against the contract transcribed from the host in ./apiErrors.
+describe("mooc mock error envelopes", () => {
+  let server: Server
+  let base: string
+
+  before(async () => {
+    ;({ server, base } = await listen(createMoocApp()))
+  })
+
+  after(() => {
+    server.close()
+  })
+
+  const api = (p: string): string => `${base}/api/v0/exercise-services/client${p}`
+
+  const uploadFor = async (exerciseId: string): Promise<string> => {
+    const form = new FormData()
+    form.append(randomUUID(), new Blob([new Uint8Array([1, 2, 3])]), "submission.tar.zst")
+    const res = await authFetch(api(`/exercises/${exerciseId}/files`), {
+      method: "POST",
+      body: form,
+    })
+    const { data_files } = (await res.json()) as { data_files: { id: string }[] }
+    return data_files[0]!.id
+  }
+
+  const submitNaming = (fileIds: string[]): Promise<Response> =>
+    authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submit`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        exercise_slide_id: passingExercise.slide.slide_id,
+        exercise_task_id: passingExercise.slide.tasks[0]!.task_id,
+        answer_kind: "file",
+        data_files: fileIds,
+      }),
+    })
+
+  const probes: {
+    name: string
+    messageKey: ApiErrorMessageKey
+    run: () => Promise<ErrorResponse>
+  }[] = [
+    {
+      name: "no bearer at all",
+      messageKey: "unauthorized",
+      run: async () => read(await fetch(api("/courses"))),
+    },
+    {
+      name: "a bearer the mock never minted",
+      messageKey: "unauthorized",
+      run: async () =>
+        read(await fetch(api("/courses"), { headers: { authorization: "Bearer nope" } })),
+    },
+    {
+      name: "a bearer without the exercise-services scope",
+      messageKey: "forbidden",
+      run: async () =>
+        read(
+          await fetch(api("/courses"), {
+            headers: { authorization: `Bearer ${MOCK_SEEDED_NOSCOPE_ACCESS_TOKEN}` },
+          }),
+        ),
+    },
+    {
+      name: "an unknown course",
+      messageKey: "not_found",
+      run: async () => read(await authFetch(api(`/courses/${nonexistentExerciseId}`))),
+    },
+    {
+      name: "an unknown exercise",
+      messageKey: "not_found",
+      run: async () => read(await authFetch(api(`/exercises/${nonexistentExerciseId}`))),
+    },
+    {
+      name: "an exercise whose course the user is not enrolled on",
+      messageKey: "not_enrolled",
+      run: async () => read(await authFetch(api(`/exercises/${notEnrolledExerciseId}`))),
+    },
+    {
+      name: "an upload naming no files",
+      messageKey: "validation_error",
+      run: async () =>
+        read(
+          await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/files`), {
+            method: "POST",
+            body: new FormData(),
+          }),
+        ),
+    },
+    {
+      name: "a submit naming a file that was never uploaded",
+      messageKey: "unknown_upload",
+      run: async () => read(await submitNaming([randomUUID()])),
+    },
+    {
+      name: "a submit naming one file twice",
+      messageKey: "duplicate_upload",
+      run: async () => {
+        const fileId = await uploadFor(passingExercise.slide.exercise_id)
+        return read(await submitNaming([fileId, fileId]))
+      },
+    },
+    {
+      name: "a submit naming a reaped file",
+      messageKey: "upload_expired",
+      run: async () => {
+        const fileId = await uploadFor(passingExercise.slide.exercise_id)
+        expireMoocUpload(fileId)
+        return read(await submitNaming([fileId]))
+      },
+    },
+    {
+      name: "grading of an unknown submission",
+      messageKey: "not_found",
+      run: async () => read(await authFetch(api(`/submissions/${nonexistentExerciseId}/grading`))),
+    },
+    {
+      name: "download of an unknown submission",
+      messageKey: "not_found",
+      run: async () => read(await authFetch(api(`/submissions/${nonexistentExerciseId}/download`))),
+    },
+    {
+      name: "share of an unknown submission",
+      messageKey: "not_found",
+      run: async () =>
+        read(
+          await authFetch(api(`/submissions/${nonexistentExerciseId}/share`), { method: "POST" }),
+        ),
+    },
+    {
+      // Dormant in a normal run (the host's MINIMUM_CLIENT_VERSION is unset),
+      // so the fault-injected mock is the only way to observe the envelope.
+      name: "a client the server considers obsolete",
+      messageKey: "obsolete_client",
+      run: async () => {
+        const obsolete = await listen(createMoocApp({ injectObsoleteClient: true }))
+        try {
+          return await read(
+            await authFetch(`${obsolete.base}/api/v0/exercise-services/client/courses`),
+          )
+        } finally {
+          obsolete.server.close()
+        }
+      },
+    },
+  ]
+
+  for (const probe of probes) {
+    test(`${probe.name} -> ${probe.messageKey}`, async () => {
+      const { status, body } = await probe.run()
+      const contract = API_ERRORS[probe.messageKey]
+      assert.equal(status, contract.status)
+      assert.equal(body.type, contract.type)
+      assert.equal(body.message_key, probe.messageKey)
+      assert.equal(typeof body.message, "string")
+      assert.ok((body.message as string).length > 0)
+      // The host's serializer omits both when they carry nothing, and every
+      // error here does.
+      assert.equal("errors" in body, false)
+      assert.equal("metadata" in body, false)
+    })
+  }
+
+  test("every error key the router can answer with is walked above", () => {
+    // Read from the source rather than listed by hand: an error key added to a
+    // handler must fail here until a probe covers it, which is what makes the
+    // walk above exhaustive rather than merely long.
+    const source = fs.readFileSync(path.join(__dirname, "router.ts"), "utf8")
+    const emitted = [...source.matchAll(/\bapiError(?:Body)?\(\s*\n?\s*"([a-z_]+)"/g)].map(
+      (match) => match[1] as ApiErrorMessageKey,
+    )
+    const walked = new Set(probes.map((probe) => probe.messageKey))
+    for (const key of new Set(emitted)) {
+      if (API_ERRORS[key].status >= 500) {
+        continue
+      }
+      assert.ok(walked.has(key), `no probe covers the ${key} error the router emits`)
     }
   })
 })
