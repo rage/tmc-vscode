@@ -1,4 +1,3 @@
-import * as fs from "fs-extra"
 import * as _ from "lodash"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
@@ -361,12 +360,13 @@ export async function submitMoocExercise(
   if (!courseExercise) {
     return Err(new Error(`ID for exercise ${exercise.exerciseSlug} was not found.`))
   }
-  const exerciseId = userData.val.getMoocExerciseByName(
-    exercise.courseSlug,
-    exercise.exerciseSlug,
-  )?.id
-  if (!exerciseId) {
-    return Err(new Error(`ID for exercise ${exercise.exerciseSlug} was not found.`))
+  const exerciseId = match(
+    LocalCourseExercise.getId(courseExercise),
+    () => undefined,
+    (mooc) => mooc.moocExerciseId,
+  )
+  if (exerciseId === undefined) {
+    return Err(new Error(`${exercise.exerciseSlug} is not a mooc exercise.`))
   }
 
   // Key shared with the paste actions, which must not overlap a submit of the same exercise.
@@ -747,9 +747,7 @@ export async function openWorkspace(
   }
 
   const openCourseWorkspace = async (): Promise<void> => {
-    if (!fs.existsSync(tmcWorkspaceFile)) {
-      workspaceManager.val.createWorkspaceFile(name, backend)
-    }
+    workspaceManager.val.createWorkspaceFile(name, backend)
     await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri)
   }
 
