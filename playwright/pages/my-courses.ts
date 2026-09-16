@@ -45,7 +45,7 @@ export class MyCoursesPage extends TmcPage {
   /** Runs the device flow to completion against the mock's auto-approving client. */
   public async logInToMooc(): Promise<void> {
     await this.startMoocLogin()
-    await expect(this.page.getByText("Logged in to courses.mooc.fi.")).toBeVisible()
+    await expect(this.notificationToast("Logged in to courses.mooc.fi.")).toBeVisible()
   }
 
   public async selectCourse(name: string): Promise<void> {

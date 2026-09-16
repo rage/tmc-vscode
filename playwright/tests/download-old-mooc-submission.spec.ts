@@ -74,9 +74,7 @@ migrationTest(
 
     await vsCodeTest.step("see it reported as a normal outcome", async () => {
       await expect(
-        page
-          .locator(".notifications-toasts")
-          .getByText("That submission has no files to download."),
+        coursePage.notificationToast("That submission has no files to download."),
       ).toBeVisible()
       // Nothing was restored, so the editor still holds the exercise stub.
       await expect(page.getByText(fileContents)).toBeVisible()

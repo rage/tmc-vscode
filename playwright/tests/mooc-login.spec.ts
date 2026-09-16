@@ -31,7 +31,7 @@ migrationTest(
     })
 
     await vsCodeTest.step("the mock approves and the login is confirmed", async () => {
-      await expect(page.getByText("Logged in to courses.mooc.fi.")).toBeVisible()
+      await expect(myCoursesPage.notificationToast("Logged in to courses.mooc.fi.")).toBeVisible()
     })
 
     await vsCodeTest.step("the enrolled courses are now offered", async () => {

@@ -1,4 +1,4 @@
-import type { FrameLocator, Page } from "@playwright/test"
+import type { FrameLocator, Locator, Page } from "@playwright/test"
 
 export class TmcPage {
   public constructor(
@@ -19,6 +19,18 @@ export class TmcPage {
       // oxlint-disable-next-line playwright/no-wait-for-timeout -- deliberate settle-delay while polling flaky VS Code webview UI
       await this.page.waitForTimeout(200)
     }
+  }
+
+  /**
+   * The toast VS Code pops for a `Dialog` notification, matched on `text`.
+   *
+   * Scoped to the toast list because VS Code also mirrors every notification into
+   * an off-screen `.monaco-alert` aria-live node, so an unscoped text match
+   * resolves to two elements for a single notification. A notification genuinely
+   * raised twice still stacks two toasts here and trips strict mode.
+   */
+  public notificationToast(text: string): Locator {
+    return this.page.locator(".notifications-toasts").getByText(text)
   }
 
   public getSidePanel(): FrameLocator {
