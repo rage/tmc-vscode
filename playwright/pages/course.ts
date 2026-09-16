@@ -3,14 +3,6 @@ import { TmcPage } from "./tmc"
 export class CoursePage extends TmcPage {
   public async openWorkspace(): Promise<void> {
     await this.webview.getByRole("button", { name: "Open workspace" }).first().click()
-    const yesButton = this.page.getByRole("button", { name: "Yes" }).first()
-    try {
-      // click yes if prompted
-      await yesButton.waitFor({ timeout: 1000 })
-      yesButton.click()
-    } catch (_e) {
-      // no-op
-    }
   }
 
   // Setting <vscode-collapsible>'s `open` property directly is more reliable
