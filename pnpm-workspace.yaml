@@ -51,6 +51,10 @@ allowBuilds:
   esbuild: true
   # Pulled in transitively; its install script only prints a reminder message.
   svelte-preprocess: false
+  # vsce's optional credential store and its code-signing helper. Neither
+  # `vsce package` nor `vsce publish -p <token>` touches them.
+  keytar: false
+  "@vscode/vsce-sign": false
 
 patchedDependencies:
   ts-results@3.3.0: patches/ts-results@3.3.0.patch

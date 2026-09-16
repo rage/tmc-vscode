@@ -32,6 +32,9 @@ jobs:
           bin/package.bash ${{ env.PRERELEASE }}
           # move packaged extension from project root to own release folder
           mkdir extension && mv *.vsix extension
+          # What the marketplace serves and every user downloads, so a jump is
+          # worth seeing on the run that caused it rather than after a release.
+          echo "vsix: $(du -h extension/*.vsix | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
         env:
           CI: true
       - name: Upload artifact
@@ -45,8 +48,8 @@ jobs:
         run: |
           chmod +x bin/validateRelease.sh
           bin/validateRelease.sh ${{ github.event.release.tag_name }}
-          pnpm dlx @vscode/vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} ${{ env.PRERELEASE }} --packagePath extension/*.vsix
+          pnpm exec vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} ${{ env.PRERELEASE }} --packagePath extension/*.vsix
       - name: Publish to Open VSX Marketplace
         if: success() && github.event_name == 'release'
         run: |
-          pnpm dlx ovsx publish extension/*.vsix -p ${{ secrets.OVSX_PUBLISHER_TOKEN }} ${{ env.PRERELEASE }}
+          pnpm exec ovsx publish extension/*.vsix -p ${{ secrets.OVSX_PUBLISHER_TOKEN }} ${{ env.PRERELEASE }}

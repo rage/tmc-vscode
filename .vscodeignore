@@ -3,30 +3,23 @@
 .vscode/**
 .vscode-test/**
 bin/**
-containers/**
 node_modules/**
-out/**
 src/**
 submodules/**
-test-resources/**
 test-results/**
 test-artifacts/**
 playwright/**
 playwright-report/**
+coverage/**
 playwright.config.ts
 
 **/.dockerignore
-**/.eslintcache
 **/.gitattributes
 **/.gitignore
 **/.gitmodules
-**/.eslintignore
-**/.eslintrc.json
-**dist/integration*
+**/dist/integration*
 **/dist/test*
-**/tsconfig.json
-**/tsconfig.production.json
-**/tslint.json
+**/tsconfig*.json
 **/*.map
 **/*.ts
 **/vsc-extension-quickstart.md
@@ -40,11 +33,8 @@ patches/**
 # Media
 # Nothing hidden
 
-# Docs
-docs/architecture.md
-docs/development.md
-docs/extension-state.md
-docs/publish.md
+# Docs (docs/FAQ.md is inlined into the bundle by the esbuild text loader)
+docs/**
 
 # Development backend
 backend/**
@@ -55,7 +45,6 @@ esbuild.mjs
 # Ignore all webview-ui files except the build directory
 webview-ui/src/**
 #webview-ui/public/**
-webview-ui/scripts/**
 webview-ui/public/index.html
 webview-ui/public/favicon.png
 webview-ui/README.md
