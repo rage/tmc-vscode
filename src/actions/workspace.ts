@@ -55,21 +55,11 @@ export async function openExercises(
     course.kind,
     courseName,
     exercisesToOpen.map((x) => LocalCourseExercise.getSlug(x)),
+    (closedExerciseSlugs) =>
+      langs.val.setSetting(closedExercisesSettingKey(course.kind, courseName), closedExerciseSlugs),
   )
   if (openResult.err) {
     return openResult
-  }
-
-  const closedExerciseNames = workspaceManager.val
-    .getExercisesByCourseSlug(course.kind, courseName)
-    .filter((x) => x.status === ExerciseStatus.Closed)
-    .map((x) => x.exerciseSlug)
-  const settingsResult = await langs.val.setSetting(
-    closedExercisesSettingKey(course.kind, courseName),
-    closedExerciseNames,
-  )
-  if (settingsResult.err) {
-    return settingsResult
   }
 
   // check open exercise count and warn if it's too high
@@ -228,6 +218,8 @@ export async function closeExercises(
     course.kind,
     courseName,
     exerciseSlugs,
+    (closedExerciseSlugs) =>
+      langs.val.setSetting(closedExercisesSettingKey(course.kind, courseName), closedExerciseSlugs),
   )
   if (closeResult.err) {
     return closeResult
@@ -242,18 +234,6 @@ export async function closeExercises(
   const closedIds = closeResult.val
     .map((exercise) => slugToId.get(exercise.exerciseSlug))
     .filter((e) => e !== undefined)
-
-  const closedExerciseNames = workspaceManager.val
-    .getExercisesByCourseSlug(course.kind, courseName)
-    .filter((x) => x.status === ExerciseStatus.Closed)
-    .map((x) => x.exerciseSlug)
-  const settingsResult = await langs.val.setSetting(
-    closedExercisesSettingKey(course.kind, courseName),
-    closedExerciseNames,
-  )
-  if (settingsResult.err) {
-    return settingsResult
-  }
 
   TmcPanel.postMessage(
     ...closedIds.map<ExtensionToWebview>((id) => ({
