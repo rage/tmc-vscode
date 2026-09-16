@@ -11,7 +11,7 @@ const path = require("path")
 // `stats.tests`, so the figure is the number of cases src/test-integration
 // declares and does not move when the CLI-version gate skips the
 // migration-contract cases.
-const MINIMUM_TESTS = 61
+const MINIMUM_TESTS = 63
 
 function run() {
   const mocha = new Mocha({
