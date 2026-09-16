@@ -1,13 +1,14 @@
 import * as path from "path"
 
 import * as fs from "fs-extra"
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
 import type Langs from "../../api/langs"
 import type * as data from "../../storage/data"
 import migrateBackendNamespacing, {
+  BACKEND_NAMESPACING_MIGRATED_COURSES_KEY,
   BACKEND_NAMESPACING_MIGRATION_DONE_KEY,
 } from "../../storage/migration/backendNamespacing"
 import { Logger, LogLevel } from "../../utilities"
@@ -16,16 +17,23 @@ import { makeTmpDirs } from "../utils"
 
 // Minimal Langs stub backed by an in-memory settings map so we can assert the
 // exact end state of the TMC-langs settings store after migration.
-function createSettingsLangsMock(initial: Record<string, unknown>): {
+function createSettingsLangsMock(
+  initial: Record<string, unknown>,
+  initiallyUnreadable: string[] = [],
+): {
   langs: Langs
   settings: Map<string, unknown>
+  unreadable: Set<string>
   getSetting: ReturnType<typeof vi.fn>
   setSetting: ReturnType<typeof vi.fn>
   unsetSetting: ReturnType<typeof vi.fn>
 } {
   const settings = new Map<string, unknown>(Object.entries(initial))
+  const unreadable = new Set(initiallyUnreadable)
   const getSetting = vi.fn(async (key: string) =>
-    Ok(settings.has(key) ? settings.get(key) : undefined),
+    unreadable.has(key)
+      ? Err(new Error(`Settings store unavailable for ${key}`))
+      : Ok(settings.has(key) ? settings.get(key) : undefined),
   )
   const setSetting = vi.fn(async (key: string, value: unknown) => {
     settings.set(key, value)
@@ -36,7 +44,7 @@ function createSettingsLangsMock(initial: Record<string, unknown>): {
     return Ok.EMPTY
   })
   const langs = { getSetting, setSetting, unsetSetting } as unknown as Langs
-  return { langs, settings, getSetting, setSetting, unsetSetting }
+  return { langs, settings, unreadable, getSetting, setSetting, unsetSetting }
 }
 
 function userDataWith(tmcNames: string[], moocNames: string[] = []): data.UserData {
@@ -132,5 +140,39 @@ suite("Backend-namespacing migration", function () {
 
     expect(settings.get("closed-exercises-for:tmc:shared-name")).toEqual(["ex_x"])
     expect(fs.existsSync(path.join(folder, "shared-name-tmc.code-workspace"))).toBe(true)
+  })
+
+  test("stays unmarked when a course could not be migrated", async function () {
+    const legacyKey = "closed-exercises-for:python-course"
+    const { langs } = createSettingsLangsMock({ [legacyKey]: ["ex_one"] }, [legacyKey])
+    const folder = makeTmpDirs({})
+
+    await migrateBackendNamespacing(memento, langs, folder, userDataWith(["python-course"]))
+
+    expect(memento.get(BACKEND_NAMESPACING_MIGRATION_DONE_KEY)).toBeUndefined()
+  })
+
+  test("retries only the courses a failed run left behind, then marks itself done", async function () {
+    const brokenKey = "closed-exercises-for:java-course"
+    const { langs, settings, unreadable, getSetting } = createSettingsLangsMock(
+      { "closed-exercises-for:python-course": ["ex_one"], [brokenKey]: ["ex_two"] },
+      [brokenKey],
+    )
+    const folder = makeTmpDirs({})
+    const courses = userDataWith(["python-course", "java-course"])
+
+    await migrateBackendNamespacing(memento, langs, folder, courses)
+    expect(memento.get(BACKEND_NAMESPACING_MIGRATION_DONE_KEY)).toBeUndefined()
+    expect(memento.get(BACKEND_NAMESPACING_MIGRATED_COURSES_KEY)).toEqual(["python-course"])
+    expect(settings.get("closed-exercises-for:tmc:python-course")).toEqual(["ex_one"])
+
+    unreadable.clear()
+    getSetting.mockClear()
+    await migrateBackendNamespacing(memento, langs, folder, courses)
+
+    expect(getSetting).toHaveBeenCalledTimes(1)
+    expect(getSetting).toHaveBeenCalledWith(brokenKey, expect.anything())
+    expect(settings.get("closed-exercises-for:tmc:java-course")).toEqual(["ex_two"])
+    expect(memento.get(BACKEND_NAMESPACING_MIGRATION_DONE_KEY)).toBe(true)
   })
 })
