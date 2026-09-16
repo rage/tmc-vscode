@@ -1,8 +1,17 @@
 name: Extension tests
 
-on: push
+on:
+  push:
+  pull_request:
 
 permissions: read-all
+
+# A pull request from a branch in this repository is built twice, once as the
+# branch and once as the merge result. Keyed on the ref those are two groups, on
+# purpose: a push must never cancel the merge-result run a reviewer waits on.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   code_style:
