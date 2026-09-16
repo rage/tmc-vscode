@@ -90,7 +90,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version
   const storage = new Storage(context)
-  const settings = new Settings(storage)
+  const settings = new Settings()
   context.subscriptions.push(settings)
   // Must precede the first CLI invocation below: the user's level decides what the output
   // channel keeps of a `logged-in` response, which carries a live OAuth token.
