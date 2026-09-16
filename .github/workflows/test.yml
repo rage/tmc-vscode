@@ -36,14 +36,9 @@ jobs:
 
       # Regenerates from the committed shared/bindings.schema.json, so only the
       # generated output can drift here; the vendored schema itself is covered by
-      # its provenance stamp below. `git diff` does not see untracked files, so a
-      # generated file that was never committed would drift undetected --
-      # --intent-to-add puts it in the diff as an addition.
+      # its provenance stamp below.
       - name: Langs schema drift (generate:langs-schema)
-        run: |
-          pnpm run generate:langs-schema
-          git add --intent-to-add -- shared/generated
-          git diff --exit-code -- shared/generated
+        run: bash bin/checkLangsSchemaDrift.sh
 
       # The two vendored artifacts are copied from sibling checkouts CI does not
       # have, so it cannot re-vendor them. It asserts instead that each still
@@ -114,26 +109,35 @@ jobs:
       # vendored OpenAPI spec, so they are what stops it drifting from the real
       # courses.mooc.fi API that every other mooc test tier trusts it to imitate.
       # They talk to nothing but themselves: no submodules, no `backend` setup,
-      # no VS Code download, no xvfb.
-      #
-      # Run from `backend/` rather than via `pnpm --filter`: a filter that
-      # matches no package exits 0 with only a "No projects matched" line, and
-      # `node --test` likewise exits 0 when its glob matches no files. The floor
-      # catches both, plus a suite that silently shrank; raise it whenever the
-      # suite grows. `set -euo pipefail` is what keeps a real test failure
-      # propagating through the `tee` instead of being overwritten by the exit
-      # code of the command that reads the log.
+      # no VS Code download, no xvfb. The script enforces the pass-count floor
+      # that stops the suite vanishing silently.
       - name: Mock backend tests (node:test)
-        working-directory: backend
-        run: |
-          set -euo pipefail
-          minimum_passing=114
-          pnpm test 2>&1 | tee "$RUNNER_TEMP/mock-backend-tests.log"
-          passing="$(sed -nE 's/^[^0-9]*pass ([0-9]+)$/\1/p' "$RUNNER_TEMP/mock-backend-tests.log" | tail -n 1)"
-          if [ "${passing:-0}" -lt "$minimum_passing" ]; then
-            echo "Mock backend suite passed ${passing:-0} tests, expected at least $minimum_passing." >&2
-            exit 1
-          fi
+        run: bash bin/runMockBackendTests.sh
+
+  gates:
+    name: Gates can fail
+    permissions:
+      contents: read
+    env:
+      CI: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.0
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Several gates above consume a glob, a generated file or a vendored
+      # artifact, and each of those can go empty or stale in a way that exits 0
+      # on its own. This breaks one input per gate and asserts the gate fails on
+      # it; the green half is the other jobs running the same gates unbroken on
+      # this commit.
+      - name: Gates fail on broken input
+        run: bash bin/verifyGatesCanFail.sh
 
   integration_tests:
     name: Integration tests
