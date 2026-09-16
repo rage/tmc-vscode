@@ -151,6 +151,16 @@ suite("Langs stdout decoding", function () {
     expect(bytewise.carry).toBe(wholeStream.carry)
   })
 
+  test("a decoded notification keeps its message and kind", function () {
+    const { events } = decodeAll(`${notificationLine}\n`)
+    const event = events[0]
+    expect(event?.kind).toBe("notification")
+    if (event?.kind === "notification") {
+      expect(event.notification.message).toBe("Your Python version is outdated")
+      expect(event.notification["notification-kind"]).toBe("warning")
+    }
+  })
+
   test("a decoded status update keeps the payload the caller needs", function () {
     const { events } = decodeAll(`${statusUpdateLine}\n`)
     const update = events[0]

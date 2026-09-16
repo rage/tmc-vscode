@@ -48,6 +48,7 @@ import type {
   MoocDeviceLogin,
   MoocOldSubmissionRestore,
   ExerciseSlideSubmissionListItem,
+  Notification,
   Organization,
   OutputData,
   RunResult,
@@ -93,6 +94,11 @@ interface LangsProcessArgs {
   /** Which args should be obfuscated in logs. */
   obfuscate?: number[] | undefined
   onStdout?: ((data: StatusUpdateData) => void) | undefined
+  /**
+   * Surfaces a CLI notification to the user. Set only for commands the user is watching,
+   * so a background poll cannot toast.
+   */
+  onNotification?: ((notification: Notification) => void) | undefined
   stdin?: string | undefined
   processTimeout?: number | undefined
   /** Set on login/logout commands, where an auth-flavored error is expected rather than a lost session. */
@@ -196,6 +202,9 @@ export default class Langs {
   private _onLogout?: (expected: boolean) => void
   private _onMoocLogin?: () => void
   private _onMoocLogout?: (expected: boolean) => void
+  private _onNotification?: (notification: Notification) => void
+  /** Messages already surfaced; the CLI repeats a plugin's warning on every run. */
+  private readonly _shownNotifications = new Set<string>()
 
   private readonly _activeInterrupts = new Set<() => void>()
 
@@ -237,9 +246,10 @@ export default class Langs {
    */
   public on(event: "mooc-login", callback: () => void): void
   public on(event: "logout" | "mooc-logout", callback: (expected: boolean) => void): void
+  public on(event: "notification", callback: (notification: Notification) => void): void
   public on(
-    event: "logout" | "mooc-login" | "mooc-logout",
-    callback: (() => void) | ((expected: boolean) => void),
+    event: "logout" | "mooc-login" | "mooc-logout" | "notification",
+    callback: (() => void) | ((expected: boolean) => void) | ((notification: Notification) => void),
   ): void {
     switch (event) {
       case "logout":
@@ -250,6 +260,9 @@ export default class Langs {
         break
       case "mooc-logout":
         this._onMoocLogout = callback as (expected: boolean) => void
+        break
+      case "notification":
+        this._onNotification = callback as (notification: Notification) => void
         break
     }
   }
@@ -480,6 +493,7 @@ export default class Langs {
       args: ["run-tests", "--exercise-path", exercisePath],
       env,
       onStdout: (data) => progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
+      onNotification: (notification) => this._showNotification(notification),
       processTimeout: CLI_PROCESS_TIMEOUT,
     })
     if (process.err) {
@@ -505,6 +519,7 @@ export default class Langs {
     const process = this._spawnLangsProcess({
       args: ["checkstyle", "--locale", "en", "--exercise-path", exercisePath],
       onStdout: (data) => progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
+      onNotification: (notification) => this._showNotification(notification),
       processTimeout: CLI_PROCESS_TIMEOUT,
     })
     if (process.err) {
@@ -1285,6 +1300,7 @@ export default class Langs {
           ExerciseIdentifier.toString(exerciseId),
         ),
         onStdout,
+        onNotification: (notification) => this._showNotification(notification),
         processTimeout: SUBMIT_PROCESS_TIMEOUT,
         interruptOnDeactivate: true,
       },
@@ -1332,6 +1348,7 @@ export default class Langs {
           exercisePath,
         ),
         onStdout,
+        onNotification: (notification) => this._showNotification(notification),
         processTimeout: SUBMIT_PROCESS_TIMEOUT,
         interruptOnDeactivate: true,
       },
@@ -1664,6 +1681,19 @@ export default class Langs {
     return Err(new RuntimeError(message, details))
   }
 
+  /**
+   * Passes a CLI notification on to the `notification` subscriber, at most once per
+   * distinct message: the plugin that warns about an outdated Python repeats it on every
+   * test run, and identical toasts would stack.
+   */
+  private _showNotification(notification: Notification): void {
+    if (this._shownNotifications.has(notification.message)) {
+      return
+    }
+    this._shownNotifications.add(notification.message)
+    this._onNotification?.(notification)
+  }
+
   /** Fires the unexpected-logout (`expected: false`) event for `target`, used when credentials were rejected rather than removed deliberately. */
   private _fireUnexpectedLogout(target?: "tmc" | "mooc"): void {
     if (target === "tmc") {
@@ -1681,7 +1711,7 @@ export default class Langs {
   private _spawnLangsProcess(
     commandArgs: LangsProcessArgs,
   ): Result<LangsProcessRunner, InitializationError | SpawnError> {
-    const { args, env, obfuscate, onStdout, stdin, processTimeout } = commandArgs
+    const { args, env, obfuscate, onStdout, onNotification, stdin, processTimeout } = commandArgs
 
     let theResult: OutputData | undefined
     let stdoutBuffer = ""
@@ -1812,8 +1842,16 @@ ${error.message}`
             case "status-update":
               onStdout?.(event.update)
               break
-            case "notification":
+            case "notification": {
+              const { message } = event.notification
+              if (event.notification["notification-kind"] === "warning") {
+                Logger.warn(message)
+              } else {
+                Logger.info(message)
+              }
+              onNotification?.(event.notification)
               break
+            }
             case "schema-mismatch":
               lastSchemaFailure = event.failure
               Logger.error(
@@ -1895,7 +1933,7 @@ export interface LangsSchemaFailure {
 export type LangsStdoutEvent =
   | { kind: "output-data"; output: OutputData }
   | { kind: "status-update"; update: StatusUpdateData }
-  | { kind: "notification" }
+  | { kind: "notification"; notification: Notification }
   | { kind: "schema-mismatch"; failure: LangsSchemaFailure }
   | { kind: "unparseable"; lineLength: number }
 
@@ -1979,7 +2017,7 @@ function classifyCliOutputLine(parsed: unknown): LangsStdoutEvent {
     case "notification": {
       const validation = CliNotification.safeParse(parsed)
       return validation.success
-        ? { kind: "notification" }
+        ? { kind: "notification", notification: validation.data }
         : schemaMismatch(parsed, outputKind, z.prettifyError(validation.error))
     }
   }

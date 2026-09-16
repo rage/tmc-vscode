@@ -343,6 +343,26 @@ suite("Langs CLI process output", function () {
     expect(text).not.toContain(TOKEN)
   })
 
+  test("a CLI notification is logged and delivered once per distinct message", async function () {
+    const captured = captureLogs()
+    const langs = newLangs()
+    const delivered: string[] = []
+    langs.on("notification", (notification) => delivered.push(notification.message))
+    const testRun = langs.runTests("/exercise")
+    const langsProcess = lastProcess()
+    const warning = JSON.stringify({
+      "output-kind": "notification",
+      "notification-kind": "warning",
+      message: "Your Python is out of date",
+    })
+    writeStdout(langsProcess, warning, warning)
+    endProcess(langsProcess)
+    await testRun.process
+
+    expect(delivered).toEqual(["Your Python is out of date"])
+    expect(loggedText(captured)).toContain("Your Python is out of date")
+  })
+
   test("status updates reach the caller", async function () {
     const langs = newLangs()
     const deviceCodes: string[] = []
