@@ -1,12 +1,15 @@
-import { render, screen } from "@testing-library/svelte"
+import { fireEvent, render, screen } from "@testing-library/svelte"
+import { SvelteMap } from "svelte/reactivity"
 import { vi } from "vitest"
 
+import type { ExerciseIdentifier } from "../shared/shared"
 import { makeTmcKind } from "../shared/shared"
 import { getButton } from "../test/dom"
 import { tmcExerciseGroup } from "../test/fixtures"
 import ExercisePart from "./ExercisePart.svelte"
 
 const noop = () => {}
+const emptySelection = () => new SvelteMap<string, ExerciseIdentifier>()
 
 suite("ExercisePart component", () => {
   test("renders the group name and completion counts", () => {
@@ -16,7 +19,7 @@ suite("ExercisePart component", () => {
         onDownloadAll: noop,
         onOpenAll: noop,
         onCloseAll: noop,
-        checkedExercises: { tmc: {}, mooc: {} },
+        checkedExercises: emptySelection(),
         exerciseStatuses: { tmc: {}, mooc: {} },
       },
     })
@@ -33,7 +36,7 @@ suite("ExercisePart component", () => {
         onDownloadAll: noop,
         onOpenAll: noop,
         onCloseAll: noop,
-        checkedExercises: { tmc: {}, mooc: {} },
+        checkedExercises: emptySelection(),
         exerciseStatuses: { tmc: { 101: "opened" }, mooc: {} },
       },
     })
@@ -69,7 +72,7 @@ suite("ExercisePart component", () => {
         onDownloadAll: noop,
         onOpenAll: noop,
         onCloseAll: noop,
-        checkedExercises: { tmc: {}, mooc: {} },
+        checkedExercises: emptySelection(),
         exerciseStatuses: { tmc: {}, mooc: {} },
       },
     })
@@ -87,7 +90,7 @@ suite("ExercisePart component", () => {
         onDownloadAll,
         onOpenAll: noop,
         onCloseAll: noop,
-        checkedExercises: { tmc: {}, mooc: {} },
+        checkedExercises: emptySelection(),
         exerciseStatuses: { tmc: {}, mooc: {} },
       },
     })
@@ -95,5 +98,32 @@ suite("ExercisePart component", () => {
     getButton("Download all").click()
 
     expect(onDownloadAll).toHaveBeenCalledWith([makeTmcKind({ tmcExerciseId: 101 })])
+  })
+
+  // Unchecking has to remove the entry, not record `false`: the panel counts entries.
+  test("adds a checked exercise to the selection and drops it again when unchecked", async () => {
+    const checkedExercises = emptySelection()
+    const { container } = render(ExercisePart, {
+      props: {
+        exerciseGroup: tmcExerciseGroup(),
+        onDownloadAll: noop,
+        onOpenAll: noop,
+        onCloseAll: noop,
+        checkedExercises,
+        exerciseStatuses: { tmc: {}, mooc: {} },
+      },
+    })
+
+    // vscode-checkbox is inert under jsdom, so set `.checked` and dispatch `change` directly.
+    const selectAll = container.querySelector<HTMLElement & { checked: boolean }>("vscode-checkbox")
+    expect(selectAll).not.toBeNull()
+
+    selectAll!.checked = true
+    await fireEvent.change(selectAll!)
+    expect([...checkedExercises.values()]).toEqual([makeTmcKind({ tmcExerciseId: 101 })])
+
+    selectAll!.checked = false
+    await fireEvent.change(selectAll!)
+    expect(checkedExercises.size).toBe(0)
   })
 })

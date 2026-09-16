@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte"
+  import { SvelteMap } from "svelte/reactivity"
 
   import Button from "../components/Button.svelte"
   import ExercisePart from "../components/ExercisePart.svelte"
-  import type { CourseDetailsPanel, TmcExerciseId, MoocExerciseId } from "../shared/shared"
+  import type { CourseDetailsPanel } from "../shared/shared"
   import {
     assertUnreachable,
     makeMoocKind,
@@ -25,15 +26,9 @@
   // `refresh()` remounts the panel under a fresh id, so `refreshing` resets on its own
   // via `{#key}`.
   let refreshing = $state<boolean>(false)
-  let checkedExercises = $state<{
-    tmc: Record<TmcExerciseId, boolean>
-    mooc: Record<MoocExerciseId, boolean>
-  }>({ tmc: {}, mooc: {} })
-  const checkedExercisesCount = $derived(
-    [...Object.values(checkedExercises.tmc), ...Object.values(checkedExercises.mooc)].filter(
-      Boolean,
-    ).length,
-  )
+  // Membership is the checked state; the key keeps a tmc and a mooc exercise apart.
+  const checkedExercises = new SvelteMap<string, ExerciseIdentifier>()
+  const checkedExercisesCount = $derived(checkedExercises.size)
   // Derived from exercise statuses rather than tracked separately, since downloads report
   // progress back as `exerciseStatusChange` broadcasts, not a return value here.
   const totalDownloading = $derived(
@@ -184,7 +179,7 @@
     })
   }
   function clearSelectedExercises() {
-    checkedExercises = { tmc: {}, mooc: {} }
+    checkedExercises.clear()
   }
   function updateExercises(p: CourseDetailsPanel) {
     if (p.course === undefined) {
@@ -212,18 +207,7 @@
     )
   }
   function getCheckedExercises(): Array<ExerciseIdentifier> {
-    const onlyCheckedExercises: Array<ExerciseIdentifier> = []
-    Object.entries(checkedExercises.tmc).forEach(([id, checked]) => {
-      if (checked) {
-        onlyCheckedExercises.push(makeTmcKind({ tmcExerciseId: Math.trunc(Number(id)) }))
-      }
-    })
-    Object.entries(checkedExercises.mooc).forEach(([id, checked]) => {
-      if (checked) {
-        onlyCheckedExercises.push(makeMoocKind({ moocExerciseId: id }))
-      }
-    })
-    return onlyCheckedExercises
+    return [...checkedExercises.values()]
   }
 </script>
 
@@ -305,7 +289,7 @@
       <ExercisePart
         {exerciseGroup}
         exerciseStatuses={panel.exerciseStatuses}
-        bind:checkedExercises
+        {checkedExercises}
         onDownloadAll={(exercises) => downloadExercises(panel, exercises)}
         onOpenAll={(exercises) => openExercises(panel, exercises)}
         onCloseAll={(exercises) => closeExercises(panel, exercises)}

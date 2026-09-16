@@ -146,7 +146,7 @@ suite("CourseDetails panel", () => {
     expect(await screen.findByText(/Unable to fetch exercise data from server/)).toBeInTheDocument()
   })
 
-  test("posts downloadExercises with a numeric tmc identifier parsed from the checkbox record key", async () => {
+  test("posts downloadExercises with the selected tmc identifier", async () => {
     const panel = tmcPanel()
     const { container } = render(CourseDetails, { props: { panel } })
     dispatch({
@@ -163,7 +163,7 @@ suite("CourseDetails panel", () => {
     postedMessages.mockClear()
     download.click()
 
-    // the tmc id must come back as a number, not the "101" string record key
+    // the tmc id stays a number and survives the postMessage clone
     expect(postedMessages).toHaveBeenCalledWith({
       type: "downloadExercises",
       ids: [makeTmcKind({ tmcExerciseId: 101 })],
@@ -172,7 +172,7 @@ suite("CourseDetails panel", () => {
     })
   })
 
-  test("posts downloadExercises with a string mooc identifier from the checkbox record key", async () => {
+  test("posts downloadExercises with the selected mooc identifier", async () => {
     const panel = moocPanel()
     const { container } = render(CourseDetails, { props: { panel } })
     dispatch({

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { SvelteMap } from "svelte/reactivity"
+
   import type {
     ExerciseGroup,
     ExerciseStatus,
@@ -9,7 +11,7 @@
   import Button from "./Button.svelte"
   import Checkbox from "./Checkbox.svelte"
 
-  // checked/status records for exercises, keyed by the backend-specific exercise id
+  // exercise statuses, keyed by the backend-specific exercise id
   type PerBackend<T> = {
     tmc: Record<TmcExerciseId, T>
     mooc: Record<MoocExerciseId, T>
@@ -20,7 +22,8 @@
     onDownloadAll: (exerciseIds: Array<ExerciseIdentifier>) => void
     onOpenAll: (exerciseIds: Array<ExerciseIdentifier>) => void
     onCloseAll: (exerciseIds: Array<ExerciseIdentifier>) => void
-    checkedExercises: PerBackend<boolean>
+    // The panel's selection, mutated in place: a `SvelteMap` propagates its own changes.
+    checkedExercises: SvelteMap<string, ExerciseIdentifier>
     exerciseStatuses: PerBackend<ExerciseStatus>
   }
 
@@ -29,7 +32,7 @@
     onDownloadAll,
     onOpenAll,
     onCloseAll,
-    checkedExercises = $bindable(),
+    checkedExercises,
     exerciseStatuses,
   }: Props = $props()
 
@@ -55,27 +58,17 @@
     return status === undefined ? "Loading…" : statusLabels[status]
   }
   function isChecked(id: ExerciseIdentifier): boolean {
-    return match(
-      id,
-      (tmc) => checkedExercises.tmc[tmc.tmcExerciseId] ?? false,
-      (mooc) => checkedExercises.mooc[mooc.moocExerciseId] ?? false,
-    )
+    return checkedExercises.has(ExerciseIdentifier.toString(id))
   }
   function setChecked(ids: Array<ExerciseIdentifier>, checked: boolean) {
-    const next = { tmc: { ...checkedExercises.tmc }, mooc: { ...checkedExercises.mooc } }
     for (const id of ids) {
-      match(
-        id,
-        (tmc) => {
-          next.tmc[tmc.tmcExerciseId] = checked
-        },
-        (mooc) => {
-          next.mooc[mooc.moocExerciseId] = checked
-        },
-      )
+      const key = ExerciseIdentifier.toString(id)
+      if (checked) {
+        checkedExercises.set(key, id)
+      } else {
+        checkedExercises.delete(key)
+      }
     }
-    // reassigned (not mutated) so that the change propagates through the binding
-    checkedExercises = next
   }
 
   const completedExercises = $derived(exerciseGroup.exercises.filter((e) => e.passed).length)
