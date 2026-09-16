@@ -46,7 +46,7 @@
   const showPassedTests = $derived(alwaysShowPassedTests || showPassedTestsChecked)
 
   const pointsPercent = $derived(
-    totalPoints > 0 ? ((successPoints / totalPoints) * 100.0).toFixed(2) : 0.0,
+    totalPoints > 0 ? ((successPoints / totalPoints) * 100.0).toFixed(2) : "0.00",
   )
 
   function showInBrowser(submissionUrl: string) {

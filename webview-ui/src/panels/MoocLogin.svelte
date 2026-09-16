@@ -23,13 +23,25 @@
   let status = $state<"starting" | "awaiting" | "error" | "cancelled">("starting")
   let device = $state<DeviceCode | null>(null)
   let errorMessage = $state<string | null>(null)
-  let copied = $state(false)
+  let copyStatus = $state<"idle" | "copied" | "failed">("idle")
+
+  // The outcome is a transient hint next to a code that stays on screen for minutes,
+  // so it clears itself; the cleanup keeps the timer from outliving the component.
+  $effect(() => {
+    if (copyStatus === "idle") {
+      return
+    }
+    const clear = setTimeout(() => {
+      copyStatus = "idle"
+    }, 2000)
+    return () => clearTimeout(clear)
+  })
 
   function startLogin() {
     status = "starting"
     device = null
     errorMessage = null
-    copied = false
+    copyStatus = "idle"
     vscode.postMessage({
       type: "moocLogin",
       sourcePanel: panel,
@@ -87,14 +99,14 @@
     // absent (insecure context / older webview) or reject (permission denied).
     const clipboard = navigator.clipboard
     if (!clipboard) {
-      copied = false
+      copyStatus = "failed"
       return
     }
     try {
       await clipboard.writeText(dev.userCode)
-      copied = true
+      copyStatus = "copied"
     } catch {
-      copied = false
+      copyStatus = "failed"
     }
   }
 
@@ -127,18 +139,13 @@
         continues automatically once you approve.
       </p>
 
-      <div
-        class="user-code"
-        role="button"
-        tabindex="0"
-        title="Click to copy"
-        onclick={copyUserCode}
-        onkeypress={copyUserCode}
-      >
+      <button type="button" class="user-code" title="Click to copy" onclick={copyUserCode}>
         {device.userCode}
-      </div>
-      {#if copied}
-        <div class="copied">Copied to clipboard</div>
+      </button>
+      {#if copyStatus === "copied"}
+        <div class="copy-status">Copied to clipboard</div>
+      {:else if copyStatus === "failed"}
+        <div class="copy-status">Couldn't copy — select the code and copy it manually</div>
       {/if}
     </div>
 
@@ -166,6 +173,10 @@
     margin-bottom: 0.5rem;
   }
   .user-code {
+    appearance: none;
+    background: none;
+    color: inherit;
+    text-align: left;
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 2rem;
     letter-spacing: 0.25rem;
@@ -178,7 +189,7 @@
     cursor: pointer;
     user-select: all;
   }
-  .copied {
+  .copy-status {
     opacity: 80%;
     font-size: 0.85rem;
     margin-bottom: 0.5rem;

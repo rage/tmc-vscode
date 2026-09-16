@@ -1,4 +1,5 @@
 import * as fs from "fs-extra"
+import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
@@ -20,8 +21,24 @@ const PROJECTS_DIRECTORY = "/tmp/tmcdata/projects"
 // `subscriptions` is all wipe reads off the extension context.
 const extensionContext = { subscriptions: [] } as unknown as vscode.ExtensionContext
 
-/** @param confirmations answers to the two explicit confirmations, in order. */
-function initializedContext(confirmations: boolean[] = [true, true]): ActionContext {
+/** Names of the wipe steps that ran, in the order they ran. */
+const stepsRun: string[] = []
+
+function step<T>(name: string, outcome: () => T): () => Promise<T> {
+  return async () => {
+    stepsRun.push(name)
+    return outcome()
+  }
+}
+
+function initializedContext(
+  options: {
+    /** Answers to the two explicit confirmations, in order. */
+    confirmations?: boolean[]
+    resetSettings?: Result<void, Error>
+  } = {},
+): ActionContext {
+  const confirmations = options.confirmations ?? [true, true]
   const [dialog] = createDialogMock()
   let asked = 0
   dialog.explicitConfirmation = vi.fn(async () => confirmations[asked++] ?? false)
@@ -30,18 +47,24 @@ function initializedContext(confirmations: boolean[] = [true, true]): ActionCont
     dialog,
     resources: Ok({ projectsDirectory: PROJECTS_DIRECTORY } as Resources),
     langs: Ok({
-      resetSettings: vi.fn(async () => Ok.EMPTY),
-      deauthenticate: vi.fn(async () => Ok.EMPTY),
-      deauthenticateMooc: vi.fn(async () => Ok.EMPTY),
+      resetSettings: vi.fn(step("resetSettings", () => options.resetSettings ?? Ok.EMPTY)),
+      deauthenticate: vi.fn(step("deauthenticate", () => Ok.EMPTY)),
+      deauthenticateMooc: vi.fn(step("deauthenticateMooc", () => Ok.EMPTY)),
     } as unknown as Langs),
-    userData: Ok({ wipeDataFromStorage: vi.fn(async () => {}) } as unknown as UserData),
+    userData: Ok({
+      wipeDataFromStorage: vi.fn(step("wipeDataFromStorage", () => {})),
+    } as unknown as UserData),
     workspaceManager: Ok({ activeCourse: undefined } as unknown as WorkspaceManager),
   }
 }
 
 suite("Wipe command", function () {
   beforeEach(function () {
-    vi.mocked(fs.removeSync).mockClear()
+    stepsRun.length = 0
+    vi.mocked(fs.removeSync).mockReset()
+    vi.mocked(fs.removeSync).mockImplementation(() => {
+      stepsRun.push("removeSync")
+    })
   })
 
   test("removes the projects directory the initialization check passed", async function () {
@@ -50,6 +73,29 @@ suite("Wipe command", function () {
     await wipe(context, extensionContext)
 
     expect(fs.removeSync).toHaveBeenCalledWith(PROJECTS_DIRECTORY)
+  })
+
+  test("deletes the exercises only after every recoverable step has succeeded", async function () {
+    const context = initializedContext()
+
+    await wipe(context, extensionContext)
+
+    expect(stepsRun).toEqual([
+      "resetSettings",
+      "deauthenticate",
+      "deauthenticateMooc",
+      "wipeDataFromStorage",
+      "removeSync",
+    ])
+  })
+
+  test("leaves the exercises on disk when an earlier step fails", async function () {
+    const context = initializedContext({ resetSettings: Err(new Error("settings are read-only")) })
+
+    await wipe(context, extensionContext)
+
+    expect(fs.removeSync).not.toHaveBeenCalled()
+    expect(context.dialog.errorNotification).toHaveBeenCalledOnce()
   })
 
   test("deletes nothing when initialization failed", async function () {
@@ -61,7 +107,7 @@ suite("Wipe command", function () {
   })
 
   test("deletes nothing when the user declines the second confirmation", async function () {
-    const context = initializedContext([true, false])
+    const context = initializedContext({ confirmations: [true, false] })
 
     await wipe(context, extensionContext)
 

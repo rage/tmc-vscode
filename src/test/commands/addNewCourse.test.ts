@@ -44,8 +44,9 @@ const moocCourses = [
   },
 ]
 
-// Identity is all that matters here: these stand for whatever the user already has.
-const storedCourses = [{ kind: "tmc" }] as LocalCourseData[]
+// Some other course than the ones offered above, so the default harness has
+// nothing marked as already added.
+const storedCourses = [{ kind: "tmc", data: { id: 999 } }] as LocalCourseData[]
 
 interface Pick {
   prompt: { title: string; placeHolder: string } | string
@@ -62,6 +63,7 @@ function harness(options: {
   organizations?: ReturnType<typeof Ok> | ReturnType<typeof Err>
   moocAuthenticated?: ReturnType<typeof Ok> | ReturnType<typeof Err>
   moocCourses?: ReturnType<typeof Ok> | ReturnType<typeof Err>
+  addedCourses?: LocalCourseData[]
   /** Label to select at each prompt, in order. `undefined` dismisses the pick. */
   select?: (string | undefined)[]
 }): Harness {
@@ -95,7 +97,8 @@ function harness(options: {
     }),
   } as unknown as ActionContext["dialog"]
 
-  const userData = new Ok({ getCourses: () => storedCourses } as unknown as UserData)
+  const courses = options.addedCourses ?? storedCourses
+  const userData = new Ok({ getCourses: () => courses } as unknown as UserData)
 
   return { context: { ...base, dialog, langs: new Ok(langs), userData }, picks, errors }
 }
@@ -248,6 +251,26 @@ suite("Add new course command", function () {
         "Check your network connection and that you are logged in.",
     ])
     expect(actions.addNewCourse).not.toHaveBeenCalled()
+  })
+
+  test("marks the courses the user has already added, in both picks", async function () {
+    const { context, picks } = harness({
+      addedCourses: [
+        { kind: "tmc", data: { id: 1 } },
+        { kind: "mooc", data: { id: "11111111-1111-1111-1111-111111111111" } },
+      ] as LocalCourseData[],
+      select: ["Test org", undefined],
+    })
+    await addNewCourse(context)
+
+    expect(picks[0]?.items.map((item) => [item[0], item[2]])).toEqual([
+      ["MOOC", "TMC Server · browse courses"],
+      ["Test org", "TMC Server · browse courses"],
+      ["Shared Slug Course", "courses.mooc.fi · MOOC.fi · already added"],
+    ])
+    expect(picks[1]?.items.map((item) => [item[0], item[2]])).toEqual([
+      ["Python Programming", "TMC Server · already added"],
+    ])
   })
 
   test("distinguishes a tmc and a mooc course that share a slug", async function () {

@@ -455,12 +455,13 @@ export class UserData {
   }
 
   /**
-   * Sets a timeout for when the user can be notified about the given course the next time.
+   * Throttles the new-exercise notification for a course until `dateInMillis`.
    *
-   * @param courseId ID of the course where the notification timeout is being set.
-   * @param dateInMillis Next possible notification date, in milliseconds.
+   * Only the toast is suppressed; the course data refresh ignores this.
+   *
+   * @param dateInMillis Epoch milliseconds before which not to notify again.
    */
-  public async setNotifyDate(
+  public async setNewExerciseNotifyAfter(
     courseId: CourseIdentifier,
     dateInMillis: number,
   ): Promise<Result<void, Error>> {

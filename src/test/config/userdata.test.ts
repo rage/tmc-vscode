@@ -326,13 +326,13 @@ suite("UserData course add/get/update/delete", function () {
     expect(userData.getMoocCourses()).toEqual([])
   })
 
-  test("setNotifyDate updates the notify timer for both backends", async function () {
+  test("setNewExerciseNotifyAfter updates the notify timer for both backends", async function () {
     const [userData] = await makeUserData({
       courses: [tmcCourse({ id: 0 })],
       mooc_courses: [moocCourse({ id: "instance-uuid-1" })],
     })
-    await userData.setNotifyDate(CourseIdentifier.from(0), 111)
-    await userData.setNotifyDate(CourseIdentifier.from("instance-uuid-1"), 222)
+    await userData.setNewExerciseNotifyAfter(CourseIdentifier.from(0), 111)
+    await userData.setNewExerciseNotifyAfter(CourseIdentifier.from("instance-uuid-1"), 222)
     expect(userData.getTmcCourse(0).notifyAfter).toBe(111)
     expect(userData.getMoocCourses()[0]?.notifyAfter).toBe(222)
   })
@@ -605,12 +605,12 @@ suite("UserData write failures", function () {
     expect(result.err).toBe(true)
   })
 
-  test("setNotifyDate reports the failed write", async function () {
+  test("setNewExerciseNotifyAfter reports the failed write", async function () {
     const [userData] = await withFailingWrites({
       courses: [tmcCourse({ id: 0 })],
       mooc_courses: [],
     })
-    const result = await userData.setNotifyDate(CourseIdentifier.from(0), 111)
+    const result = await userData.setNewExerciseNotifyAfter(CourseIdentifier.from(0), 111)
     expect(result.err).toBe(true)
   })
 

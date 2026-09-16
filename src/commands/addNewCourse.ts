@@ -7,7 +7,7 @@ import type Langs from "../api/langs"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseInstance, Organization } from "../shared/langsSchema"
 import type { CourseIdentifier, Enum } from "../shared/shared"
-import { backendName, makeMoocKind, makeTmcKind, match } from "../shared/shared"
+import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import { Logger } from "../utilities"
 
 /**
@@ -31,6 +31,17 @@ const MOOC_LOGIN = "mooc-login"
 
 const TITLE = "Add New Course"
 
+const ALREADY_ADDED = " · already added"
+
+/** Keys a course across both backends, whose id spaces would otherwise collide. */
+function courseKey(id: CourseIdentifier): string {
+  return match(
+    id,
+    (tmc) => `tmc:${tmc.courseId}`,
+    (mooc) => `mooc:${mooc.instanceId}`,
+  )
+}
+
 async function enrolledMoocCourses(
   langs: Langs,
 ): Promise<Result<CourseInstance[], Error> | typeof MOOC_LOGIN> {
@@ -53,6 +64,14 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
     langs.val.getTmcOrganizations(),
     enrolledMoocCourses(langs.val),
   ])
+
+  // Courses the user already has are dimmed rather than hidden: a student
+  // looking for one would otherwise be left wondering where it went.
+  const addedCourses = new Set(
+    userData.ok
+      ? userData.val.getCourses().map((course) => courseKey(LocalCourseData.getCourseId(course)))
+      : [],
+  )
 
   const unavailable: string[] = []
   const choices: [string, TopLevelChoice | typeof MOOC_LOGIN, string][] = []
@@ -81,10 +100,11 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
     Logger.warn(`Failed to fetch ${backendName("mooc")} courses. ${moocCourses.val}`)
   } else {
     for (const course of moocCourses.val) {
+      const added = addedCourses.has(courseKey(makeMoocKind({ instanceId: course.id })))
       choices.push([
         course.name,
         makeMoocKind(course),
-        `${backendName("mooc")} · ${course.organization_name}`,
+        `${backendName("mooc")} · ${course.organization_name}${added ? ALREADY_ADDED : ""}`,
       ])
     }
   }
@@ -130,11 +150,11 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
       }
       const course = await dialog.selectItem<CourseIdentifier>(
         { title: TITLE, placeHolder: `Which course in ${organization.name}?` },
-        ...courses.val.map<[string, CourseIdentifier, string]>((c) => [
-          c.title,
-          makeTmcKind({ courseId: c.id }),
-          backendName("tmc"),
-        ]),
+        ...courses.val.map<[string, CourseIdentifier, string]>((c) => {
+          const id = makeTmcKind({ courseId: c.id })
+          const added = addedCourses.has(courseKey(id))
+          return [c.title, id, `${backendName("tmc")}${added ? ALREADY_ADDED : ""}`]
+        }),
       )
       return course === undefined ? undefined : [organization.slug, course]
     },

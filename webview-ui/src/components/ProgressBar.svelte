@@ -7,11 +7,19 @@
 
   let { label, value, max }: Props = $props()
 
-  let progress = $derived(max === 0 ? 0.0 : value / max)
+  const progress = $derived(max <= 0 ? 0 : Math.min(1, Math.max(0, value / max)))
 </script>
 
 <div class="progress-bar-label">{label}</div>
-<div style:--bar-width={progress} class="background">
+<div
+  style:--bar-width={progress}
+  class="background"
+  role="progressbar"
+  aria-label={label}
+  aria-valuemin={0}
+  aria-valuemax={max}
+  aria-valuenow={value}
+>
   <div class="bar"></div>
 </div>
 
@@ -22,6 +30,7 @@
     border: 2px solid var(--vscode-button-border, transparent);
     border-radius: 0.4rem;
     background-color: var(--vscode-badge-background, #616161);
+    overflow: hidden;
   }
   .bar {
     height: 100%;

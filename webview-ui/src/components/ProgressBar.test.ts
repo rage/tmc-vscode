@@ -19,4 +19,24 @@ suite("ProgressBar component", () => {
     const background = container.querySelector<HTMLElement>(".background")
     expect(background?.style.getPropertyValue("--bar-width")).toBe("0")
   })
+
+  test("clamps the width to the track when the value overshoots the maximum", () => {
+    const { container } = render(ProgressBar, { props: { label: "p", value: 7, max: 4 } })
+    const background = container.querySelector<HTMLElement>(".background")
+    expect(background?.style.getPropertyValue("--bar-width")).toBe("1")
+  })
+
+  test("clamps a negative value to 0", () => {
+    const { container } = render(ProgressBar, { props: { label: "p", value: -2, max: 4 } })
+    const background = container.querySelector<HTMLElement>(".background")
+    expect(background?.style.getPropertyValue("--bar-width")).toBe("0")
+  })
+
+  test("exposes its value to assistive technology", () => {
+    render(ProgressBar, { props: { label: "Waiting for grading", value: 40, max: 100 } })
+    const bar = screen.getByRole("progressbar", { name: "Waiting for grading" })
+    expect(bar).toHaveAttribute("aria-valuemin", "0")
+    expect(bar).toHaveAttribute("aria-valuemax", "100")
+    expect(bar).toHaveAttribute("aria-valuenow", "40")
+  })
 })

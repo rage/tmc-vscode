@@ -2,17 +2,23 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import { logout, openWorkspace, removeCourse } from "../../actions"
+import { checkForCourseUpdates, logout, openWorkspace, removeCourse } from "../../actions"
 import type { ActionContext } from "../../actions/types"
+import { updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type Resources from "../../config/resources"
 import type { UserData } from "../../config/userdata"
+import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { DialogMockValues } from "../mocks/dialog"
 import { createDialogMock } from "../mocks/dialog"
+
+vi.mock("../../actions/updateCourse", () => ({
+  updateCourse: vi.fn(async () => Ok(true)),
+}))
 
 suite("logout action", function () {
   let dialogMock: Dialog
@@ -274,5 +280,75 @@ suite("openWorkspace action", function () {
     expect(dialogMock.confirmation).toHaveBeenCalled()
     expect(executeCommand).not.toHaveBeenCalledWith("vscode.openFolder", expect.anything())
     expect(dialogMock.warningNotification).toHaveBeenCalled()
+  })
+})
+
+const tmcCourse = (id: number, notifyAfter: number, newExercises: number[]): LocalCourseData =>
+  makeTmcKind({
+    id,
+    name: `course-${id}`,
+    title: `Course ${id}`,
+    description: "",
+    organization: "test",
+    exercises: [],
+    availablePoints: 0,
+    awardedPoints: 0,
+    perhapsExamMode: false,
+    newExercises,
+    notifyAfter,
+    disabled: false,
+    materialUrl: null,
+  })
+
+function contextWithCourses(courses: LocalCourseData[]): [ActionContext, Dialog] {
+  const [dialog] = createDialogMock()
+  const byId = new Map(courses.map((c) => [String(c.data.id), c]))
+  return [
+    {
+      ...createMockActionContext(),
+      dialog,
+      userData: Ok({
+        getCourses: () => courses,
+        getCourse: (id: CourseIdentifier) => Ok(byId.get(CourseIdentifier.toString(id))),
+      }) as unknown as ActionContext["userData"],
+    },
+    dialog,
+  ]
+}
+
+suite("checkForCourseUpdates action", function () {
+  beforeEach(function () {
+    vi.mocked(updateCourse).mockClear()
+  })
+
+  test("refreshes a course whose new-exercise reminder is postponed", async function () {
+    const [actionContext] = contextWithCourses([tmcCourse(1, Date.now() + 60_000, [10])])
+
+    await checkForCourseUpdates(actionContext)
+
+    expect(updateCourse).toHaveBeenCalledTimes(1)
+    expect(updateCourse).toHaveBeenCalledWith(actionContext, CourseIdentifier.from(1))
+  })
+
+  test("does not notify about a course whose reminder is postponed", async function () {
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, Date.now() + 60_000, [10])])
+
+    await checkForCourseUpdates(actionContext)
+
+    expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("refreshes and notifies for a course whose reminder is due", async function () {
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
+
+    await checkForCourseUpdates(actionContext)
+
+    expect(updateCourse).toHaveBeenCalledTimes(1)
+    expect(dialog.notification).toHaveBeenCalledWith(
+      expect.stringContaining("1 new exercises"),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    )
   })
 })

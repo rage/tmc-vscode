@@ -7,11 +7,10 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import {
+  EXTENSION_ID,
   HIDE_META_FILES,
   SHOW_META_FILES,
   WATCHER_EXCLUDE,
-  WORKSPACE_ROOT_FILE_NAME,
-  WORKSPACE_ROOT_FILE_TEXT,
   WORKSPACE_ROOT_FOLDER_NAME,
   WORKSPACE_SETTINGS,
   workspaceFileName,
@@ -48,8 +47,9 @@ interface ConfigurationProperties {
  */
 export default class WorkspaceManager implements vscode.Disposable {
   private _exercises: WorkspaceExercise[]
+  // The same objects as `_exercises`, keyed by `uri.fsPath`. Replace both together.
+  private _exercisesByPath: Map<string, WorkspaceExercise>
   private readonly _resources: Resources
-  private readonly _watcher: vscode.FileSystemWatcher | undefined
   private readonly _disposables: vscode.Disposable[]
 
   /**
@@ -58,17 +58,8 @@ export default class WorkspaceManager implements vscode.Disposable {
    */
   public constructor(resources: Resources, exercises?: WorkspaceExercise[]) {
     this._exercises = exercises ?? []
+    this._exercisesByPath = WorkspaceManager._indexByPath(this._exercises)
     this._resources = resources
-    const projectsDirectory = this._resources.projectsDirectory
-    if (projectsDirectory) {
-      this._watcher = vscode.workspace.createFileSystemWatcher(
-        projectsDirectory + "/**",
-        true,
-        true,
-        false,
-      )
-      this._watcher.onDidDelete((x) => this._fileDeleteAction(x.fsPath, projectsDirectory))
-    }
     this._disposables = [
       vscode.workspace.onDidChangeWorkspaceFolders((e) => this._onDidChangeWorkspaceFolders(e)),
       vscode.workspace.onDidOpenTextDocument((e) => this._onDidOpenTextDocument(e)),
@@ -131,7 +122,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   /**
    * Currently active exercise based on active editor, or `undefined` otherwise.
    */
-  public get activeExercise(): Readonly<WorkspaceExercise> | undefined {
+  public get activeExercise(): WorkspaceExercise | undefined {
     const uri = vscode.window.activeTextEditor?.document.uri
     return uri && this.getExerciseByPath(uri)
   }
@@ -139,7 +130,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   /**
    * Currently active course workspace uri, or `undefined` otherwise.
    */
-  public get workspaceFileUri(): vscode.Uri | undefined {
+  private get _workspaceFileUri(): vscode.Uri | undefined {
     const workspaceFile = vscode.workspace.workspaceFile
     if (
       !workspaceFile ||
@@ -152,28 +143,45 @@ export default class WorkspaceManager implements vscode.Disposable {
 
   public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
     this._exercises = exercises
+    this._exercisesByPath = WorkspaceManager._indexByPath(exercises)
     return this._refreshActiveCourseWorkspace()
   }
 
-  public getExerciseByPath(exercise: vscode.Uri): Readonly<WorkspaceExercise> | undefined {
-    // File is part of exercise if and only if it belongs to an exercise's subfolder
-    return this._exercises.find(
-      (x) => !path.relative(x.uri.fsPath, exercise.fsPath).startsWith(".."),
-    )
+  /**
+   * The exercise `uri` belongs to — its own folder, or any path inside it.
+   *
+   * `undefined` for a path outside every known exercise, including a course
+   * folder and a sibling whose name an exercise name prefixes. Runs in the
+   * path's depth, not the exercise count: every explorer row decorated goes
+   * through here.
+   */
+  public getExerciseByPath(uri: vscode.Uri): WorkspaceExercise | undefined {
+    let candidate = uri.fsPath
+    for (;;) {
+      const exercise = this._exercisesByPath.get(candidate)
+      if (exercise) {
+        return exercise
+      }
+      const parent = path.dirname(candidate)
+      if (parent === candidate) {
+        return undefined
+      }
+      candidate = parent
+    }
   }
 
   public getExerciseBySlug(
     backend: "tmc" | "mooc",
     courseSlug: string,
     exerciseSlug: string,
-  ): Readonly<WorkspaceExercise> | undefined {
+  ): WorkspaceExercise | undefined {
     return this._exercises.find(
       (x) =>
         x.backend === backend && x.courseSlug === courseSlug && x.exerciseSlug === exerciseSlug,
     )
   }
 
-  public getExercises(): readonly WorkspaceExercise[] {
+  public getExercises(): WorkspaceExercise[] {
     return this._exercises
   }
 
@@ -185,7 +193,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   public getExercisesByCourseSlug(
     backend: "tmc" | "mooc",
     courseSlug: string,
-  ): readonly WorkspaceExercise[] {
+  ): WorkspaceExercise[] {
     return this._exercises.filter((x) => x.backend === backend && x.courseSlug === courseSlug)
   }
 
@@ -202,24 +210,18 @@ export default class WorkspaceManager implements vscode.Disposable {
     return false
   }
 
-  public addExercise(exercise: WorkspaceExercise): void {
-    this._exercises = this._exercises.concat(exercise)
-  }
-
   public openCourseExercises(
     backend: "tmc" | "mooc",
     courseSlug: string,
     exerciseSlugs: string[],
   ): Promise<Result<void, Error>> {
-    this._exercises.forEach((x) => {
-      if (
+    this._setStatus(
+      (x) =>
         x.backend === backend &&
         x.courseSlug === courseSlug &&
-        exerciseSlugs.includes(x.exerciseSlug)
-      ) {
-        x.status = ExerciseStatus.Open
-      }
-    })
+        exerciseSlugs.includes(x.exerciseSlug),
+      ExerciseStatus.Open,
+    )
 
     return this._refreshActiveCourseWorkspace()
   }
@@ -229,17 +231,13 @@ export default class WorkspaceManager implements vscode.Disposable {
     courseSlug: string,
     exerciseSlugs: string[],
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    const closedExercises: WorkspaceExercise[] = []
-    this._exercises.forEach((x) => {
-      if (
+    const closedExercises = this._setStatus(
+      (x) =>
         x.backend === backend &&
         x.courseSlug === courseSlug &&
-        exerciseSlugs.includes(x.exerciseSlug)
-      ) {
-        x.status = ExerciseStatus.Closed
-        closedExercises.push(x)
-      }
-    })
+        exerciseSlugs.includes(x.exerciseSlug),
+      ExerciseStatus.Closed,
+    )
 
     const result = await this._refreshActiveCourseWorkspace()
     if (result.err) {
@@ -280,9 +278,6 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   public dispose(): void {
-    if (this._watcher) {
-      this._watcher.dispose()
-    }
     this._disposables.forEach((x) => x.dispose())
   }
 
@@ -298,7 +293,7 @@ export default class WorkspaceManager implements vscode.Disposable {
    */
   public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration {
     if (this.activeCourse) {
-      return vscode.workspace.getConfiguration(section, this.workspaceFileUri)
+      return vscode.workspace.getConfiguration(section, this._workspaceFileUri)
     }
     return vscode.workspace.getConfiguration(section)
   }
@@ -327,8 +322,11 @@ export default class WorkspaceManager implements vscode.Disposable {
     if (activeCourseWorkspace) {
       let newValue = value
       if (value instanceof Object) {
-        const oldValue = this.getWorkspaceSettings(section)
-        newValue = { ...oldValue, ...value }
+        // `inspect`, not `get`: the effective configuration would materialize
+        // every VS Code default into the workspace file as an explicit entry.
+        const workspaceValue =
+          this.getWorkspaceSettings().inspect<Record<string, unknown>>(section)?.workspaceValue
+        newValue = { ...workspaceValue, ...value }
       }
       await vscode.workspace
         .getConfiguration(
@@ -352,9 +350,15 @@ export default class WorkspaceManager implements vscode.Disposable {
    * Workaround for https://github.com/microsoft/vscode/issues/58038
    */
   private async _ensureSettingsAreStoredInMultiRootWorkspace(): Promise<void> {
-    const extension = vscode.extensions.getExtension("moocfi.test-my-code")
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)
     const extensionDefinedSettings: Record<string, ConfigurationProperties> =
-      extension?.packageJSON?.contributes?.configuration?.properties
+      extension?.packageJSON?.contributes?.configuration?.properties ?? {}
+    if (Object.keys(extensionDefinedSettings).length === 0) {
+      // A fork or a renamed publisher: nothing to copy, and the rest of the
+      // integrity pass still has work to do.
+      Logger.warn(`No declared settings found for extension ${EXTENSION_ID}.`)
+      return
+    }
     for (const [key, value] of Object.entries(extensionDefinedSettings)) {
       if (value.scope !== "application" && value.type === "boolean") {
         const codeSettings = this.getWorkspaceSettings().inspect<boolean>(key)
@@ -366,24 +370,6 @@ export default class WorkspaceManager implements vscode.Disposable {
           await this.updateWorkspaceSetting(key, codeSettings?.defaultValue)
         }
       }
-    }
-  }
-
-  /**
-   * Event listener function for workspace watcher delete.
-   * @param targetPath Path to deleted item
-   */
-  private _fileDeleteAction(targetPath: string, projectsDirectory: string): void {
-    const basedir = projectsDirectory
-    const rootFilePath = this._resources.workspaceRootFolder.fsPath
-    Logger.debug("Target path deleted", targetPath)
-    if (path.relative(rootFilePath, targetPath) === "") {
-      Logger.info(`Root file deleted ${targetPath}, fixing issue.`)
-      if (!fs.existsSync(path.join(basedir, WORKSPACE_ROOT_FILE_NAME))) {
-        fs.mkdirSync(path.join(basedir, WORKSPACE_ROOT_FILE_NAME), { recursive: true })
-      }
-
-      fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" })
     }
   }
 
@@ -442,12 +428,31 @@ export default class WorkspaceManager implements vscode.Disposable {
     return success ? Ok.EMPTY : Err(new Error("Failed to refresh active workspace."))
   }
 
+  /**
+   * Sets `status` on every exercise `predicate` matches, and returns those
+   * exercises — matched, not changed: one already at `status` is included.
+   */
+  private _setStatus(
+    predicate: (exercise: WorkspaceExercise) => boolean,
+    status: ExerciseStatus,
+  ): WorkspaceExercise[] {
+    const matched = this._exercises.filter(predicate)
+    for (const exercise of matched) {
+      exercise.status = status
+    }
+    return matched
+  }
+
+  private static _indexByPath(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {
+    return new Map(exercises.map((x) => [x.uri.fsPath, x]))
+  }
+
   private _onDidChangeWorkspaceFolders(e: vscode.WorkspaceFoldersChangeEvent): void {
     const activeCourseWorkspace = this._activeCourseWorkspace
 
     let incorrectFolderAdded = false
     e.added.forEach((added) => {
-      const exercise = this._exercises.find((x) => x.uri.fsPath === added.uri.fsPath)
+      const exercise = this._exercisesByPath.get(added.uri.fsPath)
       if (!exercise) {
         incorrectFolderAdded = true
       } else if (
@@ -459,7 +464,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     })
 
     e.removed.forEach((removed) => {
-      const exercise = this._exercises.find((x) => x.uri.fsPath === removed.uri.fsPath)
+      const exercise = this._exercisesByPath.get(removed.uri.fsPath)
       if (exercise) {
         exercise.status = ExerciseStatus.Closed
       }

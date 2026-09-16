@@ -139,6 +139,46 @@ const organizationsRemapper: CacheConfig["remapper"] = (res) => {
   return []
 }
 
+/** Ample for the failure diagnostics stderr feeds; a test run can write orders of magnitude more. */
+const MAX_RETAINED_STDERR_BYTES = 64 * 1024
+
+/**
+ * The tail of a CLI process's stderr, kept for the error details a failure attaches.
+ *
+ * A long-running `run-tests` can write more stderr than the extension host should hold, so
+ * older output is dropped once {@link MAX_RETAINED_STDERR_BYTES} is exceeded and `text()`
+ * says how much went. The newest output is the part that explains a failure, so the tail is
+ * what survives; the most recent chunk is always kept whole.
+ */
+class BoundedStderr {
+  private readonly _chunks: string[] = []
+  private _retainedBytes = 0
+  private _droppedBytes = 0
+  private _text: string | undefined
+
+  public push(chunk: string): void {
+    this._chunks.push(chunk)
+    this._retainedBytes += Buffer.byteLength(chunk)
+    while (this._retainedBytes > MAX_RETAINED_STDERR_BYTES && this._chunks.length > 1) {
+      const droppedBytes = Buffer.byteLength(this._chunks.shift() as string)
+      this._retainedBytes -= droppedBytes
+      this._droppedBytes += droppedBytes
+    }
+    this._text = undefined
+  }
+
+  public text(): string {
+    if (this._text === undefined) {
+      const tail = this._chunks.join("\n")
+      this._text =
+        this._droppedBytes === 0
+          ? tail
+          : `[…${this._droppedBytes} bytes of earlier stderr dropped…]\n${tail}`
+    }
+    return this._text
+  }
+}
+
 /**
  * A Class that provides an interface to all langs functionality.
  */
@@ -1699,11 +1739,17 @@ export default class Langs {
     } catch (error) {
       return Err(new SpawnError(error, "Failed to run tmc-langs-cli"))
     }
+    // Chunk boundaries fall wherever the pipe buffer does, so a decode per chunk splits
+    // multi-byte characters -- Finnish exercise names, Java failure messages -- into
+    // replacement characters while leaving the JSON syntactically valid. An encoding on
+    // the stream makes Node hold an incomplete sequence until the rest of it arrives.
+    cprocess.stdout.setEncoding("utf8")
+    cprocess.stderr.setEncoding("utf8")
     if (stdin) {
       cprocess.stdin.write(stdin + "\n")
     }
 
-    const stderr: string[] = []
+    const stderr = new BoundedStderr()
     const processResult = new Promise<number | null>((resolve, reject) => {
       let resultCode: number | undefined
       let stdoutEnded = false
@@ -1728,8 +1774,7 @@ ${error.message}`
         spawnFailure = error
         reject(error)
       })
-      cprocess.stderr.on("data", (chunk) => {
-        const data = chunk.toString()
+      cprocess.stderr.on("data", (data: string) => {
         // per-line at debug to keep j4rs/JNI spam out of the log; the failure paths
         // below attach the collected stderr to the error they return
         Logger.debug("stderr", data)
@@ -1756,8 +1801,8 @@ ${error.message}`
           resolve(code)
         }
       })
-      cprocess.stdout.on("data", (chunk) => {
-        const decoded = decodeLangsStdout(stdoutBuffer, chunk.toString())
+      cprocess.stdout.on("data", (chunk: string) => {
+        const decoded = decodeLangsStdout(stdoutBuffer, chunk)
         stdoutBuffer = decoded.carry
         for (const event of decoded.events) {
           switch (event.kind) {
@@ -1794,13 +1839,13 @@ ${error.message}`
         if (spawnFailure) {
           // ENOENT/EACCES/EPERM arrive here rather than as a `cp.spawn` throw, and
           // `activate` gates its antivirus-exception advice on this class.
-          return Err(new SpawnError(spawnFailure, stderr.join("\n")))
+          return Err(new SpawnError(spawnFailure, stderr.text()))
         }
-        return Err(new RuntimeError(error as string, stderr.join("\n")))
+        return Err(new RuntimeError(error as string, stderr.text()))
       }
 
       if (interrupted) {
-        return Err(new RuntimeError("TMC Langs process was killed.", stderr.join("\n")))
+        return Err(new RuntimeError("TMC Langs process was killed.", stderr.text()))
       }
 
       if (stdoutBuffer !== "") {
@@ -1820,7 +1865,7 @@ ${error.message}`
         )
       }
       return Err(
-        new EmptyLangsResponseError("Langs process ended without result data.", stderr.join("\n")),
+        new EmptyLangsResponseError("Langs process ended without result data.", stderr.text()),
       )
     })()
 
@@ -1831,7 +1876,7 @@ ${error.message}`
         kill(cprocess.pid as number)
       }
     }
-    const res = { interrupt, result, getStderr: (): string => stderr.join("\n") }
+    const res = { interrupt, result, getStderr: (): string => stderr.text() }
     return Ok(res)
   }
 }

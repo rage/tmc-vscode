@@ -40,6 +40,19 @@ function postSubmissionError(panelId: number, error: Error): void {
   )
 }
 
+function postStatusUpdate(panelId: number, progressPercent: number, message: string): void {
+  window.dispatchEvent(
+    new MessageEvent("message", {
+      data: {
+        type: "submissionStatusUpdate",
+        target: { type: "ExerciseSubmission", id: panelId },
+        progressPercent,
+        message,
+      },
+    }),
+  )
+}
+
 // Posts a mooc grading result to the panel.
 function postMoocResult(result: unknown): void {
   window.dispatchEvent(
@@ -76,6 +89,28 @@ suite("ExerciseSubmission panel", () => {
       }),
     )
     expect(await screen.findByText("Compiling on the server")).toBeInTheDocument()
+  })
+
+  test("a repeated status refreshes the live line instead of appending a duplicate", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    postStatusUpdate(panel.id, 10, "Grading in progress")
+    postStatusUpdate(panel.id, 20, "Grading in progress")
+    postStatusUpdate(panel.id, 30, "Grading in progress")
+
+    expect(await screen.findByText("Grading in progress")).toBeInTheDocument()
+    // a completed "✓" line would mean the repeat was appended rather than merged
+    expect(screen.queryByText("✓ Grading in progress")).not.toBeInTheDocument()
+  })
+
+  test("drops the oldest progress lines once the list is full", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    for (let step = 0; step < 30; step++) {
+      postStatusUpdate(panel.id, step, `Step ${step}`)
+    }
+
+    expect(await screen.findByText("Step 29")).toBeInTheDocument()
+    expect(screen.getByText("✓ Step 10")).toBeInTheDocument()
+    expect(screen.queryByText("✓ Step 9")).not.toBeInTheDocument()
   })
 
   test("replaces the progress view with the failure when the submission errors", async () => {
