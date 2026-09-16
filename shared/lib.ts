@@ -813,7 +813,8 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("submissionStatusUpdate"),
     target: targetPanelSchema("ExerciseSubmission"),
-    progressPercent: z.number(),
+    // completion as a 0..1 fraction, the unit every progress value in the extension uses
+    fraction: z.number(),
     message: z.string().optional(),
   }),
   z.object({

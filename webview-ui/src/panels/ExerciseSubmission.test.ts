@@ -40,13 +40,13 @@ function postSubmissionError(panelId: number, error: Error): void {
   )
 }
 
-function postStatusUpdate(panelId: number, progressPercent: number, message: string): void {
+function postStatusUpdate(panelId: number, fraction: number, message: string): void {
   window.dispatchEvent(
     new MessageEvent("message", {
       data: {
         type: "submissionStatusUpdate",
         target: { type: "ExerciseSubmission", id: panelId },
-        progressPercent,
+        fraction,
         message,
       },
     }),
@@ -78,17 +78,19 @@ suite("ExerciseSubmission panel", () => {
 
   test("appends server progress messages as they arrive", async () => {
     render(ExerciseSubmission, { props: { panel } })
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "submissionStatusUpdate",
-          target: { type: "ExerciseSubmission", id: panel.id },
-          progressPercent: 40,
-          message: "Compiling on the server",
-        },
-      }),
-    )
+    postStatusUpdate(panel.id, 0.4, "Compiling on the server")
+
     expect(await screen.findByText("Compiling on the server")).toBeInTheDocument()
+  })
+
+  test("renders the reported fraction on the progress bar's own scale", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    postStatusUpdate(panel.id, 0.4, "Compiling on the server")
+
+    const bar = await screen.findByRole("progressbar", { name: "Running tests on the server" })
+    expect(bar).toHaveAttribute("aria-valuenow", "0.4")
+    expect(bar).toHaveAttribute("aria-valuemax", "1")
+    expect(bar).toHaveAttribute("aria-valuemin", "0")
   })
 
   test("a repeated status refreshes the live line instead of appending a duplicate", async () => {

@@ -360,13 +360,12 @@ suite("Langs class arg building", function () {
         ),
       })
     })
-    const progress: { progressPercent: number; message: string | undefined }[] = []
-    await langs.submitMoocExerciseAndWaitForResults(
-      "ex-uuid",
-      "/path/to/ex",
-      (progressPercent, message) => progress.push({ progressPercent, message }),
+    const progress: { fraction: number; message: string | undefined }[] = []
+    await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex", (fraction, message) =>
+      progress.push({ fraction, message }),
     )
-    expect(progress).toEqual([{ progressPercent: 50, message: "Grading in progress" }])
+    // Forwarded unscaled: the CLI's percent-done and the extension are both 0..1.
+    expect(progress).toEqual([{ fraction: 0.5, message: "Grading in progress" }])
   })
 
   test("getMoocOldSubmissions parses the mooc-submissions list", async function () {

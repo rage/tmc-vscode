@@ -24,7 +24,7 @@
   const isMooc = $derived(panel.exercise.kind === "mooc")
 
   let submissionStatusUrl = $state<string | undefined>(undefined)
-  let progressPercent = $state<number>(0)
+  let progressFraction = $state<number>(0)
   let progressMessages = $state<Array<string>>([])
   let submissionError = $state<WebviewError | undefined>(undefined)
   let submissionResult = $state<SubmissionFinished | undefined>(undefined)
@@ -55,7 +55,7 @@
         break
       }
       case "submissionStatusUpdate": {
-        progressPercent = message.progressPercent
+        progressFraction = message.fraction
         // Mooc grading polls every 2 s for up to 3 minutes reporting the same text, so
         // only a changed message starts a new line; the cap bounds an alternating one.
         if (message.message !== undefined && message.message !== progressMessages.at(-1)) {
@@ -142,7 +142,7 @@
     {#if moocResult === undefined}
       <h1>Processing submission…</h1>
       <div class="progress-bar">
-        <ProgressBar label={"Waiting for grading"} value={progressPercent} max={100} />
+        <ProgressBar label={"Waiting for grading"} value={progressFraction} max={1} />
       </div>
       <div>{@render progressList("Waiting for grading")}</div>
     {:else if moocGrading === undefined}
@@ -223,7 +223,7 @@
     </div>
 
     <div class="progress-bar">
-      <ProgressBar label={"Running tests on the server"} value={progressPercent} max={100} />
+      <ProgressBar label={"Running tests on the server"} value={progressFraction} max={1} />
     </div>
 
     <div role="status">{@render progressList("Running tests on the server")}</div>

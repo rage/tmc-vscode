@@ -79,12 +79,6 @@ export interface SubmissionResultData {
   submissionUrl: string | undefined
 }
 
-export interface SubmissionStatusData {
-  messages: string[]
-  progressPct: number
-  submissionUrl: string | undefined
-}
-
 export interface TestResultData {
   testResult: unknown
   id: number

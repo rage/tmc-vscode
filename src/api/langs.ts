@@ -1371,13 +1371,13 @@ export default class Langs {
    * `BottleneckError` over that rate rather than waiting.
    *
    * @param exerciseId Id of the exercise.
-   * @param progressCallback Reports completion as a 0..100 percentage — the scale the
-   * submission panel's `progressPercent` message and its progress bar render.
+   * @param progressCallback Reports completion as a 0..1 fraction, the unit every
+   * progress value in the extension uses.
    */
   public async submitTmcExerciseAndWaitForResults(
     exerciseId: number,
     exercisePath: string,
-    progressCallback?: (progressPercent: number, message?: string) => void,
+    progressCallback?: (fraction: number, message?: string) => void,
     onSubmissionUrl?: (url: string) => void,
   ): Promise<Result<SubmissionFinished, Error>> {
     const submissionSlot = this._claimSubmissionSlot("tmc")
@@ -1386,7 +1386,7 @@ export default class Langs {
     }
 
     const onStdout = (res: StatusUpdateData): void => {
-      progressCallback?.(100 * res["percent-done"], res.message ?? undefined)
+      progressCallback?.(res["percent-done"], res.message ?? undefined)
       if (
         res["update-data-kind"] === "client-update-data" &&
         res.data?.["client-update-data-kind"] === "posted-submission"
@@ -1426,13 +1426,13 @@ export default class Langs {
    *
    * @param exerciseId Mooc exercise id (a UUID string).
    * @param exercisePath Path to the local exercise directory.
-   * @param progressCallback Reports completion as a 0..100 percentage, like
+   * @param progressCallback Reports completion as a 0..1 fraction, like
    * {@link submitTmcExerciseAndWaitForResults}.
    */
   public async submitMoocExerciseAndWaitForResults(
     exerciseId: string,
     exercisePath: string,
-    progressCallback?: (progressPercent: number, message?: string) => void,
+    progressCallback?: (fraction: number, message?: string) => void,
   ): Promise<Result<ExerciseTaskSubmissionStatus, Error>> {
     const submissionSlot = this._claimSubmissionSlot("mooc")
     if (submissionSlot.err) {
@@ -1440,7 +1440,7 @@ export default class Langs {
     }
 
     const onStdout = (res: StatusUpdateData): void => {
-      progressCallback?.(100 * res["percent-done"], res.message ?? undefined)
+      progressCallback?.(res["percent-done"], res.message ?? undefined)
     }
 
     const res = await this._executeLangsCommand(

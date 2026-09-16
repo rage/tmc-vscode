@@ -267,11 +267,11 @@ export async function submitTmcExercise(
       const submissionResult = await langs.val.submitTmcExerciseAndWaitForResults(
         exerciseId,
         exercise.uri.fsPath,
-        (progressPercent, message) => {
+        (fraction, message) => {
           TmcPanel.postMessage({
             type: "submissionStatusUpdate",
             target: panel,
-            progressPercent,
+            fraction,
             message,
           })
         },
@@ -392,11 +392,11 @@ export async function submitMoocExercise(
       const submissionResult = await langs.val.submitMoocExerciseAndWaitForResults(
         exerciseId,
         exercise.uri.fsPath,
-        (progressPercent, message) => {
+        (fraction, message) => {
           TmcPanel.postMessage({
             type: "submissionStatusUpdate",
             target: panel,
-            progressPercent,
+            fraction,
             message,
           })
         },
