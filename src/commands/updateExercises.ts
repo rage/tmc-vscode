@@ -1,5 +1,3 @@
-import { uniq } from "lodash"
-
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
 import { NOTIFICATION_DELAY } from "../config/constants"
@@ -37,12 +35,14 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
     return
   }
 
+  // Keyed by canonical string because each `courseId` is a fresh object, so
+  // anything comparing them by reference sees every exercise as its own course.
+  const coursesToUpdate = new Map(
+    exercisesToUpdate.map((x) => [CourseIdentifier.toString(x.courseId), x.courseId]),
+  )
+
   const downloadHandler = async (): Promise<void> => {
-    // Broadcast per course so a CourseDetails panel only applies its own list;
-    // identifiers are compared by canonical string since they're fresh objects.
-    const coursesToUpdate = new Map(
-      exercisesToUpdate.map((x) => [CourseIdentifier.toString(x.courseId), x.courseId]),
-    )
+    // Broadcast per course so a CourseDetails panel only applies its own list.
     const postUpdateablesByCourse = (exerciseIds: ExerciseIdentifier[]): void => {
       const wanted = new Set(exerciseIds.map((x) => ExerciseIdentifier.unwrap(x)))
       for (const [key, courseId] of coursesToUpdate) {
@@ -81,13 +81,9 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
     [
       "Remind me later",
       async (): Promise<void> => {
-        const now2 = Date.now()
-        const uniqueCourseIds = uniq(exercisesToUpdate.map((x) => x.courseId))
-        for (const courseId of uniqueCourseIds) {
-          const result = await userData.val.setNewExerciseNotifyAfter(
-            courseId,
-            now2 + NOTIFICATION_DELAY,
-          )
+        const notifyAfter = Date.now() + NOTIFICATION_DELAY
+        for (const courseId of coursesToUpdate.values()) {
+          const result = await userData.val.setNewExerciseNotifyAfter(courseId, notifyAfter)
           if (result.err) {
             dialog.errorNotification("Failed to postpone the reminder.", result.val)
             return
