@@ -1,6 +1,7 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
+import type Langs from "../api/langs"
 import { ExerciseUpdateError, InitializationError } from "../errors"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier, ExtensionToWebview } from "../shared/shared"
@@ -8,6 +9,8 @@ import { ExerciseIdentifier, LocalCourseData, match } from "../shared/shared"
 import type { ExerciseStatus } from "../ui/types"
 import { Logger } from "../utilities"
 import type { ActionContext } from "./types"
+
+type ExerciseDownloadResult = Awaited<ReturnType<Langs["downloadExercises"]>>
 
 interface DownloadResults {
   successful: ExerciseIdentifier[]
@@ -77,32 +80,80 @@ export async function downloadOrUpdateExercises(
     : undefined
 
   const downloadTemplate = !settings.getDownloadOldSubmission()
+  const tmcExerciseIds = exerciseIds.filter((x) => x.kind === "tmc")
+  const moocExerciseIds = exerciseIds.filter((x) => x.kind === "mooc")
   let cancelled = false
   const downloadResult = await dialog.progressNotification(
     "Downloading exercises...",
-    (progress, token) => {
+    async (progress, token) => {
       // Cancelling kills the CLI download process; already-written exercises stay downloaded.
       let interruptDownload: (() => void) | undefined
       token.onCancellationRequested(() => {
         cancelled = true
         interruptDownload?.()
       })
-      return langs.val.downloadExercises(
-        exerciseIds,
-        downloadTemplate,
-        (download) => {
-          progress.report(download)
-          statuses.set(ExerciseIdentifier.unwrap(download.id), "closed")
-          const message = wrapToMessage(download.id, "closed", resolveCourseId(download.id))
-          if (message) {
-            TmcPanel.postMessage(message)
-          }
+      // A leg that was still starting up when the user cancelled gets killed as
+      // soon as the CLI hands back its handle.
+      const registerInterrupt = (interrupt: () => void): void => {
+        if (cancelled) {
+          interrupt()
+          return
+        }
+        interruptDownload = interrupt
+      }
+
+      // Each backend reports its own 0..1 percentage, so counting finished
+      // exercises is the only measure that keeps rising across both.
+      let completed = 0
+      const onDownloaded = (download: { id: ExerciseIdentifier; message?: string }): void => {
+        const id = ExerciseIdentifier.unwrap(download.id)
+        const previousStatus = statuses.get(id)
+        if (previousStatus !== undefined && previousStatus !== "closed") {
+          completed += 1
+        }
+        statuses.set(id, "closed")
+        progress.report({ percent: completed / exerciseIds.length, message: download.message })
+        const message = wrapToMessage(download.id, "closed", resolveCourseId(download.id))
+        if (message) {
+          TmcPanel.postMessage(message)
+        }
+      }
+
+      // One call per backend, awaited in turn: a single mixed call would spawn
+      // the second backend's process even after the user cancelled the first.
+      const runLeg = async (
+        ids: ExerciseIdentifier[],
+        legMoocCourseId: string | undefined,
+      ): Promise<ExerciseDownloadResult | undefined> => {
+        if (ids.length === 0 || cancelled) {
+          return undefined
+        }
+        const legResult = await langs.val.downloadExercises(
+          ids,
+          downloadTemplate,
+          onDownloaded,
+          legMoocCourseId,
+          registerInterrupt,
+        )
+        interruptDownload = undefined
+        return legResult
+      }
+
+      const tmcLeg = await runLeg(tmcExerciseIds, undefined)
+      const moocLeg = await runLeg(moocExerciseIds, moocCourseId)
+
+      return {
+        tmc: tmcLeg?.tmc ?? { downloaded: [], failed: [], skipped: [] },
+        mooc: moocLeg?.mooc ?? {
+          downloaded: [],
+          failed: [],
+          skipped: [],
+          not_attempted: [],
+          stopped_for_auth: false,
         },
-        moocCourseId,
-        (interrupt) => {
-          interruptDownload = interrupt
-        },
-      )
+        tmcError: tmcLeg?.tmcError,
+        moocError: moocLeg?.moocError,
+      }
     },
     { cancellable: true },
   )
