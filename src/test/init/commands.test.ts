@@ -4,6 +4,7 @@ import * as path from "path"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { ActionContext } from "../../actions/types"
 import { registerCommands } from "../../init/commands"
 import { TmcPanel } from "../../panels/TmcPanel"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -39,7 +40,11 @@ const expectedCommands = [
   "tmc.viewInitializationErrorHelp",
 ]
 
-function registerAndCollect(): { ids: string[]; handlers: Map<string, () => Promise<void>> } {
+function registerAndCollect(): {
+  ids: string[]
+  handlers: Map<string, () => Promise<void>>
+  actionContext: ActionContext
+} {
   const ids: string[] = []
   const handlers = new Map<string, () => Promise<void>>()
   const registerCommand = vi.spyOn(vscode.commands, "registerCommand").mockImplementation(((
@@ -56,9 +61,10 @@ function registerAndCollect(): { ids: string[]; handlers: Map<string, () => Prom
     extensionUri: vscode.Uri.file("/tmp/extension"),
   } as unknown as vscode.ExtensionContext
 
-  registerCommands(context, createMockActionContext())
+  const actionContext = createMockActionContext()
+  registerCommands(context, actionContext)
   registerCommand.mockRestore()
-  return { ids, handlers }
+  return { ids, handlers, actionContext }
 }
 
 interface MenuEntry {
@@ -139,6 +145,20 @@ suite("registerCommands", function () {
 
     expect(renderSide).toHaveBeenCalledOnce()
     expect(renderSide.mock.calls[0]?.[3]).toMatchObject({ type: "MoocLogin" })
+  })
+
+  // VS Code discards a rejected handler promise, so a command that throws would
+  // otherwise leave the user staring at an unchanged screen.
+  test("a failing command reports instead of rejecting", async function () {
+    vi.spyOn(TmcPanel, "renderSide").mockRejectedValue(new Error("the panel could not open"))
+    const { handlers, actionContext } = registerAndCollect()
+
+    await expect(handlers.get("tmc.showMoocLogin")?.()).resolves.toBeUndefined()
+
+    expect(vi.mocked(actionContext.dialog.errorNotification)).toHaveBeenCalledWith(
+      "Failed to run tmc.showMoocLogin.",
+      expect.objectContaining({ message: "the panel could not open" }),
+    )
   })
 
   // Without a reachable palette entry a user with no credentials has no way in
