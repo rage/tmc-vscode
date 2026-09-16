@@ -58,7 +58,7 @@ import type {
   SubmissionFinished,
   TmcExerciseSlide,
 } from "../shared/langsSchema"
-import { CliOutput } from "../shared/langsSchema"
+import { CliNotification, CliOutputData, CliStatusUpdate } from "../shared/langsSchema"
 import {
   assertUnreachable,
   BaseError,
@@ -1685,7 +1685,7 @@ export default class Langs {
 
     let theResult: OutputData | undefined
     let stdoutBuffer = ""
-    // Last CliOutput schema-validation failure, if any — lets a process that ends without
+    // Last schema-validation failure, if any — lets a process that ends without
     // output data report *why* instead of a generic "no result data" message.
     let lastSchemaFailure: LangsSchemaFailure | undefined
 
@@ -1931,36 +1931,61 @@ export function decodeLangsStdout(carry: string, chunk: string): LangsStdoutDeco
       events.push({ kind: "unparseable", lineLength: trimmed.length })
       continue
     }
-    const validation = CliOutput.safeParse(parsed)
-    if (!validation.success) {
-      const outputKind =
-        parsed !== null && typeof parsed === "object" && "output-kind" in parsed
-          ? (parsed as Record<string, unknown>)["output-kind"]
-          : undefined
-      events.push({
-        kind: "schema-mismatch",
-        failure: {
-          issueSummary: z.prettifyError(validation.error),
-          outputKind: typeof outputKind === "string" ? outputKind : undefined,
-          shape: redactedShape(parsed),
-        },
-      })
-      continue
-    }
-    const output = validation.data
-    switch (output["output-kind"]) {
-      case "output-data":
-        events.push({ kind: "output-data", output })
-        break
-      case "status-update":
-        events.push({ kind: "status-update", update: output })
-        break
-      case "notification":
-        events.push({ kind: "notification" })
-        break
-    }
+    events.push(classifyCliOutputLine(parsed))
   }
   return { carry: tail, events }
+}
+
+/** The line's `output-kind`, when the line is an object carrying one as a string. */
+function readOutputKind(parsed: unknown): string | undefined {
+  if (parsed === null || typeof parsed !== "object" || !("output-kind" in parsed)) {
+    return undefined
+  }
+  const outputKind = (parsed as Record<string, unknown>)["output-kind"]
+  return typeof outputKind === "string" ? outputKind : undefined
+}
+
+function schemaMismatch(
+  parsed: unknown,
+  outputKind: string | undefined,
+  issueSummary: string,
+): LangsStdoutEvent {
+  return {
+    kind: "schema-mismatch",
+    failure: { issueSummary, outputKind, shape: redactedShape(parsed) },
+  }
+}
+
+/**
+ * Validates one parsed stdout line against the single contract branch its `output-kind`
+ * names, so a `status-update` is never first measured against the 44-way `output-data`
+ * payload union, and a rejection names one branch rather than all three.
+ */
+function classifyCliOutputLine(parsed: unknown): LangsStdoutEvent {
+  const outputKind = readOutputKind(parsed)
+  switch (outputKind) {
+    case "output-data": {
+      const validation = CliOutputData.safeParse(parsed)
+      return validation.success
+        ? { kind: "output-data", output: validation.data }
+        : schemaMismatch(parsed, outputKind, z.prettifyError(validation.error))
+    }
+    case "status-update": {
+      const validation = CliStatusUpdate.safeParse(parsed)
+      return validation.success
+        ? { kind: "status-update", update: validation.data }
+        : schemaMismatch(parsed, outputKind, z.prettifyError(validation.error))
+    }
+    case "notification": {
+      const validation = CliNotification.safeParse(parsed)
+      return validation.success
+        ? { kind: "notification" }
+        : schemaMismatch(parsed, outputKind, z.prettifyError(validation.error))
+    }
+  }
+  // Every branch pins `output-kind` to a literal, so nothing else can match the contract
+  // and no branch's issues are worth listing.
+  return schemaMismatch(parsed, outputKind, "unrecognized output-kind")
 }
 
 // These name a variant of the output contract rather than anything the user typed or the

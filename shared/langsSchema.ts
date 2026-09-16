@@ -181,8 +181,35 @@ export type CourseInstance = z.infer<typeof CourseInstance>
 export const ClientUpdateData = zClientUpdateData
 export type ClientUpdateData = z.infer<typeof ClientUpdateData>
 
+/**
+ * A `notification` line: `CliOutput`'s third branch on its own.
+ *
+ * Exported so a decoder can pick the branch the line's `output-kind` names instead of
+ * measuring every line against all three; `CliOutput` leads with the `output-data` branch,
+ * whose payload union has 44 members.
+ */
+export const CliNotification = z.preprocess(
+  normalizeReleasedErrorKind,
+  zNotification.and(z.object({ "output-kind": z.literal("notification") })),
+)
+export type CliNotification = z.infer<typeof CliNotification>
+
 export const CliOutput = z.preprocess(normalizeReleasedErrorKind, zCliOutput)
 export type CliOutput = z.infer<typeof CliOutput>
+
+/** An `output-data` line: `CliOutput`'s first branch on its own. See {@link CliNotification}. */
+export const CliOutputData = z.preprocess(
+  normalizeReleasedErrorKind,
+  zOutputData.and(z.object({ "output-kind": z.literal("output-data") })),
+)
+export type CliOutputData = z.infer<typeof CliOutputData>
+
+/** A `status-update` line: `CliOutput`'s second branch on its own. See {@link CliNotification}. */
+export const CliStatusUpdate = z.preprocess(
+  normalizeReleasedErrorKind,
+  zStatusUpdateData.and(z.object({ "output-kind": z.literal("status-update") })),
+)
+export type CliStatusUpdate = z.infer<typeof CliStatusUpdate>
 
 export const CombinedCourseData = zCombinedCourseData
 export type CombinedCourseData = z.infer<typeof CombinedCourseData>

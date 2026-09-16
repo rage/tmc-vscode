@@ -6,7 +6,7 @@ import { TmcPanel } from "../panels/TmcPanel"
 import { Logger } from "../utilities"
 
 /**
- * Removes language specific meta files from exercise directory.
+ * Asks for a new folder for the extension's data and moves the exercises there.
  */
 export async function changeTmcDataPath(actionContext: ActionContext): Promise<void> {
   const { dialog, resources } = actionContext
@@ -31,8 +31,13 @@ export async function changeTmcDataPath(actionContext: ActionContext): Promise<v
       return moveExtensionDataPath(actionContext, newPath, (update) => progress.report(update))
     })
     if (res.ok) {
-      Logger.info(`Moved workspace folder from ${old} to ${newPath.fsPath}`)
-      dialog.notification(`TMC Data was successfully moved to ${newPath.fsPath}`)
+      Logger.info(`Moved workspace folder from ${old} to ${res.val}`)
+      dialog.notification(
+        res.val === newPath.fsPath
+          ? `TMC Data was successfully moved to ${res.val}`
+          : `TMC Data was successfully moved to ${res.val} — the folder you chose was not empty, \
+so a tmcdata subfolder was used.`,
+      )
     } else {
       dialog.errorNotification(res.val.message, res.val)
     }

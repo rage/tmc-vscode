@@ -114,6 +114,28 @@ suite("Langs stdout decoding", function () {
     expect(described).toContain("token")
   })
 
+  test("a drifted status update is rejected rather than passed on", function () {
+    const drifted = JSON.stringify({
+      "output-kind": "status-update",
+      "update-data-kind": "none",
+      finished: false,
+      message: "Working",
+      "percent-done": "a quarter",
+      time: 1234,
+      data: null,
+    })
+    const { events } = decodeAll(`${drifted}\n`)
+    expect(events.map((event) => event.kind)).toEqual(["schema-mismatch"])
+    expect(onlyFailure(events).outputKind).toBe("status-update")
+  })
+
+  test("a line whose output-kind the contract does not know says so", function () {
+    const { events } = decodeAll(`${JSON.stringify({ "output-kind": "future-kind" })}\n`)
+    const failure = onlyFailure(events)
+    expect(failure.outputKind).toBe("future-kind")
+    expect(failure.issueSummary).toContain("unrecognized output-kind")
+  })
+
   test("a rejected line with a non-string output-kind reports no kind", function () {
     const { events } = decodeAll(`${JSON.stringify({ "output-kind": { nested: TOKEN } })}\n`)
     const failure = onlyFailure(events)
