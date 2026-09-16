@@ -285,7 +285,7 @@ suite("Extension data migration", function () {
       expect(context.globalState.get(v0.USER_DATA_KEY)).toEqual(userData.v0_9_0)
     })
 
-    // Writing the files and reopening the window belongs to the caller now, so the
+    // Writing the files and reopening the window belong to the caller, so the
     // migration itself must leave the workspace alone.
     test("creates no workspace files of its own", async function () {
       await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, { dataPath: root })
