@@ -138,9 +138,7 @@ export function registerCommands(
       })
     }),
 
-    // The only login: courses.mooc.fi device flow. Reached from the Command
-    // Palette, the tree view's "Log in" entry and the session-expired prompt.
-    // No `requestingPanel`: nothing to return to on success.
+    // The extension's only login: the courses.mooc.fi device flow.
     vscode.commands.registerCommand("tmc.showMoocLogin", async () => {
       TmcPanel.renderSide(context.extensionUri, context, actionContext, {
         id: randomPanelId(),

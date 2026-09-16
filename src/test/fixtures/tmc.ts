@@ -1,27 +1,38 @@
 import type {
   CourseInstance,
+  LocalExercise,
   LocalTmcExercise,
   MoocCourseProgress,
   TmcExerciseSlide,
 } from "../../shared/langsSchema"
+import type { ExerciseIdentifier } from "../../shared/shared"
+import { makeTmcKind } from "../../shared/shared"
 
-const checkExerciseUpdates: { id: number }[] = [{ id: 2 }]
+const tmcExerciseUpdates: ExerciseIdentifier[] = [makeTmcKind({ tmcExerciseId: 2 })]
 
-// mooc updated-exercise ids are exercise (task) uuids
-const checkMoocExerciseUpdates: string[] = []
+const moocExerciseUpdates: ExerciseIdentifier[] = []
 
 const closedExercisesPythonCourse: string[] = ["other_world"]
 
 const listLocalCourseExercisesPythonCourse: LocalTmcExercise[] = [
   {
+    "course-slug": "test-python-course",
+    "exercise-id": 1,
     "exercise-path": "/tmc/vscode/test-python-course/hello_world",
     "exercise-slug": "hello_world",
   },
   {
+    "course-slug": "test-python-course",
+    "exercise-id": 2,
     "exercise-path": "/tmc/vscode/test-python-course/other_world",
     "exercise-slug": "other_world",
   },
 ]
+
+const localExercises: LocalExercise[] = listLocalCourseExercisesPythonCourse.map((x) => ({
+  backend: "tmc",
+  ...x,
+}))
 
 // -------------------------------------------------------------------------------------------------
 // mooc fixtures (courses.mooc.fi — UUID-keyed)
@@ -78,10 +89,9 @@ const moocCourseProgress: MoocCourseProgress = {
 }
 
 export {
-  checkExerciseUpdates,
-  checkMoocExerciseUpdates,
   closedExercisesPythonCourse,
   listLocalCourseExercisesPythonCourse,
+  localExercises,
   MOOC_EXERCISE_UUID,
   MOOC_INSTANCE_UUID,
   MOOC_TASK_UUID,
@@ -89,4 +99,6 @@ export {
   moocCourseProgress,
   moocEnrolledCourseInstances,
   moocExerciseSlides,
+  moocExerciseUpdates,
+  tmcExerciseUpdates,
 }

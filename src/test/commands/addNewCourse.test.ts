@@ -1,10 +1,14 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
+import * as vscode from "vscode"
 
 import * as actions from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { addNewCourse } from "../../commands/addNewCourse"
+import type { UserData } from "../../config/userdata"
+import { TmcPanel } from "../../panels/TmcPanel"
+import type { LocalCourseData } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("../../actions/addNewCourse", () => ({
@@ -39,6 +43,9 @@ const moocCourses = [
     organization_name: "MOOC.fi",
   },
 ]
+
+// Identity is all that matters here: these stand for whatever the user already has.
+const storedCourses = [{ kind: "tmc" }] as LocalCourseData[]
 
 interface Pick {
   prompt: { title: string; placeHolder: string } | string
@@ -88,7 +95,9 @@ function harness(options: {
     }),
   } as unknown as ActionContext["dialog"]
 
-  return { context: { ...base, dialog, langs: new Ok(langs) }, picks, errors }
+  const userData = new Ok({ getCourses: () => storedCourses } as unknown as UserData)
+
+  return { context: { ...base, dialog, langs: new Ok(langs), userData }, picks, errors }
 }
 
 suite("Add new course command", function () {
@@ -122,6 +131,22 @@ suite("Add new course command", function () {
       kind: "mooc",
       data: { instanceId: "11111111-1111-1111-1111-111111111111" },
     })
+  })
+
+  test("tells an open My Courses panel about the added course", async function () {
+    const { context } = harness({ select: ["Shared Slug Course"] })
+    const postMessage = vi.spyOn(TmcPanel, "postMessage").mockResolvedValue(undefined)
+    try {
+      await addNewCourse(context)
+
+      expect(postMessage).toHaveBeenCalledWith({
+        type: "setMyCourses",
+        target: { type: "MyCourses" },
+        courses: storedCourses,
+      })
+    } finally {
+      postMessage.mockRestore()
+    }
   })
 
   test("adds a tmc course via its organization", async function () {
@@ -173,7 +198,9 @@ suite("Add new course command", function () {
     expect(actions.addNewCourse).toHaveBeenCalledOnce()
   })
 
-  test("treats a missing mooc login as that backend being unavailable, not a failure", async function () {
+  // The "Log In" command is hidden while a TMC credential still satisfies the
+  // LoggedIn context key, so this entry is those users' only way to the device flow.
+  test("offers the courses.mooc.fi login when that backend has no session", async function () {
     const { context, picks, errors } = harness({
       moocAuthenticated: Ok(false),
       select: [undefined],
@@ -181,10 +208,31 @@ suite("Add new course command", function () {
     await addNewCourse(context)
 
     expect(errors).toEqual([])
-    expect(picks[0]?.items.map((item) => item[0])).toEqual(["MOOC", "Test org"])
-    expect(picks[0]?.prompt).toMatchObject({
-      placeHolder: expect.stringContaining("courses.mooc.fi unavailable"),
+    expect(picks[0]?.items.map((item) => item[0])).toEqual([
+      "MOOC",
+      "Test org",
+      "Log in to courses.mooc.fi",
+    ])
+    expect(picks[0]?.prompt).toEqual({
+      title: "Add New Course",
+      placeHolder: "Which course or organization?",
     })
+  })
+
+  test("picking the login entry starts the device flow and adds no course", async function () {
+    const { context } = harness({
+      moocAuthenticated: Ok(false),
+      select: ["Log in to courses.mooc.fi"],
+    })
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    try {
+      await addNewCourse(context)
+
+      expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
+      expect(actions.addNewCourse).not.toHaveBeenCalled()
+    } finally {
+      executeCommand.mockRestore()
+    }
   })
 
   test("reports an error and opens no pick when both backends fail", async function () {

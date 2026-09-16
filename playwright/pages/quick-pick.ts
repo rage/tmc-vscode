@@ -26,6 +26,11 @@ export class QuickPickPage {
     await this.rows().filter({ hasText: label }).first().click()
   }
 
+  /** Asserts that exactly one item carrying `label` is offered. */
+  public async expectItem(label: string): Promise<void> {
+    await expect(this.rows().filter({ hasText: label })).toHaveCount(1)
+  }
+
   /**
    * For pickers whose labels are generated (a submission's timestamp), where
    * asserting the count is the meaningful check and the label is not.

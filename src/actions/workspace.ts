@@ -168,9 +168,11 @@ export async function downloadAndOpenExercises(
     return localCourseExercises
   }
 
-  const localCourseExerciseSlugs = localCourseExercises.val.map((lce) => lce["exercise-slug"])
+  const localExerciseIds = new Set<number | string>(
+    localCourseExercises.val.map((lce) => lce["exercise-id"]),
+  )
   const exercisesToDownload = exercisesToOpen.filter(
-    (eto) => !localCourseExerciseSlugs.includes(LocalCourseExercise.getSlug(eto)),
+    (eto) => !localExerciseIds.has(ExerciseIdentifier.unwrap(LocalCourseExercise.getId(eto))),
   )
   if (exercisesToDownload.length > 0) {
     await downloadExercisesForUi(

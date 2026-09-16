@@ -54,3 +54,61 @@ suite("Dialog.selectItem", function () {
     expect(await new Dialog().selectItem("Which course?", ["a", 1])).toBeUndefined()
   })
 })
+
+suite("Dialog.progressNotification", function () {
+  let reports: { message?: string; increment?: number }[]
+
+  beforeEach(function () {
+    reports = []
+    vi.spyOn(vscode.window, "withProgress").mockImplementation((async (
+      _options: unknown,
+      task: (
+        progress: { report: (value: { message?: string; increment?: number }) => void },
+        token: vscode.CancellationToken,
+      ) => Promise<unknown>,
+    ) =>
+      task({ report: (value): void => void reports.push(value) }, {
+        isCancellationRequested: false,
+        onCancellationRequested: () => ({ dispose: (): void => {} }),
+      } as unknown as vscode.CancellationToken)) as unknown as typeof vscode.window.withProgress)
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("delivers a message reported at an unchanged percentage", async function () {
+    await new Dialog().progressNotification("Downloading", async (progress) => {
+      progress.report({ message: "Fetching exercise 1", percent: 0.5 })
+      progress.report({ message: "Fetching exercise 2", percent: 0.5 })
+    })
+
+    expect(reports).toEqual([
+      { message: "Downloading", increment: 0 },
+      { message: "Fetching exercise 1", increment: 50 },
+      { message: "Fetching exercise 2", increment: 0 },
+    ])
+  })
+
+  test("keeps the bar from moving backwards when the percentage drops", async function () {
+    await new Dialog().progressNotification("Downloading", async (progress) => {
+      progress.report({ message: "Exercise 1 done", percent: 0.6 })
+      progress.report({ message: "Restarting exercise 2", percent: 0.2 })
+      progress.report({ message: "Exercise 2 done", percent: 0.8 })
+    })
+
+    const increments = reports.map((report) => report.increment)
+    expect(increments.slice(0, 3)).toEqual([0, 60, 0])
+    expect(increments[3]).toBeCloseTo(20)
+    expect(reports.at(-2)?.message).toBe("Restarting exercise 2")
+  })
+
+  test("drops a report that neither advances the bar nor carries a message", async function () {
+    await new Dialog().progressNotification("Downloading", async (progress) => {
+      progress.report({ percent: 0.4 })
+      progress.report({ percent: 0.4 })
+    })
+
+    expect(reports).toEqual([{ message: "Downloading", increment: 0 }, { increment: 40 }])
+  })
+})

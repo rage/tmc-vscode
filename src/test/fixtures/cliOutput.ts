@@ -226,6 +226,21 @@ const submissionFinished = {
   },
 }
 
+const localTmcExercise = {
+  "course-slug": "python-course",
+  "exercise-slug": "part01-Part01_01.Sandbox",
+  "exercise-id": 4321,
+  "exercise-path": "/p/ex",
+}
+
+const localMoocExercise = {
+  "course-slug": "mooc-python-course",
+  "course-id": UUID_A,
+  "exercise-slug": "mooc-ex",
+  "exercise-id": UUID_B,
+  "exercise-path": "/p/mooc-ex",
+}
+
 const moocCourse = {
   id: UUID_A,
   slug: "introduction-to-everything",
@@ -528,14 +543,17 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   },
   {
     name: "local-tmc-exercises",
-    value: outputData("local-tmc-exercises", [
-      { "exercise-slug": "part01-Part01_01.Sandbox", "exercise-path": "/p/ex" },
-    ]),
+    value: outputData("local-tmc-exercises", [localTmcExercise]),
   },
   {
     name: "local-mooc-exercises",
-    value: outputData("local-mooc-exercises", [
-      { "exercise-slug": "mooc-ex", "exercise-id": UUID_B, "exercise-path": "/p/mooc-ex" },
+    value: outputData("local-mooc-exercises", [localMoocExercise]),
+  },
+  {
+    name: "local-exercises",
+    value: outputData("local-exercises", [
+      { backend: "tmc", ...localTmcExercise },
+      { backend: "mooc", ...localMoocExercise },
     ]),
   },
   {
@@ -561,7 +579,24 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   { name: "tmc-config", value: outputData("tmc-config", { projects_dir: "/projects" }) },
   {
     name: "mooc-updated-exercises",
-    value: outputData("mooc-updated-exercises", [UUID_B, UUID_C]),
+    value: outputData("mooc-updated-exercises", [{ id: UUID_B }, { id: UUID_C }]),
+  },
+  {
+    name: "mooc-submission-status: no-grading-yet",
+    value: outputData("mooc-submission-status", { status: "no-grading-yet" }),
+  },
+  {
+    name: "mooc-submission-status: grading",
+    value: outputData("mooc-submission-status", {
+      status: "grading",
+      grading: {
+        grading_progress: "FullyGraded",
+        score_given: 1,
+        grading_started_at: "2026-07-21T00:00:00Z",
+        grading_completed_at: "2026-07-21T00:00:01Z",
+        feedback_text: "All tests passed",
+      },
+    }),
   },
   { name: "mooc-course", value: outputData("mooc-course", moocCourse) },
   { name: "mooc-courses", value: outputData("mooc-courses", [moocCourse]) },
@@ -657,6 +692,35 @@ const invalidCliOutputFixtures: CliOutputFixture[] = [
         },
       ],
     }),
+  },
+  {
+    // Bare UUIDs were the mooc shape before both backends settled on `{id}`;
+    // accepting them again would mean the extension reads a pre-0.40.0 CLI.
+    name: "mooc-updated-exercises as bare uuid strings",
+    value: outputData("mooc-updated-exercises", [UUID_B]),
+  },
+  {
+    name: "mooc-submission-status externally tagged as NoGradingYet",
+    value: outputData("mooc-submission-status", "NoGradingYet"),
+  },
+  {
+    name: "mooc-submission-status externally tagged as Grading",
+    value: outputData("mooc-submission-status", {
+      Grading: {
+        grading_progress: "FullyGraded",
+        score_given: 1,
+        grading_started_at: null,
+        grading_completed_at: null,
+        feedback_json: null,
+        feedback_text: null,
+      },
+    }),
+  },
+  {
+    name: "local-tmc-exercises without an exercise id",
+    value: outputData("local-tmc-exercises", [
+      { "course-slug": "python-course", "exercise-slug": "ex", "exercise-path": "/p/ex" },
+    ]),
   },
   {
     name: "status-update none with object data",

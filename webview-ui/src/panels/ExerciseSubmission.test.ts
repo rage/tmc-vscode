@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/svelte"
 
 import type { ExerciseSubmissionPanel } from "../shared/shared"
+import { BaseError, toWebviewError } from "../shared/shared"
 import { getButton } from "../test/dom"
 import {
   moocLocalCourse,
@@ -25,16 +26,17 @@ const moocPanel: ExerciseSubmissionPanel = {
   exercise: moocLocalExercise(),
 }
 
-// Posts the error that ends a failed submission on either backend.
+// Posts the error that ends a failed submission on either backend, through the
+// same JSON serialization the webview bridge applies -- a live `Error` would
+// arrive as `{}`, so the panel must be sent a flattened one.
 function postSubmissionError(panelId: number, error: Error): void {
+  const message = {
+    type: "submissionStatusError",
+    target: { type: "ExerciseSubmission", id: panelId },
+    error: toWebviewError(error),
+  }
   window.dispatchEvent(
-    new MessageEvent("message", {
-      data: {
-        type: "submissionStatusError",
-        target: { type: "ExerciseSubmission", id: panelId },
-        error,
-      },
-    }),
+    new MessageEvent("message", { data: JSON.parse(JSON.stringify(message)) as unknown }),
   )
 }
 
@@ -78,10 +80,11 @@ suite("ExerciseSubmission panel", () => {
 
   test("replaces the progress view with the failure when the submission errors", async () => {
     render(ExerciseSubmission, { props: { panel } })
-    postSubmissionError(panel.id, new Error("Failed to submit: connection reset"))
+    postSubmissionError(panel.id, new BaseError("Failed to submit: connection reset", "ECONNRESET"))
 
     expect(await screen.findByRole("heading", { name: "Submission failed" })).toBeInTheDocument()
     expect(screen.getByRole("alert")).toHaveTextContent("Failed to submit: connection reset")
+    expect(screen.getByRole("alert")).toHaveTextContent("ECONNRESET")
     expect(
       screen.queryByRole("heading", { name: "Processing submission…" }),
     ).not.toBeInTheDocument()
@@ -100,12 +103,12 @@ suite("ExerciseSubmission panel (mooc reduced results)", () => {
   test("renders the graded status, score and feedback text, no per-test list", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     postMoocResult({
-      Grading: {
+      status: "grading",
+      grading: {
         grading_progress: "FullyGraded",
         score_given: 3,
         grading_started_at: "2026-07-21T00:00:00Z",
         grading_completed_at: "2026-07-21T00:00:01Z",
-        feedback_json: null,
         feedback_text: "Great work",
       },
     })
@@ -119,12 +122,12 @@ suite("ExerciseSubmission panel (mooc reduced results)", () => {
   test("renders the failed grading state", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     postMoocResult({
-      Grading: {
+      status: "grading",
+      grading: {
         grading_progress: "Failed",
         score_given: 0,
         grading_started_at: null,
         grading_completed_at: null,
-        feedback_json: null,
         feedback_text: "Some tests failed",
       },
     })
@@ -134,12 +137,12 @@ suite("ExerciseSubmission panel (mooc reduced results)", () => {
   test("renders the pending-manual (awaiting human) state", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     postMoocResult({
-      Grading: {
+      status: "grading",
+      grading: {
         grading_progress: "PendingManual",
         score_given: 0.5,
         grading_started_at: null,
         grading_completed_at: null,
-        feedback_json: null,
         feedback_text: null,
       },
     })
@@ -155,12 +158,12 @@ suite("ExerciseSubmission panel (mooc reduced results)", () => {
     expect(getButton("Run in background")).toBeInTheDocument()
 
     postMoocResult({
-      Grading: {
+      status: "grading",
+      grading: {
         grading_progress: "PendingManual",
         score_given: null,
         grading_started_at: null,
         grading_completed_at: null,
-        feedback_json: null,
         feedback_text: null,
       },
     })
@@ -171,12 +174,12 @@ suite("ExerciseSubmission panel (mooc reduced results)", () => {
   test('hides "Run in background" once grading is fully graded', async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     postMoocResult({
-      Grading: {
+      status: "grading",
+      grading: {
         grading_progress: "FullyGraded",
         score_given: 1,
         grading_started_at: null,
         grading_completed_at: null,
-        feedback_json: null,
         feedback_text: null,
       },
     })
@@ -196,12 +199,12 @@ suite("ExerciseSubmission panel (mooc reduced results)", () => {
   test('hides "Run in background" once grading has failed', async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     postMoocResult({
-      Grading: {
+      status: "grading",
+      grading: {
         grading_progress: "Failed",
         score_given: 0,
         grading_started_at: null,
         grading_completed_at: null,
-        feedback_json: null,
         feedback_text: null,
       },
     })

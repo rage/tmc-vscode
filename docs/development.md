@@ -42,9 +42,11 @@ command lists the courses.mooc.fi courses the user is enrolled in alongside the
 TMC organizations in one quick pick, each item naming its backend, and dispatches
 on what was picked. TMC Server has far too many courses to enumerate, so its arm
 still needs a second pick within the chosen organization; a mooc course is added
-in one step. If one backend is unreachable or unauthenticated the other's
-courses are still offered, and the quick pick's placeholder names what is
-missing. The `SelectPlatform` webview flow remains as a second route in.
+in one step. If one backend is unreachable the other's courses are still
+offered, and the quick pick's placeholder names what is missing. When
+courses.mooc.fi has no session the pick offers the device-flow login in place of
+its courses, which is the only route to it for a user whose TMC credential
+already satisfies the `LoggedIn` context key.
 
 Because course slugs and titles are only unique within one backend, anything
 listing courses from both must name the backend beside them — `backendName` in

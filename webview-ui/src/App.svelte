@@ -5,9 +5,6 @@
   import InitializationErrorHelp from "./panels/InitializationErrorHelp.svelte"
   import MoocLogin from "./panels/MoocLogin.svelte"
   import MyCourses from "./panels/MyCourses.svelte"
-  import SelectCourse from "./panels/SelectCourse.svelte"
-  import SelectMoocCourse from "./panels/SelectMoocCourse.svelte"
-  import SelectOrganization from "./panels/SelectOrganization.svelte"
   // registers the custom elements used by the webview (import side effect)
   import "@vscode-elements/elements/dist/vscode-badge/index.js"
   import "@vscode-elements/elements/dist/vscode-button/index.js"
@@ -28,7 +25,6 @@
   import "@vscode-elements/elements/dist/vscode-table-row/index.js"
   import "@vscode-elements/elements/dist/vscode-textfield/index.js"
 
-  import SelectPlatform from "./panels/SelectPlatform.svelte"
   import Welcome from "./panels/Welcome.svelte"
   import type { State, AppPanel } from "./shared/shared"
   import { assertUnreachable } from "./shared/shared"
@@ -114,18 +110,10 @@
             <MyCourses panel={appState.panel} />
           {:else if appState.panel.type === "CourseDetails"}
             <CourseDetails panel={appState.panel} />
-          {:else if appState.panel.type === "SelectOrganization"}
-            <SelectOrganization panel={appState.panel} />
-          {:else if appState.panel.type === "SelectCourse"}
-            <SelectCourse panel={appState.panel} />
           {:else if appState.panel.type === "ExerciseTests"}
             <ExerciseTests panel={appState.panel} />
           {:else if appState.panel.type === "ExerciseSubmission"}
             <ExerciseSubmission panel={appState.panel} />
-          {:else if appState.panel.type === "SelectPlatform"}
-            <SelectPlatform panel={appState.panel} />
-          {:else if appState.panel.type === "SelectMoocCourse"}
-            <SelectMoocCourse panel={appState.panel} />
           {:else if appState.panel.type === "MoocLogin"}
             <MoocLogin panel={appState.panel} />
           {:else if appState.panel.type === "InitializationErrorHelp"}

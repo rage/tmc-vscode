@@ -132,12 +132,12 @@ afterEach(() => {
 suite("submitMoocExercise action", () => {
   test("submits with the resolved exercise id and posts the reduced result", async () => {
     const grading = {
-      Grading: {
+      status: "grading",
+      grading: {
         grading_progress: "FullyGraded",
         score_given: 3,
         grading_started_at: "2026-07-21T00:00:00Z",
         grading_completed_at: "2026-07-21T00:00:01Z",
-        feedback_json: null,
         feedback_text: "All tests passed",
       },
     }
@@ -164,12 +164,12 @@ suite("submitMoocExercise action", () => {
 
   test("a failed grading does not mark the exercise passed", async () => {
     const grading = {
-      Grading: {
+      status: "grading",
+      grading: {
         grading_progress: "Failed",
         score_given: 0,
         grading_started_at: null,
         grading_completed_at: null,
-        feedback_json: null,
         feedback_text: "Some tests failed",
       },
     }
@@ -187,12 +187,12 @@ suite("submitMoocExercise action", () => {
     // renders it, but it is not a pass, so the exercise must NOT be marked passed
     // even though it carries a partial score.
     const grading = {
-      Grading: {
+      status: "grading",
+      grading: {
         grading_progress: "PendingManual",
         score_given: 0.5,
         grading_started_at: "2026-07-21T00:00:00Z",
         grading_completed_at: null,
-        feedback_json: null,
         feedback_text: "Awaiting manual grading",
       },
     }
@@ -211,12 +211,12 @@ suite("submitMoocExercise action", () => {
     // data (not an error); the action must still post it to the panel (which
     // renders "grading still in progress") and must NOT mark the exercise passed.
     const grading = {
-      Grading: {
+      status: "grading",
+      grading: {
         grading_progress: "Pending",
         score_given: null,
         grading_started_at: null,
         grading_completed_at: null,
-        feedback_json: null,
         feedback_text: null,
       },
     }
@@ -236,7 +236,7 @@ suite("submitMoocExercise action", () => {
     let finishFirst!: () => void
     const submit = vi.fn().mockReturnValue(
       new Promise((resolve) => {
-        finishFirst = () => resolve(Ok("NoGradingYet"))
+        finishFirst = () => resolve(Ok({ status: "no-grading-yet" }))
       }),
     )
     const { actionContext } = contextWith(undefined)
@@ -279,7 +279,26 @@ suite("submitMoocExercise action", () => {
       expect.objectContaining({ type: "moocSubmissionResult" }),
     )
     expect(TmcPanel.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "submissionStatusError", error }),
+      expect.objectContaining({
+        type: "submissionStatusError",
+        error: { message: "You are submitting too fast, try again later." },
+      }),
     )
+  })
+
+  test("the failure survives the webview boundary with its message intact", async () => {
+    // The panel reads `error.message`, and the webview bridge serializes the
+    // message as JSON -- which drops a live Error's non-enumerable `message`.
+    const { actionContext } = contextWithErr(new Error("Connection reset by peer"))
+
+    await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+
+    const posted = vi
+      .mocked(TmcPanel.postMessage)
+      .mock.calls.flat()
+      .find((message) => message.type === "submissionStatusError")
+    expect(posted).toBeDefined()
+    const delivered = JSON.parse(JSON.stringify(posted)) as { error: { message: string } }
+    expect(delivered.error.message).toBe("Connection reset by peer")
   })
 })

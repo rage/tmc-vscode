@@ -7,19 +7,22 @@ import type {
   CourseInstance,
   DownloadOrUpdateMoocCourseExercisesResult,
   DownloadOrUpdateTmcCourseExercisesResult,
+  LocalExercise,
   LocalTmcExercise,
   MoocCourseProgress,
   TmcExerciseSlide,
 } from "../../shared/langsSchema"
+import type { ExerciseIdentifier } from "../../shared/shared"
 import {
-  checkExerciseUpdates,
-  checkMoocExerciseUpdates,
   closedExercisesPythonCourse,
   listLocalCourseExercisesPythonCourse,
+  localExercises,
   moocCourseInstance,
   moocCourseProgress,
   moocEnrolledCourseInstances,
   moocExerciseSlides,
+  moocExerciseUpdates,
+  tmcExerciseUpdates,
 } from "../fixtures/tmc"
 
 const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."))
@@ -35,13 +38,14 @@ export interface TMCMockValues {
   clean: Result<void, Error>
   downloadExercises: DownloadExercisesMockResult
   listLocalCourseExercisesPythonCourse: Result<LocalTmcExercise[], Error>
+  listLocalExercises: Result<LocalExercise[], Error>
   getSettingClosedExercises: Result<string[], Error>
   getSettingProjectsDir: Result<string, Error>
   migrateExercise: Result<void, Error>
   moveProjectsDirectory: Result<void, Error>
   setSettingClosedExercises: Result<void, Error>
-  checkExerciseUpdates: Result<{ id: number }[], Error>
-  checkMoocExerciseUpdates: Result<string[], Error>
+  tmcExerciseUpdates: Result<ExerciseIdentifier[], Error>
+  moocExerciseUpdates: Result<ExerciseIdentifier[], Error>
   isMoocAuthenticated: Result<boolean, Error>
   getMoocCourseInstanceData: Result<[CourseInstance, TmcExerciseSlide[]], Error>
   getMoocCourseProgress: Result<MoocCourseProgress, Error>
@@ -50,7 +54,7 @@ export interface TMCMockValues {
 
 const emptyDownloadExercisesResult: DownloadExercisesMockResult = {
   tmc: { downloaded: [], skipped: [], failed: [] },
-  mooc: { downloaded: [], skipped: [], failed: [], not_attempted: [], stopped_for_auth: false },
+  mooc: { downloaded: [], skipped: [], failed: [] },
 }
 
 export function createTMCMock(): [Langs, TMCMockValues] {
@@ -58,13 +62,14 @@ export function createTMCMock(): [Langs, TMCMockValues] {
     clean: Ok.EMPTY,
     downloadExercises: emptyDownloadExercisesResult,
     listLocalCourseExercisesPythonCourse: Ok(listLocalCourseExercisesPythonCourse),
+    listLocalExercises: Ok(localExercises),
     getSettingClosedExercises: Ok(closedExercisesPythonCourse),
     getSettingProjectsDir: Ok("/langs/path/to/exercises"),
     migrateExercise: Ok.EMPTY,
     moveProjectsDirectory: Ok.EMPTY,
     setSettingClosedExercises: Ok.EMPTY,
-    checkExerciseUpdates: Ok(checkExerciseUpdates),
-    checkMoocExerciseUpdates: Ok(checkMoocExerciseUpdates),
+    tmcExerciseUpdates: Ok(tmcExerciseUpdates),
+    moocExerciseUpdates: Ok(moocExerciseUpdates),
     isMoocAuthenticated: Ok(true),
     getMoocCourseInstanceData: Ok([moocCourseInstance, moocExerciseSlides]),
     getMoocCourseProgress: Ok(moocCourseProgress),
@@ -84,13 +89,14 @@ export function createFailingTMCMock(): [Langs, TMCMockValues] {
       moocError: new Error(),
     },
     listLocalCourseExercisesPythonCourse: error,
+    listLocalExercises: error,
     getSettingClosedExercises: error,
     getSettingProjectsDir: error,
     migrateExercise: error,
     moveProjectsDirectory: error,
     setSettingClosedExercises: error,
-    checkExerciseUpdates: error,
-    checkMoocExerciseUpdates: error,
+    tmcExerciseUpdates: error,
+    moocExerciseUpdates: error,
     isMoocAuthenticated: error,
     getMoocCourseInstanceData: error,
     getMoocCourseProgress: error,
@@ -103,6 +109,7 @@ export function createFailingTMCMock(): [Langs, TMCMockValues] {
 function setupMockValues(values: TMCMockValues): Langs {
   const mock = {
     clean: vi.fn(async () => values.clean),
+    listLocalExercises: vi.fn(async () => values.listLocalExercises),
     listLocalCourseExercises: vi.fn(async (backend: string, slug: string) =>
       backend === "tmc" && slug === "test-python-course"
         ? values.listLocalCourseExercisesPythonCourse
@@ -120,8 +127,9 @@ function setupMockValues(values: TMCMockValues): Langs {
     ),
     migrateExercise: vi.fn(async () => values.migrateExercise),
     moveProjectsDirectory: vi.fn(async () => values.moveProjectsDirectory),
-    checkTmcExerciseUpdates: vi.fn(async () => values.checkExerciseUpdates),
-    checkMoocExerciseUpdates: vi.fn(async () => values.checkMoocExerciseUpdates),
+    checkExerciseUpdates: vi.fn(async (backend: "tmc" | "mooc") =>
+      backend === "tmc" ? values.tmcExerciseUpdates : values.moocExerciseUpdates,
+    ),
     isMoocAuthenticated: vi.fn(async () => values.isMoocAuthenticated),
     getMoocCourseInstanceData: vi.fn(async () => values.getMoocCourseInstanceData),
     getMoocCourseProgress: vi.fn(async () => values.getMoocCourseProgress),

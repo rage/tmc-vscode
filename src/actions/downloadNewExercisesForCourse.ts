@@ -40,13 +40,24 @@ export async function downloadNewExercisesForCourse(
       exerciseIds,
     })
 
+  // Read the list back from storage rather than restoring the pre-download
+  // snapshot, which re-announces the exercises the student just received.
+  const postRemainingNewExercises = (): void => {
+    const current = userData.val.getCourse(courseId)
+    if (current.err) {
+      Logger.error("Failed to read the course's new exercises.", current.val)
+      return
+    }
+    postNewExercises(LocalCourseData.getNewExercises(current.val))
+  }
+
   postNewExercises([])
 
   const newExercises = LocalCourseData.getNewExercises(course)
   const downloadResult = await downloadOrUpdateExercises(actionContext, newExercises, courseId)
   if (downloadResult.err) {
     Logger.error("Failed to download new exercises.", downloadResult.val)
-    postNewExercises(newExercises)
+    postRemainingNewExercises()
     return downloadResult
   }
 
@@ -55,12 +66,12 @@ export async function downloadNewExercisesForCourse(
     await refreshLocalExercises(actionContext),
   )
   if (refreshResult.err) {
-    Logger.error("Failed to refresh workspace.", downloadResult.val)
-    postNewExercises(newExercises)
+    Logger.error("Failed to refresh workspace.", refreshResult.val)
+    postRemainingNewExercises()
     return refreshResult
   }
 
-  postNewExercises(newExercises)
+  postRemainingNewExercises()
 
   return Ok.EMPTY
 }

@@ -8,7 +8,7 @@
   "scripts": {
     "setup": "tsx setup.ts",
     "start": "tsx index.ts",
-    "test": "node --import tsx --test mooc/*.test.ts",
+    "test": "node --import tsx --test \"**/*.test.ts\"",
     "tsc": "tsc"
   },
   "dependencies": {

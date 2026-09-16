@@ -3,7 +3,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
-import { FileSystemError, InitializationError } from "../errors"
+import { FileSystemError } from "../errors"
 import { deactivate } from "../extension"
 import { Logger } from "../utilities"
 
@@ -25,6 +25,10 @@ export async function wipe(
     Logger.error("Extension was not initialized properly")
     return
   }
+
+  // The guard above narrows a property, which does not survive into the progress
+  // closure below; binding it here is what keeps the wipe target checked.
+  const projectsDirectory = resources.val.projectsDirectory
 
   if (workspaceManager.val.activeCourse) {
     dialog.warningNotification(
@@ -59,14 +63,9 @@ Please close the workspace and any related files before running this command aga
 
   const message = "Removing extension data..."
   const wipeResult = await dialog.progressNotification(message, async (progress) => {
-    if (!(workspaceManager && resources && langs && userData && resources.val.projectsDirectory)) {
-      Logger.error("Extension was not initialized properly")
-      return Err(new InitializationError("Extension was not initialized properly"))
-    }
-
     // Remove exercises
     try {
-      fs.removeSync(resources.val.projectsDirectory)
+      fs.removeSync(projectsDirectory)
     } catch (e) {
       return Err(new FileSystemError(e, "Failed to remove projects directory."))
     }

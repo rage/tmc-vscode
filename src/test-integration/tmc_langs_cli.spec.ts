@@ -276,7 +276,7 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should be able to check for exercise updates", async function () {
-        const result = await unwrapResult(tmc.checkTmcExerciseUpdates())
+        const result = await unwrapResult(tmc.checkExerciseUpdates("tmc"))
         expect(result.length).to.be.equal(0)
       })
 
@@ -632,12 +632,11 @@ suite("tmc langs cli spec", function () {
         ).unwrap()
         // the blocking submit resolves slide/task from the exercise id, polls the
         // grading through the real CLI, and returns a terminal FullyGraded status
-        expect(status).to.not.equal("NoGradingYet")
-        if (status === "NoGradingYet") {
-          throw new Error("unreachable")
+        if (status.status !== "grading") {
+          throw new Error(`expected a grading record, got ${status.status}`)
         }
-        expect(status.Grading.grading_progress).to.equal("FullyGraded")
-        expect(status.Grading.score_given).to.equal(1)
+        expect(status.grading.grading_progress).to.equal("FullyGraded")
+        expect(status.grading.score_given).to.equal(1)
       },
     )
 
@@ -672,12 +671,11 @@ suite("tmc langs cli spec", function () {
       const status = (
         await tmc.submitMoocExerciseAndWaitForResults(FAILING_EXERCISE_ID, dir)
       ).unwrap()
-      expect(status).to.not.equal("NoGradingYet")
-      if (status === "NoGradingYet") {
-        throw new Error("unreachable")
+      if (status.status !== "grading") {
+        throw new Error(`expected a grading record, got ${status.status}`)
       }
-      expect(status.Grading.grading_progress).to.equal("Failed")
-      expect(status.Grading.score_given).to.equal(0)
+      expect(status.grading.grading_progress).to.equal("Failed")
+      expect(status.grading.score_given).to.equal(0)
     })
 
     migrationTest(
@@ -697,11 +695,10 @@ suite("tmc langs cli spec", function () {
         const status = (
           await tmc.submitMoocExerciseAndWaitForResults(PASSING_EXERCISE_ID, dir)
         ).unwrap()
-        expect(status).to.not.equal("NoGradingYet")
-        if (status === "NoGradingYet") {
-          throw new Error("unreachable")
+        if (status.status !== "grading") {
+          throw new Error(`expected a grading record, got ${status.status}`)
         }
-        expect(status.Grading.grading_progress).to.equal("FullyGraded")
+        expect(status.grading.grading_progress).to.equal("FullyGraded")
       },
     )
 

@@ -243,6 +243,9 @@ export type DataKind = {
     'output-data': string;
     'output-data-kind': 'submission-sandbox';
 } | {
+    'output-data': Array<LocalExercise>;
+    'output-data-kind': 'local-exercises';
+} | {
     'output-data': Array<LocalTmcExercise>;
     'output-data-kind': 'local-tmc-exercises';
 } | {
@@ -252,7 +255,7 @@ export type DataKind = {
     'output-data': TmcConfig;
     'output-data-kind': 'tmc-config';
 } | {
-    'output-data': Array<string>;
+    'output-data': Array<MoocUpdatedExercise>;
     'output-data-kind': 'mooc-updated-exercises';
 } | {
     'output-data': Array<LocalMoocExercise>;
@@ -295,17 +298,7 @@ export type DownloadOrUpdateMoocCourseExercisesResult = {
         MoocExerciseDownload,
         Array<string>
     ]> | null;
-    /**
-     * Exercises never attempted because the batch stopped early on a permanent auth
-     * failure (see `stopped_for_auth`). Empty unless that happened.
-     */
-    not_attempted: Array<MoocExerciseDownload>;
     skipped: Array<MoocExerciseDownload>;
-    /**
-     * True if a mooc token refresh permanently failed partway through the batch,
-     * leaving `not_attempted` non-empty.
-     */
-    stopped_for_auth: boolean;
 };
 
 export type DownloadOrUpdateTmcCourseExercisesResult = {
@@ -477,27 +470,61 @@ export type ExerciseTaskSubmissionResult = {
     task_submission_id: string;
 };
 
-export type ExerciseTaskSubmissionStatus = 'NoGradingYet' | {
-    Grading: {
-        feedback_json: unknown;
-        feedback_text: string | null;
-        grading_completed_at: string | null;
-        grading_progress: GradingProgress;
-        grading_started_at: string | null;
-        score_given: number | null;
-    };
+/**
+ * The grading status of a task submission, as polled after `submit`.
+ */
+export type ExerciseTaskSubmissionStatus = {
+    status: 'no-grading-yet';
+} | {
+    grading: Grading;
+    status: 'grading';
 };
 
 export type ExerciseType = 'browser' | 'editor';
+
+/**
+ * A task submission's grading record.
+ */
+export type Grading = {
+    /**
+     * Human-readable feedback, for a client to display as-is.
+     */
+    feedback_text: string | null;
+    grading_completed_at: string | null;
+    grading_progress: GradingProgress;
+    grading_started_at: string | null;
+    /**
+     * Absent until grading has produced a value; a partial value while
+     * `grading_progress` is still pending.
+     */
+    score_given: number | null;
+};
 
 export type GradingProgress = 'Failed' | 'NotReady' | 'PendingManual' | 'Pending' | 'FullyGraded';
 
 export type Kind = 'generic' | 'forbidden' | 'not-logged-in' | 'connection-error' | 'obsolete-client' | 'invalid-token' | 'not-enrolled' | 'upload-expired' | 'unknown-upload';
 
 /**
+ * An exercise in the projects directory, tagged with the backend it came from.
+ * Both arms carry the ids needed to identify the exercise and its course, so a
+ * client can key off them without a second lookup.
+ */
+export type LocalExercise = (LocalTmcExercise & {
+    backend: 'tmc';
+}) | (LocalMoocExercise & {
+    backend: 'mooc';
+});
+
+/**
  * MOOC exercise inside the projects directory.
  */
 export type LocalMoocExercise = {
+    'course-id': string;
+    /**
+     * The course's on-disk directory name. Mooc courses have no server-side
+     * slug; this is the kebab-cased course name, deduplicated locally.
+     */
+    'course-slug': string;
     'exercise-id': string;
     'exercise-path': string;
     /**
@@ -509,9 +536,14 @@ export type LocalMoocExercise = {
 };
 
 /**
- * TMC eercise inside the projects directory.
+ * TMC exercise inside the projects directory.
  */
 export type LocalTmcExercise = {
+    /**
+     * The course's on-disk directory name, which is also its TMC slug.
+     */
+    'course-slug': string;
+    'exercise-id': number;
     'exercise-path': string;
     'exercise-slug': string;
 };
@@ -587,6 +619,15 @@ export type MoocExerciseDownload = {
  * Outcome of restoring a past mooc submission.
  */
 export type MoocOldSubmissionRestore = 'restored' | 'nothing-to-download';
+
+/**
+ * A local mooc exercise whose server-side version has changed. Shaped like
+ * [`UpdatedExercise`] so clients can treat the two backends' update checks
+ * alike; only the id type differs.
+ */
+export type MoocUpdatedExercise = {
+    id: string;
+};
 
 /**
  * post /api/v8/core/exercises/{exercise_id}/submissions
@@ -1066,6 +1107,9 @@ export type UpdateResult = {
     updated: Array<Exercise>;
 };
 
+/**
+ * A local TMC exercise whose server-side version has changed.
+ */
 export type UpdatedExercise = {
     id: number;
 };

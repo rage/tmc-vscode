@@ -1,12 +1,14 @@
 import { first, last } from "lodash"
 import { Ok } from "ts-results"
 import { vi } from "vitest"
+import * as vscode from "vscode"
 
 import { downloadOrUpdateExercises } from "../../actions"
 import type { ActionContext } from "../../actions/types"
-import type Dialog from "../../api/dialog"
+import Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type Settings from "../../config/settings"
+import { InvalidTokenError } from "../../errors"
 import { TmcPanel } from "../../panels/TmcPanel"
 import type { TmcExerciseDownload } from "../../shared/langsSchema"
 import type { ExtensionToWebview } from "../../shared/shared"
@@ -44,7 +46,7 @@ const createDownloadResult = (
   failed: [TmcExerciseDownload, string[]][] | undefined,
 ): DownloadExercisesMockResult => ({
   tmc: { downloaded, failed, skipped },
-  mooc: { downloaded: [], failed: [], skipped: [], not_attempted: [], stopped_for_auth: false },
+  mooc: { downloaded: [], failed: [], skipped: [] },
 })
 
 suite("downloadOrUpdateExercises action", function () {
@@ -177,8 +179,6 @@ suite("downloadOrUpdateExercises action", function () {
         downloaded: [{ "exercise-id": moocExerciseId, path: "/mooc/ex" }],
         failed: [],
         skipped: [],
-        not_attempted: [],
-        stopped_for_auth: false,
       },
     }
     const result = (
@@ -200,8 +200,6 @@ suite("downloadOrUpdateExercises action", function () {
         downloaded: [],
         failed: [[{ "exercise-id": moocExerciseId, path: "/mooc/ex" }, ["boom"]]],
         skipped: [],
-        not_attempted: [],
-        stopped_for_auth: false,
       },
     }
     const result = (
@@ -215,55 +213,55 @@ suite("downloadOrUpdateExercises action", function () {
     expect(result.successful).toEqual([])
   })
 
-  test("should mark mooc not_attempted exercises as failed when the batch stops for auth", async function () {
+  test("should report a permanent mooc auth failure and leave its exercises failed", async function () {
+    // The CLI now fails the whole mooc batch on a permanent auth failure rather
+    // than returning a partial result, so it arrives as an ordinary leg error.
     const downloadedId = "exercise-uuid-3"
-    const notAttemptedId = "exercise-uuid-4"
+    const undownloadedId = "exercise-uuid-4"
+    const moocError = new InvalidTokenError("401 unauthorized")
     tmcMockValues.downloadExercises = {
       tmc: { downloaded: [], failed: [], skipped: [] },
-      mooc: {
-        downloaded: [{ "exercise-id": downloadedId, path: "/mooc/ex" }],
-        failed: [],
-        skipped: [],
-        not_attempted: [{ "exercise-id": notAttemptedId, path: "/mooc/ex2" }],
-        stopped_for_auth: true,
-      },
+      mooc: { downloaded: [], failed: [], skipped: [] },
+      moocError,
     }
+
     const result = (
       await downloadOrUpdateExercises(
         actionContext(),
-        [ExerciseIdentifier.from(downloadedId), ExerciseIdentifier.from(notAttemptedId)],
+        [ExerciseIdentifier.from(downloadedId), ExerciseIdentifier.from(undownloadedId)],
         TEST_COURSE_ID,
       )
     ).unwrap()
-    expect(result.successful).toEqual([ExerciseIdentifier.from(downloadedId)])
-    expect(result.failed).toEqual([ExerciseIdentifier.from(notAttemptedId)])
+
+    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
+      "Failed to download exercises from courses.mooc.fi.",
+      moocError,
+    )
+    expect(result.successful).toEqual([])
+    expect(result.failed).toEqual([
+      ExerciseIdentifier.from(downloadedId),
+      ExerciseIdentifier.from(undownloadedId),
+    ])
   })
 
-  test("should not flip an already-closed exercise back to failed when the mooc batch stops for auth", async function () {
-    // The exercise that finished downloading before the batch stopped was
-    // already live-reported as "closed" via the progress callback; it must
-    // stay "closed" in the final broadcast even though the overall mooc
-    // result is now partial. Only the never-attempted exercise should end up
-    // non-"closed".
+  test("should keep an already-downloaded exercise closed when the mooc leg errors", async function () {
+    // An exercise that finished before the batch failed was already live-reported
+    // as "closed" via the progress callback; it must stay closed in the final
+    // broadcast even though the leg as a whole failed.
     const closedId = "exercise-uuid-5"
-    const notAttemptedId = "exercise-uuid-6"
+    const undownloadedId = "exercise-uuid-6"
     tmcMock.downloadExercises = vi.fn(async (_1, _2, cb) => {
       cb?.({ id: ExerciseIdentifier.from(closedId), percent: 1 })
       return {
         tmc: { downloaded: [], failed: [], skipped: [] },
-        mooc: {
-          downloaded: [{ "exercise-id": closedId, path: "/mooc/ex" }],
-          failed: [],
-          skipped: [],
-          not_attempted: [{ "exercise-id": notAttemptedId, path: "/mooc/ex2" }],
-          stopped_for_auth: true,
-        },
+        mooc: { downloaded: [], failed: [], skipped: [] },
+        moocError: new InvalidTokenError("401 unauthorized"),
       }
     }) as Langs["downloadExercises"]
 
     await downloadOrUpdateExercises(
       actionContext(),
-      [ExerciseIdentifier.from(closedId), ExerciseIdentifier.from(notAttemptedId)],
+      [ExerciseIdentifier.from(closedId), ExerciseIdentifier.from(undownloadedId)],
       TEST_COURSE_ID,
     )
     // The last message for each id reflects the final broadcast.
@@ -272,59 +270,7 @@ suite("downloadOrUpdateExercises action", function () {
         .filter((m) => "exerciseId" in m && ExerciseIdentifier.unwrap(m.exerciseId) === id)
         .at(-1)
     expect(lastMessageFor(closedId)).toEqual(wrapToMessage(closedId, "closed"))
-    expect(lastMessageFor(notAttemptedId)).toEqual(wrapToMessage(notAttemptedId, "downloadFailed"))
-  })
-
-  test("should show a session-expired message with the completed count when the mooc batch stops for auth", async function () {
-    const downloadedId = "exercise-uuid-7"
-    const skippedId = "exercise-uuid-8"
-    const notAttemptedId = "exercise-uuid-9"
-    tmcMockValues.downloadExercises = {
-      tmc: { downloaded: [], failed: [], skipped: [] },
-      mooc: {
-        downloaded: [{ "exercise-id": downloadedId, path: "/mooc/ex" }],
-        failed: [],
-        skipped: [{ "exercise-id": skippedId, path: "/mooc/ex2" }],
-        not_attempted: [{ "exercise-id": notAttemptedId, path: "/mooc/ex3" }],
-        stopped_for_auth: true,
-      },
-    }
-    await downloadOrUpdateExercises(
-      actionContext(),
-      [
-        ExerciseIdentifier.from(downloadedId),
-        ExerciseIdentifier.from(skippedId),
-        ExerciseIdentifier.from(notAttemptedId),
-      ],
-      TEST_COURSE_ID,
-    )
-    // 2 of 3 (downloaded + skipped, out of downloaded + skipped + not_attempted) completed.
-    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
-      "Downloaded 2 of 3 exercises from courses.mooc.fi, then your session expired —" +
-        " the rest will be available once you log in again.",
-    )
-  })
-
-  test("should not show the generic mooc failure message when the batch stops for auth", async function () {
-    tmcMockValues.downloadExercises = {
-      tmc: { downloaded: [], failed: [], skipped: [] },
-      mooc: {
-        downloaded: [],
-        failed: [],
-        skipped: [],
-        not_attempted: [{ "exercise-id": "exercise-uuid-10", path: "/mooc/ex" }],
-        stopped_for_auth: true,
-      },
-    }
-    await downloadOrUpdateExercises(
-      actionContext(),
-      [ExerciseIdentifier.from("exercise-uuid-10")],
-      TEST_COURSE_ID,
-    )
-    expect(dialogMock.errorNotification).not.toHaveBeenCalledWith(
-      expect.stringContaining("Failed to download exercises from courses.mooc.fi."),
-      expect.anything(),
-    )
+    expect(lastMessageFor(undownloadedId)).toEqual(wrapToMessage(undownloadedId, "downloadFailed"))
   })
 
   test("should download template if downloadOldSubmission setting is off", async function () {
@@ -429,3 +375,174 @@ function wrapToMessage(exerciseId: number | string, status: ExerciseStatus): Ext
     status,
   }
 }
+
+suite("downloadOrUpdateExercises cancellation and progress", function () {
+  const stubContext = createMockActionContext()
+  const tmcIds = [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)]
+  const moocIds = [ExerciseIdentifier.from("mooc-1"), ExerciseIdentifier.from("mooc-2")]
+
+  const noTmcDownloads: DownloadExercisesMockResult["tmc"] = {
+    downloaded: [],
+    failed: [],
+    skipped: [],
+  }
+  const noMoocDownloads: DownloadExercisesMockResult["mooc"] = {
+    downloaded: [],
+    failed: [],
+    skipped: [],
+  }
+
+  // Mirrors what the CLI reports back for a leg that downloaded everything it was given.
+  const downloadedAll = (ids: ExerciseIdentifier[]): DownloadExercisesMockResult =>
+    ids[0]?.kind === "tmc"
+      ? {
+          tmc: {
+            downloaded: ids.map((id) => ({
+              "course-slug": "python-course",
+              "exercise-slug": `exercise-${ExerciseIdentifier.unwrap(id)}`,
+              id: ExerciseIdentifier.unwrap(id) as number,
+              path: "/tmc/exercise",
+            })),
+            failed: [],
+            skipped: [],
+          },
+          mooc: noMoocDownloads,
+        }
+      : {
+          tmc: noTmcDownloads,
+          mooc: {
+            downloaded: ids.map((id) => ({
+              "exercise-id": ExerciseIdentifier.unwrap(id) as string,
+              path: "/mooc/exercise",
+            })),
+            failed: [],
+            skipped: [],
+          },
+        }
+
+  let cancel: () => void
+  let token: vscode.CancellationToken
+  let progressReports: { message?: string; increment?: number }[]
+  let tmcMock: Langs
+  let downloadedIdsPerCall: ExerciseIdentifier[][]
+
+  const actionContext = (): ActionContext => ({
+    ...stubContext,
+    // The real Dialog, so the percentages the action reports pass through the
+    // production increment wrapper before they are asserted on.
+    dialog: new Dialog(),
+    settings: createSettingsMock()[0],
+    langs: new Ok(tmcMock),
+  })
+
+  beforeEach(function () {
+    ;[tmcMock] = createTMCMock()
+    downloadedIdsPerCall = []
+    progressReports = []
+    const cancellationListeners: (() => void)[] = []
+    let cancellationRequested = false
+    cancel = (): void => {
+      cancellationRequested = true
+      cancellationListeners.forEach((listener) => listener())
+    }
+    token = {
+      get isCancellationRequested(): boolean {
+        return cancellationRequested
+      },
+      onCancellationRequested: (listener: () => void) => {
+        cancellationListeners.push(listener)
+        return { dispose: (): void => {} }
+      },
+    } as unknown as vscode.CancellationToken
+    vi.spyOn(vscode.window, "withProgress").mockImplementation((async (
+      _options: unknown,
+      task: (
+        progress: { report: (value: { message?: string; increment?: number }) => void },
+        cancellationToken: vscode.CancellationToken,
+      ) => Promise<unknown>,
+    ) =>
+      task(
+        {
+          report: (value): void => {
+            progressReports.push(value)
+          },
+        },
+        token,
+      )) as unknown as typeof vscode.window.withProgress)
+    vi.spyOn(TmcPanel, "postMessage").mockResolvedValue(undefined)
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("never asks for the mooc exercises once the tmc download is cancelled", async function () {
+    let tmcInterrupted = false
+    tmcMock.downloadExercises = vi.fn(
+      async (ids, _template, _onDownloaded, _courseId, onHandle) => {
+        downloadedIdsPerCall.push(ids)
+        onHandle?.(() => {
+          tmcInterrupted = true
+        })
+        cancel()
+        return { ...downloadedAll(ids), tmcError: new Error("interrupted") }
+      },
+    ) as Langs["downloadExercises"]
+
+    const result = (
+      await downloadOrUpdateExercises(actionContext(), [...tmcIds, ...moocIds], TEST_COURSE_ID)
+    ).unwrap()
+
+    expect(tmcInterrupted).toBe(true)
+    expect(downloadedIdsPerCall).toEqual([tmcIds])
+    expect(result.successful).toEqual([])
+    expect(result.failed).toEqual([...tmcIds, ...moocIds])
+  })
+
+  test("kills a leg that was still starting up when the user cancelled", async function () {
+    const interruptedLegs: ExerciseIdentifier[][] = []
+    tmcMock.downloadExercises = vi.fn(
+      async (ids, _template, _onDownloaded, _courseId, onHandle) => {
+        downloadedIdsPerCall.push(ids)
+        if (ids[0]?.kind === "mooc") {
+          // The token fires between the leg's start and the CLI handing back its
+          // interrupt handle.
+          cancel()
+        }
+        onHandle?.(() => {
+          interruptedLegs.push(ids)
+        })
+        return downloadedAll(ids)
+      },
+    ) as Langs["downloadExercises"]
+
+    await downloadOrUpdateExercises(actionContext(), [...tmcIds, ...moocIds], TEST_COURSE_ID)
+
+    expect(interruptedLegs).toEqual([moocIds])
+  })
+
+  test("keeps the progress bar moving while the second backend downloads", async function () {
+    tmcMock.downloadExercises = vi.fn(async (ids, _template, onDownloaded) => {
+      // Each backend counts its own exercises from 0 to 1, as the CLI does.
+      ids.forEach((id: ExerciseIdentifier, index: number) =>
+        onDownloaded?.({
+          id,
+          percent: (index + 1) / ids.length,
+          message: `Downloaded ${ExerciseIdentifier.unwrap(id)}`,
+        }),
+      )
+      return downloadedAll(ids)
+    }) as Langs["downloadExercises"]
+
+    await downloadOrUpdateExercises(actionContext(), [...tmcIds, ...moocIds], TEST_COURSE_ID)
+
+    // The wrapper drops any report that does not advance the bar, so the mooc
+    // leg's messages only survive if the percentage kept climbing past the tmc leg.
+    expect(progressReports.filter((report) => (report.increment ?? 0) > 0)).toEqual([
+      { increment: 25, message: "Downloaded 1" },
+      { increment: 25, message: "Downloaded 2" },
+      { increment: 25, message: "Downloaded mooc-1" },
+      { increment: 25, message: "Downloaded mooc-2" },
+    ])
+  })
+})

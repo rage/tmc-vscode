@@ -1,13 +1,17 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
+import * as vscode from "vscode"
 
-import { logout, removeCourse } from "../../actions"
+import { logout, openWorkspace, removeCourse } from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
+import type WorkspaceManager from "../../api/workspaceManager"
+import type Resources from "../../config/resources"
 import type { UserData } from "../../config/userdata"
 import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
+import type { DialogMockValues } from "../mocks/dialog"
 import { createDialogMock } from "../mocks/dialog"
 
 suite("logout action", function () {
@@ -195,5 +199,80 @@ suite("removeCourse action", function () {
 
     expect(dialog.errorNotification).not.toHaveBeenCalled()
     expect(removeChildWithId).toHaveBeenCalledWith("myCourses", expect.any(String))
+  })
+})
+
+// The mock exposes the open workspace as a prototype getter; an own data
+// property shadows it.
+function openWorkspaceFile(uri: vscode.Uri | undefined): void {
+  Object.defineProperty(vscode.workspace, "workspaceFile", {
+    value: uri,
+    configurable: true,
+    writable: true,
+  })
+}
+
+suite("openWorkspace action", function () {
+  const courseWorkspaceFile = "/tmc/workspaces/python-course.code-workspace"
+
+  let dialogMock: Dialog
+  let dialogMockValues: DialogMockValues
+  let createWorkspaceFile: ReturnType<typeof vi.fn>
+  let executeCommand: ReturnType<typeof vi.spyOn>
+
+  function actionContext(): ActionContext {
+    return {
+      ...createMockActionContext(),
+      dialog: dialogMock,
+      resources: new Ok({
+        getWorkspaceFilePath: () => courseWorkspaceFile,
+      } as unknown as Resources),
+      workspaceManager: new Ok({ createWorkspaceFile } as unknown as WorkspaceManager),
+    }
+  }
+
+  beforeEach(function () {
+    ;[dialogMock, dialogMockValues] = createDialogMock()
+    createWorkspaceFile = vi.fn()
+    executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    executeCommand.mockClear()
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+    openWorkspaceFile(undefined)
+  })
+
+  test("focuses the explorer instead of reloading when the workspace is already open", async function () {
+    openWorkspaceFile(vscode.Uri.file(courseWorkspaceFile))
+
+    await openWorkspace(actionContext(), "python-course", "tmc")
+
+    expect(dialogMock.confirmation).not.toHaveBeenCalled()
+    expect(executeCommand).not.toHaveBeenCalledWith("vscode.openFolder", expect.anything())
+    expect(executeCommand).toHaveBeenCalledWith("workbench.files.action.focusFilesExplorer")
+  })
+
+  test("opens the course workspace without asking when no workspace is open", async function () {
+    openWorkspaceFile(undefined)
+
+    await openWorkspace(actionContext(), "python-course", "tmc")
+
+    expect(dialogMock.confirmation).not.toHaveBeenCalled()
+    expect(executeCommand).toHaveBeenCalledWith(
+      "vscode.openFolder",
+      expect.objectContaining({ fsPath: courseWorkspaceFile }),
+    )
+  })
+
+  test("asks before closing a different workspace, and opens nothing when declined", async function () {
+    openWorkspaceFile(vscode.Uri.file("/somewhere/else.code-workspace"))
+    dialogMockValues.confirmation = false
+
+    await openWorkspace(actionContext(), "python-course", "tmc")
+
+    expect(dialogMock.confirmation).toHaveBeenCalled()
+    expect(executeCommand).not.toHaveBeenCalledWith("vscode.openFolder", expect.anything())
+    expect(dialogMock.warningNotification).toHaveBeenCalled()
   })
 })

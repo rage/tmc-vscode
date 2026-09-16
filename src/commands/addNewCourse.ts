@@ -1,7 +1,10 @@
-import { Err } from "ts-results"
+import type { Result } from "ts-results"
+import * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
+import type Langs from "../api/langs"
+import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseInstance, Organization } from "../shared/langsSchema"
 import type { CourseIdentifier, Enum } from "../shared/shared"
 import { backendName, makeMoocKind, makeTmcKind, match } from "../shared/shared"
@@ -17,10 +20,29 @@ import { Logger } from "../utilities"
  */
 type TopLevelChoice = Enum<Organization, CourseInstance>
 
+/**
+ * Stands for both "the user is not logged in to courses.mooc.fi" and the pick
+ * entry offering to fix that. The device flow is offered here because the
+ * "Log In" command is gated on the `LoggedIn` context key, which a still-valid
+ * TMC credential satisfies on its own — so for those users this is the only
+ * route to a courses.mooc.fi login.
+ */
+const MOOC_LOGIN = "mooc-login"
+
 const TITLE = "Add New Course"
 
+async function enrolledMoocCourses(
+  langs: Langs,
+): Promise<Result<CourseInstance[], Error> | typeof MOOC_LOGIN> {
+  const authenticated = await langs.isMoocAuthenticated()
+  if (authenticated.err) {
+    return authenticated
+  }
+  return authenticated.val ? langs.getEnrolledMoocCourseInstances() : MOOC_LOGIN
+}
+
 export async function addNewCourse(actionContext: ActionContext): Promise<void> {
-  const { dialog, langs } = actionContext
+  const { dialog, langs, userData } = actionContext
   Logger.info("Adding new course")
   if (langs.err) {
     Logger.error("Extension was not initialized properly")
@@ -29,20 +51,11 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
 
   const [organizations, moocCourses] = await Promise.all([
     langs.val.getTmcOrganizations(),
-    (async () => {
-      const authenticated = await langs.val.isMoocAuthenticated()
-      if (authenticated.err) {
-        return authenticated
-      }
-      if (!authenticated.val) {
-        return Err(new Error(`Not logged in to ${backendName("mooc")}.`))
-      }
-      return langs.val.getEnrolledMoocCourseInstances()
-    })(),
+    enrolledMoocCourses(langs.val),
   ])
 
   const unavailable: string[] = []
-  const choices: [string, TopLevelChoice, string][] = []
+  const choices: [string, TopLevelChoice | typeof MOOC_LOGIN, string][] = []
 
   if (organizations.err) {
     unavailable.push(backendName("tmc"))
@@ -57,7 +70,13 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
     }
   }
 
-  if (moocCourses.err) {
+  if (moocCourses === MOOC_LOGIN) {
+    choices.push([
+      `Log in to ${backendName("mooc")}`,
+      MOOC_LOGIN,
+      "to list the courses you are enrolled in",
+    ])
+  } else if (moocCourses.err) {
     unavailable.push(backendName("mooc"))
     Logger.warn(`Failed to fetch ${backendName("mooc")} courses. ${moocCourses.val}`)
   } else {
@@ -86,8 +105,15 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
       ? "Which course or organization?"
       : `Which course or organization? (${unavailable.join(" and ")} unavailable, so its courses are missing)`
 
-  const chosen = await dialog.selectItem<TopLevelChoice>({ title: TITLE, placeHolder }, ...choices)
+  const chosen = await dialog.selectItem<TopLevelChoice | typeof MOOC_LOGIN>(
+    { title: TITLE, placeHolder },
+    ...choices,
+  )
   if (chosen === undefined) {
+    return
+  }
+  if (chosen === MOOC_LOGIN) {
+    await vscode.commands.executeCommand("tmc.showMoocLogin")
     return
   }
 
@@ -124,5 +150,15 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
   const result = await actions.addNewCourse(actionContext, picked[0], picked[1])
   if (result.err) {
     dialog.errorNotification("Failed to add course.", result.val)
+    return
+  }
+  // A My Courses panel renders the list it was last sent, so it has to be told
+  // about the course that was just added.
+  if (userData.ok) {
+    TmcPanel.postMessage({
+      type: "setMyCourses",
+      target: { type: "MyCourses" },
+      courses: userData.val.getCourses(),
+    })
   }
 }

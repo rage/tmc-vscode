@@ -7,7 +7,8 @@ import type { WorkspaceExercise } from "../api/workspaceManager"
 import { ExerciseStatus } from "../api/workspaceManager"
 import { closedExercisesSettingKey } from "../config/constants"
 import { InitializationError } from "../errors"
-import { assertUnreachable } from "../shared/shared"
+import type { LocalExercise } from "../shared/langsSchema"
+import { LocalCourseData, match } from "../shared/shared"
 import { Logger } from "../utilities"
 import type { ActionContext } from "./types"
 
@@ -28,83 +29,59 @@ export async function refreshLocalExercises(
   }
   Logger.info("Refreshing local exercises")
 
+  const localExercisesResult = await langs.val.listLocalExercises()
+  if (localExercisesResult.err) {
+    return localExercisesResult
+  }
+  // Keyed the way the user's catalogue identifies a course: TMC by slug, mooc by id,
+  // since a mooc course's on-disk slug is derived locally and need not match its name.
+  const localExercisesByCourse = new Map<string, LocalExercise[]>()
+  for (const exercise of localExercisesResult.val) {
+    const key = exercise.backend === "tmc" ? exercise["course-slug"] : exercise["course-id"]
+    const exercises = localExercisesByCourse.get(key)
+    if (exercises) {
+      exercises.push(exercise)
+    } else {
+      localExercisesByCourse.set(key, [exercise])
+    }
+  }
+
   const workspaceExercises: WorkspaceExercise[] = []
   for (const course of userData.val.getCourses()) {
-    switch (course.kind) {
-      case "tmc": {
-        const exercisesResult = await langs.val.listLocalCourseExercises("tmc", course.data.name)
-        if (exercisesResult.err) {
-          Logger.warn(
-            `Failed to get exercises for course: ${JSON.stringify(course, null, 2)}`,
-            exercisesResult.val,
-          )
-          continue
-        }
-
-        const closedExercisesResult = (
-          await langs.val.getSetting(
-            closedExercisesSettingKey("tmc", course.data.name),
-            isClosedExercisesSetting,
-          )
-        ).mapErr((e) => {
-          Logger.warn("Failed to determine closed status for exercises, defaulting to open.", e)
-          return []
-        })
-
-        const closedExercises = new Set(closedExercisesResult.val ?? [])
-        workspaceExercises.push(
-          ...exercisesResult.val.map<WorkspaceExercise>((x) => ({
-            backend: "tmc",
-            courseSlug: course.data.name,
-            exerciseSlug: x["exercise-slug"],
-            status: closedExercises.has(x["exercise-slug"])
-              ? ExerciseStatus.Closed
-              : ExerciseStatus.Open,
-            uri: vscode.Uri.file(x["exercise-path"]),
-          })),
-        )
-        break
-      }
-      case "mooc": {
-        // mooc configs store no course slug, so the local listing is looked up by
-        // course id (the UUID); the display slug stays `course.data.name`.
-        const exercisesResult = await langs.val.listLocalCourseExercises("mooc", course.data.id)
-        if (exercisesResult.err) {
-          Logger.warn(
-            `Failed to get exercises for course: ${JSON.stringify(course, null, 2)}`,
-            exercisesResult.val,
-          )
-          continue
-        }
-
-        const closedExercisesResult = (
-          await langs.val.getSetting(
-            closedExercisesSettingKey("mooc", course.data.name),
-            isClosedExercisesSetting,
-          )
-        ).mapErr((e) => {
-          Logger.warn("Failed to determine closed status for exercises, defaulting to open.", e)
-          return []
-        })
-
-        const closedExercises = new Set(closedExercisesResult.val ?? [])
-        workspaceExercises.push(
-          ...exercisesResult.val.map<WorkspaceExercise>((x) => ({
-            backend: "mooc",
-            courseSlug: course.data.name,
-            exerciseSlug: x["exercise-slug"],
-            status: closedExercises.has(x["exercise-slug"])
-              ? ExerciseStatus.Closed
-              : ExerciseStatus.Open,
-            uri: vscode.Uri.file(x["exercise-path"]),
-          })),
-        )
-        break
-      }
-      default: {
-        assertUnreachable(course)
-      }
+    const courseSlug = LocalCourseData.getCourseName(course)
+    const localExercises = localExercisesByCourse.get(
+      match(
+        course,
+        () => courseSlug,
+        (mooc) => mooc.id,
+      ),
+    )
+    if (!localExercises) {
+      continue
     }
+
+    const closedExercisesResult = (
+      await langs.val.getSetting(
+        closedExercisesSettingKey(course.kind, courseSlug),
+        isClosedExercisesSetting,
+      )
+    ).mapErr((e) => {
+      Logger.warn("Failed to determine closed status for exercises, defaulting to open.", e)
+      return []
+    })
+    const closedExercises = new Set(closedExercisesResult.val ?? [])
+
+    workspaceExercises.push(
+      ...localExercises.map<WorkspaceExercise>((x) => ({
+        backend: x.backend,
+        courseSlug,
+        exerciseSlug: x["exercise-slug"],
+        status: closedExercises.has(x["exercise-slug"])
+          ? ExerciseStatus.Closed
+          : ExerciseStatus.Open,
+        uri: vscode.Uri.file(x["exercise-path"]),
+      })),
+    )
   }
 
   return workspaceManager.val.setExercises(workspaceExercises)
