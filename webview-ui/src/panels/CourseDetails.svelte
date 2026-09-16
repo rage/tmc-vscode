@@ -4,7 +4,7 @@
 
   import Button from "../components/Button.svelte"
   import ExercisePart from "../components/ExercisePart.svelte"
-  import type { CourseDetailsPanel } from "../shared/shared"
+  import type { CourseDetailsPanel, WebviewError } from "../shared/shared"
   import {
     assertUnreachable,
     makeMoocKind,
@@ -40,12 +40,21 @@
   // common course fields, independent of the course's backend
   const course = $derived(panel.course === undefined ? undefined : unwrap(panel.course))
 
-  onMount(() => {
+  // Set when the extension host answers that it cannot assemble this panel's data;
+  // rendered where the exercise list would be, so a failed load is not a permanent spinner.
+  let dataError = $state<WebviewError | undefined>(undefined)
+
+  function requestData() {
+    dataError = undefined
     vscode.postMessage({
       type: "requestCourseDetailsData",
-      sourcePanel: panel,
+      // `panel` is a `$state` proxy once a message has reassigned it; snapshot it or
+      // posting fails structured clone with a `DataCloneError`
+      sourcePanel: $state.snapshot(panel),
     })
-  })
+  }
+
+  onMount(requestData)
   // props aren't deeply reactive in Svelte 5, so panel is reassigned rather than mutated
   addMessageListener(panel, (message) => {
     switch (message.type) {
@@ -118,6 +127,10 @@
           )
         }
         panel = { ...panel, exerciseStatuses: { tmc, mooc } }
+        break
+      }
+      case "panelDataError": {
+        dataError = message.error
         break
       }
       case "setUpdateables": {
@@ -286,6 +299,15 @@
       />
     </div>
   {/each}
+{:else if dataError}
+  <div role="alert">
+    <h2>Could not load this course</h2>
+    <div class="error-message">{dataError.message}</div>
+    {#if dataError.details}
+      <code>{dataError.details}</code>
+    {/if}
+  </div>
+  <Button onclick={requestData}>Retry</Button>
 {:else}
   <vscode-progress-ring aria-label="Loading"></vscode-progress-ring>
 {/if}
@@ -350,6 +372,10 @@
   }
   .muted {
     opacity: 90%;
+  }
+  .error-message,
+  code {
+    white-space: pre-wrap;
   }
   .exercise-part {
     margin-bottom: 1rem;

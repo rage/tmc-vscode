@@ -105,6 +105,28 @@ suite("MyCourses panel", () => {
     expect(await screen.findByText(/This course has been disabled/)).toBeInTheDocument()
   })
 
+  test("shows why the courses could not be loaded, and offers to ask again", async () => {
+    render(MyCourses, { props: { panel } })
+    expect(screen.getByLabelText("Loading")).toBeInTheDocument()
+
+    dispatch({
+      type: "panelDataError",
+      target: { id: panel.id, type: "MyCourses" },
+      error: { message: "Storage is unavailable" },
+    })
+
+    expect(await screen.findByText("Storage is unavailable")).toBeInTheDocument()
+    expect(screen.queryByLabelText("Loading")).not.toBeInTheDocument()
+
+    postedMessages.mockClear()
+    ;(await findButton("Retry")).click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "requestMyCoursesData",
+      sourcePanel: panel,
+    })
+  })
+
   // The announcement is a change inside a region the screen reader already knows, so the
   // region has to be there before there is anything to announce.
   test("keeps each course's live region mounted while it has nothing to say", async () => {

@@ -9,17 +9,21 @@ import type { ActionContext } from "../actions/types"
 import type Dialog from "../api/dialog"
 import { ConnectionError, InitializationError } from "../errors"
 import type {
+  CourseDetailsPanel,
   CourseIdentifier,
   ExerciseIdentifier,
   ExerciseStatus,
   ExtensionToWebview,
+  MyCoursesPanel,
   Panel,
+  TargetPanel,
   WebviewToExtension,
 } from "../shared/shared"
 import {
   LocalCourseData,
   LocalCourseExercise,
   match,
+  toWebviewError,
   WebviewToExtensionSchema,
 } from "../shared/shared"
 import { cliFolder, formatSizeInBytes, Logger } from "../utilities"
@@ -156,6 +160,19 @@ export class TmcPanel {
       this._messageBuffer.set(`${message.target.id}:${message.type}`, message)
     }
     postMessageToWebview(this._panel.webview, message, this._webviewName)
+  }
+
+  /**
+   * Tells a panel waiting on data that it is not coming, so it stops waiting.
+   *
+   * Every early return from a `request*Data` handler needs this: the panel has no
+   * timeout and would otherwise show its spinner for the rest of the session.
+   */
+  private _postPanelDataError(
+    target: TargetPanel<CourseDetailsPanel> | TargetPanel<MyCoursesPanel>,
+    error: unknown,
+  ): void {
+    this._postMessage({ type: "panelDataError", target, error: toWebviewError(error) })
   }
 
   // renders the `panel` in the main panel
@@ -349,7 +366,7 @@ export class TmcPanel {
     actionContext: ActionContext,
   ): void {
     webview.onDidReceiveMessage(
-      async (untrustedMessage: unknown) => {
+      reportingFailures(actionContext.dialog, async (untrustedMessage: unknown) => {
         const validationResult = WebviewToExtensionSchema.safeParse(untrustedMessage)
         if (!validationResult.success) {
           Logger.error(
@@ -383,12 +400,16 @@ export class TmcPanel {
           case "requestCourseDetailsData": {
             const { langs, userData, workspaceManager } = actionContext
             if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-              reportNotInitialized(actionContext.dialog)
+              this._postPanelDataError(
+                message.sourcePanel,
+                reportNotInitialized(actionContext.dialog),
+              )
               return
             }
             const courseResult = userData.val.getCourse(message.sourcePanel.courseId)
             if (courseResult.err) {
               actionContext.dialog.errorNotification("Failed to read the course.", courseResult.val)
+              this._postPanelDataError(message.sourcePanel, courseResult.val)
               return
             }
             const course = courseResult.val
@@ -446,16 +467,23 @@ export class TmcPanel {
             // can be trusted; the groups are re-posted without them if not. Only an
             // unreachable backend means that -- any other failure leaves the stored
             // deadlines as good as they were.
-            langs.val.getCourseDetails(message.sourcePanel.courseId).then((apiCourse) => {
-              if (apiCourse.err && apiCourse.val instanceof ConnectionError) {
-                this._postMessage({
-                  type: "setCourseGroups",
-                  target: message.sourcePanel,
-                  offlineMode: true,
-                  exerciseGroups: buildView(true).exerciseGroups,
-                })
-              }
-            })
+            langs.val
+              .getCourseDetails(message.sourcePanel.courseId)
+              .then((apiCourse) => {
+                if (apiCourse.err && apiCourse.val instanceof ConnectionError) {
+                  this._postMessage({
+                    type: "setCourseGroups",
+                    target: message.sourcePanel,
+                    offlineMode: true,
+                    exerciseGroups: buildView(true).exerciseGroups,
+                  })
+                }
+              })
+              .catch((error: unknown) => {
+                // The panel is already rendered, so the only loss is the deadline check;
+                // leaving the stored deadlines standing is what an unknown answer means.
+                Logger.error("Failed to check whether the backend is reachable", error)
+              })
             break
           }
           case "requestExerciseSubmissionData": {
@@ -474,7 +502,10 @@ export class TmcPanel {
                 resources.val.projectsDirectory
               )
             ) {
-              reportNotInitialized(actionContext.dialog)
+              this._postPanelDataError(
+                message.sourcePanel,
+                reportNotInitialized(actionContext.dialog),
+              )
               return
             }
 
@@ -488,13 +519,23 @@ export class TmcPanel {
               target: message.sourcePanel,
               tmcDataPath: resources.val.projectsDirectory,
             })
-            getFolderSize.loose(resources.val.projectsDirectory).then((size) =>
-              this._postMessage({
-                type: "setTmcDataSize",
-                target: message.sourcePanel,
-                tmcDataSize: formatSizeInBytes(size),
-              }),
-            )
+            getFolderSize
+              .loose(resources.val.projectsDirectory)
+              .then((size) =>
+                this._postMessage({
+                  type: "setTmcDataSize",
+                  target: message.sourcePanel,
+                  tmcDataSize: formatSizeInBytes(size),
+                }),
+              )
+              .catch((error: unknown) => {
+                Logger.error("Failed to measure the exercise directory", error)
+                this._postMessage({
+                  type: "setTmcDataSize",
+                  target: message.sourcePanel,
+                  tmcDataSize: "unknown",
+                })
+              })
             break
           }
           case "requestWelcomeData": {
@@ -795,29 +836,52 @@ export class TmcPanel {
           default:
             assertUnreachable(message)
         }
-      },
+      }),
       undefined,
       this._disposables,
     )
   }
 }
 
+const NOT_INITIALIZED_MESSAGE =
+  "The extension did not initialize properly, so this action is unavailable."
+
 /**
  * Answers a webview action the extension cannot serve because initialization
  * failed. The panels stay interactive in that state, so a click has to say why
  * nothing happened and point at the panel that explains the failure.
+ *
+ * @returns the failure, for a caller that also has a waiting panel to tell.
  */
-function reportNotInitialized(dialog: Dialog): void {
-  dialog.errorNotification(
-    "The extension did not initialize properly, so this action is unavailable.",
-    new InitializationError("Extension was not initialized properly"),
-    [
-      "Show help",
-      (): void => {
-        vscode.commands.executeCommand("tmc.viewInitializationErrorHelp")
-      },
-    ],
-  )
+function reportNotInitialized(dialog: Dialog): InitializationError {
+  const error = new InitializationError(NOT_INITIALIZED_MESSAGE)
+  dialog.errorNotification(NOT_INITIALIZED_MESSAGE, error, [
+    "Show help",
+    (): void => {
+      vscode.commands.executeCommand("tmc.viewInitializationErrorHelp")
+    },
+  ])
+  return error
+}
+
+/**
+ * Wraps a webview message handler so a rejection is reported rather than dropped.
+ *
+ * The webview host discards whatever a listener rejects with, so without this a
+ * handler that throws leaves the user looking at a panel that silently did nothing.
+ */
+function reportingFailures(
+  dialog: Dialog,
+  handle: (message: unknown) => Promise<void>,
+): (message: unknown) => Promise<void> {
+  return (message) =>
+    handle(message).catch((error: unknown) => {
+      Logger.error("Failed to handle a message from the webview", error)
+      dialog.errorNotification(
+        "Something went wrong while handling that action.",
+        error instanceof Error ? error : new Error(String(error)),
+      )
+    })
 }
 
 // helper to make an exhaustive switch statement

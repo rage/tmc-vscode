@@ -835,6 +835,13 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     target: targetPanelSchema("ExerciseSubmission"),
     error: WebviewErrorSchema,
   }),
+  // A panel asked for its data and it could not be assembled. The panel renders this
+  // where it was showing a spinner, so a failed load stops looking like a slow one.
+  z.object({
+    type: z.literal("panelDataError"),
+    target: targetPanelSchema("MyCourses", "CourseDetails"),
+    error: WebviewErrorSchema,
+  }),
   z.object({
     type: z.literal("setNewExercises"),
     target: broadcastPanelSchema("MyCourses"),
