@@ -181,6 +181,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const resources = await init.resourceInitialization(
     context,
     storage,
+    extensionVersion,
     tmcDataPath,
     workspaceFileFolder,
   )
@@ -247,14 +248,18 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   let showWelcome = false
   if (resources.ok) {
     const currentVersion = resources.val.extensionVersion
-    const previousState = storage.getSessionState()
-    const previousVersion = previousState?.extensionVersion
-    if (currentVersion !== previousVersion) {
-      storage.updateSessionState({ extensionVersion: currentVersion })
-    }
-    const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor")
-    if (versionDiff === undefined || versionDiff > 0) {
-      showWelcome = true
+    try {
+      const previousVersion = storage.getSessionState()?.extensionVersion
+      if (currentVersion !== previousVersion) {
+        storage.updateSessionState({ extensionVersion: currentVersion })
+      }
+      const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor")
+      if (versionDiff === undefined || versionDiff > 0) {
+        showWelcome = true
+      }
+    } catch (e) {
+      // An unreadable session state costs the welcome page, nothing else.
+      Logger.warn("Skipped version check", e)
     }
   } else {
     Logger.warn("Skipped version check")
@@ -264,31 +269,44 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   let workspaceManager: Result<WorkspaceManager, Error>
   let exerciseDecorationProvider: Result<ExerciseDecorationProvider, Error>
   if (resources.ok) {
-    userData = new Ok(new UserData(storage))
     workspaceManager = new Ok(new WorkspaceManager(resources.val))
     context.subscriptions.push(workspaceManager.val)
     if (workspaceManager.val.activeCourse) {
       await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true)
       await workspaceManager.val.verifyWorkspaceSettingsIntegrity()
     }
-    exerciseDecorationProvider = new Ok(
-      new ExerciseDecorationProvider(userData.val, workspaceManager.val),
-    )
+    // Stored data this version cannot parse must degrade the extension, not abort it.
+    try {
+      userData = new Ok(new UserData(storage))
+    } catch (e) {
+      const error =
+        e instanceof Error ? e : new InitializationError(e, "Could not read stored user data")
+      initializationError(dialog, "reading stored course data", error, cliFolderPath)
+      userData = new Err(error)
+    }
+    exerciseDecorationProvider = userData.ok
+      ? new Ok(new ExerciseDecorationProvider(userData.val, workspaceManager.val))
+      : new Err(
+          new InitializationError(
+            userData.val,
+            "Could not initialize exercise decoration provider without user data",
+          ),
+        )
   } else {
     Logger.warn("Skipped userdata setup")
-    exerciseDecorationProvider = new Err(
-      new InitializationError(
-        resources.val,
-        "Could not initialize exercise decoration provider due to failure in resource initialization",
-      ),
-    )
     userData = new Err(
       new InitializationError(
         resources.val,
-        "Could not initialize exercise decoration provider due to failure in resource initialization",
+        "Could not read user data due to failure in resource initialization",
       ),
     )
     workspaceManager = new Err(
+      new InitializationError(
+        resources.val,
+        "Could not initialize workspace manager due to failure in resource initialization",
+      ),
+    )
+    exerciseDecorationProvider = new Err(
       new InitializationError(
         resources.val,
         "Could not initialize exercise decoration provider due to failure in resource initialization",

@@ -1,5 +1,3 @@
-import type { Result } from "ts-results"
-import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
@@ -7,12 +5,13 @@ import { CourseIdentifier, LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities/"
 
 /**
- * Registers the various actions and handlers required for the user interface to function.
- * Should only be called once.
- * @param ui The User Interface object
- * @param tmc The TMC API object
+ * Fills the TestMyCode tree view with the entries the current initialization state can
+ * offer, from the full menu down to the two recovery entries a broken activation leaves.
+ *
+ * Each entry id is registered from exactly one place here; registering one twice throws.
+ * Call once per activation.
  */
-export function registerUiActions(actionContext: ActionContext): Result<void, Error> {
+export function registerUiActions(actionContext: ActionContext): void {
   const {
     ui,
     visibilityGroups,
@@ -24,10 +23,6 @@ export function registerUiActions(actionContext: ActionContext): Result<void, Er
   } = actionContext
   Logger.info("Initializing UI Actions")
 
-  if (userData.err) {
-    return new Err(new Error("Extension was not initialized properly"))
-  }
-
   if (
     !(
       userData.ok &&
@@ -37,7 +32,6 @@ export function registerUiActions(actionContext: ActionContext): Result<void, Er
       workspaceManager.ok
     )
   ) {
-    // something failed
     ui.treeDP.registerAction(
       "View initialization error help",
       "tmc.viewInitializationErrorHelp",
@@ -61,7 +55,6 @@ export function registerUiActions(actionContext: ActionContext): Result<void, Er
     )
   }
 
-  // Register UI actions
   if (langs.ok) {
     ui.treeDP.registerAction(
       "Log in",
@@ -153,6 +146,4 @@ export function registerUiActions(actionContext: ActionContext): Result<void, Er
     undefined,
     "sign-out",
   )
-
-  return Ok.EMPTY
 }
