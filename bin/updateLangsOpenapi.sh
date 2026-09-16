@@ -17,70 +17,72 @@
 # extension currently tracks the unreleased `programming-exercise-migration`
 # work.
 #
-# Drift gating (two layers):
-#   * Byte-compare against the sibling checkout (`--check`) is LOCAL-ONLY: CI has
-#     no secret-project-331 checkout, so it cannot run it. Run it before
-#     committing a spec-touching change to confirm the vendored copy is
-#     byte-identical to the sibling.
+# Drift gating (three layers):
+#   * Byte-compare against the sibling checkout (`--check`) needs that checkout,
+#     so it is for local use before committing a spec-touching change.
 #   * A provenance STAMP committed next to the vendored spec
 #     (exercise-services-client.openapi.source.json: the source rev + the spec's
 #     sha256) lets CI verify the vendored spec has not been hand-edited without a
 #     re-vendor. `--check-stamp` performs that check and needs NO sibling
 #     checkout, so it is the gate CI runs (see .github/workflows/test.yml).
+#   * `--check-source` fetches the spec from GitHub at the stamp's source_rev and
+#     byte-compares, which is the only layer that catches a stamp refreshed from
+#     a dirty or unpushed sibling checkout. It needs network, and the recorded
+#     rev currently lives on sp331's programming-exercise-migration branch, so
+#     it stays non-blocking in CI until PR #1769 merges.
 #
-# Run via `pnpm run vendor:langs-openapi` (copy + refresh stamp),
-# `pnpm run vendor:langs-openapi -- --check` (byte-compare vs sibling + stamp),
-# or `pnpm run vendor:langs-openapi -- --check-stamp` (stamp only, no sibling).
+# Run via `pnpm run vendor:langs-openapi` (copy + refresh stamp), or with
+# `-- --check`, `-- --check-stamp` or `-- --check-source`.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/stamp.sh"
+
+cd "$SCRIPT_DIR/.."
 
 SP331_CHECKOUT="${SECRET_PROJECT_331_CHECKOUT:-../secret-project-331}"
-SOURCE="$SP331_CHECKOUT/services/headless-lms/server/openapi/exercise-services-client.openapi.generated.json"
+SPEC_PATH="services/headless-lms/server/openapi/exercise-services-client.openapi.generated.json"
+SOURCE="$SP331_CHECKOUT/$SPEC_PATH"
 TARGET="./backend/mooc/exercise-services-client.openapi.generated.json"
 STAMP="./backend/mooc/exercise-services-client.openapi.source.json"
+SOURCE_URL="https://raw.githubusercontent.com/rage/secret-project-331/{rev}/$SPEC_PATH"
+REVENDOR="pnpm run vendor:langs-openapi"
 
-# sha256 of a file, portable across Linux (sha256sum) and macOS (shasum).
-sha256_of() {
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1" | awk '{print $1}'
-  else
-    shasum -a 256 "$1" | awk '{print $1}'
-  fi
-}
-
-# Reads the "sha256" value out of the stamp file (no jq dependency).
-stamp_sha256() {
-  node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('$STAMP','utf8')).sha256||''))"
-}
-
-# `pnpm run <script> -- <arg>` can forward the literal "--" separator as $1; drop it.
-if [ "${1:-}" = "--" ]; then
-  shift
-fi
-MODE="${1:-}"
+MODE="$(vendor_mode "$@")"
 
 # --check-stamp: verify the vendored spec still matches the committed provenance
 # stamp. Needs NO secret-project-331 checkout, so this is the gate CI runs. It
 # catches a hand-edit of the vendored spec that never went through re-vendoring.
 if [ "$MODE" = "--check-stamp" ]; then
-  if [ ! -f "$STAMP" ]; then
-    echo "error: $STAMP not found. Run 'pnpm run vendor:langs-openapi' to create it." >&2
+  verify_stamp "$TARGET" "$STAMP" "$REVENDOR"
+  exit $?
+fi
+
+# --check-source: fetch the spec at the stamp's recorded rev and byte-compare.
+# Needs no checkout either, but does need network and a rev that is reachable on
+# a pushed branch.
+if [ "$MODE" = "--check-source" ]; then
+  rev="$(stamp_field "$STAMP" source_rev)"
+  url="$(stamp_field "$STAMP" source_url)"
+  if [ -z "$rev" ] || [ -z "$url" ]; then
+    echo "error: $STAMP records no source_rev/source_url; re-vendor with '$REVENDOR'." >&2
     exit 1
   fi
-  if [ ! -f "$TARGET" ]; then
-    echo "error: $TARGET not found." >&2
+  url="${url//\{rev\}/$rev}"
+  fetched="$(mktemp)"
+  trap 'rm -f "$fetched"' EXIT
+  if ! curl -fsSL "$url" -o "$fetched"; then
+    echo "error: could not fetch $url" >&2
+    echo "The recorded rev may not be pushed, or may live on a branch that was force-updated." >&2
     exit 1
   fi
-  actual="$(sha256_of "$TARGET")"
-  expected="$(stamp_sha256)"
-  if [ "$actual" = "$expected" ]; then
-    echo "OK: vendored spec sha256 matches the stamp ($expected)"
+  if diff -q "$fetched" "$TARGET" >/dev/null 2>&1; then
+    echo "OK: vendored spec is byte-identical to $url"
     exit 0
   fi
-  echo "STAMP MISMATCH: $TARGET sha256 $actual != stamp $expected" >&2
-  echo "The vendored spec was hand-edited or the stamp is stale." >&2
-  echo "Re-vendor from secret-project-331 with 'pnpm run vendor:langs-openapi'." >&2
+  echo "DRIFT: $TARGET differs from the spec at the recorded rev" >&2
+  echo "$url" >&2
+  diff "$fetched" "$TARGET" >&2 || true
   exit 1
 fi
 
@@ -100,24 +102,11 @@ if [ "$MODE" = "--check" ]; then
     echo "OK: vendored langs OpenAPI is byte-identical to $SOURCE"
   else
     echo "DRIFT: $TARGET differs from $SOURCE" >&2
-    echo "Run 'pnpm run vendor:langs-openapi' to re-vendor." >&2
+    echo "Run '$REVENDOR' to re-vendor." >&2
     diff "$SOURCE" "$TARGET" >&2 || true
     status=1
   fi
-  # Also validate the provenance stamp (the standalone check CI runs).
-  if [ -f "$STAMP" ]; then
-    actual="$(sha256_of "$TARGET")"
-    expected="$(stamp_sha256)"
-    if [ "$actual" = "$expected" ]; then
-      echo "OK: vendored spec sha256 matches the stamp ($expected)"
-    else
-      echo "STAMP MISMATCH: $TARGET sha256 $actual != stamp $expected" >&2
-      status=1
-    fi
-  else
-    echo "error: $STAMP not found; run 'pnpm run vendor:langs-openapi' to create it." >&2
-    status=1
-  fi
+  verify_stamp "$TARGET" "$STAMP" "$REVENDOR" || status=1
   exit $status
 fi
 
@@ -135,6 +124,7 @@ cat > "$STAMP" <<EOF
   "//": "Provenance stamp for the vendored exercise-services client OpenAPI spec. Written by bin/updateLangsOpenapi.sh; do not hand-edit. CI asserts the vendored spec's sha256 matches the value below via 'bin/updateLangsOpenapi.sh --check-stamp', catching a hand-edit that never went through re-vendoring.",
   "source_repo": "secret-project-331",
   "source_rev": "$REV",
+  "source_url": "$SOURCE_URL",
   "sha256": "$SHA"
 }
 EOF
