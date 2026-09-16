@@ -27,6 +27,7 @@ import { getNonce } from "../utilities/getNonce"
 import { getUri } from "../utilities/getUri"
 import { postMessageToWebview, renderPanel } from "../utilities/panel"
 import { buildCourseDetailsView } from "./courseDetailsViewModel"
+import type { CourseDetailsView } from "./courseDetailsViewModel"
 import { moocLoginRegistry } from "./moocLoginRegistry"
 import { updateablesRegistry } from "./updateablesRegistry"
 
@@ -397,39 +398,51 @@ export class TmcPanel {
               exerciseIds: updateablesRegistry.get(message.sourcePanel.courseId),
             })
 
-            langs.val.getCourseDetails(message.sourcePanel.courseId).then((apiCourse) => {
-              const offlineMode = apiCourse.err // failed to get course details = offline mode
+            postMessageToWebview(webview, {
+              type: "setCourseDisabledStatus",
+              target: message.sourcePanel,
+              courseId: LocalCourseData.getCourseId(course),
+              disabled: course.data.disabled,
+            })
 
-              postMessageToWebview(webview, {
-                type: "setCourseDisabledStatus",
-                target: message.sourcePanel,
-                courseId: LocalCourseData.getCourseId(course),
-                disabled: course.data.disabled,
-              })
-
-              const view = buildCourseDetailsView(
+            const buildView = (offlineMode: boolean): CourseDetailsView =>
+              buildCourseDetailsView(
                 course,
                 workspaceManager.val.getExercises(),
                 offlineMode,
                 new Date(),
               )
-              postMessageToWebview(webview, {
-                type: "setExerciseStatuses",
-                target: message.sourcePanel,
-                courseId: LocalCourseData.getCourseId(course),
-                statuses: view.exerciseStatuses.map(
-                  ({ exerciseId, status }): [ExerciseIdentifier, ExerciseStatus] => [
-                    exerciseId,
-                    status,
-                  ],
-                ),
-              })
-              postMessageToWebview(webview, {
-                type: "setCourseGroups",
-                target: message.sourcePanel,
-                offlineMode,
-                exerciseGroups: view.exerciseGroups,
-              })
+            const view = buildView(false)
+            postMessageToWebview(webview, {
+              type: "setExerciseStatuses",
+              target: message.sourcePanel,
+              courseId: LocalCourseData.getCourseId(course),
+              statuses: view.exerciseStatuses.map(
+                ({ exerciseId, status }): [ExerciseIdentifier, ExerciseStatus] => [
+                  exerciseId,
+                  status,
+                ],
+              ),
+            })
+            postMessageToWebview(webview, {
+              type: "setCourseGroups",
+              target: message.sourcePanel,
+              offlineMode: false,
+              exerciseGroups: view.exerciseGroups,
+            })
+
+            // Everything above comes from stored data, so the panel is rendered by now.
+            // The backend is reached only to find out whether the deadlines just posted
+            // can be trusted; the groups are re-posted without them if not.
+            langs.val.getCourseDetails(message.sourcePanel.courseId).then((apiCourse) => {
+              if (apiCourse.err) {
+                postMessageToWebview(webview, {
+                  type: "setCourseGroups",
+                  target: message.sourcePanel,
+                  offlineMode: true,
+                  exerciseGroups: buildView(true).exerciseGroups,
+                })
+              }
             })
             break
           }

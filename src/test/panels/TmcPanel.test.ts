@@ -719,3 +719,62 @@ suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
     expect((statuses[0] as { statuses: unknown[] }).statuses).toHaveLength(EXERCISE_COUNT)
   })
 })
+
+suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
+  const COURSE_ID = CourseIdentifier.from(42)
+
+  const sourcePanel = {
+    id: 5,
+    type: "CourseDetails" as const,
+    courseId: COURSE_ID,
+    exerciseStatuses: { tmc: {}, mooc: {} },
+  }
+
+  function contextProbing(
+    getCourseDetails: ReturnType<typeof vi.fn>,
+  ): ReturnType<typeof createMockActionContext> {
+    return {
+      ...createMockActionContext(),
+      langs: Ok({ getCourseDetails } as unknown as Langs),
+      userData: Ok({ getCourse: () => Ok(courseWith(2)) }),
+      workspaceManager: Ok({ getExercises: () => [] }),
+    } as unknown as ReturnType<typeof createMockActionContext>
+  }
+
+  test("renders the course without waiting for the backend", async () => {
+    // Never resolves, standing in for a slow or hanging CLI invocation.
+    const actionContext = contextProbing(vi.fn().mockReturnValue(new Promise(() => {})))
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "requestCourseDetailsData", sourcePanel })
+
+    const posted = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([m]) => m as { type: string })
+    expect(posted.map((m) => m.type)).toEqual([
+      "setCourseData",
+      "setUpdateables",
+      "setCourseDisabledStatus",
+      "setExerciseStatuses",
+      "setCourseGroups",
+    ])
+    expect(posted.at(-1)).toMatchObject({ offlineMode: false })
+  })
+
+  test("corrects the view with one message when the backend is unreachable", async () => {
+    const actionContext = contextProbing(vi.fn().mockResolvedValue(Err(new Error("offline"))))
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "requestCourseDetailsData", sourcePanel })
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+
+    const posted = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([m]) => m as { type: string })
+    const groups = posted.filter((m) => m.type === "setCourseGroups")
+    expect(groups).toHaveLength(2)
+    expect(groups[1]).toMatchObject({ offlineMode: true })
+  })
+})
