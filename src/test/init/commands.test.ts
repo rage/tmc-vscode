@@ -61,10 +61,17 @@ function registerAndCollect(): { ids: string[]; handlers: Map<string, () => Prom
   return { ids, handlers }
 }
 
+interface MenuEntry {
+  command: string
+  when?: string
+}
+
 function packageJson(): {
   contributes: {
     commands: { command: string }[]
-    menus: { commandPalette: { command: string; when?: string }[] }
+    keybindings?: { command: string; key: string; when?: string }[]
+    menus: Record<string, MenuEntry[]>
+    viewsWelcome?: { contents: string }[]
   }
 } {
   return JSON.parse(
@@ -74,6 +81,23 @@ function packageJson(): {
 
 function declaredCommands(): string[] {
   return packageJson().contributes.commands.map((x) => x.command)
+}
+
+function commandPalette(): MenuEntry[] {
+  return packageJson().contributes.menus.commandPalette ?? []
+}
+
+// Menus attached to a file, whose `when` therefore carries the gates the same
+// command needs when it is reached from the palette instead.
+const resourceMenus = ["explorer/context", "editor/title"]
+
+// A `when` is a conjunction; comparing term sets rather than strings lets the
+// palette and the menus spell the same gate in a different order.
+function whenTerms(when: string | undefined): string[] {
+  return (when ?? "")
+    .split("&&")
+    .map((x) => x.trim())
+    .filter((x) => x.length > 0)
 }
 
 afterEach(function () {
@@ -120,9 +144,59 @@ suite("registerCommands", function () {
   // Without a reachable palette entry a user with no credentials has no way in
   // besides the tree view; `"when": "false"` (its previous value) hides it.
   test("the login command is reachable from the palette while logged out", function () {
-    const entry = packageJson().contributes.menus.commandPalette.find(
-      (x) => x.command === "tmc.showMoocLogin",
-    )
+    const entry = commandPalette().find((x) => x.command === "tmc.showMoocLogin")
     expect(entry?.when).toBe("test-my-code:LoggedIn == false")
+  })
+
+  // A menu, keybinding or welcome-view link naming an undeclared command gives
+  // the user an entry that resolves to "command not found" when they pick it.
+  test("every command a contribution points at is declared", function () {
+    const { menus, keybindings = [], viewsWelcome = [] } = packageJson().contributes
+    const referenced = [
+      ...Object.values(menus).flatMap((entries) => entries.map((x) => x.command)),
+      ...keybindings.map((x) => x.command),
+      ...viewsWelcome.flatMap((x) =>
+        [...x.contents.matchAll(/command:([\w.-]+)/g)].flatMap((m) => m[1] ?? []),
+      ),
+    ]
+    const declared = new Set(declaredCommands())
+    expect([...new Set(referenced)].filter((x) => !declared.has(x))).toEqual([])
+  })
+
+  // A `when` naming a key nothing ever sets is never true, so the entry it
+  // gates silently disappears from the UI instead of failing anywhere.
+  test("every context key the manifest gates on is one the extension sets", function () {
+    const source = fs.readFileSync(path.join(__dirname, "..", "..", "extension.ts"), "utf8")
+    const settable = new Set(
+      [...source.matchAll(/"(test-my-code:\w+)"/g)].flatMap((match) => match[1] ?? []),
+    )
+    const { menus, keybindings = [] } = packageJson().contributes
+    const gated = [...Object.values(menus).flat(), ...keybindings]
+    const referenced = new Set(
+      gated.flatMap((x) => [...(x.when ?? "").matchAll(/test-my-code:\w+/g)].map((m) => m[0])),
+    )
+    expect([...referenced].filter((key) => !settable.has(key)).toSorted()).toEqual([])
+  })
+
+  // The palette is the one entry point with no file behind it, so a gate the
+  // file menus enforce has to be spelled out there or the command runs without it.
+  test("a palette entry carries every gate its resource menus carry", function () {
+    const { menus } = packageJson().contributes
+    const missing: string[] = []
+    for (const entry of commandPalette()) {
+      const palette = whenTerms(entry.when)
+      for (const menu of resourceMenus) {
+        const menuEntry = (menus[menu] ?? []).find((x) => x.command === entry.command)
+        if (!menuEntry) {
+          continue
+        }
+        for (const term of whenTerms(menuEntry.when)) {
+          if (!term.startsWith("resourceScheme") && !palette.includes(term)) {
+            missing.push(`${entry.command}: ${menu} requires ${term}`)
+          }
+        }
+      }
+    }
+    expect(missing).toEqual([])
   })
 })

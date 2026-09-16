@@ -359,6 +359,11 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     )
   }
 
+  // Gates the palette entries whose commands can only report "not initialized properly".
+  const initialized =
+    langs.ok && userData.ok && workspaceManager.ok && exerciseDecorationProvider.ok && resources.ok
+  await vscode.commands.executeCommand("setContext", "test-my-code:Initialized", initialized)
+
   const actionContext: ActionContext = {
     dialog,
     exerciseDecorationProvider,
@@ -427,15 +432,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     await vscode.commands.executeCommand("tmc.showWelcome")
   }
 
-  if (
-    !(
-      langs.ok &&
-      userData.ok &&
-      workspaceManager.ok &&
-      exerciseDecorationProvider.ok &&
-      resources.ok
-    )
-  ) {
+  if (!initialized) {
     TmcPanel.renderMain(context.extensionUri, context, actionContext, {
       id: randomPanelId(),
       type: "InitializationErrorHelp",

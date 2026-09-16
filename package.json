@@ -332,7 +332,7 @@
         },
         {
           "command": "tmc.downloadOldSubmission",
-          "when": "test-my-code:LoggedIn"
+          "when": "test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.logout",
@@ -344,11 +344,11 @@
         },
         {
           "command": "tmc.pasteExercise",
-          "when": "test-my-code:LoggedIn"
+          "when": "test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.resetExercise",
-          "when": "test-my-code:LoggedIn"
+          "when": "test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.showMoocLogin",
@@ -356,7 +356,7 @@
         },
         {
           "command": "tmc.submitExercise",
-          "when": "test-my-code:LoggedIn"
+          "when": "test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.updateExercises",
@@ -389,6 +389,26 @@
         {
           "command": "tmc.debug",
           "when": "test-my-code:DebugMode"
+        },
+        {
+          "command": "tmc.changeTmcDataPath",
+          "when": "test-my-code:Initialized"
+        },
+        {
+          "command": "tmc.openTMCExercisesFolder",
+          "when": "test-my-code:Initialized"
+        },
+        {
+          "command": "tmc.wipe",
+          "when": "test-my-code:Initialized"
+        },
+        {
+          "command": "tmc.switchWorkspace",
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.selectAction",
+          "when": "test-my-code:WorkspaceActive"
         }
       ],
       "editor/title": [
