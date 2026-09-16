@@ -139,6 +139,17 @@ function loggedInLine(): string {
   })
 }
 
+/** The envelope a command that returns no data ends with, e.g. `settings set`. */
+function executedCommandLine(): string {
+  return JSON.stringify({
+    "output-kind": "output-data",
+    status: "finished",
+    message: "set setting",
+    result: "executed-command",
+    data: null,
+  })
+}
+
 /** A login envelope carrying a live token, rejected because `status` is not a known value. */
 function driftedTokenLine(): string {
   return JSON.stringify({
@@ -350,6 +361,22 @@ suite("Langs CLI process output", function () {
     const text = loggedText(captured)
     expect(text).toContain("didn't match expected type")
     expect(text).not.toContain(TOKEN)
+  })
+
+  test("an oversized argument is logged as its length, not its value", async function () {
+    const captured = captureLogs()
+    const langs = newLangs()
+    const closedExercises = Array.from({ length: 50 }, (_, i) => `part01-Part01_${i}.Sandbox`)
+    const pending = langs.setSetting("closed-exercises-for:course", closedExercises)
+    const langsProcess = lastProcess()
+    writeStdout(langsProcess, executedCommandLine())
+    endProcess(langsProcess)
+    await pending
+
+    const text = loggedText(captured)
+    expect(text).toContain("closed-exercises-for:course")
+    expect(text).toContain("characters>")
+    expect(text).not.toContain("part01-Part01_0.Sandbox")
   })
 
   test("an unterminated tail never reaches the log", async function () {

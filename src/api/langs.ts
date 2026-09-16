@@ -169,6 +169,17 @@ function cacheKey(
 /** Bounds the cache so a long session that visits many courses cannot grow it without limit. */
 const MAX_CACHED_RESPONSES = 128
 
+/** Long enough for every flag and id the CLI takes; only a settings value exceeds it. */
+const MAX_LOGGED_ARG_LENGTH = 120
+
+/**
+ * Replaces an oversized argument with its length, so the output channel users paste into
+ * bug reports stays readable when a whole settings value goes through argv.
+ */
+function loggableArg(arg: string): string {
+  return arg.length > MAX_LOGGED_ARG_LENGTH ? `<${arg.length} characters>` : arg
+}
+
 const organizationsRemapper: CacheConfig["remapper"] = (res) => {
   if (res.data?.["output-data-kind"] === "organizations") {
     return res.data["output-data"].map((x) => [
@@ -689,9 +700,12 @@ export default class Langs {
    * internally.
    */
   public async setSetting(key: string, value: unknown): Promise<Result<void, Error>> {
+    // Base64 rather than raw JSON: the value goes through argv, where quoting rules differ
+    // per platform and a course's closed-exercise list is long enough to matter.
+    const encoded = Buffer.from(JSON.stringify(value)).toString("base64")
     const res = await this._executeLangsCommand(
       {
-        args: this._settingsCmd("set", key, JSON.stringify(value)),
+        args: this._settingsCmd("set", key, encoded, "--base64"),
       },
       null,
     )
@@ -1833,9 +1847,8 @@ export default class Langs {
     // output data report *why* instead of a generic "no result data" message.
     let lastSchemaFailure: LangsSchemaFailure | undefined
 
-    const obfuscatedArgs = args.map((x, i) => (obfuscate?.includes(i) ? "***" : x))
     const loggableCommand = [this.cliPath]
-      .concat(obfuscatedArgs)
+      .concat(args.map((x, i) => (obfuscate?.includes(i) ? "***" : loggableArg(x))))
       .map((x) => JSON.stringify(x))
       .join(" ")
 

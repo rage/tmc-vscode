@@ -133,6 +133,21 @@ suite("Langs class arg building", function () {
     expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "courses"])
   })
 
+  test("setSetting passes the value base64-encoded", async function () {
+    const langs = newLangs()
+    const calls = spyOnSpawn(langs)
+    await langs.setSetting("closed-exercises-for:course", ["part01-01", "part01-02"])
+    expect(calls[0]?.args).toEqual([
+      "settings",
+      "--client-name",
+      "test-client",
+      "set",
+      "closed-exercises-for:course",
+      Buffer.from('["part01-01","part01-02"]').toString("base64"),
+      "--base64",
+    ])
+  })
+
   test("getEnrolledMoocCourseInstances de-duplicates courses by id", async function () {
     // The backend can return the same course twice (two live enrollments of one
     // course); since the extension keys courses by course id, the list must be
