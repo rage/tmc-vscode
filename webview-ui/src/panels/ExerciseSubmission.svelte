@@ -198,7 +198,6 @@
   {#if submissionResult && !submissionResult.all_tests_passed}
     <div class="help-box-container">
       <PasteHelpBox
-        hidden={false}
         course={panel.course}
         exercise={panel.exercise}
         sourcePanel={{ id: panel.id, type: panel.type }}

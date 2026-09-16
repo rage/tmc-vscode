@@ -158,20 +158,21 @@
     {:else}
       <div class="header-container">
         <Button onclick={submit} disabled={submitting}>Submit to server</Button>
-        <span class="help-box-container">
-          <PasteHelpBox
-            hidden={allSuccessful ?? true}
-            course={panel.course}
-            exercise={panel.exercise}
-            sourcePanel={{ id: panel.id, type: panel.type }}
-            pasteUrl={pasteResult}
-            {pasteError}
-            onPaste={() => {
-              pasteResult = undefined
-              pasteError = undefined
-            }}
-          />
-        </span>
+        {#if !allSuccessful}
+          <span class="help-box-container">
+            <PasteHelpBox
+              course={panel.course}
+              exercise={panel.exercise}
+              sourcePanel={{ id: panel.id, type: panel.type }}
+              pasteUrl={pasteResult}
+              {pasteError}
+              onPaste={() => {
+                pasteResult = undefined
+                pasteError = undefined
+              }}
+            />
+          </span>
+        {/if}
       </div>
     {/if}
     <TestResults

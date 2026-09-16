@@ -10,11 +10,11 @@
     LocalCourseExercise,
     TargetPanel,
   } from "../shared/shared"
+  import { backendName } from "../shared/shared"
   import { vscode } from "../utilities/vscode"
   import Button from "./Button.svelte"
 
   interface Props {
-    hidden: boolean
     // matches the `pasteExercise` message sent to the extension host
     course: LocalCourseData
     exercise: LocalCourseExercise
@@ -26,7 +26,9 @@
     onPaste?: () => void
   }
 
-  let { hidden, course, exercise, sourcePanel, pasteUrl, pasteError, onPaste }: Props = $props()
+  let { course, exercise, sourcePanel, pasteUrl, pasteError, onPaste }: Props = $props()
+
+  const pasteService = $derived(`${backendName(course.kind)} paste`)
 
   let pasting = $state<boolean>(false)
   let showHelp = $state<boolean>(false)
@@ -48,16 +50,16 @@
   }
 </script>
 
-<Button {hidden} secondary onclick={toggleShowHelp}>Need help?</Button>
+<Button secondary onclick={toggleShowHelp}>Need help?</Button>
 {#if showHelp}
   <div class="help" transition:slide>
-    <h2 class="header">Submit to TMC Paste</h2>
+    <h2 class="header">Submit to {pasteService}</h2>
     <div>
-      You can submit your code to TMC Paste and share the link to the course discussion channel and
+      You can submit your code to {pasteService} and share the link to the course discussion channel and
       ask for help.
     </div>
     <div class="paste-button-container">
-      <Button onclick={paste}>Submit to TMC Paste</Button>
+      <Button onclick={paste}>Submit to {pasteService}</Button>
     </div>
     <div class="paste-results-container">
       {#if pasteUrl !== undefined}
@@ -67,11 +69,11 @@
       {/if}
       {#if pasteError !== undefined}
         <div>
-          Failed to submit to TMC Paste: {pasteError}
+          Failed to submit to {pasteService}: {pasteError}
         </div>
       {/if}
       {#if pasting && pasteUrl === undefined && pasteError === undefined}
-        <div>Sending to TMC Paste…</div>
+        <div>Sending to {pasteService}…</div>
         <vscode-progress-ring></vscode-progress-ring>
       {/if}
     </div>
