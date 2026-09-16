@@ -5,44 +5,98 @@ import { Uri, ViewColumn, window } from "vscode"
 import * as vscode from "vscode"
 import { z } from "zod"
 
-import {
-  closeExercises,
-  downloadAndOpenExercises,
-  downloadExercisesForUi,
-  openWorkspace,
-  pasteMoocExercise,
-  pasteTmcExercise,
-  removeCourse,
-  testInterrupts,
-  updateCourse,
-} from "../actions"
 import type { ActionContext } from "../actions/types"
 import type Dialog from "../api/dialog"
-import { ExerciseStatus } from "../api/workspaceManager"
-import * as commands from "../commands"
 import { InitializationError } from "../errors"
-import type { ExerciseGroup, ExtensionToWebview, Panel, WebviewToExtension } from "../shared/shared"
-import {
+import type {
+  CourseIdentifier,
   ExerciseIdentifier,
+  ExtensionToWebview,
+  Panel,
+  WebviewToExtension,
+} from "../shared/shared"
+import {
   LocalCourseData,
   LocalCourseExercise,
   match,
   WebviewToExtensionSchema,
 } from "../shared/shared"
-import type * as UITypes from "../ui/types"
-import {
-  cliFolder,
-  dateToString,
-  formatSizeInBytes,
-  Logger,
-  parseDate,
-  parseNextDeadlineAfter,
-} from "../utilities"
+import { cliFolder, formatSizeInBytes, Logger } from "../utilities"
 import { getNonce } from "../utilities/getNonce"
 import { getUri } from "../utilities/getUri"
 import { postMessageToWebview, renderPanel } from "../utilities/panel"
+import { buildCourseDetailsView } from "./courseDetailsViewModel"
 import { moocLoginRegistry } from "./moocLoginRegistry"
 import { updateablesRegistry } from "./updateablesRegistry"
+
+/**
+ * The action- and command-layer entry points the webview message handlers invoke.
+ *
+ * Declared here and supplied at activation rather than imported: both of those layers
+ * import this module, so importing them back would put the panel layer inside a runtime
+ * import cycle spanning most of the extension. The signatures are checked against the
+ * real functions where `registerWebviewHandlers` is called.
+ */
+export interface WebviewHandlers {
+  /** Stops the test run `testRunId`. Does nothing if it already finished. */
+  cancelTests: (testRunId: number) => void
+  closeExercises: (
+    actionContext: ActionContext,
+    ids: ExerciseIdentifier[],
+    courseId: CourseIdentifier,
+  ) => Promise<Result<ExerciseIdentifier[], Error>>
+  downloadAndOpenExercises: (
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    ids: ExerciseIdentifier[],
+    courseId: CourseIdentifier,
+  ) => Promise<Result<ExerciseIdentifier[], Error>>
+  downloadExercisesForUi: (
+    actionContext: ActionContext,
+    mode: string,
+    courseId: CourseIdentifier,
+    ids: ExerciseIdentifier[],
+  ) => Promise<void>
+  openWorkspace: (
+    actionContext: ActionContext,
+    courseName: string,
+    backend: "tmc" | "mooc",
+  ) => Promise<void>
+  pasteMoocExercise: (
+    actionContext: ActionContext,
+    courseSlug: string,
+    exerciseName: string,
+  ) => Promise<Result<string, Error>>
+  pasteTmcExercise: (
+    actionContext: ActionContext,
+    courseSlug: string,
+    exerciseName: string,
+  ) => Promise<Result<string, Error>>
+  removeCourse: (actionContext: ActionContext, id: CourseIdentifier) => Promise<void>
+  submitExercise: (
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    exerciseUri: vscode.Uri,
+  ) => Promise<Result<void, Error>>
+  updateCourse: (
+    actionContext: ActionContext,
+    courseId: CourseIdentifier,
+  ) => Promise<Result<boolean, Error>>
+}
+
+let registeredHandlers: WebviewHandlers | undefined
+
+/** Wires the panel layer to the actions and commands it dispatches to. Called once, at activation. */
+export function registerWebviewHandlers(webviewHandlers: WebviewHandlers): void {
+  registeredHandlers = webviewHandlers
+}
+
+function handlers(): WebviewHandlers {
+  if (registeredHandlers === undefined) {
+    throw new InitializationError("Webview handlers were never registered")
+  }
+  return registeredHandlers
+}
 
 /**
  * Manages the rendering of the extension webview panels.
@@ -345,7 +399,6 @@ export class TmcPanel {
             langs.val.getCourseDetails(message.sourcePanel.courseId).then((apiCourse) => {
               const offlineMode = apiCourse.err // failed to get course details = offline mode
 
-              const currentDate = new Date()
               postMessageToWebview(webview, {
                 type: "setCourseDisabledStatus",
                 target: message.sourcePanel,
@@ -353,82 +406,26 @@ export class TmcPanel {
                 disabled: course.data.disabled,
               })
 
-              const exerciseGroupData = new Map<string, UITypes.CourseDetailsExerciseGroup>()
-              LocalCourseData.getExercises(course).forEach((ex) => {
-                const nameMatch = LocalCourseExercise.getSlug(ex).match(/(\w+)-(.+)/)
-                const groupName = nameMatch?.[1] || ""
-                const group = exerciseGroupData.get(groupName)
-                const name = nameMatch?.[2] || ""
-                // the workspace manager only tracks on-disk exercises, so an undownloaded
-                // exercise is expected to be missing here rather than an error
-                const exData = workspaceManager.val.getExerciseBySlug(
-                  course.kind,
-                  LocalCourseData.getCourseName(course),
-                  LocalCourseExercise.getSlug(ex),
-                )
-                if (!exData) {
-                  Logger.debug(
-                    `Exercise ${LocalCourseExercise.getSlug(ex)} has not been downloaded yet`,
-                  )
-                }
-
-                const softDeadline = ex.data.softDeadline ? parseDate(ex.data.softDeadline) : null
-                const hardDeadline = ex.data.deadline ? parseDate(ex.data.deadline) : null
-
-                const exerciseId = LocalCourseExercise.getId(ex)
+              const view = buildCourseDetailsView(
+                course,
+                workspaceManager.val.getExercises(),
+                offlineMode,
+                new Date(),
+              )
+              for (const { exerciseId, status } of view.exerciseStatuses) {
                 postMessageToWebview(webview, {
                   type: "exerciseStatusChange",
                   target: message.sourcePanel,
                   courseId: LocalCourseData.getCourseId(course),
                   exerciseId,
-                  status: mapStatus(
-                    exData?.status ?? ExerciseStatus.Missing,
-                    hardDeadline !== null && currentDate >= hardDeadline,
-                  ),
+                  status,
                 })
-                const entry: UITypes.CourseDetailsExercise = {
-                  id: exerciseId,
-                  name,
-                  passed:
-                    LocalCourseData.getExercises(course).find(
-                      (ce) =>
-                        ExerciseIdentifier.toString(LocalCourseExercise.getId(ce)) ===
-                        ExerciseIdentifier.toString(exerciseId),
-                    )?.data.passed || false,
-                  softDeadline,
-                  softDeadlineString: softDeadline ? dateToString(softDeadline) : "-",
-                  hardDeadline,
-                  hardDeadlineString: hardDeadline ? dateToString(hardDeadline) : "-",
-                  isHard: softDeadline && hardDeadline ? hardDeadline <= softDeadline : true,
-                }
-                exerciseGroupData.set(groupName, {
-                  name: groupName,
-                  nextDeadlineString: "",
-                  exercises: group?.exercises.concat(entry) || [entry],
-                })
-              })
-              const exerciseGroups: ExerciseGroup[] = Array.from(exerciseGroupData.values())
-                .toSorted((a, b) => (a.name > b.name ? 1 : -1))
-                .map((e) => {
-                  return {
-                    name: e.name,
-                    exercises: e.exercises.toSorted((a, b) => (a.name > b.name ? 1 : -1)),
-                    nextDeadlineString: offlineMode
-                      ? "Next deadline: Not available"
-                      : parseNextDeadlineAfter(
-                          currentDate,
-                          e.exercises.map((ex) => ({
-                            date: ex.isHard ? ex.hardDeadline : ex.softDeadline,
-                            active: !ex.passed,
-                          })),
-                        ),
-                  }
-                })
+              }
               postMessageToWebview(webview, {
                 type: "setCourseGroups",
                 target: message.sourcePanel,
                 offlineMode,
-                exerciseGroups,
+                exerciseGroups: view.exerciseGroups,
               })
             })
             break
@@ -519,7 +516,7 @@ export class TmcPanel {
                                 This won't delete your downloaded exercises.`,
               )
             ) {
-              await removeCourse(actionContext, message.id)
+              await handlers().removeCourse(actionContext, message.id)
               await this._renderPanel({
                 id: randomPanelId(),
                 type: "MyCourses",
@@ -530,7 +527,7 @@ export class TmcPanel {
             break
           }
           case "openCourseWorkspace": {
-            openWorkspace(actionContext, message.courseName, message.backend)
+            handlers().openWorkspace(actionContext, message.courseName, message.backend)
             break
           }
           case "addNewCourse": {
@@ -550,7 +547,11 @@ export class TmcPanel {
             break
           }
           case "closeExercises": {
-            const result = await closeExercises(actionContext, message.ids, message.courseId)
+            const result = await handlers().closeExercises(
+              actionContext,
+              message.ids,
+              message.courseId,
+            )
             if (result.err) {
               actionContext.dialog.errorNotification(
                 "Errored while closing selected exercises.",
@@ -576,11 +577,16 @@ export class TmcPanel {
             break
           }
           case "downloadExercises": {
-            await downloadExercisesForUi(actionContext, message.mode, message.courseId, message.ids)
+            await handlers().downloadExercisesForUi(
+              actionContext,
+              message.mode,
+              message.courseId,
+              message.ids,
+            )
             break
           }
           case "openExercises": {
-            await downloadAndOpenExercises(
+            await handlers().downloadAndOpenExercises(
               extensionContext,
               actionContext,
               message.ids,
@@ -590,7 +596,7 @@ export class TmcPanel {
           }
           case "refreshCourseDetails": {
             const courseId = message.id
-            const updateResult = await updateCourse(actionContext, courseId)
+            const updateResult = await handlers().updateCourse(actionContext, courseId)
             if (updateResult.err) {
               actionContext.dialog.errorNotification("Failed to update course.", updateResult.val)
             }
@@ -609,13 +615,7 @@ export class TmcPanel {
             break
           }
           case "cancelTests": {
-            const interrupts = testInterrupts.get(message.testRunId)
-            if (interrupts) {
-              for (const interrupt of interrupts) {
-                interrupt()
-                testInterrupts.delete(message.testRunId)
-              }
-            }
+            handlers().cancelTests(message.testRunId)
             break
           }
           case "submitExercise": {
@@ -624,7 +624,7 @@ export class TmcPanel {
             // When it fails there is no such panel, so the ExerciseTests panel still on
             // screen has to be told, or its Submit button stays disabled forever.
             try {
-              const result = await commands.submitExercise(
+              const result = await handlers().submitExercise(
                 extensionContext,
                 actionContext,
                 message.exerciseUri,
@@ -642,13 +642,13 @@ export class TmcPanel {
             const pasteResult = await match(
               message.course,
               () =>
-                pasteTmcExercise(
+                handlers().pasteTmcExercise(
                   actionContext,
                   LocalCourseData.getCourseName(message.course),
                   LocalCourseExercise.getSlug(message.exercise),
                 ),
               () =>
-                pasteMoocExercise(
+                handlers().pasteMoocExercise(
                   actionContext,
                   LocalCourseData.getCourseName(message.course),
                   LocalCourseExercise.getSlug(message.exercise),
@@ -792,17 +792,6 @@ function reportNotInitialized(dialog: Dialog): void {
 // helper to make an exhaustive switch statement
 function assertUnreachable(x: never): never {
   throw new Error(`unreachable ${x}`)
-}
-
-function mapStatus(status: ExerciseStatus, expired: boolean): UITypes.ExerciseStatus {
-  switch (status) {
-    case ExerciseStatus.Closed:
-      return "closed"
-    case ExerciseStatus.Open:
-      return "opened"
-    default:
-      return expired ? "expired" : "new"
-  }
 }
 
 let nextPanelId = 0
