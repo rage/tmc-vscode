@@ -26,7 +26,9 @@ const exercises: Exercise[] = [
 ]
 
 for (const exercise of exercises) {
-  vsCodeTest("can complete exercise", async ({ page, webview }) => {
+  // Named after the exercise: the title is also the trace filename
+  // (fixtures.ts), so a constant one would have every case overwrite the last.
+  vsCodeTest(`can complete ${exercise.name}`, async ({ page, webview }) => {
     const myCoursesPage = new MyCoursesPage(page, webview)
     const coursePage = new CoursePage(page, webview)
     const testResultsPage = new TestResultsPage(page, webview)
