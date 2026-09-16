@@ -14,9 +14,17 @@ export default defineConfig({
     // instruments across the whole run. `pnpm run test:coverage` wires this up.
     coverage: {
       provider: "v8",
-      reporter: ["text", "html"],
+      reporter: ["text", "html", "json-summary"],
       include: ["src/**", "webview-ui/src/**", "shared/**"],
       exclude: ["src/test/**", "src/test-integration/**", "webview-ui/src/test/**"],
+      // A few points under what the suite reaches, so ordinary churn does not
+      // trip them and a real drop still does. Raise them when the measured
+      // numbers move up, never lower them to make a run pass.
+      thresholds: {
+        lines: 75,
+        branches: 65,
+        functions: 73,
+      },
     },
   },
 })

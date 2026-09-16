@@ -43,6 +43,12 @@ jobs:
       - name: Typecheck (tsgo, svelte-check)
         run: pnpm run typecheck
 
+      # tsgo is a preview compiler; the same seven projects plus the webview go
+      # through stock tsc too, so a divergence between them is caught here
+      # rather than by whoever next opens the repo in an editor.
+      - name: Typecheck (tsc)
+        run: pnpm run typecheck:tsc
+
       # Regenerates from the committed shared/bindings.schema.json, so only the
       # generated output can drift here; the vendored schema itself is covered by
       # its provenance stamp below.
@@ -95,7 +101,22 @@ jobs:
       # The vitest unit + webview-component tiers mock `vscode` and run in
       # Node/jsdom, so they need neither a VS Code download nor xvfb.
       - name: Unit tests (vitest)
+        if: matrix.os != 'ubuntu-latest'
         run: pnpm test
+
+      # One leg carries the v8 instrumentation, which is what enforces
+      # vitest.config.ts's coverage thresholds; the other two run the same suite
+      # uninstrumented.
+      - name: Unit tests with coverage (vitest)
+        if: matrix.os == 'ubuntu-latest'
+        run: pnpm run test:coverage
+
+      - uses: actions/upload-artifact@v4.4.0
+        if: ${{ always() && matrix.os == 'ubuntu-latest' }}
+        with:
+          name: coverage-report
+          path: ./coverage/
+          if-no-files-found: ignore
 
   mock_backend_tests:
     name: Mooc mock backend tests
@@ -154,12 +175,21 @@ jobs:
       contents: read
     env:
       CI: true
+      VSCODE_TEST_VERSION: ${{ matrix.vscode == 'minimum' && '' || matrix.vscode }}
     strategy:
       # A platform-specific failure must not cancel the other two, or their real
       # state is unknown on exactly the runs where it matters.
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        # Every leg runs the minimum `engines.vscode` declares (config.js's
+        # VSCODE_TEST_VERSION default), so the oldest VS Code the extension
+        # claims to support is actually exercised; one extra leg tracks the
+        # current release, where a VS Code change lands first.
+        vscode: [minimum]
+        include:
+          - os: ubuntu-latest
+            vscode: stable
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository

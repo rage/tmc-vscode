@@ -12,6 +12,8 @@ import type {
 } from "@playwright/test"
 import { downloadAndUnzipVSCode } from "@vscode/test-electron"
 
+import { VSCODE_TEST_VERSION } from "../config"
+
 const rootPath = resolve(__dirname, "..")
 
 console.log("Loading extension from", rootPath)
@@ -146,7 +148,7 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
       )
     }
     const electronApp = await electron.launch({
-      executablePath: await downloadAndUnzipVSCode(),
+      executablePath: await downloadAndUnzipVSCode(VSCODE_TEST_VERSION),
       args: launchArgs(userDataDir),
       env: {
         ...process.env,

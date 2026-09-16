@@ -12,6 +12,11 @@ const TMC_LANGS_RUST_VERSION = "0.39.6"
 // unbundled, and src/config/constants.ts needs the esbuild define and loader.
 const MIGRATION_CONTRACT_VERSION = "0.40.0"
 
+// VS Code build both test tiers download. Defaults to the minimum `engines.vscode`
+// declares, so the version users may actually be on is the one exercised; CI
+// overrides it to "stable" on one leg to catch a break in the current release.
+const VSCODE_TEST_VERSION = process.env.VSCODE_TEST_VERSION || "1.100.0"
+
 const mockTmcLocalMooc = {
   __TMC_BACKEND_URL__: JSON.stringify("http://localhost:4001"),
   __TMC_LANGS_CONFIG_DIR__: JSON.stringify(path.join(__dirname, "backend", "cli")),
@@ -45,4 +50,10 @@ const productionApi = {
   __MOOC_BACKEND_URL__: JSON.stringify("https://courses.mooc.fi"),
 }
 
-module.exports = { mockTmcLocalMooc, mockBackend, productionApi, MIGRATION_CONTRACT_VERSION }
+module.exports = {
+  mockTmcLocalMooc,
+  mockBackend,
+  productionApi,
+  MIGRATION_CONTRACT_VERSION,
+  VSCODE_TEST_VERSION,
+}
