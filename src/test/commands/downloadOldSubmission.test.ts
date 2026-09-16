@@ -9,7 +9,10 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { downloadOldSubmission } from "../../commands/downloadOldSubmission"
 import type { UserData } from "../../config/userdata"
-import type { MoocOldSubmissionRestore } from "../../shared/langsSchema"
+import type {
+  ExerciseSlideSubmissionListItem,
+  MoocOldSubmissionRestore,
+} from "../../shared/langsSchema"
 import { createMockActionContext } from "../mocks/actionContext"
 
 suite("Download old submission command (mooc branch)", function () {
@@ -37,18 +40,29 @@ suite("Download old submission command (mooc branch)", function () {
       score_given: 0,
       grading_progress: "Failed",
     },
-  ]
+  ] as ExerciseSlideSubmissionListItem[]
 
   let getMoocOldSubmissions: ReturnType<typeof vi.fn>
   let downloadMoocOldSubmission: ReturnType<typeof vi.fn>
   let notification: ReturnType<typeof vi.fn>
   let selectedLabels: string[]
 
-  function actionContext(restore: MoocOldSubmissionRestore = "restored"): ActionContext {
+  function actionContext(
+    options: {
+      restore?: MoocOldSubmissionRestore
+      submissions?: ExerciseSlideSubmissionListItem[]
+      /**
+       * Labels to pick at each prompt after the submission picker, in order;
+       * `undefined` dismisses that prompt.
+       */
+      answers?: (string | undefined)[]
+    } = {},
+  ): ActionContext {
     const base = createMockActionContext()
+    const answers = options.answers ?? ["Discard current state", "Yes, discard current state"]
 
-    getMoocOldSubmissions = vi.fn(async () => Ok(moocSubmissions))
-    downloadMoocOldSubmission = vi.fn(async () => Ok(restore))
+    getMoocOldSubmissions = vi.fn(async () => Ok(options.submissions ?? moocSubmissions))
+    downloadMoocOldSubmission = vi.fn(async () => Ok(options.restore ?? "restored"))
     const langs = {
       getMoocOldSubmissions,
       downloadMoocOldSubmission,
@@ -71,15 +85,15 @@ suite("Download old submission command (mooc branch)", function () {
     let call = 0
     const dialog = {
       ...base.dialog,
-      // 1st prompt: the submission picker (pick the first / oldest item).
-      // Later prompts (save-current-state, confirm): "discard".
       selectItem: vi.fn(async (_prompt: string, ...items: [string, unknown][]) => {
         call += 1
+        // 1st prompt: the submission picker (pick the first / oldest item).
         if (call === 1) {
           selectedLabels = items.map(([label]) => label)
           return items[0]?.[1]
         }
-        return "discard"
+        const wanted = answers[call - 2]
+        return wanted === undefined ? undefined : items.find(([label]) => label === wanted)?.[1]
       }),
       errorNotification: vi.fn(),
       notification,
@@ -119,12 +133,50 @@ suite("Download old submission command (mooc branch)", function () {
   test("tells the user when the picked submission has no files to download", async function () {
     // Reachable only for a submission the server has no files for. That is
     // ordinary news, not an error notification.
-    const context = actionContext("nothing-to-download")
+    const context = actionContext({ restore: "nothing-to-download" })
     await downloadOldSubmission(context, uri)
 
     expect(downloadMoocOldSubmission).toHaveBeenCalledOnce()
     expect(context.dialog.errorNotification).not.toHaveBeenCalled()
     expect(notification).toHaveBeenCalledOnce()
     expect(String(notification.mock.calls[0]?.[0])).toContain("no files to download")
+  })
+
+  test("names the exercise by its slug when it has no submissions", async function () {
+    await downloadOldSubmission(actionContext({ submissions: [] }), uri)
+
+    expect(notification).toHaveBeenCalledOnce()
+    expect(String(notification.mock.calls[0]?.[0])).toContain("ex-1")
+    expect(downloadMoocOldSubmission).not.toHaveBeenCalled()
+  })
+
+  test("reads a submission the server has not started grading as pending", async function () {
+    const pending = [
+      { ...moocSubmissions[0], grading_progress: "NotReady", score_given: null },
+    ] as ExerciseSlideSubmissionListItem[]
+    await downloadOldSubmission(actionContext({ submissions: pending }), uri)
+
+    expect(selectedLabels).toHaveLength(1)
+    expect(selectedLabels[0]).toContain("Pending")
+  })
+
+  test("submits the current state first when the user asks for it", async function () {
+    await downloadOldSubmission(actionContext({ answers: ["Submit to server"] }), uri)
+
+    expect(downloadMoocOldSubmission).toHaveBeenCalledExactlyOnceWith(
+      "mooc-ex-uuid",
+      uri.fsPath,
+      "sub-older",
+      true,
+    )
+  })
+
+  test("downloads nothing when the discard confirmation is dismissed", async function () {
+    await downloadOldSubmission(
+      actionContext({ answers: ["Discard current state", undefined] }),
+      uri,
+    )
+
+    expect(downloadMoocOldSubmission).not.toHaveBeenCalled()
   })
 })

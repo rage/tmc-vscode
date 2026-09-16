@@ -6,43 +6,66 @@ import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
 } from "../shared/langsSchema"
-import { backendName, ExerciseIdentifier, match } from "../shared/shared"
+import type { Enum } from "../shared/shared"
+import {
+  assertUnreachable,
+  backendName,
+  ExerciseIdentifier,
+  makeMoocKind,
+  makeTmcKind,
+  match,
+} from "../shared/shared"
 import { dateToString, Logger, parseDate } from "../utilities"
+import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
+
+const TITLE = "Download Old Submission"
 
 /**
- * A submission normalized for the picker across both backends: the backend's own
- * submission id (integer for TMC, uuid string for mooc), a timestamp, and a
- * human-readable status shown next to the date.
+ * Everything the restore call needs, as one value: the exercise id and the
+ * submission id are in different id spaces per backend (integers for TMC, uuid
+ * strings for mooc) and pairing them here is what keeps a mismatch unbuildable.
+ */
+type RestoreTarget = Enum<
+  { exerciseId: number; submissionId: number },
+  { exerciseId: string; submissionId: string }
+>
+
+/**
+ * A submission normalized for the picker across both backends: what restoring it
+ * takes, a timestamp, and a human-readable status shown next to the date.
  */
 interface PickableSubmission {
-  id: number | string
+  target: RestoreTarget
   createdAt: string
   status: string
 }
 
 /** Human-readable grading status for a mooc submission (score + progress). */
 function moocSubmissionStatus(submission: ExerciseSlideSubmissionListItem): string {
-  if (submission.grading_progress === null) {
+  const progress = submission.grading_progress
+  if (progress === null) {
     return "Not graded"
   }
   const score = submission.score_given !== null ? ` (score ${submission.score_given})` : ""
-  switch (submission.grading_progress) {
+  switch (progress) {
     case "FullyGraded":
       return `${(submission.score_given ?? 0) > 0 ? "Passed" : "Not passed"}${score}`
     case "Failed":
       return `Failed${score}`
     case "PendingManual":
       return `Awaiting manual grading${score}`
-    default:
+    case "NotReady":
+    case "Pending":
       return `Pending${score}`
   }
+  return assertUnreachable(progress)
 }
 
 /**
- * Looks for older submissions of the given exercise and lets user choose which one to download.
- * Uses resetExercise action before applying the contents of the actual submission.
+ * Lets the user pick one of an exercise's earlier submissions and restores it
+ * over the exercise's current state, optionally submitting that state first.
  *
- * @param exerciseId exercise which older submission will be downloaded
+ * @param resource An exercise file or folder; the active editor's exercise when omitted.
  */
 export async function downloadOldSubmission(
   actionContext: ActionContext,
@@ -85,7 +108,10 @@ export async function downloadOldSubmission(
       langs.val.getTmcOldSubmissions(tmc.tmcExerciseId).then((res) =>
         res.map((submissions) =>
           submissions.map<PickableSubmission>((submission) => ({
-            id: submission.id,
+            target: makeTmcKind({
+              exerciseId: tmc.tmcExerciseId,
+              submissionId: submission.id,
+            }),
             createdAt: submission.created_at,
             status: submission.all_tests_passed ? "Passed" : "Not passed",
           })),
@@ -95,7 +121,10 @@ export async function downloadOldSubmission(
       langs.val.getMoocOldSubmissions(mooc.moocExerciseId).then((res) =>
         res.map((submissions) =>
           submissions.map<PickableSubmission>((submission) => ({
-            id: submission.id,
+            target: makeMoocKind({
+              exerciseId: mooc.moocExerciseId,
+              submissionId: submission.id,
+            }),
             createdAt: submission.created_at,
             status: moocSubmissionStatus(submission),
           })),
@@ -111,13 +140,13 @@ export async function downloadOldSubmission(
     (a, b) => parseDate(a.createdAt).getTime() - parseDate(b.createdAt).getTime(),
   )
   if (submissionsResult.val.length === 0) {
-    dialog.notification(`No previous submissions found for exercise ${exerciseId}`)
+    dialog.notification(`No previous submissions found for exercise ${exercise.exerciseSlug}`)
     return
   }
 
   const submission = await dialog.selectItem(
     {
-      title: "Download Old Submission",
+      title: TITLE,
       placeHolder: exercise.exerciseSlug + ": Select a submission",
     },
     ...submissionsResult.val.map<[string, PickableSubmission]>((a) => [
@@ -129,32 +158,13 @@ export async function downloadOldSubmission(
     return
   }
 
-  const serverName = backendName(id.kind)
-  const submitFirstSelection = await dialog.selectItem(
-    {
-      title: "Download Old Submission",
-      placeHolder: `Do you want to save the current state of the exercise by submitting it to ${serverName}?`,
-    },
-    ["Submit to server", "submit"],
-    ["Discard current state", "discard"],
+  const submitFirst = await confirmSubmitBeforeDestructiveAction(
+    actionContext,
+    TITLE,
+    backendName(id.kind),
   )
-  if (submitFirstSelection === undefined) {
-    Logger.debug("Answer for submitting first not provided, returning early.")
+  if (submitFirst === undefined) {
     return
-  }
-
-  let submitFirst = submitFirstSelection === "submit"
-  // if we're submitting first, nothing will be lost anyway so it's probably okay to not annoy the user with a double confirm
-  if (!submitFirst) {
-    const confirm = await dialog.selectItem(
-      { title: "Download Old Submission", placeHolder: "Are you sure?" },
-      ["No, save the current exercise state", "submit"],
-      ["Yes, discard current state", "discard"],
-    )
-    if (confirm === undefined) {
-      return
-    }
-    submitFirst = confirm === "submit"
   }
 
   const editor = vscode.window.activeTextEditor
@@ -163,21 +173,21 @@ export async function downloadOldSubmission(
   // The tmc CLI reports no outcome, and only ever restores, so both backends are read as the
   // mooc outcome the UI below branches on.
   const oldDownloadResult: Result<MoocOldSubmissionRestore, Error> = await match(
-    id,
+    submission.target,
     (tmc) =>
       langs.val
         .downloadTmcOldSubmission(
-          tmc.tmcExerciseId,
+          tmc.exerciseId,
           exercise.uri.fsPath,
-          submission.id as number,
+          tmc.submissionId,
           submitFirst,
         )
         .then((res) => res.map(() => "restored" as const)),
     (mooc) =>
       langs.val.downloadMoocOldSubmission(
-        mooc.moocExerciseId,
+        mooc.exerciseId,
         exercise.uri.fsPath,
-        String(submission.id),
+        mooc.submissionId,
         submitFirst,
       ),
   )

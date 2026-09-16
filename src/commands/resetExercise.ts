@@ -3,12 +3,12 @@ import * as vscode from "vscode"
 import type { ActionContext } from "../actions/types"
 import { backendName, ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
+import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 
 /**
- * Resets an exercise to its initial state. Optionally submits the exercise beforehand.
+ * Resets an exercise to its initial state, optionally submitting it beforehand.
  *
- * @param id ID of the exercise to reset.
- * @param options Optional parameters that can be used to control the action behavior.
+ * @param resource An exercise file or folder; the active editor's exercise when omitted.
  */
 export async function resetExercise(
   actionContext: ActionContext,
@@ -41,12 +41,12 @@ export async function resetExercise(
   }
 
   const id = ExerciseIdentifier.from(exerciseDetails.id)
-  const serverName = backendName(id.kind)
-  const submitFirst = await dialog.confirmation(
-    `Do you want to save the current state of the exercise by submitting it to ${serverName}?`,
+  const submitFirst = await confirmSubmitBeforeDestructiveAction(
+    actionContext,
+    "Reset Exercise",
+    backendName(id.kind),
   )
   if (submitFirst === undefined) {
-    Logger.debug("Answer for submitting first not provided, returning early.")
     return
   }
 
