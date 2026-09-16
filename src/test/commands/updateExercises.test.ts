@@ -21,7 +21,9 @@ vi.mock("../../actions", () => ({
   downloadOrUpdateExercises,
 }))
 
-vi.mock("../../panels/exerciseLists", () => ({
+// Only the post is stubbed; `withOptimisticList` is the behaviour under test.
+vi.mock("../../panels/exerciseLists", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../panels/exerciseLists")>()),
   postUpdateables: vi.fn(),
 }))
 
@@ -101,6 +103,19 @@ suite("updateExercises command", function () {
       .mock.calls.map(([, exerciseIds]) => exerciseIds.map((x) => ExerciseIdentifierNs.unwrap(x)))
     expect(postedLists).toEqual([[], [10, 11]])
     expect(dialog.errorNotification).toHaveBeenCalled()
+  })
+
+  test("puts the updateable exercises back when the download throws", async function () {
+    checkForExerciseUpdates.mockResolvedValue(Ok([outdated(1, 10), outdated(1, 11)]))
+    downloadOrUpdateExercises.mockRejectedValue(new Error("spawn failed"))
+    const [actionContext] = contextWith(true)
+
+    await expect(updateExercises(actionContext, "loud")).rejects.toThrow("spawn failed")
+
+    const postedLists = vi
+      .mocked(postUpdateables)
+      .mock.calls.map(([, exerciseIds]) => exerciseIds.map((x) => ExerciseIdentifierNs.unwrap(x)))
+    expect(postedLists).toEqual([[], [10, 11]])
   })
 
   test("reports only the exercises that failed when the download succeeds", async function () {

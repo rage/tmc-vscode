@@ -1,7 +1,7 @@
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
 import { NOTIFICATION_DELAY } from "../config/constants"
-import { postUpdateables } from "../panels/exerciseLists"
+import { postUpdateables, withOptimisticList } from "../panels/exerciseLists"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 
@@ -71,20 +71,21 @@ export async function updateExercises(
         )
       }
     }
-    postUpdateablesByCourse([])
-    const downloadResult = await actions.downloadOrUpdateExercises(
-      actionContext,
-      exercisesToUpdate.map((x) => x.exerciseId),
+    await withOptimisticList(
+      () => postUpdateablesByCourse([]),
+      async (): Promise<ExerciseIdentifier[] | undefined> => {
+        const downloadResult = await actions.downloadOrUpdateExercises(
+          actionContext,
+          exercisesToUpdate.map((x) => x.exerciseId),
+        )
+        if (downloadResult.err) {
+          dialog.errorNotification("Failed to update exercises.", downloadResult.val)
+          return undefined
+        }
+        return downloadResult.val.failed
+      },
+      (failed) => postUpdateablesByCourse(failed ?? exercisesToUpdate.map((x) => x.exerciseId)),
     )
-    if (downloadResult.err) {
-      // The lists were emptied before starting; leaving them that way would tell
-      // the student the exercises are up to date when nothing was downloaded.
-      postUpdateablesByCourse(exercisesToUpdate.map((x) => x.exerciseId))
-      dialog.errorNotification("Failed to update exercises.", downloadResult.val)
-      return
-    }
-
-    postUpdateablesByCourse(downloadResult.val.failed)
   }
 
   if (settings.getAutomaticallyUpdateExercises()) {
