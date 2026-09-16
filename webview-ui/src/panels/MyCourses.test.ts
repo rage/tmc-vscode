@@ -62,4 +62,19 @@ suite("MyCourses panel", () => {
 
     expect(await screen.findByText(/This course has been disabled/)).toBeInTheDocument()
   })
+
+  // The announcement is a change inside a region the screen reader already knows, so the
+  // region has to be there before there is anything to announce.
+  test("keeps each course's live region mounted while it has nothing to say", async () => {
+    render(MyCourses, { props: { panel } })
+
+    dispatch({
+      type: "setMyCourses",
+      target: { id: panel.id, type: "MyCourses" },
+      courses: [tmcLocalCourse()],
+    })
+
+    await screen.findByRole("heading", { name: /Python Course/ })
+    expect(screen.getByRole("alert")).toBeEmptyDOMElement()
+  })
 })

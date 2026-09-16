@@ -228,16 +228,9 @@
 </script>
 
 <nav>
-  <a
-    id="back-to-my-courses"
-    role="button"
-    class="my-courses-link"
-    tabindex="0"
-    onclick={() => openMyCourses()}
-    onkeypress={() => openMyCourses()}
-  >
+  <button id="back-to-my-courses" type="button" class="my-courses-link" onclick={openMyCourses}>
     My courses
-  </a>
+  </button>
   /
   {course?.title ?? "Loading course…"}
 </nav>
@@ -284,24 +277,26 @@
     <Button aria-label="Open workspace" onclick={() => openWorkspace(panel)}>Open workspace</Button>
   </div>
 
-  <div
-    role="alert"
-    hidden={panel.updateableExercises === undefined || panel.updateableExercises.length === 0}
-  >
-    Updates found for exercises
-    <Button onclick={() => updateExercises(panel)}>Update exercises</Button>
+  <!-- Both live regions stay mounted and empty until there is something to say: a screen
+       reader announces a change inside a region it already knows, not one inserted
+       already populated, and not one that merely stops being `hidden`. -->
+  <div role="alert">
+    {#if (panel.updateableExercises?.length ?? 0) > 0}
+      Updates found for exercises
+      <Button onclick={() => updateExercises(panel)}>Update exercises</Button>
+    {/if}
   </div>
-  {#if panel.offlineMode}
-    <div role="alert">Unable to fetch exercise data from server. Displaying local exercises.</div>
-  {/if}
-  {#if course?.perhapsExamMode}
-    <div role="alert">This is an exam. Exercise submission results will not be shown.</div>
-  {/if}
-  {#if course?.disabled}
-    <div role="alert">
-      This course has been disabled. Exercises cannot be downloaded or submitted.
-    </div>
-  {/if}
+  <div role="alert">
+    {#if panel.offlineMode}
+      <div>Unable to fetch exercise data from server. Displaying local exercises.</div>
+    {/if}
+    {#if course?.perhapsExamMode}
+      <div>This is an exam. Exercise submission results will not be shown.</div>
+    {/if}
+    {#if course?.disabled}
+      <div>This course has been disabled. Exercises cannot be downloaded or submitted.</div>
+    {/if}
+  </div>
 </div>
 
 {#if panel.exerciseGroups !== undefined}
@@ -385,8 +380,13 @@
   .exercise-part {
     margin-bottom: 1rem;
   }
+  /* Resets the native button to look like the plain nav text around it. */
   .my-courses-link {
+    all: unset;
     cursor: pointer;
+    color: inherit;
+    font: inherit;
+    display: inline;
   }
   .my-courses-link:hover {
     text-decoration: underline;

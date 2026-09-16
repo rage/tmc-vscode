@@ -208,18 +208,18 @@ suite("CourseDetails panel", () => {
     })
     await findExerciseGroup(container)
 
-    const banner = screen.getByText(/Updates found for exercises/)
-    // No setUpdateables yet (undefined) -> hidden.
-    expect(banner).not.toBeVisible()
+    // The live region is mounted from the start, empty, so the announcement is a change
+    // inside it rather than the insertion of an already-populated region.
+    expect(screen.getAllByRole("alert").length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Updates found for exercises/)).not.toBeInTheDocument()
 
-    // A non-empty updateable list -> the banner must be shown.
     dispatch({
       type: "setUpdateables",
       target: { type: "CourseDetails" },
       courseId: makeTmcKind({ courseId: 42 }),
       exerciseIds: [makeTmcKind({ tmcExerciseId: 101 })],
     })
-    await waitFor(() => expect(banner).toBeVisible())
+    expect(await screen.findByText(/Updates found for exercises/)).toBeInTheDocument()
 
     // A broadcast for a DIFFERENT course must not touch this panel's list.
     dispatch({
@@ -231,16 +231,29 @@ suite("CourseDetails panel", () => {
     await new Promise((resolve) => {
       setTimeout(resolve, 20)
     })
-    expect(banner).toBeVisible()
+    expect(screen.getByText(/Updates found for exercises/)).toBeInTheDocument()
 
-    // An empty list for our course (e.g. after everything updated) -> hidden again.
     dispatch({
       type: "setUpdateables",
       target: { type: "CourseDetails" },
       courseId: makeTmcKind({ courseId: 42 }),
       exerciseIds: [],
     })
-    await waitFor(() => expect(banner).not.toBeVisible())
+    await waitFor(() =>
+      expect(screen.queryByText(/Updates found for exercises/)).not.toBeInTheDocument(),
+    )
+  })
+
+  test("navigates back with a real button rather than a keypress handler", async () => {
+    render(CourseDetails, { props: { panel: tmcPanel() } })
+    postedMessages.mockClear()
+
+    const back = screen.getByRole("button", { name: "My courses" })
+    expect(back.tagName).toBe("BUTTON")
+    expect(back).not.toHaveAttribute("tabindex")
+    back.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({ type: "openMyCourses" })
   })
 
   test("posts refreshCourseDetails with a snapshotted course id", async () => {
