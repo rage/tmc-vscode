@@ -14,11 +14,6 @@ export const TMC_UPDATE_EXERCISES_AUTOMATICALLY_KEY = "testMyCode.updateExercise
 export const TMC_INSIDER_VERSION_KEY = "testMyCode.insiderVersion"
 export const TMC_LOG_LEVEL_KEY = "testMyCode.logLevel"
 
-// langs settings
-export function langsClosedExercisesKey(exerciseId: string): string {
-  return `closed-exercises-for:${exerciseId}`
-}
-
 // data types
 export type LogLevel = v1.LogLevel
 export type SessionState = v1.SessionState
