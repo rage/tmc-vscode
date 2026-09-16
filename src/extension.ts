@@ -281,6 +281,9 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
       await applyAuthContext()
       sessionExpiry.onLogout("mooc", expected)
     })
+    langs.val.on("notification", (notification) => {
+      void dialog.warningNotification(notification.message)
+    })
   } else {
     Logger.warn("Skipped login command setup")
   }
