@@ -360,11 +360,13 @@ suite("Langs class arg building", function () {
         ),
       })
     })
-    const progress: { pct: number; message: string | undefined }[] = []
-    await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex", (pct, message) =>
-      progress.push({ pct, message }),
+    const progress: { progressPercent: number; message: string | undefined }[] = []
+    await langs.submitMoocExerciseAndWaitForResults(
+      "ex-uuid",
+      "/path/to/ex",
+      (progressPercent, message) => progress.push({ progressPercent, message }),
     )
-    expect(progress).toEqual([{ pct: 50, message: "Grading in progress" }])
+    expect(progress).toEqual([{ progressPercent: 50, message: "Grading in progress" }])
   })
 
   test("getMoocOldSubmissions parses the mooc-submissions list", async function () {
@@ -555,14 +557,35 @@ suite("Langs class arg building", function () {
         ),
       })
     })
-    const downloaded: { id: unknown; percent: number; message?: string }[] = []
+    const downloaded: { id: unknown; fraction: number; message?: string | undefined }[] = []
     await langs.downloadExercises([ExerciseIdentifier.from("ex-uuid")], false, (value) =>
       downloaded.push(value),
     )
     expect(downloaded).toHaveLength(1)
-    expect(downloaded[0]?.percent).toBe(0.5)
+    expect(downloaded[0]?.fraction).toBe(0.5)
     expect(downloaded[0]?.message).toBe("Downloading exercise")
     expect(downloaded[0]?.id).toEqual(ExerciseIdentifier.from("ex-uuid"))
+  })
+
+  test("moveProjectsDirectory forwards the CLI's completion fraction unscaled", async function () {
+    const langs = newLangs()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
+      const { onStdout } = commandArgs as { onStdout?: (data: unknown) => void }
+      onStdout?.({
+        "update-data-kind": "none",
+        "percent-done": 0.25,
+        message: "Moving exercises",
+      })
+      return Ok({
+        interrupt: (): void => {},
+        getStderr: (): string => "",
+        result: Promise.resolve(Ok(nullOutput()) as Result<OutputData, BaseError>),
+      })
+    })
+    const updates: { fraction: number; message?: string | undefined }[] = []
+    await langs.moveProjectsDirectory("/new/dir", (update) => updates.push(update))
+    expect(updates).toEqual([{ fraction: 0.25, message: "Moving exercises" }])
   })
 
   test("authenticateMooc builds the `mooc login` command", async function () {

@@ -72,6 +72,7 @@ import {
   match,
 } from "../shared/shared"
 import { Logger, LogLevel } from "../utilities/logger"
+import type { FractionProgress } from "./dialog"
 import type { SubmissionFeedback } from "./types"
 
 interface Options {
@@ -647,11 +648,11 @@ export default class Langs {
    */
   public async moveProjectsDirectory(
     newDirectory: string,
-    onUpdate?: (value: { percent: number; message?: string }) => void,
+    onUpdate?: (progress: FractionProgress) => void,
   ): Promise<Result<void, Error>> {
     const onStdout = (res: StatusUpdateData): void => {
       onUpdate?.({
-        percent: res["percent-done"],
+        fraction: res["percent-done"],
         message: res.message ?? undefined,
       })
     }
@@ -786,7 +787,7 @@ export default class Langs {
   public async downloadExercises(
     ids: ExerciseIdentifier[],
     downloadTemplate: boolean,
-    onDownloaded: (value: { id: ExerciseIdentifier; percent: number; message?: string }) => void,
+    onDownloaded: (progress: FractionProgress & { id: ExerciseIdentifier }) => void,
     moocCourseId?: string,
     onInterruptHandle?: (interrupt: () => void) => void,
   ): Promise<{
@@ -802,7 +803,7 @@ export default class Langs {
       ) {
         onDownloaded({
           id: makeTmcKind({ tmcExerciseId: res.data.id }),
-          percent: res["percent-done"],
+          fraction: res["percent-done"],
           message: res.message ?? undefined,
         })
       } else if (
@@ -812,7 +813,7 @@ export default class Langs {
       ) {
         onDownloaded({
           id: makeMoocKind({ moocExerciseId: res.data.id }),
-          percent: res["percent-done"],
+          fraction: res["percent-done"],
           message: res.message ?? undefined,
         })
       }
@@ -1370,12 +1371,13 @@ export default class Langs {
    * `BottleneckError` over that rate rather than waiting.
    *
    * @param exerciseId Id of the exercise.
-   * @param progressCallback Optional callback function that can be used to get status reports.
+   * @param progressCallback Reports completion as a 0..100 percentage — the scale the
+   * submission panel's `progressPercent` message and its progress bar render.
    */
   public async submitTmcExerciseAndWaitForResults(
     exerciseId: number,
     exercisePath: string,
-    progressCallback?: (progressPct: number, message?: string) => void,
+    progressCallback?: (progressPercent: number, message?: string) => void,
     onSubmissionUrl?: (url: string) => void,
   ): Promise<Result<SubmissionFinished, Error>> {
     const submissionSlot = this._claimSubmissionSlot("tmc")
@@ -1424,12 +1426,13 @@ export default class Langs {
    *
    * @param exerciseId Mooc exercise id (a UUID string).
    * @param exercisePath Path to the local exercise directory.
-   * @param progressCallback Optional callback for progress reports during grading.
+   * @param progressCallback Reports completion as a 0..100 percentage, like
+   * {@link submitTmcExerciseAndWaitForResults}.
    */
   public async submitMoocExerciseAndWaitForResults(
     exerciseId: string,
     exercisePath: string,
-    progressCallback?: (progressPct: number, message?: string) => void,
+    progressCallback?: (progressPercent: number, message?: string) => void,
   ): Promise<Result<ExerciseTaskSubmissionStatus, Error>> {
     const submissionSlot = this._claimSubmissionSlot("mooc")
     if (submissionSlot.err) {

@@ -62,7 +62,7 @@ export function registerCommands(
       await actions.refreshEverything(actionContext, {
         silent: false,
         onProgress: (done, total) => {
-          progress.report({ percent: total === 0 ? 1 : done / total })
+          progress.report({ fraction: total === 0 ? 1 : done / total })
         },
       })
     })

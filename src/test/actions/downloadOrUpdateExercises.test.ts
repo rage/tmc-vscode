@@ -251,7 +251,7 @@ suite("downloadOrUpdateExercises action", function () {
     const closedId = "exercise-uuid-5"
     const undownloadedId = "exercise-uuid-6"
     tmcMock.downloadExercises = vi.fn(async (_1, _2, cb) => {
-      cb?.({ id: ExerciseIdentifier.from(closedId), percent: 1 })
+      cb?.({ id: ExerciseIdentifier.from(closedId), fraction: 1 })
       return {
         tmc: { downloaded: [], failed: [], skipped: [] },
         mooc: { downloaded: [], failed: [], skipped: [] },
@@ -318,7 +318,7 @@ suite("downloadOrUpdateExercises action", function () {
     // ExerciseIdentifier.unwrap on it). A downloaded exercise is marked
     // "closed" here; the "opened" transition happens later in openExercises.
     tmcMock.downloadExercises = vi.fn(async (_1, _2, cb) => {
-      cb?.({ id: ExerciseIdentifier.from(helloWorld.id), percent: 0.5 })
+      cb?.({ id: ExerciseIdentifier.from(helloWorld.id), fraction: 0.5 })
       return createDownloadResult([helloWorld], [], undefined)
     }) as Langs["downloadExercises"]
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
@@ -428,7 +428,7 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
 
   const actionContext = (): ActionContext => ({
     ...stubContext,
-    // The real Dialog, so the percentages the action reports pass through the
+    // The real Dialog, so the fractions the action reports pass through the
     // production increment wrapper before they are asserted on.
     dialog: new Dialog(),
     settings: createSettingsMock()[0],
@@ -527,7 +527,7 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
       ids.forEach((id: ExerciseIdentifier, index: number) =>
         onDownloaded?.({
           id,
-          percent: (index + 1) / ids.length,
+          fraction: (index + 1) / ids.length,
           message: `Downloaded ${ExerciseIdentifier.unwrap(id)}`,
         }),
       )
@@ -537,7 +537,7 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
     await downloadOrUpdateExercises(actionContext(), [...tmcIds, ...moocIds], TEST_COURSE_ID)
 
     // The wrapper drops any report that does not advance the bar, so the mooc
-    // leg's messages only survive if the percentage kept climbing past the tmc leg.
+    // leg's messages only survive if the fraction kept climbing past the tmc leg.
     expect(progressReports.filter((report) => (report.increment ?? 0) > 0)).toEqual([
       { increment: 25, message: "Downloaded 1" },
       { increment: 25, message: "Downloaded 2" },

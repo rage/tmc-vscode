@@ -274,7 +274,8 @@ async function downloadLangs(
       const attempt = async (): Promise<Result<void, Error>> =>
         await downloadFile(cliUrl, tempPath, {
           signal: cancellation.signal,
-          onProgress: (percent) => progress.report({ message, percent: percent / 100 }),
+          onProgress: (percentDownloaded) =>
+            progress.report({ message, fraction: percentDownloaded / 100 }),
         })
       try {
         let result = await attempt()
