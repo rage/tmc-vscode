@@ -767,8 +767,10 @@ export async function openWorkspace(
 }
 
 /**
- * Removes given course from UserData and removes its associated files. However, doesn't remove any
- * exercises that are on disk.
+ * Removes a course from the user's courses, along with the extension's own state
+ * for it: its closed-exercise setting and its `.code-workspace` file.
+ *
+ * The exercises already downloaded are deliberately left on disk.
  *
  * @param id ID of the course to remove
  */
@@ -798,6 +800,19 @@ export async function removeCourse(
     dialog.errorNotification(
       `Failed to remove TMC-langs data for "${courseName}".`,
       unsetResult.val,
+    )
+  }
+
+  // Left behind, it would be reused verbatim if the course is added again, listing
+  // folders for exercises the student may have deleted in the meantime.
+  const workspaceFileResult = await workspaceManager.val.deleteWorkspaceFile(
+    courseName,
+    course.kind,
+  )
+  if (workspaceFileResult.err) {
+    dialog.errorNotification(
+      `Failed to remove the workspace file for "${courseName}".`,
+      workspaceFileResult.val,
     )
   }
 

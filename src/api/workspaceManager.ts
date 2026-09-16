@@ -19,6 +19,7 @@ import {
 } from "../config/constants"
 import type Resources from "../config/resources"
 import { EditorKind } from "../config/resources"
+import { FileSystemError } from "../errors"
 import { Logger } from "../utilities"
 
 export enum ExerciseStatus {
@@ -305,6 +306,44 @@ export default class WorkspaceManager implements vscode.Disposable {
       fs.writeFileSync(workspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS))
       Logger.info("Created course workspace file at", workspaceFilePath)
     }
+  }
+
+  /**
+   * Deletes a course's `.code-workspace` file, so that re-adding the course gets
+   * a fresh one instead of a folder list pointing at exercises that are gone.
+   *
+   * The course's downloaded exercises are left on disk.
+   */
+  public async deleteWorkspaceFile(
+    courseName: string,
+    backend: "tmc" | "mooc",
+  ): Promise<Result<void, Error>> {
+    const workspaceFilePath = this._resources.getWorkspaceFilePath(courseName, backend)
+    try {
+      await fs.remove(workspaceFilePath)
+    } catch (e) {
+      return Err(new FileSystemError(e, `Failed to remove ${workspaceFilePath}.`))
+    }
+    return Ok.EMPTY
+  }
+
+  /**
+   * Deletes every course's `.code-workspace` file, leaving the `.tmc` root folder
+   * each of them opens at its top.
+   */
+  public async deleteAllWorkspaceFiles(): Promise<Result<void, Error>> {
+    const workspaceFileFolder = this._resources.workspaceFileFolder
+    try {
+      const entries = await fs.readdir(workspaceFileFolder)
+      for (const entry of entries) {
+        if (entry.endsWith(".code-workspace")) {
+          await fs.remove(path.join(workspaceFileFolder, entry))
+        }
+      }
+    } catch (e) {
+      return Err(new FileSystemError(e, `Failed to empty ${workspaceFileFolder}.`))
+    }
+    return Ok.EMPTY
   }
 
   public dispose(): void {

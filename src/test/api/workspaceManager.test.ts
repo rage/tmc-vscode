@@ -442,6 +442,39 @@ suite("WorkspaceManager class", function () {
       const written = JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))
       expect(written.extensions.recommendations).toEqual(["ms-python.python"])
     })
+
+    test("deletes one course's workspace file and leaves the others", async function () {
+      const moocWorkspaceFile = resources.getWorkspaceFilePath(courseSlug, "mooc")
+      fs.writeFileSync(workspaceFile, JSON.stringify({ folders: [] }))
+      fs.writeFileSync(moocWorkspaceFile, JSON.stringify({ folders: [] }))
+
+      const result = await manager.deleteWorkspaceFile(courseSlug, "tmc")
+
+      expect(result.ok).toBe(true)
+      expect(fs.existsSync(workspaceFile)).toBe(false)
+      expect(fs.existsSync(moocWorkspaceFile)).toBe(true)
+    })
+
+    test("accepts a course whose workspace file is already gone", async function () {
+      const result = await manager.deleteWorkspaceFile(courseSlug, "tmc")
+
+      expect(result.ok).toBe(true)
+    })
+
+    test("deletes every workspace file but keeps the shared root folder", async function () {
+      const rootFolderPath = path.join(workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME)
+      fs.writeFileSync(workspaceFile, JSON.stringify({ folders: [] }))
+      fs.writeFileSync(
+        resources.getWorkspaceFilePath("another course", "mooc"),
+        JSON.stringify({ folders: [] }),
+      )
+      fs.mkdirSync(rootFolderPath)
+
+      const result = await manager.deleteAllWorkspaceFiles()
+
+      expect(result.ok).toBe(true)
+      expect(fs.readdirSync(workspaceFileFolder)).toEqual([WORKSPACE_ROOT_FOLDER_NAME])
+    })
   })
 
   suite("two backends sharing a course slug", function () {

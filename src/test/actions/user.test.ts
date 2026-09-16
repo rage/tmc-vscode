@@ -151,6 +151,7 @@ function contextWith(
       workspaceManager: Ok({
         activeCourse: undefined,
         activeCourseBackend: undefined,
+        deleteWorkspaceFile: vi.fn(async () => Ok.EMPTY),
       }) as unknown as ActionContext["workspaceManager"],
     },
     dialog,
@@ -211,6 +212,20 @@ suite("removeCourse action", function () {
 
     expect(dialog.errorNotification).not.toHaveBeenCalled()
     expect(refresh).toHaveBeenCalled()
+  })
+
+  // Left behind, it is reused verbatim when the course is added back.
+  test("removes the course's workspace file", async function () {
+    const [actionContext] = contextWith({
+      getCourse: () => Ok(course),
+      deleteCourse: vi.fn(async () => Ok.EMPTY),
+    } as unknown as Partial<UserData>)
+
+    await removeCourse(actionContext, CourseIdentifier.from(1))
+
+    expect(
+      (actionContext.workspaceManager as Ok<WorkspaceManager>).val.deleteWorkspaceFile,
+    ).toHaveBeenCalledExactlyOnceWith("test-python-course", "tmc")
   })
 })
 
