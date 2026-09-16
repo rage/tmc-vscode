@@ -848,27 +848,6 @@ describe("mooc mock conformance", () => {
   })
 })
 
-describe("mooc mock obsolete-client (426) fault", () => {
-  test("an injected obsolete client yields a spec-valid 426 ApiErrorResponse", async () => {
-    // The 426 obsolete-client contract is documented on every endpoint but is
-    // dormant in normal runs (the backend's MINIMUM_CLIENT_VERSION is unset, so
-    // no live response ever produces it). This test-only fault makes every
-    // operation respond 426, which the validator accepts only because 426 is a
-    // documented status for the operation -- the envelope's own members are
-    // checked in the error-envelope walk below.
-    const { server, base } = await listen(createMoocApp({ injectObsoleteClient: true }))
-    try {
-      // Seeded bearer gets past auth so the injected 426 (not a 401) is observed.
-      const res = await authFetch(`${base}/api/v0/exercise-services/client/courses`)
-      assert.equal(res.status, 426)
-      const body = (await res.json()) as { message_key: string }
-      assert.equal(body.message_key, "obsolete_client")
-    } finally {
-      server.close()
-    }
-  })
-})
-
 describe("mooc mock response-validation guard", () => {
   test("a spec-violating handler response fails loudly with 500", async () => {
     // Inject a fault so getClientCourses returns garbage (id: number, missing
@@ -1077,11 +1056,11 @@ describe("mooc mock error envelopes", () => {
     },
     {
       // Dormant in a normal run (the host's MINIMUM_CLIENT_VERSION is unset),
-      // so the fault-injected mock is the only way to observe the envelope.
+      // so a mock naming a minimum is the only way to observe the envelope.
       name: "a client the server considers obsolete",
       messageKey: "obsolete_client",
       run: async () => {
-        const obsolete = await listen(createMoocApp({ injectObsoleteClient: true }))
+        const obsolete = await listen(createMoocApp({ minimumClientVersion: "99.0.0" }))
         try {
           return await read(
             await authFetch(`${obsolete.base}/api/v0/exercise-services/client/courses`),
@@ -1123,6 +1102,94 @@ describe("mooc mock error envelopes", () => {
         continue
       }
       assert.ok(walked.has(key), `no probe covers the ${key} error the router emits`)
+    }
+  })
+})
+
+// The host reads `X-Client-Version` on every client operation and turns away
+// anything below MINIMUM_CLIENT_VERSION with 426. That constant is None in
+// production, so a mock naming a minimum is the only place the rule -- and the
+// 426 every operation documents -- can be exercised at all. A 426 reaching the
+// client at all proves the validator accepted it as a documented status for the
+// operation; its envelope is pinned in the error-envelope walk below.
+const clientApi = (base: string, p: string): string => `${base}/api/v0/exercise-services/client${p}`
+
+describe("mooc mock client-version floor", () => {
+  const asClient = (base: string, p: string, clientVersion?: string): Promise<Response> =>
+    authFetch(clientApi(base, p), {
+      headers: clientVersion === undefined ? {} : { "x-client-version": clientVersion },
+    })
+
+  const getCourses = (base: string, clientVersion?: string): Promise<Response> =>
+    asClient(base, "/courses", clientVersion)
+
+  const withFloor = async (
+    minimumClientVersion: string,
+    drive: (base: string) => Promise<void>,
+  ): Promise<void> => {
+    const { server, base } = await listen(createMoocApp({ minimumClientVersion }))
+    try {
+      await drive(base)
+    } finally {
+      server.close()
+    }
+  }
+
+  test("a client at or above the floor is served", async () => {
+    await withFloor("1.2.3", async (base) => {
+      assert.equal((await getCourses(base, "1.2.3")).status, 200)
+      assert.equal((await getCourses(base, "1.3.0")).status, 200)
+      assert.equal((await getCourses(base, "2.0")).status, 200)
+    })
+  })
+
+  test("a client below the floor gets a 426 naming the minimum", async () => {
+    await withFloor("1.2.3", async (base) => {
+      const res = await getCourses(base, "1.2.2")
+      assert.equal(res.status, 426)
+      const body = (await res.json()) as { message_key: string; message: string }
+      assert.equal(body.message_key, "obsolete_client")
+      assert.match(body.message, /minimum supported version is 1\.2\.3/)
+    })
+  })
+
+  test("a missing or unparseable version counts as obsolete", async () => {
+    await withFloor("1.2.3", async (base) => {
+      assert.equal((await getCourses(base)).status, 426)
+      assert.equal((await getCourses(base, "not-a-version")).status, 426)
+      assert.equal((await getCourses(base, "1.2.x")).status, 426)
+    })
+  })
+
+  test("an obsolete client's submit records nothing", async () => {
+    // The check has to run before the handler, as the host's extractor does, or
+    // a turned-away submit still leaves a submission behind.
+    const exerciseId = passingExercise.slide.exercise_id
+    await withFloor("1.2.3", async (base) => {
+      const res = await authFetch(clientApi(base, `/exercises/${exerciseId}/submit`), {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-client-version": "1.0.0" },
+        body: JSON.stringify({
+          exercise_slide_id: passingExercise.slide.slide_id,
+          exercise_task_id: passingExercise.slide.tasks[0]!.task_id,
+          answer_kind: "file",
+          data_files: [randomUUID()],
+        }),
+      })
+      assert.equal(res.status, 426)
+      const listed = (await (
+        await asClient(base, `/exercises/${exerciseId}/submissions`, "1.2.3")
+      ).json()) as unknown[]
+      assert.equal(listed.length, 0)
+    })
+  })
+
+  test("without a floor, a client advertising no version is served", async () => {
+    const { server, base } = await listen(createMoocApp())
+    try {
+      assert.equal((await getCourses(base)).status, 200)
+    } finally {
+      server.close()
     }
   })
 })

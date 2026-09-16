@@ -305,13 +305,13 @@ interface CreateMoocApiOptions {
    */
   injectResponseFault?: string
   /**
-   * Test-only fault injection: every client operation responds with the
-   * spec-documented 426 `obsolete_client` error, modelling an `X-Client-Version`
-   * older than the server minimum. Never set in normal runs -- the real
-   * backend's MINIMUM_CLIENT_VERSION is unset, so this contract is otherwise
-   * dormant and untested.
+   * Lowest `X-Client-Version` served, as `major.minor.patch`. Unset (the
+   * default) serves everything, matching the host, whose MINIMUM_CLIENT_VERSION
+   * is None -- so the 426 contract is dormant in production and a mock has to
+   * name a minimum to exercise it. With one set, a missing or unparseable
+   * header counts as obsolete, as on the host.
    */
-  injectObsoleteClient?: boolean
+  minimumClientVersion?: string | undefined
   /**
    * Bearer validation. When enabled (the default), every resource endpoint
    * requires a valid `Authorization: Bearer <token>`: missing/unknown/expired
@@ -326,6 +326,55 @@ interface CreateMoocApiOptions {
    * suite on an ephemeral port gets URLs it can follow verbatim.
    */
   baseUrl?: string
+}
+
+// Header a client advertises its version on, read by every client operation
+// (host: SupportedClient / check_client_version).
+const CLIENT_VERSION_HEADER = "x-client-version"
+
+/**
+ * `major.minor.patch` as comparable components. Missing minor/patch count as 0
+ * and anything non-numeric is unparseable, as the host parses it.
+ */
+const parseClientVersion = (version: string): number[] | undefined => {
+  const parts = version.trim().split(".")
+  const components = [parts[0] ?? "", parts[1] ?? "0", parts[2] ?? "0"].map((part) =>
+    /^[0-9]+$/.test(part) ? Number(part) : Number.NaN,
+  )
+  return components.some((component) => Number.isNaN(component)) ? undefined : components
+}
+
+const isAtLeast = (client: number[], minimum: number[]): boolean => {
+  for (const [index, component] of client.entries()) {
+    const floor = minimum[index] ?? 0
+    if (component !== floor) {
+      return component > floor
+    }
+  }
+  return true
+}
+
+/**
+ * The host's obsolete-client rule, as a response for the operation to answer
+ * with instead of running. A minimum is the only thing that arms it; with one
+ * set, a missing or unparseable client version is obsolete.
+ */
+const obsoleteClientError = (
+  minimumClientVersion: string | undefined,
+  advertised: string | undefined,
+): MockResponse | undefined => {
+  if (minimumClientVersion === undefined) {
+    return undefined
+  }
+  const minimum = parseClientVersion(minimumClientVersion)
+  const client = advertised === undefined ? undefined : parseClientVersion(advertised)
+  if (minimum && client && isAtLeast(client, minimum)) {
+    return undefined
+  }
+  return apiError(
+    "obsolete_client",
+    `This client is obsolete; the minimum supported version is ${minimumClientVersion}.`,
+  )
 }
 
 const findCourse = (state: MoocMockState, id: string) =>
@@ -461,9 +510,21 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
   api.validate = (c: Context) => c.operation?.operationId !== "uploadClientExerciseFiles"
 
   const fault = options.injectResponseFault
-  const obsoleteClient = options.injectObsoleteClient ?? false
 
-  api.register({
+  // Runs before every operation handler, as the host's SupportedClient extractor
+  // runs before its actix handler -- so an obsolete client's submit records
+  // nothing. Returning the 426 rather than writing it keeps it under the
+  // postResponseHandler's validation, which proves 426 is documented for the
+  // operation.
+  const guardClient =
+    (handler: (c: Context, req: Request) => MockResponse) =>
+    (c: Context, req: Request): MockResponse =>
+      obsoleteClientError(
+        options.minimumClientVersion,
+        req.headers[CLIENT_VERSION_HEADER] as string | undefined,
+      ) ?? handler(c, req)
+
+  const operations: Record<string, (c: Context, req: Request) => MockResponse> = {
     // GET /api/v0/exercise-services/client/courses
     getClientCourses: (): MockResponse => {
       if (fault === "getClientCourses") {
@@ -787,7 +848,16 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       const token = randomUUID()
       return ok({ paste_url: `${state.baseUrl}/shared-submissions/${token}` })
     },
-  })
+  }
+
+  api.register(
+    Object.fromEntries(
+      Object.entries(operations).map(([operationId, handler]) => [
+        operationId,
+        guardClient(handler),
+      ]),
+    ),
+  )
 
   // Unknown route: 404. Written directly, so the postResponseHandler skips it.
   api.register("notFound", (_c: Context, _req: Request, res: Response) =>
@@ -812,17 +882,7 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
     if (res.headersSent) {
       return
     }
-    let { status, body } = c.response as MockResponse
-    // Test-only obsolete-client fault: rewrite any operation's response to the
-    // spec-documented 426. Validation below only proves 426 is a documented
-    // status for the operation -- the spec's ApiErrorResponse constrains no
-    // member, so the envelope itself is pinned against ./apiErrors instead.
-    if (obsoleteClient && c.operation?.operationId) {
-      ;({ status, body } = apiError(
-        "obsolete_client",
-        "the client is obsolete and must be upgraded",
-      ))
-    }
+    const { status, body } = c.response as MockResponse
     if (c.operation?.operationId) {
       const validation = c.api.validateResponse(body, c.operation, status)
       if (validation.errors) {

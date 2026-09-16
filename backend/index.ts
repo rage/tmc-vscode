@@ -32,6 +32,9 @@ import {
 // src/test-integration/tmc_langs_cli.spec.ts (mooc bearer auth).
 const PORT = Number(process.env.PORT ?? 4001)
 const MOOC_REQUIRE_AUTH = process.env.MOOC_MOCK_REQUIRE_AUTH !== "0"
+// Lowest `X-Client-Version` the mooc mock serves. Unset by default, as on the
+// host; a tier that wants to see a client turned away with 426 names one.
+const MOOC_MINIMUM_CLIENT_VERSION = process.env.MOOC_MOCK_MINIMUM_CLIENT_VERSION
 // Every absolute URL the mooc mock hands out is built from this, so it has to
 // name the port this process actually listens on.
 const MOOC_BASE_URL = process.env.MOOC_MOCK_BASE_URL ?? `http://localhost:${PORT}`
@@ -159,7 +162,11 @@ app.use("/api/v8/application", applicationRouter)
 // spec-exempt `/mooc-archives` stub-download route. Same process/port as the
 // legacy TMC mock -- the two API namespaces (/api/v8, /oauth vs
 // /api/v0/exercise-services/client) do not collide.
-registerMoocRoutes(app, { requireAuth: MOOC_REQUIRE_AUTH, baseUrl: MOOC_BASE_URL })
+registerMoocRoutes(app, {
+  requireAuth: MOOC_REQUIRE_AUTH,
+  baseUrl: MOOC_BASE_URL,
+  minimumClientVersion: MOOC_MINIMUM_CLIENT_VERSION,
+})
 
 // getCourseSettings(0)
 for (const course of testCourses) {
