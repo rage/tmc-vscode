@@ -90,10 +90,10 @@ export class Logger {
    *
    * Pass only facts that carry no credential: this deliberately skips the level check
    * that keeps CLI responses, and the OAuth tokens in them, out of the channel. The
-   * `none` level still silences it, because it leaves no channel to write to.
+   * `none` level still silences it.
    */
   public static banner(...params: unknown[]): void {
-    this._write(ConsoleLogLevel.Info, true, params)
+    this._write(ConsoleLogLevel.Info, this._level !== LogLevel.None, params)
   }
 
   public static errorWithDialog(dialog: Dialog, ...params: unknown[]): void {
@@ -102,13 +102,21 @@ export class Logger {
     this._log(ConsoleLogLevel.Error, ...params)
   }
 
+  /**
+   * Reveals the output channel, creating one to explain itself if logging is off.
+   *
+   * `none` disposes the channel, so every "Show logs" affordance would otherwise do
+   * nothing at all — including the one offered next to a fatal activation error.
+   */
   public static show(): void {
     if (this.output === undefined) {
-      return
+      this.output = window.createOutputChannel(OUTPUT_CHANNEL_NAME)
+      this.output.appendLine(
+        `Nothing is being logged: testMyCode.logLevel is "${LogLevel.None}". ` +
+          `Set it to "${LogLevel.Errors}" or "${LogLevel.Verbose}" and reproduce the problem.`,
+      )
     }
-    if (this.level !== LogLevel.None) {
-      this.output.show()
-    }
+    this.output.show()
   }
 
   public static toLoggable(p: unknown): string {

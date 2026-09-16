@@ -1,4 +1,6 @@
+import type { Mock } from "vitest"
 import type { OutputChannel } from "vscode"
+import { window } from "vscode"
 
 import { Logger, LogLevel } from "../../utilities/logger"
 
@@ -105,6 +107,66 @@ suite("Logger output channel", function () {
     captureChannel(LogLevel.None)
 
     Logger.banner("TestMyCode version: 3.0.0")
+
+    expect(lines).toHaveLength(0)
+  })
+})
+
+suite("Logger reveal", function () {
+  // The overloaded `createOutputChannel` resolves to its LogOutputChannel signature,
+  // which the plain channel the Logger asks for does not satisfy.
+  const createOutputChannel = window.createOutputChannel as unknown as Mock<
+    (name: string) => OutputChannel
+  >
+  let lines: string[]
+  let revealed: number
+
+  beforeEach(function () {
+    lines = []
+    revealed = 0
+    createOutputChannel.mockImplementation(
+      () =>
+        ({
+          appendLine: (line: string) => lines.push(line),
+          show: () => {
+            revealed += 1
+          },
+          dispose: () => {},
+        }) as unknown as OutputChannel,
+    )
+  })
+
+  afterEach(function () {
+    Logger.configure(LogLevel.None)
+    Logger.output = undefined
+    createOutputChannel.mockReset()
+  })
+
+  test("the logs open with an explanation when logging is turned off", function () {
+    Logger.configure(LogLevel.None)
+
+    Logger.show()
+
+    expect(revealed).toBe(1)
+    expect(lines.join("\n")).toContain("testMyCode.logLevel")
+  })
+
+  test("opening the logs while logging adds no explanation", function () {
+    Logger.configure(LogLevel.Errors)
+
+    Logger.show()
+
+    expect(revealed).toBe(1)
+    expect(lines).toHaveLength(0)
+  })
+
+  test("opening the logs does not start logging", function () {
+    Logger.configure(LogLevel.None)
+    Logger.show()
+    lines.length = 0
+
+    Logger.banner("TestMyCode version: 3.0.0")
+    Logger.error("boom")
 
     expect(lines).toHaveLength(0)
   })
