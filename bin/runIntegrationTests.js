@@ -36,7 +36,7 @@ async function main() {
     exitCode = 1
   }
 
-  process.exit(exitCode)
+  process.exitCode = exitCode
 }
 
 main()
