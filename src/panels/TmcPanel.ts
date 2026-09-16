@@ -258,7 +258,7 @@ export class TmcPanel {
                     http-equiv="Content-Security-Policy"
                     content="
                         default-src 'none';
-                        img-src ${webview.cspSource} https:;
+                        img-src ${webview.cspSource};
                         font-src ${webview.cspSource};
                         style-src 'nonce-${nonce}';
                         script-src 'nonce-${nonce}';"

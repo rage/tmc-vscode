@@ -527,6 +527,14 @@ function nonceOf(html: string): string {
   return nonce
 }
 
+function contentSecurityPolicyOf(html: string): string {
+  const policy = /http-equiv="Content-Security-Policy"[\s\S]*?content="([^"]*)"/.exec(html)?.[1]
+  if (policy === undefined) {
+    throw new Error("the document declares no content security policy")
+  }
+  return policy
+}
+
 suite("TmcPanel webview document", () => {
   afterEach(resetPanels)
 
@@ -536,5 +544,15 @@ suite("TmcPanel webview document", () => {
 
     expect(first).toMatch(/^[\w-]{32}$/)
     expect(second).not.toBe(first)
+  })
+
+  test("names no scheme-wide source, so no directive reaches an arbitrary host", async () => {
+    const sources = contentSecurityPolicyOf(await mountedWebviewHtml())
+      .split(";")
+      .flatMap((directive) => directive.trim().split(/\s+/))
+
+    expect(sources).not.toContain("https:")
+    expect(sources).not.toContain("http:")
+    expect(sources).not.toContain("*")
   })
 })
