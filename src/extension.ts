@@ -31,7 +31,7 @@ import * as init from "./init"
 import { randomPanelId, TmcPanel } from "./panels/TmcPanel"
 import Storage from "./storage"
 import UI from "./ui/ui"
-import { cliFolder, Logger, LogLevel, semVerCompare } from "./utilities"
+import { cliFolder, Logger, semVerCompare } from "./utilities"
 import { createSessionExpiryTracker } from "./utilities/sessionExpiryTracker"
 
 let maintenanceInterval: NodeJS.Timeout | undefined
@@ -77,11 +77,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version
-  Logger.configure(LogLevel.Verbose)
-  Logger.info(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`)
-  Logger.info(`${vscode.env.appName} version: ${vscode.version}`)
-  Logger.info(`${EXTENSION_ID} version: ${extensionVersion}`)
-  Logger.info(`Currently open workspace: ${vscode.workspace.name}`)
+  const storage = new Storage(context)
+  const settings = new Settings(storage)
+  context.subscriptions.push(settings)
+  // Must precede the first CLI invocation below: the user's level decides what the output
+  // channel keeps of a `logged-in` response, which carries a live OAuth token.
+  Logger.configure(settings.getLogLevel())
+  // Kept at every level: it carries no credential, and it is what makes a pasted log
+  // answerable in a bug report.
+  Logger.banner(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`)
+  Logger.banner(`${vscode.env.appName} version: ${vscode.version}`)
+  Logger.banner(`${EXTENSION_ID} version: ${extensionVersion}`)
+  Logger.banner(`Currently open workspace: ${vscode.workspace.name}`)
 
   // Gates the developer-only palette entries (e.g. "Show Debug View").
   await vscode.commands.executeCommand("setContext", "test-my-code:DebugMode", DEBUG_MODE)
@@ -130,7 +137,6 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated)
 
   // migrate data between versions
-  const storage = new Storage(context)
   if (langs.ok) {
     const migrationResult = await storage.migrateToLatest(
       context,
@@ -177,17 +183,13 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const resources = await init.resourceInitialization(
     context,
     storage,
+    extensionVersion,
     tmcDataPath,
     workspaceFileFolder,
   )
   if (resources.err) {
     initializationError(dialog, "resource initialization", resources.val, cliFolderPath)
   }
-
-  const settings = new Settings(storage)
-  context.subscriptions.push(settings)
-
-  Logger.configure(settings.getLogLevel())
 
   const ui = new UI()
   const loggedIn = ui.treeDP.createVisibilityGroup(authenticated)
@@ -248,14 +250,18 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   let showWelcome = false
   if (resources.ok) {
     const currentVersion = resources.val.extensionVersion
-    const previousState = storage.getSessionState()
-    const previousVersion = previousState?.extensionVersion
-    if (currentVersion !== previousVersion) {
-      storage.updateSessionState({ extensionVersion: currentVersion })
-    }
-    const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor")
-    if (versionDiff === undefined || versionDiff > 0) {
-      showWelcome = true
+    try {
+      const previousVersion = storage.getSessionState()?.extensionVersion
+      if (currentVersion !== previousVersion) {
+        storage.updateSessionState({ extensionVersion: currentVersion })
+      }
+      const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor")
+      if (versionDiff === undefined || versionDiff > 0) {
+        showWelcome = true
+      }
+    } catch (e) {
+      // An unreadable session state costs the welcome page, nothing else.
+      Logger.warn("Skipped version check", e)
     }
   } else {
     Logger.warn("Skipped version check")
@@ -265,31 +271,44 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   let workspaceManager: Result<WorkspaceManager, Error>
   let exerciseDecorationProvider: Result<ExerciseDecorationProvider, Error>
   if (resources.ok) {
-    userData = new Ok(new UserData(storage))
     workspaceManager = new Ok(new WorkspaceManager(resources.val))
     context.subscriptions.push(workspaceManager.val)
     if (workspaceManager.val.activeCourse) {
       await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true)
       await workspaceManager.val.verifyWorkspaceSettingsIntegrity()
     }
-    exerciseDecorationProvider = new Ok(
-      new ExerciseDecorationProvider(userData.val, workspaceManager.val),
-    )
+    // Stored data this version cannot parse must degrade the extension, not abort it.
+    try {
+      userData = new Ok(new UserData(storage))
+    } catch (e) {
+      const error =
+        e instanceof Error ? e : new InitializationError(e, "Could not read stored user data")
+      initializationError(dialog, "reading stored course data", error, cliFolderPath)
+      userData = new Err(error)
+    }
+    exerciseDecorationProvider = userData.ok
+      ? new Ok(new ExerciseDecorationProvider(userData.val, workspaceManager.val))
+      : new Err(
+          new InitializationError(
+            userData.val,
+            "Could not initialize exercise decoration provider without user data",
+          ),
+        )
   } else {
     Logger.warn("Skipped userdata setup")
-    exerciseDecorationProvider = new Err(
-      new InitializationError(
-        resources.val,
-        "Could not initialize exercise decoration provider due to failure in resource initialization",
-      ),
-    )
     userData = new Err(
       new InitializationError(
         resources.val,
-        "Could not initialize exercise decoration provider due to failure in resource initialization",
+        "Could not read user data due to failure in resource initialization",
       ),
     )
     workspaceManager = new Err(
+      new InitializationError(
+        resources.val,
+        "Could not initialize workspace manager due to failure in resource initialization",
+      ),
+    )
+    exerciseDecorationProvider = new Err(
       new InitializationError(
         resources.val,
         "Could not initialize exercise decoration provider due to failure in resource initialization",

@@ -81,16 +81,19 @@ export function v3_migrateFromV2(prev: data.v2.UserData): data.v3.UserData {
   }
 }
 
+/** Every key user data has ever been stored under; one left out survives to shadow the migrated value. */
+const USER_DATA_KEYS = [
+  data.v0.USER_DATA_KEY,
+  data.v1.USER_DATA_KEY,
+  data.v2.USER_DATA_KEY,
+  data.v3.USER_DATA_KEY,
+]
+
 export default function migrateUserDataToLatest(
   memento: vscode.Memento,
 ): MigratedData<data.v3.UserData> {
-  const obsoleteKeys: string[] = []
-
   // v0 => v1
   const dataV0 = validateData(memento.get(data.v0.USER_DATA_KEY), data.v0.userDataSchema)
-  if (dataV0) {
-    obsoleteKeys.push(data.v0.USER_DATA_KEY)
-  }
   const dataV1 = dataV0
     ? { courses: v1_migrateFromV0(dataV0.courses, memento) }
     : validateData(memento.get(data.v1.USER_DATA_KEY), data.v1.userDataSchema)
@@ -105,5 +108,9 @@ export default function migrateUserDataToLatest(
     ? v3_migrateFromV2(dataV2)
     : validateData(memento.get(data.v3.USER_DATA_KEY), data.v3.userDataSchema)
 
-  return { data: dataV3, obsoleteKeys }
+  return {
+    data: dataV3,
+    supersededKeys: USER_DATA_KEYS,
+    destinationKey: data.v3.USER_DATA_KEY,
+  }
 }

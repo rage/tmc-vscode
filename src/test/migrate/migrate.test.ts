@@ -4,7 +4,9 @@ import type * as vscode from "vscode"
 import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import Storage from "../../storage"
-import { v0, v1 } from "../../storage/data"
+import type { MoocLocalCourseData } from "../../storage/data"
+import { v0, v1, v3 } from "../../storage/data"
+import { obsoleteKeys } from "../../storage/migration"
 import { Logger, LogLevel } from "../../utilities"
 import * as exerciseData from "../fixtures/exerciseData"
 import * as extensionSettings from "../fixtures/extensionSettings"
@@ -165,6 +167,98 @@ suite("Extension data migration", function () {
       expect(storage.getUserData()).not.toBeUndefined()
       expect(storage.getExtensionSettings()).not.toBeUndefined()
       expect(storage.getSessionState()).not.toBeUndefined()
+    })
+  })
+
+  suite("source key retirement", function () {
+    // Every key any migration touches, so the survivor assertion is exact
+    // rather than a spot check.
+    const migrationKeys = [
+      v0.EXERCISE_DATA_KEY,
+      v0.EXTENSION_SETTINGS_KEY,
+      v0.EXTENSION_VERSION_KEY,
+      v0.USER_DATA_KEY,
+      v1.EXTENSION_SETTINGS_KEY,
+      v1.USER_DATA_KEY,
+      v3.SESSION_STATE_KEY,
+      v3.EXTENSION_SETTINGS_KEY,
+      v3.USER_DATA_KEY,
+    ]
+    const currentKeys = [v3.SESSION_STATE_KEY, v3.EXTENSION_SETTINGS_KEY, v3.USER_DATA_KEY]
+
+    function survivingKeys(): string[] {
+      return migrationKeys.filter((key) => context.globalState.get(key) !== undefined)
+    }
+
+    test("entering from version 0 leaves only the current keys", async function () {
+      await context.globalState.update(v0.USER_DATA_KEY, userData.v0_9_0)
+      await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, extensionSettings.v0_9_0(root))
+      await context.globalState.update(v0.EXTENSION_VERSION_KEY, "1.3.4")
+
+      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      expect(result).toBe(Ok.EMPTY)
+      expect(survivingKeys()).toEqual(currentKeys)
+    })
+
+    test("entering from version 2 leaves only the current keys", async function () {
+      await context.globalState.update(v1.USER_DATA_KEY, userData.v2_1_0)
+      await context.globalState.update(v1.EXTENSION_SETTINGS_KEY, extensionSettings.v2_0_0)
+      await context.globalState.update(v1.SESSION_STATE_KEY, sessionState.v2_0_0)
+
+      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      expect(result).toBe(Ok.EMPTY)
+      expect(survivingKeys()).toEqual(currentKeys)
+    })
+
+    test("entering from version 3 keeps the stored data untouched", async function () {
+      await context.globalState.update(v3.USER_DATA_KEY, userData.v3_0_0)
+      await context.globalState.update(v3.SESSION_STATE_KEY, sessionState.v2_0_0)
+
+      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      expect(result).toBe(Ok.EMPTY)
+      expect(survivingKeys()).toEqual([v3.SESSION_STATE_KEY, v3.USER_DATA_KEY])
+      expect(storage.getUserData()).toEqual(userData.v3_0_0)
+    })
+
+    test("a second run does not replay the first run's source data", async function () {
+      await context.globalState.update(v1.USER_DATA_KEY, userData.v2_1_0)
+      expect(await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)).toBe(
+        Ok.EMPTY,
+      )
+
+      // Everything the user does between two activations: enrol on a mooc
+      // course, which the v1 snapshot has no field for, and drop a tmc one.
+      const moocCourse: MoocLocalCourseData = {
+        id: "8bd5a0d6-8ba0-4b2a-a2e0-0dd1ba7f2af5",
+        name: "mooc-course",
+        title: "A courses.mooc.fi course",
+        description: null,
+        organization: "mooc",
+        exercises: [],
+        availablePoints: 0,
+        awardedPoints: 0,
+        perhapsExamMode: false,
+        newExercises: [],
+        notifyAfter: 0,
+        disabled: false,
+        materialUrl: null,
+      }
+      await storage.updateUserData({ courses: [], mooc_courses: [moocCourse] })
+
+      expect(await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)).toBe(
+        Ok.EMPTY,
+      )
+      expect(storage.getUserData()).toEqual({ courses: [], mooc_courses: [moocCourse] })
+    })
+  })
+
+  suite("obsoleteKeys", function () {
+    test("never retires a key another migration writes to", function () {
+      const retired = obsoleteKeys([
+        { data: undefined, supersededKeys: ["shared", "superseded"], destinationKey: undefined },
+        { data: undefined, supersededKeys: [], destinationKey: "shared" },
+      ])
+      expect(retired).toEqual(["superseded"])
     })
   })
 })

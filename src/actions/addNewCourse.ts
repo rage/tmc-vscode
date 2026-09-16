@@ -58,7 +58,10 @@ export async function addNewCourse(
         disabled: courseData.settings.disabled_status !== "enabled",
         materialUrl: courseData.settings.material_url,
       }
-      userData.val.addCourse({ kind: "tmc", data: localData })
+      const addResult = await userData.val.addCourse({ kind: "tmc", data: localData })
+      if (addResult.err) {
+        return addResult
+      }
       ui.treeDP.addChildWithId("myCourses", localData.id, localData.title, {
         command: "tmc.courseDetails",
         title: "Go To Course Details",
@@ -108,12 +111,10 @@ export async function addNewCourse(
         perhapsExamMode: false,
       }
       // A duplicate enrollment of the same course can surface twice from the
-      // backend, and re-adding an already-added course id throws; fail gracefully
-      // instead of crashing the add flow.
-      try {
-        userData.val.addCourse({ kind: "mooc", data: localData })
-      } catch (e) {
-        return Err(e instanceof Error ? e : new Error(String(e)))
+      // backend, so an already-added course id is a plausible input here.
+      const addResult = await userData.val.addCourse({ kind: "mooc", data: localData })
+      if (addResult.err) {
+        return addResult
       }
       ui.treeDP.addChildWithId("myCourses", localData.id, localData.name, {
         command: "tmc.courseDetails",

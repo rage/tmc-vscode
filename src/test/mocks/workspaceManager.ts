@@ -47,8 +47,10 @@ export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManager
         : NOT_MOCKED_ERROR,
     ),
     getExerciseByPath: vi.fn(() => values.getExerciseByPath),
-    getExercisesByCourseSlug: vi.fn((courseSlug: string) =>
-      courseSlug === "test-python-course" ? values.getExercisesByCoursePythonCourse : [],
+    getExercisesByCourseSlug: vi.fn((backend: string, courseSlug: string) =>
+      backend === "tmc" && courseSlug === "test-python-course"
+        ? values.getExercisesByCoursePythonCourse
+        : [],
     ),
     setExercises: vi.fn(async () => values.setExercises),
     uriIsExercise: vi.fn(() => values.uriIsExercise),

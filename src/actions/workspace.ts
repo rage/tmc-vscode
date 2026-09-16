@@ -36,7 +36,11 @@ export async function openExercises(
     return Err(new InitializationError("Extension was not initialized properly"))
   }
 
-  const course = userData.val.getCourse(courseId)
+  const courseResult = userData.val.getCourse(courseId)
+  if (courseResult.err) {
+    return courseResult
+  }
+  const course = courseResult.val
   const courseExercises = new Map(LocalCourseData.getExercises(course).map((x) => [x.data.id, x]))
   const exercisesToOpen = compact(
     exerciseIdsToOpen.map((x) => courseExercises.get(ExerciseIdentifier.unwrap(x))),
@@ -57,7 +61,7 @@ export async function openExercises(
   }
 
   const closedExerciseNames = workspaceManager.val
-    .getExercisesByCourseSlug(courseName)
+    .getExercisesByCourseSlug(course.kind, courseName)
     .filter((x) => x.status === ExerciseStatus.Closed)
     .map((x) => x.exerciseSlug)
   const settingsResult = await langs.val.setSetting(
@@ -74,7 +78,7 @@ export async function openExercises(
   const strongThreshold = 100
   const warningThreshold = under8GbRam ? weakThreshold : strongThreshold
   const currentlyOpen = workspaceManager.val
-    .getExercisesByCourseSlug(courseName)
+    .getExercisesByCourseSlug(course.kind, courseName)
     .filter((x) => x.status === ExerciseStatus.Open)
   if (currentlyOpen.length > warningThreshold) {
     dialog.warningNotification(
@@ -129,7 +133,11 @@ export async function downloadAndOpenExercises(
     return Err(new InitializationError("Extension was not initialized properly"))
   }
 
-  const course = userData.val.getCourse(courseId)
+  const courseResult = userData.val.getCourse(courseId)
+  if (courseResult.err) {
+    return courseResult
+  }
+  const course = courseResult.val
   // Key by a primitive: ExerciseIdentifier is a tagged-union object, so a
   // Map keyed by it would only match on reference identity and always miss
   // the deserialized ids coming from the webview.
@@ -196,7 +204,11 @@ export async function closeExercises(
     return Err(new InitializationError("Extension was not initialized properly"))
   }
 
-  const course = userData.val.getCourse(courseId)
+  const courseResult = userData.val.getCourse(courseId)
+  if (courseResult.err) {
+    return courseResult
+  }
+  const course = courseResult.val
   const exercises = new Map(LocalCourseData.getExercises(course).map((x) => [x.data.id, x]))
   const exerciseSlugs = compact(
     ids.map((x) => {
@@ -230,7 +242,7 @@ export async function closeExercises(
     .filter((e) => e !== undefined)
 
   const closedExerciseNames = workspaceManager.val
-    .getExercisesByCourseSlug(courseName)
+    .getExercisesByCourseSlug(course.kind, courseName)
     .filter((x) => x.status === ExerciseStatus.Closed)
     .map((x) => x.exerciseSlug)
   const settingsResult = await langs.val.setSetting(

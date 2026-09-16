@@ -1,10 +1,11 @@
 import * as path from "path"
 
 import * as fs from "fs-extra"
-import { concat, last } from "lodash"
+import { last } from "lodash"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
+import { z } from "zod"
 
 // All access to VSCode's storage should be done through this module.
 import type Dialog from "../api/dialog"
@@ -15,9 +16,11 @@ import {
   WORKSPACE_ROOT_FOLDER_NAME,
   WORKSPACE_SETTINGS,
 } from "../config/constants"
-import { HaltForReloadError } from "../errors"
+import { CorruptStoredDataError, HaltForReloadError } from "../errors"
+import { Logger } from "../utilities"
 import * as storage from "./data"
 import { v0 } from "./data"
+import { obsoleteKeys } from "./migration"
 import migrateBackendNamespacing from "./migration/backendNamespacing"
 import migrateExerciseDataToLatest from "./migration/exerciseData"
 import migrateExtensionSettingsToLatest from "./migration/extensionSettings"
@@ -38,19 +41,22 @@ export default class Storage {
     this._context = context
   }
 
+  /** @throws {CorruptStoredDataError} if the stored value does not match the current schema. */
   public getUserData(): storage.UserData | undefined {
-    return this._context.globalState.get<storage.UserData>(storage.USER_DATA_KEY)
+    return this._readValidated(storage.USER_DATA_KEY, storage.userDataSchema)
   }
 
   /**
+   * @throws {CorruptStoredDataError} if the stored value does not match the current schema.
    * @deprecated Extension Settings will be stored in VSCode, remove on major 3.0 release.
    */
   public getExtensionSettings(): storage.ExtensionSettings | undefined {
-    return this._context.globalState.get<storage.ExtensionSettings>(storage.EXTENSION_SETTINGS_KEY)
+    return this._readValidated(storage.EXTENSION_SETTINGS_KEY, storage.extensionSettingsSchema)
   }
 
+  /** @throws {CorruptStoredDataError} if the stored value does not match the current schema. */
   public getSessionState(): storage.SessionState | undefined {
-    return this._context.globalState.get<storage.SessionState>(storage.SESSION_STATE_KEY)
+    return this._readValidated(storage.SESSION_STATE_KEY, storage.sessionStateSchema)
   }
 
   public async updateUserData(userData: storage.UserData | undefined): Promise<void> {
@@ -65,6 +71,28 @@ export default class Storage {
 
   public async updateSessionState(sessionState: storage.SessionState | undefined): Promise<void> {
     await this._context.globalState.update(storage.SESSION_STATE_KEY, sessionState)
+  }
+
+  private _readValidated<T>(key: string, schema: z.ZodType<T>): T | undefined {
+    const stored = this._context.globalState.get<unknown>(key)
+    if (stored === undefined) {
+      return undefined
+    }
+
+    const validation = schema.safeParse(stored)
+    if (!validation.success) {
+      Logger.error(
+        `Stored data under "${key}" does not match its schema:`,
+        z.prettifyError(validation.error),
+      )
+      throw new CorruptStoredDataError(
+        `Stored extension data under "${key}" could not be read. It has been left untouched.`,
+      )
+    }
+
+    // The stored value, not zod's copy: a newer extension version may have
+    // persisted extra keys that have to survive a read/write round trip.
+    return stored as T
   }
 
   public async wipeStorage(): Promise<void> {
@@ -100,21 +128,29 @@ export default class Storage {
       // Workspace data migration - this one is a bit more tricky so do it last.
       const migratedExerciseData = await migrateExerciseDataToLatest(memento, dialog, tmc)
 
-      await this.updateExtensionSettings(migratedExtensionSettings.data)
-      await this.updateSessionState(migratedSessionState.data)
-      await this.updateUserData(migratedUserData.data)
+      // A migration yields `undefined` when nothing was stored under any of its
+      // keys; that means "nothing to migrate", not "delete what is there".
+      if (migratedExtensionSettings.data) {
+        await this.updateExtensionSettings(migratedExtensionSettings.data)
+      }
+      if (migratedSessionState.data) {
+        await this.updateSessionState(migratedSessionState.data)
+      }
+      if (migratedUserData.data) {
+        await this.updateUserData(migratedUserData.data)
+      }
 
       // Runs after userData is settled so it can enumerate the user's courses.
       // Idempotent and flag-gated (see backendNamespacing.ts).
       const workspaceFileFolder = path.join(context.globalStoragePath, "workspaces")
       await migrateBackendNamespacing(memento, tmc, workspaceFileFolder, migratedUserData.data)
 
-      const keysToRemove = concat(
-        migratedExerciseData.obsoleteKeys,
-        migratedExtensionSettings.obsoleteKeys,
-        migratedSessionState.obsoleteKeys,
-        migratedUserData.obsoleteKeys,
-      )
+      const keysToRemove = obsoleteKeys([
+        migratedExerciseData,
+        migratedExtensionSettings,
+        migratedSessionState,
+        migratedUserData,
+      ])
       for (const key of keysToRemove) {
         await memento.update(key, undefined)
       }

@@ -490,7 +490,7 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
         getCourseDetails: vi.fn().mockResolvedValue(Err(new Error("offline"))),
       } as unknown as Langs),
       userData: Ok({
-        getCourse: () => localCourse,
+        getCourse: () => Ok(localCourse),
       }) as unknown as ReturnType<typeof createMockActionContext>["userData"],
       workspaceManager: Ok({
         getExerciseBySlug: () => undefined,

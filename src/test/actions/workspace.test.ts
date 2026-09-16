@@ -47,7 +47,7 @@ suite("closeExercises action", function () {
     } as unknown as WorkspaceManager
 
     const userData = {
-      getCourse: () => makeMoocKind(moocCourse) as LocalCourseData,
+      getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
     } as unknown as UserData
 
     const langs = {

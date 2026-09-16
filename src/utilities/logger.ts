@@ -22,6 +22,28 @@ enum ConsoleLogLevel {
 
 const channel = `[${OUTPUT_CHANNEL_NAME}]`
 
+// Key names whose values must never reach the output channel: users are asked to paste it
+// into bug reports, and an OAuth token or a completed device-flow URL in it is a live
+// credential. Matched with separators and case removed, so `access_token`, `accessToken`
+// and `ACCESS-TOKEN` all hit.
+const SECRET_KEYS = new Set([
+  "accesstoken",
+  "refreshtoken",
+  "idtoken",
+  "token",
+  "authorization",
+  "clientsecret",
+  "secret",
+  "password",
+  "devicecode",
+  "usercode",
+  "verificationuricomplete",
+])
+
+function isSecretKey(key: string): boolean {
+  return SECRET_KEYS.has(key.replaceAll(/[-_\s]/g, "").toLowerCase())
+}
+
 export class Logger {
   public static output: OutputChannel | undefined
   public static testmode = !!env["TMC_VSCODE_TESTMODE"]
@@ -62,6 +84,18 @@ export class Logger {
     this._log(ConsoleLogLevel.Error, ...params)
   }
 
+  /**
+   * Writes a line to the output channel whatever log level is configured, for the
+   * activation banner users are asked to paste into bug reports.
+   *
+   * Pass only facts that carry no credential: this deliberately skips the level check
+   * that keeps CLI responses, and the OAuth tokens in them, out of the channel. The
+   * `none` level still silences it, because it leaves no channel to write to.
+   */
+  public static banner(...params: unknown[]): void {
+    this._write(ConsoleLogLevel.Info, true, params)
+  }
+
   public static errorWithDialog(dialog: Dialog, ...params: unknown[]): void {
     const loggable = this._toLoggableParams(params)
     dialog.errorNotification(loggable)
@@ -89,7 +123,7 @@ export class Logger {
     }
 
     try {
-      return JSON.stringify(p)
+      return JSON.stringify(p, (key, value) => (isSecretKey(key) ? "<redacted>" : value))
     } catch {
       return "<error>"
     }
@@ -104,6 +138,11 @@ export class Logger {
    * @param params The things that should be logged.
    */
   private static _log(level: ConsoleLogLevel, ...params: unknown[]): void {
+    this._write(level, this._channelKeeps(level), params)
+  }
+
+  /** @param toOutput Whether the line reaches the channel, already weighed against the level. */
+  private static _write(level: ConsoleLogLevel, toOutput: boolean, params: unknown[]): void {
     if (DEBUG_MODE) {
       // in debug mode, we log to console with the appropriate level
       const loggableParams = this._toLoggableParams(params)
@@ -126,26 +165,23 @@ export class Logger {
         }
       }
     } else if (this.testmode) {
-      console.log(this._timestamp, channel, ...params)
+      console.log(this._timestamp, channel, this._toLoggableParams(params))
     }
-    if (this.output !== undefined) {
-      switch (this._level) {
-        case LogLevel.None: {
-          // do not log anything
-          break
-        }
-        case LogLevel.Errors: {
-          // only log warnings and errors
-          if (level === "WARN" || level === "ERROR") {
-            this._logToOutput(this.output, level, ...params)
-          }
-          break
-        }
-        case LogLevel.Verbose: {
-          // log everything
-          this._logToOutput(this.output, level, ...params)
-          break
-        }
+    if (toOutput && this.output !== undefined) {
+      this._logToOutput(this.output, level, ...params)
+    }
+  }
+
+  private static _channelKeeps(level: ConsoleLogLevel): boolean {
+    switch (this._level) {
+      case LogLevel.None: {
+        return false
+      }
+      case LogLevel.Errors: {
+        return level === ConsoleLogLevel.Warn || level === ConsoleLogLevel.Error
+      }
+      case LogLevel.Verbose: {
+        return true
       }
     }
   }

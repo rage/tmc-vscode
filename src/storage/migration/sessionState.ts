@@ -15,11 +15,12 @@ export function v1_migrateFromV0(version: string | undefined): data.v1.SessionSt
   }
 }
 
+/** Every key session state has ever been stored under; one left out survives to shadow the migrated value. */
+const SESSION_STATE_KEYS = [data.v0.EXTENSION_VERSION_KEY, data.v3.SESSION_STATE_KEY]
+
 export default function migrateSessionState(
   memento: vscode.Memento,
 ): MigratedData<data.v1.SessionState> {
-  const obsoleteKeys: string[] = []
-
   let dataV1 = validateData(
     memento.get<data.v1.SessionState>(data.v1.SESSION_STATE_KEY),
     data.v1.sessionStateSchema,
@@ -29,5 +30,9 @@ export default function migrateSessionState(
     dataV1 = v1_migrateFromV0(oldVersionData)
   }
 
-  return { data: dataV1, obsoleteKeys }
+  return {
+    data: dataV1,
+    supersededKeys: SESSION_STATE_KEYS,
+    destinationKey: data.v3.SESSION_STATE_KEY,
+  }
 }

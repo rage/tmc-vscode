@@ -27,7 +27,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
   const now = Date.now()
   const exercisesToUpdate = updateablesResult.val.filter((x) => {
     const course = userData.val.getCourse(x.courseId)
-    return course.data.notifyAfter <= now && !course.data.disabled
+    return course.ok && course.val.data.notifyAfter <= now && !course.val.data.disabled
   })
 
   if (exercisesToUpdate.length === 0) {
@@ -83,7 +83,13 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
       async (): Promise<void> => {
         const now2 = Date.now()
         const uniqueCourseIds = uniq(exercisesToUpdate.map((x) => x.courseId))
-        uniqueCourseIds.forEach((x) => userData.val.setNotifyDate(x, now2 + NOTIFICATION_DELAY))
+        for (const courseId of uniqueCourseIds) {
+          const result = await userData.val.setNotifyDate(courseId, now2 + NOTIFICATION_DELAY)
+          if (result.err) {
+            dialog.errorNotification("Failed to postpone the reminder.", result.val)
+            return
+          }
+        }
       },
     ],
   )

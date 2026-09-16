@@ -25,7 +25,12 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
     return
   }
 
-  const course = userData.val.getCourse(courseId)
+  const courseResult = userData.val.getCourse(courseId)
+  if (courseResult.err) {
+    dialog.errorNotification("Failed to read the selected course.", courseResult.val)
+    return
+  }
+  const course = courseResult.val
   if (LocalCourseData.getNewExercises(course).length === 0) {
     dialog.notification(
       `There are no new exercises for the course ${LocalCourseData.getCourseName(course)}.`,
