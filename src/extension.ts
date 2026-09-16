@@ -108,10 +108,12 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 
   const dialog = new Dialog()
   const cliFolderPath = cliFolder(context)
-  const cliPathResult = await init.ensureLangsUpdated(cliFolderPath, dialog, {
-    downloadUrl: TMC_LANGS_DL_URL,
-    version: TMC_LANGS_VERSION,
-  })
+  const cliPathResult = await init.ensureLangsUpdated(
+    cliFolderPath,
+    dialog,
+    { downloadUrl: TMC_LANGS_DL_URL, version: TMC_LANGS_VERSION },
+    context.globalState,
+  )
 
   // download langs if necessary
   let langs: Result<Langs, Error>
