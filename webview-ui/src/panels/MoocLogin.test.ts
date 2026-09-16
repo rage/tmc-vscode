@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte"
+import { tick } from "svelte"
 
 import type { MoocLoginPanel } from "../shared/shared"
 import { findButton, getButton } from "../test/dom"
@@ -82,7 +83,7 @@ suite("MoocLogin panel", () => {
     })
   })
 
-  test("does not show 'Copied' when the clipboard write rejects", async () => {
+  test("tells the user to copy manually when the clipboard write rejects", async () => {
     const writeText = vi.fn().mockRejectedValue(new Error("denied"))
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText },
@@ -93,12 +94,13 @@ suite("MoocLogin panel", () => {
     const code = await screen.findByText("WXYZ-1234")
     await fireEvent.click(code)
     await waitFor(() => expect(writeText).toHaveBeenCalled())
-    // Give any (incorrect) state update a chance to flush, then assert nothing.
-    await Promise.resolve()
+    await waitFor(() => {
+      expect(screen.getByText(/select the code and copy it manually/)).toBeInTheDocument()
+    })
     expect(screen.queryByText("Copied to clipboard")).not.toBeInTheDocument()
   })
 
-  test("does not show 'Copied' when the Clipboard API is absent", async () => {
+  test("tells the user to copy manually when the Clipboard API is absent", async () => {
     Object.defineProperty(navigator, "clipboard", {
       value: undefined,
       configurable: true,
@@ -107,8 +109,32 @@ suite("MoocLogin panel", () => {
     dispatch(deviceCodeMessage)
     const code = await screen.findByText("WXYZ-1234")
     await fireEvent.click(code)
-    await Promise.resolve()
+    await waitFor(() => {
+      expect(screen.getByText(/select the code and copy it manually/)).toBeInTheDocument()
+    })
     expect(screen.queryByText("Copied to clipboard")).not.toBeInTheDocument()
+  })
+
+  test("clears the copy outcome a couple of seconds later", async () => {
+    vi.useFakeTimers()
+    try {
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText },
+        configurable: true,
+      })
+      render(MoocLogin, { props: { panel } })
+      dispatch(deviceCodeMessage)
+      await tick()
+      await fireEvent.click(screen.getByText("WXYZ-1234"))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(screen.getByText("Copied to clipboard")).toBeInTheDocument()
+
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(screen.queryByText("Copied to clipboard")).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test("shows the error state on a moocLoginError message", async () => {
