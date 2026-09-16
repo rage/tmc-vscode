@@ -4,7 +4,6 @@ import { vsCodeTest } from "../fixtures"
 import { migrationTest } from "../migration-gate"
 import { MoocLoginPage } from "../pages/mooc-login"
 import { MyCoursesPage } from "../pages/my-courses"
-import { SelectPlatform } from "../pages/select-platform"
 
 // E2E of the courses.mooc.fi device-flow login, the extension's only login. The
 // mock's OAuth endpoints (backend/mooc/oauth.ts) are not part of the vendored
@@ -12,19 +11,18 @@ import { SelectPlatform } from "../pages/select-platform"
 //
 // The fixture seeds tmc credentials, so the extension starts logged in and the
 // tree view's "Log in" entry is hidden; these specs reach the device flow through
-// the mooc course flow, which checks the (separate, absent) mooc credentials.
+// the add-course quick pick, which offers it while the (separate, absent) mooc
+// credentials are missing.
 
 migrationTest(
-  "shows the device code and lands in the mooc course flow",
+  "shows the device code and makes the enrolled courses addable",
   async ({ page, webview }) => {
     const myCoursesPage = new MyCoursesPage(page, webview)
-    const selectPlatform = new SelectPlatform(page, webview)
     const moocLoginPage = new MoocLoginPage(page, webview)
 
-    await vsCodeTest.step("pick the mooc platform", async () => {
+    await vsCodeTest.step("start the login from the add-course pick", async () => {
       await myCoursesPage.goto()
-      await webview.getByRole("button", { name: "Add new course" }).first().click()
-      await selectPlatform.selectMooc()
+      await myCoursesPage.startMoocLogin()
     })
 
     await vsCodeTest.step("the device code is shown", async () => {
@@ -32,13 +30,13 @@ migrationTest(
       await expect(moocLoginPage.userCode()).toBeVisible()
     })
 
-    await vsCodeTest.step("the mock approves and the flow continues", async () => {
-      await expect(
-        moocLoginPage.getSidePanel().getByRole("heading", { name: "Enrolled courses" }),
-      ).toBeVisible()
-      await expect(
-        moocLoginPage.getSidePanel().getByRole("heading", { name: "MOOC Python Course" }).first(),
-      ).toBeVisible()
+    await vsCodeTest.step("the mock approves and the login is confirmed", async () => {
+      await expect(page.getByText("Logged in to courses.mooc.fi.")).toBeVisible()
+    })
+
+    await vsCodeTest.step("the enrolled courses are now offered", async () => {
+      const quickPick = await myCoursesPage.openAddCourseQuickPick()
+      await quickPick.expectItem("MOOC Python Course")
     })
   },
 )
@@ -50,13 +48,11 @@ vsCodeTest.describe(() => {
 
   migrationTest("can cancel a pending device login", async ({ page, webview }) => {
     const myCoursesPage = new MyCoursesPage(page, webview)
-    const selectPlatform = new SelectPlatform(page, webview)
     const moocLoginPage = new MoocLoginPage(page, webview)
 
-    await vsCodeTest.step("pick the mooc platform", async () => {
+    await vsCodeTest.step("start the login from the add-course pick", async () => {
       await myCoursesPage.goto()
-      await webview.getByRole("button", { name: "Add new course" }).first().click()
-      await selectPlatform.selectMooc()
+      await myCoursesPage.startMoocLogin()
     })
 
     await vsCodeTest.step("cancel the pending login", async () => {
@@ -76,13 +72,11 @@ vsCodeTest.describe(() => {
     "cancel then retry starts a clean login with no error flash",
     async ({ page, webview }) => {
       const myCoursesPage = new MyCoursesPage(page, webview)
-      const selectPlatform = new SelectPlatform(page, webview)
       const moocLoginPage = new MoocLoginPage(page, webview)
 
-      await vsCodeTest.step("pick the mooc platform", async () => {
+      await vsCodeTest.step("start the login from the add-course pick", async () => {
         await myCoursesPage.goto()
-        await webview.getByRole("button", { name: "Add new course" }).first().click()
-        await selectPlatform.selectMooc()
+        await myCoursesPage.startMoocLogin()
       })
 
       await vsCodeTest.step("cancel the pending login", async () => {

@@ -11,10 +11,11 @@ import { TestSubmissionPage } from "../pages/test-submission"
 // End-to-end walk of the mooc (courses.mooc.fi) student flow against the mooc
 // mock backend (backend/mooc, mounted in the same process as the legacy TMC
 // mock and routed via TMC_LANGS_MOOC_ROOT_URL in fixtures.ts). It covers the
-// full path the mooc migration adds: platform selection -> enrolled-course
-// selection -> course details -> selecting and opening (downloading) an
-// exercise -> opening the workspace -> opening the exercise file -> running the
-// local tests -> submitting -> the reduced mooc result panel.
+// full path the mooc migration adds: device-flow login -> picking an enrolled
+// course from the add-course quick pick -> course details -> selecting and
+// opening (downloading) an exercise -> opening the workspace -> opening the
+// exercise file -> running the local tests -> submitting -> the reduced mooc
+// result panel.
 //
 // Reaching the file explorer / run-tests / submit depends on mooc workspace
 // tracking (the CLI's `mooc list-local-course-exercises` + slug-carrying

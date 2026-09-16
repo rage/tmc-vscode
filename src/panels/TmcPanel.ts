@@ -6,7 +6,6 @@ import * as vscode from "vscode"
 import { z } from "zod"
 
 import {
-  addNewCourse,
   closeExercises,
   downloadAndOpenExercises,
   downloadExercisesForUi,
@@ -20,13 +19,11 @@ import {
 import type { ActionContext } from "../actions/types"
 import { ExerciseStatus } from "../api/workspaceManager"
 import * as commands from "../commands"
-import { TMC_BACKEND_URL } from "../config/constants"
 import type { ExerciseGroup, ExtensionToWebview, Panel, WebviewToExtension } from "../shared/shared"
 import {
   ExerciseIdentifier,
   LocalCourseData,
   LocalCourseExercise,
-  makeMoocKind,
   match,
   WebviewToExtensionSchema,
 } from "../shared/shared"
@@ -193,12 +190,7 @@ export class TmcPanel {
 
     this._panel.webview.html = this._getWebviewContent(this._panel.webview, extensionUri)
 
-    this._setWebviewMessageListener(
-      this._panel.webview,
-      extensionContext,
-      extensionUri,
-      actionContext,
-    )
+    this._setWebviewMessageListener(this._panel.webview, extensionContext, actionContext)
 
     this._isMain = isMain
   }
@@ -292,7 +284,6 @@ export class TmcPanel {
   private _setWebviewMessageListener(
     webview: Webview,
     extensionContext: vscode.ExtensionContext,
-    extensionUri: Uri,
     actionContext: ActionContext,
   ): void {
     webview.onDidReceiveMessage(
@@ -490,98 +481,6 @@ export class TmcPanel {
             )
             break
           }
-          case "requestSelectCourseData": {
-            const { langs } = actionContext
-            if (!langs.ok) {
-              Logger.error("Extension was not initialized properly")
-              return
-            }
-
-            postMessageToWebview(webview, {
-              type: "setTmcBackendUrl",
-              target: message.sourcePanel,
-              tmcBackendUrl: TMC_BACKEND_URL,
-            })
-
-            const organizations = await langs.val.getTmcOrganizations()
-            if (organizations.err) {
-              const error = `Failed to fetch organizations. ${organizations.val}`
-              actionContext.dialog.errorNotification("Failed to open panel.", organizations.val)
-              postMessageToWebview(webview, {
-                type: "requestSelectCourseDataError",
-                target: message.sourcePanel,
-                error,
-              })
-              return
-            }
-            const organization = organizations.val.find(
-              (o) => o.slug === message.sourcePanel.organizationSlug,
-            )
-            if (organization === undefined) {
-              const error = `Failed to find organization not find organization "${message.sourcePanel.organizationSlug}".`
-              actionContext.dialog.errorNotification(error)
-              postMessageToWebview(webview, {
-                type: "requestSelectCourseDataError",
-                target: message.sourcePanel,
-                error,
-              })
-              return
-            }
-            postMessageToWebview(webview, {
-              type: "setOrganization",
-              target: message.sourcePanel,
-              organization,
-            })
-
-            const courses = await langs.val.getCourses(organization.slug)
-            if (courses.err) {
-              const error = `Failed to fetch organization courses. ${courses.val}`
-              actionContext.dialog.errorNotification("Failed to open panel.", courses.val)
-              postMessageToWebview(webview, {
-                type: "requestSelectCourseDataError",
-                target: message.sourcePanel,
-                error,
-              })
-              return
-            }
-            postMessageToWebview(webview, {
-              type: "setSelectableCourses",
-              target: message.sourcePanel,
-              courses: courses.val,
-            })
-            break
-          }
-          case "requestSelectOrganizationData": {
-            const { langs } = actionContext
-            if (!langs.ok) {
-              Logger.error("Extension was not initialized properly")
-              return
-            }
-
-            postMessageToWebview(webview, {
-              type: "setTmcBackendUrl",
-              target: message.sourcePanel,
-              tmcBackendUrl: TMC_BACKEND_URL,
-            })
-
-            const organizations = await langs.val.getTmcOrganizations()
-            if (organizations.err) {
-              const error = `Failed fetch organizations. ${organizations.val}`
-              actionContext.dialog.errorNotification("Failed to open panel.", organizations.val)
-              postMessageToWebview(webview, {
-                type: "requestSelectOrganizationDataError",
-                target: message.sourcePanel,
-                error,
-              })
-              return
-            }
-            postMessageToWebview(webview, {
-              type: "setOrganizations",
-              target: message.sourcePanel,
-              organizations: organizations.val,
-            })
-            break
-          }
           case "requestWelcomeData": {
             const { resources } = actionContext
             if (!resources.ok) {
@@ -603,22 +502,6 @@ export class TmcPanel {
               type: "CourseDetails",
               courseId: message.courseId,
               exerciseStatuses: { tmc: {}, mooc: {} },
-            })
-            break
-          }
-          case "selectPlatform": {
-            await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-              id: randomPanelId(),
-              type: "SelectPlatform",
-              requestingPanel: message.sourcePanel,
-            })
-            break
-          }
-          case "selectOrganization": {
-            await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-              id: randomPanelId(),
-              type: "SelectOrganization",
-              requestingPanel: message.sourcePanel,
             })
             break
           }
@@ -657,6 +540,10 @@ export class TmcPanel {
           }
           case "openCourseWorkspace": {
             openWorkspace(actionContext, message.courseName, message.backend)
+            break
+          }
+          case "addNewCourse": {
+            await vscode.commands.executeCommand("tmc.addNewCourse")
             break
           }
           case "changeTmcDataPath": {
@@ -722,54 +609,6 @@ export class TmcPanel {
               courseId,
               exerciseStatuses: { tmc: {}, mooc: {} },
             })
-            break
-          }
-          case "selectCourse": {
-            await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-              id: randomPanelId(),
-              type: "SelectCourse",
-              organizationSlug: message.slug,
-              requestingPanel: message.sourcePanel,
-            })
-            break
-          }
-          case "addCourse": {
-            const { userData } = actionContext
-            if (!userData.ok) {
-              Logger.error("Extension was not initialized properly")
-              return
-            }
-
-            const result = await addNewCourse(
-              actionContext,
-              message.organizationSlug,
-              message.courseId,
-            )
-            if (result.err) {
-              // Keep the course-selection side panel open so the user can retry.
-              actionContext.dialog.errorNotification("Failed to add new course.", result.val)
-            } else {
-              TmcPanel.sidePanel?.dispose()
-            }
-            postMessageToWebview(webview, {
-              type: "setMyCourses",
-              target: message.requestingPanel,
-              courses: userData.val.getCourses(),
-            })
-            break
-          }
-          case "relayToWebview": {
-            // Deliberately unbuffered: this is a live hand-off between two open
-            // webviews, so replaying it into a reloaded one would be meaningless.
-            if (this._isMain) {
-              // relay msg from main panel to side panel
-              if (TmcPanel.sidePanel) {
-                TmcPanel.sidePanel._panel.webview.postMessage(message.message)
-              }
-            } else if (TmcPanel.mainPanel) {
-              // relay msg from side panel to main panel
-              TmcPanel.mainPanel._panel.webview.postMessage(message.message)
-            }
             break
           }
           case "closeSidePanel": {
@@ -853,31 +692,6 @@ export class TmcPanel {
             vscode.env.openExternal(vscode.Uri.parse(message.url))
             break
           }
-          case "selectMoocCourse": {
-            const { langs } = actionContext
-            if (!langs.ok) {
-              Logger.error("Extension was not initialized properly")
-              return
-            }
-            // Mooc credential state is independent of the tmc `LoggedIn` context
-            // key, so check it directly; if absent, show device-flow login first
-            // (continues to the course flow on success via the `moocLogin` handler).
-            const authed = await langs.val.isMoocAuthenticated()
-            if (authed.ok && authed.val) {
-              await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-                id: randomPanelId(),
-                type: "SelectMoocCourse",
-                requestingPanel: message.sourcePanel,
-              })
-            } else {
-              await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-                id: randomPanelId(),
-                type: "MoocLogin",
-                requestingPanel: message.sourcePanel,
-              })
-            }
-            break
-          }
           case "moocLogin": {
             const { langs } = actionContext
             if (!langs.ok) {
@@ -919,19 +733,11 @@ export class TmcPanel {
                 target: moocLoginPanel,
                 error: loginResult.val.message,
               })
-            } else if (moocLoginPanel.requestingPanel) {
-              // Still the current attempt (checked above), so the login panel is still active.
-              await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-                id: randomPanelId(),
-                type: "SelectMoocCourse",
-                requestingPanel: moocLoginPanel.requestingPanel,
-              })
             } else {
-              // Standalone login (palette, tree view, expiry prompt): nothing to
-              // navigate back to, so close and confirm. Offer the step the user
-              // most likely came to take rather than making them find it, but as
-              // a button, so a login that was only meant to renew a session is
-              // not hijacked into a course picker.
+              // Nothing to navigate back to, so close and confirm. Offer the step
+              // the user most likely came to take rather than making them find it,
+              // but as a button, so a login that was only meant to renew a session
+              // is not hijacked into a course picker.
               TmcPanel.sidePanel?.dispose()
               actionContext.dialog.notification("Logged in to courses.mooc.fi.", [
                 "Add new course",
@@ -944,57 +750,6 @@ export class TmcPanel {
           }
           case "cancelMoocLogin": {
             moocLoginRegistry.cancel(message.sourcePanel.id)
-            break
-          }
-          case "requestSelectMoocCourseData": {
-            const { langs } = actionContext
-            if (!langs.ok) {
-              Logger.error("Extension was not initialized properly")
-              return
-            }
-            const courseInstances = await langs.val.getEnrolledMoocCourseInstances()
-            if (courseInstances.err) {
-              const error = `Failed to fetch enrolled course instances. ${courseInstances.val}`
-              actionContext.dialog.errorNotification(error)
-              TmcPanel.postMessage({
-                type: "requestSelectMoocCourseDataError",
-                target: message.sourcePanel,
-                error,
-              })
-              return
-            }
-            TmcPanel.postMessage({
-              type: "setSelectMoocCourseData",
-              target: message.sourcePanel,
-              courseInstances: courseInstances.val,
-            })
-            break
-          }
-          case "addMoocCourse": {
-            const { userData } = actionContext
-            if (!userData.ok) {
-              Logger.error("Extension was not initialized properly")
-              return
-            }
-            const result = await addNewCourse(
-              actionContext,
-              // organizationSlug is a TMC-only concern; addNewCourse's mooc branch
-              // takes the org from the fetched course (moocCourse.organization_name),
-              // so the mooc path passes no slug.
-              "",
-              makeMoocKind({ instanceId: message.instanceId }),
-            )
-            if (result.err) {
-              // Keep the course-selection side panel open so the user can retry.
-              actionContext.dialog.errorNotification("Failed to add new course.", result.val)
-            } else {
-              TmcPanel.sidePanel?.dispose()
-            }
-            postMessageToWebview(webview, {
-              type: "setMyCourses",
-              target: message.requestingPanel,
-              courses: userData.val.getCourses(),
-            })
             break
           }
           case "requestInitializationErrors": {

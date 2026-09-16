@@ -10,7 +10,6 @@
     ExerciseIdentifier,
     LocalCourseData,
     assertUnreachable,
-    makeTmcKind,
     match,
     unwrap,
   } from "../shared/shared"
@@ -44,35 +43,6 @@
         panel = { ...panel, tmcDataSize: message.tmcDataSize }
         break
       }
-      case "selectedOrganization": {
-        vscode.postMessage({
-          type: "selectCourse",
-          sourcePanel: { id: panel.id, type: panel.type },
-          slug: message.slug,
-        })
-        break
-      }
-      case "selectedCourse": {
-        // Extension closes the selection side panel only on success, so a failed add
-        // leaves it open for retry.
-        vscode.postMessage({
-          type: "addCourse",
-          organizationSlug: message.organizationSlug,
-          // the tmc course selection sends a plain tmc course id
-          courseId: makeTmcKind({ courseId: message.courseId }),
-          requestingPanel: { id: panel.id, type: panel.type },
-        })
-        break
-      }
-      case "selectedMoocCourse": {
-        vscode.postMessage({
-          type: "addMoocCourse",
-          instanceId: message.instanceId,
-          courseName: message.courseName,
-          requestingPanel: { id: panel.id, type: panel.type },
-        })
-        break
-      }
       case "setNewExercises": {
         const course = findCourse(message.courseId)
         if (course) {
@@ -101,16 +71,6 @@
         }
         break
       }
-      case "setNextCourseDeadline": {
-        panel = {
-          ...panel,
-          courseDeadlines: {
-            ...panel.courseDeadlines,
-            [CourseIdentifier.toString(message.courseId)]: message.deadline,
-          },
-        }
-        break
-      }
       default:
         assertUnreachable(message)
     }
@@ -124,10 +84,7 @@
   }
   function addNewCourse() {
     vscode.postMessage({
-      type: "selectPlatform",
-      // only `{id, type}` is expected by the schema; the full `panel` prop is `$state`-backed
-      // and risks a `DataCloneError` once reassigned (e.g. by `setMyCourses`)
-      sourcePanel: { id: panel.id, type: panel.type },
+      type: "addNewCourse",
     })
   }
   function changeTmcDataPath() {

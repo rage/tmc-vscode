@@ -5,11 +5,7 @@ import { findButton, getButton } from "../test/dom"
 import { postedMessages } from "../test/setup"
 import MoocLogin from "./MoocLogin.svelte"
 
-const panel: MoocLoginPanel = {
-  id: 7,
-  type: "MoocLogin",
-  requestingPanel: { id: 1, type: "MyCourses" },
-}
+const panel: MoocLoginPanel = { id: 7, type: "MoocLogin" }
 
 const deviceCodeMessage = {
   type: "moocDeviceCode",

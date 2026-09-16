@@ -18,10 +18,7 @@ import { z } from "zod"
  * ======== imports ========
  */
 import {
-  Course,
   ExerciseTaskSubmissionStatus,
-  MoocCourse,
-  Organization,
   RunResult,
   StyleValidationResult,
   SubmissionFinished,
@@ -529,18 +526,14 @@ export type PanelType =
   | "Welcome"
   | "MyCourses"
   | "CourseDetails"
-  | "SelectOrganization"
-  | "SelectCourse"
   | "ExerciseTests"
   | "ExerciseSubmission"
-  | "SelectPlatform"
-  | "SelectMoocCourse"
   | "MoocLogin"
   | "InitializationErrorHelp"
 
 // used to define messages that should only be sent to a specific instance of a panel
-// for example, the course selected by the user on the SelectCoursePanel should only be sent
-// to the panel which initiated the course selection
+// for example, an exercise's test results should only be sent to the ExerciseTests
+// panel that started the run, not to another one that happens to be open
 export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "id" | "type">
 
 // used to define messages that should be sent to any instance of a given panel type
@@ -564,43 +557,24 @@ export function broadcastPanelSchema<T extends PanelType>(...types: [T, ...T[]])
 
 // stricter variant of `targetPanelSchema`, rejecting unknown keys.
 //
-// Used only for the *webview → extension host* direction (`sourcePanel`/
-// `requestingPanel` fields in `WebviewToExtensionSchema`): the webview should
-// never legitimately need to send more than `{id, type}` there, so this acts
-// as a guard against accidentally posting a whole (potentially Svelte 5
-// `$state`-proxied) panel object, which would otherwise crash the webview
-// message relay with an opaque `DataCloneError` instead of failing loudly.
+// Used only for the *webview → extension host* direction (`sourcePanel` fields
+// in `WebviewToExtensionSchema`): the webview should never legitimately need to
+// send more than `{id, type}` there, so this acts as a guard against
+// accidentally posting a whole (potentially Svelte 5 `$state`-proxied) panel
+// object, which would otherwise fail with an opaque `DataCloneError` instead of
+// failing loudly.
 //
-// Deliberately NOT used for `ExtensionToWebviewSchema`/`WebviewToWebviewSchema`
-// `target` fields: some existing extension-host call sites pass a whole panel
-// object as `target` (harmless there, since it's a plain object the receiving
-// side only reads `.id`/`.type` off), and tightening those schemas would
-// reject otherwise-working messages.
+// Deliberately NOT used for `ExtensionToWebviewSchema`'s `target` fields: some
+// existing extension-host call sites pass a whole panel object as `target`
+// (harmless there, since it's a plain object the receiving side only reads
+// `.id`/`.type` off), and tightening those schemas would reject
+// otherwise-working messages.
 function strictTargetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   return z.strictObject({
     id: z.number(),
     type: z.literal(types),
   })
 }
-
-export const SelectOrganizationPanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("SelectOrganization"),
-  // the result of the selection is sent back to this panel
-  requestingPanel: targetPanelSchema("MyCourses"),
-})
-
-export type SelectOrganizationPanel = z.infer<typeof SelectOrganizationPanelSchema>
-
-export const SelectCoursePanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("SelectCourse"),
-  organizationSlug: z.string(),
-  // the result of the selection is sent back to this panel
-  requestingPanel: targetPanelSchema("MyCourses"),
-})
-
-export type SelectCoursePanel = z.infer<typeof SelectCoursePanelSchema>
 
 export const ExerciseTestsPanelSchema = z.object({
   id: z.number(),
@@ -631,28 +605,9 @@ export const InitializationErrorHelpPanelSchema = z.object({
 
 export type InitializationErrorHelpPanel = z.infer<typeof InitializationErrorHelpPanelSchema>
 
-export const SelectPlatformPanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("SelectPlatform"),
-  requestingPanel: targetPanelSchema("MyCourses"),
-})
-
-export type SelectPlatformPanel = z.infer<typeof SelectPlatformPanelSchema>
-
-export const SelectMoocCoursePanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("SelectMoocCourse"),
-  requestingPanel: targetPanelSchema("MyCourses"),
-})
-
-export type SelectMoocCoursePanel = z.infer<typeof SelectMoocCoursePanelSchema>
-
-// Shown before the mooc course flow, or standalone on session expiry.
-// `requestingPanel` is where to continue on success; absent for standalone.
 export const MoocLoginPanelSchema = z.object({
   id: z.number(),
   type: z.literal("MoocLogin"),
-  requestingPanel: targetPanelSchema("MyCourses").optional(),
 })
 
 export type MoocLoginPanel = z.infer<typeof MoocLoginPanelSchema>
@@ -667,12 +622,8 @@ export const PanelSchema = z.discriminatedUnion("type", [
   WelcomePanelSchema,
   MyCoursesPanelSchema,
   CourseDetailsPanelSchema,
-  SelectOrganizationPanelSchema,
-  SelectCoursePanelSchema,
   ExerciseTestsPanelSchema,
   ExerciseSubmissionPanelSchema,
-  SelectPlatformPanelSchema,
-  SelectMoocCoursePanelSchema,
   MoocLoginPanelSchema,
   InitializationErrorHelpPanelSchema,
 ])
@@ -724,19 +675,13 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("setMyCourses"),
-    target: targetPanelSchema("MyCourses"),
+    target: broadcastPanelSchema("MyCourses"),
     courses: z.array(LocalCourseDataSchema),
   }),
   z.object({
     type: z.literal("setTmcDataPath"),
     target: broadcastPanelSchema("MyCourses"),
     tmcDataPath: z.string(),
-  }),
-  z.object({
-    type: z.literal("setNextCourseDeadline"),
-    target: targetPanelSchema("MyCourses"),
-    courseId: CourseIdentifierSchema,
-    deadline: z.string(),
   }),
   z.object({
     type: z.literal("setTmcDataSize"),
@@ -774,26 +719,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     // Scopes the broadcast to the CourseDetails panel showing this course (main/side can differ).
     courseId: CourseIdentifierSchema,
     exerciseIds: z.array(ExerciseIdentifierSchema),
-  }),
-  z.object({
-    type: z.literal("setOrganizations"),
-    target: targetPanelSchema("SelectOrganization"),
-    organizations: z.array(Organization),
-  }),
-  z.object({
-    type: z.literal("setTmcBackendUrl"),
-    target: targetPanelSchema("SelectOrganization", "SelectCourse"),
-    tmcBackendUrl: z.string(),
-  }),
-  z.object({
-    type: z.literal("setOrganization"),
-    target: targetPanelSchema("SelectCourse"),
-    organization: Organization,
-  }),
-  z.object({
-    type: z.literal("setSelectableCourses"),
-    target: targetPanelSchema("SelectCourse"),
-    courses: z.array(Course),
   }),
   z.object({
     type: z.literal("testResults"),
@@ -861,26 +786,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     type: z.literal("willNotRunTestsForExam"),
     target: targetPanelSchema("ExerciseTests"),
   }),
-  z.object({
-    type: z.literal("setSelectMoocCourseData"),
-    target: broadcastPanelSchema("SelectMoocCourse"),
-    courseInstances: z.array(MoocCourse),
-  }),
-  z.object({
-    type: z.literal("requestSelectCourseDataError"),
-    target: targetPanelSchema("SelectCourse"),
-    error: z.string(),
-  }),
-  z.object({
-    type: z.literal("requestSelectOrganizationDataError"),
-    target: targetPanelSchema("SelectOrganization"),
-    error: z.string(),
-  }),
-  z.object({
-    type: z.literal("requestSelectMoocCourseDataError"),
-    target: targetPanelSchema("SelectMoocCourse"),
-    error: z.string(),
-  }),
   // Device-authorization info the CLI emits before blocking on polling; snake_case CLI fields mapped to camelCase.
   z.object({
     type: z.literal("moocDeviceCode"),
@@ -930,55 +835,6 @@ export type TargetedExtensionToWebview<T extends PanelType> = Targeted<Extension
 export type BroadcastExtensionToWebview<T extends PanelType> = Broadcast<ExtensionToWebview, T>
 
 /*
- * ======== webview to webview ========
- */
-
-/**
- * Messages relayed from one webview to another, tunnelled through the
- * extension host inside a `relayToWebview` envelope (see below) and delivered
- * by `postMessageToWebview` / received by `addMessageListener` in the webview.
- *
- * Defined here (rather than webview-only) so the relay envelope's `message`
- * field can reference it and be validated on BOTH sides of the boundary. A
- * reshaped relayed payload (e.g. renaming `selectedMoocCourse`'s `instanceId`)
- * then fails at build time — producers post the inferred `WebviewToWebview`
- * type — and at `safeParse` time on the webview → host post (`vscode.ts`) and
- * the host → webview relay (`TmcPanel`), instead of only failing silently at
- * runtime when the target webview rejects it on receipt.
- *
- * `target` uses the non-strict `targetPanelSchema`, for the reason given there.
- */
-export const WebviewToWebviewSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("selectedOrganization"),
-    target: targetPanelSchema("MyCourses"),
-    slug: z.string(),
-  }),
-  z.object({
-    type: z.literal("selectedCourse"),
-    target: targetPanelSchema("MyCourses"),
-    organizationSlug: z.string(),
-    courseId: z.number(),
-  }),
-  z.object({
-    type: z.literal("selectedMoocCourse"),
-    target: targetPanelSchema("MyCourses"),
-    // mooc has no course-instance concept, so the course id doubles as the
-    // instance id and is the sole key. (A prior duplicate `courseId` field and a
-    // vestigial `organizationSlug` — mooc takes its org from the fetched course,
-    // not the wire — were dropped.)
-    instanceId: z.string(),
-    courseName: z.string(),
-  }),
-])
-
-/**
- * For use with `postMessageToWebview` in the Svelte app.
- * Relayed by the extension host to another webview.
- */
-export type WebviewToWebview = z.infer<typeof WebviewToWebviewSchema>
-
-/*
  * ======== from webview ========
  */
 
@@ -1009,20 +865,8 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     sourcePanel: MyCoursesPanelSchema,
   }),
   z.object({
-    type: z.literal("requestSelectCourseData"),
-    sourcePanel: SelectCoursePanelSchema,
-  }),
-  z.object({
-    type: z.literal("requestSelectOrganizationData"),
-    sourcePanel: SelectOrganizationPanelSchema,
-  }),
-  z.object({
     type: z.literal("requestWelcomeData"),
     sourcePanel: WelcomePanelSchema,
-  }),
-  z.object({
-    type: z.literal("selectOrganization"),
-    sourcePanel: strictTargetPanelSchema("MyCourses"),
   }),
   z.object({
     type: z.literal("removeCourse"),
@@ -1044,6 +888,9 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("clearNewExercises"),
     courseId: CourseIdentifierSchema,
+  }),
+  z.object({
+    type: z.literal("addNewCourse"),
   }),
   z.object({
     type: z.literal("changeTmcDataPath"),
@@ -1069,24 +916,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     type: z.literal("closeExercises"),
     ids: z.array(ExerciseIdentifierSchema),
     courseId: CourseIdentifierSchema,
-  }),
-  z.object({
-    type: z.literal("selectCourse"),
-    sourcePanel: strictTargetPanelSchema("MyCourses"),
-    slug: z.string(),
-  }),
-  z.object({
-    type: z.literal("addCourse"),
-    organizationSlug: z.string(),
-    courseId: CourseIdentifierSchema,
-    requestingPanel: strictTargetPanelSchema("MyCourses"),
-  }),
-  z.object({
-    type: z.literal("relayToWebview"),
-    // validated against the shared relayable-message schema so a reshaped
-    // payload fails on both sides, instead of the previous `z.unknown()` which
-    // let the inner message be checked only at runtime on receipt
-    message: WebviewToWebviewSchema,
   }),
   z.object({
     type: z.literal("closeSidePanel"),
@@ -1116,22 +945,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     sourcePanel: InitializationErrorHelpPanelSchema,
   }),
   z.object({
-    type: z.literal("selectPlatform"),
-    sourcePanel: strictTargetPanelSchema("MyCourses"),
-  }),
-  z.object({
-    type: z.literal("selectMoocCourse"),
-    sourcePanel: strictTargetPanelSchema("MyCourses"),
-  }),
-  z.object({
-    type: z.literal("requestSelectMoocCourseData"),
-    // the full panel, like every other `request*Data` message: the panel posts
-    // `sourcePanel: panel` on mount, and `SelectMoocCoursePanel` carries a
-    // `requestingPanel` field that the narrow `strictTargetPanelSchema` rejected,
-    // silently dropping the initial data request at the `vscode.ts` post guard
-    sourcePanel: SelectMoocCoursePanelSchema,
-  }),
-  z.object({
     // Posted on MoocLogin mount; starts the CLI device-flow login, streamed back as `moocDeviceCode`.
     type: z.literal("moocLogin"),
     sourcePanel: MoocLoginPanelSchema,
@@ -1140,14 +953,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     // Kills the in-progress device-flow login CLI process, keyed by panel id.
     type: z.literal("cancelMoocLogin"),
     sourcePanel: strictTargetPanelSchema("MoocLogin"),
-  }),
-  z.object({
-    type: z.literal("addMoocCourse"),
-    // The course id (== instance id) is the sole key; a redundant `courseId` and
-    // a vestigial `organizationSlug` were dropped (see `selectedMoocCourse`).
-    instanceId: z.string(),
-    courseName: z.string(),
-    requestingPanel: strictTargetPanelSchema("MyCourses"),
   }),
 ])
 

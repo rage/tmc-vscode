@@ -1,7 +1,6 @@
-import { SelectCourse } from "./select-course"
-import { SelectMoocCourse } from "./select-mooc-course"
-import { SelectOrganization } from "./select-organization"
-import { SelectPlatform } from "./select-platform"
+import { expect } from "@playwright/test"
+
+import { QuickPickPage } from "./quick-pick"
 import { TmcPage } from "./tmc"
 
 export class MyCoursesPage extends TmcPage {
@@ -10,42 +9,48 @@ export class MyCoursesPage extends TmcPage {
     await this.page.getByRole("treeitem", { name: "My Courses" }).locator("a").click()
   }
 
-  public async addNewCourse(name: string): Promise<void> {
+  /** Opens the add-course quick pick from the My Courses button. */
+  public async openAddCourseQuickPick(): Promise<QuickPickPage> {
     await this.webview.getByRole("button", { name: "Add new course" }).first().click()
-
-    // Adding a course goes through platform selection first; these specs
-    // exercise the tmc flow against the mock backend.
-    const selectPlatform = new SelectPlatform(this.page, this.webview)
-    await selectPlatform.selectTmc()
-
-    const selectOrganization = new SelectOrganization(this.page, this.webview)
-    await selectOrganization.select("Test Organization (test)")
-    // wait for the organization selection page to close
-    // oxlint-disable-next-line playwright/no-wait-for-timeout -- deliberate settle-delay while polling flaky VS Code webview UI
-    await this.page.waitForTimeout(200)
-
-    const selectCourse = new SelectCourse(this.page, this.webview)
-    await selectCourse.select(name)
+    const quickPick = new QuickPickPage(this.page)
+    await quickPick.waitForTitle("Add New Course")
+    return quickPick
   }
 
+  /** Adds a TMC Server course, which is picked inside its organization. */
+  public async addNewCourse(name: string): Promise<void> {
+    const quickPick = await this.openAddCourseQuickPick()
+    await quickPick.selectByLabel("Test Organization")
+    await quickPick.selectByLabel(name)
+    await quickPick.expectClosed()
+  }
+
+  /**
+   * Adds a courses.mooc.fi course. Enrolled courses are only listed once that
+   * backend has a session, so this logs in first.
+   */
   public async addNewMoocCourse(name: string): Promise<void> {
-    await this.webview.getByRole("button", { name: "Add new course" }).first().click()
+    await this.logInToMooc()
+    const quickPick = await this.openAddCourseQuickPick()
+    await quickPick.selectByLabel(name)
+    await quickPick.expectClosed()
+  }
 
-    // Adding a course goes through platform selection first; here we pick the
-    // mooc (courses.mooc.fi) platform, then a course from the enrolled list the
-    // mooc mock backend serves.
-    const selectPlatform = new SelectPlatform(this.page, this.webview)
-    await selectPlatform.selectMooc()
+  /** Picks the login entry the quick pick offers while courses.mooc.fi has no session. */
+  public async startMoocLogin(): Promise<void> {
+    const quickPick = await this.openAddCourseQuickPick()
+    await quickPick.selectByLabel("Log in to courses.mooc.fi")
+  }
 
-    const selectMoocCourse = new SelectMoocCourse(this.page, this.webview)
-    await selectMoocCourse.select(name)
+  /** Runs the device flow to completion against the mock's auto-approving client. */
+  public async logInToMooc(): Promise<void> {
+    await this.startMoocLogin()
+    await expect(this.page.getByText("Logged in to courses.mooc.fi.")).toBeVisible()
   }
 
   public async selectCourse(name: string): Promise<void> {
-    // The course-selection panel closes asynchronously, and until it does the
-    // webview locator still resolves to it — its course row is an <h3> with the
-    // same title, so clicking it would re-fire the add instead of opening the
-    // course. Wait for My Courses's "Add new course" button first.
+    // The webview fixture resolves to the last ready frame, which is a side panel
+    // while one is closing; waiting for a My Courses control pins it to the right one.
     await this.webview.getByRole("button", { name: "Add new course" }).first().waitFor()
     await this.webview.getByRole("heading", { name }).first().click()
   }

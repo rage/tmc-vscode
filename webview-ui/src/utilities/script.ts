@@ -4,44 +4,10 @@ import { z } from "zod"
 /**
  * Various utility functions and types for Svelte <script>s
  */
-import type {
-  ExtensionToWebview,
-  Panel,
-  Targeted,
-  WebviewToExtension,
-  WebviewToWebview as SharedWebviewToWebview,
-} from "../shared/shared"
-import { ExtensionToWebviewSchema, WebviewToWebviewSchema } from "../shared/shared"
-import { vscode } from "./vscode"
+import type { ExtensionToWebview, Panel, Targeted } from "../shared/shared"
+import { ExtensionToWebviewSchema } from "../shared/shared"
 
-/**
- * Message from the extension host or a webview.
- */
-type Message = ExtensionToWebview | WebviewToWebview
-
-/**
- * Message from webview to webview.
- *
- * The relayable set is defined once in `shared/shared` (`WebviewToWebviewSchema`)
- * so the `relayToWebview` envelope can validate it on both sides of the boundary.
- */
-type WebviewToWebview =
-  | SharedWebviewToWebview
-  // the last variant exists just to make TypeScript think that every panel type has
-  // at least two different message types, which makes TS treat them differently than if
-  // they only had one...
-  | {
-      type: never
-      target: never
-    }
-
-/**
- * Schema for any message that may arrive at the webview
- * (from the extension host, or relayed from another webview).
- */
-const MessageToWebviewSchema = z.union([ExtensionToWebviewSchema, WebviewToWebviewSchema])
-
-type TargetedMessage<T extends Panel> = Targeted<Message, T["type"]>
+type TargetedMessage<T extends Panel> = Targeted<ExtensionToWebview, T["type"]>
 
 /**
  * Convenience function for listening to messages from the extension host to the webview.
@@ -58,7 +24,7 @@ export function addMessageListener<T extends Panel>(
   callback: (message: TargetedMessage<T>) => void,
 ): () => void {
   const handleMessage = (event: MessageEvent): void => {
-    const validationResult = MessageToWebviewSchema.safeParse(event.data)
+    const validationResult = ExtensionToWebviewSchema.safeParse(event.data)
     if (!validationResult.success) {
       console.warn(
         "Ignoring invalid message to webview:",
@@ -68,7 +34,7 @@ export function addMessageListener<T extends Panel>(
       return
     }
     // zod strips unknown fields, so the original data is used instead of the parse result
-    const message = event.data as Message
+    const message = event.data as ExtensionToWebview
     // if no target id is given, accept all messages
     // if a target id is given, only accept messages with the correct id
     const correctType = message.target.type === listeningPanel.type
@@ -80,23 +46,4 @@ export function addMessageListener<T extends Panel>(
   const dispose = (): void => window.removeEventListener("message", handleMessage)
   onDestroy(dispose)
   return dispose
-}
-
-/**
- * Posts a message to another webview.
- */
-export function postMessageToWebview(message: SharedWebviewToWebview): void {
-  // relay the message through the extension host
-  const webviewToExtension: WebviewToExtension = {
-    type: "relayToWebview",
-    message,
-  }
-  vscode.postMessage(webviewToExtension)
-}
-
-/** Builds the URL for a logo served by the backend, falling back to its "missing" placeholder. */
-export function resolveLogoPath(backendUrl: string, path: string): string {
-  return !path.endsWith("missing.png")
-    ? `${backendUrl}${path}`
-    : `${backendUrl}/logos/small_logo/missing.png`
 }
