@@ -2,6 +2,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import Dialog from "../../api/dialog"
+import { Logger } from "../../utilities"
 
 suite("Dialog.selectItem", function () {
   let showQuickPick: ReturnType<typeof vi.spyOn>
@@ -110,5 +111,118 @@ suite("Dialog.progressNotification", function () {
     })
 
     expect(reports).toEqual([{ message: "Downloading", increment: 0 }, { increment: 40 }])
+  })
+})
+
+type MessageAction = vscode.MessageItem & { callback: () => void }
+
+type NotificationButton = [label: string, callback: () => void]
+
+const notificationWrappers = [
+  {
+    name: "errorNotification",
+    showMethod: "showErrorMessage",
+    notify: (dialog: Dialog, message: string, ...buttons: NotificationButton[]): Promise<void> =>
+      dialog.errorNotification(message, undefined, ...buttons),
+  },
+  {
+    name: "notification",
+    showMethod: "showInformationMessage",
+    notify: (dialog: Dialog, message: string, ...buttons: NotificationButton[]): Promise<void> =>
+      dialog.notification(message, ...buttons),
+  },
+  {
+    name: "warningNotification",
+    showMethod: "showWarningMessage",
+    notify: (dialog: Dialog, message: string, ...buttons: NotificationButton[]): Promise<void> =>
+      dialog.warningNotification(message, ...buttons),
+  },
+] as const
+
+function stubMessage(
+  showMethod: (typeof notificationWrappers)[number]["showMethod"],
+  press: (actions: MessageAction[]) => MessageAction | undefined,
+): ReturnType<typeof vi.spyOn> {
+  const show = vi
+    .spyOn(vscode.window, showMethod)
+    .mockImplementation((async (_message: string, ...actions: MessageAction[]) =>
+      press(actions)) as never)
+  // The shared vscode mock's members are already `vi.fn()`s, so spying returns
+  // the same mock and its calls outlive `restoreAllMocks`.
+  show.mockClear()
+  return show
+}
+
+function buttonTitles(show: ReturnType<typeof vi.spyOn>): string[] {
+  const actions = (show.mock.calls[0] ?? []).slice(1) as MessageAction[]
+  return actions.map((action) => action.title)
+}
+
+for (const { name, showMethod, notify } of notificationWrappers) {
+  suite(`Dialog.${name}`, function () {
+    afterEach(function () {
+      vi.restoreAllMocks()
+    })
+
+    test("runs the callback of the button pressed, not of an earlier one sharing its label", async function () {
+      stubMessage(showMethod, (actions) => actions[1])
+      const pressed: string[] = []
+      await notify(
+        new Dialog(),
+        "Two courses are named the same",
+        ["Open", (): void => void pressed.push("first")],
+        ["Open", (): void => void pressed.push("second")],
+      )
+
+      expect(pressed).toEqual(["second"])
+    })
+
+    test("prefixes the message and offers one button per item", async function () {
+      const show = stubMessage(showMethod, () => undefined)
+      await notify(new Dialog(), "Exercise downloaded", ["Open", (): void => {}])
+
+      expect(show.mock.calls[0]?.[0]).toBe("TestMyCode: Exercise downloaded")
+      expect(buttonTitles(show)).toEqual(["Open"])
+    })
+
+    test("runs no callback when the notification is dismissed", async function () {
+      stubMessage(showMethod, () => undefined)
+      let ran = false
+      await notify(new Dialog(), "Exercise downloaded", [
+        "Open",
+        (): void => {
+          ran = true
+        },
+      ])
+
+      expect(ran).toBe(false)
+    })
+  })
+}
+
+suite("Dialog.errorNotification with an error", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("offers the logs alongside the caller's own buttons and reveals them when pressed", async function () {
+    const showLogs = vi.spyOn(Logger, "show").mockImplementation(() => {})
+    const logError = vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", (actions) => actions.at(-1))
+    const boom = new Error("boom")
+    await new Dialog().errorNotification("Download failed", boom, ["Retry", (): void => {}])
+
+    expect(logError).toHaveBeenCalledWith("Download failed", boom)
+    expect(buttonTitles(show)).toEqual(["Retry", "Show logs"])
+    expect(showLogs).toHaveBeenCalledOnce()
+  })
+
+  test("without an error, neither logs nor offers the logs button", async function () {
+    const logError = vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", () => undefined)
+    await new Dialog().errorNotification("Download failed")
+
+    expect(logError).not.toHaveBeenCalled()
+    expect(buttonTitles(show)).toEqual([])
   })
 })
