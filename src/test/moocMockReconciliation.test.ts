@@ -15,6 +15,7 @@ import {
   ExerciseTaskSubmissionResult,
   ExerciseTaskSubmissionStatus,
   MoocCourse,
+  MoocCourseProgress,
   TmcExerciseSlide,
 } from "../shared/langsSchema"
 
@@ -187,10 +188,6 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     return { taskSubmissionId: ids.task_submission_id, slideSubmissionId: ids.slide_submission_id }
   }
 
-  test("submit result validates as ExerciseTaskSubmissionResult", async function () {
-    await submit(passingExercise)
-  })
-
   test("grading status validates as ExerciseTaskSubmissionStatus (both variants)", async function () {
     const { taskSubmissionId } = await submit(passingExercise)
 
@@ -240,6 +237,30 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     for (const item of graded) {
       expectValid(ExerciseSlideSubmissionListItem, item, "submission list item (graded)")
     }
+  })
+
+  test("GET /courses/{id}/progress validates as MoocCourseProgress", async function () {
+    const progressOf = async (): Promise<unknown> => {
+      const res = await fetch(api(`/courses/${pythonCourse.id}/progress`))
+      expect(res.status).toBe(200)
+      return res.json()
+    }
+
+    // untouched: every exercise is present, zeroed and unattempted
+    const untouched = (await progressOf()) as { exercises: unknown[] }
+    expect(untouched.exercises.length).toBeGreaterThan(0)
+    expectValid(MoocCourseProgress, untouched, "course progress (untouched)")
+
+    // graded: score_given and completed are populated, which is the half a
+    // zeroed payload cannot exercise
+    const { taskSubmissionId } = await submit(passingExercise)
+    await fetch(api(`/submissions/${taskSubmissionId}/grading`))
+    await fetch(api(`/submissions/${taskSubmissionId}/grading`))
+    const graded = await progressOf()
+    expectValid(MoocCourseProgress, graded, "course progress (graded)")
+    expect(
+      MoocCourseProgress.parse(graded).exercises.some((e) => e.completed && e.score_given > 0),
+    ).toBe(true)
   })
 
   test("share result validates as PasteResult", async function () {

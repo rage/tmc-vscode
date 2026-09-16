@@ -13,8 +13,34 @@ import * as path from "path"
 //     JSON Schema artifact (shared/bindings.schema.json, generated in
 //     tmc-langs-rust from the serde types; re-vendor with
 //     bin/updateLangsSchema.sh).
-import { CliOutput, DataKind } from "../shared/langsSchema"
+import {
+  CliNotification,
+  CliOutput,
+  CliOutputData,
+  CliStatusUpdate,
+  DataKind,
+} from "../shared/langsSchema"
+import type { CliOutputFixture } from "./fixtures/cliOutput"
 import { invalidCliOutputFixtures, validCliOutputFixtures } from "./fixtures/cliOutput"
+
+/** The envelope tag of a fixture, i.e. which branch schema is meant to parse it. */
+function outputKindOf(fixture: CliOutputFixture): string {
+  const kind = (fixture.value as { "output-kind"?: unknown })["output-kind"]
+  if (typeof kind !== "string") {
+    throw new TypeError(`fixture ${fixture.name} declares no output-kind`)
+  }
+  return kind
+}
+
+/** The payload tag of an `output-data` fixture, or undefined for the other envelopes. */
+function dataKindOf(fixture: CliOutputFixture): string | undefined {
+  const data = (fixture.value as { data?: unknown }).data
+  if (data === null || typeof data !== "object") {
+    return undefined
+  }
+  const kind = (data as { "output-data-kind"?: unknown })["output-data-kind"]
+  return typeof kind === "string" ? kind : undefined
+}
 
 /**
  * Locates the repo-root shared/bindings.schema.json regardless of where the
@@ -80,9 +106,19 @@ suite("Langs CLI output contract", function () {
       const schemaKinds = schema.oneOf
         .map((variant) => variant.properties["output-kind"].const)
         .toSorted()
-      // extracted manually: the status-update branch is a nested union
-      const zodKinds = ["notification", "output-data", "status-update"]
-      expect(schemaKinds).toEqual(zodKinds)
+
+      // `Langs` decodes a stdout line by picking one of these by its `output-kind`
+      // (src/api/langs.ts), rather than measuring the line against the whole union, so
+      // a line two of them accept — or none — is a decoder that picks the wrong shape.
+      const branchSchemas = [CliOutputData, CliStatusUpdate, CliNotification]
+      const coveredKinds = new Set<string>()
+      for (const fixture of validCliOutputFixtures) {
+        const accepting = branchSchemas.filter((branch) => branch.safeParse(fixture.value).success)
+        expect(accepting, `exactly one branch must parse ${fixture.name}`).toHaveLength(1)
+        coveredKinds.add(outputKindOf(fixture))
+      }
+      expect([...coveredKinds].toSorted()).toEqual(schemaKinds)
+
       for (const kind of schemaKinds) {
         const minimal = { "output-kind": kind }
         // a bare tag should at least fail on the *body*, not on an
@@ -90,6 +126,18 @@ suite("Langs CLI output contract", function () {
         const result = CliOutput.safeParse(minimal)
         expect(result.success).toBe(false)
       }
+    })
+
+    test("every output-data-kind of the vendored schema has a valid fixture", function () {
+      // Without this, a kind nothing constructs is validated by nothing: the DataKind
+      // cross-check above only proves the schema declares it.
+      const schema = readVendoredSchema()
+      const schemaKinds = (schema.$defs.DataKind?.oneOf ?? [])
+        .map((variant) => variant.properties?.["output-data-kind"]?.const)
+        .filter((kind): kind is string => typeof kind === "string")
+      const covered = new Set(validCliOutputFixtures.map((fixture) => dataKindOf(fixture)))
+      expect(schemaKinds.length).toBeGreaterThan(0)
+      expect(schemaKinds.filter((kind) => !covered.has(kind))).toEqual([])
     })
 
     test("the vendored schema has no failed-exercise-download error kind", function () {
