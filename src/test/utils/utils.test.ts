@@ -1,5 +1,3 @@
-import * as assert from "assert"
-
 import { formatSizeInBytes } from "../../utilities/utils"
 
 suite("Number formatting utils", () => {
@@ -20,7 +18,7 @@ suite("Number formatting utils", () => {
       { in: 1008000, p: 3, out: "1.01 MB" },
     ]
     for (const testCase of testCases) {
-      assert.equal(formatSizeInBytes(testCase.in, testCase.p), testCase.out)
+      expect(formatSizeInBytes(testCase.in, testCase.p)).toBe(testCase.out)
     }
   })
 })

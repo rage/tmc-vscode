@@ -16,10 +16,8 @@ function makeTmpDirsInner(root: string, dir: Dir): void {
   for (const [path, contents] of Object.entries(dir)) {
     const fullPath = root.replace(/\/$/, "") + "/" + path.replace(/^\//, "")
     if (typeof contents === "string") {
-      console.log("writing", fullPath)
       fs.outputFileSync(fullPath, contents)
     } else {
-      console.log("making", fullPath)
       fs.mkdirsSync(fullPath)
       makeTmpDirsInner(fullPath, contents)
     }

@@ -22,6 +22,22 @@ const dispatch = (data: unknown): void => {
   window.dispatchEvent(new MessageEvent("message", { data }))
 }
 
+// jsdom ships no Clipboard API, so each test installs the one it needs. Without the
+// restore below, the "absent" case leaks `undefined` into every later test in the file.
+const clipboardBeforeStub = Object.getOwnPropertyDescriptor(navigator, "clipboard")
+
+const stubClipboard = (clipboard: { writeText: () => Promise<void> } | undefined): void => {
+  Object.defineProperty(navigator, "clipboard", { value: clipboard, configurable: true })
+}
+
+afterEach(() => {
+  if (clipboardBeforeStub) {
+    Object.defineProperty(navigator, "clipboard", clipboardBeforeStub)
+  } else {
+    delete (navigator as { clipboard?: unknown }).clipboard
+  }
+})
+
 suite("MoocLogin panel", () => {
   test("starts the device-flow login on mount", () => {
     render(MoocLogin, { props: { panel } })
@@ -69,10 +85,7 @@ suite("MoocLogin panel", () => {
 
   test("shows 'Copied' only after the clipboard write resolves", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    })
+    stubClipboard({ writeText })
     render(MoocLogin, { props: { panel } })
     dispatch(deviceCodeMessage)
     const code = await screen.findByText("WXYZ-1234")
@@ -86,10 +99,7 @@ suite("MoocLogin panel", () => {
 
   test("tells the user to copy manually when the clipboard write rejects", async () => {
     const writeText = vi.fn().mockRejectedValue(new Error("denied"))
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    })
+    stubClipboard({ writeText })
     render(MoocLogin, { props: { panel } })
     dispatch(deviceCodeMessage)
     const code = await screen.findByText("WXYZ-1234")
@@ -102,10 +112,7 @@ suite("MoocLogin panel", () => {
   })
 
   test("tells the user to copy manually when the Clipboard API is absent", async () => {
-    Object.defineProperty(navigator, "clipboard", {
-      value: undefined,
-      configurable: true,
-    })
+    stubClipboard(undefined)
     render(MoocLogin, { props: { panel } })
     dispatch(deviceCodeMessage)
     const code = await screen.findByText("WXYZ-1234")
@@ -120,10 +127,7 @@ suite("MoocLogin panel", () => {
     vi.useFakeTimers()
     try {
       const writeText = vi.fn().mockResolvedValue(undefined)
-      Object.defineProperty(navigator, "clipboard", {
-        value: { writeText },
-        configurable: true,
-      })
+      stubClipboard({ writeText })
       render(MoocLogin, { props: { panel } })
       dispatch(deviceCodeMessage)
       await tick()
@@ -136,6 +140,12 @@ suite("MoocLogin panel", () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  // The stubs above are per-test; jsdom ships no Clipboard API, so a leaked one would
+  // leave every later test in this file running against the wrong environment.
+  test("leaves no stubbed clipboard behind", () => {
+    expect(Object.getOwnPropertyDescriptor(navigator, "clipboard")).toEqual(clipboardBeforeStub)
   })
 
   test("shows the error state on a moocLoginError message", async () => {
