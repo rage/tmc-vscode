@@ -31,7 +31,7 @@ import * as init from "./init"
 import { randomPanelId, TmcPanel } from "./panels/TmcPanel"
 import Storage from "./storage"
 import UI from "./ui/ui"
-import { cliFolder, Logger, LogLevel, semVerCompare } from "./utilities"
+import { cliFolder, Logger, semVerCompare } from "./utilities"
 import { createSessionExpiryTracker } from "./utilities/sessionExpiryTracker"
 
 let maintenanceInterval: NodeJS.Timeout | undefined
@@ -77,7 +77,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version
-  Logger.configure(LogLevel.Verbose)
+  const storage = new Storage(context)
+  const settings = new Settings(storage)
+  context.subscriptions.push(settings)
+  // Must precede the first CLI invocation below: the user's level decides what the output
+  // channel keeps of a `logged-in` response, which carries a live OAuth token.
+  Logger.configure(settings.getLogLevel())
   Logger.info(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`)
   Logger.info(`${vscode.env.appName} version: ${vscode.version}`)
   Logger.info(`${EXTENSION_ID} version: ${extensionVersion}`)
@@ -130,7 +135,6 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated)
 
   // migrate data between versions
-  const storage = new Storage(context)
   if (langs.ok) {
     const migrationResult = await storage.migrateToLatest(
       context,
@@ -183,11 +187,6 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   if (resources.err) {
     initializationError(dialog, "resource initialization", resources.val, cliFolderPath)
   }
-
-  const settings = new Settings(storage)
-  context.subscriptions.push(settings)
-
-  Logger.configure(settings.getLogLevel())
 
   const ui = new UI()
   const loggedIn = ui.treeDP.createVisibilityGroup(authenticated)

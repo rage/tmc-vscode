@@ -22,6 +22,28 @@ enum ConsoleLogLevel {
 
 const channel = `[${OUTPUT_CHANNEL_NAME}]`
 
+// Key names whose values must never reach the output channel: users are asked to paste it
+// into bug reports, and an OAuth token or a completed device-flow URL in it is a live
+// credential. Matched with separators and case removed, so `access_token`, `accessToken`
+// and `ACCESS-TOKEN` all hit.
+const SECRET_KEYS = new Set([
+  "accesstoken",
+  "refreshtoken",
+  "idtoken",
+  "token",
+  "authorization",
+  "clientsecret",
+  "secret",
+  "password",
+  "devicecode",
+  "usercode",
+  "verificationuricomplete",
+])
+
+function isSecretKey(key: string): boolean {
+  return SECRET_KEYS.has(key.replaceAll(/[-_\s]/g, "").toLowerCase())
+}
+
 export class Logger {
   public static output: OutputChannel | undefined
   public static testmode = !!env["TMC_VSCODE_TESTMODE"]
@@ -89,7 +111,7 @@ export class Logger {
     }
 
     try {
-      return JSON.stringify(p)
+      return JSON.stringify(p, (key, value) => (isSecretKey(key) ? "<redacted>" : value))
     } catch {
       return "<error>"
     }
@@ -126,7 +148,7 @@ export class Logger {
         }
       }
     } else if (this.testmode) {
-      console.log(this._timestamp, channel, ...params)
+      console.log(this._timestamp, channel, this._toLoggableParams(params))
     }
     if (this.output !== undefined) {
       switch (this._level) {
