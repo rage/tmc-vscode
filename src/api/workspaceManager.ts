@@ -121,7 +121,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   /**
    * Currently active exercise based on active editor, or `undefined` otherwise.
    */
-  public get activeExercise(): Readonly<WorkspaceExercise> | undefined {
+  public get activeExercise(): WorkspaceExercise | undefined {
     const uri = vscode.window.activeTextEditor?.document.uri
     return uri && this.getExerciseByPath(uri)
   }
@@ -129,7 +129,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   /**
    * Currently active course workspace uri, or `undefined` otherwise.
    */
-  public get workspaceFileUri(): vscode.Uri | undefined {
+  private get _workspaceFileUri(): vscode.Uri | undefined {
     const workspaceFile = vscode.workspace.workspaceFile
     if (
       !workspaceFile ||
@@ -173,14 +173,14 @@ export default class WorkspaceManager implements vscode.Disposable {
     backend: "tmc" | "mooc",
     courseSlug: string,
     exerciseSlug: string,
-  ): Readonly<WorkspaceExercise> | undefined {
+  ): WorkspaceExercise | undefined {
     return this._exercises.find(
       (x) =>
         x.backend === backend && x.courseSlug === courseSlug && x.exerciseSlug === exerciseSlug,
     )
   }
 
-  public getExercises(): readonly WorkspaceExercise[] {
+  public getExercises(): WorkspaceExercise[] {
     return this._exercises
   }
 
@@ -192,7 +192,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   public getExercisesByCourseSlug(
     backend: "tmc" | "mooc",
     courseSlug: string,
-  ): readonly WorkspaceExercise[] {
+  ): WorkspaceExercise[] {
     return this._exercises.filter((x) => x.backend === backend && x.courseSlug === courseSlug)
   }
 
@@ -209,25 +209,18 @@ export default class WorkspaceManager implements vscode.Disposable {
     return false
   }
 
-  public addExercise(exercise: WorkspaceExercise): void {
-    this._exercises = this._exercises.concat(exercise)
-    this._exercisesByPath.set(exercise.uri.fsPath, exercise)
-  }
-
   public openCourseExercises(
     backend: "tmc" | "mooc",
     courseSlug: string,
     exerciseSlugs: string[],
   ): Promise<Result<void, Error>> {
-    this._exercises.forEach((x) => {
-      if (
+    this._setStatus(
+      (x) =>
         x.backend === backend &&
         x.courseSlug === courseSlug &&
-        exerciseSlugs.includes(x.exerciseSlug)
-      ) {
-        x.status = ExerciseStatus.Open
-      }
-    })
+        exerciseSlugs.includes(x.exerciseSlug),
+      ExerciseStatus.Open,
+    )
 
     return this._refreshActiveCourseWorkspace()
   }
@@ -237,17 +230,13 @@ export default class WorkspaceManager implements vscode.Disposable {
     courseSlug: string,
     exerciseSlugs: string[],
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    const closedExercises: WorkspaceExercise[] = []
-    this._exercises.forEach((x) => {
-      if (
+    const closedExercises = this._setStatus(
+      (x) =>
         x.backend === backend &&
         x.courseSlug === courseSlug &&
-        exerciseSlugs.includes(x.exerciseSlug)
-      ) {
-        x.status = ExerciseStatus.Closed
-        closedExercises.push(x)
-      }
-    })
+        exerciseSlugs.includes(x.exerciseSlug),
+      ExerciseStatus.Closed,
+    )
 
     const result = await this._refreshActiveCourseWorkspace()
     if (result.err) {
@@ -303,7 +292,7 @@ export default class WorkspaceManager implements vscode.Disposable {
    */
   public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration {
     if (this.activeCourse) {
-      return vscode.workspace.getConfiguration(section, this.workspaceFileUri)
+      return vscode.workspace.getConfiguration(section, this._workspaceFileUri)
     }
     return vscode.workspace.getConfiguration(section)
   }
@@ -427,6 +416,21 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     return success ? Ok.EMPTY : Err(new Error("Failed to refresh active workspace."))
+  }
+
+  /**
+   * Sets `status` on every exercise `predicate` matches, and returns those
+   * exercises — matched, not changed: one already at `status` is included.
+   */
+  private _setStatus(
+    predicate: (exercise: WorkspaceExercise) => boolean,
+    status: ExerciseStatus,
+  ): WorkspaceExercise[] {
+    const matched = this._exercises.filter(predicate)
+    for (const exercise of matched) {
+      exercise.status = status
+    }
+    return matched
   }
 
   private static _indexByPath(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {
