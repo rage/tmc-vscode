@@ -737,16 +737,10 @@ suite("Langs cross-backend independence", function () {
         }),
       ),
     )
-    const firstTmc = await langs.submitTmcExerciseAndWaitForResults(
-      ExerciseIdentifier.from(1),
-      "/path/to/ex",
-    )
+    const firstTmc = await langs.submitTmcExerciseAndWaitForResults(1, "/path/to/ex")
     expect(firstTmc.ok).toBe(true)
 
-    const secondTmc = await langs.submitTmcExerciseAndWaitForResults(
-      ExerciseIdentifier.from(1),
-      "/path/to/ex",
-    )
+    const secondTmc = await langs.submitTmcExerciseAndWaitForResults(1, "/path/to/ex")
     expect(secondTmc.val).toBeInstanceOf(BottleneckError)
 
     // Throttle state is per-backend, so a mooc submission right after is unaffected.
@@ -778,10 +772,7 @@ suite("Langs cross-backend independence", function () {
         }),
       ),
     )
-    const tmc = await langs.submitTmcExerciseAndWaitForResults(
-      ExerciseIdentifier.from(1),
-      "/path/to/ex",
-    )
+    const tmc = await langs.submitTmcExerciseAndWaitForResults(1, "/path/to/ex")
     expect(tmc.ok).toBe(true)
   })
 

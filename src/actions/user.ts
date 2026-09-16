@@ -27,6 +27,7 @@ import {
   CourseIdentifier,
   LocalCourseData,
   LocalCourseExercise,
+  match,
   toWebviewError,
 } from "../shared/shared"
 import { Logger, parseFeedbackQuestion, runSingleFlight } from "../utilities/"
@@ -236,6 +237,14 @@ export async function submitTmcExercise(
       new Error(`ID for exercise ${exercise.exerciseSlug}/${exercise.exerciseSlug} was not found.`),
     )
   }
+  const exerciseId = match(
+    LocalCourseExercise.getId(courseExercise),
+    (tmc) => tmc.tmcExerciseId,
+    () => undefined,
+  )
+  if (exerciseId === undefined) {
+    return Err(new Error(`${exercise.exerciseSlug} is not a tmc exercise.`))
+  }
 
   // Key shared with the paste actions, which must not overlap a submit of the same exercise.
   // Held only until the result is posted: the panel offers Paste from that point on, so
@@ -258,7 +267,7 @@ export async function submitTmcExercise(
       await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
 
       const submissionResult = await langs.val.submitTmcExerciseAndWaitForResults(
-        LocalCourseExercise.getId(courseExercise),
+        exerciseId,
         exercise.uri.fsPath,
         (progressPercent, message) => {
           TmcPanel.postMessage({

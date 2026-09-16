@@ -61,11 +61,11 @@ import type {
   TmcExerciseSlide,
 } from "../shared/langsSchema"
 import { CliNotification, CliOutputData, CliStatusUpdate } from "../shared/langsSchema"
+import type { ExerciseIdentifier } from "../shared/shared"
 import {
   assertUnreachable,
   BaseError,
   CourseIdentifier,
-  ExerciseIdentifier,
   makeMoocKind,
   makeTmcKind,
   match,
@@ -1354,7 +1354,7 @@ export default class Langs {
    * @param progressCallback Optional callback function that can be used to get status reports.
    */
   public async submitTmcExerciseAndWaitForResults(
-    exerciseId: ExerciseIdentifier,
+    exerciseId: number,
     exercisePath: string,
     progressCallback?: (progressPct: number, message?: string) => void,
     onSubmissionUrl?: (url: string) => void,
@@ -1383,7 +1383,7 @@ export default class Langs {
           "--submission-path",
           exercisePath,
           "--exercise-id",
-          ExerciseIdentifier.toString(exerciseId),
+          String(exerciseId),
         ),
         onStdout,
         onNotification: (notification) => this._showNotification(notification),
@@ -1509,7 +1509,7 @@ export default class Langs {
         args: this._moocCmd(
           "paste",
           "--exercise-id",
-          exerciseId.toString(),
+          exerciseId,
           "--submission-path",
           exercisePath,
         ),
