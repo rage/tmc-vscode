@@ -35,66 +35,59 @@ interface V1SessionStatePartial {
   extensionVersion: string | undefined
 }
 
-// extension settings are no longer managed manually
+/** Lifts settings a pre-2.1 install kept in storage into the VS Code settings API, which owns them from 2.1 on. */
 export async function vscodeapi_migrateFromV1(
   memento: vscode.Memento,
   storageSettings: data.v1.ExtensionSettings,
   settings: vscode.WorkspaceConfiguration,
-): Promise<VscodeApiSettings | undefined> {
+): Promise<void> {
   let version = memento.get<string>(data.v0.EXTENSION_VERSION_KEY)
   if (!version) {
     version = memento.get<V1SessionStatePartial>(data.v1.SESSION_STATE_KEY)?.extensionVersion
   }
-  const compareVersions = semVerCompare(version ?? "0.0.0", "2.1.0", "minor")
-  if (!compareVersions || compareVersions < 0) {
-    await settings.update(
-      data.v2.TMC_DOWNLOAD_OLD_SUBMISSION_KEY,
-      storageSettings.downloadOldSubmission,
-      true,
-    )
-    await settings.update(data.v2.TMC_HIDE_META_FILES_KEY, storageSettings.hideMetaFiles, true)
-    await settings.update(
-      data.v2.TMC_UPDATE_EXERCISES_AUTOMATICALLY_KEY,
-      storageSettings.updateExercisesAutomatically,
-      true,
-    )
-    await settings.update(data.v2.TMC_INSIDER_VERSION_KEY, storageSettings.insiderVersion, true)
-    await settings.update(data.v2.TMC_LOG_LEVEL_KEY, storageSettings.logLevel, true)
-
-    // Spread the stored settings through so any fields a newer extension
-    // version persisted are preserved (validateData returns the original
-    // object for exactly this reason), then overlay the known settings.
-    return {
-      ...storageSettings,
-      downloadOldSubmission: storageSettings.downloadOldSubmission,
-      hideMetaFiles: storageSettings.hideMetaFiles,
-      updateExercisesAutomatically: storageSettings.updateExercisesAutomatically,
-      insiderVersion: storageSettings.insiderVersion,
-      logLevel: storageSettings.logLevel,
-    }
+  // A version that will not parse counts as older: the lift is idempotent, so
+  // attempting it is the safe side of the guess.
+  const versionDiff = semVerCompare(version ?? "0.0.0", "2.1.0", "minor")
+  if (versionDiff !== undefined && versionDiff > 0) {
+    return
   }
-  return undefined
+
+  await settings.update(
+    data.v2.TMC_DOWNLOAD_OLD_SUBMISSION_KEY,
+    storageSettings.downloadOldSubmission,
+    true,
+  )
+  await settings.update(data.v2.TMC_HIDE_META_FILES_KEY, storageSettings.hideMetaFiles, true)
+  await settings.update(
+    data.v2.TMC_UPDATE_EXERCISES_AUTOMATICALLY_KEY,
+    storageSettings.updateExercisesAutomatically,
+    true,
+  )
+  await settings.update(data.v2.TMC_INSIDER_VERSION_KEY, storageSettings.insiderVersion, true)
+  await settings.update(data.v2.TMC_LOG_LEVEL_KEY, storageSettings.logLevel, true)
 }
 
-export interface VscodeApiSettings {
-  downloadOldSubmission: boolean
-  updateExercisesAutomatically: boolean
-  insiderVersion: boolean
-  logLevel: data.v1.LogLevel
-  hideMetaFiles: boolean
-}
+/** The last key extension settings were persisted under; no storage version declares it any more. */
+const RETIRED_V3_SETTINGS_KEY = "extension-settings-v3"
 
-/** Every key extension settings have ever been stored under; one left out survives to shadow the migrated value. */
+/** Every key extension settings have ever been stored under; one left out survives as a stale copy. */
 const EXTENSION_SETTINGS_KEYS = [
   data.v0.EXTENSION_SETTINGS_KEY,
   data.v1.EXTENSION_SETTINGS_KEY,
   data.v2.EXTENSION_SETTINGS_KEY,
+  RETIRED_V3_SETTINGS_KEY,
 ]
 
+/**
+ * Moves extension settings out of storage and into the VS Code settings API,
+ * which is where they are read from.
+ *
+ * Persists nothing: the result carries only the keys to retire.
+ */
 export default async function migrateExtensionSettingsToLatest(
   memento: vscode.Memento,
   settings: vscode.WorkspaceConfiguration,
-): Promise<MigratedData<VscodeApiSettings | undefined>> {
+): Promise<MigratedData<never>> {
   const dataV0 = validateData(
     memento.get(data.v0.EXTENSION_SETTINGS_KEY),
     data.v0.extensionSettingsSchema,
@@ -104,14 +97,13 @@ export default async function migrateExtensionSettingsToLatest(
     ? await v1_migrateFromV0(dataV0)
     : validateData(memento.get(data.v1.EXTENSION_SETTINGS_KEY), data.v1.extensionSettingsSchema)
 
-  let vscodeApiSettings
   if (dataV1) {
-    vscodeApiSettings = await vscodeapi_migrateFromV1(memento, dataV1, settings)
+    await vscodeapi_migrateFromV1(memento, dataV1, settings)
   }
 
   return {
-    data: vscodeApiSettings,
+    data: undefined,
     supersededKeys: EXTENSION_SETTINGS_KEYS,
-    destinationKey: data.v3.EXTENSION_SETTINGS_KEY,
+    destinationKey: undefined,
   }
 }

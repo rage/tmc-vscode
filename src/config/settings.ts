@@ -1,13 +1,10 @@
 import * as vscode from "vscode"
 
 import type Storage from "../storage"
-import type * as data from "../storage/data"
 import { Logger, LogLevel } from "../utilities/logger"
 
 /**
  * Class to manage VSCode setting changes and trigger events based on changes.
- * Remove Storage dependency once 3.0 major release is being done, as then
- * we do not need to be backwards compatible.
  *
  * Handle multi-root workspace changes by creating callbacks in extension.ts,
  * so that we can test and don't need workspaceManager dependency.
@@ -17,17 +14,12 @@ export default class Settings implements vscode.Disposable {
   private _onChangeDownloadOldSubmission?: (value: boolean) => void
   private _onChangeUpdateExercisesAutomatically?: (value: boolean) => void
 
-  /**
-   * @deprecated Storage dependency should be removed when major 3.0 release.
-   */
-  private readonly _storage: Storage
-
   private _disposables: vscode.Disposable[]
 
-  public constructor(storage: Storage) {
-    this._storage = storage
+  // Unused: kept only until the remaining call site stops passing a Storage.
+  public constructor(_storage?: Storage) {
     this._disposables = [
-      vscode.workspace.onDidChangeConfiguration(async (event) => {
+      vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("testMyCode.logLevel")) {
           const value = vscode.workspace
             .getConfiguration("testMyCode")
@@ -48,7 +40,6 @@ export default class Settings implements vscode.Disposable {
           const value = this._getWorkspaceSettingValue("updateExercisesAutomatically")
           this._onChangeUpdateExercisesAutomatically?.(value)
         }
-        await this.updateExtensionSettingsToStorage()
       }),
     ]
   }
@@ -72,21 +63,6 @@ export default class Settings implements vscode.Disposable {
     this._disposables.forEach((x) => x.dispose())
   }
 
-  /**
-   * @deprecated Storage dependency should be removed when major 3.0 release.
-   */
-  public async updateExtensionSettingsToStorage(): Promise<void> {
-    const settings: data.ExtensionSettings = {
-      downloadOldSubmission: this._getUserSettingValue("downloadOldSubmission"),
-      hideMetaFiles: this._getUserSettingValue("hideMetaFiles"),
-      updateExercisesAutomatically: this._getUserSettingValue("updateExercisesAutomatically"),
-      logLevel: vscode.workspace.getConfiguration().get("testMyCode.logLevel") ?? LogLevel.Errors,
-      insiderVersion: this._getUserSettingValue("insiderVersion"),
-      javaHome: this._getUserSettingString("javaHome"),
-    }
-    await this._storage.updateExtensionSettings(settings)
-  }
-
   public getLogLevel(): LogLevel {
     return vscode.workspace
       .getConfiguration("testMyCode")
@@ -107,7 +83,6 @@ export default class Settings implements vscode.Disposable {
 
   public async configureIsInsider(value: boolean): Promise<void> {
     await vscode.workspace.getConfiguration("testMyCode").update("insiderVersion", value, true)
-    await this.updateExtensionSettingsToStorage()
   }
 
   public getJavaHome(): string {
@@ -128,30 +103,6 @@ export default class Settings implements vscode.Disposable {
       return !!scopeSettings?.defaultValue
     }
     return scopeSettings.workspaceValue
-  }
-
-  /**
-   * Used to fetch boolean values from VSCode settings API User Scope
-   */
-  private _getUserSettingValue(section: string): boolean {
-    const configuration = vscode.workspace.getConfiguration("testMyCode")
-    const scopeSettings = configuration.inspect<boolean>(section)
-    if (scopeSettings?.globalValue === undefined) {
-      return !!scopeSettings?.defaultValue
-    }
-    return scopeSettings.globalValue
-  }
-
-  /**
-   * Used to fetch string values from VSCode settings API User Scope
-   */
-  private _getUserSettingString(section: string): string {
-    const configuration = vscode.workspace.getConfiguration("testMyCode")
-    const scopeSettings = configuration.inspect<string>(section)
-    if (scopeSettings?.globalValue === undefined) {
-      return scopeSettings?.defaultValue ?? ""
-    }
-    return scopeSettings.globalValue
   }
 
   /**

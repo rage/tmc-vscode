@@ -4,7 +4,6 @@ import type { Course, Organization } from "../api/types"
 import type { SubmissionFinished } from "../shared/langsSchema"
 import type { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../shared/shared"
 import type Storage from "../storage"
-import type { ExtensionSettings } from "../storage/data"
 import type { LogLevel } from "../utilities/logger"
 import type UI from "./ui"
 
@@ -72,11 +71,6 @@ export interface OrganizationData {
 
 export interface RunningTestsData {
   exerciseName: string
-}
-
-export interface SettingsData {
-  extensionSettings: ExtensionSettings
-  tmcDataSize: string
 }
 
 export interface SubmissionResultData {

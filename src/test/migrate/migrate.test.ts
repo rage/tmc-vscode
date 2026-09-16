@@ -19,6 +19,9 @@ import { createFailingTMCMock, createTMCMock } from "../mocks/tmc"
 import { createMockContext, createMockWorkspaceConfiguration } from "../mocks/vscode"
 import { makeTmpDirs } from "../utils"
 
+/** Spelled out rather than imported: no storage version declares it any more. */
+const RETIRED_EXTENSION_SETTINGS_KEY = "extension-settings-v3"
+
 /** Puts the window in `<dataPath>/TMC workspace/<name>`, which is where v0 kept it. */
 function openLegacyWorkspace(dataPath: string, name: string): void {
   Object.defineProperty(vscode.workspace, "workspaceFile", {
@@ -113,7 +116,6 @@ suite("Extension data migration", function () {
       const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("done")
       expect(storage.getUserData()).not.toBeUndefined()
-      expect(storage.getExtensionSettings()).not.toBeUndefined()
       expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toBeUndefined()
       expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).toBeUndefined()
       expect(context.globalState.get(v0.USER_DATA_KEY)).toBeUndefined()
@@ -127,7 +129,6 @@ suite("Extension data migration", function () {
       const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("failed")
       expect(storage.getUserData()).toBeUndefined()
-      expect(storage.getExtensionSettings()).toBeUndefined()
       expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toEqual(exerciseData.v0_3_0)
       expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).toEqual(
         extensionSettings.v0_3_0(root),
@@ -144,7 +145,6 @@ suite("Extension data migration", function () {
       const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("done")
       expect(storage.getUserData()).not.toBeUndefined()
-      expect(storage.getExtensionSettings()).not.toBeUndefined()
       expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toBeUndefined()
       expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).toBeUndefined()
       expect(context.globalState.get(v0.USER_DATA_KEY)).toBeUndefined()
@@ -158,7 +158,6 @@ suite("Extension data migration", function () {
       const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("failed")
       expect(storage.getUserData()).toBeUndefined()
-      expect(storage.getExtensionSettings()).toBeUndefined()
       expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toEqual(exerciseData.v0_9_0)
       expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).toEqual(
         extensionSettings.v0_9_0(root),
@@ -175,7 +174,6 @@ suite("Extension data migration", function () {
       const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("done")
       expect(storage.getUserData()).not.toBeUndefined()
-      expect(storage.getExtensionSettings()).not.toBeUndefined()
       expect(storage.getSessionState()).not.toBeUndefined()
     })
   })
@@ -191,10 +189,10 @@ suite("Extension data migration", function () {
       v1.EXTENSION_SETTINGS_KEY,
       v1.USER_DATA_KEY,
       v3.SESSION_STATE_KEY,
-      v3.EXTENSION_SETTINGS_KEY,
+      RETIRED_EXTENSION_SETTINGS_KEY,
       v3.USER_DATA_KEY,
     ]
-    const currentKeys = [v3.SESSION_STATE_KEY, v3.EXTENSION_SETTINGS_KEY, v3.USER_DATA_KEY]
+    const currentKeys = [v3.SESSION_STATE_KEY, v3.USER_DATA_KEY]
 
     function survivingKeys(): string[] {
       return migrationKeys.filter((key) => context.globalState.get(key) !== undefined)
@@ -228,6 +226,19 @@ suite("Extension data migration", function () {
       expect(result.kind).toBe("done")
       expect(survivingKeys()).toEqual([v3.SESSION_STATE_KEY, v3.USER_DATA_KEY])
       expect(storage.getUserData()).toEqual(userData.v3_0_0)
+    })
+
+    test("drops the settings copy it no longer keeps, and nothing beside it", async function () {
+      await context.globalState.update(RETIRED_EXTENSION_SETTINGS_KEY, extensionSettings.v2_0_0)
+      await context.globalState.update(v3.USER_DATA_KEY, userData.v3_0_0)
+      await context.globalState.update(v3.SESSION_STATE_KEY, sessionState.v2_0_0)
+
+      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+
+      expect(result.kind).toBe("done")
+      expect(context.globalState.get(RETIRED_EXTENSION_SETTINGS_KEY)).toBeUndefined()
+      expect(storage.getUserData()).toEqual(userData.v3_0_0)
+      expect(storage.getSessionState()).toEqual(sessionState.v2_0_0)
     })
 
     test("a second run does not replay the first run's source data", async function () {
