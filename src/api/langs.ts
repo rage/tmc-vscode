@@ -41,6 +41,7 @@ import type {
   DownloadOrUpdateTmcCourseExercisesResult,
   ExerciseDetails,
   ExerciseTaskSubmissionStatus,
+  LocalExercise,
   LocalMoocExercise,
   LocalTmcExercise,
   MoocCourseProgress,
@@ -357,6 +358,22 @@ export default class Langs {
       null,
     )
     return res.err ? res : Ok.EMPTY
+  }
+
+  /**
+   * Lists every exercise in the projects directory, from both backends, in one call.
+   *
+   * Each entry is tagged with the backend it came from and carries the ids needed to
+   * place it — an exercise id on both arms, and a course id on the mooc arm (TMC course
+   * configs store no course id). Prefer {@link listLocalCourseExercises} when only one
+   * course's exercises are wanted.
+   */
+  public async listLocalExercises(): Promise<Result<LocalExercise[], Error>> {
+    const res = await this._executeLangsCommand(
+      { args: ["list-local-exercises", "--client-name", this.clientName] },
+      "local-exercises",
+    )
+    return res.map((x) => x.data["output-data"])
   }
 
   /**

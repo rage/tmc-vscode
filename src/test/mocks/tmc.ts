@@ -7,6 +7,7 @@ import type {
   CourseInstance,
   DownloadOrUpdateMoocCourseExercisesResult,
   DownloadOrUpdateTmcCourseExercisesResult,
+  LocalExercise,
   LocalTmcExercise,
   MoocCourseProgress,
   TmcExerciseSlide,
@@ -15,6 +16,7 @@ import type { ExerciseIdentifier } from "../../shared/shared"
 import {
   closedExercisesPythonCourse,
   listLocalCourseExercisesPythonCourse,
+  localExercises,
   moocCourseInstance,
   moocCourseProgress,
   moocEnrolledCourseInstances,
@@ -36,6 +38,7 @@ export interface TMCMockValues {
   clean: Result<void, Error>
   downloadExercises: DownloadExercisesMockResult
   listLocalCourseExercisesPythonCourse: Result<LocalTmcExercise[], Error>
+  listLocalExercises: Result<LocalExercise[], Error>
   getSettingClosedExercises: Result<string[], Error>
   getSettingProjectsDir: Result<string, Error>
   migrateExercise: Result<void, Error>
@@ -59,6 +62,7 @@ export function createTMCMock(): [Langs, TMCMockValues] {
     clean: Ok.EMPTY,
     downloadExercises: emptyDownloadExercisesResult,
     listLocalCourseExercisesPythonCourse: Ok(listLocalCourseExercisesPythonCourse),
+    listLocalExercises: Ok(localExercises),
     getSettingClosedExercises: Ok(closedExercisesPythonCourse),
     getSettingProjectsDir: Ok("/langs/path/to/exercises"),
     migrateExercise: Ok.EMPTY,
@@ -85,6 +89,7 @@ export function createFailingTMCMock(): [Langs, TMCMockValues] {
       moocError: new Error(),
     },
     listLocalCourseExercisesPythonCourse: error,
+    listLocalExercises: error,
     getSettingClosedExercises: error,
     getSettingProjectsDir: error,
     migrateExercise: error,
@@ -104,6 +109,7 @@ export function createFailingTMCMock(): [Langs, TMCMockValues] {
 function setupMockValues(values: TMCMockValues): Langs {
   const mock = {
     clean: vi.fn(async () => values.clean),
+    listLocalExercises: vi.fn(async () => values.listLocalExercises),
     listLocalCourseExercises: vi.fn(async (backend: string, slug: string) =>
       backend === "tmc" && slug === "test-python-course"
         ? values.listLocalCourseExercisesPythonCourse

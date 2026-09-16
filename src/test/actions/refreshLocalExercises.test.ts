@@ -52,11 +52,22 @@ suite("refreshLocalExercises action", function () {
     expect(result).toBe(Ok.EMPTY)
   })
 
-  test("should tolerate Langs errors", async function () {
+  test("should default to open when the closed-exercise setting is unreadable", async function () {
     tmcMockValues.getSettingClosedExercises = Err(new Error())
-    tmcMockValues.listLocalCourseExercisesPythonCourse = Err(new Error())
     const result = await refreshLocalExercises(actionContext())
     expect(result).toBe(Ok.EMPTY)
+    expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ status: ExerciseStatus.Open })]),
+    )
+  })
+
+  test("should not replace the known exercises when the listing fails", async function () {
+    // A failed listing says nothing about what is on disk; setting an empty list
+    // would drop every exercise out of the workspace.
+    tmcMockValues.listLocalExercises = Err(new Error())
+    const result = await refreshLocalExercises(actionContext())
+    expect(result.err).toBe(true)
+    expect(workspaceManagerMock.setExercises).not.toHaveBeenCalled()
   })
 
   test("should return error if WorkspaceManager operation fails", async function () {
@@ -82,23 +93,21 @@ suite("refreshLocalExercises action", function () {
       materialUrl: null,
     }
     userDataMockValues.getCourses = [makeMoocKind(moocCourse) as LocalCourseData]
-    // The mooc local listing is looked up by course id (UUID), since mooc configs
-    // store no slug. The display slug stays the course name.
-    tmcMock.listLocalCourseExercises = vi.fn(async (backend: string, courseId: string) =>
-      backend === "mooc" && courseId === "course-uuid-1"
-        ? Ok([
-            {
-              "exercise-slug": "mooc_hello",
-              "exercise-id": "exercise-uuid-1",
-              "exercise-path": "/mooc/hello",
-            },
-          ])
-        : Err(new Error("not mocked")),
-    ) as Langs["listLocalCourseExercises"]
+    // A mooc entry is matched to its course by course id, since its on-disk slug
+    // is derived locally and need not equal the course name the workspace uses.
+    tmcMockValues.listLocalExercises = Ok([
+      {
+        backend: "mooc",
+        "course-slug": "mooc-python-course-2",
+        "course-id": "course-uuid-1",
+        "exercise-slug": "mooc_hello",
+        "exercise-id": "exercise-uuid-1",
+        "exercise-path": "/mooc/hello",
+      },
+    ])
 
     const result = await refreshLocalExercises(actionContext())
     expect(result).toBe(Ok.EMPTY)
-    expect(tmcMock.listLocalCourseExercises).toHaveBeenCalledWith("mooc", "course-uuid-1")
     expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith([
       expect.objectContaining({
         backend: "mooc",
@@ -107,5 +116,10 @@ suite("refreshLocalExercises action", function () {
         status: ExerciseStatus.Open,
       }),
     ])
+  })
+
+  test("should list every course's exercises in one call", async function () {
+    await refreshLocalExercises(actionContext())
+    expect(tmcMock.listLocalExercises).toHaveBeenCalledTimes(1)
   })
 })

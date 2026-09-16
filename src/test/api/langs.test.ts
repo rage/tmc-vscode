@@ -632,6 +632,38 @@ suite("Langs class arg building", function () {
     expect(res.ok).toBe(true)
   })
 
+  test("listLocalExercises asks for every course and both backends in one call", async function () {
+    const langs = newLangs()
+    const tmcExercise = {
+      "course-slug": "python-course",
+      "exercise-slug": "hello_world",
+      "exercise-id": 1,
+      "exercise-path": "/p/hello_world",
+    }
+    const moocExercise = {
+      "course-slug": "mooc-python-course",
+      "course-id": "course-uuid",
+      "exercise-slug": "mooc_hello",
+      "exercise-id": "exercise-uuid",
+      "exercise-path": "/p/mooc_hello",
+    }
+    const calls = stubSpawn(langs, () =>
+      Ok(
+        dataOutput("local-exercises", [
+          { backend: "tmc", ...tmcExercise },
+          { backend: "mooc", ...moocExercise },
+        ]),
+      ),
+    )
+    const res = await langs.listLocalExercises()
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.args).toEqual(["list-local-exercises", "--client-name", "test-client"])
+    expect(res.unwrap()).toEqual([
+      { backend: "tmc", ...tmcExercise },
+      { backend: "mooc", ...moocExercise },
+    ])
+  })
+
   test("listLocalCourseExercises routes the mooc branch to the mooc subcommand", async function () {
     const langs = newLangs()
     const calls = stubSpawn(langs, () => Ok(dataOutput("local-mooc-exercises", [])))

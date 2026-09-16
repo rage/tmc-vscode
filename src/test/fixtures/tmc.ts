@@ -1,5 +1,6 @@
 import type {
   CourseInstance,
+  LocalExercise,
   LocalTmcExercise,
   MoocCourseProgress,
   TmcExerciseSlide,
@@ -27,6 +28,11 @@ const listLocalCourseExercisesPythonCourse: LocalTmcExercise[] = [
     "exercise-slug": "other_world",
   },
 ]
+
+const localExercises: LocalExercise[] = listLocalCourseExercisesPythonCourse.map((x) => ({
+  backend: "tmc",
+  ...x,
+}))
 
 // -------------------------------------------------------------------------------------------------
 // mooc fixtures (courses.mooc.fi — UUID-keyed)
@@ -85,6 +91,7 @@ const moocCourseProgress: MoocCourseProgress = {
 export {
   closedExercisesPythonCourse,
   listLocalCourseExercisesPythonCourse,
+  localExercises,
   MOOC_EXERCISE_UUID,
   MOOC_INSTANCE_UUID,
   MOOC_TASK_UUID,
