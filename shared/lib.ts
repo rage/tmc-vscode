@@ -763,6 +763,15 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     exerciseId: ExerciseIdentifierSchema,
     status: ExerciseStatusSchema,
   }),
+  // The whole course's statuses in one message. `exerciseStatusChange` stays for genuine
+  // per-exercise deltas; a course opening would otherwise post one message per exercise.
+  z.object({
+    type: z.literal("setExerciseStatuses"),
+    target: broadcastPanelSchema("CourseDetails"),
+    // Scopes the broadcast to the CourseDetails panel showing this course (main/side can differ).
+    courseId: CourseIdentifierSchema,
+    statuses: z.array(z.tuple([ExerciseIdentifierSchema, ExerciseStatusSchema])),
+  }),
   z.object({
     type: z.literal("setUpdateables"),
     target: broadcastPanelSchema("CourseDetails"),

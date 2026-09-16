@@ -4,7 +4,6 @@ import * as v2 from "./data_v2"
 
 // global storage keys
 export const USER_DATA_KEY = "user-data-v3"
-export const EXTENSION_SETTINGS_KEY = "extension-settings-v3"
 export import SESSION_STATE_KEY = v2.SESSION_STATE_KEY
 
 export type LogLevel = v2.LogLevel
@@ -51,17 +50,6 @@ export interface UserData {
   mooc_courses: MoocLocalCourseData[]
 }
 
-export interface ExtensionSettings {
-  downloadOldSubmission: boolean
-  hideMetaFiles: boolean
-  insiderVersion: boolean
-  logLevel: LogLevel
-  updateExercisesAutomatically: boolean
-  // absent in data migrated from storage versions that predate the setting;
-  // (re)written by Settings.updateExtensionSettingsToStorage on config change
-  javaHome?: string | undefined
-}
-
 // validation schemas (see the note in data_v0.ts: unknown extra keys are accepted)
 
 export const logLevelSchema = v2.logLevelSchema
@@ -99,13 +87,4 @@ export const moocLocalCourseDataSchema: z.ZodType<MoocLocalCourseData> = z.objec
 export const userDataSchema: z.ZodType<UserData> = z.object({
   courses: z.array(tmcLocalCourseDataSchema),
   mooc_courses: z.array(moocLocalCourseDataSchema),
-})
-
-export const extensionSettingsSchema: z.ZodType<ExtensionSettings> = z.object({
-  downloadOldSubmission: z.boolean(),
-  hideMetaFiles: z.boolean(),
-  insiderVersion: z.boolean(),
-  logLevel: logLevelSchema,
-  updateExercisesAutomatically: z.boolean(),
-  javaHome: z.string().optional(),
 })

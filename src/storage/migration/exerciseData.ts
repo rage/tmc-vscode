@@ -10,6 +10,7 @@ import type { MigratedData } from "."
 import validateData from "."
 import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
+import { legacyClosedExercisesSettingKey } from "../../config/constants"
 import { ExerciseMigrationError } from "../../errors"
 import { Logger } from "../../utilities"
 import * as data from "../data"
@@ -139,10 +140,10 @@ export async function v1_migrateFromV0(
     throw new ExerciseMigrationError(result.val, "Exercise migration failed.")
   }
 
-  for (const key of Object.keys(closedExercises)) {
+  for (const courseName of Object.keys(closedExercises)) {
     const closeExercisesResult = await langs.setSetting(
-      data.v2.langsClosedExercisesKey(key),
-      closedExercises[key],
+      legacyClosedExercisesSettingKey(courseName),
+      closedExercises[courseName],
     )
     if (closeExercisesResult.err) {
       Logger.error("Failed to migrate status of closed exercises.", closeExercisesResult.val)

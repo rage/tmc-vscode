@@ -60,7 +60,7 @@ export async function addNewCourse(
         return addResult
       }
       ui.treeDP.refresh()
-      workspaceManager.val.createWorkspaceFile(courseData.details.name, "tmc")
+      await workspaceManager.val.createWorkspaceFile(courseData.details.name, "tmc")
       return refreshLocalExercises(actionContext)
     },
     async (mooc) => {
@@ -110,7 +110,7 @@ export async function addNewCourse(
         return addResult
       }
       ui.treeDP.refresh()
-      workspaceManager.val.createWorkspaceFile(moocCourse.slug, "mooc")
+      await workspaceManager.val.createWorkspaceFile(moocCourse.slug, "mooc")
       return refreshLocalExercises(actionContext)
     },
   )

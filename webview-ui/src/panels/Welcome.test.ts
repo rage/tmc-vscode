@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/svelte"
 
+import { releaseNotes } from "../generated/releaseNotes"
 import type { WelcomePanel } from "../shared/shared"
 import { postedMessages } from "../test/setup"
 import Welcome from "./Welcome.svelte"
@@ -30,5 +31,25 @@ suite("Welcome panel", () => {
     expect(
       await screen.findByRole("heading", { name: /Welcome to TestMyCode 9.9.9/ }),
     ).toBeInTheDocument()
+  })
+
+  // What matters is that the panel shows whatever CHANGELOG.md currently says,
+  // not a fixed list this test would have to be kept in step with.
+  test("renders every generated release note", () => {
+    render(Welcome, { props: { panel } })
+    expect(releaseNotes.length).toBeGreaterThan(0)
+    for (const note of releaseNotes) {
+      const heading = note.date ? `${note.version} - ${note.date}` : note.version
+      expect(screen.getByRole("heading", { level: 3, name: heading })).toBeInTheDocument()
+    }
+  })
+
+  test("renders the entries of the newest release note", () => {
+    render(Welcome, { props: { panel } })
+    const newest = releaseNotes[0]
+    expect(newest?.entries.length).toBeGreaterThan(0)
+    for (const entry of newest?.entries ?? []) {
+      expect(screen.getByText(entry)).toBeInTheDocument()
+    }
   })
 })

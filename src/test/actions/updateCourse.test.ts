@@ -2,16 +2,17 @@ import { Err, Ok } from "ts-results"
 
 import type { ActionContext } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
+import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { UserData } from "../../config/userdata"
-import { ConnectionError, ForbiddenError } from "../../errors"
+import { ConnectionError, InsufficientScopeError } from "../../errors"
 import { TmcPanel } from "../../panels/TmcPanel"
 import { CourseIdentifier } from "../../shared/shared"
 import Storage from "../../storage"
 import type { MoocLocalCourseData } from "../../storage/data"
 import { Logger } from "../../utilities"
-import { MOOC_EXERCISE_UUID } from "../fixtures/tmc"
+import { MOOC_EXERCISE_UUID, moocCourseInstance, moocExerciseSlides } from "../fixtures/tmc"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
@@ -52,12 +53,23 @@ suite("updateCourse action (mooc)", function () {
     exerciseDecorationProvider: new Ok(autoMock()),
   })
 
+  // A context whose dialog is nobody else's, so its call count is this call's alone.
+  function contextWithOwnDialog(): { context: ActionContext; dialog: Dialog } {
+    const dialog = autoMock<Dialog>()
+    return { context: { ...actionContext(), dialog }, dialog }
+  }
+
+  // Replaces the stored course, for a test that needs it in some other starting state.
+  async function storeCourse(course: MoocLocalCourseData): Promise<void> {
+    const storage = new Storage(createMockContext())
+    await storage.updateUserData({ courses: [], mooc_courses: [{ ...course }] })
+    userData = new UserData(storage)
+  }
+
   beforeEach(async function () {
     ;[tmcMock, tmcMockValues] = createTMCMock()
     ;[workspaceManagerMock] = createWorkspaceMangerMock()
-    const storage = new Storage(createMockContext())
-    await storage.updateUserData({ courses: [], mooc_courses: [{ ...moocCourse }] })
-    userData = new UserData(storage)
+    await storeCourse(moocCourse)
     vi.spyOn(TmcPanel, "postMessage").mockImplementation(async () => {})
   })
 
@@ -115,11 +127,53 @@ suite("updateCourse action (mooc)", function () {
     expect(stored?.awardedPoints).toBe(1)
   })
 
-  test("marks the course disabled on a ForbiddenError and reports offline", async function () {
-    tmcMockValues.getMoocCourseInstanceData = Err(new ForbiddenError("nope"))
+  test("leaves the course alone when the session lacks the exercise scope", async function () {
+    // The mooc backend 403s an underscoped token, which says nothing about the course --
+    // and the mooc arm never clears `disabled`, so persisting it here would be permanent.
+    tmcMockValues.getMoocCourseInstanceData = Err(new InsufficientScopeError("no scope"))
+
     const result = await updateCourse(actionContext(), courseId)
+
     expect(result.val).toBe(false)
-    expect(userData.getMoocCourses()[0]?.disabled).toBe(true)
+    expect(userData.getMoocCourses()[0]?.disabled).toBe(false)
+  })
+
+  test("offers a login once per lapse, and again once the session is renewed", async function () {
+    // A success first, so the report latch starts in a known state.
+    await updateCourse(actionContext(), courseId)
+    tmcMockValues.getMoocCourseInstanceData = Err(new InsufficientScopeError("no scope"))
+
+    const first = contextWithOwnDialog()
+    await updateCourse(first.context, courseId)
+    expect(first.dialog.errorNotification).toHaveBeenCalledWith(
+      expect.stringContaining("no scope"),
+      expect.any(InsufficientScopeError),
+      ["Log in", expect.any(Function)],
+    )
+
+    // updateCourse runs once per course and from a background poll, so a second
+    // failure must stay quiet.
+    const repeat = contextWithOwnDialog()
+    await updateCourse(repeat.context, courseId)
+    expect(repeat.dialog.errorNotification).not.toHaveBeenCalled()
+
+    tmcMockValues.getMoocCourseInstanceData = Ok([moocCourseInstance, moocExerciseSlides])
+    await updateCourse(actionContext(), courseId)
+    tmcMockValues.getMoocCourseInstanceData = Err(new InsufficientScopeError("no scope"))
+
+    const afterRenewal = contextWithOwnDialog()
+    await updateCourse(afterRenewal.context, courseId)
+    expect(afterRenewal.dialog.errorNotification).toHaveBeenCalledTimes(1)
+  })
+
+  test("clears a disabled flag an earlier failure persisted", async function () {
+    // `disabled` has no mooc equivalent, so nothing else would ever lift it.
+    await storeCourse({ ...moocCourse, disabled: true })
+
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.val).toBe(true)
+    expect(userData.getMoocCourses()[0]?.disabled).toBe(false)
   })
 
   test("returns offline (not disabled) on a ConnectionError", async function () {

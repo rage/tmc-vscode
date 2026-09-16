@@ -16,20 +16,21 @@ import {
   resetMoocOAuthState,
   setDeviceFlowClock,
 } from "./oauth"
-import { createMoocApp, resetMoocState } from "./router"
+import type { MoocMockControls } from "./router"
+import { createMoocApp, moocMockOf } from "./router"
 
 // These endpoints (see backend/mooc/oauth.ts) are outside the vendored
 // exercise-services OpenAPI spec, so — unlike conformance.test.ts — there's no
 // spec to validate against; this test pins the RFC 8628 behavior directly.
 
-const listen = (app: Express): Promise<{ server: Server; base: string }> =>
+const listen = (app: Express): Promise<{ server: Server; base: string; mock: MoocMockControls }> =>
   new Promise((resolve) => {
     const server = app.listen(0, () => {
       const addr = server.address()
       if (!addr || typeof addr === "string") {
         throw new Error("expected a TCP address")
       }
-      resolve({ server, base: `http://localhost:${addr.port}` })
+      resolve({ server, base: `http://localhost:${addr.port}`, mock: moocMockOf(app) })
     })
   })
 
@@ -376,16 +377,17 @@ describe("mooc resource-endpoint bearer auth mode", () => {
   describe("with requireAuth", () => {
     let server: Server
     let base: string
+    let mock: MoocMockControls
 
     before(async () => {
-      ;({ server, base } = await listen(createMoocApp({ requireAuth: true })))
+      ;({ server, base, mock } = await listen(createMoocApp({ requireAuth: true })))
     })
     after(() => {
       server.close()
     })
     afterEach(() => {
       resetMoocOAuthState()
-      resetMoocState()
+      mock.reset()
     })
 
     test("missing bearer -> 401 with the sp331 unauthorized envelope", async () => {

@@ -474,14 +474,15 @@ describe("mooc mock conformance", () => {
     assert.equal(grading.score_given, 0.5)
   })
 
-  test("submit naming no answer at all is a json answer, and is accepted", async () => {
+  test("submit naming no answer at all is a json answer, and a tmc exercise refuses it", async () => {
     // All three answer members are optional and an absent `answer_kind` means json,
-    // so the slide and task alone are a complete request.
+    // so the slide and task alone are a complete request -- which a tmc exercise,
+    // whose answer is its archive, has nothing to grade.
     const res = await postJsonSubmit(passingExercise)
-    assert.equal(res.status, 200)
-    const body = (await res.json()) as { task_submission_id: string; slide_submission_id: string }
-    assert.match(body.task_submission_id, /^[0-9a-f-]{36}$/)
-    assert.notEqual(body.task_submission_id, body.slide_submission_id)
+    assert.equal(res.status, 422)
+    const body = (await res.json()) as { message_key: string; message: string }
+    assert.equal(body.message_key, "validation_error")
+    assert.match(body.message, /cannot grade an answer that names no files/)
   })
 
   test("submit of a json answer that names files is rejected", async () => {
@@ -769,26 +770,9 @@ describe("mooc mock conformance", () => {
     assert.equal(gradedList[0]!.score_given, 0)
   })
 
-  test("download of a submission made from no files is an empty list, not a 404", async () => {
-    const res = await postJsonSubmit(passingExercise)
-    assert.equal(res.status, 200)
-    const { slide_submission_id } = (await res.json()) as { slide_submission_id: string }
-    const download = await authFetch(api(`/submissions/${slide_submission_id}/download`))
-    assert.equal(download.status, 200)
-    assert.deepEqual(await download.json(), { data_files: [] })
-
-    // It is still listed, so a client picking an old submission to restore can
-    // reach it -- which is why the empty download has to be a first-class
-    // outcome rather than an error.
-    const list = (await (
-      await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submissions`))
-    ).json()) as { id: string }[]
-    assert.ok(list.some((item) => item.id === slide_submission_id))
-  })
-
   test("the seeding route produces a listed submission whose download is empty", async () => {
     // The out-of-process route the integration suite uses to reach the
-    // no-downloadable-files outcome, which the CLI cannot produce itself.
+    // no-downloadable-files outcome, which no submit can produce.
     const res = await fetch(`${base}/mooc-mock/seed-fileless-submission`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -806,6 +790,9 @@ describe("mooc mock conformance", () => {
     assert.equal(download.status, 200)
     assert.deepEqual(await download.json(), { data_files: [] })
 
+    // It is still listed, so a client picking an old submission to restore can
+    // reach it -- which is why the empty download has to be a first-class
+    // outcome rather than an error.
     const list = (await (
       await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submissions`))
     ).json()) as { id: string }[]
@@ -858,27 +845,6 @@ describe("mooc mock conformance", () => {
   test("unknown endpoint 404s", async () => {
     const res = await authFetch(api("/does-not-exist"))
     assert.equal(res.status, 404)
-  })
-})
-
-describe("mooc mock obsolete-client (426) fault", () => {
-  test("an injected obsolete client yields a spec-valid 426 ApiErrorResponse", async () => {
-    // The 426 obsolete-client contract is documented on every endpoint but is
-    // dormant in normal runs (the backend's MINIMUM_CLIENT_VERSION is unset, so
-    // no live response ever produces it). This test-only fault makes every
-    // operation respond 426, which the validator accepts only because 426 is a
-    // documented status for the operation -- the envelope's own members are
-    // checked in the error-envelope walk below.
-    const { server, base } = await listen(createMoocApp({ injectObsoleteClient: true }))
-    try {
-      // Seeded bearer gets past auth so the injected 426 (not a 401) is observed.
-      const res = await authFetch(`${base}/api/v0/exercise-services/client/courses`)
-      assert.equal(res.status, 426)
-      const body = (await res.json()) as { message_key: string }
-      assert.equal(body.message_key, "obsolete_client")
-    } finally {
-      server.close()
-    }
   })
 })
 
@@ -1090,11 +1056,11 @@ describe("mooc mock error envelopes", () => {
     },
     {
       // Dormant in a normal run (the host's MINIMUM_CLIENT_VERSION is unset),
-      // so the fault-injected mock is the only way to observe the envelope.
+      // so a mock naming a minimum is the only way to observe the envelope.
       name: "a client the server considers obsolete",
       messageKey: "obsolete_client",
       run: async () => {
-        const obsolete = await listen(createMoocApp({ injectObsoleteClient: true }))
+        const obsolete = await listen(createMoocApp({ minimumClientVersion: "99.0.0" }))
         try {
           return await read(
             await authFetch(`${obsolete.base}/api/v0/exercise-services/client/courses`),
@@ -1137,5 +1103,158 @@ describe("mooc mock error envelopes", () => {
       }
       assert.ok(walked.has(key), `no probe covers the ${key} error the router emits`)
     }
+  })
+})
+
+// The host reads `X-Client-Version` on every client operation and turns away
+// anything below MINIMUM_CLIENT_VERSION with 426. That constant is None in
+// production, so a mock naming a minimum is the only place the rule -- and the
+// 426 every operation documents -- can be exercised at all. A 426 reaching the
+// client at all proves the validator accepted it as a documented status for the
+// operation; its envelope is pinned in the error-envelope walk below.
+const clientApi = (base: string, p: string): string => `${base}/api/v0/exercise-services/client${p}`
+
+describe("mooc mock client-version floor", () => {
+  const asClient = (base: string, p: string, clientVersion?: string): Promise<Response> =>
+    authFetch(clientApi(base, p), {
+      headers: clientVersion === undefined ? {} : { "x-client-version": clientVersion },
+    })
+
+  const getCourses = (base: string, clientVersion?: string): Promise<Response> =>
+    asClient(base, "/courses", clientVersion)
+
+  const withFloor = async (
+    minimumClientVersion: string,
+    drive: (base: string) => Promise<void>,
+  ): Promise<void> => {
+    const { server, base } = await listen(createMoocApp({ minimumClientVersion }))
+    try {
+      await drive(base)
+    } finally {
+      server.close()
+    }
+  }
+
+  test("a client at or above the floor is served", async () => {
+    await withFloor("1.2.3", async (base) => {
+      assert.equal((await getCourses(base, "1.2.3")).status, 200)
+      assert.equal((await getCourses(base, "1.3.0")).status, 200)
+      assert.equal((await getCourses(base, "2.0")).status, 200)
+    })
+  })
+
+  test("a client below the floor gets a 426 naming the minimum", async () => {
+    await withFloor("1.2.3", async (base) => {
+      const res = await getCourses(base, "1.2.2")
+      assert.equal(res.status, 426)
+      const body = (await res.json()) as { message_key: string; message: string }
+      assert.equal(body.message_key, "obsolete_client")
+      assert.match(body.message, /minimum supported version is 1\.2\.3/)
+    })
+  })
+
+  test("a missing or unparseable version counts as obsolete", async () => {
+    await withFloor("1.2.3", async (base) => {
+      assert.equal((await getCourses(base)).status, 426)
+      assert.equal((await getCourses(base, "not-a-version")).status, 426)
+      assert.equal((await getCourses(base, "1.2.x")).status, 426)
+    })
+  })
+
+  test("an obsolete client's submit records nothing", async () => {
+    // The check has to run before the handler, as the host's extractor does, or
+    // a turned-away submit still leaves a submission behind.
+    const exerciseId = passingExercise.slide.exercise_id
+    await withFloor("1.2.3", async (base) => {
+      const res = await authFetch(clientApi(base, `/exercises/${exerciseId}/submit`), {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-client-version": "1.0.0" },
+        body: JSON.stringify({
+          exercise_slide_id: passingExercise.slide.slide_id,
+          exercise_task_id: passingExercise.slide.tasks[0]!.task_id,
+          answer_kind: "file",
+          data_files: [randomUUID()],
+        }),
+      })
+      assert.equal(res.status, 426)
+      const listed = (await (
+        await asClient(base, `/exercises/${exerciseId}/submissions`, "1.2.3")
+      ).json()) as unknown[]
+      assert.equal(listed.length, 0)
+    })
+  })
+
+  test("without a floor, a client advertising no version is served", async () => {
+    const { server, base } = await listen(createMoocApp())
+    try {
+      assert.equal((await getCourses(base)).status, 200)
+    } finally {
+      server.close()
+    }
+  })
+})
+
+// Injected one-shot failures. Every error the fixtures produce is a 4xx a client
+// provoked; nothing here can otherwise answer 5xx, so the client's retry and
+// error-reporting paths have no way to be driven -- least of all from the
+// out-of-process tiers, which is what the control route exists for.
+describe("mooc mock injected failures", () => {
+  let server: Server
+  let base: string
+  let mock: MoocMockControls
+
+  before(async () => {
+    ;({ server, base, mock } = await listen(createMoocApp()))
+  })
+
+  after(() => {
+    server.close()
+  })
+
+  const failNext = (body: unknown): Promise<Response> =>
+    fetch(`${base}/mooc-mock/fail-next`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    })
+
+  test("an armed fault answers once, with the host envelope for its status", async () => {
+    assert.equal(mock.failNext("getClientCourses", 500), undefined)
+    const faulted = await authFetch(clientApi(base, "/courses"))
+    assert.equal(faulted.status, 500)
+    const body = (await faulted.json()) as { type: string; message_key: string }
+    assert.equal(body.type, API_ERRORS.internal_error.type)
+    assert.equal(body.message_key, "internal_error")
+
+    // one-shot: the next call is served normally
+    assert.equal((await authFetch(clientApi(base, "/courses"))).status, 200)
+  })
+
+  test("an armed fault leaves other operations alone", async () => {
+    assert.equal(mock.failNext("getClientCourses", 500), undefined)
+    assert.equal((await authFetch(clientApi(base, `/courses/${pythonCourse.id}`))).status, 200)
+    assert.equal((await authFetch(clientApi(base, "/courses"))).status, 500)
+  })
+
+  test("a fault arms and fires the same way from outside the process", async () => {
+    assert.equal((await failNext({ operationId: "getClientCourses", status: 404 })).status, 204)
+    const faulted = await authFetch(clientApi(base, "/courses"))
+    assert.equal(faulted.status, 404)
+    assert.equal(((await faulted.json()) as { message_key: string }).message_key, "not_found")
+  })
+
+  test("a reset disarms an armed fault", async () => {
+    mock.failNext("getClientCourses", 500)
+    mock.reset()
+    assert.equal((await authFetch(clientApi(base, "/courses"))).status, 200)
+  })
+
+  test("an unknown operation or an uninjectable status is refused", async () => {
+    assert.equal(mock.failNext("getSomethingElse", 500), "unknown-operation")
+    assert.equal(mock.failNext("getClientCourses", 418), "unsupported-status")
+    assert.equal((await failNext({ operationId: "getSomethingElse", status: 500 })).status, 404)
+    assert.equal((await failNext({ operationId: "getClientCourses", status: 418 })).status, 400)
+    assert.equal((await failNext({ status: 500 })).status, 400)
+    assert.equal((await authFetch(clientApi(base, "/courses"))).status, 200)
   })
 })

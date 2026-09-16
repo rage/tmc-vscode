@@ -15,6 +15,7 @@ import WorkspaceManager, {
 } from "../../api/workspaceManager"
 import {
   HIDE_META_FILES,
+  WATCHER_EXCLUDE,
   WORKSPACE_ROOT_FILE_NAME,
   WORKSPACE_ROOT_FILE_TEXT,
   WORKSPACE_ROOT_FOLDER_NAME,
@@ -106,17 +107,18 @@ function openWorkspaceFile(fileName: string): void {
 type UpdateSetting = (section: string, value: unknown, target?: unknown) => Promise<void>
 
 /**
- * A `WorkspaceConfiguration` that reports `workspaceValue` for every section and
- * records writes, so a test can assert what would land in the `.code-workspace`.
+ * A `WorkspaceConfiguration` backed by `stored`, the values the `.code-workspace`
+ * already holds per section, that records writes so a test can assert what would
+ * land in the file.
  */
 function configurationStub(
   update: Mock<UpdateSetting>,
-  workspaceValue?: Record<string, unknown>,
+  stored: (section: string) => unknown = () => undefined,
 ): vscode.WorkspaceConfiguration {
   return {
     get: <T>(_section: string, defaultValue?: T) => defaultValue,
     has: () => false,
-    inspect: () => (workspaceValue ? { key: "", workspaceValue } : undefined),
+    inspect: (section: string) => ({ key: section, workspaceValue: stored(section) }),
     update,
   } as unknown as vscode.WorkspaceConfiguration
 }
@@ -198,7 +200,7 @@ suite("WorkspaceManager class", function () {
     })
   })
 
-  suite("getExerciseByPath", function () {
+  suite("exercise lookup by path", function () {
     const helloWorld = exercise("tmc", "test-python-course", "hello_world", ExerciseStatus.Open)
     let manager: WorkspaceManager
 
@@ -208,30 +210,33 @@ suite("WorkspaceManager class", function () {
 
     test("finds the exercise by its own folder", function () {
       expect(manager.getExerciseByPath(helloWorld.uri)?.exerciseSlug).toBe("hello_world")
+      expect(manager.getExerciseContaining(helloWorld.uri)?.exerciseSlug).toBe("hello_world")
     })
 
-    test("finds the exercise a file inside it belongs to", function () {
+    test("finds the exercise a file inside it belongs to only by containment", function () {
       const file = vscode.Uri.file(path.join(helloWorld.uri.fsPath, "src", "hello.py"))
-      expect(manager.getExerciseByPath(file)?.exerciseSlug).toBe("hello_world")
+      expect(manager.getExerciseContaining(file)?.exerciseSlug).toBe("hello_world")
+      expect(manager.getExerciseByPath(file)).toBeUndefined()
     })
 
     test("does not match a sibling folder the exercise name prefixes", function () {
       const sibling = vscode.Uri.file(`${helloWorld.uri.fsPath}_2`)
-      expect(manager.getExerciseByPath(sibling)).toBeUndefined()
+      expect(manager.getExerciseContaining(sibling)).toBeUndefined()
     })
 
     test("does not match the course folder above the exercise", function () {
       const courseFolder = vscode.Uri.file(path.dirname(helloWorld.uri.fsPath))
-      expect(manager.getExerciseByPath(courseFolder)).toBeUndefined()
+      expect(manager.getExerciseContaining(courseFolder)).toBeUndefined()
     })
 
     test("terminates on a path outside the exercise tree", function () {
-      expect(manager.getExerciseByPath(vscode.Uri.file("/elsewhere/notes.txt"))).toBeUndefined()
+      expect(manager.getExerciseContaining(vscode.Uri.file("/elsewhere/notes.txt"))).toBeUndefined()
     })
 
     test("forgets an exercise dropped from a later exercise list", async function () {
       await manager.setExercises([])
       expect(manager.getExerciseByPath(helloWorld.uri)).toBeUndefined()
+      expect(manager.getExerciseContaining(helloWorld.uri)).toBeUndefined()
     })
   })
 
@@ -292,6 +297,13 @@ suite("WorkspaceManager class", function () {
   })
 
   suite("workspace settings integrity", function () {
+    const alreadyCorrect: Record<string, unknown> = {
+      "files.exclude": HIDE_META_FILES,
+      "files.watcherExclude": WATCHER_EXCLUDE,
+      "explorer.decorations.colors": false,
+      "explorer.decorations.badges": true,
+      "problems.decorations.enabled": false,
+    }
     let update: Mock<UpdateSetting>
 
     beforeEach(function () {
@@ -320,12 +332,44 @@ suite("WorkspaceManager class", function () {
 
     test("merges a section's stored workspace value, not the effective config", async function () {
       stubExtensions(() => undefined)
-      stubWorkspace("getConfiguration", () => configurationStub(update, { "**/legacy": true }))
+      stubWorkspace("getConfiguration", () =>
+        configurationStub(update, () => ({ "**/legacy": true })),
+      )
 
       await new WorkspaceManager(resources).verifyWorkspaceSettingsIntegrity()
 
       const written = update.mock.calls.find(([section]) => section === "files.exclude")?.[1]
       expect(written).toEqual({ "**/legacy": true, ...HIDE_META_FILES })
+    })
+
+    // Every write is a configuration-change broadcast every installed extension
+    // has to handle, and this pass runs on each activation.
+    test("writes nothing when the workspace file already holds the settings", async function () {
+      stubExtensions(() => undefined)
+      stubWorkspace("getConfiguration", () =>
+        configurationStub(update, (section) => alreadyCorrect[section]),
+      )
+
+      await new WorkspaceManager(resources).verifyWorkspaceSettingsIntegrity()
+
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    test("writes only the section that drifted", async function () {
+      stubExtensions(() => undefined)
+      stubWorkspace("getConfiguration", () =>
+        configurationStub(update, (section) =>
+          section === "problems.decorations.enabled" ? true : alreadyCorrect[section],
+        ),
+      )
+
+      await new WorkspaceManager(resources).verifyWorkspaceSettingsIntegrity()
+
+      expect(update).toHaveBeenCalledExactlyOnceWith(
+        "problems.decorations.enabled",
+        false,
+        vscode.ConfigurationTarget.Workspace,
+      )
     })
   })
 
@@ -400,6 +444,53 @@ suite("WorkspaceManager class", function () {
 
       const written = JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))
       expect(written.extensions.recommendations).toEqual(["ms-python.python"])
+    })
+
+    test("creates a course's workspace file where its resources put it", async function () {
+      await manager.createWorkspaceFile(courseSlug, "tmc")
+
+      expect(JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))).toEqual(WORKSPACE_SETTINGS)
+    })
+
+    test("leaves a course's existing workspace file untouched", async function () {
+      fs.writeFileSync(workspaceFile, '{"folders":[{"path":"kept"}]}')
+
+      await manager.createWorkspaceFile(courseSlug, "tmc")
+
+      expect(fs.readFileSync(workspaceFile, "utf-8")).toBe('{"folders":[{"path":"kept"}]}')
+    })
+
+    test("deletes one course's workspace file and leaves the others", async function () {
+      const moocWorkspaceFile = resources.getWorkspaceFilePath(courseSlug, "mooc")
+      fs.writeFileSync(workspaceFile, JSON.stringify({ folders: [] }))
+      fs.writeFileSync(moocWorkspaceFile, JSON.stringify({ folders: [] }))
+
+      const result = await manager.deleteWorkspaceFile(courseSlug, "tmc")
+
+      expect(result.ok).toBe(true)
+      expect(fs.existsSync(workspaceFile)).toBe(false)
+      expect(fs.existsSync(moocWorkspaceFile)).toBe(true)
+    })
+
+    test("accepts a course whose workspace file is already gone", async function () {
+      const result = await manager.deleteWorkspaceFile(courseSlug, "tmc")
+
+      expect(result.ok).toBe(true)
+    })
+
+    test("deletes every workspace file but keeps the shared root folder", async function () {
+      const rootFolderPath = path.join(workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME)
+      fs.writeFileSync(workspaceFile, JSON.stringify({ folders: [] }))
+      fs.writeFileSync(
+        resources.getWorkspaceFilePath("another course", "mooc"),
+        JSON.stringify({ folders: [] }),
+      )
+      fs.mkdirSync(rootFolderPath)
+
+      const result = await manager.deleteAllWorkspaceFiles()
+
+      expect(result.ok).toBe(true)
+      expect(fs.readdirSync(workspaceFileFolder)).toEqual([WORKSPACE_ROOT_FOLDER_NAME])
     })
   })
 

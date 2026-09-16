@@ -8,6 +8,7 @@ import {
   BottleneckError,
   ConnectionError,
   ForbiddenError,
+  InsufficientScopeError,
   InvalidTokenError,
   NotEnrolledError,
   ObsoleteClientError,
@@ -800,7 +801,7 @@ suite("Langs cross-backend independence", function () {
 suite("Langs error-kind mapping", function () {
   const cases: [unknown, new (...args: never[]) => Error][] = [
     ["connection-error", ConnectionError],
-    ["forbidden", ForbiddenError],
+    ["forbidden", InsufficientScopeError],
     ["invalid-token", InvalidTokenError],
     ["not-logged-in", AuthorizationError],
     ["obsolete-client", ObsoleteClientError],
@@ -831,6 +832,23 @@ suite("Langs error-kind mapping", function () {
       })
     }
   }
+
+  test("forbidden is a course verdict on tmc and a session verdict on mooc", async function () {
+    // tmc.mooc.fi 403s a course the user may not see, which `updateCourse` persists as a
+    // disabled course; courses.mooc.fi 403s an underscoped token, which says nothing
+    // about the course and must never be persisted as one.
+    const langsTmc = newLangs()
+    stubSpawn(langsTmc, () => Ok(errorOutput("forbidden")))
+    const tmcResult = await langsTmc.getTmcOrganizations()
+    expect(tmcResult.val).toBeInstanceOf(ForbiddenError)
+    expect(tmcResult.val).not.toBeInstanceOf(InsufficientScopeError)
+
+    const langsMooc = newLangs()
+    stubSpawn(langsMooc, () => Ok(errorOutput("forbidden")))
+    const moocResult = await langsMooc.getEnrolledMoocCourseInstances()
+    expect(moocResult.val).toBeInstanceOf(InsufficientScopeError)
+    expect((moocResult.val as Error).message).toContain("Log in again")
+  })
 
   test("not-enrolled names the actual backend the failing command targeted", async function () {
     // Regression guard: the wording used to hardcode "courses.mooc.fi" regardless

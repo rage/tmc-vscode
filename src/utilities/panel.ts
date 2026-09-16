@@ -26,8 +26,7 @@ export function postMessageToWebview(
   message: ExtensionToWebview,
   context = "webview",
 ): Thenable<boolean> {
-  // payloads can embed whole build logs, too large for info level
-  Logger.info(`Posting a message to ${context}: "${message.type}"`)
+  Logger.debug(`Posting a message to ${context}: "${message.type}"`)
   // Logger.debug evaluates its args eagerly, so an ungated stringify would run at every level
   if (DEBUG_MODE || Logger.level === LogLevel.Verbose) {
     Logger.debug("Message contents", JSON.stringify(message, null, 2))

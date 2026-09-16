@@ -101,6 +101,25 @@
         panel = { ...panel, exerciseStatuses }
         break
       }
+      case "setExerciseStatuses": {
+        // Broadcast to every CourseDetails panel; only apply it if it's for our course.
+        if (
+          CourseIdentifier.toString(message.courseId) !== CourseIdentifier.toString(panel.courseId)
+        ) {
+          break
+        }
+        const tmc = { ...panel.exerciseStatuses.tmc }
+        const mooc = { ...panel.exerciseStatuses.mooc }
+        for (const [exerciseId, status] of message.statuses) {
+          match(
+            exerciseId,
+            (t) => (tmc[t.tmcExerciseId] = status),
+            (m) => (mooc[m.moocExerciseId] = status),
+          )
+        }
+        panel = { ...panel, exerciseStatuses: { tmc, mooc } }
+        break
+      }
       case "setUpdateables": {
         // Broadcast to every CourseDetails panel; only apply it if it's for our course.
         if (

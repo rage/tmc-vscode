@@ -41,6 +41,17 @@ export class HaltForReloadError extends BaseError {
   public override readonly name = "Reload Required error"
 }
 
+/**
+ * A courses.mooc.fi session that is valid but does not grant access to programming
+ * exercises. Only a fresh login fixes it; nothing about the course is wrong.
+ *
+ * Distinct from {@link ForbiddenError}, which tmc.mooc.fi returns for a course the user
+ * may not see and which therefore does say something about the course.
+ */
+export class InsufficientScopeError extends BaseError {
+  public override readonly name = "Insufficient Scope Error"
+}
+
 export class InvalidTokenError extends BaseError {
   public override readonly name = "Invalid Token Error"
 }

@@ -116,6 +116,20 @@ suite("buildCourseDetailsView", () => {
     expect(view.exerciseStatuses.map((entry) => entry.status)).toEqual(["expired", "new"])
   })
 
+  test("carries each exercise's own passed flag", () => {
+    const view = buildCourseDetailsView(
+      course([
+        exercise({ id: 1, name: "part01-01_hello", passed: true }),
+        exercise({ id: 2, name: "part01-02_world", passed: false }),
+      ]),
+      [],
+      false,
+      NOW,
+    )
+
+    expect(view.exerciseGroups[0]?.exercises.map((ex) => ex.passed)).toEqual([true, false])
+  })
+
   test("names the next unmet deadline for a group", () => {
     const view = buildCourseDetailsView(
       course([exercise({ name: "part01-01_hello", deadline: "2026-07-01T00:00:00Z" })]),

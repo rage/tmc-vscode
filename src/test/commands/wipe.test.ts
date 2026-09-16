@@ -14,7 +14,6 @@ import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("fs-extra", () => ({ removeSync: vi.fn() }))
-vi.mock("../../extension", () => ({ deactivate: vi.fn() }))
 
 const PROJECTS_DIRECTORY = "/tmp/tmcdata/projects"
 
@@ -36,6 +35,7 @@ function initializedContext(
     /** Answers to the two explicit confirmations, in order. */
     confirmations?: boolean[]
     resetSettings?: Result<void, Error>
+    deleteAllWorkspaceFiles?: Result<void, Error>
   } = {},
 ): ActionContext {
   const confirmations = options.confirmations ?? [true, true]
@@ -54,7 +54,12 @@ function initializedContext(
     userData: Ok({
       wipeDataFromStorage: vi.fn(step("wipeDataFromStorage", () => {})),
     } as unknown as UserData),
-    workspaceManager: Ok({ activeCourse: undefined } as unknown as WorkspaceManager),
+    workspaceManager: Ok({
+      activeCourse: undefined,
+      deleteAllWorkspaceFiles: vi.fn(
+        step("deleteAllWorkspaceFiles", () => options.deleteAllWorkspaceFiles ?? Ok.EMPTY),
+      ),
+    } as unknown as WorkspaceManager),
   }
 }
 
@@ -85,12 +90,24 @@ suite("Wipe command", function () {
       "deauthenticate",
       "deauthenticateMooc",
       "wipeDataFromStorage",
+      "deleteAllWorkspaceFiles",
       "removeSync",
     ])
   })
 
   test("leaves the exercises on disk when an earlier step fails", async function () {
     const context = initializedContext({ resetSettings: Err(new Error("settings are read-only")) })
+
+    await wipe(context, extensionContext)
+
+    expect(fs.removeSync).not.toHaveBeenCalled()
+    expect(context.dialog.errorNotification).toHaveBeenCalledOnce()
+  })
+
+  test("leaves the exercises on disk when the workspace files cannot be removed", async function () {
+    const context = initializedContext({
+      deleteAllWorkspaceFiles: Err(new Error("workspace folder is read-only")),
+    })
 
     await wipe(context, extensionContext)
 

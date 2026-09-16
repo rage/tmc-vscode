@@ -1,4 +1,3 @@
-import * as fs from "fs-extra"
 import * as _ from "lodash"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
@@ -361,12 +360,13 @@ export async function submitMoocExercise(
   if (!courseExercise) {
     return Err(new Error(`ID for exercise ${exercise.exerciseSlug} was not found.`))
   }
-  const exerciseId = userData.val.getMoocExerciseByName(
-    exercise.courseSlug,
-    exercise.exerciseSlug,
-  )?.id
-  if (!exerciseId) {
-    return Err(new Error(`ID for exercise ${exercise.exerciseSlug} was not found.`))
+  const exerciseId = match(
+    LocalCourseExercise.getId(courseExercise),
+    () => undefined,
+    (mooc) => mooc.moocExerciseId,
+  )
+  if (exerciseId === undefined) {
+    return Err(new Error(`${exercise.exerciseSlug} is not a mooc exercise.`))
   }
 
   // Key shared with the paste actions, which must not overlap a submit of the same exercise.
@@ -747,9 +747,7 @@ export async function openWorkspace(
   }
 
   const openCourseWorkspace = async (): Promise<void> => {
-    if (!fs.existsSync(tmcWorkspaceFile)) {
-      workspaceManager.val.createWorkspaceFile(name, backend)
-    }
+    await workspaceManager.val.createWorkspaceFile(name, backend)
     await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri)
   }
 
@@ -767,8 +765,10 @@ export async function openWorkspace(
 }
 
 /**
- * Removes given course from UserData and removes its associated files. However, doesn't remove any
- * exercises that are on disk.
+ * Removes a course from the user's courses, along with the extension's own state
+ * for it: its closed-exercise setting and its `.code-workspace` file.
+ *
+ * The exercises already downloaded are deliberately left on disk.
  *
  * @param id ID of the course to remove
  */
@@ -798,6 +798,19 @@ export async function removeCourse(
     dialog.errorNotification(
       `Failed to remove TMC-langs data for "${courseName}".`,
       unsetResult.val,
+    )
+  }
+
+  // Left behind, it would be reused verbatim if the course is added again, listing
+  // folders for exercises the student may have deleted in the meantime.
+  const workspaceFileResult = await workspaceManager.val.deleteWorkspaceFile(
+    courseName,
+    course.kind,
+  )
+  if (workspaceFileResult.err) {
+    dialog.errorNotification(
+      `Failed to remove the workspace file for "${courseName}".`,
+      workspaceFileResult.val,
     )
   }
 

@@ -2,6 +2,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type Langs from "../../api/langs"
+import { ConnectionError, ForbiddenError } from "../../errors"
 import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import type { WebviewHandlers } from "../../panels/TmcPanel"
 import { randomPanelId, registerWebviewHandlers, TmcPanel } from "../../panels/TmcPanel"
@@ -632,5 +633,202 @@ suite("TmcPanel webview document", () => {
     expect(roots?.map(String)).toEqual([
       String(vscode.Uri.joinPath(vscode.Uri.file("/ext"), "webview-ui/public/build")),
     ])
+  })
+})
+
+function courseWith(exerciseCount: number) {
+  return makeTmcKind({
+    id: 42,
+    name: "python-course",
+    title: "Python Course",
+    description: "",
+    organization: "mooc",
+    exercises: Array.from({ length: exerciseCount }, (_, index) => ({
+      id: index + 1,
+      availablePoints: 1,
+      awardedPoints: 0,
+      name: `part01-${String(index).padStart(3, "0")}_exercise`,
+      deadline: null,
+      passed: false,
+      softDeadline: null,
+    })),
+    availablePoints: exerciseCount,
+    awardedPoints: 0,
+    perhapsExamMode: false,
+    newExercises: [],
+    notifyAfter: 0,
+    disabled: false,
+    materialUrl: null,
+  })
+}
+
+suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
+  const COURSE_ID = CourseIdentifier.from(42)
+  // Large enough that one message per exercise would be obvious in the count.
+  const EXERCISE_COUNT = 150
+
+  async function openCourseDetails(exerciseCount: number): Promise<{
+    posted: { type: string }[]
+  }> {
+    const course = courseWith(exerciseCount)
+    const actionContext = {
+      ...createMockActionContext(),
+      langs: Ok({
+        getCourseDetails: vi.fn().mockResolvedValue(Ok({})),
+      } as unknown as Langs),
+      userData: Ok({ getCourse: () => Ok(course) }),
+      workspaceManager: Ok({ getExercises: () => [] }),
+    } as unknown as ReturnType<typeof createMockActionContext>
+
+    const { panel, listener } = await mountSidePanel(actionContext)
+    await listener({
+      type: "requestCourseDetailsData",
+      sourcePanel: {
+        id: 5,
+        type: "CourseDetails",
+        courseId: COURSE_ID,
+        exerciseStatuses: { tmc: {}, mooc: {} },
+      },
+    })
+    // The connectivity probe resolves on a later tick; let its continuation run.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+
+    return {
+      posted: vi.mocked(panel.webview.postMessage).mock.calls.map(([m]) => m as { type: string }),
+    }
+  }
+
+  test("costs the same number of messages however many exercises the course has", async () => {
+    const small = await openCourseDetails(1)
+    const large = await openCourseDetails(EXERCISE_COUNT)
+
+    expect(large.posted).toHaveLength(small.posted.length)
+    expect(large.posted.filter((m) => m.type === "exerciseStatusChange")).toHaveLength(0)
+  })
+
+  test("reports every exercise's status in one message", async () => {
+    const { posted } = await openCourseDetails(EXERCISE_COUNT)
+
+    const statuses = posted.filter(
+      (m): m is { type: string; courseId: unknown; statuses: unknown[] } =>
+        m.type === "setExerciseStatuses",
+    )
+    expect(statuses).toHaveLength(1)
+    expect(statuses[0]?.courseId).toEqual(COURSE_ID)
+    expect(statuses[0]?.statuses).toHaveLength(EXERCISE_COUNT)
+  })
+})
+
+suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
+  const COURSE_ID = CourseIdentifier.from(42)
+
+  const sourcePanel = {
+    id: 5,
+    type: "CourseDetails" as const,
+    courseId: COURSE_ID,
+    exerciseStatuses: { tmc: {}, mooc: {} },
+  }
+
+  function contextProbing(
+    getCourseDetails: ReturnType<typeof vi.fn>,
+  ): ReturnType<typeof createMockActionContext> {
+    return {
+      ...createMockActionContext(),
+      langs: Ok({ getCourseDetails } as unknown as Langs),
+      userData: Ok({ getCourse: () => Ok(courseWith(2)) }),
+      workspaceManager: Ok({ getExercises: () => [] }),
+    } as unknown as ReturnType<typeof createMockActionContext>
+  }
+
+  test("renders the course without waiting for the backend", async () => {
+    // Never resolves, standing in for a slow or hanging CLI invocation.
+    const actionContext = contextProbing(vi.fn().mockReturnValue(new Promise(() => {})))
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "requestCourseDetailsData", sourcePanel })
+
+    const posted = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([m]) => m as { type: string })
+    expect(posted.map((m) => m.type)).toEqual([
+      "setCourseData",
+      "setUpdateables",
+      "setCourseDisabledStatus",
+      "setExerciseStatuses",
+      "setCourseGroups",
+    ])
+    expect(posted.at(-1)).toMatchObject({ offlineMode: false })
+  })
+
+  test("corrects the view with one message when the backend is unreachable", async () => {
+    const actionContext = contextProbing(
+      vi.fn().mockResolvedValue(Err(new ConnectionError("down"))),
+    )
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "requestCourseDetailsData", sourcePanel })
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+
+    const posted = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([m]) => m as { type: string })
+    const groups = posted.filter((m) => m.type === "setCourseGroups")
+    expect(groups).toHaveLength(2)
+    expect(groups[1]).toMatchObject({ offlineMode: true })
+  })
+
+  test("resends the course-details reply after the webview reloads", async () => {
+    // A reload loses everything the panel was told; only what the host buffered
+    // comes back, and a reply the host did not buffer is gone for good.
+    const actionContext = contextProbing(vi.fn().mockResolvedValue(Ok({})))
+    TmcPanel.sidePanel?.dispose()
+    TmcPanel.sidePanel = undefined
+    const { panel, getMessageListener } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const courseDetails = {
+      id: randomPanelId(),
+      type: "CourseDetails" as const,
+      courseId: COURSE_ID,
+      exerciseStatuses: { tmc: {}, mooc: {} },
+    }
+    await TmcPanel.renderSide(
+      vscode.Uri.file("/ext"),
+      createMockContext(),
+      actionContext,
+      courseDetails,
+    )
+    const listener = getMessageListener()
+    await listener({ type: "requestCourseDetailsData", sourcePanel: courseDetails })
+    vi.mocked(panel.webview.postMessage).mockClear()
+
+    await listener({ type: "ready" })
+
+    const types = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([m]) => (m as { type: string }).type)
+    expect(types).toContain("setPanel")
+    expect(types).toContain("setCourseData")
+    expect(types).toContain("setCourseGroups")
+  })
+
+  test("leaves the deadlines standing when the backend answers with a failure", async () => {
+    // Only an unreachable backend makes the stored deadlines untrustworthy; a reachable
+    // one refusing the request says nothing about them.
+    const actionContext = contextProbing(vi.fn().mockResolvedValue(Err(new ForbiddenError("no"))))
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "requestCourseDetailsData", sourcePanel })
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+
+    const posted = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([m]) => m as { type: string })
+    expect(posted.filter((m) => m.type === "setCourseGroups")).toHaveLength(1)
   })
 })

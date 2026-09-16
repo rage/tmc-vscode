@@ -4,7 +4,6 @@ import { CorruptStoredDataError } from "../../errors"
 import Storage from "../../storage"
 import { v3 } from "../../storage/data"
 import { Logger, LogLevel } from "../../utilities"
-import * as extensionSettings from "../fixtures/extensionSettings"
 import * as sessionState from "../fixtures/sessionState"
 import * as userData from "../fixtures/userData"
 import { createMockContext } from "../mocks/vscode"
@@ -21,7 +20,6 @@ suite("Storage reads", function () {
 
   test("reports nothing stored as nothing stored", function () {
     expect(storage.getUserData()).toBeUndefined()
-    expect(storage.getExtensionSettings()).toBeUndefined()
     expect(storage.getSessionState()).toBeUndefined()
   })
 
@@ -33,11 +31,9 @@ suite("Storage reads", function () {
 
   test("reads back what was written", async function () {
     await storage.updateUserData(userData.v3_0_0)
-    await storage.updateExtensionSettings(extensionSettings.v2_0_0)
     await storage.updateSessionState(sessionState.v2_0_0)
 
     expect(storage.getUserData()).toEqual(userData.v3_0_0)
-    expect(storage.getExtensionSettings()).toEqual(extensionSettings.v2_0_0)
     expect(storage.getSessionState()).toEqual(sessionState.v2_0_0)
   })
 
@@ -55,11 +51,9 @@ suite("Storage reads", function () {
     expect(() => storage.getUserData()).toThrow(CorruptStoredDataError)
   })
 
-  test("rejects unreadable settings and session state", async function () {
-    await context.globalState.update(v3.EXTENSION_SETTINGS_KEY, { logLevel: "chatty" })
+  test("rejects unreadable session state", async function () {
     await context.globalState.update(v3.SESSION_STATE_KEY, { extensionVersion: 3 })
 
-    expect(() => storage.getExtensionSettings()).toThrow(CorruptStoredDataError)
     expect(() => storage.getSessionState()).toThrow(CorruptStoredDataError)
   })
 

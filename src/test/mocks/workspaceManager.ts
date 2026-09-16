@@ -1,6 +1,7 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
+import type * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import type WorkspaceManager from "../../api/workspaceManager"
@@ -44,7 +45,10 @@ export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManager
         ? values.closeExercises
         : NOT_MOCKED_ERROR,
     ),
-    getExerciseByPath: vi.fn(() => values.getExerciseByPath),
+    getExerciseByPath: vi.fn((uri: vscode.Uri) =>
+      values.getExerciseByPath?.uri.fsPath === uri.fsPath ? values.getExerciseByPath : undefined,
+    ),
+    getExerciseContaining: vi.fn(() => values.getExerciseByPath),
     getExercisesByCourseSlug: vi.fn((backend: string, courseSlug: string) =>
       backend === "tmc" && courseSlug === "test-python-course"
         ? values.getExercisesByCoursePythonCourse

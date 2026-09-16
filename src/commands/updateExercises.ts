@@ -5,8 +5,21 @@ import { postUpdateables } from "../panels/updateablesRegistry"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 
-export async function updateExercises(actionContext: ActionContext, silent: string): Promise<void> {
+/**
+ * Downloads pending exercise updates, or offers to.
+ *
+ * `"silent"` is for runs the user did not ask for — activation, the background poll,
+ * the refresh after a submit. It suppresses the "up to date" toast and the failure
+ * notification but deliberately not the "Found updates" prompt, which together with
+ * its "Remind me later" postponement is the only thing that reaches a user who has
+ * turned automatic updates off.
+ */
+export async function updateExercises(
+  actionContext: ActionContext,
+  mode?: "silent" | "loud",
+): Promise<void> {
   const { dialog, settings, userData } = actionContext
+  const silent = mode === "silent"
   Logger.info("Checking for exercise updates")
   if (userData.err) {
     Logger.error("Extension was not initialized properly")
@@ -16,7 +29,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
   const updateablesResult = await actions.checkForExerciseUpdates(actionContext)
   if (updateablesResult.err) {
     Logger.warn("Failed to check for exercise updates.", updateablesResult.val)
-    if (silent !== "silent") {
+    if (!silent) {
       dialog.errorNotification("Failed to check for exercise updates.")
     }
     return
@@ -29,7 +42,7 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
   })
 
   if (exercisesToUpdate.length === 0) {
-    if (silent !== "silent") {
+    if (!silent) {
       dialog.notification("All exercises are up to date.")
     }
     return

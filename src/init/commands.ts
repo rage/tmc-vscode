@@ -36,181 +36,178 @@ export function registerCommands(
     updateCourse: actions.updateCourse,
   })
 
-  // Commands not shown to user in Command Palette / TMC Action menu
-  context.subscriptions.push(
-    vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
-    vscode.commands.registerCommand("tmcTreeView.refreshCourses", async () => {
-      await dialog.progressNotification("Fetching course updates...", async (progress) => {
-        await actions.refreshEverything(actionContext, {
-          silent: false,
-          onProgress: (done, total) => {
-            progress.report({ percent: total === 0 ? 1 : done / total })
-          },
-        })
-      })
-    }),
-
-    // Commands shown to user in Command Palette / TMC Action menu
-    vscode.commands.registerCommand("tmc.addNewCourse", async () =>
-      commands.addNewCourse(actionContext),
-    ),
-
-    vscode.commands.registerCommand("tmc.changeTmcDataPath", async () =>
-      commands.changeTmcDataPath(actionContext),
-    ),
-
-    vscode.commands.registerCommand("tmc.cleanExercise", async (resource: vscode.Uri | undefined) =>
-      commands.cleanExercise(actionContext, resource),
-    ),
-
-    vscode.commands.registerCommand("tmc.closeExercise", async (resource: vscode.Uri | undefined) =>
-      commands.closeExercise(actionContext, resource),
-    ),
-
-    vscode.commands.registerCommand("tmc.courseDetails", async (courseId?: CourseIdentifier) => {
-      if (userData.err) {
-        Logger.error("The extension was not initialized properly")
-        return
-      }
-
-      const courses = userData.val.getCourses()
-      if (courses.length === 0) {
-        return
-      }
-      courseId =
-        courseId ??
-        (await dialog.selectItem(
-          { title: "Course Details", placeHolder: "Which course page do you want to open?" },
-          ...courses.map<[string, CourseIdentifier, string]>((c) => [
-            LocalCourseData.getCourseName(c),
-            LocalCourseData.getCourseId(c),
-            backendName(c.kind),
-          ]),
-        ))
-      if (courseId) {
-        TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-          id: randomPanelId(),
-          type: "CourseDetails",
-          courseId,
-          exerciseStatuses: { tmc: {}, mooc: {} },
-        })
-      }
-    }),
-
-    vscode.commands.registerCommand("tmc.downloadNewExercises", async () =>
-      commands.downloadNewExercises(actionContext),
-    ),
-
-    vscode.commands.registerCommand(
-      "tmc.downloadOldSubmission",
-      async (resource: vscode.Uri | undefined) =>
-        commands.downloadOldSubmission(actionContext, resource),
-    ),
-
-    vscode.commands.registerCommand("tmc.logout", async () => {
-      if (await dialog.confirmation("Are you sure you want to log out?")) {
-        // The action layer reports failures itself; only announce success here.
-        const deauth = await actions.logout(actionContext)
-        if (deauth.ok) {
-          dialog.notification("Logged out from TestMyCode.")
+  // VS Code drops whatever a command handler rejects with, so without this a
+  // failing command leaves the user with no result and no message.
+  function register<Args extends unknown[]>(id: string, run: (...args: Args) => unknown): void {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(id, async (...args: Args) => {
+        try {
+          return await run(...args)
+        } catch (e) {
+          void dialog.errorNotification(
+            `Failed to run ${id}.`,
+            e instanceof Error ? e : new Error(String(e)),
+          )
+          return undefined
         }
-      }
-    }),
+      }),
+    )
+  }
 
-    vscode.commands.registerCommand("tmc.myCourses", async () => {
-      TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-        id: randomPanelId(),
-        type: "MyCourses",
-        courseDeadlines: {},
+  // Commands not shown to user in Command Palette / TMC Action menu
+  register("tmcView.activateEntry", ui.createUiActionHandler())
+
+  register("tmcTreeView.refreshCourses", async () => {
+    await dialog.progressNotification("Fetching course updates...", async (progress) => {
+      await actions.refreshEverything(actionContext, {
+        silent: false,
+        onProgress: (done, total) => {
+          progress.report({ percent: total === 0 ? 1 : done / total })
+        },
       })
-    }),
+    })
+  })
 
-    vscode.commands.registerCommand("tmc.settings", async () => {
-      vscode.commands.executeCommand("workbench.action.openSettings", "TestMyCode")
-    }),
+  // Commands shown to user in Command Palette / TMC Action menu
+  register("tmc.addNewCourse", async () => commands.addNewCourse(actionContext))
 
-    vscode.commands.registerCommand("tmc.openTMCExercisesFolder", async () => {
-      if (!(resources.ok && resources.val.projectsDirectory)) {
-        Logger.error("The extension was not initialized properly")
-        return
-      }
+  register("tmc.changeTmcDataPath", async () => commands.changeTmcDataPath(actionContext))
 
-      vscode.commands.executeCommand(
-        "revealFileInOS",
-        vscode.Uri.file(resources.val.projectsDirectory),
-      )
-    }),
-
-    vscode.commands.registerCommand("tmc.pasteExercise", async (resource: vscode.Uri | undefined) =>
-      commands.pasteExercise(actionContext, resource),
-    ),
-
-    vscode.commands.registerCommand("tmc.resetExercise", async (resource: vscode.Uri | undefined) =>
-      commands.resetExercise(actionContext, resource),
-    ),
-
-    vscode.commands.registerCommand("tmc.selectAction", async () => {
-      vscode.commands.executeCommand(
-        "workbench.action.quickOpen",
-        ">TestMyCode: ",
-        "test-my-code:WorkspaceActive",
-      )
-    }),
-
-    vscode.commands.registerCommand("tmc.showWelcome", async () => {
-      TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-        id: randomPanelId(),
-        type: "Welcome",
-      })
-    }),
-
-    // The extension's only login: the courses.mooc.fi device flow.
-    vscode.commands.registerCommand("tmc.showMoocLogin", async () => {
-      TmcPanel.renderSide(context.extensionUri, context, actionContext, {
-        id: randomPanelId(),
-        type: "MoocLogin",
-      })
-    }),
-
-    vscode.commands.registerCommand(
-      "tmc.submitExercise",
-      async (resource: vscode.Uri | undefined) => {
-        commands.submitExercise(context, actionContext, resource)
-      },
-    ),
-
-    vscode.commands.registerCommand("tmc.switchWorkspace", async () =>
-      commands.switchWorkspace(actionContext),
-    ),
-
-    vscode.commands.registerCommand(
-      "tmc.testExercise",
-      async (resource: vscode.Uri | undefined) => {
-        commands.testExercise(context, actionContext, resource)
-      },
-    ),
-
-    vscode.commands.registerCommand("tmc.updateExercises", async (silent: string) =>
-      commands.updateExercises(actionContext, silent),
-    ),
-
-    vscode.commands.registerCommand("tmc.logs", async () => {
-      Logger.show()
-    }),
-
-    vscode.commands.registerCommand("tmc.debug", async () => {
-      vscode.commands.executeCommand("workbench.output.action.clearOutput")
-      Logger.show()
-      vscode.commands.executeCommand("workbench.action.openActiveLogOutputFile")
-    }),
-
-    vscode.commands.registerCommand("tmc.wipe", async () => commands.wipe(actionContext, context)),
-
-    vscode.commands.registerCommand("tmc.viewInitializationErrorHelp", async () => {
-      TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-        id: randomPanelId(),
-        type: "InitializationErrorHelp",
-      })
-    }),
+  register("tmc.cleanExercise", async (resource: vscode.Uri | undefined) =>
+    commands.cleanExercise(actionContext, resource),
   )
+
+  register("tmc.closeExercise", async (resource: vscode.Uri | undefined) =>
+    commands.closeExercise(actionContext, resource),
+  )
+
+  register("tmc.courseDetails", async (courseId?: CourseIdentifier) => {
+    if (userData.err) {
+      Logger.error("The extension was not initialized properly")
+      return
+    }
+
+    const courses = userData.val.getCourses()
+    if (courses.length === 0) {
+      return
+    }
+    courseId =
+      courseId ??
+      (await dialog.selectItem(
+        { title: "Course Details", placeHolder: "Which course page do you want to open?" },
+        ...courses.map<[string, CourseIdentifier, string]>((c) => [
+          LocalCourseData.getCourseName(c),
+          LocalCourseData.getCourseId(c),
+          backendName(c.kind),
+        ]),
+      ))
+    if (courseId) {
+      await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+        id: randomPanelId(),
+        type: "CourseDetails",
+        courseId,
+        exerciseStatuses: { tmc: {}, mooc: {} },
+      })
+    }
+  })
+
+  register("tmc.downloadNewExercises", async () => commands.downloadNewExercises(actionContext))
+
+  register("tmc.downloadOldSubmission", async (resource: vscode.Uri | undefined) =>
+    commands.downloadOldSubmission(actionContext, resource),
+  )
+
+  register("tmc.logout", async () => {
+    if (await dialog.confirmation("Are you sure you want to log out?")) {
+      // The action layer reports failures itself; only announce success here.
+      const deauth = await actions.logout(actionContext)
+      if (deauth.ok) {
+        dialog.notification("Logged out from TestMyCode.")
+      }
+    }
+  })
+
+  register("tmc.myCourses", async () => {
+    await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+      id: randomPanelId(),
+      type: "MyCourses",
+      courseDeadlines: {},
+    })
+  })
+
+  register("tmc.settings", async () => {
+    await vscode.commands.executeCommand("workbench.action.openSettings", "TestMyCode")
+  })
+
+  register("tmc.openTMCExercisesFolder", async () => {
+    if (!(resources.ok && resources.val.projectsDirectory)) {
+      Logger.error("The extension was not initialized properly")
+      return
+    }
+
+    await vscode.commands.executeCommand(
+      "revealFileInOS",
+      vscode.Uri.file(resources.val.projectsDirectory),
+    )
+  })
+
+  register("tmc.pasteExercise", async (resource: vscode.Uri | undefined) =>
+    commands.pasteExercise(actionContext, resource),
+  )
+
+  register("tmc.resetExercise", async (resource: vscode.Uri | undefined) =>
+    commands.resetExercise(actionContext, resource),
+  )
+
+  register("tmc.selectAction", async () => {
+    await vscode.commands.executeCommand("workbench.action.quickOpen", ">TestMyCode: ")
+  })
+
+  register("tmc.showWelcome", async () => {
+    await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+      id: randomPanelId(),
+      type: "Welcome",
+    })
+  })
+
+  // The extension's only login: the courses.mooc.fi device flow.
+  register("tmc.showMoocLogin", async () => {
+    await TmcPanel.renderSide(context.extensionUri, context, actionContext, {
+      id: randomPanelId(),
+      type: "MoocLogin",
+    })
+  })
+
+  register("tmc.submitExercise", async (resource: vscode.Uri | undefined) =>
+    commands.submitExercise(context, actionContext, resource),
+  )
+
+  register("tmc.switchWorkspace", async () => commands.switchWorkspace(actionContext))
+
+  register("tmc.testExercise", async (resource: vscode.Uri | undefined) =>
+    commands.testExercise(context, actionContext, resource),
+  )
+
+  register("tmc.updateExercises", async (mode?: "silent" | "loud") =>
+    commands.updateExercises(actionContext, mode),
+  )
+
+  register("tmc.logs", async () => {
+    Logger.show()
+  })
+
+  register("tmc.debug", async () => {
+    await vscode.commands.executeCommand("workbench.output.action.clearOutput")
+    Logger.show()
+    await vscode.commands.executeCommand("workbench.action.openActiveLogOutputFile")
+  })
+
+  register("tmc.wipe", async () => commands.wipe(actionContext, context))
+
+  register("tmc.viewInitializationErrorHelp", async () => {
+    await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+      id: randomPanelId(),
+      type: "InitializationErrorHelp",
+    })
+  })
 }

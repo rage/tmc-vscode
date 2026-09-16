@@ -20,6 +20,7 @@ import {
   ConnectionError,
   EmptyLangsResponseError,
   ForbiddenError,
+  InsufficientScopeError,
   InvalidTokenError,
   LangsResponseSchemaError,
   NotEnrolledError,
@@ -1774,6 +1775,18 @@ export default class Langs {
       case "connection-error":
         return Err(new ConnectionError(message, details))
       case "forbidden":
+        // courses.mooc.fi 403s a token whose scopes don't cover programming exercises;
+        // tmc.mooc.fi 403s a course the user may not see. Only the latter is about the
+        // course, so only it may be read as one being unavailable.
+        if (auth.backend === "mooc") {
+          return Err(
+            new InsufficientScopeError(
+              `${message}\nYour courses.mooc.fi session no longer grants access to` +
+                ` programming exercises. Log in again to continue.`,
+              details,
+            ),
+          )
+        }
         return Err(new ForbiddenError(message, details))
       case "not-enrolled": {
         // Not hardcoded to courses.mooc.fi: this error kind can come from either backend.

@@ -25,18 +25,18 @@ export default defineConfig({
   ],
 
   /*
-   * Without this, `playwright test` run directly (sandbox/local) leaves
-   * nothing listening on 4001 and every spec fails with ECONNREFUSED; CI
-   * worked because it started the backend out-of-band.
+   * Nothing else starts the mock backend, in CI or locally, so without this
+   * every spec fails with ECONNREFUSED.
    *
-   * `reuseExistingServer` keeps that CI flow intact by reusing an
-   * already-listening backend instead of erroring on the busy port. The
-   * generous timeout covers cold tsx transpilation in a sandbox.
+   * A listener already on 4001 in CI would be serving some other run's build, so
+   * refusing to reuse it turns that into a failure instead of a false pass;
+   * locally, reusing the backend a developer already started is the point. The
+   * generous timeout covers cold tsx transpilation.
    */
   webServer: {
     command: "pnpm run backend:start",
     port: 4001,
-    reuseExistingServer: true,
+    reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
     stdout: "pipe",
     stderr: "pipe",

@@ -58,18 +58,10 @@ export const HIDE_META_FILES = {
   "**/.tmc_test_results.hmac.sha256": true,
 }
 
-export const SHOW_META_FILES = {
-  "**/__pycache__": false,
-  "**/.available_points.json": false,
-  "**/.tmc_test_results.json": false,
-  "**/.tmcproject.yml": false,
-  "**/tmc": false,
-  "**/.settings": false,
-  "**/.tmcproject.json": false,
-  "**/.tmc.json": false,
-  "**/.tmc.lock": false,
-  "**/.tmc_test_results.hmac.sha256": false,
-}
+/** Derived, so a glob added to {@link HIDE_META_FILES} cannot be missing here. */
+export const SHOW_META_FILES: Record<string, boolean> = Object.fromEntries(
+  Object.keys(HIDE_META_FILES).map((glob) => [glob, false]),
+)
 
 export const WATCHER_EXCLUDE = {
   "**/.vscode/**": true,

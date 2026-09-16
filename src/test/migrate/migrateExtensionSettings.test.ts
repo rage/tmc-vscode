@@ -10,6 +10,7 @@ import { createMockMemento, createMockWorkspaceConfiguration } from "../mocks/vs
 
 const EXTENSION_SETTINGS_KEY_V0 = "extensionSettings"
 const EXTENSION_SETTINGS_KEY_V1 = "extension-settings-v1"
+const EXTENSION_SETTINGS_KEY_V3 = "extension-settings-v3"
 const UNSTABLE_EXTENSION_VERSION_KEY = "extensionVersion"
 const SESSION_STATE_KEY_V1 = "session-state-v1"
 
@@ -90,47 +91,42 @@ suite("Extension settings migration", function () {
   })
 
   suite("between versions", function () {
-    test("should succeed without any data", async function () {
-      const migrated = (await migrateExtensionSettings(memento, settingsMock)).data
-      expect(migrated).toBeUndefined()
-    })
+    function expectWritten(section: string, value: unknown): void {
+      expect(settingsMock.update).toHaveBeenCalledWith(section, value, expect.anything())
+    }
 
     test("should succeed with version 0.5.0 data", async function () {
       await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_5_0(root))
-      const migrated = (await migrateExtensionSettings(memento, settingsMock)).data
-      expect(migrated?.logLevel).toBe("verbose")
-      expect(migrated?.hideMetaFiles).toBe(true)
+      await migrateExtensionSettings(memento, settingsMock)
+      expectWritten("testMyCode.logLevel", "verbose")
+      expectWritten("testMyCode.hideMetaFiles", true)
     })
 
     test("should succeed with version 0.9.0 data", async function () {
       await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_9_0(root))
-      const migrated = (await migrateExtensionSettings(memento, settingsMock)).data
-      expect(migrated?.insiderVersion).toBe(true)
+      await migrateExtensionSettings(memento, settingsMock)
+      expectWritten("testMyCode.insiderVersion", true)
     })
 
     test("should succeed with version 1.0.0 data", async function () {
       await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v1_0_0(root))
-      const migrated = (await migrateExtensionSettings(memento, settingsMock)).data
-      expect(migrated?.downloadOldSubmission).toBe(false)
+      await migrateExtensionSettings(memento, settingsMock)
+      expectWritten("testMyCode.downloadOldSubmission", false)
     })
 
     test("should succeed with version 1.2.0 data", async function () {
       await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v1_2_0(root))
-      const migrated = (await migrateExtensionSettings(memento, settingsMock)).data
-      expect(migrated?.updateExercisesAutomatically).toBe(false)
-    })
-
-    test("should succeed with version 2.0.0 data", async function () {
-      await memento.update(EXTENSION_SETTINGS_KEY_V1, extensionSettings.v2_0_0)
-      const migrated = (await migrateExtensionSettings(memento, settingsMock)).data
-      expect(migrated).toEqual(extensionSettings.v2_0_0)
+      await migrateExtensionSettings(memento, settingsMock)
+      expectWritten("testMyCode.updateExercisesAutomatically", false)
     })
 
     test("should succeed with backwards compatible future data", async function () {
-      const data = { ...extensionSettings.v2_0_0, superman: "Clark Kent" }
-      await memento.update(EXTENSION_SETTINGS_KEY_V1, data)
-      const migrated = (await migrateExtensionSettings(memento, settingsMock)).data
-      expect(migrated).toEqual(data)
+      await memento.update(EXTENSION_SETTINGS_KEY_V1, {
+        ...extensionSettings.v2_0_0,
+        superman: "Clark Kent",
+      })
+      await migrateExtensionSettings(memento, settingsMock)
+      expectWritten("testMyCode.logLevel", extensionSettings.v2_0_0.logLevel)
     })
   })
 
@@ -142,12 +138,32 @@ suite("Extension settings migration", function () {
 
     test("should set valid placeholders with minimal data", async function () {
       await memento.update(EXTENSION_SETTINGS_KEY_V0, { dataPath: root })
-      const migrated = (await migrateExtensionSettings(memento, settingsMock)).data
-      expect(migrated?.downloadOldSubmission).toBe(true)
-      expect(migrated?.hideMetaFiles).toBe(true)
-      expect(migrated?.insiderVersion).toBe(false)
-      expect(migrated?.logLevel).toBe(LogLevel.Errors)
-      expect(migrated?.updateExercisesAutomatically).toBe(true)
+      await migrateExtensionSettings(memento, settingsMock)
+      expect(settingsMock.update).toHaveBeenCalledWith(
+        "testMyCode.downloadOldSubmission",
+        true,
+        expect.anything(),
+      )
+      expect(settingsMock.update).toHaveBeenCalledWith(
+        "testMyCode.hideMetaFiles",
+        true,
+        expect.anything(),
+      )
+      expect(settingsMock.update).toHaveBeenCalledWith(
+        "testMyCode.insiderVersion",
+        false,
+        expect.anything(),
+      )
+      expect(settingsMock.update).toHaveBeenCalledWith(
+        "testMyCode.logLevel",
+        LogLevel.Errors,
+        expect.anything(),
+      )
+      expect(settingsMock.update).toHaveBeenCalledWith(
+        "testMyCode.updateExercisesAutomatically",
+        true,
+        expect.anything(),
+      )
     })
 
     test("should remap logger values properly", async function () {
@@ -160,8 +176,13 @@ suite("Extension settings migration", function () {
       for (const [oldLevel, expectedLevel] of expectedRemappings) {
         const oldSettings: v0.ExtensionSettings = { dataPath: root, logLevel: oldLevel }
         await memento.update(EXTENSION_SETTINGS_KEY_V0, oldSettings)
-        const migrated = (await migrateExtensionSettings(memento, settingsMock)).data
-        expect(migrated?.logLevel).toBe(expectedLevel)
+        settingsMock = createMockWorkspaceConfiguration()
+        await migrateExtensionSettings(memento, settingsMock)
+        expect(settingsMock.update).toHaveBeenCalledWith(
+          "testMyCode.logLevel",
+          expectedLevel,
+          expect.anything(),
+        )
       }
     })
   })
@@ -170,6 +191,24 @@ suite("Extension settings migration", function () {
     test("should fail with garbage version 1 data", async function () {
       await memento.update(EXTENSION_SETTINGS_KEY_V1, { superman: "Clark Kent" })
       await expect(migrateExtensionSettings(memento, settingsMock)).rejects.toThrow(/mismatch/)
+    })
+  })
+
+  suite("key retirement", function () {
+    test("persists nothing of its own", async function () {
+      await memento.update(EXTENSION_SETTINGS_KEY_V1, extensionSettings.v2_0_0)
+      const migrated = await migrateExtensionSettings(memento, settingsMock)
+
+      expect(migrated.data).toBeUndefined()
+      expect(migrated.destinationKey).toBeUndefined()
+    })
+
+    test("retires every key extension settings were ever stored under", async function () {
+      const migrated = await migrateExtensionSettings(memento, settingsMock)
+
+      expect(new Set(migrated.supersededKeys)).toEqual(
+        new Set([EXTENSION_SETTINGS_KEY_V0, EXTENSION_SETTINGS_KEY_V1, EXTENSION_SETTINGS_KEY_V3]),
+      )
     })
   })
 })

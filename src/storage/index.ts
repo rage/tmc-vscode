@@ -37,14 +37,6 @@ export default class Storage {
     return this._readValidated(storage.USER_DATA_KEY, storage.userDataSchema)
   }
 
-  /**
-   * @throws {CorruptStoredDataError} if the stored value does not match the current schema.
-   * @deprecated Extension Settings will be stored in VSCode, remove on major 3.0 release.
-   */
-  public getExtensionSettings(): storage.ExtensionSettings | undefined {
-    return this._readValidated(storage.EXTENSION_SETTINGS_KEY, storage.extensionSettingsSchema)
-  }
-
   /** @throws {CorruptStoredDataError} if the stored value does not match the current schema. */
   public getSessionState(): storage.SessionState | undefined {
     return this._readValidated(storage.SESSION_STATE_KEY, storage.sessionStateSchema)
@@ -52,12 +44,6 @@ export default class Storage {
 
   public async updateUserData(userData: storage.UserData | undefined): Promise<void> {
     await this._context.globalState.update(storage.USER_DATA_KEY, userData)
-  }
-
-  public async updateExtensionSettings(
-    settings: storage.ExtensionSettings | undefined,
-  ): Promise<void> {
-    await this._context.globalState.update(storage.EXTENSION_SETTINGS_KEY, settings)
   }
 
   public async updateSessionState(sessionState: storage.SessionState | undefined): Promise<void> {
@@ -87,7 +73,6 @@ export default class Storage {
   }
 
   public async wipeStorage(): Promise<void> {
-    await this.updateExtensionSettings(undefined)
     await this.updateSessionState(undefined)
     await this.updateUserData(undefined)
   }
@@ -122,9 +107,6 @@ export default class Storage {
 
       // A migration yields `undefined` when nothing was stored under any of its
       // keys; that means "nothing to migrate", not "delete what is there".
-      if (migratedExtensionSettings.data) {
-        await this.updateExtensionSettings(migratedExtensionSettings.data)
-      }
       if (migratedSessionState.data) {
         await this.updateSessionState(migratedSessionState.data)
       }

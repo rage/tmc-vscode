@@ -134,6 +134,51 @@ suite("CourseDetails panel", () => {
     expect(await screen.findByText("Opened")).toBeInTheDocument()
   })
 
+  test("applies the whole course's statuses from one setExerciseStatuses", async () => {
+    const panel = tmcPanel()
+    const { container } = render(CourseDetails, { props: { panel } })
+    dispatch({
+      type: "setCourseGroups",
+      target: { type: "CourseDetails", id: panel.id },
+      offlineMode: false,
+      exerciseGroups: [tmcExerciseGroup()],
+    })
+    await findExerciseGroup(container)
+
+    dispatch({
+      type: "setExerciseStatuses",
+      target: { type: "CourseDetails" },
+      courseId: makeTmcKind({ courseId: 42 }),
+      statuses: [[makeTmcKind({ tmcExerciseId: 101 }), "closed"]],
+    })
+
+    expect(await screen.findByText("Closed")).toBeInTheDocument()
+  })
+
+  test("ignores a setExerciseStatuses meant for another course", async () => {
+    const panel = tmcPanel()
+    const { container } = render(CourseDetails, { props: { panel } })
+    dispatch({
+      type: "setCourseGroups",
+      target: { type: "CourseDetails", id: panel.id },
+      offlineMode: false,
+      exerciseGroups: [tmcExerciseGroup()],
+    })
+    await findExerciseGroup(container)
+
+    dispatch({
+      type: "setExerciseStatuses",
+      target: { type: "CourseDetails" },
+      courseId: makeTmcKind({ courseId: 999 }),
+      statuses: [[makeTmcKind({ tmcExerciseId: 101 }), "closed"]],
+    })
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20)
+    })
+    expect(screen.getByText("Loading…")).toBeInTheDocument()
+  })
+
   test("shows the offline-mode banner from setCourseGroups", async () => {
     const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })

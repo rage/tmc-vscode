@@ -29,7 +29,7 @@ suite("Exercise command runner", function () {
         get activeExercise() {
           return exercise
         },
-        getExerciseByPath: () => exercise,
+        getExerciseContaining: () => exercise,
       } as unknown as WorkspaceManager),
     }
   }
@@ -55,7 +55,7 @@ suite("Exercise command runner", function () {
         get activeExercise() {
           return undefined
         },
-        getExerciseByPath: () => undefined,
+        getExerciseContaining: () => undefined,
       } as unknown as WorkspaceManager),
     }
 

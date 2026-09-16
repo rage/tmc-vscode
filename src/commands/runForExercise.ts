@@ -45,7 +45,7 @@ export async function runForExercise<T>(
   }
 
   const exercise = resource
-    ? workspaceManager.val.getExerciseByPath(resource)
+    ? workspaceManager.val.getExerciseContaining(resource)
     : workspaceManager.val.activeExercise
   if (!exercise) {
     const error = new Error("The active editor is not part of a course exercise.")

@@ -69,7 +69,7 @@ and every setting and course this extension has stored will be cleared.",
     if (settingsReset.err) {
       return settingsReset
     }
-    progress.report({ message, percent: 0.25 })
+    progress.report({ message, percent: 0.2 })
 
     // `deauthenticate` fires the logout events with `expected: true`, so the
     // session-expiry warning stays quiet and the auth context updates itself.
@@ -81,10 +81,16 @@ and every setting and course this extension has stored will be cleared.",
     if (moocLogout.err) {
       return moocLogout
     }
-    progress.report({ message, percent: 0.5 })
+    progress.report({ message, percent: 0.4 })
 
     await userData.val.wipeDataFromStorage()
-    progress.report({ message, percent: 0.75 })
+    progress.report({ message, percent: 0.6 })
+
+    const workspaceFilesRemoved = await workspaceManager.val.deleteAllWorkspaceFiles()
+    if (workspaceFilesRemoved.err) {
+      return workspaceFilesRemoved
+    }
+    progress.report({ message, percent: 0.8 })
 
     try {
       fs.removeSync(projectsDirectory)
