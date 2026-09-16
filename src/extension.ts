@@ -83,10 +83,12 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   // Must precede the first CLI invocation below: the user's level decides what the output
   // channel keeps of a `logged-in` response, which carries a live OAuth token.
   Logger.configure(settings.getLogLevel())
-  Logger.info(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`)
-  Logger.info(`${vscode.env.appName} version: ${vscode.version}`)
-  Logger.info(`${EXTENSION_ID} version: ${extensionVersion}`)
-  Logger.info(`Currently open workspace: ${vscode.workspace.name}`)
+  // Kept at every level: it carries no credential, and it is what makes a pasted log
+  // answerable in a bug report.
+  Logger.banner(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`)
+  Logger.banner(`${vscode.env.appName} version: ${vscode.version}`)
+  Logger.banner(`${EXTENSION_ID} version: ${extensionVersion}`)
+  Logger.banner(`Currently open workspace: ${vscode.workspace.name}`)
 
   // Gates the developer-only palette entries (e.g. "Show Debug View").
   await vscode.commands.executeCommand("setContext", "test-my-code:DebugMode", DEBUG_MODE)

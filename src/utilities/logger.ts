@@ -84,6 +84,18 @@ export class Logger {
     this._log(ConsoleLogLevel.Error, ...params)
   }
 
+  /**
+   * Writes a line to the output channel whatever log level is configured, for the
+   * activation banner users are asked to paste into bug reports.
+   *
+   * Pass only facts that carry no credential: this deliberately skips the level check
+   * that keeps CLI responses, and the OAuth tokens in them, out of the channel. The
+   * `none` level still silences it, because it leaves no channel to write to.
+   */
+  public static banner(...params: unknown[]): void {
+    this._write(ConsoleLogLevel.Info, true, params)
+  }
+
   public static errorWithDialog(dialog: Dialog, ...params: unknown[]): void {
     const loggable = this._toLoggableParams(params)
     dialog.errorNotification(loggable)
@@ -126,6 +138,11 @@ export class Logger {
    * @param params The things that should be logged.
    */
   private static _log(level: ConsoleLogLevel, ...params: unknown[]): void {
+    this._write(level, this._channelKeeps(level), params)
+  }
+
+  /** @param toOutput Whether the line reaches the channel, already weighed against the level. */
+  private static _write(level: ConsoleLogLevel, toOutput: boolean, params: unknown[]): void {
     if (DEBUG_MODE) {
       // in debug mode, we log to console with the appropriate level
       const loggableParams = this._toLoggableParams(params)
@@ -150,24 +167,21 @@ export class Logger {
     } else if (this.testmode) {
       console.log(this._timestamp, channel, this._toLoggableParams(params))
     }
-    if (this.output !== undefined) {
-      switch (this._level) {
-        case LogLevel.None: {
-          // do not log anything
-          break
-        }
-        case LogLevel.Errors: {
-          // only log warnings and errors
-          if (level === "WARN" || level === "ERROR") {
-            this._logToOutput(this.output, level, ...params)
-          }
-          break
-        }
-        case LogLevel.Verbose: {
-          // log everything
-          this._logToOutput(this.output, level, ...params)
-          break
-        }
+    if (toOutput && this.output !== undefined) {
+      this._logToOutput(this.output, level, ...params)
+    }
+  }
+
+  private static _channelKeeps(level: ConsoleLogLevel): boolean {
+    switch (this._level) {
+      case LogLevel.None: {
+        return false
+      }
+      case LogLevel.Errors: {
+        return level === ConsoleLogLevel.Warn || level === ConsoleLogLevel.Error
+      }
+      case LogLevel.Verbose: {
+        return true
       }
     }
   }

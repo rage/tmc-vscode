@@ -1,4 +1,6 @@
-import { Logger } from "../../utilities/logger"
+import type { OutputChannel } from "vscode"
+
+import { Logger, LogLevel } from "../../utilities/logger"
 
 const TOKEN = "super-secret-refresh-token"
 
@@ -53,5 +55,57 @@ suite("Logger redaction", function () {
     const circular: Record<string, unknown> = { access_token: TOKEN }
     circular.self = circular
     expect(Logger.toLoggable(circular)).toBe("<error>")
+  })
+})
+
+suite("Logger output channel", function () {
+  let lines: string[]
+
+  function captureChannel(level: LogLevel): void {
+    lines = []
+    Logger.output = {
+      appendLine: (line: string) => lines.push(line),
+      dispose: () => {},
+    } as unknown as OutputChannel
+    Logger.configure(level)
+  }
+
+  afterEach(function () {
+    Logger.configure(LogLevel.None)
+    Logger.output = undefined
+  })
+
+  // The banner is what makes a pasted log answerable: it names the VS Code and
+  // extension versions and the open workspace, and `errors` is the default level.
+  test("the activation banner reaches the channel at the default level", function () {
+    captureChannel(LogLevel.Errors)
+
+    Logger.banner("TestMyCode version: 3.0.0")
+
+    expect(lines.join("\n")).toContain("TestMyCode version: 3.0.0")
+  })
+
+  test("ordinary info is still withheld at the default level", function () {
+    captureChannel(LogLevel.Errors)
+
+    Logger.info("logged in as someone")
+
+    expect(lines).toHaveLength(0)
+  })
+
+  test("the banner is written once, not twice, when everything is logged", function () {
+    captureChannel(LogLevel.Verbose)
+
+    Logger.banner("TestMyCode version: 3.0.0")
+
+    expect(lines).toHaveLength(1)
+  })
+
+  test("logging turned off silences the banner too", function () {
+    captureChannel(LogLevel.None)
+
+    Logger.banner("TestMyCode version: 3.0.0")
+
+    expect(lines).toHaveLength(0)
   })
 })
