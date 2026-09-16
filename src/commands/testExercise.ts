@@ -2,14 +2,15 @@ import type * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
-import { runForExercise } from "./runForExercise"
+import { failure, runForExercise } from "./runForExercise"
 
 export async function testExercise(
   context: vscode.ExtensionContext,
   actionContext: ActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<void> {
-  await runForExercise(actionContext, resource, "Testing the exercise", (exercise) =>
-    actions.testExercise(context, actionContext, exercise),
-  )
+  await runForExercise(actionContext, resource, "Testing the exercise", async (exercise) => {
+    const result = await actions.testExercise(context, actionContext, exercise)
+    return result.err ? failure("Exercise test run failed.", result.val) : result
+  })
 }

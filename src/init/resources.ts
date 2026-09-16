@@ -1,15 +1,9 @@
-import * as path from "path"
-
 import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
-import {
-  workspaceFileName,
-  WORKSPACE_ROOT_FILE_TEXT,
-  WORKSPACE_SETTINGS,
-} from "../config/constants"
+import { ensureCourseWorkspaceFile, ensureWorkspaceRootFile } from "../api/workspaceManager"
 import Resources from "../config/resources"
 import { CorruptStoredDataError, FileSystemError } from "../errors"
 import type Storage from "../storage"
@@ -36,8 +30,8 @@ export async function resourceInitialization(
     const mediaPath = extensionContext.asAbsolutePath("media")
 
     if (tmcDataPath) {
-      if (!fs.existsSync(tmcDataPath)) {
-        fs.mkdirSync(tmcDataPath, { recursive: true })
+      const created = await fs.mkdir(tmcDataPath, { recursive: true })
+      if (created !== undefined) {
         Logger.info(`Created tmc data directory at ${tmcDataPath}`)
       }
     } else {
@@ -53,33 +47,22 @@ export async function resourceInitialization(
       tmcDataPath,
     )
 
-    // Verify that all course .code-workspaces are in-place on startup.
-    fs.ensureDirSync(workspaceFileFolder)
     const userData = storage.getUserData()
-    userData?.courses.forEach((course) => {
-      const tmcWorkspaceFilePath = path.join(
-        workspaceFileFolder,
-        workspaceFileName(course.name, "tmc"),
-      )
-      if (!fs.existsSync(tmcWorkspaceFilePath)) {
-        fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS))
-        Logger.info(`Created tmc workspace file at ${tmcWorkspaceFilePath}`)
-      }
-    })
-    userData?.mooc_courses.forEach((course) => {
-      const moocWorkspaceFilePath = path.join(
-        workspaceFileFolder,
-        workspaceFileName(course.name, "mooc"),
-      )
-      if (!fs.existsSync(moocWorkspaceFilePath)) {
-        fs.writeFileSync(moocWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS))
-        Logger.info(`Created mooc workspace file at ${moocWorkspaceFilePath}`)
-      }
-    })
+    const storedCourses = [
+      ["tmc", userData?.courses ?? []],
+      ["mooc", userData?.mooc_courses ?? []],
+    ] as const
 
-    // Verify that .tmc folder and its contents exists
-    fs.ensureDirSync(resources.workspaceRootFolder.fsPath)
-    fs.writeFileSync(resources.workspaceRootFile.fsPath, WORKSPACE_ROOT_FILE_TEXT)
+    // A course whose workspace file went missing is unopenable, so every stored
+    // course gets one back on startup.
+    await Promise.all([
+      ensureWorkspaceRootFile(workspaceFileFolder),
+      ...storedCourses.flatMap(([backend, courses]) =>
+        courses.map((course) =>
+          ensureCourseWorkspaceFile(resources.getWorkspaceFilePath(course.name, backend)),
+        ),
+      ),
+    ])
 
     return new Ok(resources)
   } catch (e) {

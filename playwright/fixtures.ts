@@ -73,10 +73,13 @@ function launchArgs(userDataDir: string): string[] {
     "--disable-backgrounding-occluded-windows",
     "--disable-background-timer-throttling",
     "--disable-updates",
+    // The workspace-trust prompt interrupts at unpredictable points once a
+    // course workspace is opened, and dismissing it from the specs made every
+    // page object carry a trust workaround.
+    "--disable-workspace-trust",
     "--extensionDevelopmentPath=" + rootPath,
     "--new-window",
     "--no-sandbox",
-    "--profile-temp",
     "--skip-release-notes",
     "--skip-welcome",
     "--user-data-dir=" + userDataDir,

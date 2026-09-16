@@ -2,14 +2,7 @@ import { expect } from "@playwright/test"
 import type { Page } from "@playwright/test"
 
 export class ExplorerPage {
-  public constructor(public readonly page: Page) {
-    // continuously check for the trust dialogues which
-    // appears at unpredictable times
-    page.addLocatorHandler(
-      page.locator(".dialog-message-text").getByText("Do you trust"),
-      async () => await this.page.getByRole("button", { name: "Yes" }).click(),
-    )
-  }
+  public constructor(public readonly page: Page) {}
 
   public async openFile(filename: string): Promise<void> {
     // first, let's make sure that the target isn't a directory that's already open,

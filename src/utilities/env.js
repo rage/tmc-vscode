@@ -1,25 +1,20 @@
 //@ts-check
 
-const uniq = require("lodash").uniq
-
-/**@type {import("./env").Platform[]} */
+/**@type {import("./env").SupportedPlatform[]} */
 const allPlatforms = [
   "linux32",
   "linux64",
   "linuxarm",
   "linuxarm64",
-  "macos32",
   "macos64",
   "macosarm64",
   "windows32",
   "windows64",
-  "other",
 ]
 
 /**@type {import("./env").getAllLangsCLIs} */
 function getAllLangsCLIs(version) {
-  const allCLIs = allPlatforms.map((x) => getLangsCLIForPlatform(x, version))
-  return uniq(allCLIs)
+  return allPlatforms.map((x) => getLangsCLIForPlatform(x, version))
 }
 
 /**@type {import("./env").getPlatform} */
@@ -33,17 +28,22 @@ function getPlatform() {
       return "linuxarm64"
     } else if (arch === "arm") {
       return "linuxarm"
+    } else if (arch === "ia32") {
+      return "linux32"
     }
-    return "linux32"
+    return "unsupported"
   } else if (platform === "win32") {
+    // Windows on ARM runs the i686 build through x86 emulation.
     return arch === "x64" ? "windows64" : "windows32"
   } else if (platform === "darwin") {
     if (arch === "arm64") {
       return "macosarm64"
+    } else if (arch === "x64") {
+      return "macos64"
     }
-    return arch === "x64" ? "macos64" : "macos32"
+    return "unsupported"
   }
-  return "other"
+  return "unsupported"
 }
 
 /**@type {import("./env").getLangsCLIForPlatform} */
@@ -66,8 +66,7 @@ function getLangsCLIForPlatform(platform, version) {
     case "windows64":
       return `tmc-langs-cli-x86_64-pc-windows-msvc-${version}.exe`
     default:
-      // Currently set linux CLI as default, this is experimental, in future return error.
-      return `tmc-langs-cli-x86_64-unknown-linux-gnu-${version}`
+      throw new Error(`No tmc-langs-cli build for ${process.platform}/${process.arch}`)
   }
 }
 

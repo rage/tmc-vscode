@@ -15,10 +15,9 @@ import path from "path"
 // response validation treats it as free-form. See
 // tmc-langs-rust/crates/tmc-mooc-client/src/exercise.rs.
 
-// The mock always listens on 4001 (see backend/index.ts). stub_download_url is
-// an arbitrary absolute URL the CLI dereferences directly; it points back at
-// the mock's spec-exempt archive route. Overridable for out-of-process reuse.
-export const MOOC_MOCK_BASE_URL = process.env.MOOC_MOCK_BASE_URL ?? "http://localhost:4001"
+// Where a mock serves when nothing names an address: the port backend/index.ts
+// listens on.
+export const DEFAULT_MOOC_MOCK_BASE_URL = process.env.MOOC_MOCK_BASE_URL ?? "http://localhost:4001"
 
 // Content-Type the CLI sends for a submission archive, and what the tmc exercise
 // service writes for the same archive made in its IFrame. The host echoes the part's
@@ -121,6 +120,7 @@ export const extraCourse: Course = {
 // ---- exercises ----
 
 const makeExercise = (params: {
+  baseUrl: string
   exerciseId: string
   slideId: string
   courseId: string
@@ -132,91 +132,42 @@ const makeExercise = (params: {
   studentFiles: string[]
   checksum: string
   gradingOutcome?: GradingOutcome
-}): MoocExerciseFixture => ({
-  archiveSlug: params.archiveSlug,
-  sourceDir: params.sourceDir,
-  gradingOutcome: params.gradingOutcome ?? "passing",
-  modelSolution: {
-    type: "editor",
-    solution_download_url: `${MOOC_MOCK_BASE_URL}/mooc-archives/${params.archiveSlug}.tar.zst`,
-  },
-  slide: {
-    slide_id: params.slideId,
-    exercise_id: params.exerciseId,
-    course_id: params.courseId,
-    exercise_name: params.name,
-    exercise_order_number: params.order,
-    deadline: null,
-    tasks: [
-      {
-        task_id: params.taskId,
-        order_number: 0,
-        assignment: [],
-        exercise_service_slug: "tmc",
-        model_solution_spec: null,
-        public_spec: {
-          type: "editor",
-          archive_name: `${params.archiveSlug}.tar.zst`,
-          stub_download_url: `${MOOC_MOCK_BASE_URL}/mooc-archives/${params.archiveSlug}.tar.zst`,
-          student_file_paths: params.studentFiles,
-          checksum: params.checksum,
+}): MoocExerciseFixture => {
+  const archiveUrl = `${params.baseUrl}/mooc-archives/${params.archiveSlug}.tar.zst`
+  return {
+    archiveSlug: params.archiveSlug,
+    sourceDir: params.sourceDir,
+    gradingOutcome: params.gradingOutcome ?? "passing",
+    modelSolution: {
+      type: "editor",
+      solution_download_url: archiveUrl,
+    },
+    slide: {
+      slide_id: params.slideId,
+      exercise_id: params.exerciseId,
+      course_id: params.courseId,
+      exercise_name: params.name,
+      exercise_order_number: params.order,
+      deadline: null,
+      tasks: [
+        {
+          task_id: params.taskId,
+          order_number: 0,
+          assignment: [],
+          exercise_service_slug: "tmc",
+          model_solution_spec: null,
+          public_spec: {
+            type: "editor",
+            archive_name: `${params.archiveSlug}.tar.zst`,
+            stub_download_url: archiveUrl,
+            student_file_paths: params.studentFiles,
+            checksum: params.checksum,
+          },
         },
-      },
-    ],
-  },
-})
-
-// Exercise A lives in pythonCourse, exercise B in extraCourse -- this makes the
-// bulk download-or-update path resolve exercise -> course by scanning ALL
-// enrolled courses' slides (there is no exercise->course API endpoint), which
-// is exactly the semantic the CLI relies on.
-// exercise_name is a slug-like, hyphenated string ("part<NN>-<rest>") so the
-// extension's course-details view groups it the same way it groups tmc
-// exercises (it splits on the first hyphen into group + exercise name). It also
-// matches the packed source directory name.
-export const passingExercise = makeExercise({
-  exerciseId: "a1a1a1a1-0000-4000-8000-000000000001",
-  slideId: "a1a1a1a1-0000-4000-8000-000000000101",
-  courseId: pythonCourse.id,
-  taskId: "a1a1a1a1-0000-4000-8000-000000000201",
-  name: "part01-01_passing_exercise",
-  order: 0,
-  archiveSlug: "passing-exercise",
-  sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
-  studentFiles: ["src/passing_exercise.py"],
-  checksum: "mooc-checksum-passing",
-})
-
-export const failingExercise = makeExercise({
-  exerciseId: "b2b2b2b2-0000-4000-8000-000000000001",
-  slideId: "b2b2b2b2-0000-4000-8000-000000000101",
-  courseId: extraCourse.id,
-  taskId: "b2b2b2b2-0000-4000-8000-000000000201",
-  name: "part01-02_failing_exercise",
-  order: 0,
-  archiveSlug: "failing-exercise",
-  sourceDir: path.join(RESOURCES, "part01-02_failing_exercise"),
-  studentFiles: ["src/failing_exercise.py"],
-  checksum: "mooc-checksum-failing",
-  gradingOutcome: "failing",
-})
-
-// A second exercise in extraCourse whose grading ends in PendingManual (awaiting
-// a human), the terminal-for-student state. Reuses the failing exercise's source
-// tree for its archive -- only its grading outcome matters here.
-export const pendingManualExercise = makeExercise({
-  exerciseId: "c3c3c3c3-0000-4000-8000-000000000001",
-  slideId: "c3c3c3c3-0000-4000-8000-000000000101",
-  courseId: extraCourse.id,
-  taskId: "c3c3c3c3-0000-4000-8000-000000000201",
-  name: "part01-03_pending_manual_exercise",
-  order: 1,
-  archiveSlug: "pending-manual-exercise",
-  sourceDir: path.join(RESOURCES, "part01-02_failing_exercise"),
-  studentFiles: ["src/failing_exercise.py"],
-  checksum: "mooc-checksum-pending-manual",
-  gradingOutcome: "pendingManual",
-})
+      ],
+    },
+  }
+}
 
 // An exercise id present in no course -- an entirely UNKNOWN id. The backend's
 // get_by_id yields RecordNotFound, so this drives the 404 path (not the 422
@@ -235,23 +186,112 @@ export interface CourseWithExercises {
   exercises: MoocExerciseFixture[]
 }
 
-export const courses: CourseWithExercises[] = [
-  { course: pythonCourse, exercises: [passingExercise] },
-  { course: extraCourse, exercises: [failingExercise, pendingManualExercise] },
-]
+export interface MoocFixtures {
+  courses: CourseWithExercises[]
+  /** Flat lookup by exercise id across all courses. */
+  exerciseById: Map<string, MoocExerciseFixture>
+  /** Archive lookup by the slug used in the stub_download_url path. */
+  exerciseByArchiveSlug: Map<string, MoocExerciseFixture>
+  passingExercise: MoocExerciseFixture
+  failingExercise: MoocExerciseFixture
+  pendingManualExercise: MoocExerciseFixture
+}
 
-/** Flat lookup by exercise id across all courses. */
-export const exerciseById = new Map<string, MoocExerciseFixture>()
-for (const { exercises } of courses) {
-  for (const exercise of exercises) {
-    exerciseById.set(exercise.slide.exercise_id, exercise)
+/**
+ * The fixture courses and exercises, with every absolute URL they carry pointing
+ * back at `baseUrl` -- the address the mock serving them is reachable at. A
+ * client that follows a stub or model-solution URL verbatim therefore reaches
+ * the mock that handed it out rather than whatever else holds the default port.
+ *
+ * Ids, names and checksums do not vary with `baseUrl`, so a test may read them
+ * off the {@link DEFAULT_MOOC_MOCK_BASE_URL} set exported below.
+ */
+export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
+  // Exercise A lives in pythonCourse, exercise B in extraCourse -- this makes the
+  // bulk download-or-update path resolve exercise -> course by scanning ALL
+  // enrolled courses' slides (there is no exercise->course API endpoint), which
+  // is exactly the semantic the CLI relies on.
+  // exercise_name is a slug-like, hyphenated string ("part<NN>-<rest>") so the
+  // extension's course-details view groups it the same way it groups tmc
+  // exercises (it splits on the first hyphen into group + exercise name). It also
+  // matches the packed source directory name.
+  const passingExercise = makeExercise({
+    baseUrl,
+    exerciseId: "a1a1a1a1-0000-4000-8000-000000000001",
+    slideId: "a1a1a1a1-0000-4000-8000-000000000101",
+    courseId: pythonCourse.id,
+    taskId: "a1a1a1a1-0000-4000-8000-000000000201",
+    name: "part01-01_passing_exercise",
+    order: 0,
+    archiveSlug: "passing-exercise",
+    sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
+    studentFiles: ["src/passing_exercise.py"],
+    checksum: "mooc-checksum-passing",
+  })
+
+  const failingExercise = makeExercise({
+    baseUrl,
+    exerciseId: "b2b2b2b2-0000-4000-8000-000000000001",
+    slideId: "b2b2b2b2-0000-4000-8000-000000000101",
+    courseId: extraCourse.id,
+    taskId: "b2b2b2b2-0000-4000-8000-000000000201",
+    name: "part01-02_failing_exercise",
+    order: 0,
+    archiveSlug: "failing-exercise",
+    sourceDir: path.join(RESOURCES, "part01-02_failing_exercise"),
+    studentFiles: ["src/failing_exercise.py"],
+    checksum: "mooc-checksum-failing",
+    gradingOutcome: "failing",
+  })
+
+  // A second exercise in extraCourse whose grading ends in PendingManual (awaiting
+  // a human), the terminal-for-student state. Reuses the failing exercise's source
+  // tree for its archive -- only its grading outcome matters here.
+  const pendingManualExercise = makeExercise({
+    baseUrl,
+    exerciseId: "c3c3c3c3-0000-4000-8000-000000000001",
+    slideId: "c3c3c3c3-0000-4000-8000-000000000101",
+    courseId: extraCourse.id,
+    taskId: "c3c3c3c3-0000-4000-8000-000000000201",
+    name: "part01-03_pending_manual_exercise",
+    order: 1,
+    archiveSlug: "pending-manual-exercise",
+    sourceDir: path.join(RESOURCES, "part01-02_failing_exercise"),
+    studentFiles: ["src/failing_exercise.py"],
+    checksum: "mooc-checksum-pending-manual",
+    gradingOutcome: "pendingManual",
+  })
+
+  const courses: CourseWithExercises[] = [
+    { course: pythonCourse, exercises: [passingExercise] },
+    { course: extraCourse, exercises: [failingExercise, pendingManualExercise] },
+  ]
+
+  const exerciseById = new Map<string, MoocExerciseFixture>()
+  const exerciseByArchiveSlug = new Map<string, MoocExerciseFixture>()
+  for (const { exercises } of courses) {
+    for (const exercise of exercises) {
+      exerciseById.set(exercise.slide.exercise_id, exercise)
+      exerciseByArchiveSlug.set(exercise.archiveSlug, exercise)
+    }
+  }
+
+  return {
+    courses,
+    exerciseById,
+    exerciseByArchiveSlug,
+    passingExercise,
+    failingExercise,
+    pendingManualExercise,
   }
 }
 
-/** Archive lookup by the slug used in the stub_download_url path. */
-export const exerciseByArchiveSlug = new Map<string, MoocExerciseFixture>()
-for (const { exercises } of courses) {
-  for (const exercise of exercises) {
-    exerciseByArchiveSlug.set(exercise.archiveSlug, exercise)
-  }
-}
+// The default-address fixture set, for readers that only need ids and names.
+export const {
+  courses,
+  exerciseById,
+  exerciseByArchiveSlug,
+  passingExercise,
+  failingExercise,
+  pendingManualExercise,
+} = createMoocFixtures(DEFAULT_MOOC_MOCK_BASE_URL)

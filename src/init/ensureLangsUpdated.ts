@@ -7,7 +7,11 @@ import { Err, Ok } from "ts-results"
 
 import type Dialog from "../api/dialog"
 import { FileSystemError, InitializationError } from "../errors"
-import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger } from "../utilities"
+import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger, sleep } from "../utilities"
+
+/** Extra attempts after the first, for the one download too large to redo cheaply. */
+const DOWNLOAD_RETRIES = 2
+const RETRY_BACKOFF_MS = 500
 
 /**
  * Parses the hash out of a `.sha256` file's contents and normalizes it to
@@ -24,6 +28,10 @@ export function parseSha256Sum(contents: string): string {
  * Hashes the CLI at `cliPath` and compares it against the checksum stored in the
  * `.sha256` file at `shaPath`. Used both for the initial check and for
  * re-verification after a redownload.
+ *
+ * The checksum is served by the same origin as the binary, so a match proves the
+ * download is intact, not that it is the build we published: this detects
+ * corruption and truncation, never substitution.
  *
  * The CLI is hashed as a stream so a large binary is never read fully into
  * memory and the hashing doesn't block the event loop in one burst during
@@ -65,8 +73,7 @@ function hashFile(filePath: string): Promise<string> {
     const stream = fs.createReadStream(filePath)
     stream.on("error", reject)
     stream.on("data", (chunk) => hash.update(chunk))
-    // windows returns the calculated hash in uppercase for some reason...
-    stream.on("end", () => resolve(Buffer.from(hash.digestSync()).toString("hex").toLowerCase()))
+    stream.on("end", () => resolve(Buffer.from(hash.digestSync()).toString("hex")))
   })
 }
 
@@ -101,7 +108,13 @@ async function ensureLangsUpdated(
   const { downloadUrl, version } = config
 
   Logger.info("Platform " + process.platform + " Arch " + process.arch)
-  const executable = getLangsCLIForPlatform(getPlatform(), version)
+  const platform = getPlatform()
+  if (platform === "unsupported") {
+    return Err(
+      new InitializationError(`No tmc-langs-cli build for ${process.platform}/${process.arch}`),
+    )
+  }
+  const executable = getLangsCLIForPlatform(platform, version)
   Logger.info("TMC-Langs version: " + executable)
 
   // download CLI if necessary
@@ -151,8 +164,8 @@ async function ensureLangsUpdated(
       )
     }
 
-    // Re-verify after the redownload so we never hand back an unverified
-    // binary; a persistent mismatch is fatal.
+    // Re-verify after the redownload so we never hand back a binary that does
+    // not match its checksum; a persistent mismatch is fatal.
     const recheck = await verifyCli(cliPath, shaPath)
     if (!recheck.match) {
       return Err(
@@ -206,12 +219,30 @@ async function downloadLangs(
   const message = `Downloading TMC-langs ${version}...`
   const langsDownloadResult = await dialog.progressNotification(
     message,
-    async (progress) =>
-      await downloadFile(cliUrl, tempPath, undefined, (percent) => {
-        // downloadFile gives both percent between 0-100 and discrete increment.
-        // Divide here at least until deciding if "increments" are no longer necessary.
-        progress.report({ message, percent: percent / 100 })
-      }),
+    async (progress, token) => {
+      const cancellation = new AbortController()
+      const subscription = token.onCancellationRequested(() => cancellation.abort())
+      const attempt = async (): Promise<Result<void, Error>> =>
+        await downloadFile(cliUrl, tempPath, {
+          signal: cancellation.signal,
+          onProgress: (percent) => progress.report({ message, percent: percent / 100 }),
+        })
+      try {
+        let result = await attempt()
+        for (let retry = 1; retry <= DOWNLOAD_RETRIES; retry++) {
+          if (result.ok || token.isCancellationRequested) {
+            break
+          }
+          Logger.warn("Download of TMC-langs failed, retrying in a moment:", result.val)
+          await sleep(RETRY_BACKOFF_MS * retry)
+          result = await attempt()
+        }
+        return result
+      } finally {
+        subscription.dispose()
+      }
+    },
+    { cancellable: true },
   )
   if (langsDownloadResult.err) {
     Logger.error("An error occurred while downloading TMC-langs:", langsDownloadResult.val)
@@ -235,14 +266,15 @@ async function downloadLangs(
   }
   await fs.rename(tempPath, cliPath)
 
-  // download shasum if necessary
-  if (!fs.existsSync(shaPath)) {
-    const result = await downloadFile(shaUrl, shaPath)
-    if (result.err) {
-      Logger.error("An error occurred while downloading the checksum for TMC-langs:", result.val)
-      return Err(result.val)
-    }
+  // Same temp-then-rename as the binary: a checksum file that exists is complete.
+  const shaTempPath = shaPath + ".tmp"
+  const shaResult = await downloadFile(shaUrl, shaTempPath)
+  if (shaResult.err) {
+    Logger.error("An error occurred while downloading the checksum for TMC-langs:", shaResult.val)
+    return Err(shaResult.val)
   }
+  await fs.rename(shaTempPath, shaPath)
+
   return Ok.EMPTY
 }
 

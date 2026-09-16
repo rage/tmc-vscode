@@ -133,6 +133,21 @@ suite("Langs class arg building", function () {
     expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "courses"])
   })
 
+  test("setSetting passes the value base64-encoded", async function () {
+    const langs = newLangs()
+    const calls = spyOnSpawn(langs)
+    await langs.setSetting("closed-exercises-for:course", ["part01-01", "part01-02"])
+    expect(calls[0]?.args).toEqual([
+      "settings",
+      "--client-name",
+      "test-client",
+      "set",
+      "closed-exercises-for:course",
+      Buffer.from('["part01-01","part01-02"]').toString("base64"),
+      "--base64",
+    ])
+  })
+
   test("getEnrolledMoocCourseInstances de-duplicates courses by id", async function () {
     // The backend can return the same course twice (two live enrollments of one
     // course); since the extension keys courses by course id, the list must be
@@ -722,16 +737,10 @@ suite("Langs cross-backend independence", function () {
         }),
       ),
     )
-    const firstTmc = await langs.submitTmcExerciseAndWaitForResults(
-      ExerciseIdentifier.from(1),
-      "/path/to/ex",
-    )
+    const firstTmc = await langs.submitTmcExerciseAndWaitForResults(1, "/path/to/ex")
     expect(firstTmc.ok).toBe(true)
 
-    const secondTmc = await langs.submitTmcExerciseAndWaitForResults(
-      ExerciseIdentifier.from(1),
-      "/path/to/ex",
-    )
+    const secondTmc = await langs.submitTmcExerciseAndWaitForResults(1, "/path/to/ex")
     expect(secondTmc.val).toBeInstanceOf(BottleneckError)
 
     // Throttle state is per-backend, so a mooc submission right after is unaffected.
@@ -763,10 +772,7 @@ suite("Langs cross-backend independence", function () {
         }),
       ),
     )
-    const tmc = await langs.submitTmcExerciseAndWaitForResults(
-      ExerciseIdentifier.from(1),
-      "/path/to/ex",
-    )
+    const tmc = await langs.submitTmcExerciseAndWaitForResults(1, "/path/to/ex")
     expect(tmc.ok).toBe(true)
   })
 
@@ -871,7 +877,7 @@ suite("Langs error-kind mapping", function () {
     expect(result.err).toBe(true)
   })
 
-  test("invalid-token clears the cache and fires the failing backend's logout event", async function () {
+  test("invalid-token fires the failing backend's logout event and keeps the other's cache", async function () {
     const langs = newLangs()
     const onLogout = vi.fn()
     const onMoocLogout = vi.fn()
@@ -898,9 +904,33 @@ suite("Langs error-kind mapping", function () {
     expect(onMoocLogout).toHaveBeenCalledExactlyOnceWith(false)
     expect(onLogout).not.toHaveBeenCalled()
 
-    // The cache was cleared, so the organizations request must spawn again.
+    // tmc.mooc.fi did not reject anything, so its data is still good.
     await langs.getTmcOrganizations()
-    expect(organizationsCalls).toBe(2)
+    expect(organizationsCalls).toBe(1)
+  })
+
+  test("invalid-token drops the failing backend's own cached data", async function () {
+    const langs = newLangs()
+    let courseCalls = 0
+    stubSpawn(langs, (_i, args) => {
+      if (args.includes("courses")) {
+        return Ok(errorOutput("invalid-token"))
+      }
+      if (args.includes("course-exercises")) {
+        return Ok(dataOutput("mooc-exercise-slides", []))
+      }
+      courseCalls += 1
+      return Ok(dataOutput("mooc-course", { id: "course-uuid" }))
+    })
+
+    await langs.getMoocCourseInstanceData("course-uuid")
+    await langs.getMoocCourseInstanceData("course-uuid")
+    expect(courseCalls).toBe(1)
+
+    expect((await langs.getEnrolledMoocCourseInstances()).err).toBe(true)
+
+    await langs.getMoocCourseInstanceData("course-uuid")
+    expect(courseCalls).toBe(2)
   })
 
   test("a tmc command's invalid-token fires the tmc logout event as unexpected", async function () {
@@ -1062,6 +1092,66 @@ suite("Langs response cache", function () {
     expect(callCount).toBe(4)
   })
 
+  test("getCourseDetails reuses the mooc course getMoocCourseInstanceData already fetched", async function () {
+    const langs = newLangs()
+    let courseCalls = 0
+    stubSpawn(langs, (_i, args) => {
+      if (args.includes("course-exercises")) {
+        return Ok(dataOutput("mooc-exercise-slides", []))
+      }
+      courseCalls += 1
+      return Ok(dataOutput("mooc-course", { id: "course-uuid" }))
+    })
+
+    await langs.getMoocCourseInstanceData("course-uuid")
+    const details = await langs.getCourseDetails(CourseIdentifier.from("course-uuid"))
+
+    // Both legs run `mooc course --course-id`, so the second must not spawn.
+    expect(courseCalls).toBe(1)
+    expect(details.val).toEqual({ id: "course-uuid" })
+  })
+
+  test("a tmc course id and a mooc course id of the same text keep separate entries", async function () {
+    const langs = newLangs()
+    const kindsRequested: string[] = []
+    stubSpawn(langs, (_i, args) => {
+      if (args[0] === "tmc") {
+        kindsRequested.push("tmc")
+        return Ok(dataOutput("course-details", { id: 5, name: "tmc course" }))
+      }
+      kindsRequested.push("mooc")
+      return Ok(dataOutput("mooc-course", { id: "5" }))
+    })
+
+    const tmc = await langs.getCourseDetails(CourseIdentifier.from(5))
+    const mooc = await langs.getCourseDetails(CourseIdentifier.from("5"))
+
+    expect(kindsRequested).toEqual(["tmc", "mooc"])
+    expect(tmc.val).toEqual({ id: 5, name: "tmc course" })
+    expect(mooc.val).toEqual({ id: "5" })
+  })
+
+  test("the cache evicts the least recently used entry once it is full", async function () {
+    const langs = newLangs()
+    let detailCalls = 0
+    stubSpawn(langs, () => {
+      detailCalls += 1
+      return Ok(dataOutput("exercise-details", { id: detailCalls }))
+    })
+
+    // One entry per exercise id; the cap is 128, so 129 ids push the first one out.
+    for (let exerciseId = 0; exerciseId <= 128; exerciseId++) {
+      await langs.getExerciseDetails(exerciseId)
+    }
+    expect(detailCalls).toBe(129)
+
+    // The newest is still cached, the oldest is not.
+    await langs.getExerciseDetails(128)
+    expect(detailCalls).toBe(129)
+    await langs.getExerciseDetails(0)
+    expect(detailCalls).toBe(130)
+  })
+
   test("the organizations remapper populates per-organization cache entries", async function () {
     const langs = newLangs()
     const orgs = [
@@ -1144,78 +1234,6 @@ suite("Langs exercise-update cache invalidation", function () {
     await langs.downloadExercises([ExerciseIdentifier.from("ex-uuid")], false, () => {})
     await langs.checkExerciseUpdates("tmc")
     expect(tmcUpdateCheckCalls).toBe(1)
-  })
-})
-
-// Holds the spawn open so the process counts as in flight, and reports whether the
-// returned interrupt was called.
-function stubPendingSpawn(langs: Langs): {
-  interrupted: () => boolean
-  optedIn: () => boolean | undefined
-  settle: () => void
-} {
-  let interrupted = false
-  let optedIn: boolean | undefined
-  let settle!: () => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
-    optedIn = (commandArgs as { interruptOnDeactivate?: boolean }).interruptOnDeactivate
-    const result = new Promise<Result<OutputData, BaseError>>((resolve) => {
-      settle = () => resolve(Err(new RuntimeError("stopped")))
-    })
-    return Ok({
-      interrupt: () => {
-        interrupted = true
-        settle()
-      },
-      result,
-    })
-  })
-  return { interrupted: () => interrupted, optedIn: () => optedIn, settle: () => settle() }
-}
-
-suite("Langs process interruption on deactivate", function () {
-  test("killAllProcesses interrupts an in-flight submit", async function () {
-    const langs = newLangs()
-    const spawn = stubPendingSpawn(langs)
-
-    const submitting = langs.submitTmcExerciseAndWaitForResults(
-      ExerciseIdentifier.from(101),
-      "/ex",
-      () => {},
-      () => {},
-    )
-    expect(spawn.optedIn()).toBe(true)
-
-    langs.killAllProcesses()
-    expect(spawn.interrupted()).toBe(true)
-    expect((await submitting).err).toBe(true)
-  })
-
-  test("leaves processes that did not opt in alone, so a download can't be cut in half", async function () {
-    const langs = newLangs()
-    const spawn = stubPendingSpawn(langs)
-
-    const fetching = langs.getCourseDetails(CourseIdentifier.from(42))
-    expect(spawn.optedIn()).toBeUndefined()
-
-    langs.killAllProcesses()
-    expect(spawn.interrupted()).toBe(false)
-
-    spawn.settle()
-    expect((await fetching).err).toBe(true)
-  })
-
-  test("stops tracking a process once it settles", async function () {
-    const langs = newLangs()
-    const spawn = stubPendingSpawn(langs)
-
-    const pasting = langs.submitTmcExerciseToPaste(101, "/ex")
-    spawn.settle()
-    await pasting
-
-    langs.killAllProcesses()
-    expect(spawn.interrupted()).toBe(false)
   })
 })
 

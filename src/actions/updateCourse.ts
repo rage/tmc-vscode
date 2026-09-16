@@ -5,7 +5,7 @@ import { ConnectionError, ForbiddenError, InitializationError } from "../errors"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CombinedCourseData, CourseInstance, TmcExerciseSlide } from "../shared/langsSchema"
 import type { CourseIdentifier, Enum, ExerciseIdentifier } from "../shared/shared"
-import { LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
+import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import { Logger } from "../utilities"
 import {
   combineMoocApiExerciseData,
@@ -86,14 +86,13 @@ export async function updateCourse(
         if (disableResult.err) {
           return disableResult
         }
-        postCourseStatusMessage(courseIdent, true, [])
       } else {
         Logger.warn(`ForbiddenError above probably caused by course still being disabled`)
-        postCourseStatusMessage(courseIdent, true, [])
       }
+      postCourseStatusMessage(courseIdent, true, [])
       return Ok(false)
     } else if (updateResult.val instanceof ConnectionError) {
-      Logger.warn("Failed to fetch data from TMC servers, data not updated.")
+      Logger.warn(`Failed to fetch data from ${backendName(courseId.kind)}, data not updated.`)
       return Ok(false)
     }
     return updateResult
@@ -131,7 +130,7 @@ export async function updateCourse(
       const [moocCourse, slides] = mooc
       // The update result and the stored course are looked up from the same
       // `courseId`, so this holds by construction; assert it to narrow the stored
-      // data off its tmc|mooc union before writing mooc-shaped fields below.
+      // data off its tmc|mooc union before the mooc-shaped reads and writes below.
       if (courseData.kind !== "mooc") {
         return Err(
           new Error(`Expected stored course ${moocCourse.id} to be a mooc course but it was tmc`),
@@ -139,11 +138,7 @@ export async function updateCourse(
       }
       // Non-fatal: on a failed fetch, previous local progress is carried over
       // per exercise id so a refresh never wipes known points or passed flags.
-      const progressRes = await match(
-        courseId,
-        async () => Err<Error>(new Error("not a mooc course")),
-        (moocId) => langs.val.getMoocCourseProgress(moocId.instanceId),
-      )
+      const progressRes = await langs.val.getMoocCourseProgress(courseData.data.id)
       if (progressRes.err) {
         Logger.warn("Failed to fetch mooc course progress", progressRes.val)
       }
@@ -203,14 +198,12 @@ export async function updateCourse(
   // refresh local exercises to ensure deleted exercises don't appear open etc.
   await refreshLocalExercises(actionContext)
 
-  const updatedCourse = userData.val.getCourse(courseId)
-  if (updatedCourse.err) {
-    return updatedCourse
-  }
+  // Reading the course back would hand out this same object: `userData` stores the
+  // value given to `updateCourse`, and `updateExercises` mutates it in place.
   postCourseStatusMessage(
-    LocalCourseData.getCourseId(updatedCourse.val),
-    updatedCourse.val.data.disabled,
-    LocalCourseData.getNewExercises(updatedCourse.val),
+    LocalCourseData.getCourseId(courseData),
+    courseData.data.disabled,
+    LocalCourseData.getNewExercises(courseData),
   )
 
   return Ok(true)

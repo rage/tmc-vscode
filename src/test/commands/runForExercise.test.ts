@@ -6,7 +6,7 @@ import type { ActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
-import { runForExercise } from "../../commands/runForExercise"
+import { failure, runForExercise } from "../../commands/runForExercise"
 import { BottleneckError } from "../../errors"
 import { createMockActionContext } from "../mocks/actionContext"
 
@@ -67,20 +67,43 @@ suite("Exercise command runner", function () {
     expect(stubContext.dialog.errorNotification).toHaveBeenCalledOnce()
   })
 
-  test("names the operation when the body fails", async function () {
-    const failure = new Error("boom")
+  test("leads with the sentence the body chose, keeping the cause as the detail", async function () {
+    const cause = new Error("langs exited with 1")
 
-    await runForExercise(actionContext(), uri, "Resetting the exercise", async () => Err(failure))
+    await runForExercise(actionContext(), uri, "Resetting the exercise", async () =>
+      failure("Failed to reset exercise.", cause),
+    )
+
+    expect(stubContext.dialog.errorNotification).toHaveBeenCalledExactlyOnceWith(
+      "Failed to reset exercise.",
+      cause,
+    )
+  })
+
+  test("names the operation when the failure carries no sentence of its own", async function () {
+    const speechless = new Error("")
+
+    await runForExercise(actionContext(), uri, "Resetting the exercise", async () =>
+      Err(speechless),
+    )
 
     expect(stubContext.dialog.errorNotification).toHaveBeenCalledExactlyOnceWith(
       "Resetting the exercise failed.",
-      failure,
+      speechless,
     )
   })
 
   test("keeps a cancellation out of the user's way", async function () {
     await runForExercise(actionContext(), uri, "Submitting the exercise", async () =>
       Err(new BottleneckError("too soon")),
+    )
+
+    expect(stubContext.dialog.errorNotification).not.toHaveBeenCalled()
+  })
+
+  test("keeps a cancellation quiet even when the body gave it a headline", async function () {
+    await runForExercise(actionContext(), uri, "Submitting the exercise", async () =>
+      failure("Exercise submission failed.", new BottleneckError("too soon")),
     )
 
     expect(stubContext.dialog.errorNotification).not.toHaveBeenCalled()

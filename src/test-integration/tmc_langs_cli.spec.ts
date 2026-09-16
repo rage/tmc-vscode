@@ -324,26 +324,15 @@ suite("tmc langs cli spec", function () {
       test("should be able to submit the exercise for evaluation", async function () {
         let url: string | undefined
         const results = await unwrapResult(
-          tmc.submitTmcExerciseAndWaitForResults(
-            ExerciseIdentifier.from(1),
-            exercisePath,
-            undefined,
-            (x) => (url = x),
-          ),
+          tmc.submitTmcExerciseAndWaitForResults(1, exercisePath, undefined, (x) => (url = x)),
         )
         expect(results.status).to.be.equal("ok")
         !url && expect.fail("expected to receive submission url during submission.")
       })
 
       test("should encounter an error if trying to submit the exercise twice too soon", async function () {
-        const firstSubmission = tmc.submitTmcExerciseAndWaitForResults(
-          ExerciseIdentifier.from(1),
-          exercisePath,
-        )
-        const second = tmc.submitTmcExerciseAndWaitForResults(
-          ExerciseIdentifier.from(1),
-          exercisePath,
-        )
+        const firstSubmission = tmc.submitTmcExerciseAndWaitForResults(1, exercisePath)
+        const second = tmc.submitTmcExerciseAndWaitForResults(1, exercisePath)
         const [, secondResult] = await Promise.all([firstSubmission, second])
         expect(secondResult.val).to.be.instanceOf(BottleneckError)
       })
@@ -399,10 +388,7 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should encounter an error when trying to submit it", async function () {
-        const result = await tmc.submitTmcExerciseAndWaitForResults(
-          ExerciseIdentifier.from(1),
-          missingExercisePath,
-        )
+        const result = await tmc.submitTmcExerciseAndWaitForResults(1, missingExercisePath)
         expect(result.val).to.be.instanceOf(RuntimeError)
       })
 
@@ -558,10 +544,7 @@ suite("tmc langs cli spec", function () {
       })
 
       migrationTest("should not be able to submit exercise", async function () {
-        const result = await tmc.submitTmcExerciseAndWaitForResults(
-          ExerciseIdentifier.from(1),
-          exercisePath,
-        )
+        const result = await tmc.submitTmcExerciseAndWaitForResults(1, exercisePath)
         expect(result.val).to.be.instanceOf(RuntimeError)
       })
 

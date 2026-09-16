@@ -15,19 +15,38 @@ import type { SubmissionFeedbackQuestion } from "../shared/langsSchema"
 import { BaseError } from "../shared/shared"
 import { Logger } from "./logger"
 
+/** Budget for a whole download, from request to last byte. */
+const DEFAULT_TOTAL_TIMEOUT_MS = 10 * 60 * 1000
+
+/** Budget between two consecutive chunks. Matches tmc-langs' own HTTP timeout. */
+const DEFAULT_STALL_TIMEOUT_MS = 30 * 1000
+
+export interface DownloadOptions {
+  /** Reports the percentage downloaded (0-100). Silent unless the response declares its length. */
+  onProgress?: (downloadedPct: number) => void
+  /** Aborts the download; the call then resolves to an `Err`. */
+  signal?: AbortSignal
+  /** Defaults to ten minutes. */
+  totalTimeoutMs?: number
+  /** Defaults to thirty seconds. A server that sends headers and then goes silent trips this. */
+  stallTimeoutMs?: number
+}
+
 /**
  * Downloads data from given url to the specified file. If file exists, its content will be
  * overwritten.
  *
+ * Never hangs: the request is bounded by both a total and a per-chunk budget, and by
+ * the caller's own signal. A body that stops short of the `Content-Length` it declared
+ * is an `Err`, so a truncated file is never handed back as a complete one.
+ *
  * @param url Url to data
  * @param filePath Absolute path to the desired output file
- * @param headers Request headers if any
  */
 export async function downloadFile(
   url: string,
   filePath: string,
-  headers?: Record<string, string>,
-  progressCallback?: (downloadedPct: number, increment: number) => void,
+  options?: DownloadOptions,
 ): Promise<Result<void, Error>> {
   try {
     fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true })
@@ -35,58 +54,94 @@ export async function downloadFile(
     return new Err(new BaseError(error, "Failed to create download directory"))
   }
 
-  let response: Response
-  try {
-    response = await fetch(url, { method: "get", ...(headers ? { headers } : {}) })
-  } catch (error) {
-    // Typing change from update
-    return new Err(new ConnectionError(error))
+  const stallTimeoutMs = options?.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS
+  // A `for await` over a silent body never yields again, so the stall watchdog has to
+  // abort the request itself rather than just break out of the loop.
+  const stallController = new AbortController()
+  const signals = [
+    stallController.signal,
+    AbortSignal.timeout(options?.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS),
+  ]
+  if (options?.signal) {
+    signals.push(options.signal)
+  }
+  const signal = AbortSignal.any(signals)
+
+  let stallTimer: NodeJS.Timeout | undefined
+  const restartStallTimer = (): void => {
+    clearTimeout(stallTimer)
+    stallTimer = setTimeout(() => {
+      stallController.abort(new Error(`No data received from ${url} in ${stallTimeoutMs} ms`))
+    }, stallTimeoutMs)
   }
 
-  if (!response.ok) {
-    let cause: string | undefined
+  try {
+    let response: Response
     try {
-      cause = await response.text()
-    } catch (_error) {
-      // ignore error in reading response, not important
+      restartStallTimer()
+      response = await fetch(url, { method: "get", signal })
+    } catch (error) {
+      return new Err(new ConnectionError(signal.aborted ? signal.reason : error))
     }
 
-    return new Err(new Error("Request failed: " + response.statusText, { cause }))
-  }
+    if (!response.ok) {
+      let cause: string | undefined
+      try {
+        cause = await response.text()
+      } catch (_error) {
+        // ignore error in reading response, not important
+      }
 
-  // Created outside the try so the catch can always release the fd.
-  const writeStream = fs.createWriteStream(filePath)
-  try {
-    if (!response.body) {
-      throw new Error("Unexpected null response body")
+      return new Err(new Error("Request failed: " + response.statusText, { cause }))
     }
 
+    // Created outside the try so the catch can always release the fd.
+    const writeStream = fs.createWriteStream(filePath)
     let downloaded = 0
     const sizeString = response.headers.get("content-length")
     const size = sizeString ? Math.trunc(Number(sizeString)) : 0
-    for await (const chunk of response.body) {
-      if (sizeString && progressCallback && size > 0) {
+    try {
+      if (!response.body) {
+        throw new Error("Unexpected null response body")
+      }
+
+      restartStallTimer()
+      for await (const chunk of response.body) {
+        restartStallTimer()
         downloaded += chunk.length
-        progressCallback(Math.round((downloaded / size) * 100), (100 * chunk.length) / size)
+        if (size > 0) {
+          options?.onProgress?.(Math.round((downloaded / size) * 100))
+        }
+        // write() returns false when the internal buffer is full; wait for
+        // "drain" so large downloads don't grow memory unbounded.
+        if (!writeStream.write(chunk)) {
+          await once(writeStream, "drain")
+        }
       }
-      // write() returns false when the internal buffer is full; wait for
-      // "drain" so large downloads don't grow memory unbounded.
-      if (!writeStream.write(chunk)) {
-        await once(writeStream, "drain")
+
+      // Wait until everything is flushed and the fd is closed, so callers
+      // always see a complete file with no handle left open.
+      writeStream.end()
+      await finished(writeStream)
+    } catch (error) {
+      // Destroy on error so we never leak an open handle.
+      writeStream.destroy()
+      if (signal.aborted) {
+        return new Err(new ConnectionError(signal.reason, `Download from ${url} was aborted`))
       }
+      return new Err(new BaseError(error, "Writing to file failed"))
     }
 
-    // Wait until everything is flushed and the fd is closed, so callers
-    // always see a complete file with no handle left open.
-    writeStream.end()
-    await finished(writeStream)
-  } catch (error) {
-    // Destroy on error so we never leak an open handle.
-    writeStream.destroy()
-    return new Err(new BaseError(error, "Writing to file failed"))
-  }
+    if (size > 0 && downloaded !== size) {
+      return new Err(
+        new Error(`Download from ${url} ended after ${downloaded} of ${size} declared bytes`),
+      )
+    }
 
-  return Ok.EMPTY
+    return Ok.EMPTY
+  } finally {
+    clearTimeout(stallTimer)
+  }
 }
 
 /**

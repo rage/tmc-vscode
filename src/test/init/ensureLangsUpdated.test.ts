@@ -5,6 +5,7 @@ import * as path from "path"
 import * as fs from "fs-extra"
 import * as tmp from "tmp"
 
+import type Dialog from "../../api/dialog"
 import { InitializationError } from "../../errors"
 import {
   ensureLangsUpdated,
@@ -25,6 +26,32 @@ interface ServeState {
   // Returns the full `.sha256` file body for the n-th sha request (1-indexed).
   shaFor: (hit: number) => string
   hits: { cli: number; sha: number }
+}
+
+/** A Dialog whose progress notification cancels itself after `afterMs`. */
+function cancellingDialog(afterMs: number): Dialog {
+  return {
+    progressNotification: async (
+      _message: string,
+      task: (progress: unknown, token: unknown) => unknown,
+    ) => {
+      const listeners: (() => void)[] = []
+      const token = {
+        isCancellationRequested: false,
+        onCancellationRequested: (listener: () => void) => {
+          listeners.push(listener)
+          return { dispose: (): void => {} }
+        },
+      }
+      setTimeout(() => {
+        token.isCancellationRequested = true
+        for (const listener of listeners) {
+          listener()
+        }
+      }, afterMs)
+      return await task({ report: (): void => {} }, token)
+    },
+  } as unknown as Dialog
 }
 
 function startLangsServer(state: ServeState): Promise<http.Server> {
@@ -339,6 +366,80 @@ suite("ensureLangsUpdated end-to-end", function () {
     expect(state.hits.sha).toBe(0)
   })
 
+  test("leaves no partial checksum behind: the .sha256 appears only once complete", async function () {
+    const cli = Buffer.from("fake cli binary contents")
+    const state: ServeState = {
+      cli,
+      shaFor: () => `${sha256(cli)}  ${executable}`,
+      hits: { cli: 0, sha: 0 },
+    }
+    server = await startLangsServer(state)
+    const [dialog] = createDialogMock()
+    const folder = path.join(tmpDir.name, "cli")
+
+    const result = await ensureLangsUpdated(folder, dialog, {
+      downloadUrl: serverUrl(server),
+      version,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(fs.existsSync(path.join(folder, executable + ".sha256.tmp"))).toBe(false)
+  })
+
+  test("retries a failing CLI download before giving up", async function () {
+    const cli = Buffer.from("eventually served")
+    let cliAttempts = 0
+    server = await startServer((req, res) => {
+      if ((req.url ?? "").endsWith(".sha256")) {
+        const body = `${sha256(cli)}  ${executable}`
+        res.writeHead(200, { "content-length": String(Buffer.byteLength(body)) })
+        res.end(body)
+        return
+      }
+      cliAttempts++
+      if (cliAttempts === 1) {
+        res.writeHead(503)
+        res.end("try again")
+        return
+      }
+      res.writeHead(200, { "content-length": String(cli.length) })
+      res.end(cli)
+    })
+    const [dialog] = createDialogMock()
+    const folder = path.join(tmpDir.name, "cli")
+
+    const result = await ensureLangsUpdated(folder, dialog, {
+      downloadUrl: serverUrl(server),
+      version,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(cliAttempts).toBe(2)
+  })
+
+  test("a cancelled download is not retried", async function () {
+    let cliAttempts = 0
+    server = await startServer((req, res) => {
+      if ((req.url ?? "").endsWith(".sha256")) {
+        res.writeHead(200, { "content-length": "0" })
+        res.end()
+        return
+      }
+      cliAttempts++
+      res.writeHead(200, { "content-length": String(64 * 1024 * 1024) })
+      res.write(Buffer.alloc(1024))
+      // Never finishes, so only the cancellation can end the download.
+    })
+
+    const result = await ensureLangsUpdated(path.join(tmpDir.name, "cli"), cancellingDialog(50), {
+      downloadUrl: serverUrl(server),
+      version,
+    })
+
+    expect(result.err).toBe(true)
+    expect(cliAttempts).toBe(1)
+  })
+
   test("a cached CLI whose checksum file is missing recovers via redownload instead of throwing", async function () {
     // Simulates a prior run that downloaded+renamed the CLI but failed to
     // write its .sha256: the binary exists on disk, the checksum does not.
@@ -364,5 +465,46 @@ suite("ensureLangsUpdated end-to-end", function () {
     // The missing checksum forced a single redownload rather than a crash.
     expect(state.hits.cli).toBe(1)
     expect(state.hits.sha).toBe(1)
+  })
+})
+
+suite("ensureLangsUpdated on an unsupported platform", function () {
+  let tmpDir: tmp.DirResult
+
+  beforeEach(function () {
+    tmpDir = tmp.dirSync({ unsafeCleanup: true })
+  })
+
+  afterEach(function () {
+    tmpDir.removeCallback()
+    vi.doUnmock("../../utilities/env")
+    vi.resetModules()
+  })
+
+  test("names the platform instead of downloading a binary that cannot run", async function () {
+    vi.resetModules()
+    vi.doMock("../../utilities/env", () => ({
+      getAllLangsCLIs: () => [],
+      getPlatform: () => "unsupported",
+      getLangsCLIForPlatform: () => {
+        throw new Error("no build")
+      },
+    }))
+    const unsupported = await import("../../init/ensureLangsUpdated")
+    // Same fresh module registry, so the error class compares by identity.
+    const { InitializationError: FreshInitializationError } = await import("../../errors")
+    const [dialog] = createDialogMock()
+
+    const result = await unsupported.ensureLangsUpdated(path.join(tmpDir.name, "cli"), dialog, {
+      downloadUrl: "http://127.0.0.1:9/never-reached/",
+      version: "0.0.0-test",
+    })
+
+    expect(result.err).toBe(true)
+    if (result.err) {
+      expect(result.val).toBeInstanceOf(FreshInitializationError)
+      expect(result.val.message).toContain(process.platform)
+      expect(result.val.message).toContain(process.arch)
+    }
   })
 })

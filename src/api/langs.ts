@@ -26,6 +26,7 @@ import {
   ObsoleteClientError,
   RuntimeError,
   SpawnError,
+  TimeoutError,
   UnknownUploadError,
   UploadExpiredError,
 } from "../errors"
@@ -60,11 +61,11 @@ import type {
   TmcExerciseSlide,
 } from "../shared/langsSchema"
 import { CliNotification, CliOutputData, CliStatusUpdate } from "../shared/langsSchema"
+import type { ExerciseIdentifier } from "../shared/shared"
 import {
   assertUnreachable,
   BaseError,
   CourseIdentifier,
-  ExerciseIdentifier,
   makeMoocKind,
   makeTmcKind,
   match,
@@ -106,10 +107,21 @@ interface LangsProcessArgs {
   onInterruptHandle?: ((interrupt: () => void) => void) | undefined
   /**
    * Registers the process with {@link Langs.killAllProcesses}. Only set for commands with no
-   * partial-write failure mode (network-only submit/paste) -- a killed download or settings
-   * write can corrupt state.
+   * partial-write failure mode (network-only submit/paste, local test runs) -- a killed
+   * download or settings write can corrupt state.
    */
   interruptOnDeactivate?: boolean | undefined
+}
+
+/** How an auth failure in a CLI response is attributed. */
+interface AuthAttribution {
+  /**
+   * The backend the command talked to. Only its cached responses are dropped when it
+   * rejects our credentials, and it names the site in a not-enrolled message.
+   */
+  backend?: "tmc" | "mooc" | undefined
+  /** Set on login/logout commands, where an auth error means no session was lost. */
+  expected?: boolean | undefined
 }
 
 interface LangsProcessRunner {
@@ -135,10 +147,43 @@ interface CacheConfig {
   remapper?: ((response: OutputData) => [string, OutputData][]) | undefined
 }
 
+/**
+ * Builds a response-cache key.
+ *
+ * Every key starts with the backend, because tmc.mooc.fi and courses.mooc.fi share an id
+ * space here — both arrive as strings — and because {@link Langs} drops one backend's
+ * entries without touching the other's by matching that prefix.
+ *
+ * @param resource What the entry holds, e.g. `course-details`. One resource name per CLI
+ * output-data kind, so two commands returning the same thing share an entry.
+ * @param parts The ids the entry is keyed by, in the order the resource names them.
+ */
+function cacheKey(
+  backend: "tmc" | "mooc",
+  resource: string,
+  ...parts: (string | number)[]
+): string {
+  return [backend, resource, ...parts].join(":")
+}
+
+/** Bounds the cache so a long session that visits many courses cannot grow it without limit. */
+const MAX_CACHED_RESPONSES = 128
+
+/** Long enough for every flag and id the CLI takes; only a settings value exceeds it. */
+const MAX_LOGGED_ARG_LENGTH = 120
+
+/**
+ * Replaces an oversized argument with its length, so the output channel users paste into
+ * bug reports stays readable when a whole settings value goes through argv.
+ */
+function loggableArg(arg: string): string {
+  return arg.length > MAX_LOGGED_ARG_LENGTH ? `<${arg.length} characters>` : arg
+}
+
 const organizationsRemapper: CacheConfig["remapper"] = (res) => {
   if (res.data?.["output-data-kind"] === "organizations") {
     return res.data["output-data"].map((x) => [
-      `organization-${x.slug}`,
+      cacheKey("tmc", "organization", x.slug),
       { ...res, data: { "output-data-kind": "organization", "output-data": x } },
     ])
   }
@@ -147,6 +192,34 @@ const organizationsRemapper: CacheConfig["remapper"] = (res) => {
 
 /** Ample for the failure diagnostics stderr feeds; a test run can write orders of magnitude more. */
 const MAX_RETAINED_STDERR_BYTES = 64 * 1024
+
+/** POSIX has process groups, so a child spawned `detached` can be signalled as a whole tree. */
+const HAS_PROCESS_GROUPS = process.platform !== "win32"
+
+/**
+ * Kills the CLI process and everything it spawned, doing nothing if it never started.
+ *
+ * On POSIX the child leads its own process group (see the `detached` spawn option), so one
+ * synchronous signal reaches the whole tree and has taken effect before this returns --
+ * which is what lets a synchronous `deactivate` stop a submit in flight. Windows has no
+ * process groups, so `tree-kill` walks the tree asynchronously there instead.
+ */
+function killProcessTree(cprocess: cp.ChildProcess): void {
+  const pid = cprocess.pid
+  // Undefined until the spawn succeeds, and `tree-kill` throws on a non-numeric pid.
+  if (pid === undefined) {
+    return
+  }
+  if (!HAS_PROCESS_GROUPS) {
+    kill(pid)
+    return
+  }
+  try {
+    process.kill(-pid, "SIGKILL")
+  } catch {
+    // ESRCH: the group is already gone, which is the outcome asked for.
+  }
+}
 
 /**
  * The tail of a CLI process's stderr, kept for the error details a failure attaches.
@@ -189,14 +262,8 @@ class BoundedStderr {
  * A Class that provides an interface to all langs functionality.
  */
 export default class Langs {
-  /** tmc.mooc.fi and courses.mooc.fi are unrelated servers, so their update checks cache and invalidate separately. */
-  private static _exerciseUpdatesCacheKey(backend: "tmc" | "mooc"): string {
-    return `${backend}-exercise-updates`
-  }
-
   // Per-backend: tmc.mooc.fi and courses.mooc.fi are unrelated servers, so one must not throttle the other.
-  private _nextTmcSubmissionAllowedTimestamp: number
-  private _nextMoocSubmissionAllowedTimestamp: number
+  private readonly _nextSubmissionAllowedTimestamp: Record<"tmc" | "mooc", number>
   private readonly _options: Options
   private readonly _responseCache: Map<string, ResponseCacheEntry>
   private _onLogout?: (expected: boolean) => void
@@ -217,16 +284,18 @@ export default class Langs {
     private readonly clientVersion: string,
     options?: Options,
   ) {
-    this._nextTmcSubmissionAllowedTimestamp = 0
-    this._nextMoocSubmissionAllowedTimestamp = 0
+    this._nextSubmissionAllowedTimestamp = { tmc: 0, mooc: 0 }
     this._options = { ...options }
     this._responseCache = new Map()
   }
 
   /**
-   * Kills every CLI process opted in via `interruptOnDeactivate` (submit and paste);
-   * downloads, extraction, and settings/credentials writes are left running so a window
-   * reload can't leave them half-written.
+   * Kills every CLI process opted in via `interruptOnDeactivate` (submit, paste and local
+   * test runs); downloads, extraction, and settings/credentials writes are left running so a
+   * window reload can't leave them half-written.
+   *
+   * Safe to call from a synchronous `deactivate`: each kill is a single syscall that has
+   * taken effect by the time it returns.
    */
   public killAllProcesses(): void {
     const interrupts = Array.from(this._activeInterrupts)
@@ -310,7 +379,7 @@ export default class Langs {
       null,
     )
     return res.andThen(() => {
-      this._responseCache.clear()
+      this._clearBackendCache("tmc")
       this._onLogout?.(true)
       return Ok.EMPTY
     })
@@ -347,7 +416,9 @@ export default class Langs {
     const { interrupt, result, getStderr } = process.val
     const loginResult = result.then((res) =>
       res
-        .andThen((x) => this._checkLangsResponse(x, null, undefined, getStderr()))
+        .andThen((x) =>
+          this._checkLangsResponse(x, null, { backend: "mooc", expected: true }, getStderr()),
+        )
         .map(() => {
           this._onMoocLogin?.()
           return undefined
@@ -389,7 +460,7 @@ export default class Langs {
       null,
     )
     return res.andThen(() => {
-      this._responseCache.clear()
+      this._clearBackendCache("mooc")
       this._onMoocLogout?.(true)
       return Ok.EMPTY
     })
@@ -480,7 +551,6 @@ export default class Langs {
   public runTests(
     exercisePath: string,
     pythonExecutablePath?: string,
-    progressCallback?: (progressPct: number, message?: string) => void,
   ): {
     process: Promise<Result<RunResult, BaseError | InitializationError>>
     interrupt: () => void
@@ -492,9 +562,9 @@ export default class Langs {
     const process = this._spawnLangsProcess({
       args: ["run-tests", "--exercise-path", exercisePath],
       env,
-      onStdout: (data) => progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
       onNotification: (notification) => this._showNotification(notification),
       processTimeout: CLI_PROCESS_TIMEOUT,
+      interruptOnDeactivate: true,
     })
     if (process.err) {
       return { process: Promise.resolve(process), interrupt: (): void => {} }
@@ -502,25 +572,22 @@ export default class Langs {
     const { interrupt, result, getStderr } = process.val
     const postResult = result.then((res) =>
       res
-        .andThen((x) => this._checkLangsResponse(x, "test-result", undefined, getStderr()))
+        .andThen((x) => this._checkLangsResponse(x, "test-result", {}, getStderr()))
         .map((x) => x.data["output-data"]),
     )
 
     return { process: postResult, interrupt }
   }
 
-  public runCheckstyle(
-    exercisePath: string,
-    progressCallback?: (progressPct: number, message?: string) => void,
-  ): {
+  public runCheckstyle(exercisePath: string): {
     process: Promise<Result<StyleValidationResult | null, BaseError>>
     interrupt: () => void
   } {
     const process = this._spawnLangsProcess({
       args: ["checkstyle", "--locale", "en", "--exercise-path", exercisePath],
-      onStdout: (data) => progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
       onNotification: (notification) => this._showNotification(notification),
       processTimeout: CLI_PROCESS_TIMEOUT,
+      interruptOnDeactivate: true,
     })
     if (process.err) {
       return { process: Promise.resolve(process), interrupt: (): void => {} }
@@ -528,7 +595,7 @@ export default class Langs {
     const { interrupt, result, getStderr } = process.val
     const checkstyleResult = result.then((res) =>
       res
-        .andThen((x) => this._checkLangsResponse(x, "validation", undefined, getStderr()))
+        .andThen((x) => this._checkLangsResponse(x, "validation", {}, getStderr()))
         .map((x) => x.data["output-data"]),
     )
     return { process: checkstyleResult, interrupt }
@@ -625,9 +692,12 @@ export default class Langs {
    * internally.
    */
   public async setSetting(key: string, value: unknown): Promise<Result<void, Error>> {
+    // Base64 rather than raw JSON: the value goes through argv, where quoting rules differ
+    // per platform and a course's closed-exercise list is long enough to matter.
+    const encoded = Buffer.from(JSON.stringify(value)).toString("base64")
     const res = await this._executeLangsCommand(
       {
-        args: this._settingsCmd("set", key, JSON.stringify(value)),
+        args: this._settingsCmd("set", key, encoded, "--base64"),
       },
       null,
     )
@@ -679,7 +749,7 @@ export default class Langs {
   ): Promise<Result<ExerciseIdentifier[], Error>> {
     const cacheConfig = {
       forceRefresh: options?.forceRefresh,
-      key: Langs._exerciseUpdatesCacheKey(backend),
+      key: cacheKey(backend, "exercise-updates"),
     }
     if (backend === "mooc") {
       const res = await this._executeLangsCommand(
@@ -784,7 +854,7 @@ export default class Langs {
         "tmc-exercise-download",
       )
       const tmcMappedRes = tmcRes.andThen((x) => {
-        this._responseCache.delete(Langs._exerciseUpdatesCacheKey("tmc"))
+        this._responseCache.delete(cacheKey("tmc", "exercise-updates"))
         return Ok(x.data["output-data"])
       })
       if (tmcMappedRes.err) {
@@ -822,7 +892,7 @@ export default class Langs {
         "mooc-exercise-download",
       )
       const moocMappedRes = moocRes.andThen((x) => {
-        this._responseCache.delete(Langs._exerciseUpdatesCacheKey("mooc"))
+        this._responseCache.delete(cacheKey("mooc", "exercise-updates"))
         return Ok(x.data["output-data"])
       })
       if (moocMappedRes.err) {
@@ -846,7 +916,9 @@ export default class Langs {
    * @param exerciseId  Id of the exercise.
    * @param exercisePath Filepath where the old submission should be downloaded to.
    * @param submissionId Id of the exercise submission to download.
-   * @param saveOldState Whether to submit the current state of the exercise beforehand.
+   * @param saveOldState Whether to submit the current state of the exercise beforehand. That
+   * submission takes a slot in the tmc throttle, so asking for it can make this err with a
+   * `BottleneckError` without touching the exercise.
    */
   public async downloadTmcOldSubmission(
     exerciseId: number,
@@ -855,6 +927,12 @@ export default class Langs {
     saveOldState: boolean,
     _progressCallback?: (downloadedPct: number, increment: number) => void,
   ): Promise<Result<void, Error>> {
+    if (saveOldState) {
+      const submissionSlot = this._claimSubmissionSlot("tmc")
+      if (submissionSlot.err) {
+        return submissionSlot
+      }
+    }
     const saveOldStateArg = saveOldState ? ["--save-old-state"] : []
     const args = this._tmcCmd(
       "download-old-submission",
@@ -876,6 +954,9 @@ export default class Langs {
    * Resolves to `nothing-to-download` for a submission the server has no files
    * for, which only an exercise type with no files at all can be. Nothing on disk
    * (or on the server) is touched in that case, `saveOldState` included.
+   *
+   * `saveOldState` takes a slot in the mooc submission throttle, so asking for it can make
+   * this err with a `BottleneckError` without touching the exercise.
    */
   public async downloadMoocOldSubmission(
     exerciseId: string,
@@ -884,6 +965,12 @@ export default class Langs {
     saveOldState: boolean,
     _progressCallback?: (downloadedPct: number, increment: number) => void,
   ): Promise<Result<MoocOldSubmissionRestore, Error>> {
+    if (saveOldState) {
+      const submissionSlot = this._claimSubmissionSlot("mooc")
+      if (submissionSlot.err) {
+        return submissionSlot
+      }
+    }
     const saveOldStateArg = saveOldState ? ["--save-old-state"] : []
     const args = this._moocCmd(
       "download-old-submission",
@@ -921,7 +1008,7 @@ export default class Langs {
       "courses",
       {
         forceRefresh: options?.forceRefresh,
-        key: `organization-${organization}-courses`,
+        key: cacheKey("tmc", "organization-courses", organization),
       },
     )
     return res.map((x) => x.data["output-data"])
@@ -945,21 +1032,21 @@ export default class Langs {
       const { details, exercises, settings } = response.data["output-data"]
       return [
         [
-          `course-${courseId}-details`,
+          cacheKey("tmc", "course-details", courseId),
           {
             ...response,
             data: { "output-data-kind": "course-details", "output-data": details },
           },
         ],
         [
-          `course-${courseId}-exercises`,
+          cacheKey("tmc", "course-exercises", courseId),
           {
             ...response,
             data: { "output-data-kind": "course-exercises", "output-data": exercises },
           },
         ],
         [
-          `course-${courseId}-settings`,
+          cacheKey("tmc", "course-settings", courseId),
           {
             ...response,
             data: { "output-data-kind": "course-data", "output-data": settings },
@@ -973,7 +1060,11 @@ export default class Langs {
         args: this._tmcCmd("get-course-data", "--course-id", courseId.toString()),
       },
       "combined-course-data",
-      { forceRefresh: options?.forceRefresh, key: `course-${courseId}-data`, remapper },
+      {
+        forceRefresh: options?.forceRefresh,
+        key: cacheKey("tmc", "course-data", courseId),
+        remapper,
+      },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -991,7 +1082,7 @@ export default class Langs {
     const courseRes = await this._executeLangsCommand(
       { backend: "mooc", args: this._moocCmd("course", "--course-id", courseId) },
       "mooc-course",
-      { forceRefresh: options?.forceRefresh, key: `mooc-course-${courseId}` },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("mooc", "course", courseId) },
     )
     if (courseRes.err) {
       return courseRes
@@ -999,7 +1090,7 @@ export default class Langs {
     const exercisesRes = await this._executeLangsCommand(
       { backend: "mooc", args: this._moocCmd("course-exercises", "--course-id", courseId) },
       "mooc-exercise-slides",
-      { forceRefresh: options?.forceRefresh, key: `mooc-course-exercises-${courseId}` },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("mooc", "course-exercises", courseId) },
     )
     if (exercisesRes.err) {
       return exercisesRes
@@ -1046,7 +1137,7 @@ export default class Langs {
         "course-details",
         {
           forceRefresh: options?.forceRefresh,
-          key: `course-${CourseIdentifier.toString(courseId)}-details`,
+          key: cacheKey("tmc", "course-details", CourseIdentifier.toString(courseId)),
         },
       )
       return res.map((x) => x.data["output-data"])
@@ -1054,7 +1145,8 @@ export default class Langs {
       // The mooc CLI has no `get-course-details` subcommand; `course` returns the
       // course itself. Callers use this only as a connectivity probe (a failed
       // result flips the course-details view into offline mode), so the returned
-      // MoocCourse shape is sufficient.
+      // MoocCourse shape is sufficient. It shares getMoocCourseInstanceData's entry,
+      // being the same command against the same course.
       const res = await this._executeLangsCommand(
         {
           backend: "mooc",
@@ -1063,7 +1155,7 @@ export default class Langs {
         "mooc-course",
         {
           forceRefresh: options?.forceRefresh,
-          key: `course-${CourseIdentifier.toString(courseId)}-details`,
+          key: cacheKey("mooc", "course", CourseIdentifier.toString(courseId)),
         },
       )
       return res.map((x) => x.data["output-data"])
@@ -1088,7 +1180,7 @@ export default class Langs {
         args: this._tmcCmd("get-course-exercises", "--course-id", courseId.toString()),
       },
       "course-exercises",
-      { forceRefresh: options?.forceRefresh, key: `course-${courseId}-exercises` },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "course-exercises", courseId) },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -1110,7 +1202,7 @@ export default class Langs {
         args: this._tmcCmd("get-course-settings", "--course-id", courseId.toString()),
       },
       "course-data",
-      { forceRefresh: options?.forceRefresh, key: `course-${courseId}-settings` },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "course-settings", courseId) },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -1132,7 +1224,7 @@ export default class Langs {
         args: this._tmcCmd("get-exercise-details", "--exercise-id", exerciseId.toString()),
       },
       "exercise-details",
-      { forceRefresh: options?.forceRefresh, key: `exercise-${exerciseId}-details` },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "exercise-details", exerciseId) },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -1185,7 +1277,10 @@ export default class Langs {
         args: this._tmcCmd("get-organization", "--organization", organizationSlug),
       },
       "organization",
-      { forceRefresh: options?.forceRefresh, key: `organization-${organizationSlug}` },
+      {
+        forceRefresh: options?.forceRefresh,
+        key: cacheKey("tmc", "organization", organizationSlug),
+      },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -1204,7 +1299,7 @@ export default class Langs {
       "organizations",
       {
         forceRefresh: options?.forceRefresh,
-        key: "organizations",
+        key: cacheKey("tmc", "organizations"),
         remapper: organizationsRemapper,
       },
     )
@@ -1217,12 +1312,20 @@ export default class Langs {
    *
    * @param exerciseId Id of the exercise.
    * @param saveOldState Whether to submit current state of the exercise before reseting it.
+   * That submission takes a slot in the backend's submission throttle, so asking for it can
+   * make this err with a `BottleneckError` without touching the exercise.
    */
   public async resetExercise(
     exerciseId: ExerciseIdentifier,
     exercisePath: string,
     saveOldState: boolean,
   ): Promise<Result<void, Error>> {
+    if (saveOldState) {
+      const submissionSlot = this._claimSubmissionSlot(exerciseId.kind)
+      if (submissionSlot.err) {
+        return submissionSlot
+      }
+    }
     return match(
       exerciseId,
       async (tmc) => {
@@ -1261,23 +1364,23 @@ export default class Langs {
    * Submits an exercise to server and waits for test results. Uses TMC-langs `submit` core
    * command internally.
    *
-   * This function can only be called once per `MINIMUM_SUBMISSION_INTERVAL` and this limitation
-   * is shared with `submitTmcExerciseToPaste()`.
+   * Throttled to one call per `MINIMUM_SUBMISSION_INTERVAL` shared with every other tmc call
+   * that submits — paste, and `--save-old-state` on reset and restore — and errs with a
+   * `BottleneckError` over that rate rather than waiting.
    *
    * @param exerciseId Id of the exercise.
    * @param progressCallback Optional callback function that can be used to get status reports.
    */
   public async submitTmcExerciseAndWaitForResults(
-    exerciseId: ExerciseIdentifier,
+    exerciseId: number,
     exercisePath: string,
     progressCallback?: (progressPct: number, message?: string) => void,
     onSubmissionUrl?: (url: string) => void,
   ): Promise<Result<SubmissionFinished, Error>> {
-    const now = Date.now()
-    if (now < this._nextTmcSubmissionAllowedTimestamp) {
-      return Err(new BottleneckError("This command can't be executed at the moment."))
+    const submissionSlot = this._claimSubmissionSlot("tmc")
+    if (submissionSlot.err) {
+      return submissionSlot
     }
-    this._nextTmcSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
 
     const onStdout = (res: StatusUpdateData): void => {
       progressCallback?.(100 * res["percent-done"], res.message ?? undefined)
@@ -1297,7 +1400,7 @@ export default class Langs {
           "--submission-path",
           exercisePath,
           "--exercise-id",
-          ExerciseIdentifier.toString(exerciseId),
+          String(exerciseId),
         ),
         onStdout,
         onNotification: (notification) => this._showNotification(notification),
@@ -1315,8 +1418,8 @@ export default class Langs {
    * task ids from the exercise id and owns the poll loop, so this only needs the
    * exercise id and path; it returns the terminal grading status.
    *
-   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with
-   * `submitMoocExerciseToPaste()`; per-backend, so tmc submit/paste is unaffected.
+   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with every other mooc call that
+   * submits; per-backend, so the tmc path is unaffected.
    *
    * @param exerciseId Mooc exercise id (a UUID string).
    * @param exercisePath Path to the local exercise directory.
@@ -1327,11 +1430,10 @@ export default class Langs {
     exercisePath: string,
     progressCallback?: (progressPct: number, message?: string) => void,
   ): Promise<Result<ExerciseTaskSubmissionStatus, Error>> {
-    const now = Date.now()
-    if (now < this._nextMoocSubmissionAllowedTimestamp) {
-      return Err(new BottleneckError("This command can't be executed at the moment."))
+    const submissionSlot = this._claimSubmissionSlot("mooc")
+    if (submissionSlot.err) {
+      return submissionSlot
     }
-    this._nextMoocSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
 
     const onStdout = (res: StatusUpdateData): void => {
       progressCallback?.(100 * res["percent-done"], res.message ?? undefined)
@@ -1361,8 +1463,9 @@ export default class Langs {
    * Submits given exercise to TMC Paste and provides a link to it. Uses TMC-langs `paste` core
    * command internally.
    *
-   * This function can only be called once per `MINIMUM_SUBMISSION_INTERVAL` and this limitation
-   * is shared with `submitTmcExerciseAndWaitForResults()`.
+   * Throttled to one call per `MINIMUM_SUBMISSION_INTERVAL` shared with every other tmc call
+   * that submits — submit, and `--save-old-state` on reset and restore — and errs with a
+   * `BottleneckError` over that rate rather than waiting.
    *
    * @param exerciseId Id of the exercise.
    * @returns TMC paste link.
@@ -1371,11 +1474,10 @@ export default class Langs {
     exerciseId: number,
     exercisePath: string,
   ): Promise<Result<string, Error>> {
-    const now = Date.now()
-    if (now < this._nextTmcSubmissionAllowedTimestamp) {
-      return Err(new BottleneckError("This command can't be executed at the moment."))
+    const submissionSlot = this._claimSubmissionSlot("tmc")
+    if (submissionSlot.err) {
+      return submissionSlot
     }
-    this._nextTmcSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
 
     const res = await this._executeLangsCommand(
       {
@@ -1400,8 +1502,8 @@ export default class Langs {
    * subcommand submits (non-blocking) then shares the resulting submission in
    * one shot, resolving the slide/task ids from the exercise id.
    *
-   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with
-   * `submitMoocExerciseAndWaitForResults()`; per-backend, so tmc submit/paste is unaffected.
+   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with every other mooc call that
+   * submits; per-backend, so the tmc path is unaffected.
    *
    * @param exerciseId Mooc exercise id (a UUID string).
    * @param exercisePath Path to the local exercise directory.
@@ -1411,11 +1513,10 @@ export default class Langs {
     exerciseId: string,
     exercisePath: string,
   ): Promise<Result<string, Error>> {
-    const now = Date.now()
-    if (now < this._nextMoocSubmissionAllowedTimestamp) {
-      return Err(new BottleneckError("This command can't be executed at the moment."))
+    const submissionSlot = this._claimSubmissionSlot("mooc")
+    if (submissionSlot.err) {
+      return submissionSlot
     }
-    this._nextMoocSubmissionAllowedTimestamp = now + MINIMUM_SUBMISSION_INTERVAL
 
     const res = await this._executeLangsCommand(
       {
@@ -1423,7 +1524,7 @@ export default class Langs {
         args: this._moocCmd(
           "paste",
           "--exercise-id",
-          exerciseId.toString(),
+          exerciseId,
           "--submission-path",
           exercisePath,
         ),
@@ -1485,6 +1586,23 @@ export default class Langs {
   }
 
   /**
+   * Claims the next submission slot for `backend`, or errs when one was claimed less than
+   * `MINIMUM_SUBMISSION_INTERVAL` ago.
+   *
+   * Every call that makes the CLI submit claims a slot — the submit and paste commands, and
+   * `--save-old-state` on reset and old-submission restore — so they throttle each other
+   * rather than only their own kind.
+   */
+  private _claimSubmissionSlot(backend: "tmc" | "mooc"): Result<void, Error> {
+    const now = Date.now()
+    if (now < this._nextSubmissionAllowedTimestamp[backend]) {
+      return Err(new BottleneckError("This command can't be executed at the moment."))
+    }
+    this._nextSubmissionAllowedTimestamp[backend] = now + MINIMUM_SUBMISSION_INTERVAL
+    return Ok.EMPTY
+  }
+
+  /**
    * Constructs the base arguments for all `mooc` subcommands.
    *
    * @param rest The rest of the arguments.
@@ -1530,22 +1648,20 @@ export default class Langs {
   ): Promise<
     Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, Error>
   > {
-    const cacheKey = cacheConfig?.key
+    const key = cacheConfig?.key
     const currentTime = Date.now()
-    if (!cacheConfig?.forceRefresh && cacheKey) {
-      const cachedEntry = this._responseCache.get(cacheKey)
+    if (!cacheConfig?.forceRefresh && key) {
+      const cachedEntry = this._readCachedResponse(key)
       if (cachedEntry) {
         const { response, timestamp } = cachedEntry
         const cachedDataLifeLeft = timestamp + API_CACHE_LIFETIME - currentTime
         if (cachedDataLifeLeft > 0 && dataMatchesKind(response, outputDataKind)) {
           const prettySecondsLeft = Math.ceil(cachedDataLifeLeft / 1000)
-          Logger.info(
-            `Using cached data for key: ${cacheKey}. Still valid for ${prettySecondsLeft}s`,
-          )
+          Logger.info(`Using cached data for key: ${key}. Still valid for ${prettySecondsLeft}s`)
           return Ok(response)
         }
-        Logger.debug(`Discarding invalidated cache data for key: ${cacheKey}`)
-        this._responseCache.delete(cacheKey)
+        Logger.debug(`Discarding invalidated cache data for key: ${key}`)
+        this._responseCache.delete(key)
       }
     }
 
@@ -1554,44 +1670,75 @@ export default class Langs {
       return process
     }
     langsArgs.onInterruptHandle?.(process.val.interrupt)
-    // Attribute a lost-session error to the command's backend so the right logout event fires.
-    const authEventTarget = langsArgs.suppressAuthEvents ? undefined : langsArgs.backend
-    const { interrupt, result, getStderr } = process.val
-    const res = langsArgs.interruptOnDeactivate
-      ? await this._trackInterrupt(interrupt, result)
-      : await result
+    const auth: AuthAttribution = {
+      backend: langsArgs.backend,
+      expected: langsArgs.suppressAuthEvents,
+    }
+    const { result, getStderr } = process.val
+    const res = await result
     return res
-      .andThen((x) => this._checkLangsResponse(x, outputDataKind, authEventTarget, getStderr()))
+      .andThen((x) => this._checkLangsResponse(x, outputDataKind, auth, getStderr()))
       .andThen((x) => {
-        if (x && cacheKey) {
-          this._responseCache.set(cacheKey, { response: x, timestamp: currentTime })
-          cacheConfig?.remapper?.(x).forEach(([key, response]) => {
-            this._responseCache.set(key, { response, timestamp: currentTime })
+        if (x && key) {
+          this._writeCachedResponse(key, { response: x, timestamp: currentTime })
+          cacheConfig?.remapper?.(x).forEach(([remappedKey, response]) => {
+            this._writeCachedResponse(remappedKey, { response, timestamp: currentTime })
           })
         }
         return Ok(x)
       })
   }
 
-  /** Keeps `interrupt` reachable from {@link killAllProcesses} for as long as the process runs. */
-  private async _trackInterrupt<T>(interrupt: () => void, result: Promise<T>): Promise<T> {
-    this._activeInterrupts.add(interrupt)
-    try {
-      return await result
-    } finally {
-      this._activeInterrupts.delete(interrupt)
+  /** Reads an entry and marks it most recently used, so {@link _writeCachedResponse} evicts it last. */
+  private _readCachedResponse(key: string): ResponseCacheEntry | undefined {
+    const entry = this._responseCache.get(key)
+    if (entry) {
+      // A Map iterates in insertion order, so re-inserting moves the entry to the back.
+      this._responseCache.delete(key)
+      this._responseCache.set(key, entry)
+    }
+    return entry
+  }
+
+  /** Stores an entry, evicting the least recently used ones once the cache is over its cap. */
+  private _writeCachedResponse(key: string, entry: ResponseCacheEntry): void {
+    this._responseCache.delete(key)
+    this._responseCache.set(key, entry)
+    for (const oldest of this._responseCache.keys()) {
+      if (this._responseCache.size <= MAX_CACHED_RESPONSES) {
+        break
+      }
+      this._responseCache.delete(oldest)
+    }
+  }
+
+  /**
+   * Drops every cached response belonging to `backend`, leaving the other backend's alone:
+   * the two servers are unrelated, so one rejecting our credentials says nothing about the
+   * other's data. An unattributed failure drops everything, having ruled nothing out.
+   */
+  private _clearBackendCache(backend: "tmc" | "mooc" | undefined): void {
+    if (backend === undefined) {
+      this._responseCache.clear()
+      return
+    }
+    const prefix = `${backend}:`
+    for (const key of this._responseCache.keys()) {
+      if (key.startsWith(prefix)) {
+        this._responseCache.delete(key)
+      }
     }
   }
 
   /**
    * Checks langs response for generic errors.
    *
-   * @param authEventTarget Backend whose unexpected-logout event to fire on an auth error; undefined fires none.
+   * @param auth How an auth failure in this response is attributed; see {@link AuthAttribution}.
    */
   private _checkLangsResponse<T extends DataKind["output-data-kind"] | null>(
     langsResponse: OutputData,
     outputDataKind: T,
-    authEventTarget?: "tmc" | "mooc",
+    auth: AuthAttribution = {},
     stderr = "",
   ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, BaseError> {
     // The CLI's panic handler emits `status: "crashed"` with no data, so narrowing on the
@@ -1631,9 +1778,9 @@ export default class Langs {
       case "not-enrolled": {
         // Not hardcoded to courses.mooc.fi: this error kind can come from either backend.
         const siteName =
-          authEventTarget === "tmc"
+          auth.backend === "tmc"
             ? "tmc.mooc.fi"
-            : authEventTarget === "mooc"
+            : auth.backend === "mooc"
               ? "courses.mooc.fi"
               : "the server"
         return Err(
@@ -1660,12 +1807,16 @@ export default class Langs {
         // this exercise. Surfaced as-is so it is diagnosable rather than retried.
         return Err(new UnknownUploadError(message, details))
       case "invalid-token":
-        this._responseCache.clear()
-        this._fireUnexpectedLogout(authEventTarget)
+        this._clearBackendCache(auth.backend)
+        if (!auth.expected) {
+          this._fireUnexpectedLogout(auth.backend)
+        }
         return Err(new InvalidTokenError(message))
       case "not-logged-in":
-        this._responseCache.clear()
-        this._fireUnexpectedLogout(authEventTarget)
+        this._clearBackendCache(auth.backend)
+        if (!auth.expected) {
+          this._fireUnexpectedLogout(auth.backend)
+        }
         return Err(new AuthorizationError(message, details))
       case "obsolete-client":
         return Err(
@@ -1711,7 +1862,16 @@ export default class Langs {
   private _spawnLangsProcess(
     commandArgs: LangsProcessArgs,
   ): Result<LangsProcessRunner, InitializationError | SpawnError> {
-    const { args, env, obfuscate, onStdout, onNotification, stdin, processTimeout } = commandArgs
+    const {
+      args,
+      env,
+      obfuscate,
+      onStdout,
+      onNotification,
+      stdin,
+      processTimeout,
+      interruptOnDeactivate,
+    } = commandArgs
 
     let theResult: OutputData | undefined
     let stdoutBuffer = ""
@@ -1719,9 +1879,8 @@ export default class Langs {
     // output data report *why* instead of a generic "no result data" message.
     let lastSchemaFailure: LangsSchemaFailure | undefined
 
-    const obfuscatedArgs = args.map((x, i) => (obfuscate?.includes(i) ? "***" : x))
     const loggableCommand = [this.cliPath]
-      .concat(obfuscatedArgs)
+      .concat(args.map((x, i) => (obfuscate?.includes(i) ? "***" : loggableArg(x))))
       .map((x) => JSON.stringify(x))
       .join(" ")
 
@@ -1756,6 +1915,9 @@ export default class Langs {
     const startTime = Date.now()
     try {
       cprocess = cp.spawn(this.cliPath, args, {
+        // Gives the child its own process group, so {@link killProcessTree} can reach the
+        // plugins it spawns (Maven, pytest) with one signal. No-op on Windows.
+        detached: HAS_PROCESS_GROUPS,
         env: {
           ...process.env,
           ...env,
@@ -1776,7 +1938,10 @@ export default class Langs {
     cprocess.stdout.setEncoding("utf8")
     cprocess.stderr.setEncoding("utf8")
     if (stdin) {
-      cprocess.stdin.write(stdin + "\n")
+      // A CLI reading stdin blocks until EOF, so the write has to be closed. The listener
+      // keeps an EPIPE from a child that exited early off the unhandled-error path.
+      cprocess.stdin.on("error", (error) => Logger.warn("Failed to write to langs stdin", error))
+      cprocess.stdin.end(stdin + "\n")
     }
 
     const stderr = new BoundedStderr()
@@ -1787,11 +1952,14 @@ export default class Langs {
       const timeout =
         processTimeout &&
         setTimeout(() => {
-          kill(cprocess.pid as number)
-          reject("Process didn't seem to finish or was taking a really long time.")
+          killProcessTree(cprocess)
+          reject(
+            new TimeoutError("Process didn't seem to finish or was taking a really long time."),
+          )
         }, processTimeout)
 
       cprocess.on("error", (error) => {
+        active = false
         if (timeout) {
           clearTimeout(timeout)
         }
@@ -1820,6 +1988,9 @@ ${error.message}`
         }
       })
       cprocess.on("exit", (code) => {
+        // The pid is free for the OS to reuse from here on, so a retained `interrupt`
+        // closure must not signal it.
+        active = false
         resultCode = code ?? 0
         Logger.info(
           `Process exited with code ${resultCode} after ${Date.now() - startTime}ms: ${loggableCommand}`,
@@ -1879,6 +2050,9 @@ ${error.message}`
           // `activate` gates its antivirus-exception advice on this class.
           return Err(new SpawnError(spawnFailure, stderr.text()))
         }
+        if (error instanceof TimeoutError) {
+          return Err(new TimeoutError(error.message, stderr.text()))
+        }
         return Err(new RuntimeError(error as string, stderr.text()))
       }
 
@@ -1911,11 +2085,14 @@ ${error.message}`
       if (active) {
         active = false
         interrupted = true
-        kill(cprocess.pid as number)
+        killProcessTree(cprocess)
       }
     }
-    const res = { interrupt, result, getStderr: (): string => stderr.text() }
-    return Ok(res)
+    if (interruptOnDeactivate) {
+      this._activeInterrupts.add(interrupt)
+      void result.finally(() => this._activeInterrupts.delete(interrupt))
+    }
+    return Ok({ interrupt, result, getStderr: (): string => stderr.text() })
   }
 }
 

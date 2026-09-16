@@ -167,6 +167,8 @@ interface CreateOldSubmissionParams {
   exerciseName: string
   id: number
   passed: boolean
+  /** Space-separated point names the submission awarded; none by default. */
+  points?: string
   timestamp: Date
   userId: number
 }
@@ -177,7 +179,7 @@ export const failingExerciseId = 2
 
 const createOldSubmission = (params: CreateOldSubmissionParams): OldSubmission => {
   const timestamp = params.timestamp.toISOString()
-  const points = params.id === passingExerciseId ? "part01-01_passing_exercise" : ""
+  const points = params.points ?? ""
   return {
     all_tests_passed: params.passed,
     course_id: params.courseId,

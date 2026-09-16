@@ -1,7 +1,13 @@
 import { vi } from "vitest"
 
 import Langs from "../../api/langs"
-import { EmptyLangsResponseError, LangsResponseSchemaError, SpawnError } from "../../errors"
+import {
+  EmptyLangsResponseError,
+  LangsResponseSchemaError,
+  SpawnError,
+  TimeoutError,
+} from "../../errors"
+import { ExerciseIdentifier } from "../../shared/shared"
 import { Logger } from "../../utilities/logger"
 
 type FakeListener = (...args: unknown[]) => void
@@ -76,6 +82,19 @@ vi.mock("tree-kill", () => ({
   },
 }))
 
+// Process groups the runner signalled. `process.kill` is stubbed rather than let through:
+// the fake pids below name no real process, so a real signal could land on an unrelated
+// group.
+const killedProcessGroups: number[] = []
+
+/**
+ * Pids whose whole tree the runner killed, by whichever mechanism the platform uses:
+ * one signal to the child's own process group on POSIX, a `tree-kill` walk on Windows.
+ */
+function killedProcessTrees(): number[] {
+  return process.platform === "win32" ? killedPids : killedProcessGroups
+}
+
 function newLangs(): Langs {
   return new Langs("dummy-cli-path", "test-client", "1.0.0")
 }
@@ -116,6 +135,17 @@ function loggedInLine(): string {
     status: "finished",
     message: "logged in",
     result: "logged-in",
+    data: null,
+  })
+}
+
+/** The envelope a command that returns no data ends with, e.g. `settings set`. */
+function executedCommandLine(): string {
+  return JSON.stringify({
+    "output-kind": "output-data",
+    status: "finished",
+    message: "set setting",
+    result: "executed-command",
     data: null,
   })
 }
@@ -175,6 +205,11 @@ function splitMidCharacter(text: string): [Buffer, Buffer] {
 beforeEach(function () {
   spawnedProcesses.length = 0
   killedPids.length = 0
+  killedProcessGroups.length = 0
+  vi.spyOn(process, "kill").mockImplementation(((pid: number): true => {
+    killedProcessGroups.push(-pid)
+    return true
+  }) as typeof process.kill)
 })
 
 afterEach(function () {
@@ -328,6 +363,22 @@ suite("Langs CLI process output", function () {
     expect(text).not.toContain(TOKEN)
   })
 
+  test("an oversized argument is logged as its length, not its value", async function () {
+    const captured = captureLogs()
+    const langs = newLangs()
+    const closedExercises = Array.from({ length: 50 }, (_, i) => `part01-Part01_${i}.Sandbox`)
+    const pending = langs.setSetting("closed-exercises-for:course", closedExercises)
+    const langsProcess = lastProcess()
+    writeStdout(langsProcess, executedCommandLine())
+    endProcess(langsProcess)
+    await pending
+
+    const text = loggedText(captured)
+    expect(text).toContain("closed-exercises-for:course")
+    expect(text).toContain("characters>")
+    expect(text).not.toContain("part01-Part01_0.Sandbox")
+  })
+
   test("an unterminated tail never reaches the log", async function () {
     const captured = captureLogs()
     const langs = newLangs()
@@ -404,10 +455,33 @@ suite("Langs CLI process cancellation", function () {
 
     const result = await login.result
     expect((result.val as Error).message).toContain("killed")
-    expect(killedPids).toContain(langsProcess.pid)
+    expect(killedProcessTrees()).toContain(langsProcess.pid)
   })
 
-  test("a process that outlives its timeout is killed and reported", async function () {
+  test("interrupting a process that already exited signals nothing", async function () {
+    const langs = newLangs()
+    const login = langs.authenticateMooc(() => {})
+    const langsProcess = lastProcess()
+    endProcess(langsProcess)
+    await login.result
+
+    // The pid is the OS's to reuse by now, so the retained closure must be inert.
+    login.interrupt()
+    expect(killedProcessTrees()).toEqual([])
+  })
+
+  test("interrupting a process that failed to start signals nothing", async function () {
+    const langs = newLangs()
+    const login = langs.authenticateMooc(() => {})
+    const langsProcess = lastProcess()
+    langsProcess.emit("error", Object.assign(new Error("spawn ENOENT"), { errno: -2 }))
+    await login.result
+
+    login.interrupt()
+    expect(killedProcessTrees()).toEqual([])
+  })
+
+  test("a process that outlives its timeout is killed and reported as a timeout", async function () {
     vi.useFakeTimers()
     try {
       const langs = newLangs()
@@ -416,10 +490,58 @@ suite("Langs CLI process cancellation", function () {
       vi.advanceTimersByTime(5000)
 
       const result = await pending
+      expect(result.val).toBeInstanceOf(TimeoutError)
       expect((result.val as Error).message).toContain("really long time")
-      expect(killedPids).toContain(langsProcess.pid)
+      expect(killedProcessTrees()).toContain(langsProcess.pid)
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  test("killAllProcesses kills an in-flight submit's process tree", async function () {
+    const langs = newLangs()
+    const submitting = langs.submitTmcExerciseToPaste(101, "/ex")
+    const langsProcess = lastProcess()
+
+    langs.killAllProcesses()
+    expect(killedProcessTrees()).toContain(langsProcess.pid)
+
+    endProcess(langsProcess)
+    expect((await submitting).err).toBe(true)
+  })
+
+  test("killAllProcesses kills an in-flight test run's process tree", async function () {
+    const langs = newLangs()
+    const running = langs.runTests("/ex")
+    const langsProcess = lastProcess()
+
+    langs.killAllProcesses()
+    expect(killedProcessTrees()).toContain(langsProcess.pid)
+
+    endProcess(langsProcess)
+    expect((await running.process).err).toBe(true)
+  })
+
+  test("killAllProcesses leaves a download alone, so it can't be cut in half", async function () {
+    const langs = newLangs()
+    const downloading = langs.downloadExercises([ExerciseIdentifier.from(1)], false, () => {})
+    const langsProcess = lastProcess()
+
+    langs.killAllProcesses()
+    expect(killedProcessTrees()).toEqual([])
+
+    endProcess(langsProcess)
+    await downloading
+  })
+
+  test("killAllProcesses stops tracking a process once it settles", async function () {
+    const langs = newLangs()
+    const pasting = langs.submitTmcExerciseToPaste(101, "/ex")
+    const langsProcess = lastProcess()
+    endProcess(langsProcess)
+    await pasting
+
+    langs.killAllProcesses()
+    expect(killedProcessTrees()).toEqual([])
   })
 })

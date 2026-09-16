@@ -9,6 +9,7 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { resetExercise } from "../../commands/resetExercise"
 import type { UserData } from "../../config/userdata"
+import { acquireSingleFlight, releaseSingleFlight } from "../../utilities"
 import { createMockActionContext } from "../mocks/actionContext"
 
 suite("Reset exercise command", function () {
@@ -22,12 +23,14 @@ suite("Reset exercise command", function () {
   }
 
   let reset: ReturnType<typeof vi.fn>
+  let notification: ReturnType<typeof vi.fn>
   let prompts: string[]
 
   /** @param answers labels to pick at each prompt; `undefined` dismisses it. */
   function actionContext(answers: (string | undefined)[]): ActionContext {
     const base = createMockActionContext()
     reset = vi.fn(async () => Ok.EMPTY)
+    notification = vi.fn()
     prompts = []
     let call = 0
     const dialog = {
@@ -37,6 +40,7 @@ suite("Reset exercise command", function () {
         const wanted = answers[call++]
         return wanted === undefined ? undefined : items.find(([label]) => label === wanted)?.[1]
       }),
+      notification,
     } as unknown as ActionContext["dialog"]
 
     return {
@@ -77,5 +81,21 @@ suite("Reset exercise command", function () {
     await resetExercise(actionContext(["Discard current state", undefined]), uri)
 
     expect(reset).not.toHaveBeenCalled()
+  })
+
+  test("refuses to reset while a submission of the same exercise is in flight", async function () {
+    // The key the submit and paste actions hold; claiming it here stands in for one of them.
+    const submitKey = `submit:${uri.fsPath}`
+    expect(acquireSingleFlight(submitKey, 60_000)).toBe(true)
+    try {
+      await resetExercise(actionContext(["Submit to server"]), uri)
+    } finally {
+      releaseSingleFlight(submitKey)
+    }
+
+    expect(reset).not.toHaveBeenCalled()
+    expect(notification).toHaveBeenCalledExactlyOnceWith(
+      "A submission for this exercise is already in progress.",
+    )
   })
 })

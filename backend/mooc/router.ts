@@ -11,16 +11,12 @@ import { OpenAPIBackend } from "openapi-backend"
 import { API_ERRORS, type ApiErrorMessageKey } from "./apiErrors"
 import { buildTarZst } from "./archive"
 import {
-  courses,
-  exerciseByArchiveSlug,
-  exerciseById,
-  failingExercise,
-  MOOC_MOCK_BASE_URL,
+  createMoocFixtures,
+  DEFAULT_MOOC_MOCK_BASE_URL,
   notEnrolledExerciseId,
-  passingExercise,
-  pendingManualExercise,
   type ExerciseSlide,
   type MoocExerciseFixture,
+  type MoocFixtures,
 } from "./fixtures"
 import {
   EXERCISE_SERVICES_SCOPE,
@@ -52,8 +48,13 @@ import {
 
 const SPEC_PATH = path.join(__dirname, "exercise-services-client.openapi.generated.json")
 
-// ---- stateful submissions ----
+// ---- per-instance state ----
 //
+// Every mutable binding below belongs to ONE mock, built by registerMoocRoutes
+// and closed over by that mock's handlers. Two mocks in one process -- the
+// suites run several -- therefore share no submissions, uploads or auth
+// observations, and each hands out URLs naming the address it serves on.
+
 // The real backend uses TWO distinct submission id spaces, and this mock mirrors
 // the split so the flows exercise the right ids:
 //   - `/grading` is polled with the EXERCISE-TASK-SUBMISSION id.
@@ -76,12 +77,6 @@ interface SubmissionRecord {
   fileIds: string[]
 }
 
-const submissionsByTaskId = new Map<string, SubmissionRecord>()
-const submissionsBySlideId = new Map<string, SubmissionRecord>()
-const submissionsByExercise = new Map<string, SubmissionRecord[]>()
-
-// ---- stateful uploads ----
-//
 // `POST exercises/{id}/files` stores files the client names in a later submit.
 // The real host binds each upload to (exercise, user) and reaps unreferenced
 // ones, so the mock models the binding and a soft-delete.
@@ -107,35 +102,129 @@ interface UploadRecord {
   expired: boolean
 }
 
-const uploadsById = new Map<string, UploadRecord>()
-/** Uploaded bytes keyed by stored path segment, served by the file-store route. */
-const uploadBytesByStoredName = new Map<string, Buffer>()
-/** One-shot: the next upload batch is stored already reaped. See {@link expireNextMoocUpload}. */
-let expireNextUpload = false
+interface MoocMockState {
+  /** Absolute origin every URL this mock hands out is built from. */
+  baseUrl: string
+  fixtures: MoocFixtures
+  /** Slide and task lookups by their OWN ids, for submit's slide/task ownership checks. */
+  slideById: Map<string, ExerciseSlide>
+  slideIdByTaskId: Map<string, string>
+  /**
+   * Per-exercise point weight (score_maximum), deliberately heterogeneous across
+   * fixtures so progress aggregation exercises differing weights rather than a
+   * uniform 1-per-exercise total. passingExercise stays 1 so the existing
+   * single-exercise pythonCourse progress assertion is unaffected.
+   */
+  scoreMaximumByExerciseId: Map<string, number>
+  submissionsByTaskId: Map<string, SubmissionRecord>
+  submissionsBySlideId: Map<string, SubmissionRecord>
+  submissionsByExercise: Map<string, SubmissionRecord[]>
+  uploadsById: Map<string, UploadRecord>
+  /** Uploaded bytes keyed by stored path segment, served by the file-store route. */
+  uploadBytesByStoredName: Map<string, Buffer>
+  /** One-shot: the next upload batch is stored already reaped. */
+  expireNextUpload: boolean
+  // The integration mock runs in a separate process from the test, so the two
+  // members below record the most recent authenticated request's `Authorization`
+  // header and a count, surfaced via `GET /mooc-mock/auth-state`, to let a test
+  // prove the CLI actually attached the bearer it expects.
+  lastAuthorization: string | undefined
+  authenticatedRequestCount: number
+}
 
-// ---- auth-mode observation (for cross-process test assertions) ----
-//
-// The integration mock runs in a separate process from the test, so these
-// record the most recent authenticated request's `Authorization` header and a
-// count, surfaced via `GET /mooc-mock/auth-state`, to let a test prove the CLI
-// actually attached the bearer it expects.
-let lastAuthorization: string | undefined
-let authenticatedRequestCount = 0
+/** The half of a mock's state that is derived from its base URL. */
+type FixtureIndex = Pick<
+  MoocMockState,
+  "baseUrl" | "fixtures" | "slideById" | "slideIdByTaskId" | "scoreMaximumByExerciseId"
+>
 
-/** Clears in-memory submission/upload + auth-observation state (for test isolation). */
+const indexFixtures = (baseUrl: string): FixtureIndex => {
+  const fixtures = createMoocFixtures(baseUrl)
+  const slideById = new Map<string, ExerciseSlide>()
+  const slideIdByTaskId = new Map<string, string>()
+  for (const exercise of fixtures.exerciseById.values()) {
+    slideById.set(exercise.slide.slide_id, exercise.slide)
+    for (const task of exercise.slide.tasks) {
+      slideIdByTaskId.set(task.task_id, exercise.slide.slide_id)
+    }
+  }
+  return {
+    baseUrl,
+    fixtures,
+    slideById,
+    slideIdByTaskId,
+    scoreMaximumByExerciseId: new Map([
+      [fixtures.passingExercise.slide.exercise_id, 1],
+      [fixtures.failingExercise.slide.exercise_id, 2],
+      [fixtures.pendingManualExercise.slide.exercise_id, 3],
+    ]),
+  }
+}
+
+const createMoocMockState = (baseUrl: string): MoocMockState => ({
+  ...indexFixtures(baseUrl),
+  submissionsByTaskId: new Map(),
+  submissionsBySlideId: new Map(),
+  submissionsByExercise: new Map(),
+  uploadsById: new Map(),
+  uploadBytesByStoredName: new Map(),
+  expireNextUpload: false,
+  lastAuthorization: undefined,
+  authenticatedRequestCount: 0,
+})
+
+/**
+ * Drives one mock's state from a test or a control route. Reach it with
+ * {@link moocMockOf} on the app the mock was mounted on.
+ */
+export interface MoocMockControls {
+  /** Discards submissions, uploads and the auth observation; fixtures and base URL survive. */
+  reset: () => void
+  /**
+   * Soft-deletes an upload, modelling the host's reaper. Returns false for an
+   * unknown id. Drives the `upload_expired` path, which is otherwise unreachable.
+   */
+  expireUpload: (fileId: string) => boolean
+  /**
+   * Arms the reaper to consume the NEXT upload batch, so the following submit sees
+   * `upload_expired`. This is the only way to hit the race the CLI's upload retry
+   * exists for: the reaper would otherwise have to fire inside the millisecond gap
+   * between the CLI's own two calls.
+   */
+  expireNextUpload: () => void
+  /**
+   * Seeds a submission the host has no files for, so its download is an empty list.
+   * Only an exercise type with no files at all is like this, and a submit through the
+   * client API cannot produce one -- hence the seed.
+   * Returns undefined for an unknown exercise.
+   */
+  seedFilelessSubmission: (
+    exerciseId: string,
+  ) => { taskSubmissionId: string; slideSubmissionId: string } | undefined
+  /** Points every URL this mock hands out at `baseUrl`. */
+  rebase: (baseUrl: string) => void
+}
+
+// Every mock alive in this process, so resetMoocState can reach the ones whose
+// app a caller does not hold.
+const liveMocks = new Set<MoocMockControls>()
+
+/**
+ * Clears every mooc mock in this process. A caller holding the app should reset
+ * just that one via {@link moocMockOf} instead.
+ */
 export const resetMoocState = (): void => {
-  submissionsByTaskId.clear()
-  submissionsBySlideId.clear()
-  submissionsByExercise.clear()
-  uploadsById.clear()
-  uploadBytesByStoredName.clear()
-  expireNextUpload = false
-  lastAuthorization = undefined
-  authenticatedRequestCount = 0
+  for (const mock of liveMocks) {
+    mock.reset()
+  }
 }
 
 /** Records one submission under both of its id spaces and against its exercise. */
-const retainSubmission = (exerciseId: string, fileIds: string[]): SubmissionRecord => {
+const retainSubmission = (
+  state: MoocMockState,
+  exerciseId: string,
+  fileIds: string[],
+): SubmissionRecord => {
   const record: SubmissionRecord = {
     exerciseId,
     taskSubmissionId: randomUUID(),
@@ -144,53 +233,46 @@ const retainSubmission = (exerciseId: string, fileIds: string[]): SubmissionReco
     createdAt: new Date().toISOString(),
     fileIds: [...fileIds],
   }
-  submissionsByTaskId.set(record.taskSubmissionId, record)
-  submissionsBySlideId.set(record.slideSubmissionId, record)
-  const list = submissionsByExercise.get(exerciseId) ?? []
+  state.submissionsByTaskId.set(record.taskSubmissionId, record)
+  state.submissionsBySlideId.set(record.slideSubmissionId, record)
+  const list = state.submissionsByExercise.get(exerciseId) ?? []
   list.push(record)
-  submissionsByExercise.set(exerciseId, list)
+  state.submissionsByExercise.set(exerciseId, list)
   return record
 }
 
-/**
- * Seeds a submission the host has no files for, so its download is an empty list.
- * Only an exercise type with no files at all is like this, and a submit through the
- * client API cannot produce one -- hence the seed.
- * Returns undefined for an unknown exercise.
- */
-export const seedMoocFilelessSubmission = (
-  exerciseId: string,
-): { taskSubmissionId: string; slideSubmissionId: string } | undefined => {
-  if (!exerciseById.has(exerciseId)) {
-    return undefined
-  }
-  const { taskSubmissionId, slideSubmissionId } = retainSubmission(exerciseId, [])
-  return { taskSubmissionId, slideSubmissionId }
-}
-
-/**
- * Soft-deletes an upload, modelling the host's reaper. Returns false for an
- * unknown id. Drives the `upload_expired` path, which is otherwise unreachable.
- */
-export const expireMoocUpload = (fileId: string): boolean => {
-  const upload = uploadsById.get(fileId)
-  if (!upload) {
-    return false
-  }
-  upload.expired = true
-  uploadBytesByStoredName.delete(upload.storedName)
-  return true
-}
-
-/**
- * Arms the reaper to consume the NEXT upload batch, so the following submit sees
- * `upload_expired`. This is the only way to hit the race the CLI's upload retry
- * exists for: the reaper would otherwise have to fire inside the millisecond gap
- * between the CLI's own two calls.
- */
-export const expireNextMoocUpload = (): void => {
-  expireNextUpload = true
-}
+const createMoocMockControls = (state: MoocMockState): MoocMockControls => ({
+  reset: () => {
+    state.submissionsByTaskId.clear()
+    state.submissionsBySlideId.clear()
+    state.submissionsByExercise.clear()
+    state.uploadsById.clear()
+    state.uploadBytesByStoredName.clear()
+    state.expireNextUpload = false
+    state.lastAuthorization = undefined
+    state.authenticatedRequestCount = 0
+  },
+  expireUpload: (fileId) => {
+    const upload = state.uploadsById.get(fileId)
+    if (!upload) {
+      return false
+    }
+    upload.expired = true
+    state.uploadBytesByStoredName.delete(upload.storedName)
+    return true
+  },
+  expireNextUpload: () => {
+    state.expireNextUpload = true
+  },
+  seedFilelessSubmission: (exerciseId) => {
+    if (!state.fixtures.exerciseById.has(exerciseId)) {
+      return undefined
+    }
+    const { taskSubmissionId, slideSubmissionId } = retainSubmission(state, exerciseId, [])
+    return { taskSubmissionId, slideSubmissionId }
+  },
+  rebase: (baseUrl) => void Object.assign(state, indexFixtures(baseUrl)),
+})
 
 // ---- response envelope threaded through the postResponseHandler ----
 
@@ -251,32 +333,20 @@ interface CreateMoocApiOptions {
    * -> 403 `forbidden`. Pass `false` for the old auth-less behavior.
    */
   requireAuth?: boolean
+  /**
+   * Origin every absolute URL the mock hands out is built from -- stub and
+   * model-solution downloads, answer-file claims and share links. Defaults to
+   * the env value; createMoocApp overrides it with the address it bound, so a
+   * suite on an ephemeral port gets URLs it can follow verbatim.
+   */
+  baseUrl?: string
 }
 
-const findCourse = (id: string) => courses.find((c) => c.course.id === id)
+const findCourse = (state: MoocMockState, id: string) =>
+  state.fixtures.courses.find((c) => c.course.id === id)
 
-/** Slide and task lookups by their OWN ids, for submit's slide/task ownership checks. */
-const slideById = new Map<string, ExerciseSlide>()
-const slideIdByTaskId = new Map<string, string>()
-for (const exercise of exerciseById.values()) {
-  slideById.set(exercise.slide.slide_id, exercise.slide)
-  for (const task of exercise.slide.tasks) {
-    slideIdByTaskId.set(task.task_id, exercise.slide.slide_id)
-  }
-}
-
-// Per-exercise point weight (score_maximum), deliberately heterogeneous across
-// fixtures so progress aggregation exercises differing weights rather than a
-// uniform 1-per-exercise total. passingExercise stays 1 so the existing
-// single-exercise pythonCourse progress assertion is unaffected.
-const scoreMaximumByExerciseId = new Map<string, number>([
-  [passingExercise.slide.exercise_id, 1],
-  [failingExercise.slide.exercise_id, 2],
-  [pendingManualExercise.slide.exercise_id, 3],
-])
-
-const scoreMaximumFor = (exerciseId: string): number =>
-  scoreMaximumByExerciseId.get(exerciseId) ?? 1
+const scoreMaximumFor = (state: MoocMockState, exerciseId: string): number =>
+  state.scoreMaximumByExerciseId.get(exerciseId) ?? 1
 
 /** True once a submission has been polled enough that grading has "completed". */
 const isGraded = (record: SubmissionRecord): boolean => record.polls > 1
@@ -286,10 +356,12 @@ const isGraded = (record: SubmissionRecord): boolean => record.polls > 1
  * the try limit exhausted. The mock models the full-points half; no fixture
  * limits tries.
  */
-const modelSolutionRevealed = (exerciseId: string): boolean => {
-  const records = submissionsByExercise.get(exerciseId) ?? []
+const modelSolutionRevealed = (state: MoocMockState, exerciseId: string): boolean => {
+  const records = state.submissionsByExercise.get(exerciseId) ?? []
   return records.some(
-    (record) => isGraded(record) && outcomeOf(record).score_given >= scoreMaximumFor(exerciseId),
+    (record) =>
+      isGraded(record) &&
+      outcomeOf(state, record).score_given >= scoreMaximumFor(state, exerciseId),
   )
 }
 
@@ -298,8 +370,11 @@ const modelSolutionRevealed = (exerciseId: string): boolean => {
  * attached once it may be revealed. The list view never reveals one, mirroring
  * the host's `client_tasks_from_slide` callers.
  */
-const revealModelSolutions = (exercise: MoocExerciseFixture): ExerciseSlide => {
-  if (!modelSolutionRevealed(exercise.slide.exercise_id)) {
+const revealModelSolutions = (
+  state: MoocMockState,
+  exercise: MoocExerciseFixture,
+): ExerciseSlide => {
+  if (!modelSolutionRevealed(state, exercise.slide.exercise_id)) {
     return exercise.slide
   }
   return {
@@ -336,11 +411,12 @@ const GRADING_OUTCOMES = {
 } as const
 
 const outcomeOf = (
+  state: MoocMockState,
   record: SubmissionRecord,
 ): (typeof GRADING_OUTCOMES)[keyof typeof GRADING_OUTCOMES] =>
-  GRADING_OUTCOMES[exerciseById.get(record.exerciseId)?.gradingOutcome ?? "passing"]
+  GRADING_OUTCOMES[state.fixtures.exerciseById.get(record.exerciseId)?.gradingOutcome ?? "passing"]
 
-const gradingStatus = (record: SubmissionRecord): unknown => {
+const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown => {
   // First poll: not graded yet. Subsequent polls: the exercise's terminal
   // grading outcome. Deterministic (poll-count based) rather than wall-clock
   // based so tests are not flaky.
@@ -348,8 +424,8 @@ const gradingStatus = (record: SubmissionRecord): unknown => {
     return "NoGradingYet"
   }
   const now = new Date().toISOString()
-  const outcome = exerciseById.get(record.exerciseId)?.gradingOutcome ?? "passing"
-  const grading = outcomeOf(record)
+  const outcome = state.fixtures.exerciseById.get(record.exerciseId)?.gradingOutcome ?? "passing"
+  const grading = outcomeOf(state, record)
   return {
     Grading: {
       grading_progress: grading.grading_progress,
@@ -367,10 +443,11 @@ const gradingStatus = (record: SubmissionRecord): unknown => {
 
 /**
  * Builds the openapi-backend instance with all client operation handlers
- * registered. Handlers return a {@link MockResponse}; the postResponseHandler
- * validates its body against the spec before writing it.
+ * registered, every one of them reading and writing `state` alone. Handlers
+ * return a {@link MockResponse}; the postResponseHandler validates its body
+ * against the spec before writing it.
  */
-export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBackend => {
+const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): OpenAPIBackend => {
   // Load the spec as an object and run in `quick` mode. Quick mode skips
   // openapi-backend's OpenAPI meta-schema validation of the DOCUMENT (which
   // rejects this valid OpenAPI 3.1 doc -- utoipa emits 3.1 features like
@@ -390,8 +467,9 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
   // requestBody". Its path param is trivial (a uuid), the multipart rules are
   // enforced in the handler, and its response is still validated by the
   // postResponseHandler -- the drift guard that matters. Submit IS validated:
-  // its body is plain JSON now, so a submit omitting `uploaded_file_ids`
-  // (required, no default) must be rejected as the real host rejects it.
+  // its body is plain JSON, so the spec's rules on its path param and on the
+  // body's slide and task ids apply before the handler runs. `data_files` is
+  // optional there, so nothing is rejected for omitting it.
   // NB: the constructor boolean-coerces the `validate` option, so the predicate
   // is assigned to the property directly (handleRequest honours a function).
   api.validate = (c: Context) => c.operation?.operationId !== "uploadClientExerciseFiles"
@@ -406,13 +484,13 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         // id must be a uuid + required fields missing -> spec violation
         return ok([{ id: 42 }])
       }
-      return ok(courses.map((c) => c.course))
+      return ok(state.fixtures.courses.map((c) => c.course))
     },
 
     // GET /api/v0/exercise-services/client/courses/{id}
     getClientCourse: (c: Context): MockResponse => {
       const id = String(c.request.params.id)
-      const found = findCourse(id)
+      const found = findCourse(state, id)
       if (!found) {
         return apiError("not_found", `no such course: ${id}`)
       }
@@ -422,7 +500,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
     // GET /api/v0/exercise-services/client/courses/{id}/exercises
     getClientCourseExercises: (c: Context): MockResponse => {
       const id = String(c.request.params.id)
-      const found = findCourse(id)
+      const found = findCourse(state, id)
       if (!found) {
         return apiError("not_found", `no such course: ${id}`)
       }
@@ -432,7 +510,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
     // GET /api/v0/exercise-services/client/courses/{id}/progress
     getClientCourseProgress: (c: Context): MockResponse => {
       const id = String(c.request.params.id)
-      const found = findCourse(id)
+      const found = findCourse(state, id)
       if (!found) {
         return apiError("not_found", `no such course: ${id}`)
       }
@@ -442,15 +520,17 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       return ok({
         course_id: found.course.id,
         exercises: found.exercises.map((e) => {
-          const records = submissionsByExercise.get(e.slide.exercise_id) ?? []
+          const records = state.submissionsByExercise.get(e.slide.exercise_id) ?? []
           const graded = records.filter((r) => isGraded(r))
-          const scores = graded.map((r) => outcomeOf(r).score_given)
+          const scores = graded.map((r) => outcomeOf(state, r).score_given)
           const scoreGiven = scores.length > 0 ? Math.max(...scores) : 0
-          const completed = graded.some((r) => outcomeOf(r).grading_progress === "FullyGraded")
+          const completed = graded.some(
+            (r) => outcomeOf(state, r).grading_progress === "FullyGraded",
+          )
           return {
             exercise_id: e.slide.exercise_id,
             score_given: scoreGiven,
-            score_maximum: scoreMaximumFor(e.slide.exercise_id),
+            score_maximum: scoreMaximumFor(state, e.slide.exercise_id),
             completed,
             attempted: records.length > 0,
           }
@@ -468,14 +548,14 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         // (domain/error.rs). The spec documents this 422 (ApiErrorResponse).
         return apiError("not_enrolled", "not enrolled to this course")
       }
-      const exercise = exerciseById.get(id)
+      const exercise = state.fixtures.exerciseById.get(id)
       if (!exercise) {
         // An entirely unknown exercise id: the backend's get_by_id yields
         // RecordNotFound -> 404 (the spec documents 404 on this path). Distinct
         // from the not-enrolled 422 above.
         return apiError("not_found", `no such exercise: ${id}`)
       }
-      return ok(revealModelSolutions(exercise))
+      return ok(revealModelSolutions(state, exercise))
     },
 
     // POST /api/v0/exercise-services/client/exercises/{id}/files  (multipart)
@@ -486,7 +566,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         // stream, so enrollment outranks any multipart rule violation below.
         return apiError("not_enrolled", "not enrolled to this course")
       }
-      if (!exerciseById.has(exerciseId)) {
+      if (!state.fixtures.exerciseById.has(exerciseId)) {
         return apiError("not_found", `no such exercise: ${exerciseId}`)
       }
 
@@ -534,10 +614,10 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         return apiError("validation_error", "At least one file must be uploaded")
       }
 
-      const reaped = expireNextUpload
-      expireNextUpload = false
-      const stored = files.map((file) => retainUpload(exerciseId, file, reaped))
-      return ok({ data_files: stored.map((record) => answerFile(record)) })
+      const reaped = state.expireNextUpload
+      state.expireNextUpload = false
+      const stored = files.map((file) => retainUpload(state, exerciseId, file, reaped))
+      return ok({ data_files: stored.map((record) => answerFile(state, record)) })
     },
 
     // POST /api/v0/exercise-services/client/exercises/{id}/submit  (JSON)
@@ -548,7 +628,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         // this 422 on submit too.
         return apiError("not_enrolled", "not enrolled to this course")
       }
-      if (!exerciseById.has(exerciseId)) {
+      if (!state.fixtures.exerciseById.has(exerciseId)) {
         return apiError("not_found", `no such exercise: ${exerciseId}`)
       }
       // Request validation enforced the body shape. Only the slide and task are
@@ -564,11 +644,11 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       // The URL authorizes only the exercise; the slide and task ids come from the
       // body, so an unrelated exercise's slide/task must be rejected here or a
       // client could submit into it (host: verify_slide_and_task_belong).
-      const slide = slideById.get(body.exercise_slide_id)
+      const slide = state.slideById.get(body.exercise_slide_id)
       if (!slide) {
         return apiError("not_found", `no such exercise slide: ${body.exercise_slide_id}`)
       }
-      const taskSlideId = slideIdByTaskId.get(body.exercise_task_id)
+      const taskSlideId = state.slideIdByTaskId.get(body.exercise_task_id)
       if (!taskSlideId) {
         return apiError("not_found", `no such exercise task: ${body.exercise_task_id}`)
       }
@@ -608,7 +688,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         namedOnce.add(fileId)
       }
       for (const fileId of namedFiles) {
-        const upload = uploadsById.get(fileId)
+        const upload = state.uploadsById.get(fileId)
         // A file bound to another exercise is indistinguishable from one that was
         // never uploaded, exactly as in the host: both are `unknown_upload`.
         if (!upload || upload.exerciseId !== exerciseId) {
@@ -624,7 +704,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
           )
         }
       }
-      const record = retainSubmission(exerciseId, namedFiles)
+      const record = retainSubmission(state, exerciseId, namedFiles)
       return ok({
         task_submission_id: record.taskSubmissionId,
         slide_submission_id: record.slideSubmissionId,
@@ -635,7 +715,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
     // (id = exercise-task-submission id, from submit)
     getClientSubmissionGrading: (c: Context): MockResponse => {
       const id = String(c.request.params.id)
-      const record = submissionsByTaskId.get(id)
+      const record = state.submissionsByTaskId.get(id)
       if (!record) {
         // Unknown submission: the backend's get_by_id yields RecordNotFound ->
         // 404 (the spec now documents 404 on this path). Mirrors the real
@@ -643,19 +723,19 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         return apiError("not_found", `no such submission: ${id}`)
       }
       record.polls += 1
-      return ok(gradingStatus(record))
+      return ok(gradingStatus(state, record))
     },
 
     // GET /api/v0/exercise-services/client/exercises/{id}/submissions
     getClientExerciseSubmissions: (c: Context): MockResponse => {
       const exerciseId = String(c.request.params.id)
-      const records = submissionsByExercise.get(exerciseId) ?? []
+      const records = state.submissionsByExercise.get(exerciseId) ?? []
       // newest first -- each item's `id` is the slide-submission id. A graded
       // submission reports the exercise's actual grading outcome (score +
       // progress); an as-yet-ungraded one reports nulls.
       const items = [...records].toReversed().map((record) => {
         const graded = isGraded(record)
-        const outcome = outcomeOf(record)
+        const outcome = outcomeOf(state, record)
         return {
           id: record.slideSubmissionId,
           exercise_id: record.exerciseId,
@@ -671,7 +751,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
     // (id = exercise-slide-submission id, from the submissions list or submit)
     downloadClientSubmission: (c: Context): MockResponse => {
       const id = String(c.request.params.id)
-      const record = submissionsBySlideId.get(id)
+      const record = state.submissionsBySlideId.get(id)
       if (!record) {
         return apiError("not_found", `no such submission: ${id}`)
       }
@@ -683,12 +763,12 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       // Order numbers come from the position in the answer as submitted, so a reaped
       // file leaves a gap rather than renumbering the ones that survive it.
       const data_files = record.fileIds
-        .map((fileId, orderNumber) => ({ upload: uploadsById.get(fileId), orderNumber }))
+        .map((fileId, orderNumber) => ({ upload: state.uploadsById.get(fileId), orderNumber }))
         .filter(
           (entry): entry is { upload: UploadRecord; orderNumber: number } =>
             entry.upload !== undefined && !entry.upload.expired,
         )
-        .map((entry) => answerFile(entry.upload, entry.orderNumber))
+        .map((entry) => answerFile(state, entry.upload, entry.orderNumber))
       return ok({ data_files })
     },
 
@@ -696,7 +776,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
     // (id = exercise-slide-submission id)
     shareClientSubmission: (c: Context): MockResponse => {
       const id = String(c.request.params.id)
-      const record = submissionsBySlideId.get(id)
+      const record = state.submissionsBySlideId.get(id)
       if (!record) {
         // The backend looks the submission up before it can check ownership, so an
         // id it has no row for is a 404 here exactly as it is on grading and
@@ -705,7 +785,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         return apiError("not_found", `no such submission: ${id}`)
       }
       const token = randomUUID()
-      return ok({ paste_url: `${MOOC_MOCK_BASE_URL}/shared-submissions/${token}` })
+      return ok({ paste_url: `${state.baseUrl}/shared-submissions/${token}` })
     },
   })
 
@@ -803,10 +883,10 @@ const signClaim = (fileUploadId: string, expiresAt: number): string =>
   createHmac("sha256", DOWNLOAD_CLAIM_SECRET).update(`${fileUploadId}.${expiresAt}`).digest("hex")
 
 /** The `url` an answer file is read through, claim minted here and now. */
-const claimedFileUrl = (fileUploadId: string): string => {
+const claimedFileUrl = (state: MoocMockState, fileUploadId: string): string => {
   const expiresAt = Math.floor(Date.now() / 1000) + DOWNLOAD_CLAIM_LIFETIME_SECONDS
   const claim = `${expiresAt}.${signClaim(fileUploadId, expiresAt)}`
-  return `${MOOC_MOCK_BASE_URL}/api/v0/files/claimed/${fileUploadId}?${DOWNLOAD_CLAIM_PARAM}=${claim}`
+  return `${state.baseUrl}/api/v0/files/claimed/${fileUploadId}?${DOWNLOAD_CLAIM_PARAM}=${claim}`
 }
 
 /** Whether `claim` authorizes `fileUploadId` right now. */
@@ -851,20 +931,29 @@ const MAX_RETAINED_UPLOADS = 32
  * belongs to, so it is null for an upload that is not part of one yet -- which is every
  * file the upload endpoint returns.
  */
-const answerFile = (stored: UploadRecord, orderNumber: number | null = null) => ({
+const answerFile = (
+  state: MoocMockState,
+  stored: UploadRecord,
+  orderNumber: number | null = null,
+) => ({
   id: stored.id,
   name: stored.name,
   mime: stored.mime,
   size_bytes: stored.sizeBytes,
   order_number: orderNumber,
-  url: claimedFileUrl(stored.id),
+  url: claimedFileUrl(state, stored.id),
 })
 
 /**
  * Records one uploaded part. The returned `id` is freshly minted and is NEVER the
  * client's field name -- see {@link UploadRecord.id}.
  */
-const retainUpload = (exerciseId: string, file: MulterFile, reaped: boolean): UploadRecord => {
+const retainUpload = (
+  state: MoocMockState,
+  exerciseId: string,
+  file: MulterFile,
+  reaped: boolean,
+): UploadRecord => {
   const storedName = randomUUID().replaceAll("-", "")
   const record: UploadRecord = {
     id: randomUUID(),
@@ -875,18 +964,18 @@ const retainUpload = (exerciseId: string, file: MulterFile, reaped: boolean): Up
     exerciseId,
     expired: reaped,
   }
-  uploadsById.set(record.id, record)
+  state.uploadsById.set(record.id, record)
   if (!reaped) {
-    uploadBytesByStoredName.set(storedName, file.buffer)
+    state.uploadBytesByStoredName.set(storedName, file.buffer)
   }
-  evictOldUploads()
+  evictOldUploads(state)
   return record
 }
 
 /** Ids named by some submission, which retention must not evict. */
-const submittedUploadIds = (): Set<string> => {
+const submittedUploadIds = (state: MoocMockState): Set<string> => {
   const ids = new Set<string>()
-  for (const submission of submissionsByTaskId.values()) {
+  for (const submission of state.submissionsByTaskId.values()) {
     for (const fileId of submission.fileIds) {
       ids.add(fileId)
     }
@@ -894,20 +983,20 @@ const submittedUploadIds = (): Set<string> => {
   return ids
 }
 
-const evictOldUploads = (): void => {
-  if (uploadsById.size <= MAX_RETAINED_UPLOADS) {
+const evictOldUploads = (state: MoocMockState): void => {
+  if (state.uploadsById.size <= MAX_RETAINED_UPLOADS) {
     return
   }
-  const submitted = submittedUploadIds()
-  for (const [id, evicted] of uploadsById) {
-    if (uploadsById.size <= MAX_RETAINED_UPLOADS) {
+  const submitted = submittedUploadIds(state)
+  for (const [id, evicted] of state.uploadsById) {
+    if (state.uploadsById.size <= MAX_RETAINED_UPLOADS) {
       return
     }
     if (submitted.has(id)) {
       continue
     }
-    uploadsById.delete(id)
-    uploadBytesByStoredName.delete(evicted.storedName)
+    state.uploadsById.delete(id)
+    state.uploadBytesByStoredName.delete(evicted.storedName)
   }
 }
 
@@ -922,13 +1011,20 @@ const evictOldUploads = (): void => {
  *     object, and `/api/v0/files/<prefix>/:name` serves it. Both spec-exempt for
  *     the same reason: they are file-store URLs, not client API routes.
  */
-export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions = {}): void => {
-  const api = createMoocApi(options)
+export const registerMoocRoutes = (
+  app: Express,
+  options: CreateMoocApiOptions = {},
+): MoocMockControls => {
+  const state = createMoocMockState(options.baseUrl ?? DEFAULT_MOOC_MOCK_BASE_URL)
+  const controls = createMoocMockControls(state)
+  liveMocks.add(controls)
+  app.locals.moocMock = controls
+  const api = createMoocApi(state, options)
 
   // Spec-exempt archive route (see doc comment above).
   app.get("/mooc-archives/:archive", (req, res, next) => {
     const archive = req.params.archive.replace(/\.tar\.zst$/, "")
-    const exercise = exerciseByArchiveSlug.get(archive)
+    const exercise = state.fixtures.exerciseByArchiveSlug.get(archive)
     if (!exercise || !fs.existsSync(exercise.sourceDir)) {
       return next()
     }
@@ -942,9 +1038,8 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
 
   // Spec-exempt claim route: resolves an answer file's `url` to the object, as the
   // real host does (controllers/files.rs: redirect_claimed_file). The Location is
-  // RELATIVE on purpose -- the claim URL carries the fixed MOOC_MOCK_BASE_URL host
-  // while the in-process suites listen on a random port, so an absolute one would
-  // send the follower to a port nothing is serving.
+  // RELATIVE on purpose, as the host's is: it resolves against whichever host the
+  // request arrived on, so a client reaching the mock by any name still follows it.
   app.get("/api/v0/files/claimed/:id", (req, res, next) => {
     const claim = req.query[DOWNLOAD_CLAIM_PARAM]
     if (typeof claim !== "string") {
@@ -955,8 +1050,8 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
       const rejected = apiError("validation_error", "Download claim does not authorize this file")
       return res.status(rejected.status).json(rejected.body)
     }
-    const stored = uploadsById.get(req.params.id)
-    if (!stored || !uploadBytesByStoredName.has(stored.storedName)) {
+    const stored = state.uploadsById.get(req.params.id)
+    if (!stored || !state.uploadBytesByStoredName.has(stored.storedName)) {
       return next()
     }
     res.setHeader("cache-control", "max-age=300, private")
@@ -969,7 +1064,7 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
   // host's upload URLs are `/api/v0/files/<prefix>/<random>` and sit outside the
   // client spec, so this path shape is faithful and deliberately spec-exempt.
   app.get(`/api/v0/files/${CLIENT_UPLOAD_PATH_PREFIX}/:name`, (req, res, next) => {
-    const bytes = uploadBytesByStoredName.get(req.params.name)
+    const bytes = state.uploadBytesByStoredName.get(req.params.name)
     if (!bytes) {
       return next()
     }
@@ -977,25 +1072,34 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
     res.send(bytes)
   })
 
-  // Spec-exempt observation route; see the module-level state above.
+  // The /mooc-mock/* control routes below sit on the app rather than on
+  // moocRouter, so they stay outside the bearer middleware: a test drives them
+  // before it holds a token, and the real backend has no counterpart to
+  // authenticate them against. They parse their own JSON bodies, as the OAuth
+  // routes parse their own form bodies.
+  const json = express.json()
+
+  // Spec-exempt observation route; see MoocMockState's auth-observation members.
   app.get("/mooc-mock/auth-state", (_req, res) => {
-    res.json({ lastAuthorization, authenticatedRequestCount })
+    res.json({
+      lastAuthorization: state.lastAuthorization,
+      authenticatedRequestCount: state.authenticatedRequestCount,
+    })
   })
 
   // Spec-exempt reset route: lets an out-of-process consumer sharing one
   // long-lived mock (notably the Playwright fixtures) isolate each test.
-  // In-process (vitest) tests call resetMooc*State directly.
   app.post("/mooc-mock/reset", (_req, res) => {
-    resetMoocState()
+    controls.reset()
     resetMoocOAuthState()
     res.status(204).end()
   })
 
   // Spec-exempt seeding route for out-of-process consumers; see
-  // {@link seedMoocFilelessSubmission}.
-  app.post("/mooc-mock/seed-fileless-submission", (req, res) => {
+  // {@link MoocMockControls.seedFilelessSubmission}.
+  app.post("/mooc-mock/seed-fileless-submission", json, (req, res) => {
     const exerciseId = String((req.body as { exercise_id?: unknown })?.exercise_id ?? "")
-    const seeded = seedMoocFilelessSubmission(exerciseId)
+    const seeded = controls.seedFilelessSubmission(exerciseId)
     if (!seeded) {
       res.status(404).json({ error: `no such exercise: ${exerciseId}` })
       return
@@ -1009,7 +1113,7 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
   // Spec-exempt reaper simulation for out-of-process consumers: arms the reaper
   // on the next upload so the submit that follows it sees `upload_expired`.
   app.post("/mooc-mock/expire-next-upload", (_req, res) => {
-    expireNextMoocUpload()
+    controls.expireNextUpload()
     res.status(204).end()
   })
 
@@ -1017,7 +1121,7 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
   // named access token (or every live one), so the next resource call 401s while
   // the client still believes its stored token is good -- the only way to reach
   // the reactive refresh-and-retry path from outside this process.
-  app.post("/mooc-mock/expire-access-token", (req, res) => {
+  app.post("/mooc-mock/expire-access-token", json, (req, res) => {
     const accessToken = (req.body as { access_token?: unknown })?.access_token
     if (accessToken !== undefined && typeof accessToken !== "string") {
       res.status(400).json({ error: "access_token must be a string" })
@@ -1031,6 +1135,11 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
   })
 
   const moocRouter = express.Router()
+
+  // The router parses its own JSON bodies rather than assuming the host app
+  // mounted a parser: `handle` forwards req.body to openapi-backend, which
+  // validates the submit body against the spec.
+  moocRouter.use(json)
 
   const requireAuth = options.requireAuth ?? true
 
@@ -1063,8 +1172,8 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
         )
         return
       }
-      lastAuthorization = header
-      authenticatedRequestCount += 1
+      state.lastAuthorization = header
+      state.authenticatedRequestCount += 1
       next()
     })
   }
@@ -1118,13 +1227,40 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
 
   // Device-flow OAuth endpoints. Registered separately and deliberately NOT
   // spec-validated (they are not part of the exercise-services client spec).
-  registerMoocOAuthRoutes(app)
+  registerMoocOAuthRoutes(app, () => state.baseUrl)
+
+  return controls
 }
 
-/** Builds a standalone Express app hosting only the mooc mock (used by tests). */
+/** The mock mounted on `app`, for a test that drives its state directly. */
+export const moocMockOf = (app: Express): MoocMockControls =>
+  app.locals.moocMock as MoocMockControls
+
+/**
+ * Builds a standalone Express app hosting only the mooc mock (used by tests).
+ * Unless `baseUrl` names one, the app rebases its mock onto the address it
+ * actually binds, so a suite listening on port 0 gets URLs it can follow
+ * verbatim instead of ones naming the default port.
+ */
 export const createMoocApp = (options: CreateMoocApiOptions = {}): Express => {
   const app = express()
-  app.use(express.json())
-  registerMoocRoutes(app, options)
+  const mock = registerMoocRoutes(app, options)
+  if (options.baseUrl !== undefined) {
+    return app
+  }
+  type Listen = Express["listen"]
+  const bind = app.listen.bind(app) as Listen
+  app.listen = ((...args: Parameters<Listen>) => {
+    const server = bind(...args)
+    // Prepended so the base URL is right before the caller's own listening
+    // callback runs and starts driving the mock.
+    server.prependListener("listening", () => {
+      const address = server.address()
+      if (address !== null && typeof address !== "string") {
+        mock.rebase(`http://localhost:${address.port}`)
+      }
+    })
+    return server
+  }) as Listen
   return app
 }
