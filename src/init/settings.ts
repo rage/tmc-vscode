@@ -1,7 +1,7 @@
 import type { ActionContext } from "../actions/types"
 import { Logger } from "../utilities"
 
-export async function registerSettingsCallbacks(actionContext: ActionContext): Promise<void> {
+export function registerSettingsCallbacks(actionContext: ActionContext): void {
   const { settings, workspaceManager } = actionContext
   if (!workspaceManager.ok) {
     Logger.error("The extension was not initialized properly")
