@@ -57,13 +57,21 @@ export function v0_resolveExercisePath(
   )
 }
 
-// from v1, the directory for the exercises is managed by langs
+/**
+ * Hands the v0 exercises that are still on disk over to langs, which owns the
+ * exercise directory from v1 on.
+ *
+ * Returns `course/name` for every exercise langs refused. The v0 record is the
+ * only remaining pointer to those files, so a non-empty return means the
+ * caller must keep it. Exercises whose files are already gone are dropped
+ * rather than reported: there is nothing left to point at.
+ */
 export async function v1_migrateFromV0(
   exerciseData: data.v0.LocalExerciseData[],
   memento: vscode.Memento,
   dialog: Dialog,
   langs: Langs,
-): Promise<void> {
+): Promise<string[]> {
   interface ExtensionSettingsPartial {
     dataPath: string
   }
@@ -99,9 +107,10 @@ export async function v1_migrateFromV0(
   }
 
   if (exercisesToMigrate.length === 0) {
-    return
+    return []
   }
 
+  const unmigrated: string[] = []
   const message =
     "Migrating exercises on disk for extension version 2. Please do not close the editor..."
   const result = await dialog.progressNotification(message, async (progress) => {
@@ -114,6 +123,7 @@ export async function v1_migrateFromV0(
         atLeastOneSuccess = true
       } else {
         Logger.error(`Migration failed for exercise ${course}/${name}:`, migrationResult.val)
+        unmigrated.push(`${course}/${name}`)
       }
 
       progress.report({
@@ -138,6 +148,8 @@ export async function v1_migrateFromV0(
       Logger.error("Failed to migrate status of closed exercises.", closeExercisesResult.val)
     }
   }
+
+  return unmigrated
 }
 
 export default async function migrateExerciseDataToLatest(
@@ -153,8 +165,16 @@ export default async function migrateExerciseDataToLatest(
     z.array(data.v0.localExerciseDataSchema),
   )
   if (dataV0) {
-    await v1_migrateFromV0(dataV0, memento, dialog, tmc)
-    supersededKeys.push(data.v0.EXERCISE_DATA_KEY)
+    const unmigrated = await v1_migrateFromV0(dataV0, memento, dialog, tmc)
+    if (unmigrated.length === 0) {
+      supersededKeys.push(data.v0.EXERCISE_DATA_KEY)
+    } else {
+      Logger.error("Exercises left unmigrated:", unmigrated.join(", "))
+      await dialog.warningNotification(
+        `${unmigrated.length} exercise(s) could not be migrated and were left where they are. ` +
+          "The migration will try again the next time the extension starts.",
+      )
+    }
   }
 
   // to support the mooc backend, langs stores new courses in distinct tmc and mooc dirs

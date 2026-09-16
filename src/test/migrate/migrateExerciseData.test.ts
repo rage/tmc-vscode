@@ -1,3 +1,5 @@
+import { Err, Ok } from "ts-results"
+import { vi } from "vitest"
 import type * as vscode from "vscode"
 
 import type Dialog from "../../api/dialog"
@@ -90,6 +92,22 @@ suite("Exercise data migration", function () {
         "closed-exercises-for:test-python-course",
         testValue,
       )
+    })
+  })
+
+  suite("with a partial migration", function () {
+    test("keeps the v0 data when langs refuses an exercise", async function () {
+      const dataPath = makeTmpDirs(virtualFileSystem)
+      await memento.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(dataPath))
+      vi.mocked(tmcMock.migrateExercise)
+        .mockResolvedValueOnce(Ok.EMPTY)
+        .mockResolvedValueOnce(Err(new Error("langs refused the exercise")))
+
+      const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
+
+      // The v0 record is the only pointer left to the files langs did not take.
+      expect(migrated.supersededKeys).toEqual([])
+      expect(dialogMock.warningNotification).toHaveBeenCalled()
     })
   })
 })
