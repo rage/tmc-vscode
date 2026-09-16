@@ -42,6 +42,43 @@ suite("ExercisePart component", () => {
     expect(screen.getByText("Opened")).toBeInTheDocument()
   })
 
+  test("states the soft-deadline policy once, with only the date in each row", () => {
+    const group = tmcExerciseGroup({
+      exercises: [
+        {
+          id: makeTmcKind({ tmcExerciseId: 101 }),
+          name: "part01-01_hello",
+          isHard: false,
+          hardDeadlineString: "2026-01-31",
+          softDeadlineString: "2026-01-01",
+          passed: true,
+        },
+        {
+          id: makeTmcKind({ tmcExerciseId: 102 }),
+          name: "part01-02_bye",
+          isHard: false,
+          hardDeadlineString: "2026-02-28",
+          softDeadlineString: "2026-02-01",
+          passed: false,
+        },
+      ],
+    })
+    render(ExercisePart, {
+      props: {
+        exerciseGroup: group,
+        onDownloadAll: noop,
+        onOpenAll: noop,
+        onCloseAll: noop,
+        checkedExercises: { tmc: {}, mooc: {} },
+        exerciseStatuses: { tmc: {}, mooc: {} },
+      },
+    })
+
+    expect(screen.getAllByText(/award only 75% of the exercise points/)).toHaveLength(1)
+    expect(screen.getByText(/Hard deadline: 2026-01-31/)).toBeInTheDocument()
+    expect(screen.getByText(/Hard deadline: 2026-02-28/)).toBeInTheDocument()
+  })
+
   test("Download all passes every exercise identifier back to the callback", () => {
     const onDownloadAll = vi.fn()
     render(ExercisePart, {

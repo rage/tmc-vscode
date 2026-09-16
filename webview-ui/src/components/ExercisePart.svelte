@@ -89,6 +89,7 @@
     exerciseGroup.exercises.filter((e) => getStatus(e.id) === "opened").length,
   )
   const totalExercises = $derived(exerciseGroup.exercises.length)
+  const hasSoftDeadline = $derived(exerciseGroup.exercises.some((exercise) => !exercise.isHard))
   const allExercisesAreChecked = $derived(
     exerciseGroup.exercises.every((exercise) => isChecked(exercise.id)),
   )
@@ -96,15 +97,6 @@
     exerciseGroup.exercises.some((exercise) => isChecked(exercise.id)),
   )
 
-  function getHardDeadlineInformation(deadline: string) {
-    return (
-      "This is a soft deadline and it can be exceeded. " +
-      "Exercises can be submitted after the soft deadline has passed, " +
-      "but you receive only 75% of the exercise points. " +
-      `Hard deadline for this exercise is: ${deadline}. ` +
-      "Hard deadline can not be exceeded."
-    )
-  }
   function checkAllExercises(checked: boolean) {
     setChecked(
       exerciseGroup.exercises.map((exercise) => exercise.id),
@@ -136,6 +128,13 @@
     </div>
 
     <div class="next-deadline">{exerciseGroup.nextDeadlineString}</div>
+
+    {#if hasSoftDeadline}
+      <div class="deadline-policy">
+        A soft deadline can be exceeded: exercises submitted after it still count, but award only
+        75% of the exercise points. A hard deadline cannot be exceeded.
+      </div>
+    {/if}
 
     <vscode-table zebra responsive breakpoint="480">
       <vscode-table-header slot="header">
@@ -175,12 +174,14 @@
                   {exercise.softDeadlineString}
                   <span
                     class="deadline-info"
-                    title={getHardDeadlineInformation(exercise.hardDeadlineString)}
+                    title={`Hard deadline: ${exercise.hardDeadlineString}`}
                   >
                     <vscode-icon name="info"></vscode-icon>
                   </span>
+                  <!-- `title` is unreachable without a pointer, so the same text is also
+                       exposed to assistive technology. -->
                   <span class="visually-hidden">
-                    {getHardDeadlineInformation(exercise.hardDeadlineString)}
+                    Hard deadline: {exercise.hardDeadlineString}
                   </span>
                 </span>
               {/if}
@@ -222,6 +223,10 @@
   }
   .next-deadline {
     margin-bottom: 0.8rem;
+  }
+  .deadline-policy {
+    margin-bottom: 0.8rem;
+    opacity: 90%;
   }
   .checkbox-cell {
     width: 2rem;
