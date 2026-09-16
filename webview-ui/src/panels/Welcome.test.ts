@@ -33,8 +33,8 @@ suite("Welcome panel", () => {
     ).toBeInTheDocument()
   })
 
-  // The list used to be hand-written here and fell two releases behind, so what
-  // matters is that the panel shows whatever CHANGELOG.md currently says.
+  // What matters is that the panel shows whatever CHANGELOG.md currently says,
+  // not a fixed list this test would have to be kept in step with.
   test("renders every generated release note", () => {
     render(Welcome, { props: { panel } })
     expect(releaseNotes.length).toBeGreaterThan(0)

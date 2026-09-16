@@ -2,11 +2,10 @@
 //
 //   CHANGELOG.md  ->  webview-ui/src/generated/releaseNotes.ts
 //
-// The panel used to carry its own hand-written copy of the list, which fell two
-// releases behind; generating it is what keeps the upgrade screen telling the
-// truth. Run via `pnpm run generate:release-notes`, which `webview:build`
-// chains; the output is committed, and `--check` fails when it has drifted from
-// CHANGELOG.md.
+// Generating the list is what stops the upgrade screen from telling a user
+// about a release older than the one they just installed. Run via
+// `pnpm run generate:release-notes`, which `webview:build` chains; the output is
+// committed, and `--check` fails when it has drifted from CHANGELOG.md.
 import { execFileSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
