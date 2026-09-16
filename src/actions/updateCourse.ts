@@ -17,7 +17,8 @@ import { Logger } from "../utilities"
 import {
   combineMoocApiExerciseData,
   combineTmcApiExerciseData,
-  sumMoocCoursePoints,
+  sumCoursePoints,
+  sumTmcApiCoursePoints,
 } from "../utilities/apiData"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ActionContext } from "./types"
@@ -136,10 +137,7 @@ export async function updateCourse(
     updateResult.val,
     async (tmc) => {
       const { details, exercises, settings } = tmc
-      const [availablePoints, awardedPoints] = exercises.reduce(
-        (a, b) => [a[0] + b.available_points.length, a[1] + b.awarded_points.length],
-        [0, 0],
-      )
+      const { availablePoints, awardedPoints } = sumTmcApiCoursePoints(exercises)
 
       courseData.data = {
         ...courseData.data,
@@ -190,7 +188,7 @@ export async function updateCourse(
         previousExercises,
       )
 
-      const { availablePoints, awardedPoints } = sumMoocCoursePoints(localExercises)
+      const { availablePoints, awardedPoints } = sumCoursePoints(localExercises)
       courseData.data = {
         ...courseData.data,
         availablePoints,

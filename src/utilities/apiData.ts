@@ -98,6 +98,3 @@ export function sumTmcApiCoursePoints(courseExercises: CourseExercise[]): Course
     })),
   )
 }
-
-/** @deprecated Call {@link sumCoursePoints}. */
-export const sumMoocCoursePoints = sumCoursePoints
