@@ -101,7 +101,13 @@ async function ensureLangsUpdated(
   const { downloadUrl, version } = config
 
   Logger.info("Platform " + process.platform + " Arch " + process.arch)
-  const executable = getLangsCLIForPlatform(getPlatform(), version)
+  const platform = getPlatform()
+  if (platform === "unsupported") {
+    return Err(
+      new InitializationError(`No tmc-langs-cli build for ${process.platform}/${process.arch}`),
+    )
+  }
+  const executable = getLangsCLIForPlatform(platform, version)
   Logger.info("TMC-Langs version: " + executable)
 
   // download CLI if necessary

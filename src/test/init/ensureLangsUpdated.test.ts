@@ -366,3 +366,44 @@ suite("ensureLangsUpdated end-to-end", function () {
     expect(state.hits.sha).toBe(1)
   })
 })
+
+suite("ensureLangsUpdated on an unsupported platform", function () {
+  let tmpDir: tmp.DirResult
+
+  beforeEach(function () {
+    tmpDir = tmp.dirSync({ unsafeCleanup: true })
+  })
+
+  afterEach(function () {
+    tmpDir.removeCallback()
+    vi.doUnmock("../../utilities/env")
+    vi.resetModules()
+  })
+
+  test("names the platform instead of downloading a binary that cannot run", async function () {
+    vi.resetModules()
+    vi.doMock("../../utilities/env", () => ({
+      getAllLangsCLIs: () => [],
+      getPlatform: () => "unsupported",
+      getLangsCLIForPlatform: () => {
+        throw new Error("no build")
+      },
+    }))
+    const unsupported = await import("../../init/ensureLangsUpdated")
+    // Same fresh module registry, so the error class compares by identity.
+    const { InitializationError: FreshInitializationError } = await import("../../errors")
+    const [dialog] = createDialogMock()
+
+    const result = await unsupported.ensureLangsUpdated(path.join(tmpDir.name, "cli"), dialog, {
+      downloadUrl: "http://127.0.0.1:9/never-reached/",
+      version: "0.0.0-test",
+    })
+
+    expect(result.err).toBe(true)
+    if (result.err) {
+      expect(result.val).toBeInstanceOf(FreshInitializationError)
+      expect(result.val.message).toContain(process.platform)
+      expect(result.val.message).toContain(process.arch)
+    }
+  })
+})
