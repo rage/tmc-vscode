@@ -787,7 +787,7 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("testError"),
     target: targetPanelSchema("ExerciseTests"),
-    error: z.custom<BaseError>(),
+    error: WebviewErrorSchema,
   }),
   // the submit never started, so the panel it would have opened never appears;
   // tells the ExerciseTests panel still on screen to re-enable its buttons

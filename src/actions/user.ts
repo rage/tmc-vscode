@@ -153,7 +153,7 @@ export async function testExercise(
             TmcPanel.postMessage({
               type: "testError",
               target: panel,
-              error: testResults.val,
+              error: toWebviewError(testResults.val),
             })
             return Ok.EMPTY
           }
@@ -165,7 +165,7 @@ export async function testExercise(
             TmcPanel.postMessage({
               type: "testError",
               target: panel,
-              error: validationResults.val,
+              error: toWebviewError(validationResults.val),
             })
             return Ok.EMPTY
           }

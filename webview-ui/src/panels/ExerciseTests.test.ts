@@ -190,15 +190,7 @@ suite("ExerciseTests panel", () => {
     expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
     getButton("Submit to server").click()
 
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "testError",
-          target: { type: "ExerciseTests", id: panel.id },
-          error: new Error("boom"),
-        },
-      }),
-    )
+    postTestError({ message: "boom" })
     await tick()
 
     postedMessages.mockClear()
