@@ -19,7 +19,14 @@ export function registerCommands(
   context.subscriptions.push(
     vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
     vscode.commands.registerCommand("tmcTreeView.refreshCourses", async () => {
-      await actions.refreshEverything(actionContext, { silent: false })
+      await dialog.progressNotification("Fetching course updates...", async (progress) => {
+        await actions.refreshEverything(actionContext, {
+          silent: false,
+          onProgress: (done, total) => {
+            progress.report({ percent: total === 0 ? 1 : done / total })
+          },
+        })
+      })
     }),
 
     // Commands shown to user in Command Palette / TMC Action menu

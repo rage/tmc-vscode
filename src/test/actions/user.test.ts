@@ -345,6 +345,37 @@ suite("checkForCourseUpdates action", function () {
     expect(dialog.notification).not.toHaveBeenCalled()
   })
 
+  test("refreshes the other courses after one fails, and names the failure", async function () {
+    vi.mocked(updateCourse).mockImplementation(async (_actionContext, id) =>
+      CourseIdentifier.toString(id) === "1" ? Err(new Error("boom")) : Ok(true),
+    )
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, []), tmcCourse(2, 0, [])])
+
+    const result = await checkForCourseUpdates(actionContext)
+
+    expect(updateCourse).toHaveBeenCalledTimes(2)
+    expect(result.err && result.val.message).toContain("course-1")
+    // The caller decides whether a background failure is worth a toast.
+    expect(dialog.errorNotification).not.toHaveBeenCalled()
+  })
+
+  test("reports progress as each course finishes", async function () {
+    const reported: [number, number][] = []
+    const [actionContext] = contextWithCourses([tmcCourse(1, 0, []), tmcCourse(2, 0, [])])
+
+    await checkForCourseUpdates(actionContext, {
+      onProgress: (done, total) => {
+        reported.push([done, total])
+      },
+    })
+
+    expect(reported).toEqual([
+      [0, 2],
+      [1, 2],
+      [2, 2],
+    ])
+  })
+
   test("refreshes and notifies for a course whose reminder is due", async function () {
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
 
