@@ -4,7 +4,7 @@ import { vi } from "vitest"
 import type { ActionContext } from "../../actions/types"
 import { updateExercises } from "../../commands/updateExercises"
 import type Settings from "../../config/settings"
-import { postUpdateables } from "../../panels/updateablesRegistry"
+import { postUpdateables } from "../../panels/exerciseLists"
 import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
 import {
   CourseIdentifier as CourseIdentifierNs,
@@ -21,7 +21,7 @@ vi.mock("../../actions", () => ({
   downloadOrUpdateExercises,
 }))
 
-vi.mock("../../panels/updateablesRegistry", () => ({
+vi.mock("../../panels/exerciseLists", () => ({
   postUpdateables: vi.fn(),
 }))
 

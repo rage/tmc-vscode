@@ -1,7 +1,7 @@
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
 import { NOTIFICATION_DELAY } from "../config/constants"
-import { postUpdateables } from "../panels/updateablesRegistry"
+import { postUpdateables } from "../panels/exerciseLists"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 

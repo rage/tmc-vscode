@@ -1,7 +1,7 @@
 import { Result } from "ts-results"
 
+import { postUpdateables } from "../panels/exerciseLists"
 import { TmcPanel } from "../panels/TmcPanel"
-import { postUpdateables } from "../panels/updateablesRegistry"
 import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities/"

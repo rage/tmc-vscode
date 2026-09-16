@@ -3,10 +3,11 @@ import * as vscode from "vscode"
 
 import type Langs from "../../api/langs"
 import { ConnectionError, ForbiddenError } from "../../errors"
+import { postUpdateables } from "../../panels/exerciseLists"
 import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import type { WebviewHandlers } from "../../panels/TmcPanel"
 import { randomPanelId, registerWebviewHandlers, TmcPanel } from "../../panels/TmcPanel"
-import { postUpdateables, updateablesRegistry } from "../../panels/updateablesRegistry"
+import { updateablesRegistry } from "../../panels/updateablesRegistry"
 import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
@@ -151,6 +152,47 @@ async function mountSidePanel(actionContext: ReturnType<typeof createMockActionC
 }
 
 suite("TmcPanel initialization guards", () => {
+  test("a panel waiting on data is told it is not coming", async () => {
+    // Nothing else ever answers `requestMyCoursesData`, so returning silently here
+    // leaves the panel on its spinner for the rest of the session.
+    const actionContext = createMockActionContext({ userData: "err" })
+    const { panel, listener } = await mountSidePanel(actionContext)
+    const sourcePanel = { id: 5, type: "MyCourses" as const, courseDeadlines: {} }
+
+    await listener({ type: "requestMyCoursesData", sourcePanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "panelDataError",
+        target: sourcePanel,
+        error: { message: expect.stringContaining("did not initialize properly") },
+      }),
+    )
+  })
+
+  test("a course that cannot be read is reported to the panel showing it", async () => {
+    const actionContext = {
+      ...createMockActionContext(),
+      userData: Ok({ getCourse: () => Err(new Error("no such course")) }),
+    } as unknown as ReturnType<typeof createMockActionContext>
+    const { panel, listener } = await mountSidePanel(actionContext)
+    const sourcePanel = {
+      id: 5,
+      type: "CourseDetails" as const,
+      courseId: CourseIdentifier.from(42),
+      exerciseStatuses: { tmc: {}, mooc: {} },
+    }
+
+    await listener({ type: "requestCourseDetailsData", sourcePanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "panelDataError",
+        error: { message: "no such course" },
+      }),
+    )
+  })
+
   test("a click that cannot be served is reported, with a route to the help panel", async () => {
     const actionContext = createMockActionContext()
     actionContext.userData = Err(new Error("no user data"))
@@ -212,6 +254,27 @@ suite("TmcPanel handler dispatch", () => {
     expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
       "Errored while closing selected exercises.",
       expect.any(Error),
+    )
+  })
+
+  test("reports a handler that rejects instead of dropping it", async () => {
+    // The webview host discards whatever a listener rejects with, so nothing else
+    // would tell the user their click failed.
+    const handlers = stubHandlers()
+    handlers.closeExercises.mockRejectedValue(new Error("handler exploded"))
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createMockActionContext()
+    const { listener } = await mountSidePanel(actionContext)
+
+    await listener({
+      type: "closeExercises",
+      ids: [ExerciseIdentifier.from(101)],
+      courseId: CourseIdentifier.from(42),
+    })
+
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      "Something went wrong while handling that action.",
+      expect.objectContaining({ message: "handler exploded" }),
     )
   })
 
