@@ -2,6 +2,7 @@
   import { onMount } from "svelte"
 
   import Button from "../components/Button.svelte"
+  import { releaseNotes } from "../generated/releaseNotes"
   import type { WelcomePanel } from "../shared/shared"
   import { assertUnreachable } from "../shared/shared"
   import { addMessageListener } from "../utilities/script"
@@ -81,99 +82,14 @@
           <a href="https://github.com/rage/tmc-vscode/blob/master/CHANGELOG.md">CHANGELOG</a>.
         </p>
 
-        <!-- This list should generally contain only the last couple versions/months worth of updates -->
-        <h3>3.5.3 - 2026-06-12</h3>
-        <h4>Fixed the extension failing to start when downloading the CLI</h4>
-        <p>
-          On VS Code 1.123 and later (Windows), the langs CLI checksum file could be read before its
-          download had finished, causing the extension to fail to start when the CLI was downloaded
-          or redownloaded. This has been fixed.
-        </p>
-        <h3>3.5.2 - 2026-06-12</h3>
-        <h4>Fixed unnecessary CLI redownloads on startup</h4>
-        <p>
-          The langs CLI checksum was compared case-sensitively, so it was re-downloaded on every
-          startup. Checksums are now compared case-insensitively.
-        </p>
-        <h3>3.5.1 - 2025-11-20</h3>
-        <h4>Fixed CLI hash comparison on Windows</h4>
-        <p>
-          SHA256 hashes calculated on Windows were returned in uppercase, causing spurious hash
-          comparison failures. This has been fixed.
-        </p>
-        <h4>Improved error messages on failure to run CLI</h4>
-        <p>
-          If the CLI fails to execute properly for some reason, the error messaging should now make
-          it more clear to the user how to attempt resolving the issue.
-        </p>
-        <h3>3.5.0 - 2025-10-09</h3>
-        <h4>Improved exercise submission packaging to avoid overly large archives</h4>
-        <p>
-          Previously, some unnecessary files were included when packaging exercise submissions,
-          sometimes leading to very large archives if a large file happened to be in the exercise
-          directory.
-        </p>
-        <h4>Improved extension data migration from one version to the next</h4>
-        <p>
-          The format of the extension data may change between extension releases, and in such cases
-          it's necessary to migrate data from the previous format to the new one. This operation has
-          been made more robust in preparation for a future update.
-        </p>
-        <h3>3.4.2 - 2025-08-25</h3>
-        <h4>Removed an unnecessary dependency which could cause errors</h4>
-        <p>
-          The previous version contained a dependency on an unnecessary library which caused an
-          error when the library was missing on the user's computer.
-        </p>
-        <h3>3.4.1 - 2025-08-21</h3>
-        <h4>Fixed Python exercises including venv directories when packaging</h4>
-        <p>
-          Previously, if an exercise contained a venv directory it would get included during
-          submissions and cause issues at the server. Now these directories are ignored during
-          packaging.
-        </p>
-        <h3>3.4.0 - 2025-07-17</h3>
-        <h4>Improved error handling during initialization</h4>
-        <p>
-          Previously, any error during initialization would cause the extension menu to not load at
-          all. Now, a help screen is displayed and the menu is usable.
-        </p>
-        <h4>Added a checksum check for langs</h4>
-        <p>
-          If something goes wrong when downloading langs or it is otherwise corrupted, the extension
-          now automatically detects it with a checksum and redownloads langs on extension launch.
-        </p>
-        <h3>3.3.0 - 2025-04-03</h3>
-        <h4>Added a command for viewing the output logs</h4>
-        <p>
-          Added a new command <code>tmc.logs</code> that opens the TestMyCode logs in the Output view
-          and a corresponding option in the extension menu.
-        </p>
-        <h4>Added a command for debugging the extension</h4>
-        <p>
-          Added a new command <code>tmc.debug</code> that resets the extension logs and opens them in
-          a file so users can replicate an issue and easily view the relevant logs.
-        </p>
-        <h3>3.2.1 - 2025-03-11</h3>
-        <h4>Improved error reporting when initialising the extension fails</h4>
-        <p>
-          Previously certain issues when initialising the extension would only appear in debug
-          logging. Now, more information is included in the error message and the logging is output
-          at the warn level.
-        </p>
-        <h3>3.2.0 - 2025-02-25</h3>
-        <h4>Test results contain style warnings or errors for applicable exercises</h4>
-        <p>
-          Exercises can be configured to warn or fail submissions for style e.g. nonstandard
-          formatting. These issues are now checked by the extension and the errors caused by style
-          issues are displayed.
-        </p>
-        <h3>3.1.1 - 2025-02-21</h3>
-        <h4>Improved error messages and logging</h4>
-        <p>
-          Various error messages that were previously vague and unhelpful now contain much more
-          detail. The associated logging has also been improved to make debugging easier.
-        </p>
+        {#each releaseNotes as note (note.version)}
+          <h3>{note.date ? `${note.version} - ${note.date}` : note.version}</h3>
+          <ul>
+            {#each note.entries as entry (entry)}
+              <li>{entry}</li>
+            {/each}
+          </ul>
+        {/each}
       </section>
 
       <section>

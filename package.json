@@ -33,6 +33,7 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "generate:langs-schema": "node bin/generateLangsSchema.mjs",
+    "generate:release-notes": "node bin/generateReleaseNotes.mjs",
     "install:all": "pnpm install",
     "lint": "oxlint --fix",
     "lint:ci": "oxlint --max-warnings=0",
@@ -56,7 +57,7 @@
     "vendor:langs-schema": "bash bin/updateLangsSchema.sh",
     "vscode:prepublish": "cross-env NODE_ENV=production pnpm run build",
     "watch": "node esbuild.mjs --watch",
-    "webview:build": "pnpm --dir webview-ui run build",
+    "webview:build": "pnpm run generate:release-notes && pnpm --dir webview-ui run build",
     "webview:start": "pnpm --dir webview-ui run dev"
   },
   "dependencies": {
