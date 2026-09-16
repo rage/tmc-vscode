@@ -135,11 +135,10 @@
       id,
     })
   }
-  function openWorkspace(name: string, backend: "tmc" | "mooc") {
+  function openWorkspace(courseId: CourseIdentifier) {
     vscode.postMessage({
       type: "openCourseWorkspace",
-      courseName: name,
-      backend,
+      courseId: $state.snapshot(courseId),
     })
   }
   function downloadExercises(ids: Array<ExerciseIdentifier>, courseId: CourseIdentifier) {
@@ -211,10 +210,7 @@
             max={courseData.availablePoints}
           />
         </div>
-        <Button
-          aria-label="Open workspace"
-          onclick={() => openWorkspace(courseData.name, course.kind)}
-        >
+        <Button aria-label="Open workspace" onclick={() => openWorkspace(courseId)}>
           Open workspace
         </Button>
 

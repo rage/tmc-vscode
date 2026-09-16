@@ -596,7 +596,22 @@ export class TmcPanel {
             break
           }
           case "openCourseWorkspace": {
-            handlers().openWorkspace(actionContext, message.courseName, message.backend)
+            const { userData } = actionContext
+            if (!userData.ok) {
+              reportNotInitialized(actionContext.dialog)
+              return
+            }
+
+            const courseResult = userData.val.getCourse(message.courseId)
+            if (courseResult.err) {
+              actionContext.dialog.errorNotification("Failed to read the course.", courseResult.val)
+              return
+            }
+            handlers().openWorkspace(
+              actionContext,
+              LocalCourseData.getCourseName(courseResult.val),
+              message.courseId.kind,
+            )
             break
           }
           case "addNewCourse": {
@@ -749,7 +764,21 @@ export class TmcPanel {
             break
           }
           case "openLinkInBrowser": {
-            vscode.env.openExternal(vscode.Uri.parse(message.url))
+            // Non-strict `Uri.parse` never throws and invents a `file` scheme for a string
+            // without one, so a link from the webview has to be parsed strictly and its
+            // scheme checked before it reaches the OS handler.
+            let link
+            try {
+              link = vscode.Uri.parse(message.url, true)
+            } catch (error) {
+              Logger.error("Refusing to open an unparseable link from the webview", error)
+              break
+            }
+            if (link.scheme !== "http" && link.scheme !== "https") {
+              Logger.error(`Refusing to open a "${link.scheme}" link from the webview`, message.url)
+              break
+            }
+            vscode.env.openExternal(link)
             break
           }
           case "moocLogin": {

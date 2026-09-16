@@ -105,6 +105,26 @@ suite("MyCourses panel", () => {
     expect(await screen.findByText(/This course has been disabled/)).toBeInTheDocument()
   })
 
+  test("asks for a course workspace by id, leaving the slug to the extension", async () => {
+    // The slug names a file the extension writes and opens, so it is resolved from
+    // stored data rather than chosen here.
+    render(MyCourses, { props: { panel } })
+    dispatch({
+      type: "setMyCourses",
+      target: { id: panel.id, type: "MyCourses" },
+      courses: [tmcLocalCourse()],
+    })
+
+    const open = await findButton("Open workspace")
+    postedMessages.mockClear()
+    open.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openCourseWorkspace",
+      courseId: makeTmcKind({ courseId: 42 }),
+    })
+  })
+
   test("shows why the courses could not be loaded, and offers to ask again", async () => {
     render(MyCourses, { props: { panel } })
     expect(screen.getByLabelText("Loading")).toBeInTheDocument()

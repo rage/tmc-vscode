@@ -289,6 +289,46 @@ suite("TmcPanel handler dispatch", () => {
   })
 })
 
+suite("TmcPanel webview-supplied paths and links", () => {
+  test("resolves the workspace slug from storage rather than from the message", async () => {
+    // The slug becomes a `.code-workspace` path the extension writes and opens, so a
+    // name the webview chose must never reach it.
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = {
+      ...createMockActionContext(),
+      userData: Ok({ getCourse: () => Ok(courseWith(0)) }),
+    } as unknown as ReturnType<typeof createMockActionContext>
+    const { listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "openCourseWorkspace", courseId: CourseIdentifier.from(42) })
+
+    expect(handlers.openWorkspace).toHaveBeenCalledWith(actionContext, "python-course", "tmc")
+  })
+
+  test("opens an https link the webview asks for", async () => {
+    const openExternal = stubOpenExternal()
+    const { listener } = await mountSidePanel(createMockActionContext())
+
+    await listener({ type: "openLinkInBrowser", url: "https://tmc.mooc.fi/paste/abc" })
+
+    expect(openExternal).toHaveBeenCalledWith(
+      expect.objectContaining({ scheme: "https", authority: "tmc.mooc.fi" }),
+    )
+  })
+
+  test("refuses a link that is not http or https", async () => {
+    // `Uri.parse` in its default mode invents a `file` scheme for anything without one,
+    // so an unrestricted link would reach the OS handler as a local path.
+    const openExternal = stubOpenExternal()
+    const { listener } = await mountSidePanel(createMockActionContext())
+
+    await listener({ type: "openLinkInBrowser", url: "file:///etc/passwd" })
+
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+})
+
 suite("TmcPanel addNewCourse handling", () => {
   test("runs the add-course command rather than opening a selection webview", async () => {
     const actionContext = createMockActionContext()
@@ -521,6 +561,16 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
     )
   })
 })
+
+// `jest-mock-vscode` ships no `env` namespace, so the tests that drive link opening
+// install one on the mock the `vscode` alias resolves to.
+const vscodeMock = vscode as unknown as { env: { openExternal: (uri: vscode.Uri) => void } }
+
+function stubOpenExternal(): ReturnType<typeof vi.fn> {
+  const openExternal = vi.fn()
+  vscodeMock.env = { openExternal }
+  return openExternal
+}
 
 // Discards whatever panels a previous test left mounted.
 function resetPanels(): void {

@@ -163,15 +163,9 @@
     })
   }
   function openWorkspace(p: CourseDetailsPanel) {
-    if (p.course === undefined) {
-      return
-    }
     vscode.postMessage({
       type: "openCourseWorkspace",
-      courseName: unwrap(p.course).name,
-      // The workspace file is named after the course slug; the backend tag disambiguates it
-      // from a course on the other backend that happens to share the slug.
-      backend: p.course.kind,
+      courseId: $state.snapshot(p.courseId),
     })
   }
   function downloadExercises(p: CourseDetailsPanel, ids: Array<ExerciseIdentifier>) {

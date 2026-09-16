@@ -941,10 +941,9 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("openCourseWorkspace"),
-    courseName: z.string(),
-    // Workspace files are namespaced by backend (`<slug>-<backend>.code-workspace`);
-    // a bare slug is ambiguous if a tmc and mooc course share a name.
-    backend: z.enum(["tmc", "mooc"]),
+    // The id, not the slug: the slug names a file the extension writes and opens, so
+    // the webview must not be the one choosing it.
+    courseId: CourseIdentifierSchema,
   }),
   z.object({
     type: z.literal("downloadExercises"),
@@ -1005,7 +1004,9 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("openLinkInBrowser"),
-    url: z.string(),
+    // Most senders carry a backend-supplied string; the handler additionally restricts
+    // the scheme, which this does not.
+    url: z.url(),
   }),
   z.object({
     type: z.literal("requestInitializationErrors"),
