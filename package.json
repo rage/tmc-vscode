@@ -494,6 +494,10 @@
     "untrustedWorkspaces": {
       "supported": false,
       "description": "TestMyCode runs exercise code and the TMC-langs CLI on files in the workspace."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "TestMyCode runs the TMC-langs CLI as a local process and stores exercises on disk."
     }
   }
 }
