@@ -3,6 +3,7 @@ import { strictEqual } from "assert"
 import {
   dateToString,
   findNextDateAfter,
+  parseDate,
   parseNextDeadlineAfter,
 } from "../../utilities/dateDeadline"
 
@@ -94,5 +95,38 @@ suite("Date utils", () => {
       parsedTarget,
       `Parsed deadline from inactive future dates was expected to be "${parsedTarget}"`,
     )
+  })
+
+  test("an unparseable deadline neither renders nor hides a real one", () => {
+    const invalid = parseDate("whenever")
+    strictEqual(Number.isNaN(invalid.getTime()), true, "Test needs a string Date cannot parse.")
+
+    strictEqual(dateToString(invalid), "", "An unrenderable date must not render as text.")
+    strictEqual(
+      parseNextDeadlineAfter(CURRENT_TIME, [{ date: invalid, active: true }]),
+      "No deadline",
+      "A lone unparseable deadline is no deadline.",
+    )
+
+    const expected = `Next deadline: ${dateToString(TARGET_TIME)}`
+    strictEqual(
+      parseNextDeadlineAfter(CURRENT_TIME, [
+        { date: invalid, active: true },
+        { date: TARGET_TIME, active: true },
+      ]),
+      expected,
+      "An unparseable deadline seen first must not mask a real one.",
+    )
+    strictEqual(
+      parseNextDeadlineAfter(CURRENT_TIME, [
+        { date: TARGET_TIME, active: true },
+        { date: invalid, active: true },
+      ]),
+      expected,
+      "An unparseable deadline seen last must not mask a real one.",
+    )
+
+    strictEqual(findNextDateAfter(CURRENT_TIME, [invalid, TARGET_TIME]), TARGET_TIME)
+    strictEqual(findNextDateAfter(CURRENT_TIME, [TARGET_TIME, invalid]), TARGET_TIME)
   })
 })
