@@ -221,7 +221,26 @@ suite("Langs CLI process failures", function () {
     const result = await pending
     expect(result.val).toBeInstanceOf(SpawnError)
     expect((result.val as SpawnError).message).toContain("EACCES")
-    expect((result.val as SpawnError).details).toContain("permission denied")
+    expect((result.val as SpawnError).details).toBe("permission denied")
+  })
+
+  test("stderr past the retention cap keeps the newest output and counts the rest", async function () {
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const langsProcess = lastProcess()
+    const filler = "x".repeat(8 * 1024)
+    langsProcess.stderr.emit("data", `oldest ${filler}`)
+    for (let written = 0; written < 16; written++) {
+      langsProcess.stderr.emit("data", filler)
+    }
+    langsProcess.stderr.emit("data", `newest ${filler}`)
+    langsProcess.emit("error", new Error("spawn dummy-cli-path ENOENT"))
+
+    const retained = ((await pending).val as SpawnError).details ?? ""
+    expect(retained).toContain("newest")
+    expect(retained).not.toContain("oldest")
+    expect(retained).toContain("bytes of earlier stderr dropped")
+    expect(retained.length).toBeLessThan(80 * 1024)
   })
 
   test("a macOS architecture mismatch carries the Rosetta instructions", async function () {
