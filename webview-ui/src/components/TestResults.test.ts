@@ -43,4 +43,18 @@ suite("TestResults component", () => {
     expect(screen.getByText("Code quality errors found")).toBeInTheDocument()
     expect(screen.getByText(/bad style/)).toBeInTheDocument()
   })
+
+  test("formats the points percentage the same way when the exercise has no points", () => {
+    render(TestResults, {
+      props: {
+        totalPoints: 0,
+        successPoints: 0,
+        testResults: [testResult({ successful: true })],
+        validationResult: null,
+        solutionUrl: null,
+      },
+    })
+
+    expect(screen.getByText("Points: 0.00%")).toBeInTheDocument()
+  })
 })
