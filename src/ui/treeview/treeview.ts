@@ -9,6 +9,7 @@ import { Visibility } from "./visibility"
  */
 export default class TmcMenuTree {
   private readonly _treeDP: TmcMenuTreeDataProvider
+  private readonly _treeView: vscode.TreeView<TmcTreeNode>
   private readonly _visibility: Visibility
 
   /**
@@ -17,9 +18,14 @@ export default class TmcMenuTree {
    */
   public constructor(viewId: string) {
     this._treeDP = new TmcMenuTreeDataProvider()
-    vscode.window.createTreeView(viewId, { treeDataProvider: this._treeDP })
+    this._treeView = vscode.window.createTreeView(viewId, { treeDataProvider: this._treeDP })
 
     this._visibility = new Visibility()
+  }
+
+  public dispose(): void {
+    this._treeView.dispose()
+    this._treeDP.dispose()
   }
 
   /**
@@ -134,7 +140,7 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
   /**
    * @implements {vscode.TreeDataProvider<TmcTreeNode>}
    */
-  private _refreshEventEmitter: vscode.EventEmitter<TmcTreeNode | undefined>
+  private readonly _refreshEventEmitter: vscode.EventEmitter<TmcTreeNode | undefined>
 
   private _actions: Map<string, { action: TmcTreeNode; visible: boolean }>
 
@@ -145,6 +151,10 @@ class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
     this._refreshEventEmitter = new vscode.EventEmitter<TmcTreeNode | undefined>()
     this.onDidChangeTreeData = this._refreshEventEmitter.event
     this._actions = new Map<string, { action: TmcTreeNode; visible: boolean }>()
+  }
+
+  public dispose(): void {
+    this._refreshEventEmitter.dispose()
   }
 
   /**

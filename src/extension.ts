@@ -34,11 +34,6 @@ import UI from "./ui/ui"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
 import { createSessionExpiryTracker } from "./utilities/sessionExpiryTracker"
 
-let maintenanceInterval: NodeJS.Timeout | undefined
-
-// module-level so `deactivate` can reach the instance `activate` built
-let activeLangs: Langs | undefined
-
 function initializationError(
   dialog: Dialog,
   step: string,
@@ -83,6 +78,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   // Must precede the first CLI invocation below: the user's level decides what the output
   // channel keeps of a `logged-in` response, which carries a live OAuth token.
   Logger.configure(settings.getLogLevel())
+  context.subscriptions.push({ dispose: () => Logger.dispose() })
   // Kept at every level: it carries no credential, and it is what makes a pasted log
   // answerable in a bug report.
   Logger.banner(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`)
@@ -108,10 +104,12 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   } else {
     // fire-and-forget: verify the CLI's output contract matches this build's schema
     void init.verifyCliSchema(cliPathResult.val, context.extensionPath)
-    activeLangs = new Langs(cliPathResult.val, CLIENT_NAME, extensionVersion, {
+    const langsInstance = new Langs(cliPathResult.val, CLIENT_NAME, extensionVersion, {
       cliConfigDir: TMC_LANGS_CONFIG_DIR,
     })
-    langs = new Ok(activeLangs)
+    // A submit or paste would otherwise keep polling the backend past shutdown.
+    context.subscriptions.push({ dispose: () => langsInstance.killAllProcesses() })
+    langs = new Ok(langsInstance)
   }
 
   // tmc and mooc credential states are independent; the UI treats the user
@@ -192,13 +190,37 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   }
 
   const ui = new UI()
+  context.subscriptions.push(ui)
   const loggedIn = ui.treeDP.createVisibilityGroup(authenticated)
   const visibilityGroups = {
     loggedIn,
   }
 
+  // Armed only while logged in: each round is two cold CLI starts, and a session can only
+  // drop silently for someone who has one. `applyAuthContext` sees every transition.
+  let maintenancePoll: NodeJS.Timeout | undefined
+  function setMaintenancePollArmed(armed: boolean): void {
+    if (armed === (maintenancePoll !== undefined)) {
+      return
+    }
+    if (armed) {
+      maintenancePoll = setInterval(() => void runMaintenancePoll(), EXERCISE_CHECK_INTERVAL)
+    } else {
+      clearInterval(maintenancePoll)
+      maintenancePoll = undefined
+    }
+  }
+  context.subscriptions.push({ dispose: () => setMaintenancePollArmed(false) })
+
+  // Seeded from the startup `setContext`, so an unchanged status reissues nothing.
+  let lastAppliedLoggedIn = authenticated
   const applyAuthContext = async (): Promise<void> => {
     const loggedInNow = authStatus.tmc || authStatus.mooc
+    setMaintenancePollArmed(loggedInNow)
+    if (loggedInNow === lastAppliedLoggedIn) {
+      return
+    }
+    lastAppliedLoggedIn = loggedInNow
     await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", loggedInNow)
     ui.treeDP.updateVisibility([
       loggedInNow ? visibilityGroups.loggedIn : visibilityGroups.loggedIn.not,
@@ -335,6 +357,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 
   if (exerciseDecorationProvider.ok) {
     context.subscriptions.push(
+      exerciseDecorationProvider.val,
       vscode.window.registerFileDecorationProvider(exerciseDecorationProvider.val),
     )
   }
@@ -345,33 +368,35 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     )
   }
 
-  if (maintenanceInterval) {
-    clearInterval(maintenanceInterval)
+  async function runMaintenancePoll(): Promise<void> {
+    try {
+      const authRes = langs.ok ? await langs.val.isAuthenticated() : Ok(false)
+      if (authRes.err) {
+        Logger.error("Failed to check if authenticated", authRes.val)
+      } else {
+        authStatus.tmc = authRes.val
+      }
+      const moocAuthRes = langs.ok ? await langs.val.isMoocAuthenticated() : Ok(false)
+      if (moocAuthRes.err) {
+        Logger.error("Failed to check if mooc authenticated", moocAuthRes.val)
+      } else {
+        authStatus.mooc = moocAuthRes.val
+      }
+      // Proactively catches a session dropping between polls, not just on a failed command.
+      sessionExpiry.onAuthChecked("tmc", authStatus.tmc)
+      sessionExpiry.onAuthChecked("mooc", authStatus.mooc)
+      if (authStatus.tmc || authStatus.mooc) {
+        void refreshEverything(actionContext, { silent: true }).catch((e) =>
+          Logger.error("Background refresh failed", e),
+        )
+      }
+      await applyAuthContext()
+    } catch (e) {
+      Logger.error("Maintenance check failed", e)
+    }
   }
 
-  maintenanceInterval = setInterval(async () => {
-    const authRes = langs.ok ? await langs.val.isAuthenticated() : Ok(false)
-    if (authRes.err) {
-      Logger.error("Failed to check if authenticated", authRes.val)
-    } else {
-      authStatus.tmc = authRes.val
-    }
-    const moocAuthRes = langs.ok ? await langs.val.isMoocAuthenticated() : Ok(false)
-    if (moocAuthRes.err) {
-      Logger.error("Failed to check if mooc authenticated", moocAuthRes.val)
-    } else {
-      authStatus.mooc = moocAuthRes.val
-    }
-    // Proactively catches a session dropping between polls, not just on a failed command.
-    sessionExpiry.onAuthChecked("tmc", authStatus.tmc)
-    sessionExpiry.onAuthChecked("mooc", authStatus.mooc)
-    if (authStatus.tmc || authStatus.mooc) {
-      void refreshEverything(actionContext, { silent: true }).catch((e) =>
-        Logger.error("Background refresh failed", e),
-      )
-    }
-    await applyAuthContext()
-  }, EXERCISE_CHECK_INTERVAL)
+  setMaintenancePollArmed(authStatus.tmc || authStatus.mooc)
 
   if (showWelcome) {
     await vscode.commands.executeCommand("tmc.showWelcome")
@@ -393,10 +418,6 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   }
 }
 
-export function deactivate(): void {
-  if (maintenanceInterval) {
-    clearInterval(maintenanceInterval)
-  }
-  // a submit or paste would otherwise keep polling the backend past shutdown
-  activeLangs?.killAllProcesses()
-}
+// Everything activation starts is registered in `context.subscriptions`, which VS Code
+// disposes for us; this exists because the extension API requires the export.
+export function deactivate(): void {}

@@ -16,6 +16,10 @@ export default class UI {
     this.treeDP = new TmcMenuTree("tmcView")
   }
 
+  public dispose(): void {
+    this.treeDP.dispose()
+  }
+
   /**
    * @return A handler callback for the tmcView.activateEntry command
    */
