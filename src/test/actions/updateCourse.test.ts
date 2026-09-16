@@ -10,6 +10,7 @@ import { TmcPanel } from "../../panels/TmcPanel"
 import { CourseIdentifier } from "../../shared/shared"
 import Storage from "../../storage"
 import type { MoocLocalCourseData } from "../../storage/data"
+import { Logger } from "../../utilities"
 import { MOOC_EXERCISE_UUID } from "../fixtures/tmc"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
@@ -122,9 +123,11 @@ suite("updateCourse action (mooc)", function () {
   })
 
   test("returns offline (not disabled) on a ConnectionError", async function () {
+    const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {})
     tmcMockValues.getMoocCourseInstanceData = Err(new ConnectionError("down"))
     const result = await updateCourse(actionContext(), courseId)
     expect(result.val).toBe(false)
     expect(userData.getMoocCourses()[0]?.disabled).toBe(false)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("courses.mooc.fi"))
   })
 })
