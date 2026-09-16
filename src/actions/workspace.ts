@@ -57,7 +57,7 @@ export async function openExercises(
   }
 
   const closedExerciseNames = workspaceManager.val
-    .getExercisesByCourseSlug(courseName)
+    .getExercisesByCourseSlug(course.kind, courseName)
     .filter((x) => x.status === ExerciseStatus.Closed)
     .map((x) => x.exerciseSlug)
   const settingsResult = await langs.val.setSetting(
@@ -74,7 +74,7 @@ export async function openExercises(
   const strongThreshold = 100
   const warningThreshold = under8GbRam ? weakThreshold : strongThreshold
   const currentlyOpen = workspaceManager.val
-    .getExercisesByCourseSlug(courseName)
+    .getExercisesByCourseSlug(course.kind, courseName)
     .filter((x) => x.status === ExerciseStatus.Open)
   if (currentlyOpen.length > warningThreshold) {
     dialog.warningNotification(
@@ -230,7 +230,7 @@ export async function closeExercises(
     .filter((e) => e !== undefined)
 
   const closedExerciseNames = workspaceManager.val
-    .getExercisesByCourseSlug(courseName)
+    .getExercisesByCourseSlug(course.kind, courseName)
     .filter((x) => x.status === ExerciseStatus.Closed)
     .map((x) => x.exerciseSlug)
   const settingsResult = await langs.val.setSetting(

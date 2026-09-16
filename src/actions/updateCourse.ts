@@ -184,7 +184,7 @@ export async function updateCourse(
     courseData.kind === workspaceManager.val.activeCourseBackend
   ) {
     exerciseDecorationProvider.val.updateDecorationsForExercises(
-      ...workspaceManager.val.getExercisesByCourseSlug(courseName),
+      ...workspaceManager.val.getExercisesByCourseSlug(courseData.kind, courseName),
     )
   }
 

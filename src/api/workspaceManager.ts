@@ -167,8 +167,16 @@ export default class WorkspaceManager implements vscode.Disposable {
     return this._exercises
   }
 
-  public getExercisesByCourseSlug(courseSlug: string): readonly WorkspaceExercise[] {
-    return this._exercises.filter((x) => x.courseSlug === courseSlug)
+  /**
+   * A course's exercises. Ported material gives a mooc course the same slug and
+   * the same on-disk exercise names as its TMC counterpart, so the backend is
+   * part of the key.
+   */
+  public getExercisesByCourseSlug(
+    backend: "tmc" | "mooc",
+    courseSlug: string,
+  ): readonly WorkspaceExercise[] {
+    return this._exercises.filter((x) => x.backend === backend && x.courseSlug === courseSlug)
   }
 
   /**
