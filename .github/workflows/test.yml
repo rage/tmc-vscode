@@ -43,9 +43,9 @@ jobs:
       - name: Typecheck (tsgo, svelte-check)
         run: pnpm run typecheck
 
-      # tsgo is a preview compiler; the same seven projects plus the webview go
-      # through stock tsc too, so a divergence between them is caught here
-      # rather than by whoever next opens the repo in an editor.
+      # tsgo is a preview compiler. Stock tsc covers the same projects plus the
+      # webview, so where the two disagree it surfaces here rather than in
+      # whoever next opens the repo in an editor.
       - name: Typecheck (tsc)
         run: pnpm run typecheck:tsc
 

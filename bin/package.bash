@@ -20,9 +20,9 @@ pnpm run webview:build
 # symlinked node_modules layout.
 BACKEND=production pnpm exec vsce package --no-dependencies "${PRERELEASE_ARG}"
 
-# The listing is what reaches users. Sources, test bundles, the coverage report
-# and the docs have each been in it at some point, and none of them fails
-# anything else, so assert their absence rather than trusting .vscodeignore.
+# The listing is what reaches users, and nothing else fails when a source tree, a
+# test bundle, the coverage report or the docs slip into it -- so assert their
+# absence here rather than trusting .vscodeignore to stay right.
 LISTING=$(BACKEND=production pnpm exec vsce ls --no-dependencies)
 if echo "${LISTING}" | grep -E '(^|/)(src|backend|playwright|coverage|docs|node_modules)/|^dist/integration|\.map$|\.test\.js$'; then
   echo "The paths above would ship to users; fix .vscodeignore." >&2
