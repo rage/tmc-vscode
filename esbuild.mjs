@@ -98,7 +98,10 @@ const common = {
     // docs/FAQ.md is imported as text (src/config/constants.ts).
     ".md": "text",
   },
-  sourcemap: production ? false : "inline",
+  // Emitted in every configuration, and kept out of the vsix by .vscodeignore's
+  // `**/*.map`: a minified stack trace a user pastes from "Show Logs" maps back
+  // to source from the archived build artifact, without growing their download.
+  sourcemap: true,
   minify: production,
   logLevel: "info",
   plugins: watch ? [stubOptionalNativeAddon, problemMatcherPlugin] : [stubOptionalNativeAddon],

@@ -10,7 +10,7 @@ import path from "path"
 // NB on public_spec: the OpenAPI spec types public_spec / assignment /
 // model_solution_spec as opaque `{}` (envelope-level validation only), but the
 // CLI deserialises public_spec into tmc-mooc-client's PublicSpec struct, so the
-// CONTENT here must be a valid editor PublicSpec (type/archive_name/
+// CONTENT here must be a valid tmc PublicSpec (type/archive_name/
 // stub_download_url/student_file_paths/checksum) even though the mock's own
 // response validation treats it as free-form. See
 // tmc-langs-rust/crates/tmc-mooc-client/src/exercise.rs.
@@ -37,6 +37,22 @@ export interface EditorPublicSpec {
 }
 
 /**
+ * A browser exercise's public spec. It carries the same archive members as an
+ * editor one -- the IFrame still needs the stub -- so `type` is the only thing
+ * telling a native client it can neither download nor submit this task.
+ */
+export interface BrowserPublicSpec {
+  type: "browser"
+  archive_name: string
+  stub_download_url: string
+  student_file_paths: string[]
+  checksum: string
+  browser_test: { runtime: "python"; script: string }
+}
+
+export type PublicSpec = EditorPublicSpec | BrowserPublicSpec
+
+/**
  * What the `tmc` exercise service emits (`services/tmc/src/util/stateInterfaces.ts`)
  * and tmc-mooc-client deserializes. The backend forwards it only once the model
  * solution may be revealed, so a wrong shape here breaks every command on an
@@ -52,8 +68,9 @@ export interface ExerciseTask {
   task_id: string
   order_number: number
   assignment: unknown
+  /** Only a service declaring `supports_native_client` can be served to this client. */
   exercise_service_slug: string
-  public_spec: EditorPublicSpec
+  public_spec: PublicSpec
   /** Null as stored; the mock reveals {@link MoocExerciseFixture.modelSolution} per the reveal rule. */
   model_solution_spec: ModelSolutionSpec | null
 }
@@ -93,8 +110,14 @@ export interface MoocExerciseFixture {
   sourceDir: string
   /** Grading result the mock returns for this exercise's submissions. */
   gradingOutcome: GradingOutcome
-  /** Served by `GET exercises/{id}` once this exercise has been solved for full points. */
+  /** Served by `GET exercises/{id}` once the mock's reveal rule allows it. */
   modelSolution: ModelSolutionSpec
+  /**
+   * Submissions the student may make to one slide. Unset means unlimited, as an
+   * exercise with `limit_number_of_tries` false; the count is per slide, and
+   * every fixture slide is its exercise's only one.
+   */
+  maxTriesPerSlide?: number | undefined
 }
 
 const ORG = "Test Organization"
@@ -117,14 +140,49 @@ export const extraCourse: Course = {
   organization_name: ORG,
 }
 
+// Holds the exercises that are not a plain submittable editor exercise. Each one
+// makes a host refusal or a client branch reachable that the two courses above
+// cannot reach.
+export const variantsCourse: Course = {
+  id: "33333333-3333-4333-8333-333333333333",
+  slug: "mooc-variants-course",
+  name: "MOOC Variants Course",
+  description: null,
+  organization_name: ORG,
+}
+
+// A course the student is NOT enrolled on. Every gate a submit passes through
+// starts with enrollment, so the mock needs a real course to fail it against.
+export const notEnrolledCourse: Course = {
+  id: "44444444-4444-4444-8444-444444444444",
+  slug: "mooc-unenrolled-course",
+  name: "MOOC Unenrolled Course",
+  description: null,
+  organization_name: ORG,
+}
+
 // ---- exercises ----
+
+// Fixed rather than computed from the current time, so the same request is
+// refused or accepted on every run and in every timezone.
+const PAST_DEADLINE = "2000-01-01T00:00:00.000Z"
+const FUTURE_DEADLINE = "2100-01-01T00:00:00.000Z"
+
+/** One task of a fixture slide; its position in the array is its order number. */
+interface TaskFixture {
+  taskId: string
+  /** Decides the public spec shape: only an editor task is downloadable and submittable. */
+  type: "editor" | "browser"
+  /** Defaults to `tmc`, the only slug the mock's client API can serve. */
+  serviceSlug?: string
+}
 
 const makeExercise = (params: {
   baseUrl: string
   exerciseId: string
   slideId: string
   courseId: string
-  taskId: string
+  tasks: TaskFixture[]
   name: string
   order: number
   archiveSlug: string
@@ -132,12 +190,21 @@ const makeExercise = (params: {
   studentFiles: string[]
   checksum: string
   gradingOutcome?: GradingOutcome
+  deadline?: string
+  maxTriesPerSlide?: number
 }): MoocExerciseFixture => {
   const archiveUrl = `${params.baseUrl}/mooc-archives/${params.archiveSlug}.tar.zst`
+  const archiveSpec = {
+    archive_name: `${params.archiveSlug}.tar.zst`,
+    stub_download_url: archiveUrl,
+    student_file_paths: params.studentFiles,
+    checksum: params.checksum,
+  }
   return {
     archiveSlug: params.archiveSlug,
     sourceDir: params.sourceDir,
     gradingOutcome: params.gradingOutcome ?? "passing",
+    maxTriesPerSlide: params.maxTriesPerSlide,
     modelSolution: {
       type: "editor",
       solution_download_url: archiveUrl,
@@ -148,23 +215,22 @@ const makeExercise = (params: {
       course_id: params.courseId,
       exercise_name: params.name,
       exercise_order_number: params.order,
-      deadline: null,
-      tasks: [
-        {
-          task_id: params.taskId,
-          order_number: 0,
-          assignment: [],
-          exercise_service_slug: "tmc",
-          model_solution_spec: null,
-          public_spec: {
-            type: "editor",
-            archive_name: `${params.archiveSlug}.tar.zst`,
-            stub_download_url: archiveUrl,
-            student_file_paths: params.studentFiles,
-            checksum: params.checksum,
-          },
-        },
-      ],
+      deadline: params.deadline ?? null,
+      tasks: params.tasks.map((task, orderNumber) => ({
+        task_id: task.taskId,
+        order_number: orderNumber,
+        assignment: [],
+        exercise_service_slug: task.serviceSlug ?? "tmc",
+        model_solution_spec: null,
+        public_spec:
+          task.type === "editor"
+            ? { type: "editor", ...archiveSpec }
+            : {
+                type: "browser",
+                ...archiveSpec,
+                browser_test: { runtime: "python", script: "print('hello')" },
+              },
+      })),
     },
   }
 }
@@ -174,15 +240,19 @@ const makeExercise = (params: {
 // not-enrolled path). Also drives the bulk-download error path.
 export const nonexistentExerciseId = "ffffffff-0000-4000-8000-000000000000"
 
-// An exercise id that resolves to a real exercise whose course the current user
-// is NOT enrolled in. The backend returns 422 with message_key `not_enrolled`
-// for this case -- distinct from an entirely unknown id (404 above). Present in
-// no course listing; the mock recognises this id explicitly so the 422
-// not-enrolled contract stays exercised after unknown ids moved to 404.
+// The exercise of {@link notEnrolledCourse}: a real exercise whose course the
+// current user is not enrolled on, which the backend answers with 422
+// `not_enrolled` -- distinct from an entirely unknown id (404 above).
 export const notEnrolledExerciseId = "eeeeeeee-0000-4000-8000-000000000000"
 
 export interface CourseWithExercises {
   course: Course
+  /**
+   * Whether the mock's single student is enrolled. Viewing, uploading to and
+   * submitting an exercise are all gated on it before any other rule, so a
+   * course with it false is the only way to reach the host's `not_enrolled`.
+   */
+  enrolled: boolean
   exercises: MoocExerciseFixture[]
 }
 
@@ -195,6 +265,13 @@ export interface MoocFixtures {
   passingExercise: MoocExerciseFixture
   failingExercise: MoocExerciseFixture
   pendingManualExercise: MoocExerciseFixture
+  browserExercise: MoocExerciseFixture
+  mixedTaskExercise: MoocExerciseFixture
+  pastDeadlineExercise: MoocExerciseFixture
+  futureDeadlineExercise: MoocExerciseFixture
+  limitedTriesExercise: MoocExerciseFixture
+  notClientCapableExercise: MoocExerciseFixture
+  notEnrolledExercise: MoocExerciseFixture
 }
 
 /**
@@ -220,7 +297,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     exerciseId: "a1a1a1a1-0000-4000-8000-000000000001",
     slideId: "a1a1a1a1-0000-4000-8000-000000000101",
     courseId: pythonCourse.id,
-    taskId: "a1a1a1a1-0000-4000-8000-000000000201",
+    tasks: [{ taskId: "a1a1a1a1-0000-4000-8000-000000000201", type: "editor" }],
     name: "part01-01_passing_exercise",
     order: 0,
     archiveSlug: "passing-exercise",
@@ -234,7 +311,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     exerciseId: "b2b2b2b2-0000-4000-8000-000000000001",
     slideId: "b2b2b2b2-0000-4000-8000-000000000101",
     courseId: extraCourse.id,
-    taskId: "b2b2b2b2-0000-4000-8000-000000000201",
+    tasks: [{ taskId: "b2b2b2b2-0000-4000-8000-000000000201", type: "editor" }],
     name: "part01-02_failing_exercise",
     order: 0,
     archiveSlug: "failing-exercise",
@@ -252,7 +329,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     exerciseId: "c3c3c3c3-0000-4000-8000-000000000001",
     slideId: "c3c3c3c3-0000-4000-8000-000000000101",
     courseId: extraCourse.id,
-    taskId: "c3c3c3c3-0000-4000-8000-000000000201",
+    tasks: [{ taskId: "c3c3c3c3-0000-4000-8000-000000000201", type: "editor" }],
     name: "part01-03_pending_manual_exercise",
     order: 1,
     archiveSlug: "pending-manual-exercise",
@@ -262,9 +339,142 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     gradingOutcome: "pendingManual",
   })
 
+  // Answered only in the exercise service's IFrame: a native client can neither
+  // download nor submit it, which is the whole of what makes
+  // `editor_stub_download_url` / `editor_task_id` return None.
+  const browserExercise = makeExercise({
+    baseUrl,
+    exerciseId: "d4d4d4d4-0000-4000-8000-000000000001",
+    slideId: "d4d4d4d4-0000-4000-8000-000000000101",
+    courseId: variantsCourse.id,
+    tasks: [{ taskId: "d4d4d4d4-0000-4000-8000-000000000201", type: "browser" }],
+    name: "part02-01_browser_exercise",
+    order: 0,
+    archiveSlug: "browser-exercise",
+    sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
+    studentFiles: ["src/passing_exercise.py"],
+    checksum: "mooc-checksum-browser",
+  })
+
+  // Two tasks the client may be served, only the second of them submittable, so
+  // `TmcExerciseSlide::editor_task` has to select rather than take the first.
+  const mixedTaskExercise = makeExercise({
+    baseUrl,
+    exerciseId: "e5e5e5e5-0000-4000-8000-000000000001",
+    slideId: "e5e5e5e5-0000-4000-8000-000000000101",
+    courseId: variantsCourse.id,
+    tasks: [
+      { taskId: "e5e5e5e5-0000-4000-8000-000000000201", type: "browser" },
+      { taskId: "e5e5e5e5-0000-4000-8000-000000000202", type: "editor" },
+    ],
+    name: "part02-02_mixed_task_exercise",
+    order: 1,
+    archiveSlug: "mixed-task-exercise",
+    sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
+    studentFiles: ["src/passing_exercise.py"],
+    checksum: "mooc-checksum-mixed-task",
+  })
+
+  const pastDeadlineExercise = makeExercise({
+    baseUrl,
+    exerciseId: "f6f6f6f6-0000-4000-8000-000000000001",
+    slideId: "f6f6f6f6-0000-4000-8000-000000000101",
+    courseId: variantsCourse.id,
+    tasks: [{ taskId: "f6f6f6f6-0000-4000-8000-000000000201", type: "editor" }],
+    name: "part02-03_past_deadline_exercise",
+    order: 2,
+    archiveSlug: "past-deadline-exercise",
+    sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
+    studentFiles: ["src/passing_exercise.py"],
+    checksum: "mooc-checksum-past-deadline",
+    deadline: PAST_DEADLINE,
+  })
+
+  // The other side of the deadline gate: a deadline that is set but has not
+  // passed must not refuse anything.
+  const futureDeadlineExercise = makeExercise({
+    baseUrl,
+    exerciseId: "a7a7a7a7-0000-4000-8000-000000000001",
+    slideId: "a7a7a7a7-0000-4000-8000-000000000101",
+    courseId: variantsCourse.id,
+    tasks: [{ taskId: "a7a7a7a7-0000-4000-8000-000000000201", type: "editor" }],
+    name: "part02-04_future_deadline_exercise",
+    order: 3,
+    archiveSlug: "future-deadline-exercise",
+    sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
+    studentFiles: ["src/passing_exercise.py"],
+    checksum: "mooc-checksum-future-deadline",
+    deadline: FUTURE_DEADLINE,
+  })
+
+  // One try, so a second submit is refused and the model solution is revealed
+  // after the first: the limit has to be exhaustible within a test rather than
+  // merely declared. It grades as failing, so full points cannot be what reveals
+  // the solution here.
+  const limitedTriesExercise = makeExercise({
+    baseUrl,
+    exerciseId: "b8b8b8b8-0000-4000-8000-000000000001",
+    slideId: "b8b8b8b8-0000-4000-8000-000000000101",
+    courseId: variantsCourse.id,
+    tasks: [{ taskId: "b8b8b8b8-0000-4000-8000-000000000201", type: "editor" }],
+    name: "part02-05_limited_tries_exercise",
+    order: 4,
+    archiveSlug: "limited-tries-exercise",
+    sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
+    studentFiles: ["src/passing_exercise.py"],
+    checksum: "mooc-checksum-limited-tries",
+    gradingOutcome: "failing",
+    maxTriesPerSlide: 1,
+  })
+
+  // Belongs to a service that does not declare `supports_native_client`, so the
+  // host hides the task from every listing and refuses a submit naming it.
+  const notClientCapableExercise = makeExercise({
+    baseUrl,
+    exerciseId: "c9c9c9c9-0000-4000-8000-000000000001",
+    slideId: "c9c9c9c9-0000-4000-8000-000000000101",
+    courseId: variantsCourse.id,
+    tasks: [
+      { taskId: "c9c9c9c9-0000-4000-8000-000000000201", type: "editor", serviceSlug: "quizzes" },
+    ],
+    name: "part02-06_quiz_exercise",
+    order: 5,
+    archiveSlug: "quiz-exercise",
+    sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
+    studentFiles: ["src/passing_exercise.py"],
+    checksum: "mooc-checksum-quiz",
+  })
+
+  const notEnrolledExercise = makeExercise({
+    baseUrl,
+    exerciseId: notEnrolledExerciseId,
+    slideId: "eeeeeeee-0000-4000-8000-000000000101",
+    courseId: notEnrolledCourse.id,
+    tasks: [{ taskId: "eeeeeeee-0000-4000-8000-000000000201", type: "editor" }],
+    name: "part03-01_unenrolled_exercise",
+    order: 0,
+    archiveSlug: "unenrolled-exercise",
+    sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
+    studentFiles: ["src/passing_exercise.py"],
+    checksum: "mooc-checksum-unenrolled",
+  })
+
   const courses: CourseWithExercises[] = [
-    { course: pythonCourse, exercises: [passingExercise] },
-    { course: extraCourse, exercises: [failingExercise, pendingManualExercise] },
+    { course: pythonCourse, enrolled: true, exercises: [passingExercise] },
+    { course: extraCourse, enrolled: true, exercises: [failingExercise, pendingManualExercise] },
+    {
+      course: variantsCourse,
+      enrolled: true,
+      exercises: [
+        browserExercise,
+        mixedTaskExercise,
+        pastDeadlineExercise,
+        futureDeadlineExercise,
+        limitedTriesExercise,
+        notClientCapableExercise,
+      ],
+    },
+    { course: notEnrolledCourse, enrolled: false, exercises: [notEnrolledExercise] },
   ]
 
   const exerciseById = new Map<string, MoocExerciseFixture>()
@@ -283,6 +493,13 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     passingExercise,
     failingExercise,
     pendingManualExercise,
+    browserExercise,
+    mixedTaskExercise,
+    pastDeadlineExercise,
+    futureDeadlineExercise,
+    limitedTriesExercise,
+    notClientCapableExercise,
+    notEnrolledExercise,
   }
 }
 
@@ -294,4 +511,11 @@ export const {
   passingExercise,
   failingExercise,
   pendingManualExercise,
+  browserExercise,
+  mixedTaskExercise,
+  pastDeadlineExercise,
+  futureDeadlineExercise,
+  limitedTriesExercise,
+  notClientCapableExercise,
+  notEnrolledExercise,
 } = createMoocFixtures(DEFAULT_MOOC_MOCK_BASE_URL)

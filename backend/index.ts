@@ -131,6 +131,15 @@ const courseExercises: CourseWithExercises[] = [
 
 // ==== submissions ====
 
+// Grading is decided by exercise id: only the failing fixture reports a failed
+// test case, so a client can be driven through both outcomes. The names are the
+// unittest ids the packed python exercises really produce, so a client rendering
+// them shows what a real run would.
+const testCasesOf = (exerciseId: number): { name: string; successful: boolean }[] =>
+  exerciseId === failingExerciseId
+    ? [{ name: "test.test_failing_exercise.FailingExercise.test_failing", successful: false }]
+    : [{ name: "test.test_passing_exercise.PassingExercise.test_passing", successful: true }]
+
 let submissionId = 1
 
 const submissions: (OldSubmission & { file: string })[] = [
@@ -261,7 +270,7 @@ for (const { course, exercises } of courseExercises) {
             courseId: course.id,
             exerciseName: exercise.name,
             id: newSubmissionId,
-            passed: true,
+            passed: exercise.id !== failingExerciseId,
             timestamp: new Date(),
             userId: 0,
           }),
@@ -313,12 +322,7 @@ for (const { course, exercises } of courseExercises) {
           courseName: course.name,
           exerciseName: exercise.name,
           id: Math.trunc(Number(id)),
-          testCases: [
-            {
-              name: "test.test_parsing_exercise.PassingExercise.test_passing",
-              successful: true,
-            },
-          ],
+          testCases: testCasesOf(exercise.id),
         })
 
         return res.json(finishedSubmission)

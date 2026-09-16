@@ -6,8 +6,9 @@ vi.mock("../../panels/TmcPanel", () => ({
   TmcPanel: { postMessage: vi.fn() },
 }))
 
+import { postUpdateables } from "../../panels/exerciseLists"
 import { TmcPanel } from "../../panels/TmcPanel"
-import { postUpdateables, updateablesRegistry } from "../../panels/updateablesRegistry"
+import { updateablesRegistry } from "../../panels/updateablesRegistry"
 
 const tmcCourse = CourseIdentifier.from(1)
 const otherTmcCourse = CourseIdentifier.from(2)

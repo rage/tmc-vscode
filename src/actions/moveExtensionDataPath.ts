@@ -5,6 +5,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
+import type { FractionProgress } from "../api/dialog"
 import { FileSystemError, InitializationError } from "../errors"
 import { Logger } from "../utilities"
 import { refreshLocalExercises } from "./refreshLocalExercises"
@@ -21,7 +22,7 @@ import type { ActionContext } from "./types"
 export async function moveExtensionDataPath(
   actionContext: ActionContext,
   newPath: vscode.Uri,
-  onUpdate?: (value: { percent: number; message?: string }) => void,
+  onUpdate?: (progress: FractionProgress) => void,
 ): Promise<Result<string, Error>> {
   const { resources, langs } = actionContext
   if (!(langs.ok && resources.ok)) {

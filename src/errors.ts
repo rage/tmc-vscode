@@ -37,10 +37,6 @@ export class ForbiddenError extends BaseError {
   public override readonly name = "Forbidden Error"
 }
 
-export class HaltForReloadError extends BaseError {
-  public override readonly name = "Reload Required error"
-}
-
 /**
  * A courses.mooc.fi session that is valid but does not grant access to programming
  * exercises. Only a fresh login fixes it; nothing about the course is wrong.

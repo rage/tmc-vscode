@@ -1,6 +1,5 @@
 import * as vscode from "vscode"
 
-import type Storage from "../storage"
 import { Logger, LogLevel } from "../utilities/logger"
 
 /**
@@ -16,8 +15,7 @@ export default class Settings implements vscode.Disposable {
 
   private _disposables: vscode.Disposable[]
 
-  // Unused: kept only until the remaining call site stops passing a Storage.
-  public constructor(_storage?: Storage) {
+  public constructor() {
     this._disposables = [
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("testMyCode.logLevel")) {

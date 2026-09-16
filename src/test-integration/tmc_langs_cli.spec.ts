@@ -609,8 +609,10 @@ suite("tmc langs cli spec", function () {
 
     migrationTest("should list the enrolled mooc courses", async function () {
       const courses = (await tmc.getEnrolledMoocCourseInstances()).unwrap()
-      expect(courses.length).to.be.equal(2)
+      // the fixture set's fourth course is one the student is not enrolled on
+      expect(courses.length).to.be.equal(3)
       expect(courses.some((c) => c.name === "MOOC Python Course")).to.be.true
+      expect(courses.some((c) => c.name === "MOOC Unenrolled Course")).to.be.false
     })
 
     migrationTest("should get mooc course data with exercise slides", async function () {

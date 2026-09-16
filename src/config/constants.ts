@@ -1,7 +1,5 @@
 // @ts-expect-error "No module found" error even though the file exists
 import FAQ from "../../docs/FAQ.md"
-import type { TestResultData } from "../shared/shared"
-import { ExerciseIdentifier } from "../shared/shared"
 
 // Build time only globals defined in the esbuild configuration (esbuild.mjs
 // `define`, sourced from config.js). These values are inlined when bundling.
@@ -11,6 +9,8 @@ declare const __TMC_LANGS_CONFIG_DIR__: string | null
 declare const __TMC_LANGS_DL_URL__: string
 declare const __TMC_LANGS_VERSION__: string
 declare const __MOOC_BACKEND_URL__: string
+declare const __EXTENSION_VERSION__: string
+declare const __MIGRATION_CONTRACT_VERSION__: string
 
 export const DEBUG_MODE = __DEBUG_MODE__
 export const TMC_BACKEND_URL = __TMC_BACKEND_URL__
@@ -18,6 +18,19 @@ export const TMC_LANGS_CONFIG_DIR = __TMC_LANGS_CONFIG_DIR__ || undefined
 export const TMC_LANGS_DL_URL = __TMC_LANGS_DL_URL__
 export const TMC_LANGS_VERSION = __TMC_LANGS_VERSION__
 export const MOOC_BACKEND_URL = __MOOC_BACKEND_URL__
+
+/** This build's `package.json` version, inlined so it needs no extension-registry lookup. */
+export const EXTENSION_VERSION = __EXTENSION_VERSION__
+
+/**
+ * First tmc-langs-cli release carrying the post-migration contract: the `mooc`
+ * subcommand tree, the `schema` subcommand, the newer error kinds.
+ *
+ * Deliberately not {@link TMC_LANGS_VERSION}. Everything gated on this stays off
+ * until a release actually carries the contract, so bumping the pin for an
+ * unrelated fix cannot switch the gates on behind whoever bumped it.
+ */
+export const MIGRATION_CONTRACT_VERSION = __MIGRATION_CONTRACT_VERSION__
 
 export const CLIENT_NAME = "vscode_plugin"
 export const EXTENSION_ID = "moocfi.test-my-code"
@@ -112,27 +125,4 @@ export function workspaceFileName(courseName: string, backend: "tmc" | "mooc"): 
 /** The pre-namespacing workspace filename. Only referenced by the migration. */
 export function legacyWorkspaceFileName(courseName: string): string {
   return `${courseName}.code-workspace`
-}
-
-export const EXAM_TEST_RESULT: TestResultData = {
-  testResult: {
-    status: "PASSED",
-    testResults: [
-      {
-        name: "Hidden Exam Test: hidden_test",
-        successful: true,
-        message: "Remember to submit your solution to the server for evaluation.",
-        points: [],
-        exception: [],
-      },
-    ],
-    logs: {},
-  },
-  id: ExerciseIdentifier.from(0),
-  courseSlug: "",
-  exerciseName: "part01-exam01",
-  tmcLogs: {
-    stdout: "",
-    stderr: "",
-  },
 }

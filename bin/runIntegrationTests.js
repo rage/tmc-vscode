@@ -1,7 +1,7 @@
 //@ts-check
 
-// Runner for the VS Code API / tmc-langs integration tier. Downloads a
-// pinned VS Code build and runs the bundled integration suite
+// Runner for the VS Code API / tmc-langs integration tier. Downloads the VS Code
+// build config.js pins and runs the bundled integration suite
 // (dist/integration.spec.js) inside the extension host via mocha
 // (bin/integrationTestLoader.js).
 //
@@ -11,6 +11,8 @@
 // be built (`pnpm run build`). See the `test:integration` npm script.
 const runTests = require("@vscode/test-electron").runTests
 const path = require("path")
+
+const { VSCODE_TEST_VERSION } = require("../config.js")
 
 async function main() {
   let exitCode = 0
@@ -30,6 +32,7 @@ async function main() {
       extensionTestsPath,
       extensionTestsEnv,
       platform,
+      version: VSCODE_TEST_VERSION,
     })
   } catch (err) {
     console.error("Failed to run integration tests:", err)

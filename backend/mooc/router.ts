@@ -13,7 +13,7 @@ import { buildTarZst } from "./archive"
 import {
   createMoocFixtures,
   DEFAULT_MOOC_MOCK_BASE_URL,
-  notEnrolledExerciseId,
+  type CourseWithExercises,
   type ExerciseSlide,
   type MoocExerciseFixture,
   type MoocFixtures,
@@ -65,12 +65,20 @@ const SPEC_PATH = path.join(__dirname, "exercise-services-client.openapi.generat
 // by the task-submission id while list/download/share resolve by the
 // slide-submission id.
 
+/**
+ * Whose submission a record is. The mock authenticates exactly one student, so
+ * ownership is binary rather than a user id, and another student's submissions
+ * are seeded rather than submitted.
+ */
+type SubmissionOwner = "caller" | "another-user"
+
 interface SubmissionRecord {
   exerciseId: string
   /** Returned by submit; the id `/grading` is polled with. */
   taskSubmissionId: string
   /** The id the submissions list, `/download` and `/share` use. */
   slideSubmissionId: string
+  owner: SubmissionOwner
   polls: number
   createdAt: string
   /** Host file ids the submit named, in request order; what `/download` returns. */
@@ -109,6 +117,8 @@ interface MoocMockState {
   /** Slide and task lookups by their OWN ids, for submit's slide/task ownership checks. */
   slideById: Map<string, ExerciseSlide>
   slideIdByTaskId: Map<string, string>
+  /** The course an exercise belongs to, which is where its enrollment is recorded. */
+  courseByExerciseId: Map<string, CourseWithExercises>
   /**
    * Per-exercise point weight (score_maximum), deliberately heterogeneous across
    * fixtures so progress aggregation exercises differing weights rather than a
@@ -137,17 +147,28 @@ interface MoocMockState {
 /** The half of a mock's state that is derived from its base URL. */
 type FixtureIndex = Pick<
   MoocMockState,
-  "baseUrl" | "fixtures" | "slideById" | "slideIdByTaskId" | "scoreMaximumByExerciseId"
+  | "baseUrl"
+  | "fixtures"
+  | "slideById"
+  | "slideIdByTaskId"
+  | "courseByExerciseId"
+  | "scoreMaximumByExerciseId"
 >
 
 const indexFixtures = (baseUrl: string): FixtureIndex => {
   const fixtures = createMoocFixtures(baseUrl)
   const slideById = new Map<string, ExerciseSlide>()
   const slideIdByTaskId = new Map<string, string>()
+  const courseByExerciseId = new Map<string, CourseWithExercises>()
   for (const exercise of fixtures.exerciseById.values()) {
     slideById.set(exercise.slide.slide_id, exercise.slide)
     for (const task of exercise.slide.tasks) {
       slideIdByTaskId.set(task.task_id, exercise.slide.slide_id)
+    }
+  }
+  for (const course of fixtures.courses) {
+    for (const exercise of course.exercises) {
+      courseByExerciseId.set(exercise.slide.exercise_id, course)
     }
   }
   return {
@@ -155,6 +176,7 @@ const indexFixtures = (baseUrl: string): FixtureIndex => {
     fixtures,
     slideById,
     slideIdByTaskId,
+    courseByExerciseId,
     scoreMaximumByExerciseId: new Map([
       [fixtures.passingExercise.slide.exercise_id, 1],
       [fixtures.failingExercise.slide.exercise_id, 2],
@@ -228,6 +250,15 @@ export interface MoocMockControls {
   seedFilelessSubmission: (
     exerciseId: string,
   ) => { taskSubmissionId: string; slideSubmissionId: string } | undefined
+  /**
+   * Seeds a submission belonging to a different student, so grading, download and
+   * share answer 403 for it. Nothing a client can do produces one, so the owner
+   * check is unreachable without this seed. Returns undefined for an unknown
+   * exercise.
+   */
+  seedForeignSubmission: (
+    exerciseId: string,
+  ) => { taskSubmissionId: string; slideSubmissionId: string } | undefined
   /** Points every URL this mock hands out at `baseUrl`. */
   rebase: (baseUrl: string) => void
 }
@@ -237,11 +268,13 @@ const retainSubmission = (
   state: MoocMockState,
   exerciseId: string,
   fileIds: string[],
+  owner: SubmissionOwner = "caller",
 ): SubmissionRecord => {
   const record: SubmissionRecord = {
     exerciseId,
     taskSubmissionId: randomUUID(),
     slideSubmissionId: randomUUID(),
+    owner,
     polls: 0,
     createdAt: new Date().toISOString(),
     fileIds: [...fileIds],
@@ -296,6 +329,18 @@ const createMoocMockControls = (
       return undefined
     }
     const { taskSubmissionId, slideSubmissionId } = retainSubmission(state, exerciseId, [])
+    return { taskSubmissionId, slideSubmissionId }
+  },
+  seedForeignSubmission: (exerciseId) => {
+    if (!state.fixtures.exerciseById.has(exerciseId)) {
+      return undefined
+    }
+    const { taskSubmissionId, slideSubmissionId } = retainSubmission(
+      state,
+      exerciseId,
+      [],
+      "another-user",
+    )
     return { taskSubmissionId, slideSubmissionId }
   },
   rebase: (baseUrl) => void Object.assign(state, indexFixtures(baseUrl)),
@@ -426,16 +471,87 @@ const findCourse = (state: MoocMockState, id: string) =>
 const scoreMaximumFor = (state: MoocMockState, exerciseId: string): number =>
   state.scoreMaximumByExerciseId.get(exerciseId) ?? 1
 
+/**
+ * Exercise services that declare `supports_native_client`, i.e. the only ones this
+ * API serves. The host reads the live set from `exercise_service_info`; here it is
+ * a constant, because the mock serves one plugin.
+ */
+const NATIVE_CLIENT_CAPABLE_SLUGS = ["tmc"]
+
+const isClientCapable = (serviceSlug: string): boolean =>
+  NATIVE_CLIENT_CAPABLE_SLUGS.includes(serviceSlug)
+
+/**
+ * The slide as a native client may see it: tasks belonging to a service that
+ * cannot serve this client are not merely unusable, they are invisible, so a
+ * client never holds a task id that submit would have to reject.
+ */
+const clientServableSlide = (slide: ExerciseSlide): ExerciseSlide => ({
+  ...slide,
+  tasks: slide.tasks.filter((task) => isClientCapable(task.exercise_service_slug)),
+})
+
+const isEnrolled = (state: MoocMockState, exerciseId: string): boolean =>
+  state.courseByExerciseId.get(exerciseId)?.enrolled === true
+
+const notEnrolledError = (): MockResponse =>
+  apiError("not_enrolled", "User is not enrolled to this exercise's course")
+
 /** True once a submission has been polled enough that grading has "completed". */
 const isGraded = (record: SubmissionRecord): boolean => record.polls > 1
 
 /**
- * The host's reveal rule (`model_solution_should_be_revealed`): full points, or
- * the try limit exhausted. The mock models the full-points half; no fixture
- * limits tries.
+ * The caller's own submissions to an exercise. Progress, the reveal rule and the
+ * submissions list are all per-user on the host, so a seeded foreign submission
+ * must be invisible to every one of them.
  */
-const modelSolutionRevealed = (state: MoocMockState, exerciseId: string): boolean => {
-  const records = state.submissionsByExercise.get(exerciseId) ?? []
+const callerSubmissionsFor = (state: MoocMockState, exerciseId: string): SubmissionRecord[] =>
+  (state.submissionsByExercise.get(exerciseId) ?? []).filter((record) => record.owner === "caller")
+
+/**
+ * The host's `verify_user_can_answer_exercise`: a passed deadline, then an
+ * exhausted per-slide try limit. Answers with the refusal, or undefined when the
+ * student may still answer.
+ */
+const answerRefusal = (
+  state: MoocMockState,
+  exercise: MoocExerciseFixture,
+): MockResponse | undefined => {
+  const { deadline } = exercise.slide
+  // The host allows a second of slack, so a deadline one tick away is already past.
+  if (deadline !== null && Date.now() + 1000 >= Date.parse(deadline)) {
+    return apiError("validation_error", "Exercise deadline passed.")
+  }
+  const limit = exercise.maxTriesPerSlide
+  if (
+    limit !== undefined &&
+    callerSubmissionsFor(state, exercise.slide.exercise_id).length >= limit
+  ) {
+    return apiError("validation_error", "You've ran out of tries.")
+  }
+  return undefined
+}
+
+/** The host's `verify_submission_owner`, whose message names the operation refused. */
+const foreignSubmissionError = (
+  record: SubmissionRecord,
+  message: string,
+): MockResponse | undefined =>
+  record.owner === "caller" ? undefined : apiError("forbidden", message)
+
+/**
+ * The host's reveal rule (`model_solution_should_be_revealed`): full points, or
+ * the slide's try limit used up. The try half counts submissions rather than
+ * gradings, so it fires on the last try a student is allowed however that try
+ * scores.
+ */
+const modelSolutionRevealed = (state: MoocMockState, exercise: MoocExerciseFixture): boolean => {
+  const exerciseId = exercise.slide.exercise_id
+  const records = callerSubmissionsFor(state, exerciseId)
+  const limit = exercise.maxTriesPerSlide
+  if (limit !== undefined && records.length >= limit) {
+    return true
+  }
   return records.some(
     (record) =>
       isGraded(record) &&
@@ -452,7 +568,7 @@ const revealModelSolutions = (
   state: MoocMockState,
   exercise: MoocExerciseFixture,
 ): ExerciseSlide => {
-  if (!modelSolutionRevealed(state, exercise.slide.exercise_id)) {
+  if (!modelSolutionRevealed(state, exercise)) {
     return exercise.slide
   }
   return {
@@ -591,7 +707,7 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         // id must be a uuid + required fields missing -> spec violation
         return ok([{ id: 42 }])
       }
-      return ok(state.fixtures.courses.map((c) => c.course))
+      return ok(state.fixtures.courses.filter((c) => c.enrolled).map((c) => c.course))
     },
 
     // GET /api/v0/exercise-services/client/courses/{id}
@@ -611,7 +727,13 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (!found) {
         return apiError("not_found", `no such course: ${id}`)
       }
-      return ok(found.exercises.map((e) => e.slide))
+      // A slide left with no servable task drops out of the listing entirely, as
+      // the host's `if !tasks.is_empty()` does.
+      return ok(
+        found.exercises
+          .map((e) => clientServableSlide(e.slide))
+          .filter((slide) => slide.tasks.length > 0),
+      )
     },
 
     // GET /api/v0/exercise-services/client/courses/{id}/progress
@@ -627,7 +749,7 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       return ok({
         course_id: found.course.id,
         exercises: found.exercises.map((e) => {
-          const records = state.submissionsByExercise.get(e.slide.exercise_id) ?? []
+          const records = callerSubmissionsFor(state, e.slide.exercise_id)
           const graded = records.filter((r) => isGraded(r))
           const scores = graded.map((r) => outcomeOf(state, r).score_given)
           const scoreGiven = scores.length > 0 ? Math.max(...scores) : 0
@@ -648,33 +770,45 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
     // GET /api/v0/exercise-services/client/exercises/{id}
     getClientExercise: (c: Context): MockResponse => {
       const id = String(c.request.params.id)
-      if (id === notEnrolledExerciseId) {
-        // A real exercise whose course the user is not enrolled in: the backend
-        // resolves the slide but its course context is inaccessible, raising a
-        // BadRequest that maps to 422 with message_key `not_enrolled`
-        // (domain/error.rs). The spec documents this 422 (ApiErrorResponse).
-        return apiError("not_enrolled", "not enrolled to this course")
-      }
       const exercise = state.fixtures.exerciseById.get(id)
       if (!exercise) {
         // An entirely unknown exercise id: the backend's get_by_id yields
         // RecordNotFound -> 404 (the spec documents 404 on this path). Distinct
-        // from the not-enrolled 422 above.
+        // from the not-enrolled 422 below.
         return apiError("not_found", `no such exercise: ${id}`)
       }
-      return ok(revealModelSolutions(state, exercise))
+      if (!isEnrolled(state, id)) {
+        // The backend resolves the slide but its course context is inaccessible,
+        // raising a BadRequest that maps to 422 with message_key `not_enrolled`
+        // (domain/error.rs). The spec documents this 422 (ApiErrorResponse).
+        return notEnrolledError()
+      }
+      const slide = clientServableSlide(revealModelSolutions(state, exercise))
+      if (slide.tasks.length === 0) {
+        // The exercise exists and the student is on its course, but nothing in it
+        // can be rendered here -- which the host reports as a 404, not a 422.
+        return apiError("not_found", "No task of this exercise can be served to this client")
+      }
+      return ok(slide)
     },
 
     // POST /api/v0/exercise-services/client/exercises/{id}/files  (multipart)
     uploadClientExerciseFiles: (c: Context, req: Request): MockResponse => {
       const exerciseId = String(c.request.params.id)
-      if (exerciseId === notEnrolledExerciseId) {
-        // The host authorizes and checks enrollment BEFORE reading the multipart
-        // stream, so enrollment outranks any multipart rule violation below.
-        return apiError("not_enrolled", "not enrolled to this course")
-      }
-      if (!state.fixtures.exerciseById.has(exerciseId)) {
+      const exercise = state.fixtures.exerciseById.get(exerciseId)
+      if (!exercise) {
         return apiError("not_found", `no such exercise: ${exerciseId}`)
+      }
+      // The host runs both checks BEFORE reading the multipart stream, so an upload
+      // is refused for the reason a submit would be refused rather than for a
+      // multipart rule below. Stored objects outlive the request, which is why the
+      // gate is here at all and not only on submit.
+      if (!isEnrolled(state, exerciseId)) {
+        return notEnrolledError()
+      }
+      const refusal = answerRefusal(state, exercise)
+      if (refusal) {
+        return refusal
       }
 
       // Every multipart rule violation is a `controller_err!(BadRequest, …)` on the
@@ -730,13 +864,14 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
     // POST /api/v0/exercise-services/client/exercises/{id}/submit  (JSON)
     submitClientExercise: (c: Context): MockResponse => {
       const exerciseId = String(c.request.params.id)
-      if (exerciseId === notEnrolledExerciseId) {
+      const exercise = state.fixtures.exerciseById.get(exerciseId)
+      if (!exercise) {
+        return apiError("not_found", `no such exercise: ${exerciseId}`)
+      }
+      if (!isEnrolled(state, exerciseId)) {
         // Consistent with getClientExercise's 422 above; the spec documents
         // this 422 on submit too.
-        return apiError("not_enrolled", "not enrolled to this course")
-      }
-      if (!state.fixtures.exerciseById.has(exerciseId)) {
-        return apiError("not_found", `no such exercise: ${exerciseId}`)
+        return notEnrolledError()
       }
       // Request validation enforced the body shape. Only the slide and task are
       // required: all three answer members are optional, and omitting them all is a
@@ -771,6 +906,17 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
           `Exercise task ${body.exercise_task_id} does not belong to exercise slide ${slide.slide_id}`,
         )
       }
+      const task = slide.tasks.find((candidate) => candidate.task_id === body.exercise_task_id)
+      // Every listing hides a task this client cannot be served, so naming one
+      // means holding an id from somewhere else; persisting the answer would leave
+      // it to fail deep inside a service that cannot read it (host:
+      // verify_task_is_client_capable).
+      if (task && !isClientCapable(task.exercise_service_slug)) {
+        return apiError(
+          "validation_error",
+          `Exercise task ${task.task_id} belongs to the exercise service '${task.exercise_service_slug}', which cannot be served to this client`,
+        )
+      }
       // The two answer shapes the flat body allows but the answer model does not.
       // Checked here, after the slide/task ownership checks and before the per-upload
       // ones, in the host's own order (domain/exercises.rs: verify_named_uploads).
@@ -792,7 +938,6 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       // grading; the mock refuses it at submit instead. That keeps
       // seedFilelessSubmission the only route to a submission with no files, which
       // is what its doc comment claims.
-      const task = slide.tasks.find((candidate) => candidate.task_id === body.exercise_task_id)
       if (isJsonAnswer && task?.exercise_service_slug === "tmc") {
         return apiError(
           "validation_error",
@@ -825,6 +970,12 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
           )
         }
       }
+      // Last, as on the host, where grading is what enforces the deadline and the
+      // try limit: everything about the answer itself is settled first.
+      const refusal = answerRefusal(state, exercise)
+      if (refusal) {
+        return refusal
+      }
       const record = retainSubmission(state, exerciseId, namedFiles)
       return ok({
         task_submission_id: record.taskSubmissionId,
@@ -843,6 +994,13 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         // backend rather than the previous synthetic 200 NoGradingYet.
         return apiError("not_found", `no such submission: ${id}`)
       }
+      const foreign = foreignSubmissionError(
+        record,
+        "Cannot view another user's submission grading",
+      )
+      if (foreign) {
+        return foreign
+      }
       record.polls += 1
       return ok(gradingStatus(state, record))
     },
@@ -850,7 +1008,7 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
     // GET /api/v0/exercise-services/client/exercises/{id}/submissions
     getClientExerciseSubmissions: (c: Context): MockResponse => {
       const exerciseId = String(c.request.params.id)
-      const records = state.submissionsByExercise.get(exerciseId) ?? []
+      const records = callerSubmissionsFor(state, exerciseId)
       // newest first -- each item's `id` is the slide-submission id. A graded
       // submission reports the exercise's actual grading outcome (score +
       // progress); an as-yet-ungraded one reports nulls.
@@ -875,6 +1033,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       const record = state.submissionsBySlideId.get(id)
       if (!record) {
         return apiError("not_found", `no such submission: ${id}`)
+      }
+      const foreign = foreignSubmissionError(record, "Cannot download another user's submission")
+      if (foreign) {
+        return foreign
       }
       // A submission made from no files is a 200 with an empty list, not a 404:
       // the host resolves this from its own upload records, and having none is
@@ -901,9 +1063,13 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (!record) {
         // The backend looks the submission up before it can check ownership, so an
         // id it has no row for is a 404 here exactly as it is on grading and
-        // download. The 403 belongs to a submission that exists and is someone
-        // else's, which this mock has no way to produce yet.
+        // download; the 403 below belongs to a submission that exists and is
+        // someone else's.
         return apiError("not_found", `no such submission: ${id}`)
+      }
+      const foreign = foreignSubmissionError(record, "Cannot share another user's submission")
+      if (foreign) {
+        return foreign
       }
       const token = randomUUID()
       return ok({ paste_url: `${state.baseUrl}/shared-submissions/${token}` })
@@ -1222,6 +1388,21 @@ export const registerMoocRoutes = (
   app.post("/mooc-mock/seed-fileless-submission", json, (req, res) => {
     const exerciseId = String((req.body as { exercise_id?: unknown })?.exercise_id ?? "")
     const seeded = controls.seedFilelessSubmission(exerciseId)
+    if (!seeded) {
+      res.status(404).json({ error: `no such exercise: ${exerciseId}` })
+      return
+    }
+    res.json({
+      task_submission_id: seeded.taskSubmissionId,
+      slide_submission_id: seeded.slideSubmissionId,
+    })
+  })
+
+  // Spec-exempt seeding route for out-of-process consumers; see
+  // {@link MoocMockControls.seedForeignSubmission}.
+  app.post("/mooc-mock/seed-foreign-submission", json, (req, res) => {
+    const exerciseId = String((req.body as { exercise_id?: unknown })?.exercise_id ?? "")
+    const seeded = controls.seedForeignSubmission(exerciseId)
     if (!seeded) {
       res.status(404).json({ error: `no such exercise: ${exerciseId}` })
       return

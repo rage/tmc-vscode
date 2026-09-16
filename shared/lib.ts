@@ -787,7 +787,7 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("testError"),
     target: targetPanelSchema("ExerciseTests"),
-    error: z.custom<BaseError>(),
+    error: WebviewErrorSchema,
   }),
   // the submit never started, so the panel it would have opened never appears;
   // tells the ExerciseTests panel still on screen to re-enable its buttons
@@ -813,7 +813,8 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("submissionStatusUpdate"),
     target: targetPanelSchema("ExerciseSubmission"),
-    progressPercent: z.number(),
+    // completion as a 0..1 fraction, the unit every progress value in the extension uses
+    fraction: z.number(),
     message: z.string().optional(),
   }),
   z.object({
@@ -833,6 +834,13 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("submissionStatusError"),
     target: targetPanelSchema("ExerciseSubmission"),
+    error: WebviewErrorSchema,
+  }),
+  // A panel asked for its data and it could not be assembled. The panel renders this
+  // where it was showing a spinner, so a failed load stops looking like a slow one.
+  z.object({
+    type: z.literal("panelDataError"),
+    target: targetPanelSchema("MyCourses", "CourseDetails"),
     error: WebviewErrorSchema,
   }),
   z.object({

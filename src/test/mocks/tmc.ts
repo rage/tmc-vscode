@@ -138,7 +138,7 @@ function setupMockValues(values: TMCMockValues): Langs {
       async (
         _identifiers: unknown,
         _downloadTemplate: unknown,
-        cb?: (value: { id: number; percent: number }) => void,
+        cb?: (progress: { id: number; fraction: number }) => void,
       ) => {
         void cb
         return values.downloadExercises

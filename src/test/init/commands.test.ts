@@ -5,6 +5,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../../actions/types"
+import { EXTENSION_ID, EXTENSION_VERSION } from "../../config/constants"
 import { registerCommands } from "../../init/commands"
 import { TmcPanel } from "../../panels/TmcPanel"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -73,6 +74,9 @@ interface MenuEntry {
 }
 
 function packageJson(): {
+  name: string
+  publisher: string
+  version: string
   contributes: {
     commands: { command: string }[]
     keybindings?: { command: string; key: string; when?: string }[]
@@ -252,6 +256,20 @@ const vsCodeDefaultKeys: Record<string, string> = {
 // Shadowing kept deliberately: both keys shipped years ago and students have
 // learned them, which outweighs losing the defaults inside a course workspace.
 const acceptedShadowedKeys = ["ctrl+shift+c", "ctrl+shift+t"]
+
+// Neither constant is read from the manifest at runtime: the id is what VS Code
+// resolves the extension by, and the version is what both backends receive as
+// `--client-version`, so a manifest edit that leaves them behind is silent.
+suite("extension identity", function () {
+  test("EXTENSION_ID is the manifest's publisher and name", function () {
+    const { publisher, name } = packageJson()
+    expect(EXTENSION_ID).toBe(`${publisher}.${name}`)
+  })
+
+  test("EXTENSION_VERSION is the manifest's version", function () {
+    expect(EXTENSION_VERSION).toBe(packageJson().version)
+  })
+})
 
 suite("keybindings", function () {
   // Adding a binding means editing this list, which is what puts the shadowing

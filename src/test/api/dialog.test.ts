@@ -78,10 +78,10 @@ suite("Dialog.progressNotification", function () {
     vi.restoreAllMocks()
   })
 
-  test("delivers a message reported at an unchanged percentage", async function () {
+  test("delivers a message reported at an unchanged fraction", async function () {
     await new Dialog().progressNotification("Downloading", async (progress) => {
-      progress.report({ message: "Fetching exercise 1", percent: 0.5 })
-      progress.report({ message: "Fetching exercise 2", percent: 0.5 })
+      progress.report({ message: "Fetching exercise 1", fraction: 0.5 })
+      progress.report({ message: "Fetching exercise 2", fraction: 0.5 })
     })
 
     expect(reports).toEqual([
@@ -91,11 +91,11 @@ suite("Dialog.progressNotification", function () {
     ])
   })
 
-  test("keeps the bar from moving backwards when the percentage drops", async function () {
+  test("keeps the bar from moving backwards when the fraction drops", async function () {
     await new Dialog().progressNotification("Downloading", async (progress) => {
-      progress.report({ message: "Exercise 1 done", percent: 0.6 })
-      progress.report({ message: "Restarting exercise 2", percent: 0.2 })
-      progress.report({ message: "Exercise 2 done", percent: 0.8 })
+      progress.report({ message: "Exercise 1 done", fraction: 0.6 })
+      progress.report({ message: "Restarting exercise 2", fraction: 0.2 })
+      progress.report({ message: "Exercise 2 done", fraction: 0.8 })
     })
 
     const increments = reports.map((report) => report.increment)
@@ -106,8 +106,8 @@ suite("Dialog.progressNotification", function () {
 
   test("drops a report that neither advances the bar nor carries a message", async function () {
     await new Dialog().progressNotification("Downloading", async (progress) => {
-      progress.report({ percent: 0.4 })
-      progress.report({ percent: 0.4 })
+      progress.report({ fraction: 0.4 })
+      progress.report({ fraction: 0.4 })
     })
 
     expect(reports).toEqual([{ message: "Downloading", increment: 0 }, { increment: 40 }])

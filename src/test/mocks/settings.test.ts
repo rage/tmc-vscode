@@ -26,7 +26,18 @@ suite("the settings mock", () => {
 
     expect(notified).toEqual([true])
     expect(settings.getAutomaticallyUpdateExercises()).toBe(true)
-    expect(values.getAutomaticallyUpdateExercises).toBe(true)
+    expect(values.updateExercisesAutomatically).toBe(true)
+  })
+
+  test("each value field feeds the getter for that same setting", () => {
+    // The two boolean settings default alike and share a type, so a getter wired
+    // to the wrong field reads correctly until a test changes exactly one of them.
+    const [settings, values] = createSettingsMock()
+
+    values.downloadOldSubmission = true
+
+    expect(settings.getDownloadOldSubmission()).toBe(true)
+    expect(settings.getAutomaticallyUpdateExercises()).toBe(false)
   })
 
   test("its values start at the settings' declared defaults", () => {

@@ -128,7 +128,7 @@ export async function v1_migrateFromV0(
       }
 
       progress.report({
-        percent: ++index / exercisesToMigrate.length,
+        fraction: ++index / exercisesToMigrate.length,
         message,
       })
     }

@@ -1,6 +1,7 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
+import type { FractionProgress } from "../api/dialog"
 import type Langs from "../api/langs"
 import { ExerciseUpdateError, InitializationError } from "../errors"
 import { TmcPanel } from "../panels/TmcPanel"
@@ -102,17 +103,17 @@ export async function downloadOrUpdateExercises(
         interruptDownload = interrupt
       }
 
-      // Each backend reports its own 0..1 percentage, so counting finished
+      // Each backend reports its own completion fraction, so counting finished
       // exercises is the only measure that keeps rising across both.
       let completed = 0
-      const onDownloaded = (download: { id: ExerciseIdentifier; message?: string }): void => {
+      const onDownloaded = (download: FractionProgress & { id: ExerciseIdentifier }): void => {
         const id = ExerciseIdentifier.unwrap(download.id)
         const previousStatus = statuses.get(id)
         if (previousStatus !== undefined && previousStatus !== "closed") {
           completed += 1
         }
         statuses.set(id, "closed")
-        progress.report({ percent: completed / exerciseIds.length, message: download.message })
+        progress.report({ fraction: completed / exerciseIds.length, message: download.message })
         const message = wrapToMessage(download.id, "closed", resolveCourseId(download.id))
         if (message) {
           TmcPanel.postMessage(message)

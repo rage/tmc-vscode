@@ -349,6 +349,30 @@ suite("CourseDetails panel", () => {
     expect(postedMessages).toHaveBeenCalledWith({ type: "openMyCourses" })
   })
 
+  test("shows why the course could not be loaded, and offers to ask again", async () => {
+    const panel = tmcPanel()
+    render(CourseDetails, { props: { panel } })
+    expect(screen.getByLabelText("Loading")).toBeInTheDocument()
+
+    dispatch({
+      type: "panelDataError",
+      target: { id: panel.id, type: "CourseDetails" },
+      error: { message: "Failed to read the course.", details: "no such course" },
+    })
+
+    expect(await screen.findByText("Failed to read the course.")).toBeInTheDocument()
+    expect(screen.getByText("no such course")).toBeInTheDocument()
+    expect(screen.queryByLabelText("Loading")).not.toBeInTheDocument()
+
+    postedMessages.mockClear()
+    ;(await findButton("Retry")).click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "requestCourseDetailsData",
+      sourcePanel: panel,
+    })
+  })
+
   test("posts refreshCourseDetails with a snapshotted course id", async () => {
     // The dispatch first reassigns `panel`, turning it into a Svelte 5 `$state` proxy.
     // postMessage is now the only structured-clone boundary left, and the mock enforces

@@ -17,9 +17,10 @@ type ShowNotification = (
   ...actions: NotificationAction[]
 ) => Thenable<NotificationAction | undefined>
 
-export interface PercentProgress {
+/** A progress report giving absolute completion as a 0..1 fraction. */
+export interface FractionProgress {
   message?: string | undefined
-  percent: number
+  fraction: number
 }
 
 /**
@@ -89,7 +90,7 @@ export default class Dialog {
   public async progressNotification<T>(
     message: string,
     task: (
-      progress: vscode.Progress<PercentProgress>,
+      progress: vscode.Progress<FractionProgress>,
       token: vscode.CancellationToken,
     ) => Promise<T>,
     options?: { cancellable?: boolean },
@@ -102,9 +103,9 @@ export default class Dialog {
       },
       (progress, token) => {
         progress.report({ message, increment: 0 })
-        const percentageProgress = this._incrementPercentageWrapper(progress)
+        const fractionProgress = this._fractionProgressWrapper(progress)
 
-        return task(percentageProgress, token)
+        return task(fractionProgress, token)
       },
     )
   }
@@ -164,21 +165,20 @@ export default class Dialog {
    * completion fraction instead. This is mostly useful when using
    * `vscode.window.withProgress`.
    *
-   * `percent` is a 0..1 fraction and callers may report one that is lower than a
-   * previous report; the bar then stays where it is, but the report's message is
-   * still shown.
+   * Callers may report a fraction lower than a previous report; the bar then
+   * stays where it is, but the report's message is still shown.
    */
-  private _incrementPercentageWrapper(
+  private _fractionProgressWrapper(
     progress: vscode.Progress<{ message?: string; increment: number }>,
-  ): vscode.Progress<PercentProgress> {
+  ): vscode.Progress<FractionProgress> {
     let peak = 0
-    const report: (value: PercentProgress) => void = ({ message, percent }) => {
-      const increment = Math.max(0, 100 * (percent - peak))
+    const report: (value: FractionProgress) => void = ({ message, fraction }) => {
+      const increment = Math.max(0, 100 * (fraction - peak))
       if (increment === 0 && message === undefined) {
         return
       }
       progress.report({ increment, ...(message !== undefined ? { message } : {}) })
-      peak = Math.max(peak, percent)
+      peak = Math.max(peak, fraction)
     }
 
     return { report }

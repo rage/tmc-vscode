@@ -68,7 +68,7 @@ suite("TmcMenuTree", function () {
   })
 
   test("a refresh re-renders the whole tree, not one node", function () {
-    const refreshed: (vscode.TreeItem | undefined)[] = []
+    const refreshed: unknown[] = []
     dataProvider.onDidChangeTreeData?.((node) => refreshed.push(node))
     tree.registerAction(leaf("settings"))
     tree.refresh()

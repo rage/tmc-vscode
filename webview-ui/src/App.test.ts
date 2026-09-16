@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/svelte"
 import { tick } from "svelte"
 
 import App from "./App.svelte"
+import { findButton } from "./test/dom"
 import { tmcLocalCourse } from "./test/fixtures"
 import { postedMessages } from "./test/setup"
 
@@ -39,6 +40,22 @@ suite("App global error handling", () => {
       expect(document.body.innerHTML).toContain("Unhandled rejection: rejected")
       expect(document.body.innerHTML).toContain("This is a bug in the extension.")
     })
+  })
+
+  test("the crash view offers a way back to the panel that crashed", async () => {
+    render(App)
+    window.dispatchEvent(new ErrorEvent("error", { message: "boom", error: new Error("boom") }))
+    await waitFor(() => {
+      expect(document.body.innerHTML).toContain("Uncaught error: boom")
+    })
+
+    postedMessages.mockClear()
+    ;(await findButton("Reload")).click()
+
+    await waitFor(() => {
+      expect(document.body.innerHTML).not.toContain("This is a bug in the extension.")
+    })
+    expect(postedMessages).toHaveBeenCalledWith({ type: "ready" })
   })
 })
 

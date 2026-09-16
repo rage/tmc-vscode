@@ -4,7 +4,11 @@
   import Button from "../components/Button.svelte"
   import Card from "../components/Card.svelte"
   import ProgressBar from "../components/ProgressBar.svelte"
-  import type { LocalCourseData as LocalCourseDataType, MyCoursesPanel } from "../shared/shared"
+  import type {
+    LocalCourseData as LocalCourseDataType,
+    MyCoursesPanel,
+    WebviewError,
+  } from "../shared/shared"
   import {
     CourseIdentifier,
     ExerciseIdentifier,
@@ -24,12 +28,21 @@
 
   let { panel = $bindable() }: Props = $props()
 
-  onMount(() => {
+  // Set when the extension host answers that it cannot assemble this panel's data;
+  // rendered where the course list would be, so a failed load is not a permanent spinner.
+  let dataError = $state<WebviewError | undefined>(undefined)
+
+  function requestData() {
+    dataError = undefined
     vscode.postMessage({
       type: "requestMyCoursesData",
-      sourcePanel: panel,
+      // `panel` is a `$state` proxy once a message has reassigned it; snapshot it or
+      // posting fails structured clone with a `DataCloneError`
+      sourcePanel: $state.snapshot(panel),
     })
-  })
+  }
+
+  onMount(requestData)
   // props aren't deeply reactive in Svelte 5, so panel is reassigned rather than mutated
   addMessageListener(panel, (message) => {
     switch (message.type) {
@@ -65,6 +78,10 @@
               }),
           ),
         )
+        break
+      }
+      case "panelDataError": {
+        dataError = message.error
         break
       }
       case "setCourseDisabledStatus": {
@@ -224,6 +241,15 @@
     {#if panel.courses.length === 0}
       <div>Add courses to start completing exercises.</div>
     {/if}
+  {:else if dataError}
+    <div role="alert">
+      <h2>Could not load your courses</h2>
+      <div class="error-message">{dataError.message}</div>
+      {#if dataError.details}
+        <code>{dataError.details}</code>
+      {/if}
+    </div>
+    <Button onclick={requestData}>Retry</Button>
   {:else}
     <vscode-progress-ring aria-label="Loading"></vscode-progress-ring>
   {/if}
@@ -266,6 +292,10 @@
   .data-path {
     white-space: normal;
     font-family: monospace;
+  }
+  .error-message,
+  code {
+    white-space: pre-wrap;
   }
   .top-container :global(.change-path-button) {
     margin-top: 0.4rem;

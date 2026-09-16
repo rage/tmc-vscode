@@ -1,6 +1,5 @@
 import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { CourseIdentifier as CourseIdentifierNs } from "../shared/shared"
-import { TmcPanel } from "./TmcPanel"
 
 /**
  * Remembers which exercises have updates available, per course.
@@ -12,6 +11,9 @@ import { TmcPanel } from "./TmcPanel"
  *
  * In memory on purpose: `tmc.updateExercises silent` runs at activation, so a fresh
  * window refills this within seconds.
+ *
+ * Deliberately free of any panel import: the panel layer reads this registry, so
+ * reaching back into it from here would put the two in an import cycle.
  */
 class UpdateablesRegistry {
   private readonly _byCourse = new Map<string, ExerciseIdentifier[]>()
@@ -21,6 +23,7 @@ class UpdateablesRegistry {
     return this._byCourse.get(CourseIdentifierNs.toString(courseId)) ?? []
   }
 
+  /** Write through `postUpdateables` in `./exerciseLists`, or this and the live UI drift. */
   public set(courseId: CourseIdentifier, exerciseIds: ExerciseIdentifier[]): void {
     this._byCourse.set(CourseIdentifierNs.toString(courseId), exerciseIds)
   }
@@ -31,22 +34,3 @@ class UpdateablesRegistry {
 }
 
 export const updateablesRegistry = new UpdateablesRegistry()
-
-/**
- * Records `exerciseIds` as `courseId`'s updateable exercises **and** posts them.
- *
- * The single writer: recording and posting separately would let the two drift, and a
- * reload would then restore a list the live UI never showed.
- */
-export function postUpdateables(
-  courseId: CourseIdentifier,
-  exerciseIds: ExerciseIdentifier[],
-): void {
-  updateablesRegistry.set(courseId, exerciseIds)
-  TmcPanel.postMessage({
-    type: "setUpdateables",
-    target: { type: "CourseDetails" },
-    courseId,
-    exerciseIds,
-  })
-}

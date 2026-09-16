@@ -79,8 +79,6 @@ suite("Extension data migration", function () {
       const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("failed")
       expect(storage.getUserData()).toBeUndefined()
-      console.log("a", context.globalState.get(v0.EXERCISE_DATA_KEY))
-      console.log("b", exerciseData.v0_1_0(root))
       expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toEqual(exerciseData.v0_1_0(root))
       expect(context.globalState.get(v0.USER_DATA_KEY)).toEqual(userData.v0_1_0)
     })

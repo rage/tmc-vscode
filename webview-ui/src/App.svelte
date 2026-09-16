@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from "./components/Button.svelte"
   import CourseDetails from "./panels/CourseDetails.svelte"
   import ExerciseSubmission from "./panels/ExerciseSubmission.svelte"
   import ExerciseTests from "./panels/ExerciseTests.svelte"
@@ -88,11 +89,12 @@
   vscode.postMessage({ type: "ready" })
 </script>
 
-{#snippet crashView(title: string, message: string, stack: string | undefined)}
+{#snippet crashView(title: string, message: string, stack: string | undefined, retry: () => void)}
   <div>{title}: {message}</div>
   <div>This is a bug in the extension.</div>
   <div>Stack trace:</div>
   <pre>{stack}</pre>
+  <Button onclick={retry}>Reload</Button>
 {/snippet}
 
 <svelte:window onerror={handleError} onunhandledrejection={handleRejection} />
@@ -100,7 +102,12 @@
 <main>
   <div class="container">
     {#if crash}
-      {@render crashView(crash.title, crash.message, crash.stack)}
+      {@render crashView(crash.title, crash.message, crash.stack, () => {
+        crash = null
+        // The extension answers "ready" with the panel it last rendered, so the view
+        // comes back rather than sitting empty until the user navigates somewhere.
+        vscode.postMessage({ type: "ready" })
+      })}
     {:else}
       <svelte:boundary>
         {#key appState.panel.id}
@@ -125,11 +132,17 @@
           {/if}
         {/key}
 
-        {#snippet failed(error: unknown)}
+        {#snippet failed(error: unknown, reset: () => void)}
           {@render crashView(
             "Uncaught error",
             error instanceof Error ? error.message : String(error),
             error instanceof Error ? error.stack : undefined,
+            () => {
+              // The boundary keeps rendering its fallback until `reset`; asking the
+              // extension to resend the panel alone would change nothing on screen.
+              reset()
+              vscode.postMessage({ type: "ready" })
+            },
           )}
         {/snippet}
       </svelte:boundary>
