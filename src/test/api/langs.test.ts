@@ -37,6 +37,7 @@ function spyOnSpawn(langs: Langs): { args: string[] }[] {
 function stubSpawn(
   langs: Langs,
   respond: (callIndex: number, args: string[]) => Result<OutputData, BaseError>,
+  stderr = "",
 ): { args: string[] }[] {
   const calls: { args: string[] }[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,7 +45,11 @@ function stubSpawn(
     const args = (commandArgs as { args: string[] }).args
     const index = calls.length
     calls.push({ args })
-    return Ok({ interrupt: (): void => {}, result: Promise.resolve(respond(index, args)) })
+    return Ok({
+      interrupt: (): void => {},
+      result: Promise.resolve(respond(index, args)),
+      getStderr: (): string => stderr,
+    })
   })
   return calls
 }
@@ -297,6 +302,7 @@ suite("Langs class arg building", function () {
       })
       return Ok({
         interrupt: (): void => {},
+        getStderr: (): string => "",
         result: Promise.resolve(
           Ok(dataOutput("mooc-submission-status", "NoGradingYet")) as Result<OutputData, BaseError>,
         ),
@@ -489,6 +495,7 @@ suite("Langs class arg building", function () {
       })
       return Ok({
         interrupt: (): void => {},
+        getStderr: (): string => "",
         result: Promise.resolve(
           Ok(
             dataOutput("mooc-exercise-download", { downloaded: [], skipped: [], failed: [] }),
@@ -547,6 +554,7 @@ suite("Langs class arg building", function () {
       })
       return Ok({
         interrupt: (): void => {},
+        getStderr: (): string => "",
         result: Promise.resolve(
           Ok({
             "output-kind": "output-data",
@@ -785,6 +793,19 @@ suite("Langs error-kind mapping", function () {
       expect(result.err).toBe(true)
       expect(result.val).toBeInstanceOf(errorClass)
     })
+
+    // invalid-token is excluded deliberately: it means the stored credential was
+    // rejected, which is a clean signal that needs no diagnostics attached.
+    if (kind !== "invalid-token") {
+      test(`${String(kind)} carries the CLI trace and the process stderr`, async function () {
+        const langs = newLangs()
+        stubSpawn(langs, () => Ok(errorOutput(kind)), "stderr line")
+        const result = await langs.getEnrolledMoocCourseInstances()
+        const details = (result.val as BaseError).details ?? ""
+        expect(details).toContain("trace line")
+        expect(details).toContain("stderr line")
+      })
+    }
   }
 
   test("not-enrolled names the actual backend the failing command targeted", async function () {
@@ -1141,5 +1162,121 @@ suite("Langs exercise-update cache invalidation", function () {
     await langs.downloadExercises([ExerciseIdentifier.from("ex-uuid")], false, () => {})
     await langs.checkTmcExerciseUpdates()
     expect(tmcUpdateCheckCalls).toBe(1)
+  })
+})
+
+// Holds the spawn open so the process counts as in flight, and reports whether the
+// returned interrupt was called.
+function stubPendingSpawn(langs: Langs): {
+  interrupted: () => boolean
+  optedIn: () => boolean | undefined
+  settle: () => void
+} {
+  let interrupted = false
+  let optedIn: boolean | undefined
+  let settle!: () => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
+    optedIn = (commandArgs as { interruptOnDeactivate?: boolean }).interruptOnDeactivate
+    const result = new Promise<Result<OutputData, BaseError>>((resolve) => {
+      settle = () => resolve(Err(new RuntimeError("stopped")))
+    })
+    return Ok({
+      interrupt: () => {
+        interrupted = true
+        settle()
+      },
+      result,
+    })
+  })
+  return { interrupted: () => interrupted, optedIn: () => optedIn, settle: () => settle() }
+}
+
+suite("Langs process interruption on deactivate", function () {
+  test("killAllProcesses interrupts an in-flight submit", async function () {
+    const langs = newLangs()
+    const spawn = stubPendingSpawn(langs)
+
+    const submitting = langs.submitTmcExerciseAndWaitForResults(
+      ExerciseIdentifier.from(101),
+      "/ex",
+      () => {},
+      () => {},
+    )
+    expect(spawn.optedIn()).toBe(true)
+
+    langs.killAllProcesses()
+    expect(spawn.interrupted()).toBe(true)
+    expect((await submitting).err).toBe(true)
+  })
+
+  test("leaves processes that did not opt in alone, so a download can't be cut in half", async function () {
+    const langs = newLangs()
+    const spawn = stubPendingSpawn(langs)
+
+    const fetching = langs.getCourseDetails(CourseIdentifier.from(42))
+    expect(spawn.optedIn()).toBeUndefined()
+
+    langs.killAllProcesses()
+    expect(spawn.interrupted()).toBe(false)
+
+    spawn.settle()
+    expect((await fetching).err).toBe(true)
+  })
+
+  test("stops tracking a process once it settles", async function () {
+    const langs = newLangs()
+    const spawn = stubPendingSpawn(langs)
+
+    const pasting = langs.submitTmcExerciseToPaste(101, "/ex")
+    spawn.settle()
+    await pasting
+
+    langs.killAllProcesses()
+    expect(spawn.interrupted()).toBe(false)
+  })
+})
+
+// Drives `_executeLangsCommand` with a caller-chosen result and stderr, so the
+// assertions are about what reaches the returned error rather than about spawning.
+function stubSpawnWithStderr(
+  langs: Langs,
+  result: Result<OutputData, BaseError>,
+  stderr: string,
+): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation(() =>
+    Ok({
+      interrupt: (): void => {},
+      result: Promise.resolve(result),
+      getStderr: (): string => stderr,
+    }),
+  )
+}
+
+suite("Langs error diagnostics", function () {
+  test("an error response carries both the CLI trace and the process stderr", async function () {
+    const langs = newLangs()
+    stubSpawnWithStderr(
+      langs,
+      Ok({
+        "output-kind": "output-data",
+        status: "finished",
+        message: "something went wrong",
+        result: "error",
+        data: {
+          "output-data-kind": "error",
+          "output-data": { kind: "generic", trace: ["frame one", "frame two"] },
+        },
+      } as unknown as OutputData),
+      "thread 'main' panicked",
+    )
+
+    const result = await langs.getCourseDetails(CourseIdentifier.from(42))
+
+    expect(result.err).toBe(true)
+    const details = (result.val as BaseError).details ?? ""
+    expect(details).toContain("frame one")
+    expect(details).toContain("thread 'main' panicked")
   })
 })

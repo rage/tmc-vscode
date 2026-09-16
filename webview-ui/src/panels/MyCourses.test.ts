@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/svelte"
 
 import type { MyCoursesPanel } from "../shared/shared"
 import { findButton } from "../test/dom"
-import { MOOC_INSTANCE_ID, moocLocalCourse } from "../test/fixtures"
+import { MOOC_INSTANCE_ID, moocLocalCourse, tmcLocalCourse } from "../test/fixtures"
 import { postedMessages } from "../test/setup"
 import MyCourses from "./MyCourses.svelte"
 
@@ -58,5 +58,31 @@ suite("MyCourses panel", () => {
       courseName: "MOOC Python",
       requestingPanel: { id: panel.id, type: panel.type },
     })
+  })
+
+  // The webview no longer persists these deltas, so a reload restores them only if
+  // `setMyCourses` alone is enough to render them.
+  test("renders the new-exercise notice from setMyCourses alone", async () => {
+    render(MyCourses, { props: { panel } })
+
+    dispatch({
+      type: "setMyCourses",
+      target: { id: panel.id, type: "MyCourses" },
+      courses: [tmcLocalCourse({ newExercises: [101, 102] })],
+    })
+
+    expect(await screen.findByText(/2 new exercises found for this course/)).toBeInTheDocument()
+  })
+
+  test("renders the disabled notice from setMyCourses alone", async () => {
+    render(MyCourses, { props: { panel } })
+
+    dispatch({
+      type: "setMyCourses",
+      target: { id: panel.id, type: "MyCourses" },
+      courses: [tmcLocalCourse({ disabled: true, newExercises: [101] })],
+    })
+
+    expect(await screen.findByText(/This course has been disabled/)).toBeInTheDocument()
   })
 })

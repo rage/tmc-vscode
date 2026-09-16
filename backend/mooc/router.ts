@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto"
+import { createHmac, randomUUID, timingSafeEqual } from "crypto"
 import fs from "fs"
 import path from "path"
 
@@ -92,9 +92,11 @@ interface UploadRecord {
    */
   id: string
   name: string
+  /** Echoed from the part's Content-Type, as the host does; not inferred from the name. */
+  mime: string
+  sizeBytes: number
   /** Path segment under the spec-exempt file-store route, as the real host mints. */
   storedName: string
-  downloadUrl: string
   /** A submit naming this file for any other exercise gets `unknown_upload`. */
   exerciseId: string
   /** Soft-deleted (reaped): a submit naming it gets `upload_expired`, not `unknown_upload`. */
@@ -147,10 +149,9 @@ const retainSubmission = (exerciseId: string, fileIds: string[]): SubmissionReco
 }
 
 /**
- * Seeds a submission the host has no files for, so its download is an empty
- * list. The host records an IFrame answer's files too, so this only happens for
- * an exercise type with no files or a service that cannot enumerate them --
- * neither reachable through the client API, hence the seed.
+ * Seeds a submission the host has no files for, so its download is an empty list.
+ * Only an exercise type with no files at all is like this, and a submit through the
+ * client API cannot produce one -- hence the seed.
  * Returns undefined for an unknown exercise.
  */
 export const seedMoocFilelessSubmission = (
@@ -531,13 +532,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       const reaped = expireNextUpload
       expireNextUpload = false
       const stored = files.map((file) => retainUpload(exerciseId, file, reaped))
-      return ok({
-        files: stored.map((upload) => ({
-          id: upload.id,
-          name: upload.name,
-          download_url: upload.downloadUrl,
-        })),
-      })
+      return ok({ data_files: stored.map((record) => answerFile(record)) })
     },
 
     // POST /api/v0/exercise-services/client/exercises/{id}/submit  (JSON)
@@ -551,12 +546,15 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       if (!exerciseById.has(exerciseId)) {
         return { status: 404, body: apiError("not_found", `no such exercise: ${exerciseId}`) }
       }
-      // Request validation already enforced the body shape, including that
-      // `uploaded_file_ids` is present (it has no default -- omitting it is a 400).
+      // Request validation enforced the body shape. Only the slide and task are
+      // required: all three answer members are optional, and omitting them all is a
+      // valid JSON answer of `null`.
       const body = c.request.requestBody as {
         exercise_slide_id: string
         exercise_task_id: string
-        uploaded_file_ids: string[]
+        answer_kind?: "json" | "file" | null
+        data_json?: unknown
+        data_files?: string[] | null
       }
       // The URL authorizes only the exercise; the slide and task ids come from the
       // body, so an unrelated exercise's slide/task must be rejected here or a
@@ -593,10 +591,30 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
           ),
         }
       }
+      // The two answer shapes the flat body allows but the answer model does not.
+      // Checked here, after the slide/task ownership checks and before the per-upload
+      // ones, in the host's own order (domain/exercises.rs: verify_named_uploads).
+      const namedFiles = body.data_files ?? []
+      if ((body.answer_kind ?? "json") === "json") {
+        if (namedFiles.length > 0) {
+          return {
+            status: 422,
+            body: apiError(
+              "validation_error",
+              "A json answer cannot name uploaded files. Send answer_kind 'file' to submit files.",
+            ),
+          }
+        }
+      } else if (namedFiles.length === 0) {
+        return {
+          status: 422,
+          body: apiError("validation_error", "A file answer must name at least one uploaded file."),
+        }
+      }
       // Deduplicating instead would record one file twice and list it twice in a
       // download, hiding the client defect (host: verify_uploads_are_distinct).
       const namedOnce = new Set<string>()
-      for (const fileId of body.uploaded_file_ids) {
+      for (const fileId of namedFiles) {
         if (namedOnce.has(fileId)) {
           return {
             status: 422,
@@ -605,7 +623,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
         }
         namedOnce.add(fileId)
       }
-      for (const fileId of body.uploaded_file_ids) {
+      for (const fileId of namedFiles) {
         const upload = uploadsById.get(fileId)
         // A file bound to another exercise is indistinguishable from one that was
         // never uploaded, exactly as in the host: both are `unknown_upload`.
@@ -628,7 +646,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
           }
         }
       }
-      const record = retainSubmission(exerciseId, body.uploaded_file_ids)
+      const record = retainSubmission(exerciseId, namedFiles)
       return ok({
         task_submission_id: record.taskSubmissionId,
         slide_submission_id: record.slideSubmissionId,
@@ -684,15 +702,16 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
       // not the same as the submission not existing. The host's join filters
       // soft-deleted rows, so an explicitly reaped file drops out of the listing;
       // retention never drops a submission's own uploads (see retainUpload).
-      const files = record.fileIds
-        .map((fileId) => uploadsById.get(fileId))
-        .filter((upload): upload is UploadRecord => upload !== undefined && !upload.expired)
-        .map((upload) => ({
-          id: upload.id,
-          name: upload.name,
-          download_url: upload.downloadUrl,
-        }))
-      return ok({ files })
+      // Order numbers come from the position in the answer as submitted, so a reaped
+      // file leaves a gap rather than renumbering the ones that survive it.
+      const data_files = record.fileIds
+        .map((fileId, orderNumber) => ({ upload: uploadsById.get(fileId), orderNumber }))
+        .filter(
+          (entry): entry is { upload: UploadRecord; orderNumber: number } =>
+            entry.upload !== undefined && !entry.upload.expired,
+        )
+        .map((entry) => answerFile(entry.upload, entry.orderNumber))
+      return ok({ data_files })
     },
 
     // POST /api/v0/exercise-services/client/submissions/{id}/share
@@ -770,6 +789,7 @@ export const createMoocApi = (options: CreateMoocApiOptions = {}): OpenAPIBacken
 interface MulterFile {
   fieldname: string
   originalname: string
+  mimetype: string
   buffer: Buffer
 }
 
@@ -782,6 +802,44 @@ const UPLOAD_TOO_LARGE_MESSAGE = "Exercise upload exceeds the 100 MiB per-file o
 
 // The host requires every multipart field name to be a UUID the client picked.
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// ---- download claims ----
+//
+// An answer file's `url` is not a path to the object: it is a capability for that one
+// file for one hour, which the host mints fresh on every response and redirects to the
+// object store (base/src/jwt.rs, controllers/files.rs: redirect_claimed_file). A client
+// must treat it as opaque, must not persist it, and must follow the redirect -- so the
+// mock has to make it opaque and make it expire, or none of that is exercised.
+//
+// An HMAC rather than a real JWT: the client never inspects it, and forging one is the
+// only thing a test could want to do that a JWT library would make harder.
+const DOWNLOAD_CLAIM_PARAM = "download-claim"
+const DOWNLOAD_CLAIM_SECRET = "mooc-mock-download-claim"
+const DOWNLOAD_CLAIM_LIFETIME_SECONDS = 60 * 60
+
+const signClaim = (fileUploadId: string, expiresAt: number): string =>
+  createHmac("sha256", DOWNLOAD_CLAIM_SECRET).update(`${fileUploadId}.${expiresAt}`).digest("hex")
+
+/** The `url` an answer file is read through, claim minted here and now. */
+const claimedFileUrl = (fileUploadId: string): string => {
+  const expiresAt = Math.floor(Date.now() / 1000) + DOWNLOAD_CLAIM_LIFETIME_SECONDS
+  const claim = `${expiresAt}.${signClaim(fileUploadId, expiresAt)}`
+  return `${MOOC_MOCK_BASE_URL}/api/v0/files/claimed/${fileUploadId}?${DOWNLOAD_CLAIM_PARAM}=${claim}`
+}
+
+/** Whether `claim` authorizes `fileUploadId` right now. */
+const claimAuthorizes = (claim: string, fileUploadId: string): boolean => {
+  const [expiresAt, mac] = claim.split(".")
+  if (!expiresAt || !mac || !/^[0-9]+$/.test(expiresAt)) {
+    return false
+  }
+  if (Number(expiresAt) <= Math.floor(Date.now() / 1000)) {
+    return false
+  }
+  // The claim names one file, so a claim for another one must not open this one.
+  const expected = signClaim(fileUploadId, Number(expiresAt))
+  return mac.length === expected.length && timingSafeEqual(Buffer.from(mac), Buffer.from(expected))
+}
 
 // `files` is one over the limit so a just-over-limit batch reaches the handler and
 // gets the host's own message. `fileSize` matches the host's per-file cap: the host
@@ -807,6 +865,20 @@ const CLIENT_UPLOAD_PATH_PREFIX = "exercise-services-client"
 const MAX_RETAINED_UPLOADS = 32
 
 /**
+ * An upload as the wire reports it. `orderNumber` is the file's position in the answer it
+ * belongs to, so it is null for an upload that is not part of one yet -- which is every
+ * file the upload endpoint returns.
+ */
+const answerFile = (stored: UploadRecord, orderNumber: number | null = null) => ({
+  id: stored.id,
+  name: stored.name,
+  mime: stored.mime,
+  size_bytes: stored.sizeBytes,
+  order_number: orderNumber,
+  url: claimedFileUrl(stored.id),
+})
+
+/**
  * Records one uploaded part. The returned `id` is freshly minted and is NEVER the
  * client's field name -- see {@link UploadRecord.id}.
  */
@@ -815,8 +887,9 @@ const retainUpload = (exerciseId: string, file: MulterFile, reaped: boolean): Up
   const record: UploadRecord = {
     id: randomUUID(),
     name: file.originalname,
+    mime: file.mimetype,
+    sizeBytes: file.buffer.length,
     storedName,
-    downloadUrl: `${MOOC_MOCK_BASE_URL}/api/v0/files/${CLIENT_UPLOAD_PATH_PREFIX}/${storedName}`,
     exerciseId,
     expired: reaped,
   }
@@ -863,6 +936,9 @@ const evictOldUploads = (): void => {
  *     exercise's `stub_download_url`. This route is INTENTIONALLY OUTSIDE the
  *     OpenAPI spec: `stub_download_url` is an arbitrary absolute file-store URL
  *     in the real backend, so it is deliberately spec-exempt here.
+ *   - `/api/v0/files/claimed/:id` -> redirects an answer file's claim URL to the
+ *     object, and `/api/v0/files/<prefix>/:name` serves it. Both spec-exempt for
+ *     the same reason: they are file-store URLs, not client API routes.
  */
 export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions = {}): void => {
   const api = createMoocApi(options)
@@ -880,6 +956,30 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
         res.send(bytes)
       })
       .catch(next)
+  })
+
+  // Spec-exempt claim route: resolves an answer file's `url` to the object, as the
+  // real host does (controllers/files.rs: redirect_claimed_file). The Location is
+  // RELATIVE on purpose -- the claim URL carries the fixed MOOC_MOCK_BASE_URL host
+  // while the in-process suites listen on a random port, so an absolute one would
+  // send the follower to a port nothing is serving.
+  app.get("/api/v0/files/claimed/:id", (req, res, next) => {
+    const claim = req.query[DOWNLOAD_CLAIM_PARAM]
+    if (typeof claim !== "string") {
+      // actix's query extractor rejects the missing parameter before the handler.
+      return res.status(400).json(apiError("validation_error", "Missing download claim"))
+    }
+    if (!claimAuthorizes(claim, req.params.id)) {
+      return res
+        .status(422)
+        .json(apiError("validation_error", "Download claim does not authorize this file"))
+    }
+    const stored = uploadsById.get(req.params.id)
+    if (!stored || !uploadBytesByStoredName.has(stored.storedName)) {
+      return next()
+    }
+    res.setHeader("cache-control", "max-age=300, private")
+    return res.redirect(302, `/api/v0/files/${CLIENT_UPLOAD_PATH_PREFIX}/${stored.storedName}`)
   })
 
   // Spec-exempt file-store route: serves the exact bytes of a client upload, so

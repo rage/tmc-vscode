@@ -4,6 +4,7 @@ import type * as vscode from "vscode"
 
 import { pasteMoocExercise } from "../../actions"
 import type { ActionContext } from "../../actions/types"
+import { BottleneckError } from "../../errors"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const COURSE_SLUG = "mooc-python-course"
@@ -61,6 +62,33 @@ suite("pasteMoocExercise action", () => {
     expect(submit).toHaveBeenCalledWith(EXERCISE_ID, EXERCISE_PATH)
     expect(result.ok).toBe(true)
     expect(result.val).toBe("https://paste.example/abc123")
+  })
+
+  test("a paste is rejected while a submit of the same exercise is in flight", async () => {
+    // Paste and submit deliberately share one key: both drive the CLI against the
+    // same exercise directory, so they must not overlap.
+    let finish!: () => void
+    const { actionContext } = contextWith(undefined)
+    ;(actionContext.langs.val as unknown as Record<string, unknown>).submitMoocExerciseToPaste = vi
+      .fn()
+      .mockReturnValue(
+        new Promise((resolve) => {
+          finish = () => resolve(Ok("link"))
+        }),
+      )
+    const notification = vi.mocked(actionContext.dialog.notification)
+
+    const first = pasteMoocExercise(actionContext, COURSE_SLUG, EXERCISE_SLUG)
+    const second = await pasteMoocExercise(actionContext, COURSE_SLUG, EXERCISE_SLUG)
+
+    expect(second.err).toBe(true)
+    expect(second.val).toBeInstanceOf(BottleneckError)
+    expect(notification).toHaveBeenCalledExactlyOnceWith(
+      "A submission for this exercise is already in progress.",
+    )
+
+    finish()
+    expect((await first).val).toBe("link")
   })
 
   test("on a CLI/backend error, shows an error notification and returns the error", async () => {

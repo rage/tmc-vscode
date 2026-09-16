@@ -11,7 +11,7 @@ import {
   tmcExerciseGroup,
   tmcLocalCourse,
 } from "../test/fixtures"
-import { postedMessages, savedStates } from "../test/setup"
+import { postedMessages } from "../test/setup"
 import CourseDetails from "./CourseDetails.svelte"
 
 // vscode-checkbox is inert under jsdom, so set `.checked` and dispatch `change` directly;
@@ -243,13 +243,13 @@ suite("CourseDetails panel", () => {
     await waitFor(() => expect(banner).not.toBeVisible())
   })
 
-  test("persists panel state as a structured-cloneable plain object on every message", async () => {
-    // savePanelState feeds vscode.setState, which VS Code structured-clones; a
-    // raw $state proxy would throw DataCloneError. The setState mock enforces the
-    // clone (see test/setup.ts), so this dispatch would throw if a proxy leaked.
+  test("posts refreshCourseDetails with a snapshotted course id", async () => {
+    // The dispatch first reassigns `panel`, turning it into a Svelte 5 `$state` proxy.
+    // postMessage is now the only structured-clone boundary left, and the mock enforces
+    // the clone (see test/setup.ts), so a leaked proxy fails here rather than in
+    // production with an opaque DataCloneError.
     const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })
-    savedStates.mockClear()
     dispatch({
       type: "exerciseStatusChange",
       target: { type: "CourseDetails" },
@@ -257,16 +257,6 @@ suite("CourseDetails panel", () => {
       exerciseId: makeTmcKind({ tmcExerciseId: 101 }),
       status: "opened",
     })
-    await waitFor(() => expect(savedStates).toHaveBeenCalled())
-    const savedState = savedStates.mock.calls.at(-1)?.[0]
-    // must survive a structured clone (no proxies / functions)
-    expect(() => structuredClone(savedState)).not.toThrow()
-    expect(savedState).toEqual({ panel: expect.objectContaining({ type: "CourseDetails" }) })
-  })
-
-  test("posts refreshCourseDetails with a snapshotted course id", async () => {
-    const panel = tmcPanel()
-    render(CourseDetails, { props: { panel } })
     postedMessages.mockClear()
 
     const refresh = await findButton("Refresh")
@@ -279,5 +269,7 @@ suite("CourseDetails panel", () => {
         useCache: false,
       })
     })
+    const posted = postedMessages.mock.calls.at(-1)?.[0]
+    expect(() => structuredClone(posted)).not.toThrow()
   })
 })

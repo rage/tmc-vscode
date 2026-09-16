@@ -2142,7 +2142,7 @@
           "const": "restored"
         },
         {
-          "description": "The host has no files for the submission, so nothing on disk was touched:\nan exercise type with no files, or a service that declares no way to\nenumerate its answers' files.",
+          "description": "The host has no files for the submission, so nothing on disk was touched.\nOnly an exercise type with no files at all reaches this; a tmc submission\nalways has its archive, wherever it was made.",
           "type": "string",
           "const": "nothing-to-download"
         }

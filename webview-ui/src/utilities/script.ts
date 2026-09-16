@@ -100,14 +100,3 @@ export function resolveLogoPath(backendUrl: string, path: string): string {
     ? `${backendUrl}${path}`
     : `${backendUrl}/logos/small_logo/missing.png`
 }
-
-export function savePanelState(panel: Panel): void {
-  // `panel` reaches here as a Svelte 5 `$state` proxy (it is the reassigned panel
-  // prop). VS Code's real `setState` serializes its argument with the structured
-  // clone algorithm, which throws `DataCloneError` on a proxy -- the same hazard
-  // the postMessage boundary guards against. Deep-clone to a plain object first.
-  // This is a plain `.ts` module, so `$state.snapshot` (a compiler rune) is not
-  // available; a JSON round-trip reads through the proxy and yields a plain,
-  // structured-cloneable object (Panel is always JSON-serializable).
-  vscode.setState({ panel: JSON.parse(JSON.stringify(panel)) as Panel })
-}

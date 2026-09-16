@@ -230,22 +230,56 @@ suite("submitMoocExercise action", () => {
     )
   })
 
-  test("a BottleneckError from the submission throttle returns Ok and posts no result", async () => {
-    // The submission throttle surfaces as a BottleneckError; the action treats it
-    // as a cancellation: it returns Ok and posts NEITHER a moocSubmissionResult
-    // nor a submissionStatusError.
-    const { actionContext, setPassed } = contextWithErr(
-      new BottleneckError("You are submitting too fast, try again later."),
+  test("a second submit of the same exercise is rejected while one is in flight", async () => {
+    // The guard lives in the action rather than `commands/submitExercise`, because
+    // `TmcPanel` calls the paste actions -- which share this key -- directly.
+    let finishFirst!: () => void
+    const submit = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        finishFirst = () => resolve(Ok("NoGradingYet"))
+      }),
     )
+    const { actionContext } = contextWith(undefined)
+    ;(
+      actionContext.langs.val as unknown as Record<string, unknown>
+    ).submitMoocExerciseAndWaitForResults = submit
+    const notification = vi.mocked(actionContext.dialog.notification)
+
+    const first = submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+    const second = await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+
+    expect(second.err).toBe(true)
+    expect(second.val).toBeInstanceOf(BottleneckError)
+    expect(notification).toHaveBeenCalledExactlyOnceWith(
+      "A submission for this exercise is already in progress.",
+    )
+    // the rejected call must not have reached the CLI
+    expect(submit).toHaveBeenCalledTimes(1)
+
+    finishFirst()
+    expect((await first).ok).toBe(true)
+
+    // and the key is free again once the first submit finishes
+    const third = await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+    expect(third.ok).toBe(true)
+  })
+
+  test("a BottleneckError from the submission throttle reaches the panel", async () => {
+    // The throttle surfaces as a BottleneckError. It is reported like any other
+    // submission failure so the panel stops waiting; `commands/submitExercise`
+    // is the one place that decides it warrants no error dialog.
+    const error = new BottleneckError("You are submitting too fast, try again later.")
+    const { actionContext, setPassed } = contextWithErr(error)
 
     const result = await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
-    expect(result.ok).toBe(true)
+    expect(result.err).toBe(true)
+    expect(result.val).toBe(error)
     expect(setPassed).not.toHaveBeenCalled()
     expect(TmcPanel.postMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "moocSubmissionResult" }),
     )
-    expect(TmcPanel.postMessage).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "submissionStatusError" }),
+    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "submissionStatusError", error }),
     )
   })
 })

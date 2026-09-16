@@ -31,8 +31,8 @@ async function main() {
       extensionTestsEnv,
       platform,
     })
-  } catch (_err) {
-    console.error("Failed to run integration tests")
+  } catch (err) {
+    console.error("Failed to run integration tests:", err)
     exitCode = 1
   }
 

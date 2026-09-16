@@ -10,6 +10,7 @@ import {
   CLI_PROCESS_TIMEOUT,
   MINIMUM_SUBMISSION_INTERVAL,
   MOOC_BACKEND_URL,
+  SUBMIT_PROCESS_TIMEOUT,
   TMC_BACKEND_URL,
 } from "../config/constants"
 import type { InitializationError } from "../errors"
@@ -67,7 +68,7 @@ import {
   makeTmcKind,
   match,
 } from "../shared/shared"
-import { Logger } from "../utilities/logger"
+import { Logger, LogLevel } from "../utilities/logger"
 import type { SubmissionFeedback } from "./types"
 
 interface Options {
@@ -91,18 +92,25 @@ interface LangsProcessArgs {
   env?: Record<string, string> | undefined
   /** Which args should be obfuscated in logs. */
   obfuscate?: number[] | undefined
-  onStderr?: ((data: string) => void) | undefined
   onStdout?: ((data: StatusUpdateData) => void) | undefined
   stdin?: string | undefined
   processTimeout?: number | undefined
   /** Set on login/logout commands, where an auth-flavored error is expected rather than a lost session. */
   suppressAuthEvents?: boolean | undefined
   onInterruptHandle?: ((interrupt: () => void) => void) | undefined
+  /**
+   * Registers the process with {@link Langs.killAllProcesses}. Only set for commands with no
+   * partial-write failure mode (network-only submit/paste) -- a killed download or settings
+   * write can corrupt state.
+   */
+  interruptOnDeactivate?: boolean | undefined
 }
 
 interface LangsProcessRunner {
   interrupt: () => void
   result: Promise<Result<OutputData, BaseError>>
+  /** Raw stderr collected so far; complete once `result` has settled. */
+  getStderr: () => string
 }
 
 interface ResponseCacheEntry {
@@ -147,6 +155,8 @@ export default class Langs {
   private _onMoocLogin?: () => void
   private _onMoocLogout?: (expected: boolean) => void
 
+  private readonly _activeInterrupts = new Set<() => void>()
+
   /**
    * Creates a new instance of the langs interface class.
    */
@@ -160,6 +170,19 @@ export default class Langs {
     this._nextMoocSubmissionAllowedTimestamp = 0
     this._options = { ...options }
     this._responseCache = new Map()
+  }
+
+  /**
+   * Kills every CLI process opted in via `interruptOnDeactivate` (submit and paste);
+   * downloads, extraction, and settings/credentials writes are left running so a window
+   * reload can't leave them half-written.
+   */
+  public killAllProcesses(): void {
+    const interrupts = Array.from(this._activeInterrupts)
+    Logger.info(`Killing ${interrupts.length} active CLI process(es)`)
+    for (const interrupt of interrupts) {
+      interrupt()
+    }
   }
 
   /**
@@ -262,15 +285,14 @@ export default class Langs {
       backend: "mooc",
       args: this._moocCmd("login"),
       onStdout,
-      onStderr: (data) => Logger.info("Rust Langs", data),
     })
     if (process.err) {
       return { result: Promise.resolve(process), interrupt: (): void => {} }
     }
-    const { interrupt, result } = process.val
+    const { interrupt, result, getStderr } = process.val
     const loginResult = result.then((res) =>
       res
-        .andThen((x) => this._checkLangsResponse(x, null))
+        .andThen((x) => this._checkLangsResponse(x, null, undefined, getStderr()))
         .map(() => {
           this._onMoocLogin?.()
           return undefined
@@ -400,16 +422,15 @@ export default class Langs {
       args: ["run-tests", "--exercise-path", exercisePath],
       env,
       onStdout: (data) => progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
-      onStderr: (data) => Logger.info("Rust Langs", data),
       processTimeout: CLI_PROCESS_TIMEOUT,
     })
     if (process.err) {
       return { process: Promise.resolve(process), interrupt: (): void => {} }
     }
-    const { interrupt, result } = process.val
+    const { interrupt, result, getStderr } = process.val
     const postResult = result.then((res) =>
       res
-        .andThen((x) => this._checkLangsResponse(x, "test-result"))
+        .andThen((x) => this._checkLangsResponse(x, "test-result", undefined, getStderr()))
         .map((x) => x.data["output-data"]),
     )
 
@@ -426,16 +447,15 @@ export default class Langs {
     const process = this._spawnLangsProcess({
       args: ["checkstyle", "--locale", "en", "--exercise-path", exercisePath],
       onStdout: (data) => progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
-      onStderr: (data) => Logger.info("Rust Langs", data),
       processTimeout: CLI_PROCESS_TIMEOUT,
     })
     if (process.err) {
       return { process: Promise.resolve(process), interrupt: (): void => {} }
     }
-    const { interrupt, result } = process.val
+    const { interrupt, result, getStderr } = process.val
     const checkstyleResult = result.then((res) =>
       res
-        .andThen((x) => this._checkLangsResponse(x, "validation"))
+        .andThen((x) => this._checkLangsResponse(x, "validation", undefined, getStderr()))
         .map((x) => x.data["output-data"]),
     )
     return { process: checkstyleResult, interrupt }
@@ -789,9 +809,8 @@ export default class Langs {
    * Restores a past mooc submission at `exercisePath`.
    *
    * Resolves to `nothing-to-download` for a submission the server has no files
-   * for: an exercise type with none, or an exercise service that cannot
-   * enumerate its answers' files. Nothing on disk (or on the server) is touched
-   * in that case, `saveOldState` included.
+   * for, which only an exercise type with no files at all can be. Nothing on disk
+   * (or on the server) is touched in that case, `saveOldState` included.
    */
   public async downloadMoocOldSubmission(
     exerciseId: string,
@@ -1216,6 +1235,8 @@ export default class Langs {
           ExerciseIdentifier.toString(exerciseId),
         ),
         onStdout,
+        processTimeout: SUBMIT_PROCESS_TIMEOUT,
+        interruptOnDeactivate: true,
       },
       "submission-finished",
     )
@@ -1261,6 +1282,8 @@ export default class Langs {
           exercisePath,
         ),
         onStdout,
+        processTimeout: SUBMIT_PROCESS_TIMEOUT,
+        interruptOnDeactivate: true,
       },
       "mooc-submission-status",
     )
@@ -1297,6 +1320,8 @@ export default class Langs {
           "--submission-path",
           exercisePath,
         ),
+        processTimeout: CLI_PROCESS_TIMEOUT,
+        interruptOnDeactivate: true,
       },
       "new-submission",
     )
@@ -1335,6 +1360,8 @@ export default class Langs {
           "--submission-path",
           exercisePath,
         ),
+        processTimeout: CLI_PROCESS_TIMEOUT,
+        interruptOnDeactivate: true,
       },
       "mooc-paste",
     )
@@ -1462,9 +1489,12 @@ export default class Langs {
     langsArgs.onInterruptHandle?.(process.val.interrupt)
     // Attribute a lost-session error to the command's backend so the right logout event fires.
     const authEventTarget = langsArgs.suppressAuthEvents ? undefined : langsArgs.backend
-    const res = await process.val.result
+    const { interrupt, result, getStderr } = process.val
+    const res = langsArgs.interruptOnDeactivate
+      ? await this._trackInterrupt(interrupt, result)
+      : await result
     return res
-      .andThen((x) => this._checkLangsResponse(x, outputDataKind, authEventTarget))
+      .andThen((x) => this._checkLangsResponse(x, outputDataKind, authEventTarget, getStderr()))
       .andThen((x) => {
         if (x && cacheKey) {
           this._responseCache.set(cacheKey, { response: x, timestamp: currentTime })
@@ -1476,6 +1506,16 @@ export default class Langs {
       })
   }
 
+  /** Keeps `interrupt` reachable from {@link killAllProcesses} for as long as the process runs. */
+  private async _trackInterrupt<T>(interrupt: () => void, result: Promise<T>): Promise<T> {
+    this._activeInterrupts.add(interrupt)
+    try {
+      return await result
+    } finally {
+      this._activeInterrupts.delete(interrupt)
+    }
+  }
+
   /**
    * Checks langs response for generic errors.
    *
@@ -1485,33 +1525,36 @@ export default class Langs {
     langsResponse: OutputData,
     outputDataKind: T,
     authEventTarget?: "tmc" | "mooc",
+    stderr = "",
   ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, BaseError> {
     if (!dataMatchesKind(langsResponse, outputDataKind)) {
       Logger.error("Unexpected TMC-langs response.", langsResponse)
-      return Err(new BaseError("Unexpected TMC-langs response."))
+      return Err(new BaseError("Unexpected TMC-langs response.", stderr))
     }
     if (langsResponse.status === "crashed") {
       Logger.error("Langs process crashed.", langsResponse.message, langsResponse.data)
-      return Err(new BaseError("Langs process crashed."))
+      return Err(new BaseError("Langs process crashed.", stderr))
     }
     if (langsResponse.result !== "error") {
       return Ok(langsResponse)
     }
     if (langsResponse.data?.["output-data-kind"] !== "error") {
       Logger.error("Unexpected data in error response.", JSON.stringify(langsResponse, null, 2))
-      return Err(new BaseError("Unexpected data in error response"))
+      return Err(new BaseError("Unexpected data in error response", stderr))
     }
 
     // after this point, we know we have an error
     const data = langsResponse.data
     const message = langsResponse.message
-    const traceString = data["output-data"].trace.join("\n")
     const errorKind = data["output-data"].kind
+    // `trace` is the CLI's own reported backtrace; `stderr` is what the process wrote.
+    // Neither alone has been enough to diagnose a failure, so every error carries both.
+    const details = [data["output-data"].trace.join("\n"), stderr].filter(Boolean).join("\n\n")
     switch (errorKind) {
       case "connection-error":
-        return Err(new ConnectionError(message, traceString))
+        return Err(new ConnectionError(message, details))
       case "forbidden":
-        return Err(new ForbiddenError(message, traceString))
+        return Err(new ForbiddenError(message, details))
       case "not-enrolled": {
         // Not hardcoded to courses.mooc.fi: this error kind can come from either backend.
         const siteName =
@@ -1525,7 +1568,7 @@ export default class Langs {
             `You are no longer enrolled on this course on ${siteName}, so its` +
               ` exercises can't be fetched. Enroll on the course again from` +
               ` ${siteName}, then reload the course here.`,
-            traceString,
+            details,
           ),
         )
       }
@@ -1536,13 +1579,13 @@ export default class Langs {
           new UploadExpiredError(
             `${message}\nThe submission's files expired on the server before the` +
               ` submission was accepted. Please try again.`,
-            traceString,
+            details,
           ),
         )
       case "unknown-upload":
         // Never a race: the backend has no record of a file the CLI named for
         // this exercise. Surfaced as-is so it is diagnosable rather than retried.
-        return Err(new UnknownUploadError(message, traceString))
+        return Err(new UnknownUploadError(message, details))
       case "invalid-token":
         this._responseCache.clear()
         this._fireUnexpectedLogout(authEventTarget)
@@ -1550,19 +1593,19 @@ export default class Langs {
       case "not-logged-in":
         this._responseCache.clear()
         this._fireUnexpectedLogout(authEventTarget)
-        return Err(new AuthorizationError(message, traceString))
+        return Err(new AuthorizationError(message, details))
       case "obsolete-client":
         return Err(
           new ObsoleteClientError(
             message +
               "\nYour TMC Extension is out of date, please update it." +
               "\nhttps://code.visualstudio.com/docs/editor/extension-gallery",
-            traceString,
+            details,
           ),
         )
     }
 
-    return Err(new RuntimeError(message, traceString))
+    return Err(new RuntimeError(message, details))
   }
 
   /** Fires the unexpected-logout (`expected: false`) event for `target`, used when credentials were rejected rather than removed deliberately. */
@@ -1582,7 +1625,7 @@ export default class Langs {
   private _spawnLangsProcess(
     commandArgs: LangsProcessArgs,
   ): Result<LangsProcessRunner, InitializationError | SpawnError> {
-    const { args, env, obfuscate, onStderr, onStdout, stdin, processTimeout } = commandArgs
+    const { args, env, obfuscate, onStdout, stdin, processTimeout } = commandArgs
 
     let theResult: OutputData | undefined
     let stdoutBuffer = ""
@@ -1617,15 +1660,19 @@ export default class Langs {
     Logger.debug(`MOOC backend at ${moocBackendUrl}`)
     Logger.debug(`Config dir at ${tmcLangsConfigDir}`)
 
+    // debug pulls in j4rs/JNI spam, so only ask for it when the user opted into verbose
+    const cliLogLevel = Logger.level === LogLevel.Verbose ? "debug" : "info"
+
     let active = true
     let interrupted = false
     let cprocess
+    const startTime = Date.now()
     try {
       cprocess = cp.spawn(this.cliPath, args, {
         env: {
           ...process.env,
           ...env,
-          RUST_LOG: "debug,rustls=warn,reqwest=warn",
+          RUST_LOG: `${cliLogLevel},rustls=warn,reqwest=warn`,
           TMC_LANGS_TMC_ROOT_URL: tmcBackendUrl,
           TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
           TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
@@ -1665,9 +1712,10 @@ ${error.message}`
       })
       cprocess.stderr.on("data", (chunk) => {
         const data = chunk.toString()
-        Logger.warn("stderr", data)
+        // per-line at debug to keep j4rs/JNI spam out of the log; the failure paths
+        // below attach the collected stderr to the error they return
+        Logger.debug("stderr", data)
         stderr.push(data)
-        onStderr?.(data)
       })
       cprocess.stdout.on("end", () => {
         stdoutEnded = true
@@ -1680,6 +1728,9 @@ ${error.message}`
       })
       cprocess.on("exit", (code) => {
         resultCode = code ?? 0
+        Logger.info(
+          `Process exited with code ${resultCode} after ${Date.now() - startTime}ms: ${loggableCommand}`,
+        )
         if (stdoutEnded) {
           if (timeout) {
             clearTimeout(timeout)
@@ -1737,11 +1788,11 @@ ${error.message}`
       try {
         await processResult
       } catch (error) {
-        return Err(new RuntimeError(error as string))
+        return Err(new RuntimeError(error as string, stderr.join("\n")))
       }
 
       if (interrupted) {
-        return Err(new RuntimeError("TMC Langs process was killed."))
+        return Err(new RuntimeError("TMC Langs process was killed.", stderr.join("\n")))
       }
 
       if (stdoutBuffer !== "") {
@@ -1762,9 +1813,7 @@ ${error.message}`
         )
       }
       return Err(
-        new EmptyLangsResponseError(
-          `Langs process ended without result data. stderr: {${stderr.join("\n")}}`,
-        ),
+        new EmptyLangsResponseError("Langs process ended without result data.", stderr.join("\n")),
       )
     })()
 
@@ -1775,7 +1824,7 @@ ${error.message}`
         kill(cprocess.pid as number)
       }
     }
-    const res = { interrupt, result }
+    const res = { interrupt, result, getStderr: (): string => stderr.join("\n") }
     return Ok(res)
   }
 }

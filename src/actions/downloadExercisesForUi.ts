@@ -1,6 +1,7 @@
 import { Result } from "ts-results"
 
 import { TmcPanel } from "../panels/TmcPanel"
+import { postUpdateables } from "../panels/updateablesRegistry"
 import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities/"
@@ -27,20 +28,10 @@ export async function downloadExercisesForUi(
   }
 
   if (mode === "update") {
-    TmcPanel.postMessage({
-      type: "setUpdateables",
-      target: { type: "CourseDetails" },
-      courseId,
-      exerciseIds: [],
-    })
+    postUpdateables(courseId, [])
     const downloadResult = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
     if (downloadResult.ok) {
-      TmcPanel.postMessage({
-        type: "setUpdateables",
-        target: { type: "CourseDetails" },
-        courseId,
-        exerciseIds: downloadResult.val.failed,
-      })
+      postUpdateables(courseId, downloadResult.val.failed)
     }
     return
   }

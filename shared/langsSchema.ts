@@ -5,7 +5,7 @@ import { z } from "zod"
 // Source of truth: the serde-annotated Rust types in tmc-langs-rust, exported
 // from that repo as a schemars JSON Schema generated with the *serialize*
 // contract, so it describes exactly what the CLI writes to stdout. Vendored
-// from rev b94f8c7f9f7 (branch programming-exercise-migration).
+// from rev f440be88074 (branch programming-exercise-migration).
 //
 // This file is a thin shim: the schemas below are generated from that JSON
 // Schema and re-exported under stable public names. Do not hand-edit them;
@@ -282,7 +282,7 @@ export type MoocDeviceLogin = z.infer<typeof MoocDeviceLogin>
 export const MoocExerciseDownload = zMoocExerciseDownload
 export type MoocExerciseDownload = z.infer<typeof MoocExerciseDownload>
 
-/** Outcome of `mooc download-old-submission`: `nothing-to-download` for a submission the server has no files for. */
+/** Outcome of `mooc download-old-submission`: `nothing-to-download` for a submission the server has no files for, which only an exercise type with no files at all can be. */
 export const MoocOldSubmissionRestore = zMoocOldSubmissionRestore
 export type MoocOldSubmissionRestore = z.infer<typeof MoocOldSubmissionRestore>
 

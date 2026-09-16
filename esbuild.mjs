@@ -104,10 +104,14 @@ const common = {
   plugins: watch ? [stubOptionalNativeAddon, problemMatcherPlugin] : [stubOptionalNativeAddon],
 }
 
-// The two test outputs bundle every matching spec file into a single file
-// via a generated in-memory entry point.
+// Bundles every matching spec file into a single test output via a generated
+// in-memory entry point. An empty match would bundle nothing and the tier
+// would then run zero tests and report success, so it is a build failure.
 function aggregateEntry(globPattern) {
   const files = globSync(globPattern, { cwd: __dirname })
+  if (files.length === 0) {
+    throw new Error(`No test files matched ${globPattern}; the bundled suite would be empty.`)
+  }
   const contents = files
     .map((f) => `import ${JSON.stringify("./" + f.split(path.sep).join("/"))};`)
     .join("\n")
