@@ -15,6 +15,16 @@ export class ConnectionError extends BaseError {
   public override readonly name = "Connection Error"
 }
 
+/**
+ * Raised when a value in global state no longer matches the schema its migration
+ * writes. Callers must fail rather than carry on from an empty value: the blob is the
+ * only copy of the user's course catalogue, and the next write would persist the empty
+ * one over it. It is left untouched.
+ */
+export class CorruptStoredDataError extends BaseError {
+  public override readonly name = "Corrupt Stored Data Error"
+}
+
 export class EmptyLangsResponseError extends BaseError {
   public override readonly name = "Empy Langs Response Error"
 }

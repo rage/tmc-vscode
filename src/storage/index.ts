@@ -16,8 +16,7 @@ import {
   WORKSPACE_ROOT_FOLDER_NAME,
   WORKSPACE_SETTINGS,
 } from "../config/constants"
-import { HaltForReloadError } from "../errors"
-import { BaseError } from "../shared/shared"
+import { CorruptStoredDataError, HaltForReloadError } from "../errors"
 import { Logger } from "../utilities"
 import * as storage from "./data"
 import { v0 } from "./data"
@@ -28,15 +27,7 @@ import migrateExtensionSettingsToLatest from "./migration/extensionSettings"
 import migrateSessionState from "./migration/sessionState"
 import migrateUserDataToLatest from "./migration/userData"
 
-/**
- * Raised when a value in global state no longer matches the schema its
- * migration writes. Callers must fail rather than carry on from an empty
- * value: the blob is the only copy of the user's course catalogue, and the
- * next write would persist the empty one over it. It is left untouched.
- */
-export class CorruptStoredDataError extends BaseError {
-  public override readonly name = "Corrupt Stored Data Error"
-}
+export { CorruptStoredDataError } from "../errors"
 
 /**
  * Interface class for accessing stored TMC configuration and data.
