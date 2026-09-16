@@ -244,6 +244,54 @@ suite("CourseDetails panel", () => {
     )
   })
 
+  test("opens the workspace under the course's own backend", async () => {
+    const panel = moocPanel()
+    render(CourseDetails, { props: { panel } })
+    dispatch({
+      type: "setCourseData",
+      target: { type: "CourseDetails", id: panel.id },
+      courseData: moocLocalCourse(),
+    })
+    await screen.findByRole("heading", { name: /MOOC Python/ })
+
+    const open = await findButton("Open workspace")
+    postedMessages.mockClear()
+    open.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openCourseWorkspace",
+      courseName: "mooc-python",
+      backend: "mooc",
+    })
+  })
+
+  test("posts the panel's own course id when updating exercises", async () => {
+    const panel = moocPanel()
+    render(CourseDetails, { props: { panel } })
+    dispatch({
+      type: "setCourseData",
+      target: { type: "CourseDetails", id: panel.id },
+      courseData: moocLocalCourse(),
+    })
+    dispatch({
+      type: "setUpdateables",
+      target: { type: "CourseDetails" },
+      courseId: makeMoocKind({ instanceId: MOOC_INSTANCE_ID }),
+      exerciseIds: [makeMoocKind({ moocExerciseId: MOOC_EXERCISE_ID })],
+    })
+
+    const update = await findButton("Update exercises")
+    postedMessages.mockClear()
+    update.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "downloadExercises",
+      ids: [makeMoocKind({ moocExerciseId: MOOC_EXERCISE_ID })],
+      courseId: panel.courseId,
+      mode: "update",
+    })
+  })
+
   test("navigates back with a real button rather than a keypress handler", async () => {
     render(CourseDetails, { props: { panel: tmcPanel() } })
     postedMessages.mockClear()

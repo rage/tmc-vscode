@@ -134,25 +134,13 @@
     if (p.course === undefined) {
       return
     }
-    match(
-      p.course,
-      (tmc) => {
-        vscode.postMessage({
-          type: "openCourseWorkspace",
-          courseName: tmc.name,
-          backend: "tmc",
-        })
-      },
-      (mooc) => {
-        // The workspace file is created under the course slug; the backend tag disambiguates
-        // it from a tmc course that happens to share the same slug.
-        vscode.postMessage({
-          type: "openCourseWorkspace",
-          courseName: mooc.name,
-          backend: "mooc",
-        })
-      },
-    )
+    vscode.postMessage({
+      type: "openCourseWorkspace",
+      courseName: unwrap(p.course).name,
+      // The workspace file is named after the course slug; the backend tag disambiguates it
+      // from a course on the other backend that happens to share the slug.
+      backend: p.course.kind,
+    })
   }
   function downloadExercises(p: CourseDetailsPanel, ids: Array<ExerciseIdentifier>) {
     vscode.postMessage({
@@ -182,29 +170,12 @@
     checkedExercises.clear()
   }
   function updateExercises(p: CourseDetailsPanel) {
-    if (p.course === undefined) {
-      return
-    }
-    match(
-      p.course,
-      (tmc) => {
-        vscode.postMessage({
-          type: "downloadExercises",
-          ids: $state.snapshot(p.updateableExercises ?? []),
-          courseId: makeTmcKind({ courseId: tmc.id }),
-          mode: "update",
-        })
-      },
-      (mooc) => {
-        vscode.postMessage({
-          type: "downloadExercises",
-          ids: $state.snapshot(p.updateableExercises ?? []),
-          // mooc CourseIdentifier carries the course id in `instanceId`
-          courseId: makeMoocKind({ instanceId: mooc.id }),
-          mode: "update",
-        })
-      },
-    )
+    vscode.postMessage({
+      type: "downloadExercises",
+      ids: $state.snapshot(p.updateableExercises ?? []),
+      courseId: $state.snapshot(p.courseId),
+      mode: "update",
+    })
   }
   function getCheckedExercises(): Array<ExerciseIdentifier> {
     return [...checkedExercises.values()]
