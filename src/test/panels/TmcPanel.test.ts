@@ -8,7 +8,12 @@ import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import type { WebviewHandlers } from "../../panels/TmcPanel"
 import { randomPanelId, registerWebviewHandlers, TmcPanel } from "../../panels/TmcPanel"
 import { updateablesRegistry } from "../../panels/updateablesRegistry"
-import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
+import {
+  CourseIdentifier,
+  ExerciseIdentifier,
+  ExerciseSchema,
+  makeTmcKind,
+} from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
 
@@ -284,6 +289,41 @@ suite("TmcPanel handler dispatch", () => {
     const { listener } = await mountSidePanel(createMockActionContext())
 
     await listener({ type: "cancelTests", testRunId: 7 })
+
+    expect(handlers.cancelTests).toHaveBeenCalledWith(7)
+  })
+})
+
+suite("TmcPanel inbound message guard", () => {
+  // The webview is a separate document; its messages are the extension's one untrusted
+  // input, and nothing downstream re-checks them.
+  async function drive(message: unknown): Promise<{
+    handlers: ReturnType<typeof stubHandlers>
+    posted: ReturnType<typeof vi.fn>
+  }> {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const { panel, listener } = await mountSidePanel(createMockActionContext())
+    await listener(message)
+    return { handlers, posted: vi.mocked(panel.webview.postMessage) }
+  }
+
+  test("ignores a message whose type it does not know", async () => {
+    const { handlers, posted } = await drive({ type: "notAKnownMessage", testRunId: 7 })
+
+    expect(handlers.cancelTests).not.toHaveBeenCalled()
+    expect(posted).not.toHaveBeenCalled()
+  })
+
+  test("ignores a known message that is missing a required field", async () => {
+    const { handlers, posted } = await drive({ type: "cancelTests" })
+
+    expect(handlers.cancelTests).not.toHaveBeenCalled()
+    expect(posted).not.toHaveBeenCalled()
+  })
+
+  test("acts on the same message once it carries the field", async () => {
+    const { handlers } = await drive({ type: "cancelTests", testRunId: 7 })
 
     expect(handlers.cancelTests).toHaveBeenCalledWith(7)
   })
@@ -749,7 +789,7 @@ suite("TmcPanel webview document", () => {
   })
 })
 
-function courseWith(exerciseCount: number) {
+function courseWith(exerciseCount: number, deadline: string | null = null) {
   return makeTmcKind({
     id: 42,
     name: "python-course",
@@ -761,9 +801,9 @@ function courseWith(exerciseCount: number) {
       availablePoints: 1,
       awardedPoints: 0,
       name: `part01-${String(index).padStart(3, "0")}_exercise`,
-      deadline: null,
+      deadline,
       passed: false,
-      softDeadline: null,
+      softDeadline: deadline,
     })),
     availablePoints: exerciseCount,
     awardedPoints: 0,
@@ -780,10 +820,13 @@ suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
   // Large enough that one message per exercise would be obvious in the count.
   const EXERCISE_COUNT = 150
 
-  async function openCourseDetails(exerciseCount: number): Promise<{
+  async function openCourseDetails(
+    exerciseCount: number,
+    deadline: string | null = null,
+  ): Promise<{
     posted: { type: string }[]
   }> {
-    const course = courseWith(exerciseCount)
+    const course = courseWith(exerciseCount, deadline)
     const actionContext = {
       ...createMockActionContext(),
       langs: Ok({
@@ -819,6 +862,22 @@ suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
 
     expect(large.posted).toHaveLength(small.posted.length)
     expect(large.posted.filter((m) => m.type === "exerciseStatusChange")).toHaveLength(0)
+  })
+
+  test("ships only the fields the exercise contract declares", async () => {
+    // The view model's rows also carry parsed `Date` deadlines it needs internally.
+    // Those are not part of the message contract, and a `Date` has no business
+    // crossing a `postMessage`.
+    const { posted } = await openCourseDetails(1, "2030-01-01T00:00:00.000Z")
+
+    const groups = posted.find((m) => m.type === "setCourseGroups") as unknown as {
+      exerciseGroups: { exercises: Record<string, unknown>[] }[]
+    }
+    const exercise = groups.exerciseGroups[0]?.exercises[0]
+    expect(exercise).toBeDefined()
+    expect(Object.keys(exercise ?? {}).toSorted()).toEqual(
+      Object.keys(ExerciseSchema.shape).toSorted(),
+    )
   })
 
   test("reports every exercise's status in one message", async () => {

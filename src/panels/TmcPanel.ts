@@ -11,6 +11,7 @@ import { ConnectionError, InitializationError } from "../errors"
 import type {
   CourseDetailsPanel,
   CourseIdentifier,
+  ExerciseGroup,
   ExerciseIdentifier,
   ExerciseStatus,
   ExtensionToWebview,
@@ -459,7 +460,7 @@ export class TmcPanel {
               type: "setCourseGroups",
               target: message.sourcePanel,
               offlineMode: false,
-              exerciseGroups: view.exerciseGroups,
+              exerciseGroups: toMessageGroups(view.exerciseGroups),
             })
 
             // Everything above comes from stored data, so the panel is rendered by now.
@@ -475,7 +476,7 @@ export class TmcPanel {
                     type: "setCourseGroups",
                     target: message.sourcePanel,
                     offlineMode: true,
-                    exerciseGroups: buildView(true).exerciseGroups,
+                    exerciseGroups: toMessageGroups(buildView(true).exerciseGroups),
                   })
                 }
               })
@@ -870,6 +871,29 @@ export class TmcPanel {
       this._disposables,
     )
   }
+}
+
+/**
+ * Narrows the view model's rows to the fields `ExerciseSchema` declares.
+ *
+ * `buildCourseDetailsView` assembles its groups out of `CourseDetailsExercise` rows,
+ * which also carry the parsed `Date` deadlines it needs to sort and compare; the
+ * message contract declares only their rendered strings, and a `Date` has no place
+ * on the far side of a `postMessage`.
+ */
+function toMessageGroups(groups: ExerciseGroup[]): ExerciseGroup[] {
+  return groups.map(({ name, nextDeadlineString, exercises }) => ({
+    name,
+    nextDeadlineString,
+    exercises: exercises.map((exercise) => ({
+      id: exercise.id,
+      name: exercise.name,
+      isHard: exercise.isHard,
+      hardDeadlineString: exercise.hardDeadlineString,
+      softDeadlineString: exercise.softDeadlineString,
+      passed: exercise.passed,
+    })),
+  }))
 }
 
 const NOT_INITIALIZED_MESSAGE =
