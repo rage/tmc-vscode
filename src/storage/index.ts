@@ -27,8 +27,6 @@ import migrateExtensionSettingsToLatest from "./migration/extensionSettings"
 import migrateSessionState from "./migration/sessionState"
 import migrateUserDataToLatest from "./migration/userData"
 
-export { CorruptStoredDataError } from "../errors"
-
 /**
  * Interface class for accessing stored TMC configuration and data.
  */

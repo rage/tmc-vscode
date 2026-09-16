@@ -1,6 +1,7 @@
 import type * as vscode from "vscode"
 
-import Storage, { CorruptStoredDataError } from "../../storage"
+import { CorruptStoredDataError } from "../../errors"
+import Storage from "../../storage"
 import { v3 } from "../../storage/data"
 import { Logger, LogLevel } from "../../utilities"
 import * as extensionSettings from "../fixtures/extensionSettings"
