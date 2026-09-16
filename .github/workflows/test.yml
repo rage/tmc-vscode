@@ -34,9 +34,13 @@ jobs:
       - name: Typecheck (tsgo, svelte-check)
         run: pnpm run typecheck
 
+      # `git diff` does not see untracked files, so a generated file that was
+      # never committed would drift undetected; --intent-to-add puts it in the
+      # diff as an addition.
       - name: Langs schema drift (generate:langs-schema)
         run: |
           pnpm run generate:langs-schema
+          git add --intent-to-add -- shared/generated shared/bindings.schema.json
           git diff --exit-code -- shared/generated shared/bindings.schema.json
 
       # The mooc mock's vendored OpenAPI spec is copied from secret-project-331,
