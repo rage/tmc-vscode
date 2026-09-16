@@ -308,15 +308,11 @@ export default class WorkspaceManager implements vscode.Disposable {
   /**
    * Creates the course's `.code-workspace` file unless it is already there.
    *
-   * Synchronous because its callers open the file in the next statement; the
-   * activation path uses {@link ensureCourseWorkspaceFile} instead.
+   * Await it: every caller opens that file, or lists the course, in the next
+   * statement.
    */
-  public createWorkspaceFile(courseName: string, backend: "tmc" | "mooc"): void {
-    const workspaceFilePath = this._resources.getWorkspaceFilePath(courseName, backend)
-    if (!fs.existsSync(workspaceFilePath)) {
-      fs.writeFileSync(workspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS))
-      Logger.info("Created course workspace file at", workspaceFilePath)
-    }
+  public createWorkspaceFile(courseName: string, backend: "tmc" | "mooc"): Promise<void> {
+    return ensureCourseWorkspaceFile(this._resources.getWorkspaceFilePath(courseName, backend))
   }
 
   /**

@@ -747,7 +747,7 @@ export async function openWorkspace(
   }
 
   const openCourseWorkspace = async (): Promise<void> => {
-    workspaceManager.val.createWorkspaceFile(name, backend)
+    await workspaceManager.val.createWorkspaceFile(name, backend)
     await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri)
   }
 

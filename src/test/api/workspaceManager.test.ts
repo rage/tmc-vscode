@@ -446,6 +446,20 @@ suite("WorkspaceManager class", function () {
       expect(written.extensions.recommendations).toEqual(["ms-python.python"])
     })
 
+    test("creates a course's workspace file where its resources put it", async function () {
+      await manager.createWorkspaceFile(courseSlug, "tmc")
+
+      expect(JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))).toEqual(WORKSPACE_SETTINGS)
+    })
+
+    test("leaves a course's existing workspace file untouched", async function () {
+      fs.writeFileSync(workspaceFile, '{"folders":[{"path":"kept"}]}')
+
+      await manager.createWorkspaceFile(courseSlug, "tmc")
+
+      expect(fs.readFileSync(workspaceFile, "utf-8")).toBe('{"folders":[{"path":"kept"}]}')
+    })
+
     test("deletes one course's workspace file and leaves the others", async function () {
       const moocWorkspaceFile = resources.getWorkspaceFilePath(courseSlug, "mooc")
       fs.writeFileSync(workspaceFile, JSON.stringify({ folders: [] }))
