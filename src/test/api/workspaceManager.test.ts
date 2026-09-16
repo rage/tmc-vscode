@@ -2,11 +2,12 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 
+import { Err, Ok } from "ts-results"
 import type { Mock } from "vitest"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import type { WorkspaceExercise } from "../../api/workspaceManager"
+import type { PersistClosedExercises, WorkspaceExercise } from "../../api/workspaceManager"
 import WorkspaceManager, {
   ensureCourseWorkspaceFile,
   ensureWorkspaceRootFile,
@@ -90,6 +91,8 @@ function exercise(
 function folderOf(uri: vscode.Uri, name: string): vscode.WorkspaceFolder {
   return { uri, name, index: 0 }
 }
+
+const persist: PersistClosedExercises = async () => Ok.EMPTY
 
 /**
  * Opens `fileName` as the window's workspace file, together with the display
@@ -232,6 +235,62 @@ suite("WorkspaceManager class", function () {
     })
   })
 
+  suite("opening and closing exercises", function () {
+    const courseSlug = "test-python-course"
+    let open: WorkspaceExercise
+    let closed: WorkspaceExercise
+    let manager: WorkspaceManager
+
+    beforeEach(function () {
+      open = exercise("tmc", courseSlug, "hello_world", ExerciseStatus.Open)
+      closed = exercise("tmc", courseSlug, "part02-01_greeting", ExerciseStatus.Closed)
+      openWorkspaceFile(workspaceFileName(courseSlug, "tmc"))
+      stubWorkspace("workspaceFolders", [rootFolder, folderOf(open.uri, open.exerciseSlug)])
+      manager = new WorkspaceManager(resources, [open, closed])
+    })
+
+    test("records the whole closed set, not only the exercises the caller named", async function () {
+      const record = vi.fn<PersistClosedExercises>(async () => Ok.EMPTY)
+
+      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug], record)
+
+      expect(record).toHaveBeenCalledExactlyOnceWith(["hello_world", "part02-01_greeting"])
+    })
+
+    test("records the closed set before the workspace shows the change", async function () {
+      let workspaceWritesBeforeRecording = -1
+      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug], async () => {
+        workspaceWritesBeforeRecording = updateWorkspaceFolders.mock.calls.length
+        return Ok.EMPTY
+      })
+
+      expect(workspaceWritesBeforeRecording).toBe(0)
+      expect(updateWorkspaceFolders).toHaveBeenCalledOnce()
+    })
+
+    test("changes nothing the user can see when the closed set cannot be recorded", async function () {
+      const result = await manager.closeCourseExercises(
+        "tmc",
+        courseSlug,
+        [open.exerciseSlug],
+        async () => Err(new Error("settings are read-only")),
+      )
+
+      expect(result.err).toBe(true)
+      expect(open.status).toBe(ExerciseStatus.Open)
+      expect(updateWorkspaceFolders).not.toHaveBeenCalled()
+    })
+
+    test("drops the reopened exercise from the recorded closed set", async function () {
+      const record = vi.fn<PersistClosedExercises>(async () => Ok.EMPTY)
+
+      await manager.openCourseExercises("tmc", courseSlug, [closed.exerciseSlug], record)
+
+      expect(record).toHaveBeenCalledExactlyOnceWith([])
+      expect(closed.status).toBe(ExerciseStatus.Open)
+    })
+  })
+
   suite("workspace settings integrity", function () {
     let update: Mock<UpdateSetting>
 
@@ -363,7 +422,7 @@ suite("WorkspaceManager class", function () {
     })
 
     test("opens an exercise only in the requested backend", async function () {
-      const result = await manager.openCourseExercises("mooc", courseSlug, ["hello_world"])
+      const result = await manager.openCourseExercises("mooc", courseSlug, ["hello_world"], persist)
 
       expect(result.ok).toBe(true)
       expect(moocExercise.status).toBe(ExerciseStatus.Open)
@@ -375,7 +434,12 @@ suite("WorkspaceManager class", function () {
       tmcExercise.status = ExerciseStatus.Open
       moocExercise.status = ExerciseStatus.Open
 
-      const result = await manager.closeCourseExercises("mooc", courseSlug, ["hello_world"])
+      const result = await manager.closeCourseExercises(
+        "mooc",
+        courseSlug,
+        ["hello_world"],
+        persist,
+      )
 
       expect(result.val).toEqual([moocExercise])
       expect(tmcExercise.status).toBe(ExerciseStatus.Open)

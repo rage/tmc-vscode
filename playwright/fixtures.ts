@@ -74,8 +74,7 @@ function launchArgs(userDataDir: string): string[] {
     "--disable-background-timer-throttling",
     "--disable-updates",
     // The workspace-trust prompt interrupts at unpredictable points once a
-    // course workspace is opened, and dismissing it from the specs made every
-    // page object carry a trust workaround.
+    // course workspace is opened.
     "--disable-workspace-trust",
     "--extensionDevelopmentPath=" + rootPath,
     "--new-window",
@@ -138,8 +137,7 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
     // The mock backend is a long-lived process shared across specs, so its
     // in-memory mooc state leaks between tests; reset it here the same way the
     // per-test config/projects dirs isolate on-disk state. A reset that did not
-    // happen leaves the previous test's state in place, which is a silent
-    // cross-test dependency rather than a missing nicety.
+    // happen leaves this test running against the previous one's state.
     const reset = await fetch("http://localhost:4001/mooc-mock/reset", { method: "POST" })
     if (!reset.ok) {
       throw new Error(

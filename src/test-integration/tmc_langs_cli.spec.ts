@@ -1,4 +1,5 @@
 import * as cp from "child_process"
+import { createHash } from "crypto"
 import * as path from "path"
 
 import { expect } from "chai"
@@ -18,7 +19,7 @@ import { getLangsCLIForPlatform, getPlatform, semVerCompare } from "../utilities
 
 // __dirname is the dist folder when built.
 const PROJECT_ROOT = path.join(__dirname, "..")
-const ARTIFACT_FOLDER = path.join(PROJECT_ROOT, "test-artifacts")
+const ARTIFACT_ROOT = path.join(PROJECT_ROOT, "test-artifacts")
 
 // Use CLI from backend folder to run tests.
 const BACKEND_FOLDER = path.join(PROJECT_ROOT, "backend")
@@ -69,9 +70,16 @@ const INVALID_REFRESH_TOKEN = "mock-invalid-refresh-token"
 
 suite("tmc langs cli spec", function () {
   let server: cp.ChildProcess | undefined
+  let runArtifactDir: string
+  let anyTestFailed = false
 
   suiteSetup(async function () {
     this.timeout(30000)
+    // Per run: a directory an earlier run left behind holds credentials langs
+    // adopts in preference to the ones a case seeds, so a case would refresh a
+    // previous run's rotated token instead of its own.
+    fs.mkdirSync(ARTIFACT_ROOT, { recursive: true })
+    runArtifactDir = fs.mkdtempSync(path.join(ARTIFACT_ROOT, "run-"))
     // Route mooc (courses.mooc.fi) CLI calls at the mock mounted in the same
     // backend process (backend/mooc). This overrides the compiled
     // MOOC_BACKEND_URL define; _spawnLangsProcess reads it from the env and
@@ -86,16 +94,25 @@ suite("tmc langs cli spec", function () {
   })
 
   let testDir: string
+  let testIndex = 0
 
   setup(function () {
-    let testDirName = this.currentTest?.fullTitle().replaceAll(/\s/g, "_")
-    if (!testDirName) {
+    const fullTitle = this.currentTest?.fullTitle()
+    if (!fullTitle) {
       throw new Error("Illegal function call.")
     }
-    if (testDirName?.length > 72) {
-      testDirName = testDirName.slice(0, 40) + ".." + testDirName.slice(testDirName.length - 30)
+    testIndex++
+    // Digested rather than truncated: a truncated title collides whenever two
+    // long titles share a head and a tail, and two cases sharing a directory
+    // share credentials and a projects dir.
+    const titleDigest = createHash("sha256").update(fullTitle).digest("hex").slice(0, 8)
+    testDir = path.join(runArtifactDir, `${testIndex}-${titleDigest}`)
+  })
+
+  teardown(function () {
+    if (this.currentTest?.state === "failed") {
+      anyTestFailed = true
     }
-    testDir = path.join(ARTIFACT_FOLDER, testDirName)
   })
 
   // A user with a pre-existing tmc token in credentials.json: still supported,
@@ -971,10 +988,6 @@ suite("tmc langs cli spec", function () {
       // rather than leaving the suite order-dependent.
       await fetch(`${AUTH_BASE}/mooc-mock/reset`, { method: "POST" })
       configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME)
-      // test-artifacts survives between runs, and langs prefers the per-host
-      // credentials file it adopted last time over the shared name each case
-      // seeds -- so without this a case silently refreshes a previous run's
-      // rotated token instead of its own.
       clearMoocCredentials(configDir)
       const projectsDir = path.join(testDir, "tmcdata")
       deleteSync(projectsDir, { force: true })
@@ -1099,6 +1112,11 @@ suite("tmc langs cli spec", function () {
 
   suiteTeardown(async function () {
     await stopServer(server)
+    if (anyTestFailed) {
+      console.info(`Keeping the artifacts of this run at ${runArtifactDir}`)
+    } else {
+      fs.rmSync(runArtifactDir, { recursive: true, force: true })
+    }
   })
 })
 

@@ -35,6 +35,14 @@ export interface WorkspaceExercise {
   uri: vscode.Uri
 }
 
+/**
+ * Writes the durable record of which of a course's exercises are closed.
+ *
+ * `WorkspaceManager` awaits this before it changes anything the user can see, so
+ * an implementation must have completed the write by the time it resolves `Ok`.
+ */
+export type PersistClosedExercises = (closedExerciseSlugs: string[]) => Promise<Result<void, Error>>
+
 interface ConfigurationProperties {
   default?: unknown
   type?: string
@@ -240,36 +248,18 @@ export default class WorkspaceManager implements vscode.Disposable {
     backend: "tmc" | "mooc",
     courseSlug: string,
     exerciseSlugs: string[],
-  ): Promise<Result<void, Error>> {
-    this._setStatus(
-      (x) =>
-        x.backend === backend &&
-        x.courseSlug === courseSlug &&
-        exerciseSlugs.includes(x.exerciseSlug),
-      ExerciseStatus.Open,
-    )
-
-    return this._refreshActiveCourseWorkspace()
+    persistClosed: PersistClosedExercises,
+  ): Promise<Result<WorkspaceExercise[], Error>> {
+    return this._setOpen(backend, courseSlug, exerciseSlugs, true, persistClosed)
   }
 
-  public async closeCourseExercises(
+  public closeCourseExercises(
     backend: "tmc" | "mooc",
     courseSlug: string,
     exerciseSlugs: string[],
+    persistClosed: PersistClosedExercises,
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    const closedExercises = this._setStatus(
-      (x) =>
-        x.backend === backend &&
-        x.courseSlug === courseSlug &&
-        exerciseSlugs.includes(x.exerciseSlug),
-      ExerciseStatus.Closed,
-    )
-
-    const result = await this._refreshActiveCourseWorkspace()
-    if (result.err) {
-      return result
-    }
-    return Ok(closedExercises)
+    return this._setOpen(backend, courseSlug, exerciseSlugs, false, persistClosed)
   }
 
   /**
@@ -469,18 +459,42 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   /**
-   * Sets `status` on every exercise `predicate` matches, and returns those
-   * exercises — matched, not changed: one already at `status` is included.
+   * The one place a course's exercises change between open and closed.
+   *
+   * Records the resulting closed set through `persistClosed` first and gives up
+   * on a failed write, so the student never sees exercises open or close in a way
+   * the next {@link setExercises} silently reverts.
+   *
+   * @returns the exercises the request named — matched, not changed: one already
+   * in the requested state is included.
    */
-  private _setStatus(
-    predicate: (exercise: WorkspaceExercise) => boolean,
-    status: ExerciseStatus,
-  ): WorkspaceExercise[] {
-    const matched = this._exercises.filter(predicate)
-    for (const exercise of matched) {
-      exercise.status = status
+  private async _setOpen(
+    backend: "tmc" | "mooc",
+    courseSlug: string,
+    exerciseSlugs: string[],
+    open: boolean,
+    persistClosed: PersistClosedExercises,
+  ): Promise<Result<WorkspaceExercise[], Error>> {
+    const courseExercises = this._exercises.filter(
+      (x) => x.backend === backend && x.courseSlug === courseSlug,
+    )
+    const requested = new Set(exerciseSlugs)
+    const closedAfterwards = courseExercises
+      .filter((x) => (requested.has(x.exerciseSlug) ? !open : x.status === ExerciseStatus.Closed))
+      .map((x) => x.exerciseSlug)
+
+    const persisted = await persistClosed(closedAfterwards)
+    if (persisted.err) {
+      return persisted
     }
-    return matched
+
+    const matched = courseExercises.filter((x) => requested.has(x.exerciseSlug))
+    for (const exercise of matched) {
+      exercise.status = open ? ExerciseStatus.Open : ExerciseStatus.Closed
+    }
+
+    const refreshed = await this._refreshActiveCourseWorkspace()
+    return refreshed.err ? refreshed : Ok(matched)
   }
 
   private static _indexByPath(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {

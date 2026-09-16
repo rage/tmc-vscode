@@ -61,10 +61,17 @@ function registerAndCollect(): { ids: string[]; handlers: Map<string, () => Prom
   return { ids, handlers }
 }
 
+interface MenuEntry {
+  command: string
+  when?: string
+}
+
 function packageJson(): {
   contributes: {
     commands: { command: string }[]
-    menus: { commandPalette: { command: string; when?: string }[] }
+    keybindings?: { command: string; key: string; when?: string }[]
+    menus: Record<string, MenuEntry[]>
+    viewsWelcome?: { contents: string }[]
   }
 } {
   return JSON.parse(
@@ -74,6 +81,23 @@ function packageJson(): {
 
 function declaredCommands(): string[] {
   return packageJson().contributes.commands.map((x) => x.command)
+}
+
+function commandPalette(): MenuEntry[] {
+  return packageJson().contributes.menus.commandPalette ?? []
+}
+
+// Menus attached to a file, whose `when` therefore carries the gates the same
+// command needs when it is reached from the palette instead.
+const resourceMenus = ["explorer/context", "editor/title"]
+
+// A `when` is a conjunction; comparing term sets rather than strings lets the
+// palette and the menus spell the same gate in a different order.
+function whenTerms(when: string | undefined): string[] {
+  return (when ?? "")
+    .split("&&")
+    .map((x) => x.trim())
+    .filter((x) => x.length > 0)
 }
 
 afterEach(function () {
@@ -120,9 +144,117 @@ suite("registerCommands", function () {
   // Without a reachable palette entry a user with no credentials has no way in
   // besides the tree view; `"when": "false"` (its previous value) hides it.
   test("the login command is reachable from the palette while logged out", function () {
-    const entry = packageJson().contributes.menus.commandPalette.find(
-      (x) => x.command === "tmc.showMoocLogin",
-    )
+    const entry = commandPalette().find((x) => x.command === "tmc.showMoocLogin")
     expect(entry?.when).toBe("test-my-code:LoggedIn == false")
+  })
+
+  // A menu, keybinding or welcome-view link naming an undeclared command gives
+  // the user an entry that resolves to "command not found" when they pick it.
+  test("every command a contribution points at is declared", function () {
+    const { menus, keybindings = [], viewsWelcome = [] } = packageJson().contributes
+    const referenced = [
+      ...Object.values(menus).flatMap((entries) => entries.map((x) => x.command)),
+      ...keybindings.map((x) => x.command),
+      ...viewsWelcome.flatMap((x) =>
+        [...x.contents.matchAll(/command:([\w.-]+)/g)].flatMap((m) => m[1] ?? []),
+      ),
+    ]
+    const declared = new Set(declaredCommands())
+    expect([...new Set(referenced)].filter((x) => !declared.has(x))).toEqual([])
+  })
+
+  // A `when` naming a key nothing ever sets is never true, so the entry it
+  // gates silently disappears from the UI instead of failing anywhere.
+  test("every context key the manifest gates on is one the extension sets", function () {
+    const source = fs.readFileSync(path.join(__dirname, "..", "..", "extension.ts"), "utf8")
+    const settable = new Set(
+      [...source.matchAll(/"(test-my-code:\w+)"/g)].flatMap((match) => match[1] ?? []),
+    )
+    const { menus, keybindings = [] } = packageJson().contributes
+    const gated = [...Object.values(menus).flat(), ...keybindings]
+    const referenced = new Set(
+      gated.flatMap((x) => [...(x.when ?? "").matchAll(/test-my-code:\w+/g)].map((m) => m[0])),
+    )
+    expect([...referenced].filter((key) => !settable.has(key)).toSorted()).toEqual([])
+  })
+
+  // The palette is the one entry point with no file behind it, so a gate the
+  // file menus enforce has to be spelled out there or the command runs without it.
+  test("a palette entry carries every gate its resource menus carry", function () {
+    const { menus } = packageJson().contributes
+    const missing: string[] = []
+    for (const entry of commandPalette()) {
+      const palette = whenTerms(entry.when)
+      for (const menu of resourceMenus) {
+        const menuEntry = (menus[menu] ?? []).find((x) => x.command === entry.command)
+        if (!menuEntry) {
+          continue
+        }
+        for (const term of whenTerms(menuEntry.when)) {
+          if (!term.startsWith("resourceScheme") && !palette.includes(term)) {
+            missing.push(`${entry.command}: ${menu} requires ${term}`)
+          }
+        }
+      }
+    }
+    expect(missing).toEqual([])
+  })
+})
+
+// VS Code's own Windows/Linux defaults, transcribed. An extension binding of
+// equal specificity outranks a default, so any key claimed from here is
+// shadowed wherever the binding's `when` holds.
+const vsCodeDefaultKeys: Record<string, string> = {
+  "ctrl+shift+b": "workbench.action.tasks.build",
+  "ctrl+shift+c": "workbench.action.terminal.openNativeConsole",
+  "ctrl+shift+d": "workbench.view.debug",
+  "ctrl+shift+e": "workbench.view.explorer",
+  "ctrl+shift+f": "workbench.view.search",
+  "ctrl+shift+g": "workbench.view.scm",
+  "ctrl+shift+h": "editor.action.startFindReplaceAction",
+  "ctrl+shift+i": "editor.action.formatDocument",
+  "ctrl+shift+k": "editor.action.deleteLines",
+  "ctrl+shift+l": "editor.action.selectHighlights",
+  "ctrl+shift+m": "workbench.actions.view.problems",
+  "ctrl+shift+n": "workbench.action.newWindow",
+  "ctrl+shift+o": "workbench.action.gotoSymbol",
+  "ctrl+shift+p": "workbench.action.showCommands",
+  "ctrl+shift+s": "workbench.action.files.saveAs",
+  "ctrl+shift+t": "workbench.action.reopenClosedEditor",
+  "ctrl+shift+u": "workbench.action.output.toggleOutput",
+  "ctrl+shift+v": "markdown.showPreview",
+  "ctrl+shift+w": "workbench.action.closeWindow",
+  "ctrl+shift+x": "workbench.view.extensions",
+  "ctrl+shift+y": "workbench.debug.action.toggleRepl",
+  "ctrl+shift+z": "redo",
+}
+
+// Shadowing kept deliberately: both keys shipped years ago and students have
+// learned them, which outweighs losing the defaults inside a course workspace.
+const acceptedShadowedKeys = ["ctrl+shift+c", "ctrl+shift+t"]
+
+suite("keybindings", function () {
+  // Adding a binding means editing this list, which is what puts the shadowing
+  // check below in front of whoever adds it.
+  test("claims exactly the reviewed keys", function () {
+    expect(packageJson().contributes.keybindings).toEqual([
+      { command: "tmc.closeExercise", key: "ctrl+shift+c", when: "test-my-code:WorkspaceActive" },
+      { command: "tmc.selectAction", key: "ctrl+shift+a", when: "test-my-code:WorkspaceActive" },
+      { command: "tmc.testExercise", key: "ctrl+shift+t", when: "test-my-code:WorkspaceActive" },
+    ])
+  })
+
+  test("shadows no VS Code default beyond the two accepted ones", function () {
+    const shadowed = (packageJson().contributes.keybindings ?? [])
+      .map((x) => x.key)
+      .filter((key) => key in vsCodeDefaultKeys && !acceptedShadowedKeys.includes(key))
+    expect(shadowed).toEqual([])
+  })
+
+  // A binding with no `when` applies in every window, course workspace or not.
+  test("gates every key on an open course workspace", function () {
+    for (const binding of packageJson().contributes.keybindings ?? []) {
+      expect(binding.when).toBe("test-my-code:WorkspaceActive")
+    }
   })
 })

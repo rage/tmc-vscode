@@ -4,6 +4,7 @@ import * as path from "path"
 
 import * as fs from "fs-extra"
 import * as tmp from "tmp"
+import type * as vscode from "vscode"
 
 import type Dialog from "../../api/dialog"
 import { InitializationError } from "../../errors"
@@ -11,10 +12,12 @@ import {
   ensureLangsUpdated,
   parseSha256Sum,
   removeCliFolder,
+  VERIFIED_CLI_KEY,
   verifyCli,
 } from "../../init/ensureLangsUpdated"
 import { getLangsCLIForPlatform, getPlatform } from "../../utilities"
 import { createDialogMock } from "../mocks/dialog"
+import { createMockMemento } from "../mocks/vscode"
 import { serverUrl, startServer } from "../utils/httpServer"
 
 function sha256(buf: Buffer): string {
@@ -237,10 +240,15 @@ suite("ensureLangsUpdated end-to-end", function () {
     const [dialog] = createDialogMock()
     const folder = path.join(tmpDir.name, "cli")
 
-    const result = await ensureLangsUpdated(folder, dialog, {
-      downloadUrl: serverUrl(server),
-      version,
-    })
+    const result = await ensureLangsUpdated(
+      folder,
+      dialog,
+      {
+        downloadUrl: serverUrl(server),
+        version,
+      },
+      createMockMemento(),
+    )
 
     expect(result.ok).toBe(true)
     const cliPath = result.unwrap()
@@ -249,6 +257,76 @@ suite("ensureLangsUpdated end-to-end", function () {
     expect((await verifyCli(cliPath, cliPath + ".sha256")).match).toBe(true)
     // A correct first download must not trigger a redownload.
     expect(state.hits.cli).toBe(1)
+  })
+
+  suite("the remembered checksum verdict", function () {
+    const cli = Buffer.from("fake cli binary contents")
+    let state: ServeState
+    let memento: vscode.Memento
+    let folder: string
+    let cliPath: string
+
+    /** A fresh install, after which the CLI has been checksummed once. */
+    async function install(): Promise<void> {
+      state = { cli, shaFor: () => `${sha256(cli)}  ${executable}`, hits: { cli: 0, sha: 0 } }
+      server = await startLangsServer(state)
+      memento = createMockMemento()
+      folder = path.join(tmpDir.name, "cli")
+      cliPath = path.join(folder, executable)
+
+      const [dialog] = createDialogMock()
+      const result = await ensureLangsUpdated(
+        folder,
+        dialog,
+        { downloadUrl: serverUrl(server), version },
+        memento,
+      )
+      expect(result.ok).toBe(true)
+      expect(state.hits.cli).toBe(1)
+    }
+
+    /**
+     * Runs again against the same folder with the checksum file removed, so a run
+     * that still verifies is forced into a visible redownload.
+     */
+    async function activateWithoutChecksumFile(): Promise<void> {
+      fs.removeSync(cliPath + ".sha256")
+      const [dialog] = createDialogMock()
+      const result = await ensureLangsUpdated(
+        folder,
+        dialog,
+        { downloadUrl: serverUrl(server!), version },
+        memento,
+      )
+      expect(result.ok).toBe(true)
+    }
+
+    test("skips the hash for a CLI an earlier run already accepted", async function () {
+      await install()
+
+      await activateWithoutChecksumFile()
+
+      expect(state.hits.cli).toBe(1)
+    })
+
+    test("hashes again once the CLI file has changed", async function () {
+      await install()
+      fs.writeFileSync(cliPath, "different bytes, different size")
+
+      await activateWithoutChecksumFile()
+
+      expect(state.hits.cli).toBe(2)
+    })
+
+    test("hashes again once the pinned version has changed", async function () {
+      await install()
+      const remembered = memento.get<{ version: string }>(VERIFIED_CLI_KEY)
+      await memento.update(VERIFIED_CLI_KEY, { ...remembered, version: "0.0.0-previous" })
+
+      await activateWithoutChecksumFile()
+
+      expect(state.hits.cli).toBe(2)
+    })
   })
 
   test("fresh install accepts an uppercase + CRLF checksum on the first try", async function () {
@@ -262,10 +340,15 @@ suite("ensureLangsUpdated end-to-end", function () {
     const [dialog] = createDialogMock()
     const folder = path.join(tmpDir.name, "cli")
 
-    const result = await ensureLangsUpdated(folder, dialog, {
-      downloadUrl: serverUrl(server),
-      version,
-    })
+    const result = await ensureLangsUpdated(
+      folder,
+      dialog,
+      {
+        downloadUrl: serverUrl(server),
+        version,
+      },
+      createMockMemento(),
+    )
 
     expect(result.ok).toBe(true)
     expect(state.hits.cli).toBe(1)
@@ -284,10 +367,15 @@ suite("ensureLangsUpdated end-to-end", function () {
     const [dialog] = createDialogMock()
     const folder = path.join(tmpDir.name, "cli")
 
-    const result = await ensureLangsUpdated(folder, dialog, {
-      downloadUrl: serverUrl(server),
-      version,
-    })
+    const result = await ensureLangsUpdated(
+      folder,
+      dialog,
+      {
+        downloadUrl: serverUrl(server),
+        version,
+      },
+      createMockMemento(),
+    )
 
     expect(result.err).toBe(true)
     if (result.err) {
@@ -310,10 +398,15 @@ suite("ensureLangsUpdated end-to-end", function () {
     const [dialog] = createDialogMock()
     const folder = path.join(tmpDir.name, "cli")
 
-    const result = await ensureLangsUpdated(folder, dialog, {
-      downloadUrl: serverUrl(server),
-      version,
-    })
+    const result = await ensureLangsUpdated(
+      folder,
+      dialog,
+      {
+        downloadUrl: serverUrl(server),
+        version,
+      },
+      createMockMemento(),
+    )
 
     expect(result.ok).toBe(true)
     const cliPath = result.unwrap()
@@ -334,10 +427,15 @@ suite("ensureLangsUpdated end-to-end", function () {
     const [dialog] = createDialogMock()
     const folder = path.join(tmpDir.name, "cli")
 
-    const result = await ensureLangsUpdated(folder, dialog, {
-      downloadUrl: deadUrl,
-      version,
-    })
+    const result = await ensureLangsUpdated(
+      folder,
+      dialog,
+      {
+        downloadUrl: deadUrl,
+        version,
+      },
+      createMockMemento(),
+    )
 
     expect(result.err).toBe(true)
   })
@@ -356,10 +454,15 @@ suite("ensureLangsUpdated end-to-end", function () {
     server = await startLangsServer(state)
     const [dialog] = createDialogMock()
 
-    const result = await ensureLangsUpdated(folder, dialog, {
-      downloadUrl: serverUrl(server),
-      version,
-    })
+    const result = await ensureLangsUpdated(
+      folder,
+      dialog,
+      {
+        downloadUrl: serverUrl(server),
+        version,
+      },
+      createMockMemento(),
+    )
 
     expect(result.ok).toBe(true)
     expect(state.hits.cli).toBe(0)
@@ -377,10 +480,15 @@ suite("ensureLangsUpdated end-to-end", function () {
     const [dialog] = createDialogMock()
     const folder = path.join(tmpDir.name, "cli")
 
-    const result = await ensureLangsUpdated(folder, dialog, {
-      downloadUrl: serverUrl(server),
-      version,
-    })
+    const result = await ensureLangsUpdated(
+      folder,
+      dialog,
+      {
+        downloadUrl: serverUrl(server),
+        version,
+      },
+      createMockMemento(),
+    )
 
     expect(result.ok).toBe(true)
     expect(fs.existsSync(path.join(folder, executable + ".sha256.tmp"))).toBe(false)
@@ -408,10 +516,15 @@ suite("ensureLangsUpdated end-to-end", function () {
     const [dialog] = createDialogMock()
     const folder = path.join(tmpDir.name, "cli")
 
-    const result = await ensureLangsUpdated(folder, dialog, {
-      downloadUrl: serverUrl(server),
-      version,
-    })
+    const result = await ensureLangsUpdated(
+      folder,
+      dialog,
+      {
+        downloadUrl: serverUrl(server),
+        version,
+      },
+      createMockMemento(),
+    )
 
     expect(result.ok).toBe(true)
     expect(cliAttempts).toBe(2)
@@ -431,10 +544,15 @@ suite("ensureLangsUpdated end-to-end", function () {
       // Never finishes, so only the cancellation can end the download.
     })
 
-    const result = await ensureLangsUpdated(path.join(tmpDir.name, "cli"), cancellingDialog(50), {
-      downloadUrl: serverUrl(server),
-      version,
-    })
+    const result = await ensureLangsUpdated(
+      path.join(tmpDir.name, "cli"),
+      cancellingDialog(50),
+      {
+        downloadUrl: serverUrl(server),
+        version,
+      },
+      createMockMemento(),
+    )
 
     expect(result.err).toBe(true)
     expect(cliAttempts).toBe(1)
@@ -454,10 +572,15 @@ suite("ensureLangsUpdated end-to-end", function () {
     server = await startLangsServer(state)
     const [dialog] = createDialogMock()
 
-    const result = await ensureLangsUpdated(folder, dialog, {
-      downloadUrl: serverUrl(server),
-      version,
-    })
+    const result = await ensureLangsUpdated(
+      folder,
+      dialog,
+      {
+        downloadUrl: serverUrl(server),
+        version,
+      },
+      createMockMemento(),
+    )
 
     expect(result.ok).toBe(true)
     const cliPath = result.unwrap()
@@ -495,10 +618,15 @@ suite("ensureLangsUpdated on an unsupported platform", function () {
     const { InitializationError: FreshInitializationError } = await import("../../errors")
     const [dialog] = createDialogMock()
 
-    const result = await unsupported.ensureLangsUpdated(path.join(tmpDir.name, "cli"), dialog, {
-      downloadUrl: "http://127.0.0.1:9/never-reached/",
-      version: "0.0.0-test",
-    })
+    const result = await unsupported.ensureLangsUpdated(
+      path.join(tmpDir.name, "cli"),
+      dialog,
+      {
+        downloadUrl: "http://127.0.0.1:9/never-reached/",
+        version: "0.0.0-test",
+      },
+      createMockMemento(),
+    )
 
     expect(result.err).toBe(true)
     if (result.err) {

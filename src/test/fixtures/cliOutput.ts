@@ -226,6 +226,18 @@ const submissionFinished = {
   },
 }
 
+const exerciseDetails = {
+  course_name: "mooc-java-programming-i",
+  course_id: 590,
+  code_review_requests_enabled: false,
+  run_tests_locally_action_enabled: true,
+  exercise_name: "part01-Part01_01.Sandbox",
+  exercise_id: 83114,
+  unlocked_at: null,
+  deadline: "2026-08-19T23:59:59.999+03:00",
+  submissions: [exerciseSubmission],
+}
+
 const localTmcExercise = {
   "course-slug": "python-course",
   "exercise-slug": "part01-Part01_01.Sandbox",
@@ -492,20 +504,7 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   { name: "course-exercises", value: outputData("course-exercises", [courseExercise]) },
   { name: "course-data", value: outputData("course-data", courseData) },
   { name: "courses", value: outputData("courses", [course]) },
-  {
-    name: "exercise-details",
-    value: outputData("exercise-details", {
-      course_name: "mooc-java-programming-i",
-      course_id: 590,
-      code_review_requests_enabled: false,
-      run_tests_locally_action_enabled: true,
-      exercise_name: "part01-Part01_01.Sandbox",
-      exercise_id: 83114,
-      unlocked_at: null,
-      deadline: "2026-08-19T23:59:59.999+03:00",
-      submissions: [exerciseSubmission],
-    }),
-  },
+  { name: "exercise-details", value: outputData("exercise-details", exerciseDetails) },
   { name: "submissions", value: outputData("submissions", [submission]) },
   {
     name: "update-result",
@@ -613,6 +612,54 @@ const validCliOutputFixtures: CliOutputFixture[] = [
     }),
   },
   {
+    name: "mooc-submissions",
+    value: outputData("mooc-submissions", [
+      {
+        id: UUID_B,
+        exercise_id: UUID_A,
+        created_at: "2026-07-21T12:00:00Z",
+        score_given: 1,
+        grading_progress: "FullyGraded",
+      },
+      // not yet graded: the host reports both nullable members as null
+      {
+        id: UUID_C,
+        exercise_id: UUID_A,
+        created_at: "2026-07-21T10:00:00Z",
+        score_given: null,
+        grading_progress: null,
+      },
+    ]),
+  },
+  {
+    name: "mooc-paste",
+    value: outputData("mooc-paste", {
+      paste_url: "https://courses.mooc.fi/paste/8VVBEYCqjB9U9M8M",
+    }),
+  },
+  {
+    name: "mooc-course-progress",
+    value: outputData("mooc-course-progress", {
+      course_id: UUID_A,
+      exercises: [
+        {
+          exercise_id: UUID_B,
+          score_given: 1.5,
+          score_maximum: 2,
+          completed: false,
+          attempted: true,
+        },
+        {
+          exercise_id: UUID_C,
+          score_given: 0,
+          score_maximum: 1,
+          completed: false,
+          attempted: false,
+        },
+      ],
+    }),
+  },
+  {
     name: "mooc-old-submission-restore: restored",
     value: outputData("mooc-old-submission-restore", "restored"),
   },
@@ -700,6 +747,13 @@ const invalidCliOutputFixtures: CliOutputFixture[] = [
     value: outputData("mooc-updated-exercises", [UUID_B]),
   },
   {
+    // the caller sums the per-exercise points into the course totals
+    name: "mooc-course-progress without score_maximum or attempted",
+    value: outputData("mooc-course-progress", {
+      exercises: [{ exercise_id: UUID_B, completed: true, points: 3 }],
+    }),
+  },
+  {
     name: "mooc-submission-status externally tagged as NoGradingYet",
     value: outputData("mooc-submission-status", "NoGradingYet"),
   },
@@ -751,3 +805,15 @@ const invalidCliOutputFixtures: CliOutputFixture[] = [
 
 export type { CliOutputFixture }
 export { invalidCliOutputFixtures, validCliOutputFixtures }
+// Exported piecemeal too: a test needing a payload the CLI could really emit starts from
+// one of these rather than hand-rolling a partial one.
+export {
+  course,
+  courseDetails,
+  exerciseDetails,
+  localMoocExercise,
+  localTmcExercise,
+  moocCourse,
+  organization,
+  submissionFinished,
+}

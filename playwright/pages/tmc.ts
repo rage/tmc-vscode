@@ -21,7 +21,8 @@ async function isVisibleNow(target: Locator): Promise<boolean> {
  * VS Code renders the extension's activity bar entry and its tree view before
  * the extension host has finished activating, and a click landing in that
  * window opens nothing and reports no error -- so the click has to be retried
- * against its outcome. `description` names the outcome in the failure message.
+ * against its outcome. `description` is suffixed with "after N clicks" in the
+ * failure message, so phrase it as "the X did not open".
  */
 export async function clickUntilVisible(
   trigger: Locator,

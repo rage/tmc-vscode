@@ -18,4 +18,23 @@ if (typeof vscode.FileDecoration !== "function") {
   }
 }
 
+// jest-mock-vscode returns `undefined` where the real API returns a `Disposable`, and
+// the extension pushes what these return into `context.subscriptions`. Without a real
+// disposable, a test that shuts a context down the way VS Code does walks an array of
+// `undefined` and cannot tell a registered listener from a leaked one.
+const registrationsReturningDisposables = [
+  [vscode.commands, "registerCommand"],
+  [vscode.window, "registerFileDecorationProvider"],
+  [vscode.window, "registerTreeDataProvider"],
+  [vscode.workspace, "onDidChangeConfiguration"],
+  [vscode.workspace, "onDidChangeWorkspaceFolders"],
+  [vscode.workspace, "onDidOpenTextDocument"],
+]
+for (const [namespace, name] of registrationsReturningDisposables) {
+  const register = namespace[name]
+  namespace[name] = vi.fn(
+    (...args) => register?.apply(namespace, args) ?? new vscode.Disposable(() => {}),
+  )
+}
+
 module.exports = vscode

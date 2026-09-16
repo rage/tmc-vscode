@@ -4,7 +4,18 @@ import { Logger } from "../utilities"
 
 type Item<T> = [label: string, value: T, description?: string]
 
+/**
+ * A notification button: its label, and what pressing it does. Buttons are
+ * resolved by identity rather than by label, so two may share a label.
+ */
 type NotificationButton = [label: string, callback: () => void]
+
+type NotificationAction = vscode.MessageItem & { callback: () => void }
+
+type ShowNotification = (
+  message: string,
+  ...actions: NotificationAction[]
+) => Thenable<NotificationAction | undefined>
 
 export interface PercentProgress {
   message?: string | undefined
@@ -38,14 +49,10 @@ export default class Dialog {
   ): Promise<void> {
     if (error) {
       Logger.error(notification, error)
-      items = items.concat([Dialog._logsButton])
     }
+    const buttons = error ? items.concat([Dialog._logsButton]) : items
 
-    return vscode.window
-      .showErrorMessage(`TestMyCode: ${notification}`, ...items.map((item) => item[0]))
-      .then((selection) => {
-        items.find((item) => item[0] === selection)?.[1]()
-      })
+    return this._notify(vscode.window.showErrorMessage, notification, buttons)
   }
 
   /**
@@ -68,11 +75,7 @@ export default class Dialog {
    * associated callbacks.
    */
   public async notification(message: string, ...items: NotificationButton[]): Promise<void> {
-    return vscode.window
-      .showInformationMessage(`TestMyCode: ${message}`, ...items.map((item) => item[0]))
-      .then((selection) => {
-        items.find((item) => item[0] === selection)?.[1]()
-      })
+    return this._notify(vscode.window.showInformationMessage, message, items)
   }
 
   /**
@@ -137,11 +140,23 @@ export default class Dialog {
    * callbacks.
    */
   public async warningNotification(message: string, ...items: NotificationButton[]): Promise<void> {
-    return vscode.window
-      .showWarningMessage(`TestMyCode: ${message}`, ...items.map((item) => item[0]))
-      .then((selection) => {
-        items.find((item) => item[0] === selection)?.[1]()
-      })
+    return this._notify(vscode.window.showWarningMessage, message, items)
+  }
+
+  /**
+   * Shows `message` with one button per item and runs the pressed button's callback.
+   *
+   * @param show the `vscode.window.show*Message` overload taking `MessageItem`s,
+   * which returns the pressed item itself, so duplicate labels stay distinct.
+   */
+  private async _notify(
+    show: ShowNotification,
+    message: string,
+    buttons: NotificationButton[],
+  ): Promise<void> {
+    const actions = buttons.map(([title, callback]) => ({ title, callback }))
+    const pressed = await show(`TestMyCode: ${message}`, ...actions)
+    pressed?.callback()
   }
 
   /**

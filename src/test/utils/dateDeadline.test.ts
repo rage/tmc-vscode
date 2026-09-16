@@ -1,5 +1,3 @@
-import { strictEqual } from "assert"
-
 import {
   dateToString,
   findNextDateAfter,
@@ -15,118 +13,102 @@ suite("Date utils", () => {
   const TESTSET = PASSED_DATES.concat(FUTURE_DATES)
 
   test("findNextDateAfter", () => {
-    strictEqual(
+    expect(
       findNextDateAfter(CURRENT_TIME, []),
-      null,
       "Next date in empty array should be null.",
-    )
-    strictEqual(
+    ).toBeNull()
+    expect(
       findNextDateAfter(CURRENT_TIME, [CURRENT_TIME]),
-      null,
       "Next date after start date can't be itself.",
-    )
-    strictEqual(
+    ).toBeNull()
+    expect(
       findNextDateAfter(CURRENT_TIME, PASSED_DATES),
-      null,
       "Next date after too early dates should be null.",
-    )
-    strictEqual(
+    ).toBeNull()
+    expect(
       findNextDateAfter(CURRENT_TIME, FUTURE_DATES),
-      TARGET_TIME,
       "Next date isn't correct with only later dates.",
-    )
-    strictEqual(
+    ).toBe(TARGET_TIME)
+    expect(
       findNextDateAfter(CURRENT_TIME, TESTSET),
-      TARGET_TIME,
       "Next date isn't correct with both earlier and later dates.",
-    )
+    ).toBe(TARGET_TIME)
   })
 
   test("parseNextDeadline", () => {
     const NO_DEADLINE = "No deadline"
     const ALL_DEADLINES_HAVE_EXPIRED = "All deadlines have expired"
 
-    strictEqual(
+    expect(
       parseNextDeadlineAfter(CURRENT_TIME, []),
-      NO_DEADLINE,
       `Parsed deadline from empty array should be "${NO_DEADLINE}"`,
-    )
-    strictEqual(
+    ).toBe(NO_DEADLINE)
+    expect(
       parseNextDeadlineAfter(CURRENT_TIME, [{ date: CURRENT_TIME, active: true }]),
-      ALL_DEADLINES_HAVE_EXPIRED,
       "Parsed deadline after current date can't be itself",
-    )
+    ).toBe(ALL_DEADLINES_HAVE_EXPIRED)
 
     const parsedTarget = parseNextDeadlineAfter(CURRENT_TIME, [{ date: TARGET_TIME, active: true }])
-    strictEqual(
-      parsedTarget,
+    expect(parsedTarget, "Parsed deadline from one active target time should be that").toBe(
       `Next deadline: ${dateToString(TARGET_TIME)}`,
-      "Parsed deadline from one active target time should be that",
     )
-    strictEqual(
+    expect(
       parseNextDeadlineAfter(
         CURRENT_TIME,
         PASSED_DATES.map((x) => ({ date: x, active: true })),
       ),
-      ALL_DEADLINES_HAVE_EXPIRED,
       `Parsed deadline after active past dates should be "${ALL_DEADLINES_HAVE_EXPIRED}"`,
-    )
-    strictEqual(
+    ).toBe(ALL_DEADLINES_HAVE_EXPIRED)
+    expect(
       parseNextDeadlineAfter(
         CURRENT_TIME,
         PASSED_DATES.map((x) => ({ date: x, active: false })),
       ),
-      ALL_DEADLINES_HAVE_EXPIRED,
       `Parsed deadline after inactive past dates should be "${ALL_DEADLINES_HAVE_EXPIRED}"`,
-    )
-    strictEqual(
+    ).toBe(ALL_DEADLINES_HAVE_EXPIRED)
+    expect(
       parseNextDeadlineAfter(
         CURRENT_TIME,
         FUTURE_DATES.map((x) => ({ date: x, active: true })),
       ),
-      parsedTarget,
       `Parsed deadline from active future dates was expected to be "${parsedTarget}"`,
-    )
-    strictEqual(
+    ).toBe(parsedTarget)
+    expect(
       parseNextDeadlineAfter(
         CURRENT_TIME,
         FUTURE_DATES.map((x) => ({ date: x, active: false })),
       ),
-      parsedTarget,
       `Parsed deadline from inactive future dates was expected to be "${parsedTarget}"`,
-    )
+    ).toBe(parsedTarget)
   })
 
   test("an unparseable deadline neither renders nor hides a real one", () => {
     const invalid = parseDate("whenever")
-    strictEqual(Number.isNaN(invalid.getTime()), true, "Test needs a string Date cannot parse.")
+    expect(Number.isNaN(invalid.getTime()), "Test needs a string Date cannot parse.").toBe(true)
 
-    strictEqual(dateToString(invalid), "", "An unrenderable date must not render as text.")
-    strictEqual(
+    expect(dateToString(invalid), "An unrenderable date must not render as text.").toBe("")
+    expect(
       parseNextDeadlineAfter(CURRENT_TIME, [{ date: invalid, active: true }]),
-      "No deadline",
       "A lone unparseable deadline is no deadline.",
-    )
+    ).toBe("No deadline")
 
     const expected = `Next deadline: ${dateToString(TARGET_TIME)}`
-    strictEqual(
+    expect(
       parseNextDeadlineAfter(CURRENT_TIME, [
         { date: invalid, active: true },
         { date: TARGET_TIME, active: true },
       ]),
-      expected,
       "An unparseable deadline seen first must not mask a real one.",
-    )
-    strictEqual(
+    ).toBe(expected)
+    expect(
       parseNextDeadlineAfter(CURRENT_TIME, [
         { date: TARGET_TIME, active: true },
         { date: invalid, active: true },
       ]),
-      expected,
       "An unparseable deadline seen last must not mask a real one.",
-    )
+    ).toBe(expected)
 
-    strictEqual(findNextDateAfter(CURRENT_TIME, [invalid, TARGET_TIME]), TARGET_TIME)
-    strictEqual(findNextDateAfter(CURRENT_TIME, [TARGET_TIME, invalid]), TARGET_TIME)
+    expect(findNextDateAfter(CURRENT_TIME, [invalid, TARGET_TIME])).toBe(TARGET_TIME)
+    expect(findNextDateAfter(CURRENT_TIME, [TARGET_TIME, invalid])).toBe(TARGET_TIME)
   })
 })

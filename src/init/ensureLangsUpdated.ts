@@ -4,6 +4,7 @@ import { Sha256 } from "@aws-crypto/sha256-js"
 import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
+import type * as vscode from "vscode"
 
 import type Dialog from "../api/dialog"
 import { FileSystemError, InitializationError } from "../errors"
@@ -12,6 +13,41 @@ import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger, sleep } from
 /** Extra attempts after the first, for the one download too large to redo cheaply. */
 const DOWNLOAD_RETRIES = 2
 const RETRY_BACKOFF_MS = 500
+
+/** Global-state key holding the CLI a previous run checksummed successfully. */
+export const VERIFIED_CLI_KEY = "tmc-langs-verified-cli"
+
+/**
+ * Identifies the exact file a checksum verdict was reached about. Hashing 51 MB
+ * of CLI costs most of a second, so a run that finds all four fields unchanged
+ * skips it; any redownload or hand-edit changes the size or the mtime and the
+ * hash runs again.
+ */
+interface VerifiedCli {
+  version: string
+  cliPath: string
+  size: number
+  mtimeMs: number
+}
+
+/** Describes the CLI on disk now, or `undefined` if it is not readable. */
+async function describeCli(cliPath: string, version: string): Promise<VerifiedCli | undefined> {
+  const stats = await fs.stat(cliPath).catch(() => undefined)
+  if (!stats) {
+    return undefined
+  }
+  return { version, cliPath, size: stats.size, mtimeMs: stats.mtimeMs }
+}
+
+function isSameCli(remembered: VerifiedCli | undefined, current: VerifiedCli): boolean {
+  return (
+    remembered !== undefined &&
+    remembered.version === current.version &&
+    remembered.cliPath === current.cliPath &&
+    remembered.size === current.size &&
+    remembered.mtimeMs === current.mtimeMs
+  )
+}
 
 /**
  * Parses the hash out of a `.sha256` file's contents and normalizes it to
@@ -99,11 +135,14 @@ export async function removeCliFolder(cliFolder: string): Promise<Result<void, E
  * @param dialog
  * @param config Download URL and version to fetch; owned by the caller (the
  * extension passes the build-inlined constants, tests pass a local server).
+ * @param memento Where the checksum verdict is remembered between runs, so an
+ * unchanged CLI is not rehashed on every activation.
  */
 async function ensureLangsUpdated(
   cliFolder: string,
   dialog: Dialog,
   config: { downloadUrl: string; version: string },
+  memento: vscode.Memento,
 ): Promise<Result<string, Error>> {
   const { downloadUrl, version } = config
 
@@ -136,6 +175,11 @@ async function ensureLangsUpdated(
     if (result.err) {
       return Err(result.val)
     }
+  }
+
+  const onDisk = await describeCli(cliPath, version)
+  if (onDisk && isSameCli(memento.get<VerifiedCli>(VERIFIED_CLI_KEY), onDisk)) {
+    return Ok(cliPath)
   }
 
   // check shasum
@@ -174,6 +218,11 @@ async function ensureLangsUpdated(
         ),
       )
     }
+  }
+
+  const verified = await describeCli(cliPath, version)
+  if (verified) {
+    await memento.update(VERIFIED_CLI_KEY, verified)
   }
 
   return Ok(cliPath)
