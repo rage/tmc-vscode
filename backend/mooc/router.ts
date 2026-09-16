@@ -24,6 +24,7 @@ import {
 } from "./fixtures"
 import {
   EXERCISE_SERVICES_SCOPE,
+  expireMoocAccessToken,
   registerMoocOAuthRoutes,
   resetMoocOAuthState,
   scopesForBearer,
@@ -1009,6 +1010,23 @@ export const registerMoocRoutes = (app: Express, options: CreateMoocApiOptions =
   // on the next upload so the submit that follows it sees `upload_expired`.
   app.post("/mooc-mock/expire-next-upload", (_req, res) => {
     expireNextMoocUpload()
+    res.status(204).end()
+  })
+
+  // Spec-exempt token invalidation for out-of-process consumers: expires the
+  // named access token (or every live one), so the next resource call 401s while
+  // the client still believes its stored token is good -- the only way to reach
+  // the reactive refresh-and-retry path from outside this process.
+  app.post("/mooc-mock/expire-access-token", (req, res) => {
+    const accessToken = (req.body as { access_token?: unknown })?.access_token
+    if (accessToken !== undefined && typeof accessToken !== "string") {
+      res.status(400).json({ error: "access_token must be a string" })
+      return
+    }
+    if (!expireMoocAccessToken(accessToken)) {
+      res.status(404).json({ error: `no such access token: ${accessToken}` })
+      return
+    }
     res.status(204).end()
   })
 
