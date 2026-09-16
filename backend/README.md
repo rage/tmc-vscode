@@ -31,7 +31,15 @@ contract (a drift is a failing test). Highlights:
   exercise-slide-submission ids). `.tar.zst` exercise archives are served on the
   spec-exempt `/mooc-archives/*` route (the real `stub_download_url` is an
   arbitrary file-store URL).
-- No auth: the CLI sends no bearer token to localhost (untrusted domain).
+- That state belongs to the mock instance, not the module, and every absolute URL
+  an instance hands out is built from the address it serves on — a standalone app
+  rebases onto the port it binds, so a suite on port 0 can follow a stub,
+  model-solution or answer-file URL verbatim.
+- Bearer auth, required by default: every client-API endpoint wants a valid
+  `Authorization: Bearer <token>` and answers the real backend's 401
+  `unauthorized` / 403 `forbidden` envelopes without one. `mooc/oauth.ts` mocks
+  the device-flow endpoints the token is minted by. Pass `requireAuth: false`
+  in-process, or run the server with `MOOC_MOCK_REQUIRE_AUTH=0`, to opt out.
 
 `conformance.test.ts` (run with `pnpm --filter tmc-vscode-mock-backend run test`)
 exercises the routing, the request/response validation, the archive route, and a
@@ -45,6 +53,9 @@ first (see `docs/development.md` → "Using a locally-built tmc-langs CLI"):
 ```
 bin/useLocalLangs.bash        # builds ../tmc-langs-rust into backend/cli
 ```
+
+Both tiers below also set `TMC_LANGS_MOOC_TRUST_LOCALHOST=1`: without it the CLI
+attaches no bearer to a localhost URL, so every authenticated mooc call 401s.
 
 - **Integration** (`src/test-integration/tmc_langs_cli.spec.ts`): drives the local
   CLI straight at this mock; the mooc cases are gated behind the CLI version so
