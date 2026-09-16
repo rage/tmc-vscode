@@ -52,10 +52,18 @@ export function EnumSchema<Tmc extends z.ZodType, Mooc extends z.ZodType>(
   // in zod's inferred object types simplify to `Enum`'s members while `Tmc` and
   // `Mooc` are still generic; every call site is checked against the annotated
   // return type above
+  //
+  // the price of the annotation is that zod's own `.options` and `.extend()` are
+  // no longer visible on the result — use `enumSchemaKinds` for the arms
   return z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("tmc"), data: tmc }),
     z.object({ kind: z.literal("mooc"), data: mooc }),
   ]) as unknown as z.ZodType<Enum<z.output<Tmc>, z.output<Mooc>>>
+}
+
+/** The arms every `EnumSchema` carries, in declaration order. */
+export function enumSchemaKinds(): readonly ["tmc", "mooc"] {
+  return ["tmc", "mooc"]
 }
 
 export namespace Enum {
