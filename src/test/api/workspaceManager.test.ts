@@ -6,16 +6,31 @@ import * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import WorkspaceManager, { ExerciseStatus } from "../../api/workspaceManager"
-import { WORKSPACE_ROOT_FOLDER_NAME, workspaceFileName } from "../../config/constants"
+import {
+  HIDE_META_FILES,
+  WORKSPACE_ROOT_FOLDER_NAME,
+  workspaceFileName,
+} from "../../config/constants"
 import Resources from "../../config/resources"
 
 // `Resources` reads `vscode.env.appName` to tell Code from VSCodium, and the
 // mock ships no `env`.
-const vscodeModule = vscode as unknown as { env: { appName: string } }
+const vscodeModule = vscode as unknown as {
+  env: { appName: string }
+  extensions: { getExtension: (id: string) => vscode.Extension<unknown> | undefined }
+}
 Object.defineProperty(vscodeModule, "env", {
   value: { appName: "Visual Studio Code" },
   configurable: true,
 })
+
+/** Replaces `vscode.extensions`, which the mock does not ship at all. */
+function stubExtensions(getExtension: (id: string) => vscode.Extension<unknown> | undefined): void {
+  Object.defineProperty(vscodeModule, "extensions", {
+    value: { getExtension },
+    configurable: true,
+  })
+}
 
 const WORKSPACE_FILE_FOLDER = "/tmc/workspaces"
 const PROJECTS_DIRECTORY = "/tmc/projects"
@@ -26,6 +41,7 @@ interface WorkspaceStubs {
   workspaceFolders: vscode.WorkspaceFolder[] | undefined
   onDidChangeWorkspaceFolders: () => vscode.Disposable
   onDidOpenTextDocument: () => vscode.Disposable
+  getConfiguration: (section?: string, scope?: unknown) => vscode.WorkspaceConfiguration
   updateWorkspaceFolders: (
     start: number,
     deleteCount: number,
@@ -72,6 +88,24 @@ function folderOf(uri: vscode.Uri, name: string): vscode.WorkspaceFolder {
 function openWorkspaceFile(fileName: string): void {
   stubWorkspace("workspaceFile", vscode.Uri.file(path.join(WORKSPACE_FILE_FOLDER, fileName)))
   stubWorkspace("name", `${path.basename(fileName, ".code-workspace")} (Workspace)`)
+}
+
+type UpdateSetting = (section: string, value: unknown, target?: unknown) => Promise<void>
+
+/**
+ * A `WorkspaceConfiguration` that reports `workspaceValue` for every section and
+ * records writes, so a test can assert what would land in the `.code-workspace`.
+ */
+function configurationStub(
+  update: Mock<UpdateSetting>,
+  workspaceValue?: Record<string, unknown>,
+): vscode.WorkspaceConfiguration {
+  return {
+    get: <T>(_section: string, defaultValue?: T) => defaultValue,
+    has: () => false,
+    inspect: () => (workspaceValue ? { key: "", workspaceValue } : undefined),
+    update,
+  } as unknown as vscode.WorkspaceConfiguration
 }
 
 suite("WorkspaceManager class", function () {
@@ -185,6 +219,44 @@ suite("WorkspaceManager class", function () {
     test("forgets an exercise dropped from a later exercise list", async function () {
       await manager.setExercises([])
       expect(manager.getExerciseByPath(helloWorld.uri)).toBeUndefined()
+    })
+  })
+
+  suite("workspace settings integrity", function () {
+    let update: Mock<UpdateSetting>
+
+    beforeEach(function () {
+      update = vi.fn<UpdateSetting>(async () => undefined)
+      openWorkspaceFile(workspaceFileName("test-python-course", "tmc"))
+    })
+
+    function sectionsWritten(): string[] {
+      return update.mock.calls.map(([section]) => section)
+    }
+
+    test("keeps verifying when the extension's own record is missing", async function () {
+      stubExtensions(() => undefined)
+      stubWorkspace("getConfiguration", () => configurationStub(update))
+
+      await new WorkspaceManager(resources).verifyWorkspaceSettingsIntegrity()
+
+      expect(sectionsWritten()).toEqual(
+        expect.arrayContaining([
+          "files.watcherExclude",
+          "explorer.decorations.colors",
+          "problems.decorations.enabled",
+        ]),
+      )
+    })
+
+    test("merges a section's stored workspace value, not the effective config", async function () {
+      stubExtensions(() => undefined)
+      stubWorkspace("getConfiguration", () => configurationStub(update, { "**/legacy": true }))
+
+      await new WorkspaceManager(resources).verifyWorkspaceSettingsIntegrity()
+
+      const written = update.mock.calls.find(([section]) => section === "files.exclude")?.[1]
+      expect(written).toEqual({ "**/legacy": true, ...HIDE_META_FILES })
     })
   })
 

@@ -7,6 +7,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import {
+  EXTENSION_ID,
   HIDE_META_FILES,
   SHOW_META_FILES,
   WATCHER_EXCLUDE,
@@ -321,8 +322,11 @@ export default class WorkspaceManager implements vscode.Disposable {
     if (activeCourseWorkspace) {
       let newValue = value
       if (value instanceof Object) {
-        const oldValue = this.getWorkspaceSettings(section)
-        newValue = { ...oldValue, ...value }
+        // `inspect`, not `get`: the effective configuration would materialize
+        // every VS Code default into the workspace file as an explicit entry.
+        const workspaceValue =
+          this.getWorkspaceSettings().inspect<Record<string, unknown>>(section)?.workspaceValue
+        newValue = { ...workspaceValue, ...value }
       }
       await vscode.workspace
         .getConfiguration(
@@ -346,9 +350,15 @@ export default class WorkspaceManager implements vscode.Disposable {
    * Workaround for https://github.com/microsoft/vscode/issues/58038
    */
   private async _ensureSettingsAreStoredInMultiRootWorkspace(): Promise<void> {
-    const extension = vscode.extensions.getExtension("moocfi.test-my-code")
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)
     const extensionDefinedSettings: Record<string, ConfigurationProperties> =
-      extension?.packageJSON?.contributes?.configuration?.properties
+      extension?.packageJSON?.contributes?.configuration?.properties ?? {}
+    if (Object.keys(extensionDefinedSettings).length === 0) {
+      // A fork or a renamed publisher: nothing to copy, and the rest of the
+      // integrity pass still has work to do.
+      Logger.warn(`No declared settings found for extension ${EXTENSION_ID}.`)
+      return
+    }
     for (const [key, value] of Object.entries(extensionDefinedSettings)) {
       if (value.scope !== "application" && value.type === "boolean") {
         const codeSettings = this.getWorkspaceSettings().inspect<boolean>(key)
