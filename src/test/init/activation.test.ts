@@ -24,12 +24,16 @@ const langsStub = vi.hoisted(() => ({
   moocAuthenticated: false,
   authChecks: 0,
   killAllProcessesCalls: 0,
+  /** What activation subscribed to, so a test can fire an event at it. */
+  handlers: new Map<string, (payload: never) => void>(),
 }))
 
 // Swapped per test so a suite can decide what global state holds.
 const storedUserData = vi.hoisted(() => ({ read: (): unknown => undefined }))
 
 const cliSettings = vi.hoisted(() => ({ projectsDirectory: "" }))
+
+const storedMigration = vi.hoisted(() => ({ outcome: { kind: "done" } as unknown }))
 
 const registration = vi.hoisted(() => ({ dispose: (): void => {} }))
 
@@ -63,7 +67,7 @@ vi.mock("vscode", async (importOriginal) => {
 vi.mock("../../ui/ui", () => ({
   default: class {
     public treeDP = {
-      registerAction: (_label: string, id: string): void => {
+      registerAction: ({ id }: { id: string }): void => {
         recorded.treeEntryIds.push(id)
       },
       createVisibilityGroup: (): unknown => ({ id: "_0", not: { id: "!_0" } }),
@@ -78,6 +82,7 @@ vi.mock("../../ui/ui", () => ({
 
 vi.mock("../../panels/TmcPanel", () => ({
   randomPanelId: () => 1,
+  registerWebviewHandlers: () => {},
   TmcPanel: {
     renderMain: (
       _uri: unknown,
@@ -103,7 +108,9 @@ vi.mock("../../api/langs", () => ({
       return Ok(langsStub.moocAuthenticated)
     }
     public getSetting = async (): Promise<unknown> => Ok(cliSettings.projectsDirectory)
-    public on = (): void => {}
+    public on = (event: string, callback: (payload: never) => void): void => {
+      langsStub.handlers.set(event, callback)
+    }
     public killAllProcesses = (): void => {
       langsStub.killAllProcessesCalls += 1
     }
@@ -115,7 +122,7 @@ vi.mock("../../storage", () => ({
     public getUserData = (): unknown => storedUserData.read()
     public getSessionState = (): undefined => undefined
     public updateSessionState = async (): Promise<void> => {}
-    public migrateToLatest = async (): Promise<unknown> => Ok.EMPTY
+    public migrateToLatest = async (): Promise<unknown> => storedMigration.outcome
   },
 }))
 
@@ -127,9 +134,20 @@ vi.mock("../../init/verifyCliSchema", () => ({
   verifyCliSchema: async (): Promise<void> => {},
 }))
 
+// `registerCommands` reads the handlers it hands the panel layer eagerly, so every one
+// of them has to exist here even though no test drives a webview message.
 vi.mock("../../actions", () => ({
   refreshEverything: async (): Promise<unknown> => Ok.EMPTY,
   refreshLocalExercises: async (): Promise<unknown> => Ok.EMPTY,
+  testInterrupts: new Map(),
+  closeExercises: async (): Promise<unknown> => Ok.EMPTY,
+  downloadAndOpenExercises: async (): Promise<unknown> => Ok.EMPTY,
+  downloadExercisesForUi: async (): Promise<void> => {},
+  openWorkspace: async (): Promise<void> => {},
+  pasteMoocExercise: async (): Promise<unknown> => Ok.EMPTY,
+  pasteTmcExercise: async (): Promise<unknown> => Ok.EMPTY,
+  removeCourse: async (): Promise<void> => {},
+  updateCourse: async (): Promise<unknown> => Ok.EMPTY,
 }))
 
 /** Contexts handed to `activate`, so a test can shut each one down the way VS Code does. */
@@ -174,10 +192,12 @@ function resetActivationRecording(): void {
   recorded.panelTypes.length = 0
   recorded.uiDisposals = 0
   storedUserData.read = (): unknown => undefined
+  storedMigration.outcome = { kind: "done" }
   langsStub.tmcAuthenticated = false
   langsStub.moocAuthenticated = false
   langsStub.authChecks = 0
   langsStub.killAllProcessesCalls = 0
+  langsStub.handlers.clear()
   cliSettings.projectsDirectory = tmp.dirSync().name
   vi.spyOn(vscode.window, "showErrorMessage").mockResolvedValue(undefined)
 }
@@ -316,5 +336,41 @@ suite("shutdown", function () {
 
     expect(langsStub.killAllProcessesCalls).toBe(1)
     expect(recorded.uiDisposals).toBe(1)
+  })
+})
+
+suite("activation in a workspace the migration cannot use in place", function () {
+  const workspaceName = "python-course.code-workspace"
+
+  beforeEach(function () {
+    resetActivationRecording()
+    storedMigration.outcome = { kind: "needsReload", workspaceName }
+  })
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  test("reopens the window on the workspace file it wrote", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const context = createContext()
+
+    await activate(context)
+
+    const workspaceFile = path.join(context.globalStorageUri.fsPath, "workspaces", workspaceName)
+    expect(fs.existsSync(workspaceFile)).toBe(true)
+    expect(executeCommand).toHaveBeenCalledWith(
+      "vscode.openFolder",
+      expect.objectContaining({ fsPath: workspaceFile }),
+    )
+  })
+
+  // The window is about to be replaced, so anything registered here would be
+  // registered twice over the two activations.
+  test("registers nothing before the reload", async function () {
+    await activate(createContext())
+
+    expect(recorded.treeEntryIds).toEqual([])
   })
 })

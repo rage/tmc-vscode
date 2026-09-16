@@ -9,7 +9,10 @@ import type { ActionContext } from "./actions/types"
 import Dialog from "./api/dialog"
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider"
 import Langs from "./api/langs"
-import WorkspaceManager from "./api/workspaceManager"
+import WorkspaceManager, {
+  ensureCourseWorkspaceFile,
+  ensureWorkspaceRootFile,
+} from "./api/workspaceManager"
 import {
   CLIENT_NAME,
   DEBUG_MODE,
@@ -21,12 +24,7 @@ import {
 } from "./config/constants"
 import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
-import {
-  EmptyLangsResponseError,
-  HaltForReloadError,
-  InitializationError,
-  SpawnError,
-} from "./errors"
+import { EmptyLangsResponseError, FileSystemError, InitializationError, SpawnError } from "./errors"
 import * as init from "./init"
 import { randomPanelId, TmcPanel } from "./panels/TmcPanel"
 import Storage from "./storage"
@@ -54,6 +52,25 @@ function initializationError(
       langsFolder,
     )
   }
+}
+
+/**
+ * Puts the workspace files a pre-2.0 window needs in their current home and reopens
+ * the window there, which is what lets the next activation migrate its stored data.
+ */
+async function reopenInMigratedWorkspace(
+  workspaceFileFolder: string,
+  workspaceName: string,
+): Promise<Result<void, Error>> {
+  const workspaceFile = path.join(workspaceFileFolder, workspaceName)
+  try {
+    await ensureCourseWorkspaceFile(workspaceFile)
+    await ensureWorkspaceRootFile(workspaceFileFolder)
+  } catch (e) {
+    return new Err(new FileSystemError(e, "Failed to create the migrated workspace files"))
+  }
+  await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(workspaceFile))
+  return Ok.EMPTY
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -134,21 +151,25 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const authenticated = authStatus.tmc || authStatus.mooc
   await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated)
 
+  const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
+
   // migrate data between versions
   if (langs.ok) {
-    const migrationResult = await storage.migrateToLatest(
+    const migration = await storage.migrateToLatest(
       context,
       dialog,
       langs.val,
       vscode.workspace.getConfiguration(),
     )
-    if (migrationResult.err) {
-      if (migrationResult.val instanceof HaltForReloadError) {
-        Logger.warn("Extension expected to restart", migrationResult.val)
+    if (migration.kind === "needsReload") {
+      const reopened = await reopenInMigratedWorkspace(workspaceFileFolder, migration.workspaceName)
+      if (reopened.ok) {
+        Logger.warn("Extension expected to restart to migrate the open workspace")
         return
       }
-
-      initializationError(dialog, "migration", migrationResult.val, cliFolderPath)
+      initializationError(dialog, "migration", reopened.val, cliFolderPath)
+    } else if (migration.kind === "failed") {
+      initializationError(dialog, "migration", migration.error, cliFolderPath)
     }
   } else {
     Logger.warn("Skipped data migration")
@@ -177,7 +198,6 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     }
   }
 
-  const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
   const resources = await init.resourceInitialization(
     context,
     storage,
