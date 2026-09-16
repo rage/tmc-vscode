@@ -1699,6 +1699,12 @@ export default class Langs {
     } catch (error) {
       return Err(new SpawnError(error, "Failed to run tmc-langs-cli"))
     }
+    // Chunk boundaries fall wherever the pipe buffer does, so a decode per chunk splits
+    // multi-byte characters -- Finnish exercise names, Java failure messages -- into
+    // replacement characters while leaving the JSON syntactically valid. An encoding on
+    // the stream makes Node hold an incomplete sequence until the rest of it arrives.
+    cprocess.stdout.setEncoding("utf8")
+    cprocess.stderr.setEncoding("utf8")
     if (stdin) {
       cprocess.stdin.write(stdin + "\n")
     }
@@ -1728,8 +1734,7 @@ ${error.message}`
         spawnFailure = error
         reject(error)
       })
-      cprocess.stderr.on("data", (chunk) => {
-        const data = chunk.toString()
+      cprocess.stderr.on("data", (data: string) => {
         // per-line at debug to keep j4rs/JNI spam out of the log; the failure paths
         // below attach the collected stderr to the error they return
         Logger.debug("stderr", data)
@@ -1756,8 +1761,8 @@ ${error.message}`
           resolve(code)
         }
       })
-      cprocess.stdout.on("data", (chunk) => {
-        const decoded = decodeLangsStdout(stdoutBuffer, chunk.toString())
+      cprocess.stdout.on("data", (chunk: string) => {
+        const decoded = decodeLangsStdout(stdoutBuffer, chunk)
         stdoutBuffer = decoded.carry
         for (const event of decoded.events) {
           switch (event.kind) {

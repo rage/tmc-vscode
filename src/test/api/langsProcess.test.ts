@@ -8,6 +8,7 @@ type FakeListener = (...args: unknown[]) => void
 
 interface FakeStream {
   on: (event: string, listener: FakeListener) => FakeStream
+  setEncoding: (encoding: BufferEncoding) => FakeStream
   emit: (event: string, ...args: unknown[]) => void
 }
 
@@ -24,16 +25,31 @@ const spawnedProcesses: FakeChildProcess[] = vi.hoisted(() => [])
 const killedPids: number[] = vi.hoisted(() => [])
 
 vi.mock("child_process", () => {
+  // Buffers are delivered decoded only once an encoding is set, the way a real
+  // stream does it -- otherwise a character split across two chunks is not observable.
   const makeStream = (): FakeStream => {
     const listeners = new Map<string, FakeListener[]>()
+    let decoder: InstanceType<typeof TextDecoder> | undefined
     const stream: FakeStream = {
       on: (event, listener) => {
         listeners.set(event, [...(listeners.get(event) ?? []), listener])
         return stream
       },
+      setEncoding: (encoding) => {
+        decoder = new TextDecoder(encoding)
+        return stream
+      },
       emit: (event, ...args) => {
+        let params = args
+        if (event === "data" && decoder && Buffer.isBuffer(args[0])) {
+          const text = decoder.decode(args[0], { stream: true })
+          if (text === "") {
+            return
+          }
+          params = [text, ...args.slice(1)]
+        }
         for (const listener of listeners.get(event) ?? []) {
-          listener(...args)
+          listener(...params)
         }
       },
     }
@@ -146,6 +162,16 @@ function crashedLine(message: string): string {
   })
 }
 
+/** Cuts `text` at a UTF-8 continuation byte, so the two halves split a character. */
+function splitMidCharacter(text: string): [Buffer, Buffer] {
+  const bytes = Buffer.from(text, "utf8")
+  const at = bytes.findIndex((byte) => (byte & 0xc0) === 0x80)
+  if (at <= 0) {
+    throw new Error("the text has no multi-byte character to split")
+  }
+  return [bytes.subarray(0, at), bytes.subarray(at)]
+}
+
 beforeEach(function () {
   spawnedProcesses.length = 0
   killedPids.length = 0
@@ -232,6 +258,20 @@ suite("Langs CLI process output", function () {
     endProcess(langsProcess, "end-first")
 
     expect(await pending).toEqual(expect.objectContaining({ val: true }))
+  })
+
+  test("a character split across two chunks arrives intact", async function () {
+    const message = "Testit epäonnistuivat: ääkköset"
+    const langs = newLangs()
+    const pending = langs.getTmcOrganizations()
+    const langsProcess = lastProcess()
+    const [head, tail] = splitMidCharacter(crashedLine(message) + "\n")
+    langsProcess.stdout.emit("data", head)
+    langsProcess.stdout.emit("data", tail)
+    endProcess(langsProcess)
+
+    const result = await pending
+    expect((result.val as Error).message).toContain(message)
   })
 
   test("a process that writes nothing reports an empty response", async function () {
