@@ -2,7 +2,7 @@ import type * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
 import { Logger } from "../utilities"
-import { runForExercise } from "./runForExercise"
+import { failure, runForExercise } from "./runForExercise"
 
 /**
  * Removes language specific meta files from exercise directory.
@@ -17,7 +17,8 @@ export async function cleanExercise(
     return
   }
 
-  await runForExercise(actionContext, resource, "Cleaning the exercise", (exercise) =>
-    langs.val.clean(exercise.uri.fsPath),
-  )
+  await runForExercise(actionContext, resource, "Cleaning the exercise", async (exercise) => {
+    const result = await langs.val.clean(exercise.uri.fsPath)
+    return result.err ? failure("Failed to clean exercise.", result.val) : result
+  })
 }

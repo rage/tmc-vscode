@@ -1,11 +1,11 @@
-import { Err, Ok } from "ts-results"
+import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
 import { backendName, ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
-import { runForExercise } from "./runForExercise"
+import { failure, runForExercise } from "./runForExercise"
 
 /**
  * Resets an exercise to its initial state, optionally submitting it beforehand.
@@ -30,7 +30,7 @@ export async function resetExercise(
         ? userData.val.getMoocExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
         : userData.val.getTmcExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
     if (!exerciseDetails) {
-      return Err(new Error(`Missing exercise data for ${exercise.exerciseSlug}.`))
+      return failure(`Missing exercise data for ${exercise.exerciseSlug}.`)
     }
 
     const id = ExerciseIdentifier.from(exerciseDetails.id)
@@ -47,7 +47,7 @@ export async function resetExercise(
     const document = editor?.document.uri
     const resetResult = await langs.val.resetExercise(id, exercise.uri.fsPath, submitFirst)
     if (resetResult.err) {
-      return resetResult
+      return failure("Failed to reset exercise.", resetResult.val)
     }
 
     if (editor && document) {

@@ -1,5 +1,5 @@
 import type { Result } from "ts-results"
-import { Err, Ok } from "ts-results"
+import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
@@ -18,7 +18,7 @@ import {
 } from "../shared/shared"
 import { dateToString, Logger, parseDate } from "../utilities"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
-import { runForExercise } from "./runForExercise"
+import { failure, runForExercise } from "./runForExercise"
 
 const TITLE = "Download Old Submission"
 
@@ -91,7 +91,7 @@ export async function downloadOldSubmission(
           ? userData.val.getMoocExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id
           : userData.val.getTmcExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id
       if (!exerciseId) {
-        return Err(new Error("Failed to resolve exercise id."))
+        return failure("Failed to resolve exercise id.")
       }
 
       const id = ExerciseIdentifier.from(exerciseId)
@@ -129,7 +129,7 @@ export async function downloadOldSubmission(
           ),
       )
       if (submissionsResult.err) {
-        return submissionsResult
+        return failure("Failed to fetch old submissions.", submissionsResult.val)
       }
 
       submissionsResult.val.sort(
@@ -192,7 +192,7 @@ export async function downloadOldSubmission(
         await vscode.commands.executeCommand("workbench.action.files.revert", document)
       }
       if (restoreResult.err) {
-        return restoreResult
+        return failure("Failed to download old submission.", restoreResult.val)
       }
       if (restoreResult.val === "nothing-to-download") {
         // Reachable only for an exercise type with no files at all, so never for a tmc

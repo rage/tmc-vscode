@@ -5,7 +5,7 @@ import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
 import { LocalCourseData, LocalCourseExercise } from "../shared/shared"
 import { Logger } from "../utilities"
-import { runForExercise } from "./runForExercise"
+import { failure, runForExercise } from "./runForExercise"
 
 export async function closeExercise(
   actionContext: ActionContext,
@@ -42,7 +42,7 @@ export async function closeExercise(
 
     const course = userData.val.getCourseBySlug(exercise.backend, exercise.courseSlug)
     if (course.err) {
-      return course
+      return failure("Error when closing exercise.", course.val)
     }
 
     const result = await actions.closeExercises(
@@ -51,7 +51,7 @@ export async function closeExercise(
       LocalCourseData.getCourseId(course.val),
     )
     if (result.err) {
-      return result
+      return failure("Error when closing exercise.", result.val)
     }
 
     vscode.commands.executeCommand("workbench.action.closeActiveEditor")
