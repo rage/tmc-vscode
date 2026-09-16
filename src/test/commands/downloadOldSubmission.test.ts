@@ -78,7 +78,7 @@ suite("Download old submission command (mooc branch)", function () {
       get activeExercise() {
         return moocExercise
       },
-      getExerciseByPath: () => moocExercise,
+      getExerciseContaining: () => moocExercise,
     } as unknown as WorkspaceManager
 
     selectedLabels = []

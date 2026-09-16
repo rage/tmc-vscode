@@ -54,7 +54,7 @@ suite("Reset exercise command", function () {
         get activeExercise() {
           return exercise
         },
-        getExerciseByPath: () => exercise,
+        getExerciseContaining: () => exercise,
       } as unknown as WorkspaceManager),
     }
   }

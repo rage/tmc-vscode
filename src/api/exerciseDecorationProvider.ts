@@ -51,7 +51,7 @@ export default class ExerciseDecorationProvider
 
   public provideFileDecoration(uri: vscode.Uri): vscode.ProviderResult<vscode.FileDecoration> {
     const exercise = this.workspaceManager.getExerciseByPath(uri)
-    if (!exercise || exercise.uri.fsPath !== uri.fsPath) {
+    if (!exercise) {
       return
     }
 

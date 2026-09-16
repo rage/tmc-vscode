@@ -172,7 +172,7 @@ export default class WorkspaceManager implements vscode.Disposable {
    */
   public get activeExercise(): WorkspaceExercise | undefined {
     const uri = vscode.window.activeTextEditor?.document.uri
-    return uri && this.getExerciseByPath(uri)
+    return uri && this.getExerciseContaining(uri)
   }
 
   /**
@@ -196,14 +196,25 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   /**
+   * The exercise whose own folder is `uri`, and nothing else — a file inside an
+   * exercise does not match. File decoration calls this for every row the
+   * explorer renders, and decorates only the exercise folders themselves.
+   *
+   * Use {@link getExerciseContaining} for a path the user pointed at, which may
+   * be a file within the exercise.
+   */
+  public getExerciseByPath(uri: vscode.Uri): WorkspaceExercise | undefined {
+    return this._exercisesByPath.get(uri.fsPath)
+  }
+
+  /**
    * The exercise `uri` belongs to — its own folder, or any path inside it.
    *
    * `undefined` for a path outside every known exercise, including a course
    * folder and a sibling whose name an exercise name prefixes. Costs the path's
-   * depth rather than the exercise count: file decoration calls this for every
-   * row the explorer renders.
+   * depth rather than the exercise count.
    */
-  public getExerciseByPath(uri: vscode.Uri): WorkspaceExercise | undefined {
+  public getExerciseContaining(uri: vscode.Uri): WorkspaceExercise | undefined {
     let candidate = uri.fsPath
     for (;;) {
       const exercise = this._exercisesByPath.get(candidate)

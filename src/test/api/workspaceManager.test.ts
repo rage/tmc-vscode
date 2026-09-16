@@ -200,7 +200,7 @@ suite("WorkspaceManager class", function () {
     })
   })
 
-  suite("getExerciseByPath", function () {
+  suite("exercise lookup by path", function () {
     const helloWorld = exercise("tmc", "test-python-course", "hello_world", ExerciseStatus.Open)
     let manager: WorkspaceManager
 
@@ -210,30 +210,33 @@ suite("WorkspaceManager class", function () {
 
     test("finds the exercise by its own folder", function () {
       expect(manager.getExerciseByPath(helloWorld.uri)?.exerciseSlug).toBe("hello_world")
+      expect(manager.getExerciseContaining(helloWorld.uri)?.exerciseSlug).toBe("hello_world")
     })
 
-    test("finds the exercise a file inside it belongs to", function () {
+    test("finds the exercise a file inside it belongs to only by containment", function () {
       const file = vscode.Uri.file(path.join(helloWorld.uri.fsPath, "src", "hello.py"))
-      expect(manager.getExerciseByPath(file)?.exerciseSlug).toBe("hello_world")
+      expect(manager.getExerciseContaining(file)?.exerciseSlug).toBe("hello_world")
+      expect(manager.getExerciseByPath(file)).toBeUndefined()
     })
 
     test("does not match a sibling folder the exercise name prefixes", function () {
       const sibling = vscode.Uri.file(`${helloWorld.uri.fsPath}_2`)
-      expect(manager.getExerciseByPath(sibling)).toBeUndefined()
+      expect(manager.getExerciseContaining(sibling)).toBeUndefined()
     })
 
     test("does not match the course folder above the exercise", function () {
       const courseFolder = vscode.Uri.file(path.dirname(helloWorld.uri.fsPath))
-      expect(manager.getExerciseByPath(courseFolder)).toBeUndefined()
+      expect(manager.getExerciseContaining(courseFolder)).toBeUndefined()
     })
 
     test("terminates on a path outside the exercise tree", function () {
-      expect(manager.getExerciseByPath(vscode.Uri.file("/elsewhere/notes.txt"))).toBeUndefined()
+      expect(manager.getExerciseContaining(vscode.Uri.file("/elsewhere/notes.txt"))).toBeUndefined()
     })
 
     test("forgets an exercise dropped from a later exercise list", async function () {
       await manager.setExercises([])
       expect(manager.getExerciseByPath(helloWorld.uri)).toBeUndefined()
+      expect(manager.getExerciseContaining(helloWorld.uri)).toBeUndefined()
     })
   })
 
