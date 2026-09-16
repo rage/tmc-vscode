@@ -16,7 +16,6 @@ import type {
 import {
   CLI_PROCESS_TIMEOUT,
   closedExercisesSettingKey,
-  EXAM_TEST_RESULT,
   EXERCISE_CHECK_INTERVAL,
   NOTIFICATION_DELAY,
   SUBMIT_PROCESS_TIMEOUT,
@@ -135,13 +134,6 @@ export async function testExercise(
       }
       await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
 
-      let data: TestResultData = {
-        ...EXAM_TEST_RESULT,
-        id: LocalCourseExercise.getId(courseExercise),
-        disabled: course.data.disabled,
-        courseSlug: LocalCourseData.getCourseName(course),
-      }
-
       if (!course.data.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext)
         const { process: testRunner, interrupt: testInterrupt } = langs.val.runTests(
@@ -178,7 +170,7 @@ export async function testExercise(
           return Ok.EMPTY
         }
 
-        data = {
+        const data: TestResultData = {
           testResult: testResults.val,
           id: LocalCourseExercise.getId(courseExercise),
           courseSlug: LocalCourseData.getCourseName(course),
