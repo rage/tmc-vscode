@@ -1527,13 +1527,19 @@ export default class Langs {
     authEventTarget?: "tmc" | "mooc",
     stderr = "",
   ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, BaseError> {
-    if (!dataMatchesKind(langsResponse, outputDataKind)) {
-      Logger.error("Unexpected TMC-langs response.", langsResponse)
-      return Err(new BaseError("Unexpected TMC-langs response.", stderr))
-    }
+    // The CLI's panic handler emits `status: "crashed"` with no data, so narrowing on the
+    // expected data kind first would misreport every panic and discard its message.
     if (langsResponse.status === "crashed") {
-      Logger.error("Langs process crashed.", langsResponse.message, langsResponse.data)
-      return Err(new BaseError("Langs process crashed.", stderr))
+      Logger.error("Langs process crashed.", langsResponse.message)
+      return Err(new BaseError(langsResponse.message || "Langs process crashed.", stderr))
+    }
+    if (!dataMatchesKind(langsResponse, outputDataKind)) {
+      // Not the envelope: a `logged-in` response carries a live OAuth token.
+      Logger.error(
+        "Unexpected TMC-langs response.",
+        `result: ${langsResponse.result}, output-data-kind: ${langsResponse.data?.["output-data-kind"]}`,
+      )
+      return Err(new BaseError("Unexpected TMC-langs response.", stderr))
     }
     if (langsResponse.result !== "error") {
       return Ok(langsResponse)
@@ -1665,6 +1671,7 @@ export default class Langs {
 
     let active = true
     let interrupted = false
+    let spawnFailure: Error | undefined
     let cprocess
     const startTime = Date.now()
     try {
@@ -1708,6 +1715,7 @@ export default class Langs {
 If you're on macOS: Try installing Rosetta by running \`softwareupdate --install-rosetta\` in the terminal. (See https://support.apple.com/en-us/102527).
 ${error.message}`
         }
+        spawnFailure = error
         reject(error)
       })
       cprocess.stderr.on("data", (chunk) => {
@@ -1788,6 +1796,11 @@ ${error.message}`
       try {
         await processResult
       } catch (error) {
+        if (spawnFailure) {
+          // ENOENT/EACCES/EPERM arrive here rather than as a `cp.spawn` throw, and
+          // `activate` gates its antivirus-exception advice on this class.
+          return Err(new SpawnError(spawnFailure, stderr.join("\n")))
+        }
         return Err(new RuntimeError(error as string, stderr.join("\n")))
       }
 
