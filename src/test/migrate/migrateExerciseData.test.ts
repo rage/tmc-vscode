@@ -34,7 +34,7 @@ suite("Exercise data migration", function () {
     test("should succeed without any data", async function () {
       const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
       expect(migrated.data).toBeUndefined()
-      expect(migrated.obsoleteKeys).toEqual([])
+      expect(migrated.supersededKeys).toEqual([])
     })
 
     test("should succeed with version 0.1.0 data", async function () {
@@ -42,7 +42,7 @@ suite("Exercise data migration", function () {
       await memento.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(dataPath))
       const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
       expect(migrated.data).toBeUndefined()
-      expect(migrated.obsoleteKeys).toEqual([v0.EXERCISE_DATA_KEY])
+      expect(migrated.supersededKeys).toEqual([v0.EXERCISE_DATA_KEY])
     })
 
     test("should succeed with version 0.2.0 data", async function () {
@@ -50,7 +50,7 @@ suite("Exercise data migration", function () {
       await memento.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_2_0(dataPath))
       const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
       expect(migrated.data).toBeUndefined()
-      expect(migrated.obsoleteKeys).toEqual([v0.EXERCISE_DATA_KEY])
+      expect(migrated.supersededKeys).toEqual([v0.EXERCISE_DATA_KEY])
     })
 
     test("should succeed with version 0.3.0 data", async function () {
@@ -59,7 +59,7 @@ suite("Exercise data migration", function () {
       await memento.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_3_0)
       const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
       expect(migrated.data).toBeUndefined()
-      expect(migrated.obsoleteKeys).toEqual([v0.EXERCISE_DATA_KEY])
+      expect(migrated.supersededKeys).toEqual([v0.EXERCISE_DATA_KEY])
     })
 
     test("should succeed with version 0.9.0 data", async function () {
@@ -68,7 +68,7 @@ suite("Exercise data migration", function () {
       await memento.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_9_0)
       const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
       expect(migrated.data).toBeUndefined()
-      expect(migrated.obsoleteKeys).toEqual([v0.EXERCISE_DATA_KEY])
+      expect(migrated.supersededKeys).toEqual([v0.EXERCISE_DATA_KEY])
     })
   })
 

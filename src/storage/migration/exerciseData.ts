@@ -145,7 +145,7 @@ export default async function migrateExerciseDataToLatest(
   dialog: Dialog,
   tmc: Langs,
 ): Promise<MigratedData<undefined>> {
-  const obsoleteKeys: string[] = []
+  const supersededKeys: string[] = []
 
   // v0 => v1
   const dataV0 = validateData(
@@ -154,7 +154,7 @@ export default async function migrateExerciseDataToLatest(
   )
   if (dataV0) {
     await v1_migrateFromV0(dataV0, memento, dialog, tmc)
-    obsoleteKeys.push(data.v0.EXERCISE_DATA_KEY)
+    supersededKeys.push(data.v0.EXERCISE_DATA_KEY)
   }
 
   // to support the mooc backend, langs stores new courses in distinct tmc and mooc dirs
@@ -162,5 +162,5 @@ export default async function migrateExerciseDataToLatest(
   // though we can still do the migration later if we want to just for consistency
   // await v3_migrateFromV1();
 
-  return { data: undefined, obsoleteKeys }
+  return { data: undefined, supersededKeys, destinationKey: undefined }
 }

@@ -1,7 +1,7 @@
 import * as path from "path"
 
 import * as fs from "fs-extra"
-import { concat, last } from "lodash"
+import { last } from "lodash"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
@@ -18,6 +18,7 @@ import {
 import { HaltForReloadError } from "../errors"
 import * as storage from "./data"
 import { v0 } from "./data"
+import { obsoleteKeys } from "./migration"
 import migrateBackendNamespacing from "./migration/backendNamespacing"
 import migrateExerciseDataToLatest from "./migration/exerciseData"
 import migrateExtensionSettingsToLatest from "./migration/extensionSettings"
@@ -100,21 +101,29 @@ export default class Storage {
       // Workspace data migration - this one is a bit more tricky so do it last.
       const migratedExerciseData = await migrateExerciseDataToLatest(memento, dialog, tmc)
 
-      await this.updateExtensionSettings(migratedExtensionSettings.data)
-      await this.updateSessionState(migratedSessionState.data)
-      await this.updateUserData(migratedUserData.data)
+      // A migration yields `undefined` when nothing was stored under any of its
+      // keys; that means "nothing to migrate", not "delete what is there".
+      if (migratedExtensionSettings.data) {
+        await this.updateExtensionSettings(migratedExtensionSettings.data)
+      }
+      if (migratedSessionState.data) {
+        await this.updateSessionState(migratedSessionState.data)
+      }
+      if (migratedUserData.data) {
+        await this.updateUserData(migratedUserData.data)
+      }
 
       // Runs after userData is settled so it can enumerate the user's courses.
       // Idempotent and flag-gated (see backendNamespacing.ts).
       const workspaceFileFolder = path.join(context.globalStoragePath, "workspaces")
       await migrateBackendNamespacing(memento, tmc, workspaceFileFolder, migratedUserData.data)
 
-      const keysToRemove = concat(
-        migratedExerciseData.obsoleteKeys,
-        migratedExtensionSettings.obsoleteKeys,
-        migratedSessionState.obsoleteKeys,
-        migratedUserData.obsoleteKeys,
-      )
+      const keysToRemove = obsoleteKeys([
+        migratedExerciseData,
+        migratedExtensionSettings,
+        migratedSessionState,
+        migratedUserData,
+      ])
       for (const key of keysToRemove) {
         await memento.update(key, undefined)
       }

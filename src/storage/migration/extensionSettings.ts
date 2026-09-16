@@ -84,18 +84,21 @@ export interface VscodeApiSettings {
   hideMetaFiles: boolean
 }
 
+/** Every key extension settings have ever been stored under; one left out survives to shadow the migrated value. */
+const EXTENSION_SETTINGS_KEYS = [
+  data.v0.EXTENSION_SETTINGS_KEY,
+  data.v1.EXTENSION_SETTINGS_KEY,
+  data.v2.EXTENSION_SETTINGS_KEY,
+]
+
 export default async function migrateExtensionSettingsToLatest(
   memento: vscode.Memento,
   settings: vscode.WorkspaceConfiguration,
 ): Promise<MigratedData<VscodeApiSettings | undefined>> {
-  const obsoleteKeys: string[] = []
   const dataV0 = validateData(
     memento.get(data.v0.EXTENSION_SETTINGS_KEY),
     data.v0.extensionSettingsSchema,
   )
-  if (dataV0) {
-    obsoleteKeys.push(data.v0.EXTENSION_SETTINGS_KEY)
-  }
 
   const dataV1 = dataV0
     ? await v1_migrateFromV0(dataV0)
@@ -106,5 +109,9 @@ export default async function migrateExtensionSettingsToLatest(
     vscodeApiSettings = await vscodeapi_migrateFromV1(memento, dataV1, settings)
   }
 
-  return { data: vscodeApiSettings, obsoleteKeys }
+  return {
+    data: vscodeApiSettings,
+    supersededKeys: EXTENSION_SETTINGS_KEYS,
+    destinationKey: data.v3.EXTENSION_SETTINGS_KEY,
+  }
 }
