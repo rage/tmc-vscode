@@ -124,6 +124,8 @@ interface MoocMockState {
   uploadBytesByStoredName: Map<string, Buffer>
   /** One-shot: the next upload batch is stored already reaped. */
   expireNextUpload: boolean
+  /** One-shot per entry: the next call to this operationId answers with this status. */
+  failNextByOperation: Map<string, number>
   // The integration mock runs in a separate process from the test, so the two
   // members below record the most recent authenticated request's `Authorization`
   // header and a count, surfaced via `GET /mooc-mock/auth-state`, to let a test
@@ -169,9 +171,28 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   uploadsById: new Map(),
   uploadBytesByStoredName: new Map(),
   expireNextUpload: false,
+  failNextByOperation: new Map(),
   lastAuthorization: undefined,
   authenticatedRequestCount: 0,
 })
+
+/**
+ * Which host error a {@link MoocMockControls.failNext} status stands for. A
+ * status alone is ambiguous -- several message keys share one -- so the
+ * canonical key per injectable status is named here, and a status with no entry
+ * cannot be injected.
+ */
+const FAULT_ERRORS: Record<number, ApiErrorMessageKey> = {
+  401: "unauthorized",
+  403: "forbidden",
+  404: "not_found",
+  422: "validation_error",
+  426: "obsolete_client",
+  500: "internal_error",
+}
+
+/** Why {@link MoocMockControls.failNext} refused to arm a fault. */
+type FailNextRejection = "unknown-operation" | "unsupported-status"
 
 /**
  * Drives one mock's state from a test or a control route. Reach it with
@@ -192,6 +213,12 @@ export interface MoocMockControls {
    * between the CLI's own two calls.
    */
   expireNextUpload: () => void
+  /**
+   * Arms a one-shot failure: the next call to `operationId` answers with the
+   * error the host raises for `status`, without running its handler. Returns why
+   * it could not be armed, or undefined once armed.
+   */
+  failNext: (operationId: string, status: number) => FailNextRejection | undefined
   /**
    * Seeds a submission the host has no files for, so its download is an empty list.
    * Only an exercise type with no files at all is like this, and a submit through the
@@ -227,7 +254,10 @@ const retainSubmission = (
   return record
 }
 
-const createMoocMockControls = (state: MoocMockState): MoocMockControls => ({
+const createMoocMockControls = (
+  state: MoocMockState,
+  knownOperation: (operationId: string) => boolean,
+): MoocMockControls => ({
   reset: () => {
     state.submissionsByTaskId.clear()
     state.submissionsBySlideId.clear()
@@ -235,6 +265,7 @@ const createMoocMockControls = (state: MoocMockState): MoocMockControls => ({
     state.uploadsById.clear()
     state.uploadBytesByStoredName.clear()
     state.expireNextUpload = false
+    state.failNextByOperation.clear()
     state.lastAuthorization = undefined
     state.authenticatedRequestCount = 0
   },
@@ -249,6 +280,16 @@ const createMoocMockControls = (state: MoocMockState): MoocMockControls => ({
   },
   expireNextUpload: () => {
     state.expireNextUpload = true
+  },
+  failNext: (operationId, status) => {
+    if (!knownOperation(operationId)) {
+      return "unknown-operation"
+    }
+    if (!(status in FAULT_ERRORS)) {
+      return "unsupported-status"
+    }
+    state.failNextByOperation.set(operationId, status)
+    return undefined
   },
   seedFilelessSubmission: (exerciseId) => {
     if (!state.fixtures.exerciseById.has(exerciseId)) {
@@ -301,9 +342,11 @@ interface CreateMoocApiOptions {
   /**
    * Test-only fault injection: the named operationId returns a spec-violating
    * body, exercising the response-validation guard (which must turn it into a
-   * 500). Never set in the real mock.
+   * 500). Process-lifetime, unlike the one-shot
+   * {@link MoocMockControls.failNext}; backend/index.ts reads it from
+   * `MOOC_MOCK_FAULT`.
    */
-  injectResponseFault?: string
+  injectResponseFault?: string | undefined
   /**
    * Lowest `X-Client-Version` served, as `major.minor.patch`. Unset (the
    * default) serves everything, matching the host, whose MINIMUM_CLIENT_VERSION
@@ -518,11 +561,28 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
   // operation.
   const guardClient =
     (handler: (c: Context, req: Request) => MockResponse) =>
-    (c: Context, req: Request): MockResponse =>
-      obsoleteClientError(
+    (c: Context, req: Request, res: Response): MockResponse | undefined => {
+      const obsolete = obsoleteClientError(
         options.minimumClientVersion,
         req.headers[CLIENT_VERSION_HEADER] as string | undefined,
-      ) ?? handler(c, req)
+      )
+      if (obsolete) {
+        return obsolete
+      }
+      const operationId = c.operation?.operationId
+      const injected =
+        operationId === undefined ? undefined : state.failNextByOperation.get(operationId)
+      const injectedError = injected === undefined ? undefined : FAULT_ERRORS[injected]
+      if (operationId === undefined || injected === undefined || injectedError === undefined) {
+        return handler(c, req)
+      }
+      state.failNextByOperation.delete(operationId)
+      // Written past the response validator: an injected 500 is a status the
+      // spec documents nowhere, so validating it would replace the fault under
+      // test with a different one.
+      send(res, apiError(injectedError, `injected ${injected} fault for ${operationId}`))
+      return undefined
+    }
 
   const operations: Record<string, (c: Context, req: Request) => MockResponse> = {
     // GET /api/v0/exercise-services/client/courses
@@ -1076,9 +1136,12 @@ export const registerMoocRoutes = (
   options: CreateMoocApiOptions = {},
 ): MoocMockControls => {
   const state = createMoocMockState(options.baseUrl ?? DEFAULT_MOOC_MOCK_BASE_URL)
-  const controls = createMoocMockControls(state)
-  app.locals.moocMock = controls
   const api = createMoocApi(state, options)
+  const controls = createMoocMockControls(
+    state,
+    (operationId) => api.getOperation(operationId) !== undefined,
+  )
+  app.locals.moocMock = controls
 
   // Spec-exempt archive route (see doc comment above).
   app.get("/mooc-archives/:archive", (req, res, next) => {
@@ -1173,6 +1236,34 @@ export const registerMoocRoutes = (
   // on the next upload so the submit that follows it sees `upload_expired`.
   app.post("/mooc-mock/expire-next-upload", (_req, res) => {
     controls.expireNextUpload()
+    res.status(204).end()
+  })
+
+  // Spec-exempt fault injection for out-of-process consumers: the named
+  // operation answers once with the host error for `status`. Without it a tier
+  // outside this process can reach no error the fixtures do not already
+  // produce -- a 5xx above all, which is what the client's retry and
+  // error-reporting paths are written for.
+  app.post("/mooc-mock/fail-next", json, (req, res) => {
+    const { operationId, status } = (req.body ?? {}) as {
+      operationId?: unknown
+      status?: unknown
+    }
+    if (typeof operationId !== "string" || typeof status !== "number") {
+      res.status(400).json({ error: "operationId must be a string and status a number" })
+      return
+    }
+    const rejected = controls.failNext(operationId, status)
+    if (rejected === "unknown-operation") {
+      res.status(404).json({ error: `no such client operation: ${operationId}` })
+      return
+    }
+    if (rejected === "unsupported-status") {
+      res.status(400).json({
+        error: `no host error answers with ${status}; injectable: ${Object.keys(FAULT_ERRORS).join(", ")}`,
+      })
+      return
+    }
     res.status(204).end()
   })
 

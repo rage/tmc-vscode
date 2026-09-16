@@ -35,6 +35,10 @@ const MOOC_REQUIRE_AUTH = process.env.MOOC_MOCK_REQUIRE_AUTH !== "0"
 // Lowest `X-Client-Version` the mooc mock serves. Unset by default, as on the
 // host; a tier that wants to see a client turned away with 426 names one.
 const MOOC_MINIMUM_CLIENT_VERSION = process.env.MOOC_MOCK_MINIMUM_CLIENT_VERSION
+// operationId whose response should violate the spec, so a tier outside this
+// process can watch the mock's own response validation turn it into a 500.
+// One-off errors are armed per request via POST /mooc-mock/fail-next instead.
+const MOOC_FAULT = process.env.MOOC_MOCK_FAULT
 // Every absolute URL the mooc mock hands out is built from this, so it has to
 // name the port this process actually listens on.
 const MOOC_BASE_URL = process.env.MOOC_MOCK_BASE_URL ?? `http://localhost:${PORT}`
@@ -166,6 +170,7 @@ registerMoocRoutes(app, {
   requireAuth: MOOC_REQUIRE_AUTH,
   baseUrl: MOOC_BASE_URL,
   minimumClientVersion: MOOC_MINIMUM_CLIENT_VERSION,
+  injectResponseFault: MOOC_FAULT,
 })
 
 // getCourseSettings(0)

@@ -1193,3 +1193,68 @@ describe("mooc mock client-version floor", () => {
     }
   })
 })
+
+// Injected one-shot failures. Every error the fixtures produce is a 4xx a client
+// provoked; nothing here can otherwise answer 5xx, so the client's retry and
+// error-reporting paths have no way to be driven -- least of all from the
+// out-of-process tiers, which is what the control route exists for.
+describe("mooc mock injected failures", () => {
+  let server: Server
+  let base: string
+  let mock: MoocMockControls
+
+  before(async () => {
+    ;({ server, base, mock } = await listen(createMoocApp()))
+  })
+
+  after(() => {
+    server.close()
+  })
+
+  const failNext = (body: unknown): Promise<Response> =>
+    fetch(`${base}/mooc-mock/fail-next`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    })
+
+  test("an armed fault answers once, with the host envelope for its status", async () => {
+    assert.equal(mock.failNext("getClientCourses", 500), undefined)
+    const faulted = await authFetch(clientApi(base, "/courses"))
+    assert.equal(faulted.status, 500)
+    const body = (await faulted.json()) as { type: string; message_key: string }
+    assert.equal(body.type, API_ERRORS.internal_error.type)
+    assert.equal(body.message_key, "internal_error")
+
+    // one-shot: the next call is served normally
+    assert.equal((await authFetch(clientApi(base, "/courses"))).status, 200)
+  })
+
+  test("an armed fault leaves other operations alone", async () => {
+    assert.equal(mock.failNext("getClientCourses", 500), undefined)
+    assert.equal((await authFetch(clientApi(base, `/courses/${pythonCourse.id}`))).status, 200)
+    assert.equal((await authFetch(clientApi(base, "/courses"))).status, 500)
+  })
+
+  test("a fault arms and fires the same way from outside the process", async () => {
+    assert.equal((await failNext({ operationId: "getClientCourses", status: 404 })).status, 204)
+    const faulted = await authFetch(clientApi(base, "/courses"))
+    assert.equal(faulted.status, 404)
+    assert.equal(((await faulted.json()) as { message_key: string }).message_key, "not_found")
+  })
+
+  test("a reset disarms an armed fault", async () => {
+    mock.failNext("getClientCourses", 500)
+    mock.reset()
+    assert.equal((await authFetch(clientApi(base, "/courses"))).status, 200)
+  })
+
+  test("an unknown operation or an uninjectable status is refused", async () => {
+    assert.equal(mock.failNext("getSomethingElse", 500), "unknown-operation")
+    assert.equal(mock.failNext("getClientCourses", 418), "unsupported-status")
+    assert.equal((await failNext({ operationId: "getSomethingElse", status: 500 })).status, 404)
+    assert.equal((await failNext({ operationId: "getClientCourses", status: 418 })).status, 400)
+    assert.equal((await failNext({ status: 500 })).status, 400)
+    assert.equal((await authFetch(clientApi(base, "/courses"))).status, 200)
+  })
+})
