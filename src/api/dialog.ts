@@ -145,19 +145,25 @@ export default class Dialog {
   }
 
   /**
-   * Wraps increment-style `vscode.Progress` with a version that allows reporting simple
-   * percentages instead. This is mostly useful when using `vscode.window.withProgress`.
+   * Wraps increment-style `vscode.Progress` with a version that takes an absolute
+   * completion fraction instead. This is mostly useful when using
+   * `vscode.window.withProgress`.
+   *
+   * `percent` is a 0..1 fraction and callers may report one that is lower than a
+   * previous report; the bar then stays where it is, but the report's message is
+   * still shown.
    */
   private _incrementPercentageWrapper(
     progress: vscode.Progress<{ message?: string; increment: number }>,
   ): vscode.Progress<PercentProgress> {
     let peak = 0
     const report: (value: PercentProgress) => void = ({ message, percent }) => {
-      const increment = 100 * (percent - peak)
-      if (increment > 0) {
-        progress.report({ increment, ...(message !== undefined ? { message } : {}) })
-        peak = percent
+      const increment = Math.max(0, 100 * (percent - peak))
+      if (increment === 0 && message === undefined) {
+        return
       }
+      progress.report({ increment, ...(message !== undefined ? { message } : {}) })
+      peak = Math.max(peak, percent)
     }
 
     return { report }
