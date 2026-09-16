@@ -46,6 +46,8 @@ interface ConfigurationProperties {
  */
 export default class WorkspaceManager implements vscode.Disposable {
   private _exercises: WorkspaceExercise[]
+  // The same objects as `_exercises`, keyed by `uri.fsPath`. Replace both together.
+  private _exercisesByPath: Map<string, WorkspaceExercise>
   private readonly _resources: Resources
   private readonly _disposables: vscode.Disposable[]
 
@@ -55,6 +57,7 @@ export default class WorkspaceManager implements vscode.Disposable {
    */
   public constructor(resources: Resources, exercises?: WorkspaceExercise[]) {
     this._exercises = exercises ?? []
+    this._exercisesByPath = WorkspaceManager._indexByPath(this._exercises)
     this._resources = resources
     this._disposables = [
       vscode.workspace.onDidChangeWorkspaceFolders((e) => this._onDidChangeWorkspaceFolders(e)),
@@ -139,14 +142,31 @@ export default class WorkspaceManager implements vscode.Disposable {
 
   public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
     this._exercises = exercises
+    this._exercisesByPath = WorkspaceManager._indexByPath(exercises)
     return this._refreshActiveCourseWorkspace()
   }
 
-  public getExerciseByPath(exercise: vscode.Uri): Readonly<WorkspaceExercise> | undefined {
-    // File is part of exercise if and only if it belongs to an exercise's subfolder
-    return this._exercises.find(
-      (x) => !path.relative(x.uri.fsPath, exercise.fsPath).startsWith(".."),
-    )
+  /**
+   * The exercise `uri` belongs to — its own folder, or any path inside it.
+   *
+   * `undefined` for a path outside every known exercise, including a course
+   * folder and a sibling whose name an exercise name prefixes. Runs in the
+   * path's depth, not the exercise count: every explorer row decorated goes
+   * through here.
+   */
+  public getExerciseByPath(uri: vscode.Uri): WorkspaceExercise | undefined {
+    let candidate = uri.fsPath
+    for (;;) {
+      const exercise = this._exercisesByPath.get(candidate)
+      if (exercise) {
+        return exercise
+      }
+      const parent = path.dirname(candidate)
+      if (parent === candidate) {
+        return undefined
+      }
+      candidate = parent
+    }
   }
 
   public getExerciseBySlug(
@@ -191,6 +211,7 @@ export default class WorkspaceManager implements vscode.Disposable {
 
   public addExercise(exercise: WorkspaceExercise): void {
     this._exercises = this._exercises.concat(exercise)
+    this._exercisesByPath.set(exercise.uri.fsPath, exercise)
   }
 
   public openCourseExercises(
@@ -408,12 +429,16 @@ export default class WorkspaceManager implements vscode.Disposable {
     return success ? Ok.EMPTY : Err(new Error("Failed to refresh active workspace."))
   }
 
+  private static _indexByPath(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {
+    return new Map(exercises.map((x) => [x.uri.fsPath, x]))
+  }
+
   private _onDidChangeWorkspaceFolders(e: vscode.WorkspaceFoldersChangeEvent): void {
     const activeCourseWorkspace = this._activeCourseWorkspace
 
     let incorrectFolderAdded = false
     e.added.forEach((added) => {
-      const exercise = this._exercises.find((x) => x.uri.fsPath === added.uri.fsPath)
+      const exercise = this._exercisesByPath.get(added.uri.fsPath)
       if (!exercise) {
         incorrectFolderAdded = true
       } else if (
@@ -425,7 +450,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     })
 
     e.removed.forEach((removed) => {
-      const exercise = this._exercises.find((x) => x.uri.fsPath === removed.uri.fsPath)
+      const exercise = this._exercisesByPath.get(removed.uri.fsPath)
       if (exercise) {
         exercise.status = ExerciseStatus.Closed
       }

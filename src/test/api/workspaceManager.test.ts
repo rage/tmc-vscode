@@ -177,6 +177,15 @@ suite("WorkspaceManager class", function () {
       const courseFolder = vscode.Uri.file(path.dirname(helloWorld.uri.fsPath))
       expect(manager.getExerciseByPath(courseFolder)).toBeUndefined()
     })
+
+    test("terminates on a path outside the exercise tree", function () {
+      expect(manager.getExerciseByPath(vscode.Uri.file("/elsewhere/notes.txt"))).toBeUndefined()
+    })
+
+    test("forgets an exercise dropped from a later exercise list", async function () {
+      await manager.setExercises([])
+      expect(manager.getExerciseByPath(helloWorld.uri)).toBeUndefined()
+    })
   })
 
   suite("two backends sharing a course slug", function () {
