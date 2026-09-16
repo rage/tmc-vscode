@@ -25,7 +25,7 @@
   "publisher": "moocfi",
   "main": "./dist/extension",
   "scripts": {
-    "backend:start": "pnpm --filter tmc-vscode-mock-backend run start",
+    "backend:start": "pnpm --dir backend run start",
     "build": "node esbuild.mjs",
     "check:svelte": "pnpm --dir webview-ui run check",
     "ci:all": "pnpm install --frozen-lockfile",
@@ -42,7 +42,7 @@
     "prepare": "husky",
     "pretest:integration": "cross-env NODE_ENV=development BACKEND=mockBackend pnpm run build",
     "release": "./bin/publishRelease.sh",
-    "setup-ultimate": "git clean -X -d -f && git submodule update --init && pnpm install && pnpm --filter tmc-vscode-mock-backend run setup",
+    "setup-ultimate": "git clean -X -d -f && git submodule update --init && pnpm install && pnpm --dir backend run setup",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
@@ -56,8 +56,8 @@
     "vendor:langs-schema": "bash bin/updateLangsSchema.sh",
     "vscode:prepublish": "cross-env NODE_ENV=production pnpm run build",
     "watch": "node esbuild.mjs --watch",
-    "webview:build": "pnpm --filter tmc-vscode-svelte run build",
-    "webview:start": "pnpm --filter tmc-vscode-svelte run dev"
+    "webview:build": "pnpm --dir webview-ui run build",
+    "webview:start": "pnpm --dir webview-ui run dev"
   },
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",
