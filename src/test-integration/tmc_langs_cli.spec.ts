@@ -12,7 +12,12 @@ import type { Result } from "ts-results"
 import { TMC_ARCHIVE_MIME } from "../../backend/mooc/fixtures"
 import Langs from "../api/langs"
 import type { SubmissionFeedback } from "../api/types"
-import { CLIENT_NAME, MINIMUM_SUBMISSION_INTERVAL, TMC_LANGS_VERSION } from "../config/constants"
+import {
+  CLIENT_NAME,
+  MIGRATION_CONTRACT_VERSION,
+  MINIMUM_SUBMISSION_INTERVAL,
+  TMC_LANGS_VERSION,
+} from "../config/constants"
 import { AuthorizationError, BottleneckError, RuntimeError } from "../errors"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { getLangsCLIForPlatform, getPlatform, semVerCompare } from "../utilities/"
@@ -41,9 +46,7 @@ const isString = (object: unknown): object is string => typeof object === "strin
 //
 // Anchored to the first release that will carry the contract rather than to
 // whatever is pinned today, so bumping TMC_LANGS_RUST_VERSION for an unrelated
-// fix cannot silently switch these on. Keep in step with
-// `SCHEMA_SUBCOMMAND_VERSION` in src/init/verifyCliSchema.ts.
-const MIGRATION_CONTRACT_VERSION = "0.40.0"
+// fix cannot silently switch these on.
 const cliSupportsMigrationContract = ((): boolean => {
   try {
     const version = cp.execFileSync(CLI_FILE, ["--version"], { encoding: "utf-8" })
