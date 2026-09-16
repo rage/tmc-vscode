@@ -383,7 +383,6 @@ suite("ensureLangsUpdated end-to-end", function () {
     })
 
     expect(result.ok).toBe(true)
-    // The temp file the checksum is renamed from must not survive.
     expect(fs.existsSync(path.join(folder, executable + ".sha256.tmp"))).toBe(false)
   })
 

@@ -18,8 +18,8 @@ function withHost(platform: string, arch: string, body: () => void): void {
 suite("getAllLangsCLIs", function () {
   test("enumerates every published build exactly once", function () {
     const clis = getAllLangsCLIs(version)
-    // Duplicates used to be deduped away, which hid the placeholder targets that
-    // mapped to no build at all from the release-time existence check.
+    // A duplicate means some platform resolves to another one's build, which is
+    // invisible to the release-time existence check.
     expect(new Set(clis).size).toBe(clis.length)
     expect(clis).toEqual([
       `tmc-langs-cli-i686-unknown-linux-gnu-${version}`,
