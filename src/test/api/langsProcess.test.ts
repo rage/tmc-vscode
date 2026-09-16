@@ -1,7 +1,8 @@
 import { vi } from "vitest"
 
 import Langs from "../../api/langs"
-import { SpawnError } from "../../errors"
+import { EmptyLangsResponseError, LangsResponseSchemaError, SpawnError } from "../../errors"
+import { Logger } from "../../utilities/logger"
 
 type FakeListener = (...args: unknown[]) => void
 
@@ -91,6 +92,50 @@ function endProcess(
   }
 }
 
+const TOKEN = "super-secret-refresh-token"
+
+function loggedInLine(): string {
+  return JSON.stringify({
+    "output-kind": "output-data",
+    status: "finished",
+    message: "logged in",
+    result: "logged-in",
+    data: null,
+  })
+}
+
+/** A login envelope carrying a live token, rejected because `status` is not a known value. */
+function driftedTokenLine(): string {
+  return JSON.stringify({
+    "output-kind": "output-data",
+    status: "aborted",
+    message: "logged in",
+    result: "logged-in",
+    data: {
+      "output-data-kind": "token",
+      "output-data": { access_token: TOKEN, refresh_token: TOKEN },
+    },
+  })
+}
+
+/** Replaces every `Logger` sink with a recorder, so a test can assert what was written. */
+function captureLogs(): unknown[][] {
+  const captured: unknown[][] = []
+  for (const level of ["debug", "info", "warn", "error"] as const) {
+    vi.spyOn(Logger, level).mockImplementation((...params: unknown[]): void => {
+      captured.push(params)
+    })
+  }
+  return captured
+}
+
+function loggedText(captured: unknown[][]): string {
+  return captured
+    .flat()
+    .map((param) => (typeof param === "string" ? param : (JSON.stringify(param) ?? "")))
+    .join("\n")
+}
+
 function crashedLine(message: string): string {
   return JSON.stringify({
     "output-kind": "output-data",
@@ -165,5 +210,137 @@ suite("Langs CLI process failures", function () {
     const result = await pending
     expect(result.val).toBeInstanceOf(SpawnError)
     expect((result.val as SpawnError).message).toContain("softwareupdate --install-rosetta")
+  })
+})
+
+suite("Langs CLI process output", function () {
+  test("the result settles when exit precedes the stdout end", async function () {
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const langsProcess = lastProcess()
+    writeStdout(langsProcess, loggedInLine())
+    endProcess(langsProcess, "exit-first")
+
+    expect(await pending).toEqual(expect.objectContaining({ val: true }))
+  })
+
+  test("the result settles when the stdout end precedes exit", async function () {
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const langsProcess = lastProcess()
+    writeStdout(langsProcess, loggedInLine())
+    endProcess(langsProcess, "end-first")
+
+    expect(await pending).toEqual(expect.objectContaining({ val: true }))
+  })
+
+  test("a process that writes nothing reports an empty response", async function () {
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    endProcess(lastProcess())
+
+    const result = await pending
+    expect(result.val).toBeInstanceOf(EmptyLangsResponseError)
+  })
+
+  test("output the CLI contract rejects reports the schema mismatch", async function () {
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const langsProcess = lastProcess()
+    writeStdout(langsProcess, driftedTokenLine())
+    endProcess(langsProcess)
+
+    const result = await pending
+    expect(result.val).toBeInstanceOf(LangsResponseSchemaError)
+    expect((result.val as Error).message).toContain("output-data")
+  })
+
+  test("a rejected line never reaches the log", async function () {
+    const captured = captureLogs()
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const langsProcess = lastProcess()
+    writeStdout(langsProcess, driftedTokenLine())
+    endProcess(langsProcess)
+    await pending
+
+    const text = loggedText(captured)
+    expect(text).toContain("didn't match expected type")
+    expect(text).not.toContain(TOKEN)
+  })
+
+  test("an unterminated tail never reaches the log", async function () {
+    const captured = captureLogs()
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const langsProcess = lastProcess()
+    writeStdout(langsProcess, loggedInLine())
+    langsProcess.stdout.emit("data", `{"access_token":"${TOKEN}`)
+    endProcess(langsProcess)
+
+    expect(await pending).toEqual(expect.objectContaining({ val: true }))
+    const text = loggedText(captured)
+    expect(text).toContain("unterminated")
+    expect(text).not.toContain(TOKEN)
+  })
+
+  test("status updates reach the caller", async function () {
+    const langs = newLangs()
+    const deviceCodes: string[] = []
+    const login = langs.authenticateMooc((info) => deviceCodes.push(info.user_code))
+    const langsProcess = lastProcess()
+    writeStdout(
+      langsProcess,
+      JSON.stringify({
+        "output-kind": "status-update",
+        "update-data-kind": "mooc-device-login",
+        finished: false,
+        message: "Waiting for approval",
+        "percent-done": 0,
+        time: 1,
+        data: {
+          expires_in: 600,
+          interval: 5,
+          user_code: "ABCD-EFGH",
+          verification_uri: "https://courses.mooc.fi/oauth_device",
+          verification_uri_complete: null,
+        },
+      }),
+      loggedInLine(),
+    )
+    endProcess(langsProcess)
+
+    expect((await login.result).ok).toBe(true)
+    expect(deviceCodes).toEqual(["ABCD-EFGH"])
+  })
+})
+
+suite("Langs CLI process cancellation", function () {
+  test("an interrupted process is reported as killed", async function () {
+    const langs = newLangs()
+    const login = langs.authenticateMooc(() => {})
+    const langsProcess = lastProcess()
+    login.interrupt()
+    endProcess(langsProcess)
+
+    const result = await login.result
+    expect((result.val as Error).message).toContain("killed")
+    expect(killedPids).toContain(langsProcess.pid)
+  })
+
+  test("a process that outlives its timeout is killed and reported", async function () {
+    vi.useFakeTimers()
+    try {
+      const langs = newLangs()
+      const pending = langs.isAuthenticated({ timeout: 5000 })
+      const langsProcess = lastProcess()
+      vi.advanceTimersByTime(5000)
+
+      const result = await pending
+      expect((result.val as Error).message).toContain("really long time")
+      expect(killedPids).toContain(langsProcess.pid)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

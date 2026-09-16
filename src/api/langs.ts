@@ -1637,7 +1637,7 @@ export default class Langs {
     let stdoutBuffer = ""
     // Last CliOutput schema-validation failure, if any — lets a process that ends without
     // output data report *why* instead of a generic "no result data" message.
-    let lastSchemaValidationFailure: { issueSummary: string; outputKind: unknown } | undefined
+    let lastSchemaFailure: LangsSchemaFailure | undefined
 
     const obfuscatedArgs = args.map((x, i) => (obfuscate?.includes(i) ? "***" : x))
     const loggableCommand = [this.cliPath]
@@ -1747,46 +1747,31 @@ ${error.message}`
         }
       })
       cprocess.stdout.on("data", (chunk) => {
-        const data = chunk.toString()
-        const parts = (stdoutBuffer + data).split("\n")
-        stdoutBuffer = parts.pop() || ""
-        for (const part of parts) {
-          try {
-            const trimmed = part.trim()
-            if (!trimmed) {
-              continue
-            }
-            const json = JSON.parse(trimmed)
-            const validation = CliOutput.safeParse(json)
-            if (!validation.success) {
-              const issueSummary = z.prettifyError(validation.error)
-              const outputKind =
-                json && typeof json === "object" && "output-kind" in json
-                  ? (json as { "output-kind": unknown })["output-kind"]
-                  : undefined
-              lastSchemaValidationFailure = { issueSummary, outputKind }
-              Logger.error("TMC-langs response didn't match expected type:", issueSummary)
-              Logger.debug(json)
-              continue
-            }
-            const output = validation.data
-
-            switch (output["output-kind"]) {
-              case "output-data":
-                theResult = output
-                break
-              case "status-update":
-                onStdout?.(output)
-                break
-              case "notification":
-                break
-              default:
-                Logger.error("TMC-langs returned invalid `output-kind`:", output["output-kind"])
-                Logger.debug(output)
-            }
-          } catch (e) {
-            Logger.warn(`Failed to parse TMC-langs output`, e)
-            Logger.debug(part)
+        const decoded = decodeLangsStdout(stdoutBuffer, chunk.toString())
+        stdoutBuffer = decoded.carry
+        for (const event of decoded.events) {
+          switch (event.kind) {
+            case "output-data":
+              theResult = event.output
+              break
+            case "status-update":
+              onStdout?.(event.update)
+              break
+            case "notification":
+              break
+            case "schema-mismatch":
+              lastSchemaFailure = event.failure
+              Logger.error(
+                "TMC-langs response didn't match expected type:",
+                event.failure.issueSummary,
+              )
+              Logger.debug("Rejected output shape:", JSON.stringify(event.failure.shape))
+              break
+            case "unparseable":
+              Logger.warn(
+                `Discarded a ${event.lineLength}-character TMC-langs output line that is not JSON`,
+              )
+              break
           }
         }
       })
@@ -1809,19 +1794,18 @@ ${error.message}`
       }
 
       if (stdoutBuffer !== "") {
-        Logger.warn("Failed to parse some TMC Langs output")
-        Logger.debug(stdoutBuffer)
+        Logger.warn(`Discarded ${stdoutBuffer.length} characters of unterminated TMC-langs output`)
       }
 
       if (theResult) {
         return Ok(theResult)
       }
-      if (lastSchemaValidationFailure) {
+      if (lastSchemaFailure) {
         return Err(
           new LangsResponseSchemaError(
             `Langs process ended without result data because its output didn't match the ` +
-              `expected schema (output-kind: ${JSON.stringify(lastSchemaValidationFailure.outputKind)}): ` +
-              `${lastSchemaValidationFailure.issueSummary}`,
+              `expected schema (output-kind: ${JSON.stringify(lastSchemaFailure.outputKind)}): ` +
+              `${lastSchemaFailure.issueSummary}`,
           ),
         )
       }
@@ -1840,6 +1824,128 @@ ${error.message}`
     const res = { interrupt, result, getStderr: (): string => stderr.join("\n") }
     return Ok(res)
   }
+}
+
+/** A stdout line the CLI's output contract rejected, described without its values. */
+export interface LangsSchemaFailure {
+  /** `z.prettifyError`'s paths and messages. */
+  issueSummary: string
+  /** The line's `output-kind`, when it is a string. */
+  outputKind: string | undefined
+  /** The line's JSON with every value replaced by its type. */
+  shape: unknown
+}
+
+/** One decoded line of the CLI's newline-delimited stdout. */
+export type LangsStdoutEvent =
+  | { kind: "output-data"; output: OutputData }
+  | { kind: "status-update"; update: StatusUpdateData }
+  | { kind: "notification" }
+  | { kind: "schema-mismatch"; failure: LangsSchemaFailure }
+  | { kind: "unparseable"; lineLength: number }
+
+export interface LangsStdoutDecoding {
+  /** The chunk's unterminated tail; pass it back as `carry` with the next chunk. */
+  carry: string
+  events: LangsStdoutEvent[]
+}
+
+/**
+ * Splits one chunk of the CLI's stdout into whole lines and classifies each one.
+ *
+ * Pure, and deliberately silent. The `logged-in` envelope carries a live OAuth token and
+ * the output channel is what users are asked to paste into bug reports, so a rejected line
+ * is described by shape alone and callers have no payload to log.
+ *
+ * @param carry The previous chunk's unterminated tail; `""` at the start of the stream.
+ */
+export function decodeLangsStdout(carry: string, chunk: string): LangsStdoutDecoding {
+  const events: LangsStdoutEvent[] = []
+  const lines = (carry + chunk).split("\n")
+  const tail = lines.pop() ?? ""
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      continue
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(trimmed)
+    } catch {
+      // Node's parse errors quote the input, so only the size of the rejected line escapes.
+      events.push({ kind: "unparseable", lineLength: trimmed.length })
+      continue
+    }
+    const validation = CliOutput.safeParse(parsed)
+    if (!validation.success) {
+      const outputKind =
+        parsed !== null && typeof parsed === "object" && "output-kind" in parsed
+          ? (parsed as Record<string, unknown>)["output-kind"]
+          : undefined
+      events.push({
+        kind: "schema-mismatch",
+        failure: {
+          issueSummary: z.prettifyError(validation.error),
+          outputKind: typeof outputKind === "string" ? outputKind : undefined,
+          shape: redactedShape(parsed),
+        },
+      })
+      continue
+    }
+    const output = validation.data
+    switch (output["output-kind"]) {
+      case "output-data":
+        events.push({ kind: "output-data", output })
+        break
+      case "status-update":
+        events.push({ kind: "status-update", update: output })
+        break
+      case "notification":
+        events.push({ kind: "notification" })
+        break
+    }
+  }
+  return { carry: tail, events }
+}
+
+// These name a variant of the output contract rather than anything the user typed or the
+// backend issued, so they survive redaction; without them a drift report cannot say which
+// variant drifted.
+const CONTRACT_DISCRIMINATOR_KEYS = new Set([
+  "output-kind",
+  "output-data-kind",
+  "update-data-kind",
+  "client-update-data-kind",
+  "result",
+  "status",
+])
+
+const MAX_SHAPE_DEPTH = 6
+
+/** Replaces every value in `value` with its JSON type, so key names can be logged safely. */
+function redactedShape(value: unknown, depth = 0): unknown {
+  if (value === null) {
+    return "null"
+  }
+  if (Array.isArray(value)) {
+    return value.length === 0 || depth >= MAX_SHAPE_DEPTH
+      ? []
+      : [redactedShape(value[0], depth + 1)]
+  }
+  if (typeof value !== "object") {
+    return typeof value
+  }
+  if (depth >= MAX_SHAPE_DEPTH) {
+    return "object"
+  }
+  const shape: Record<string, unknown> = {}
+  for (const [key, member] of Object.entries(value)) {
+    shape[key] =
+      CONTRACT_DISCRIMINATOR_KEYS.has(key) && typeof member === "string"
+        ? member
+        : redactedShape(member, depth + 1)
+  }
+  return shape
 }
 
 /**
