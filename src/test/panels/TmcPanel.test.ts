@@ -2,6 +2,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type Langs from "../../api/langs"
+import { ConnectionError, ForbiddenError } from "../../errors"
 import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import type { WebviewHandlers } from "../../panels/TmcPanel"
 import { randomPanelId, registerWebviewHandlers, TmcPanel } from "../../panels/TmcPanel"
@@ -762,7 +763,9 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
   })
 
   test("corrects the view with one message when the backend is unreachable", async () => {
-    const actionContext = contextProbing(vi.fn().mockResolvedValue(Err(new Error("offline"))))
+    const actionContext = contextProbing(
+      vi.fn().mockResolvedValue(Err(new ConnectionError("down"))),
+    )
     const { panel, listener } = await mountSidePanel(actionContext)
 
     await listener({ type: "requestCourseDetailsData", sourcePanel })
@@ -776,5 +779,22 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
     const groups = posted.filter((m) => m.type === "setCourseGroups")
     expect(groups).toHaveLength(2)
     expect(groups[1]).toMatchObject({ offlineMode: true })
+  })
+
+  test("leaves the deadlines standing when the backend answers with a failure", async () => {
+    // Only an unreachable backend makes the stored deadlines untrustworthy; a reachable
+    // one refusing the request says nothing about them.
+    const actionContext = contextProbing(vi.fn().mockResolvedValue(Err(new ForbiddenError("no"))))
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "requestCourseDetailsData", sourcePanel })
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+
+    const posted = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([m]) => m as { type: string })
+    expect(posted.filter((m) => m.type === "setCourseGroups")).toHaveLength(1)
   })
 })

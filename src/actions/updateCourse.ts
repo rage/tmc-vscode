@@ -1,7 +1,14 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
+import * as vscode from "vscode"
 
-import { ConnectionError, ForbiddenError, InitializationError } from "../errors"
+import type Dialog from "../api/dialog"
+import {
+  ConnectionError,
+  ForbiddenError,
+  InitializationError,
+  InsufficientScopeError,
+} from "../errors"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CombinedCourseData, CourseInstance, TmcExerciseSlide } from "../shared/langsSchema"
 import type { CourseIdentifier, Enum, ExerciseIdentifier } from "../shared/shared"
@@ -40,6 +47,27 @@ const postCourseStatusMessage = (
   )
 }
 
+let insufficientScopeReported = false
+
+/**
+ * Tells the user their session has to be renewed, and stays quiet until one is.
+ *
+ * `updateCourse` runs once per course and from a half-hourly background poll, so an
+ * unguarded dialog would repeat for every course on every refresh.
+ */
+function reportInsufficientScope(dialog: Dialog, error: InsufficientScopeError): void {
+  if (insufficientScopeReported) {
+    return
+  }
+  insufficientScopeReported = true
+  dialog.errorNotification(error.message, error, [
+    "Log in",
+    (): void => {
+      vscode.commands.executeCommand("tmc.showMoocLogin")
+    },
+  ])
+}
+
 /**
  * Updates the given course by re-fetching all data from the server. Handles authorization and
  * connection errors as successful operations where the data was not actually updated.
@@ -51,7 +79,7 @@ export async function updateCourse(
   actionContext: ActionContext,
   courseId: CourseIdentifier,
 ): Promise<Result<boolean, Error>> {
-  const { exerciseDecorationProvider, langs, userData, workspaceManager } = actionContext
+  const { dialog, exerciseDecorationProvider, langs, userData, workspaceManager } = actionContext
   if (!(langs.ok && userData.ok && workspaceManager.ok && exerciseDecorationProvider.ok)) {
     return new Err(new InitializationError("Extension was not initialized properly"))
   }
@@ -77,6 +105,12 @@ export async function updateCourse(
         .then((res) => res.map((x) => makeMoocKind(x))),
   )
   if (updateResult.err) {
+    if (updateResult.val instanceof InsufficientScopeError) {
+      // Says nothing about the course, so nothing stored about it is touched.
+      Logger.warn("The current session does not grant access to programming exercises.")
+      reportInsufficientScope(dialog, updateResult.val)
+      return Ok(false)
+    }
     if (updateResult.val instanceof ForbiddenError) {
       const courseIdent = LocalCourseData.getCourseId(courseData)
       if (!courseData.data.disabled) {
@@ -127,6 +161,9 @@ export async function updateCourse(
       )
     },
     async (mooc) => {
+      // The fetch the session was refused before has now gone through, so the next
+      // lapse is worth telling the user about again.
+      insufficientScopeReported = false
       const [moocCourse, slides] = mooc
       // The update result and the stored course are looked up from the same
       // `courseId`, so this holds by construction; assert it to narrow the stored
@@ -159,8 +196,12 @@ export async function updateCourse(
         availablePoints,
         awardedPoints,
         // Refresh the metadata the backend can change, mirroring what the tmc arm
-        // does. `disabled`, `materialUrl` and `perhapsExamMode` have no mooc
-        // equivalent (see `zMoocCourse`), so they are genuinely nothing to do here.
+        // does. `materialUrl` and `perhapsExamMode` have no mooc equivalent (see
+        // `zMoocCourse`), so there is genuinely nothing to do for them here.
+        //
+        // mooc has no disabled state either, so this clears rather than refreshes:
+        // a flag left in stored data would otherwise never be lifted.
+        disabled: false,
         //
         // `name` (the slug) is deliberately NOT refreshed: it is the workspace
         // folder name and the key for closed-exercise settings and exercise

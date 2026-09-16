@@ -7,7 +7,7 @@ import { z } from "zod"
 
 import type { ActionContext } from "../actions/types"
 import type Dialog from "../api/dialog"
-import { InitializationError } from "../errors"
+import { ConnectionError, InitializationError } from "../errors"
 import type {
   CourseIdentifier,
   ExerciseIdentifier,
@@ -433,9 +433,11 @@ export class TmcPanel {
 
             // Everything above comes from stored data, so the panel is rendered by now.
             // The backend is reached only to find out whether the deadlines just posted
-            // can be trusted; the groups are re-posted without them if not.
+            // can be trusted; the groups are re-posted without them if not. Only an
+            // unreachable backend means that -- any other failure leaves the stored
+            // deadlines as good as they were.
             langs.val.getCourseDetails(message.sourcePanel.courseId).then((apiCourse) => {
-              if (apiCourse.err) {
+              if (apiCourse.err && apiCourse.val instanceof ConnectionError) {
                 postMessageToWebview(webview, {
                   type: "setCourseGroups",
                   target: message.sourcePanel,
