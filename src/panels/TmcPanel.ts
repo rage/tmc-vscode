@@ -17,8 +17,10 @@ import {
   updateCourse,
 } from "../actions"
 import type { ActionContext } from "../actions/types"
+import type Dialog from "../api/dialog"
 import { ExerciseStatus } from "../api/workspaceManager"
 import * as commands from "../commands"
+import { InitializationError } from "../errors"
 import type { ExerciseGroup, ExtensionToWebview, Panel, WebviewToExtension } from "../shared/shared"
 import {
   ExerciseIdentifier,
@@ -322,7 +324,7 @@ export class TmcPanel {
           case "requestCourseDetailsData": {
             const { langs, userData, workspaceManager } = actionContext
             if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-              Logger.error("Extension was not initialized properly")
+              reportNotInitialized(actionContext.dialog)
               return
             }
             const courseResult = userData.val.getCourse(message.sourcePanel.courseId)
@@ -446,10 +448,6 @@ export class TmcPanel {
           }
           case "requestMyCoursesData": {
             const { userData, workspaceManager, resources } = actionContext
-            if (userData.err) {
-              Logger.error("Extension was not initialized properly")
-              return
-            }
             if (
               !(
                 userData.ok &&
@@ -458,7 +456,7 @@ export class TmcPanel {
                 resources.val.projectsDirectory
               )
             ) {
-              Logger.error("Extension was not initialized properly")
+              reportNotInitialized(actionContext.dialog)
               return
             }
 
@@ -484,7 +482,7 @@ export class TmcPanel {
           case "requestWelcomeData": {
             const { resources } = actionContext
             if (!resources.ok) {
-              Logger.error("Extension was not initialized properly")
+              reportNotInitialized(actionContext.dialog)
               return
             }
 
@@ -508,7 +506,7 @@ export class TmcPanel {
           case "removeCourse": {
             const { userData } = actionContext
             if (!userData.ok) {
-              Logger.error("Extension was not initialized properly")
+              reportNotInitialized(actionContext.dialog)
               return
             }
 
@@ -571,7 +569,7 @@ export class TmcPanel {
           case "clearNewExercises": {
             const { userData } = actionContext
             if (!userData.ok) {
-              Logger.error("Extension was not initialized properly")
+              reportNotInitialized(actionContext.dialog)
               return
             }
 
@@ -695,7 +693,7 @@ export class TmcPanel {
           case "moocLogin": {
             const { langs } = actionContext
             if (!langs.ok) {
-              Logger.error("Extension was not initialized properly")
+              reportNotInitialized(actionContext.dialog)
               return
             }
             const moocLoginPanel = message.sourcePanel
@@ -778,6 +776,24 @@ export class TmcPanel {
       this._disposables,
     )
   }
+}
+
+/**
+ * Answers a webview action the extension cannot serve because initialization
+ * failed. The panels stay interactive in that state, so a click has to say why
+ * nothing happened and point at the panel that explains the failure.
+ */
+function reportNotInitialized(dialog: Dialog): void {
+  dialog.errorNotification(
+    "The extension did not initialize properly, so this action is unavailable.",
+    new InitializationError("Extension was not initialized properly"),
+    [
+      "Show help",
+      (): void => {
+        vscode.commands.executeCommand("tmc.viewInitializationErrorHelp")
+      },
+    ],
+  )
 }
 
 // helper to make an exhaustive switch statement

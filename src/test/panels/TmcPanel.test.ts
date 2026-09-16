@@ -136,6 +136,36 @@ async function mountSidePanel(actionContext: ReturnType<typeof createMockActionC
   return { panel, listener }
 }
 
+suite("TmcPanel initialization guards", () => {
+  test("a click that cannot be served is reported, with a route to the help panel", async () => {
+    const actionContext = createMockActionContext()
+    actionContext.userData = Err(new Error("no user data"))
+    const { listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "removeCourse", id: CourseIdentifier.from(1) })
+
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      "The extension did not initialize properly, so this action is unavailable.",
+      expect.any(Error),
+      ["Show help", expect.any(Function)],
+    )
+
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    try {
+      const [, , button] = vi.mocked(actionContext.dialog.errorNotification).mock.calls[0] as [
+        string,
+        Error,
+        [string, () => void],
+      ]
+      button[1]()
+
+      expect(executeCommand).toHaveBeenCalledWith("tmc.viewInitializationErrorHelp")
+    } finally {
+      executeCommand.mockRestore()
+    }
+  })
+})
+
 suite("TmcPanel addNewCourse handling", () => {
   test("runs the add-course command rather than opening a selection webview", async () => {
     const actionContext = createMockActionContext()
