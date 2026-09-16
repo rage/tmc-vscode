@@ -6,7 +6,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch --mode development",
-    "check": "svelte-check --tsconfig ./tsconfig.json --tsgo",
+    "check": "node -e \"require('node:fs').rmSync('.svelte-check',{recursive:true,force:true})\" && svelte-check --tsconfig ./tsconfig.json --tsgo",
     "check:tsc": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {

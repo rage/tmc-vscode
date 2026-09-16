@@ -28,7 +28,10 @@ jobs:
       - name: Format check (oxfmt)
         run: pnpm run format:check
 
-      - name: Typecheck (tsgo)
+      # tsgo skips .svelte entirely, so the webview templates and their script
+      # blocks -- the code consuming the postMessage schemas -- are only typed
+      # by the svelte-check pass this script chains on the end.
+      - name: Typecheck (tsgo, svelte-check)
         run: pnpm run typecheck
 
       - name: Langs schema drift (generate:langs-schema)

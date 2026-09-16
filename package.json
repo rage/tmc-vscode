@@ -27,6 +27,7 @@
   "scripts": {
     "backend:start": "pnpm --filter tmc-vscode-mock-backend run start",
     "build": "node esbuild.mjs",
+    "check:svelte": "pnpm --dir webview-ui run check",
     "ci:all": "pnpm install --frozen-lockfile",
     "clean-local-rust-config": "cd backend && cd cli && rm -rf tmc-vscode_plugin",
     "format": "oxfmt",
@@ -48,7 +49,7 @@
     "test:integration": "node ./bin/runIntegrationTests.js",
     "test:playwright": "pnpm run playwright-test",
     "ci:test": "pnpm run test && pnpm run test:integration",
-    "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.test.json && tsgo --noEmit -p tsconfig.integration.json && tsgo --noEmit -p webview-ui/tsconfig.json && tsgo --noEmit -p backend/tsconfig.json && tsgo --noEmit -p playwright/tsconfig.json && tsgo --noEmit -p tsconfig.node.json",
+    "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.test.json && tsgo --noEmit -p tsconfig.integration.json && tsgo --noEmit -p webview-ui/tsconfig.json && tsgo --noEmit -p backend/tsconfig.json && tsgo --noEmit -p playwright/tsconfig.json && tsgo --noEmit -p tsconfig.node.json && pnpm run check:svelte",
     "typecheck:tsc": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.integration.json && tsc --noEmit -p webview-ui/tsconfig.json && tsc --noEmit -p backend/tsconfig.json && tsc --noEmit -p playwright/tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "update-submodules": "git submodule foreach git pull origin master",
     "vendor:langs-openapi": "bash bin/updateLangsOpenapi.sh",
