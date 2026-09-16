@@ -306,22 +306,11 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
   })
 
   test("a submission made from no files downloads as an empty list, not a 404", async function () {
-    // A submit naming no files at all is a json answer, and the host answers its
-    // download with `{"data_files":[]}` rather than the 404 the archive-shaped
-    // contract gave. A tmc submission always names its archive, so this is only
-    // reachable here, not through the CLI.
-    const exercise = passingExercise
-    const res = await fetch(api(`/exercises/${exercise.slide.exercise_id}/submit`), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        exercise_slide_id: exercise.slide.slide_id,
-        exercise_task_id: exercise.slide.tasks[0]!.task_id,
-      }),
-    })
-    expect(res.status).toBe(200)
-    const { slide_submission_id } = (await res.json()) as { slide_submission_id: string }
-    const download = await fetch(api(`/submissions/${slide_submission_id}/download`))
+    // The host answers such a download with `{"data_files":[]}` rather than the 404
+    // the archive-shaped contract gave. Only an exercise type with no files at all
+    // submits this way, so the seed is the only route to one.
+    const seeded = mock.seedFilelessSubmission(passingExercise.slide.exercise_id)
+    const download = await fetch(api(`/submissions/${seeded!.slideSubmissionId}/download`))
     expect(download.status).toBe(200)
     expect(await download.json()).toEqual({ data_files: [] })
   })

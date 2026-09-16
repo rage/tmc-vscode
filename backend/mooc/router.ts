@@ -654,7 +654,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       // Checked here, after the slide/task ownership checks and before the per-upload
       // ones, in the host's own order (domain/exercises.rs: verify_named_uploads).
       const namedFiles = body.data_files ?? []
-      if ((body.answer_kind ?? "json") === "json") {
+      const isJsonAnswer = (body.answer_kind ?? "json") === "json"
+      if (isJsonAnswer) {
         if (namedFiles.length > 0) {
           return apiError(
             "validation_error",
@@ -663,6 +664,19 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         }
       } else if (namedFiles.length === 0) {
         return apiError("validation_error", "A file answer must name at least one uploaded file.")
+      }
+      // The mock runs no exercise service, so a plugin's own answer validation is
+      // a blind spot -- deliberately, except here. A tmc exercise's answer IS its
+      // archive, so the host takes a fileless one and the tmc service fails it at
+      // grading; the mock refuses it at submit instead. That keeps
+      // seedFilelessSubmission the only route to a submission with no files, which
+      // is what its doc comment claims.
+      const task = slide.tasks.find((candidate) => candidate.task_id === body.exercise_task_id)
+      if (isJsonAnswer && task?.exercise_service_slug === "tmc") {
+        return apiError(
+          "validation_error",
+          "The tmc exercise service cannot grade an answer that names no files.",
+        )
       }
       // Deduplicating instead would record one file twice and list it twice in a
       // download, hiding the client defect (host: verify_uploads_are_distinct).

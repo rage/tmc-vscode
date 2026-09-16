@@ -474,14 +474,15 @@ describe("mooc mock conformance", () => {
     assert.equal(grading.score_given, 0.5)
   })
 
-  test("submit naming no answer at all is a json answer, and is accepted", async () => {
+  test("submit naming no answer at all is a json answer, and a tmc exercise refuses it", async () => {
     // All three answer members are optional and an absent `answer_kind` means json,
-    // so the slide and task alone are a complete request.
+    // so the slide and task alone are a complete request -- which a tmc exercise,
+    // whose answer is its archive, has nothing to grade.
     const res = await postJsonSubmit(passingExercise)
-    assert.equal(res.status, 200)
-    const body = (await res.json()) as { task_submission_id: string; slide_submission_id: string }
-    assert.match(body.task_submission_id, /^[0-9a-f-]{36}$/)
-    assert.notEqual(body.task_submission_id, body.slide_submission_id)
+    assert.equal(res.status, 422)
+    const body = (await res.json()) as { message_key: string; message: string }
+    assert.equal(body.message_key, "validation_error")
+    assert.match(body.message, /cannot grade an answer that names no files/)
   })
 
   test("submit of a json answer that names files is rejected", async () => {
@@ -769,26 +770,9 @@ describe("mooc mock conformance", () => {
     assert.equal(gradedList[0]!.score_given, 0)
   })
 
-  test("download of a submission made from no files is an empty list, not a 404", async () => {
-    const res = await postJsonSubmit(passingExercise)
-    assert.equal(res.status, 200)
-    const { slide_submission_id } = (await res.json()) as { slide_submission_id: string }
-    const download = await authFetch(api(`/submissions/${slide_submission_id}/download`))
-    assert.equal(download.status, 200)
-    assert.deepEqual(await download.json(), { data_files: [] })
-
-    // It is still listed, so a client picking an old submission to restore can
-    // reach it -- which is why the empty download has to be a first-class
-    // outcome rather than an error.
-    const list = (await (
-      await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submissions`))
-    ).json()) as { id: string }[]
-    assert.ok(list.some((item) => item.id === slide_submission_id))
-  })
-
   test("the seeding route produces a listed submission whose download is empty", async () => {
     // The out-of-process route the integration suite uses to reach the
-    // no-downloadable-files outcome, which the CLI cannot produce itself.
+    // no-downloadable-files outcome, which no submit can produce.
     const res = await fetch(`${base}/mooc-mock/seed-fileless-submission`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -806,6 +790,9 @@ describe("mooc mock conformance", () => {
     assert.equal(download.status, 200)
     assert.deepEqual(await download.json(), { data_files: [] })
 
+    // It is still listed, so a client picking an old submission to restore can
+    // reach it -- which is why the empty download has to be a first-class
+    // outcome rather than an error.
     const list = (await (
       await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submissions`))
     ).json()) as { id: string }[]
