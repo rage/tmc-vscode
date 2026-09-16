@@ -51,6 +51,8 @@ already satisfies the `LoggedIn` context key.
 Because course slugs and titles are only unique within one backend, anything
 listing courses from both must name the backend beside them — `backendName` in
 `shared/lib.ts`, passed as `Dialog.selectItem`'s optional third tuple element.
+That function is the single source of those names: "TMC Server" and
+"courses.mooc.fi" are the only two spellings, and nothing else writes either.
 
 ### One login
 
@@ -133,6 +135,19 @@ build. Because the mooc types originate in `secret-project-331`
 (`exercise-services-api`), a backend type change has to travel all three repos:
 backend crate → CLI → this file.
 
+Vendoring also writes a provenance stamp beside the artifact — the source rev
+and the artifact's sha256 — and CI checks it:
+
+| artifact                                                       | stamp                                                       | gate                                             |
+| -------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------ |
+| `shared/bindings.schema.json`                                  | `shared/bindings.schema.source.json`                        | `pnpm run vendor:langs-schema -- --check-stamp`  |
+| `backend/mooc/exercise-services-client.openapi.generated.json` | `backend/mooc/exercise-services-client.openapi.source.json` | `pnpm run vendor:langs-openapi -- --check-stamp` |
+
+Both gates read only this repo, so they run in CI, which has no sibling
+checkout to re-vendor from. The consequence is the rule: never `cp` an artifact
+into place. A hand-copy leaves the stamp naming the previous revision and fails
+the gate; run the vendoring script, which rewrites both.
+
 ## Mock backends
 
 `backend/` is one Express app on port 4001 (`pnpm run backend:start`) serving
@@ -162,6 +177,36 @@ a bearer token to trusted domains, so those tiers also set
 `TMC_LANGS_MOOC_TRUST_LOCALHOST=1`; without it every authenticated mooc call
 against localhost 401s.
 
+## What green CI proves
+
+`.github/workflows/test.yml` runs six jobs on every push and pull request:
+
+| job                     | proves                                                                                                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code style              | lint, format, typecheck (including `.svelte` via svelte-check), the generated zod schemas match the vendored contract, and neither vendored artifact was hand-edited |
+| Unit tests              | the vitest unit + webview-component tiers on Linux, macOS and Windows                                                                                                |
+| Mooc mock backend tests | `backend/mooc` still matches the vendored OpenAPI spec, above a pass-count floor                                                                                     |
+| Gates can fail          | each of the gates above still fails when its input is broken (`bin/verifyGatesCanFail.sh`)                                                                           |
+| Integration tests       | the extension drives the real `tmc-langs-cli` against the mock backend inside a VS Code extension host, on all three platforms, above a test-count floor             |
+| Playwright tests        | the webview flows end to end against that same mock                                                                                                                  |
+
+What it does **not** prove:
+
+- **The mooc paths.** Both out-of-process tiers download the `tmc-langs-cli`
+  release `config.js` pins, currently `0.39.6`, which predates the mooc client
+  contract. Every mooc case is gated on the CLI reporting at least `0.40.0`
+  (`src/test-integration/tmc_langs_cli.spec.ts`, `playwright/migration-gate.ts`)
+  and skips in CI, and `src/init/verifyCliSchema.ts`'s schema self-check is
+  gated the same way. Their only evidence is a local run against a sibling
+  tmc-langs build — see below. Delete the three gates once the pin moves to a
+  released 0.40.0, not before: against the old binary those cases fail.
+- **That the vendored OpenAPI spec matches its recorded source rev.** The
+  `Vendored OpenAPI spec source` step is `continue-on-error` until
+  secret-project-331 PR #1769 lands, because the rev it fetches lives only on
+  that unmerged branch.
+- **A production-mode build.** The `.vsix` is packaged only by the
+  master-triggered `build-and-upload.yml`.
+
 ## Using a locally-built tmc-langs CLI
 
 By default the dev/test flow downloads the released `tmc-langs-cli` pinned in
@@ -182,8 +227,8 @@ those skip gracefully. `backend/cli` is gitignored — the local build is never
 committed.
 
 - Integration: `pnpm run test:integration`
-- Playwright (needs the mock backend running, `pnpm run backend:start`):
-  `pnpm run playwright-test:local` (builds with the `mockBackend` profile)
+- Playwright: `pnpm run playwright-test:local` (builds with the `mockBackend`
+  profile and starts the mock backend itself, or reuses one already on 4001)
 
 To restore the released CLI: `rm -rf backend/cli && (cd backend && pnpm run setup)`.
 
