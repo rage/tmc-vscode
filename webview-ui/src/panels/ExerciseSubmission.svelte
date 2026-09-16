@@ -17,6 +17,8 @@
 
   let { panel }: Props = $props()
 
+  const progressMessageLimit = 20
+
   // common exercise fields, independent of the backend
   const exercise = $derived(unwrap(panel.exercise))
   const isMooc = $derived(panel.exercise.kind === "mooc")
@@ -54,8 +56,14 @@
       }
       case "submissionStatusUpdate": {
         progressPercent = message.progressPercent
-        if (message.message !== undefined) {
+        // Mooc grading polls every 2 s for up to 3 minutes with an unchanged status text,
+        // so only a changed message starts a new line; the cap bounds any status that
+        // alternates instead of repeating.
+        if (message.message !== undefined && message.message !== progressMessages.at(-1)) {
           progressMessages.push(message.message)
+          if (progressMessages.length > progressMessageLimit) {
+            progressMessages.shift()
+          }
         }
         break
       }
