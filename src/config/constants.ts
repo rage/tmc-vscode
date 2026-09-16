@@ -11,6 +11,7 @@ declare const __TMC_LANGS_CONFIG_DIR__: string | null
 declare const __TMC_LANGS_DL_URL__: string
 declare const __TMC_LANGS_VERSION__: string
 declare const __MOOC_BACKEND_URL__: string
+declare const __EXTENSION_VERSION__: string
 
 export const DEBUG_MODE = __DEBUG_MODE__
 export const TMC_BACKEND_URL = __TMC_BACKEND_URL__
@@ -18,6 +19,9 @@ export const TMC_LANGS_CONFIG_DIR = __TMC_LANGS_CONFIG_DIR__ || undefined
 export const TMC_LANGS_DL_URL = __TMC_LANGS_DL_URL__
 export const TMC_LANGS_VERSION = __TMC_LANGS_VERSION__
 export const MOOC_BACKEND_URL = __MOOC_BACKEND_URL__
+
+/** This build's `package.json` version, inlined so it needs no extension-registry lookup. */
+export const EXTENSION_VERSION = __EXTENSION_VERSION__
 
 export const CLIENT_NAME = "vscode_plugin"
 export const EXTENSION_ID = "moocfi.test-my-code"

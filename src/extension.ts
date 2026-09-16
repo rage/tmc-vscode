@@ -18,6 +18,7 @@ import {
   DEBUG_MODE,
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_ID,
+  EXTENSION_VERSION,
   TMC_LANGS_CONFIG_DIR,
   TMC_LANGS_DL_URL,
   TMC_LANGS_VERSION,
@@ -88,7 +89,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 async function activateInner(context: vscode.ExtensionContext): Promise<void> {
-  const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version
   const storage = new Storage(context)
   const settings = new Settings()
   context.subscriptions.push(settings)
@@ -100,7 +100,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   // answerable in a bug report.
   Logger.banner(`Starting ${EXTENSION_ID} in "${DEBUG_MODE ? "development" : "production"}" mode.`)
   Logger.banner(`${vscode.env.appName} version: ${vscode.version}`)
-  Logger.banner(`${EXTENSION_ID} version: ${extensionVersion}`)
+  Logger.banner(`${EXTENSION_ID} version: ${EXTENSION_VERSION}`)
   Logger.banner(`Currently open workspace: ${vscode.workspace.name}`)
 
   // Gates the developer-only palette entries (e.g. "Show Debug View").
@@ -123,7 +123,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   } else {
     // fire-and-forget: verify the CLI's output contract matches this build's schema
     void init.verifyCliSchema(cliPathResult.val, context.extensionPath)
-    const langsInstance = new Langs(cliPathResult.val, CLIENT_NAME, extensionVersion, {
+    const langsInstance = new Langs(cliPathResult.val, CLIENT_NAME, EXTENSION_VERSION, {
       cliConfigDir: TMC_LANGS_CONFIG_DIR,
     })
     // A submit or paste would otherwise keep polling the backend past shutdown.
@@ -203,7 +203,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const resources = await init.resourceInitialization(
     context,
     storage,
-    extensionVersion,
+    EXTENSION_VERSION,
     tmcDataPath,
     workspaceFileFolder,
   )
