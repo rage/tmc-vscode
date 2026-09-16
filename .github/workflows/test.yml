@@ -205,6 +205,9 @@ jobs:
       - name: Setup Node & pnpm
         uses: ./.github/actions/setup-node-pnpm
 
+      # `backend/cli` is what the extension downloads the tmc-langs binary from,
+      # so the mock still needs its setup; starting it is playwright.config.ts's
+      # `webServer`, and building the extension is `playwright-test` itself.
       - name: Setup
         run: |
           pnpm install --frozen-lockfile
@@ -212,10 +215,6 @@ jobs:
           pnpm run setup
           chmod -R +x cli
           cd ..
-          pnpm run pretest:integration
-
-      - name: Start backend
-        run: pnpm run backend:start &
 
       - name: Playwright tests
         run: pnpm run playwright-test
@@ -231,5 +230,5 @@ jobs:
         if: failure()
         with:
           name: playwright-html-report
-          path: ./playwright-report/index.html
+          path: ./playwright-report/
           if-no-files-found: ignore
