@@ -329,17 +329,24 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
-    if (this.activeCourse) {
-      Logger.info("TMC Workspace open, verifying workspace settings integrity.")
-      const hideMetaFiles = this.getWorkspaceSettings("testMyCode").get<boolean>(
-        "hideMetaFiles",
-        true,
-      )
-      await this.excludeMetaFilesInWorkspace(hideMetaFiles)
-      await this._ensureSettingsAreStoredInMultiRootWorkspace()
-      await this._verifyWatcherPatternExclusion()
-      await this._forceTMCWorkspaceSettings()
+    if (!this.activeCourse) {
+      return
     }
+    Logger.info("TMC Workspace open, verifying workspace settings integrity.")
+    const hideMetaFiles = this.getWorkspaceSettings("testMyCode").get<boolean>(
+      "hideMetaFiles",
+      true,
+    )
+    await this._updateWorkspaceSettings({
+      "files.exclude": hideMetaFiles ? HIDE_META_FILES : SHOW_META_FILES,
+      ...this._settingsDeclaredByExtension(),
+      // Our watcher would otherwise delete an exercise folder's `.vscode`, and
+      // with it per-folder settings such as the exercise's Python interpreter.
+      "files.watcherExclude": WATCHER_EXCLUDE,
+      "explorer.decorations.colors": false,
+      "explorer.decorations.badges": true,
+      "problems.decorations.enabled": false,
+    })
   }
 
   /**
@@ -348,68 +355,81 @@ export default class WorkspaceManager implements vscode.Disposable {
    * @param value The new value
    */
   public async updateWorkspaceSetting(section: string, value: unknown): Promise<void> {
+    await this._updateWorkspaceSettings({ [section]: value })
+  }
+
+  /**
+   * Writes each section into the open course workspace's `.code-workspace`,
+   * skipping the ones already holding the value that would be written.
+   *
+   * Every write VS Code accepts is a configuration-change broadcast each installed
+   * extension has to process, and the integrity pass runs on every activation with
+   * a course workspace open — so the skip is what keeps that pass free once the
+   * file is correct.
+   *
+   * Object values are merged over what the workspace file already stores, so a
+   * setting the student added by hand to the same section survives.
+   */
+  private async _updateWorkspaceSettings(sections: Record<string, unknown>): Promise<void> {
     const activeCourseWorkspace = this._activeCourseWorkspace
-    if (activeCourseWorkspace) {
-      let newValue = value
-      if (value instanceof Object) {
-        // `inspect`, not `get`: the effective configuration would materialize
-        // every VS Code default into the workspace file as an explicit entry.
-        const workspaceValue =
-          this.getWorkspaceSettings().inspect<Record<string, unknown>>(section)?.workspaceValue
-        newValue = { ...workspaceValue, ...value }
+    if (!activeCourseWorkspace) {
+      return
+    }
+    const workspaceConfiguration = vscode.workspace.getConfiguration(
+      undefined,
+      vscode.Uri.file(
+        this._resources.getWorkspaceFilePath(
+          activeCourseWorkspace.slug,
+          activeCourseWorkspace.backend,
+        ),
+      ),
+    )
+    for (const [section, value] of Object.entries(sections)) {
+      // `inspect`, not `get`: the effective configuration would materialize
+      // every VS Code default into the workspace file as an explicit entry.
+      const stored = this.getWorkspaceSettings().inspect<unknown>(section)?.workspaceValue
+      const desired = value instanceof Object ? { ...(stored as object), ...value } : value
+      if (_.isEqual(stored, desired)) {
+        continue
       }
-      await vscode.workspace
-        .getConfiguration(
-          undefined,
-          vscode.Uri.file(
-            this._resources.getWorkspaceFilePath(
-              activeCourseWorkspace.slug,
-              activeCourseWorkspace.backend,
-            ),
-          ),
-        )
-        .update(section, newValue, vscode.ConfigurationTarget.Workspace)
+      await workspaceConfiguration.update(section, desired, vscode.ConfigurationTarget.Workspace)
     }
   }
 
   /**
-   * Ensures that settings defined in package.json are written to the multi-root
-   * workspace file. If the key can't be found in the .code-workspace file, it will write the
-   * setting defined in the User scope to the file. Last resort, default value.
+   * The extension's own boolean settings with the value the workspace file should
+   * hold: whatever it already stores, else the user-scope value, else the
+   * declared default.
    *
-   * Workaround for https://github.com/microsoft/vscode/issues/58038
+   * Workaround for https://github.com/microsoft/vscode/issues/58038, which is why
+   * these are copied into the workspace file at all.
    */
-  private async _ensureSettingsAreStoredInMultiRootWorkspace(): Promise<void> {
+  private _settingsDeclaredByExtension(): Record<string, unknown> {
     const extension = vscode.extensions.getExtension(EXTENSION_ID)
-    const extensionDefinedSettings: Record<string, ConfigurationProperties> =
+    const declared: Record<string, ConfigurationProperties> =
       extension?.packageJSON?.contributes?.configuration?.properties ?? {}
-    if (Object.keys(extensionDefinedSettings).length === 0) {
+    if (Object.keys(declared).length === 0) {
       // A fork or a renamed publisher: nothing to copy, and the rest of the
       // integrity pass still has work to do.
       Logger.warn(`No declared settings found for extension ${EXTENSION_ID}.`)
-      return
+      return {}
     }
-    for (const [key, value] of Object.entries(extensionDefinedSettings)) {
-      if (value.scope !== "application" && value.type === "boolean") {
-        const codeSettings = this.getWorkspaceSettings().inspect<boolean>(key)
-        if (codeSettings?.workspaceValue !== undefined) {
-          await this.updateWorkspaceSetting(key, codeSettings.workspaceValue)
-        } else if (codeSettings?.globalValue !== undefined) {
-          await this.updateWorkspaceSetting(key, codeSettings.globalValue)
-        } else {
-          await this.updateWorkspaceSetting(key, codeSettings?.defaultValue)
-        }
+
+    const desired: Record<string, unknown> = {}
+    for (const [key, property] of Object.entries(declared)) {
+      if (property.scope === "application" || property.type !== "boolean") {
+        continue
+      }
+      const stored = this.getWorkspaceSettings().inspect<boolean>(key)
+      if (stored?.workspaceValue !== undefined) {
+        desired[key] = stored.workspaceValue
+      } else if (stored?.globalValue !== undefined) {
+        desired[key] = stored.globalValue
+      } else {
+        desired[key] = stored?.defaultValue
       }
     }
-  }
-
-  /**
-   * Force some settings for TMC multi-root workspaces that we want.
-   */
-  private async _forceTMCWorkspaceSettings(): Promise<void> {
-    await this.updateWorkspaceSetting("explorer.decorations.colors", false)
-    await this.updateWorkspaceSetting("explorer.decorations.badges", true)
-    await this.updateWorkspaceSetting("problems.decorations.enabled", false)
+    return desired
   }
 
   /**
@@ -585,14 +605,5 @@ export default class WorkspaceManager implements vscode.Disposable {
         }
         break
     }
-  }
-
-  /**
-   * Makes sure that folders and its contents aren't deleted by our watcher.
-   * .vscode folder needs to be unwatched, otherwise adding settings to WorkspaceFolder level
-   * doesn't work. For example defining Python interpreter for the Exercise folder.
-   */
-  private async _verifyWatcherPatternExclusion(): Promise<void> {
-    await this.updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE })
   }
 }

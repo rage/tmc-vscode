@@ -15,6 +15,7 @@ import WorkspaceManager, {
 } from "../../api/workspaceManager"
 import {
   HIDE_META_FILES,
+  WATCHER_EXCLUDE,
   WORKSPACE_ROOT_FILE_NAME,
   WORKSPACE_ROOT_FILE_TEXT,
   WORKSPACE_ROOT_FOLDER_NAME,
@@ -106,17 +107,18 @@ function openWorkspaceFile(fileName: string): void {
 type UpdateSetting = (section: string, value: unknown, target?: unknown) => Promise<void>
 
 /**
- * A `WorkspaceConfiguration` that reports `workspaceValue` for every section and
- * records writes, so a test can assert what would land in the `.code-workspace`.
+ * A `WorkspaceConfiguration` backed by `stored`, the values the `.code-workspace`
+ * already holds per section, that records writes so a test can assert what would
+ * land in the file.
  */
 function configurationStub(
   update: Mock<UpdateSetting>,
-  workspaceValue?: Record<string, unknown>,
+  stored: (section: string) => unknown = () => undefined,
 ): vscode.WorkspaceConfiguration {
   return {
     get: <T>(_section: string, defaultValue?: T) => defaultValue,
     has: () => false,
-    inspect: () => (workspaceValue ? { key: "", workspaceValue } : undefined),
+    inspect: (section: string) => ({ key: section, workspaceValue: stored(section) }),
     update,
   } as unknown as vscode.WorkspaceConfiguration
 }
@@ -292,6 +294,13 @@ suite("WorkspaceManager class", function () {
   })
 
   suite("workspace settings integrity", function () {
+    const alreadyCorrect: Record<string, unknown> = {
+      "files.exclude": HIDE_META_FILES,
+      "files.watcherExclude": WATCHER_EXCLUDE,
+      "explorer.decorations.colors": false,
+      "explorer.decorations.badges": true,
+      "problems.decorations.enabled": false,
+    }
     let update: Mock<UpdateSetting>
 
     beforeEach(function () {
@@ -320,12 +329,44 @@ suite("WorkspaceManager class", function () {
 
     test("merges a section's stored workspace value, not the effective config", async function () {
       stubExtensions(() => undefined)
-      stubWorkspace("getConfiguration", () => configurationStub(update, { "**/legacy": true }))
+      stubWorkspace("getConfiguration", () =>
+        configurationStub(update, () => ({ "**/legacy": true })),
+      )
 
       await new WorkspaceManager(resources).verifyWorkspaceSettingsIntegrity()
 
       const written = update.mock.calls.find(([section]) => section === "files.exclude")?.[1]
       expect(written).toEqual({ "**/legacy": true, ...HIDE_META_FILES })
+    })
+
+    // Every write is a configuration-change broadcast every installed extension
+    // has to handle, and this pass runs on each activation.
+    test("writes nothing when the workspace file already holds the settings", async function () {
+      stubExtensions(() => undefined)
+      stubWorkspace("getConfiguration", () =>
+        configurationStub(update, (section) => alreadyCorrect[section]),
+      )
+
+      await new WorkspaceManager(resources).verifyWorkspaceSettingsIntegrity()
+
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    test("writes only the section that drifted", async function () {
+      stubExtensions(() => undefined)
+      stubWorkspace("getConfiguration", () =>
+        configurationStub(update, (section) =>
+          section === "problems.decorations.enabled" ? true : alreadyCorrect[section],
+        ),
+      )
+
+      await new WorkspaceManager(resources).verifyWorkspaceSettingsIntegrity()
+
+      expect(update).toHaveBeenCalledExactlyOnceWith(
+        "problems.decorations.enabled",
+        false,
+        vscode.ConfigurationTarget.Workspace,
+      )
     })
   })
 
