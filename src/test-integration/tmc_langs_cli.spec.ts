@@ -61,6 +61,12 @@ const cliSupportsMigrationContract = ((): boolean => {
 // skips (with the reason logged above) against the released CLI.
 const migrationTest = cliSupportsMigrationContract ? test : test.skip
 
+// Well-known tokens the mooc mock honours without a device-flow round trip, so a
+// suite can seed credentials_mooc.json directly (backend/mooc/oauth.ts).
+const SEEDED_ACCESS_TOKEN = "mock-seeded-access-token"
+const SEEDED_REFRESH_TOKEN = "mock-seeded-refresh-token"
+const INVALID_REFRESH_TOKEN = "mock-invalid-refresh-token"
+
 suite("tmc langs cli spec", function () {
   let server: cp.ChildProcess | undefined
 
@@ -71,15 +77,12 @@ suite("tmc langs cli spec", function () {
     // MOOC_BACKEND_URL define; _spawnLangsProcess reads it from the env and
     // passes it to the CLI child. Set before any Langs is constructed.
     process.env.TMC_LANGS_MOOC_ROOT_URL = "http://localhost:4001"
-    // The tmc code path authenticates with the mooc access token, and the CLI
-    // only attaches that bearer to a localhost backend when localhost is
-    // trusted. Without this the whole tier would run the tmc path
-    // unauthenticated once the pinned CLI carries that change.
+    // The CLI only attaches a bearer to a localhost backend when localhost is
+    // trusted, and both paths need one: the mooc mock rejects an anonymous
+    // request outright, and the tmc path authenticates with the same mooc
+    // access token.
     process.env.TMC_LANGS_MOOC_TRUST_LOCALHOST = "1"
-    // The mock defaults to requiring a bearer; opt this shared instance out
-    // since the suite below drives resource endpoints without one (port 4002
-    // covers the auth-required path).
-    server = await startServer({ MOOC_MOCK_REQUIRE_AUTH: "0" })
+    server = await startServer()
   })
 
   let testDir: string
@@ -590,6 +593,10 @@ suite("tmc langs cli spec", function () {
     setup(function () {
       configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME)
       writeCredentials(configDir)
+      // The mock requires a bearer, and the CLI only attaches one to localhost
+      // because suiteSetup trusts it -- so every case here goes through the same
+      // authenticated path a real session does.
+      writeMoocCredentials(configDir, { accessToken: SEEDED_ACCESS_TOKEN })
       const projectsDir = path.join(testDir, "tmcdata")
       deleteSync(projectsDir, { force: true })
       setupProjectsDir(configDir, projectsDir)
@@ -940,17 +947,14 @@ suite("tmc langs cli spec", function () {
     )
   })
 
-  // Second mock with bearer validation ON, reached via
-  // TMC_LANGS_MOOC_TRUST_LOCALHOST=1 (without it the CLI never attaches a
-  // bearer to localhost). Pins the 401/403 -> refresh-retry/delete path.
+  // A second mock instance, so the cases that deliberately hold a rejected or
+  // expiring credential cannot disturb the suite above, which shares one token
+  // across every case. Pins the 401/403 -> refresh-retry/delete path.
   suite("mooc backend (bearer auth)", function () {
     this.timeout(30000)
 
     const AUTH_PORT = 4002
     const AUTH_BASE = `http://localhost:${AUTH_PORT}`
-    // Tokens the auth-mode mock recognises (backend/mooc/oauth.ts).
-    const SEEDED_ACCESS_TOKEN = "mock-seeded-access-token"
-    const INVALID_REFRESH_TOKEN = "mock-invalid-refresh-token"
 
     let authServer: cp.ChildProcess | undefined
     let configDir: string
@@ -971,13 +975,16 @@ suite("tmc langs cli spec", function () {
       })
     })
 
-    setup(function () {
-      // Trust localhost so the CLI actually attaches a bearer; env vars are
-      // saved/restored so the other suites (auth-less 4001 mock) are unaffected.
+    setup(async function () {
+      // Point the CLI at the auth-mode mock; env vars are saved/restored so the
+      // other suites (which use the 4001 instance) are unaffected.
       savedRootUrl = process.env.TMC_LANGS_MOOC_ROOT_URL
       savedTrust = process.env.TMC_LANGS_MOOC_TRUST_LOCALHOST
       process.env.TMC_LANGS_MOOC_ROOT_URL = AUTH_BASE
       process.env.TMC_LANGS_MOOC_TRUST_LOCALHOST = "1"
+      // Cases below expire tokens on the server, so restore the seeded ones
+      // rather than leaving the suite order-dependent.
+      await fetch(`${AUTH_BASE}/mooc-mock/reset`, { method: "POST" })
       configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME)
       const projectsDir = path.join(testDir, "tmcdata")
       deleteSync(projectsDir, { force: true })
@@ -1026,9 +1033,9 @@ suite("tmc langs cli spec", function () {
           // Unrecognised token; the expired lifetime forces the CLI's proactive
           // refresh before the resource call.
           accessToken: "mock-access-expired",
-          // Any non-sentinel value; the mock's refresh grant mints a fresh
-          // valid access token from it.
-          refreshToken: "mock-refresh-valid",
+          // The seeded refresh token the mock always honours; an arbitrary one
+          // is rejected now that the grant only accepts tokens it issued.
+          refreshToken: SEEDED_REFRESH_TOKEN,
           expiresIn: 3600,
           obtainedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
         })
@@ -1051,6 +1058,48 @@ suite("tmc langs cli spec", function () {
         })
         expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
         // Refresh is rejected, so langs deletes the creds and proceeds unauthenticated.
+        const res = await tmc.getEnrolledMoocCourseInstances()
+        expect(res.err).to.be.true
+        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+      },
+    )
+
+    // Revokes the token server-side while the stored credentials still look
+    // valid, which is the only way to reach the reactive path: the proactive
+    // cases above refresh before the request, so the 401 never happens.
+    const expireAccessToken = async (accessToken: string): Promise<void> => {
+      const res = await fetch(`${AUTH_BASE}/mooc-mock/expire-access-token`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ access_token: accessToken }),
+      })
+      expect(res.status).to.equal(204)
+    }
+
+    migrationTest(
+      "refreshes and retries when a token it believed valid is rejected",
+      async function () {
+        writeMoocCredentials(configDir, {
+          accessToken: SEEDED_ACCESS_TOKEN,
+          refreshToken: SEEDED_REFRESH_TOKEN,
+          expiresIn: 3600,
+        })
+        await expireAccessToken(SEEDED_ACCESS_TOKEN)
+        const courses = (await tmc.getEnrolledMoocCourseInstances()).unwrap()
+        expect(courses.length).to.be.greaterThan(0)
+        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      },
+    )
+
+    migrationTest(
+      "deletes credentials when the refresh after a rejection also fails",
+      async function () {
+        writeMoocCredentials(configDir, {
+          accessToken: SEEDED_ACCESS_TOKEN,
+          refreshToken: INVALID_REFRESH_TOKEN,
+          expiresIn: 3600,
+        })
+        await expireAccessToken(SEEDED_ACCESS_TOKEN)
         const res = await tmc.getEnrolledMoocCourseInstances()
         expect(res.err).to.be.true
         expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
