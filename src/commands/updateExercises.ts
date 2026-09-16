@@ -84,7 +84,10 @@ export async function updateExercises(actionContext: ActionContext, silent: stri
         const now2 = Date.now()
         const uniqueCourseIds = uniq(exercisesToUpdate.map((x) => x.courseId))
         for (const courseId of uniqueCourseIds) {
-          const result = await userData.val.setNotifyDate(courseId, now2 + NOTIFICATION_DELAY)
+          const result = await userData.val.setNewExerciseNotifyAfter(
+            courseId,
+            now2 + NOTIFICATION_DELAY,
+          )
           if (result.err) {
             dialog.errorNotification("Failed to postpone the reminder.", result.val)
             return

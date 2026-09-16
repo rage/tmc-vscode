@@ -575,10 +575,9 @@ export async function checkForCourseUpdates(
     courses = userData.val.getCourses()
   }
 
-  const filteredCourses = courses.filter((c) => c.data.notifyAfter <= Date.now())
   Logger.info(`Checking for course updates for courses`)
   const updatedCourses: LocalCourseData[] = []
-  for (const course of filteredCourses) {
+  for (const course of courses) {
     const id = LocalCourseData.getCourseId(course)
     await updateCourse(actionContext, id)
     const updated = userData.val.getCourse(id)
@@ -600,9 +599,13 @@ export async function checkForCourseUpdates(
     }
   }
 
+  // `notifyAfter` throttles this toast only. The refresh above has to run
+  // regardless, or one "Remind me later" click freezes course metadata and point
+  // totals for the whole delay, including the refresh each submit asks for.
+  const now = Date.now()
   for (const course of updatedCourses) {
     const newExercises = LocalCourseData.getNewExercises(course)
-    if (newExercises.length > 0 && !course.data.disabled) {
+    if (newExercises.length > 0 && !course.data.disabled && course.data.notifyAfter <= now) {
       const id = LocalCourseData.getCourseId(course)
       const courseName = LocalCourseData.getCourseName(course)
       dialog.notification(
@@ -611,7 +614,10 @@ export async function checkForCourseUpdates(
         [
           "Remind me later",
           async (): Promise<void> => {
-            const result = await userData.val.setNotifyDate(id, Date.now() + NOTIFICATION_DELAY)
+            const result = await userData.val.setNewExerciseNotifyAfter(
+              id,
+              Date.now() + NOTIFICATION_DELAY,
+            )
             if (result.err) {
               dialog.errorNotification("Failed to postpone the reminder.", result.val)
             }
