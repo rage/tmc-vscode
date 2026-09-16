@@ -273,18 +273,10 @@ export class TmcPanel {
                     type="text/css"
                     href="${codiconCssUri}"
                 />
-                <script defer nonce="${nonce}" src="${scriptUri}" />
+                <script defer nonce="${nonce}" src="${scriptUri}"></script>
             </head>
-                <body>
-                </body>
+            <body></body>
             </html>
-
-            <style>
-                body {
-                    /* ensures no layout shift during loading */
-                    scrollbar-gutter: stable;
-                }
-            </style>
       `
   }
 

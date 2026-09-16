@@ -555,4 +555,24 @@ suite("TmcPanel webview document", () => {
     expect(sources).not.toContain("http:")
     expect(sources).not.toContain("*")
   })
+
+  test("closes every script tag, so nothing after one is swallowed as its content", async () => {
+    const html = await mountedWebviewHtml()
+
+    const opened = html.match(/<script\b/g) ?? []
+    expect(opened.length).toBeGreaterThan(0)
+    expect(html.match(/<\/script>/g) ?? []).toHaveLength(opened.length)
+    expect(html.trimEnd().endsWith("</html>")).toBe(true)
+  })
+
+  test("nonces every script and stylesheet, which style-src and script-src require", async () => {
+    const html = await mountedWebviewHtml()
+    const nonce = nonceOf(html)
+
+    const tags = html.match(/<(?:script|style|link)\b[^>]*>/g) ?? []
+    expect(tags.length).toBeGreaterThan(0)
+    for (const tag of tags) {
+      expect(tag).toContain(`nonce="${nonce}"`)
+    }
+  })
 })
