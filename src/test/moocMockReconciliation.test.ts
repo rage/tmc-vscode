@@ -1,4 +1,6 @@
+import fs from "fs"
 import type { Server } from "http"
+import path from "path"
 
 import {
   failingExercise,
@@ -12,12 +14,14 @@ import type { MoocMockControls } from "../../backend/mooc/router"
 import { createMoocApp, moocMockOf } from "../../backend/mooc/router"
 import { zPasteResult } from "../shared/generated/langs/zod.gen"
 import {
+  DataKind,
   ExerciseSlideSubmissionListItem,
   ExerciseTaskSubmissionResult,
   ExerciseTaskSubmissionStatus,
   MoocCourse,
   MoocCourseProgress,
   TmcExerciseSlide,
+  TmcExerciseTask,
 } from "../shared/langsSchema"
 
 // Reconciles the two independently-generated descriptions of the same wire: the
@@ -51,16 +55,19 @@ const listen = (): Promise<{ server: Server; base: string; mock: MoocMockControl
   })
 
 // The CLI does not consume the wire ExerciseSlide verbatim: its
-// `TryFrom<api::ExerciseSlide> for TmcExerciseSlide`
-// (tmc-langs-rust/crates/tmc-mooc-client/src/exercise.rs) enriches each task
-// with a top-level `checksum` lifted from its public_spec, and PublicSpec
-// carries a `browser_test` field (null for editor tasks). The mock emits the
-// bare wire shape, so we apply that same minimal enrichment before checking the
-// payload against the CLI-stdout schema (`TmcExerciseSlide`). This function IS
-// the wire<->stdout reconciliation for the exercise shape; if the wire drifts so
-// the enrichment can no longer produce a valid TmcExerciseSlide, the assertion
-// below fails.
-const toCliStdoutSlide = (wire: ExerciseSlide): unknown => ({
+// `TryFrom<api::ExerciseSlide> for TmcExerciseSlide` and, per task,
+// `TryFrom<api::ExerciseTask> for TmcExerciseTask`
+// (tmc-langs-rust/crates/tmc-mooc-client/src/exercise.rs) enrich each task with
+// a top-level `checksum` lifted from its public_spec, and PublicSpec carries a
+// `browser_test` field (null for editor tasks). The mock emits the bare wire
+// shape, so we apply that same minimal enrichment before checking the payload
+// against the CLI-stdout schema (`TmcExerciseSlide`).
+//
+// This function IS the wire<->stdout reconciliation for the exercise shape, and
+// it is a hand-written replica of that Rust: a change to either TryFrom has to
+// be made here too, or this file goes on reconciling a conversion that no longer
+// exists. Exported so the coupling is greppable from the Rust side.
+export const toCliStdoutSlide = (wire: ExerciseSlide): unknown => ({
   ...wire,
   tasks: wire.tasks.map((task) => ({
     ...task,
@@ -84,6 +91,80 @@ const toCliStdoutGradingStatus = (wire: unknown): unknown => {
     wire as { Grading: Record<string, unknown> }
   ).Grading
   return { status: "grading", grading }
+}
+
+// Properties the CLI contract leaves entirely unconstrained -- `true` or `{}` in
+// shared/bindings.schema.json, `{}` in the OpenAPI spec -- are the blind spot the
+// two descriptions share: neither says anything a round trip could violate, so a
+// generator that dropped one instead of emitting `z.unknown()` would look
+// correct everywhere. The set is read out of the vendored schema rather than
+// listed, so a newly opaque property fails below until a round trip covers it.
+const opaqueProperties = (schema: unknown): string[] => {
+  const found: string[] = []
+  const walk = (node: unknown, definition: string): void => {
+    if (Array.isArray(node)) {
+      for (const entry of node) {
+        walk(entry, definition)
+      }
+      return
+    }
+    if (node === null || typeof node !== "object") {
+      return
+    }
+    const properties = (node as { properties?: unknown }).properties
+    if (properties !== null && typeof properties === "object") {
+      for (const [name, subschema] of Object.entries(properties)) {
+        const unconstrained =
+          subschema === true ||
+          (subschema !== null &&
+            typeof subschema === "object" &&
+            Object.keys(subschema as object).length === 0)
+        if (unconstrained) {
+          found.push(`${definition}.${name}`)
+        }
+      }
+    }
+    for (const value of Object.values(node)) {
+      walk(value, definition)
+    }
+  }
+  const definitions = (schema as { $defs?: Record<string, unknown> }).$defs ?? {}
+  for (const [name, definition] of Object.entries(definitions)) {
+    walk(definition, name)
+  }
+  return [...new Set(found)]
+}
+
+/**
+ * One round trip per opaque property: a minimal value of the schema that
+ * declares it, carrying `opaque` where the property goes, and the way back out
+ * of the parsed result.
+ */
+const opaqueRoundTrips: Record<
+  string,
+  {
+    schema: { parse: (value: unknown) => unknown }
+    build: (opaque: unknown) => unknown
+    read: (parsed: unknown) => unknown
+  }
+> = {
+  "TmcExerciseTask.assignment": {
+    schema: TmcExerciseTask,
+    build: (opaque) => ({
+      assignment: opaque,
+      checksum: null,
+      model_solution_spec: null,
+      order_number: 0,
+      public_spec: null,
+      task_id: "a1a1a1a1-0000-4000-8000-000000000201",
+    }),
+    read: (parsed) => (parsed as { assignment: unknown }).assignment,
+  },
+  "DataKind.output-data": {
+    schema: DataKind,
+    build: (opaque) => ({ "output-data-kind": "token", "output-data": opaque }),
+    read: (parsed) => (parsed as Record<string, unknown>)["output-data"],
+  },
 }
 
 // Asserts a payload validates against a zod schema, surfacing the issues on
@@ -129,6 +210,14 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     for (const course of body) {
       expectValid(MoocCourse, course, "course")
     }
+  })
+
+  test("GET /courses/{id} payload validates as MoocCourse", async function () {
+    const res = await fetch(api(`/courses/${pythonCourse.id}`))
+    expect(res.status).toBe(200)
+    const course = (await res.json()) as unknown
+    expectValid(MoocCourse, course, "single course")
+    expect(MoocCourse.parse(course).id).toBe(pythonCourse.id)
   })
 
   test("GET /courses/{id}/exercises slides validate as TmcExerciseSlide", async function () {
@@ -313,6 +402,21 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     const download = await fetch(api(`/submissions/${seeded!.slideSubmissionId}/download`))
     expect(download.status).toBe(200)
     expect(await download.json()).toEqual({ data_files: [] })
+  })
+
+  test("every opaque property in the CLI contract survives its zod schema", function () {
+    const schemaPath = path.resolve(__dirname, "..", "..", "shared", "bindings.schema.json")
+    const opaque = opaqueProperties(JSON.parse(fs.readFileSync(schemaPath, "utf8")))
+    expect(opaque.length).toBeGreaterThan(0)
+    const sentinel = { plugin_private: "reconciliation sentinel", nested: [1, { deep: true }] }
+    for (const property of opaque) {
+      const roundTrip = opaqueRoundTrips[property]
+      expect(roundTrip, `no round trip covers the opaque ${property}`).toBeDefined()
+      expect(
+        roundTrip!.read(roundTrip!.schema.parse(roundTrip!.build(sentinel))),
+        property,
+      ).toEqual(sentinel)
+    }
   })
 
   test("a not-enrolled 422 body carries the message key the CLI branches on", async function () {
