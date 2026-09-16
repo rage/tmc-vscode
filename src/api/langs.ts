@@ -553,7 +553,6 @@ export default class Langs {
   public runTests(
     exercisePath: string,
     pythonExecutablePath?: string,
-    progressCallback?: (progressPct: number, message?: string) => void,
   ): {
     process: Promise<Result<RunResult, BaseError | InitializationError>>
     interrupt: () => void
@@ -565,7 +564,6 @@ export default class Langs {
     const process = this._spawnLangsProcess({
       args: ["run-tests", "--exercise-path", exercisePath],
       env,
-      onStdout: (data) => progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
       onNotification: (notification) => this._showNotification(notification),
       processTimeout: CLI_PROCESS_TIMEOUT,
       interruptOnDeactivate: true,
@@ -583,16 +581,12 @@ export default class Langs {
     return { process: postResult, interrupt }
   }
 
-  public runCheckstyle(
-    exercisePath: string,
-    progressCallback?: (progressPct: number, message?: string) => void,
-  ): {
+  public runCheckstyle(exercisePath: string): {
     process: Promise<Result<StyleValidationResult | null, BaseError>>
     interrupt: () => void
   } {
     const process = this._spawnLangsProcess({
       args: ["checkstyle", "--locale", "en", "--exercise-path", exercisePath],
-      onStdout: (data) => progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
       onNotification: (notification) => this._showNotification(notification),
       processTimeout: CLI_PROCESS_TIMEOUT,
       interruptOnDeactivate: true,
@@ -1906,7 +1900,10 @@ export default class Langs {
     cprocess.stdout.setEncoding("utf8")
     cprocess.stderr.setEncoding("utf8")
     if (stdin) {
-      cprocess.stdin.write(stdin + "\n")
+      // A CLI reading stdin blocks until EOF, so the write has to be closed. The listener
+      // keeps an EPIPE from a child that exited early off the unhandled-error path.
+      cprocess.stdin.on("error", (error) => Logger.warn("Failed to write to langs stdin", error))
+      cprocess.stdin.end(stdin + "\n")
     }
 
     const stderr = new BoundedStderr()
