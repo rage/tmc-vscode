@@ -711,13 +711,13 @@ suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
   test("reports every exercise's status in one message", async () => {
     const { posted } = await openCourseDetails(EXERCISE_COUNT)
 
-    const statuses = posted.filter((m) => m.type === "setExerciseStatuses")
+    const statuses = posted.filter(
+      (m): m is { type: string; courseId: unknown; statuses: unknown[] } =>
+        m.type === "setExerciseStatuses",
+    )
     expect(statuses).toHaveLength(1)
-    expect(statuses[0]).toMatchObject({
-      courseId: COURSE_ID,
-      statuses: expect.any(Array),
-    })
-    expect((statuses[0] as { statuses: unknown[] }).statuses).toHaveLength(EXERCISE_COUNT)
+    expect(statuses[0]?.courseId).toEqual(COURSE_ID)
+    expect(statuses[0]?.statuses).toHaveLength(EXERCISE_COUNT)
   })
 })
 
