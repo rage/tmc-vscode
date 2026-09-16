@@ -5,6 +5,7 @@ import { last } from "lodash"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
+import { z } from "zod"
 
 // All access to VSCode's storage should be done through this module.
 import type Dialog from "../api/dialog"
@@ -16,6 +17,8 @@ import {
   WORKSPACE_SETTINGS,
 } from "../config/constants"
 import { HaltForReloadError } from "../errors"
+import { BaseError } from "../shared/shared"
+import { Logger } from "../utilities"
 import * as storage from "./data"
 import { v0 } from "./data"
 import { obsoleteKeys } from "./migration"
@@ -24,6 +27,16 @@ import migrateExerciseDataToLatest from "./migration/exerciseData"
 import migrateExtensionSettingsToLatest from "./migration/extensionSettings"
 import migrateSessionState from "./migration/sessionState"
 import migrateUserDataToLatest from "./migration/userData"
+
+/**
+ * Raised when a value in global state no longer matches the schema its
+ * migration writes. Callers must fail rather than carry on from an empty
+ * value: the blob is the only copy of the user's course catalogue, and the
+ * next write would persist the empty one over it. It is left untouched.
+ */
+export class CorruptStoredDataError extends BaseError {
+  public override readonly name = "Corrupt Stored Data Error"
+}
 
 /**
  * Interface class for accessing stored TMC configuration and data.
@@ -39,19 +52,22 @@ export default class Storage {
     this._context = context
   }
 
+  /** @throws {CorruptStoredDataError} if the stored value does not match the current schema. */
   public getUserData(): storage.UserData | undefined {
-    return this._context.globalState.get<storage.UserData>(storage.USER_DATA_KEY)
+    return this._readValidated(storage.USER_DATA_KEY, storage.userDataSchema)
   }
 
   /**
+   * @throws {CorruptStoredDataError} if the stored value does not match the current schema.
    * @deprecated Extension Settings will be stored in VSCode, remove on major 3.0 release.
    */
   public getExtensionSettings(): storage.ExtensionSettings | undefined {
-    return this._context.globalState.get<storage.ExtensionSettings>(storage.EXTENSION_SETTINGS_KEY)
+    return this._readValidated(storage.EXTENSION_SETTINGS_KEY, storage.extensionSettingsSchema)
   }
 
+  /** @throws {CorruptStoredDataError} if the stored value does not match the current schema. */
   public getSessionState(): storage.SessionState | undefined {
-    return this._context.globalState.get<storage.SessionState>(storage.SESSION_STATE_KEY)
+    return this._readValidated(storage.SESSION_STATE_KEY, storage.sessionStateSchema)
   }
 
   public async updateUserData(userData: storage.UserData | undefined): Promise<void> {
@@ -66,6 +82,28 @@ export default class Storage {
 
   public async updateSessionState(sessionState: storage.SessionState | undefined): Promise<void> {
     await this._context.globalState.update(storage.SESSION_STATE_KEY, sessionState)
+  }
+
+  private _readValidated<T>(key: string, schema: z.ZodType<T>): T | undefined {
+    const stored = this._context.globalState.get<unknown>(key)
+    if (stored === undefined) {
+      return undefined
+    }
+
+    const validation = schema.safeParse(stored)
+    if (!validation.success) {
+      Logger.error(
+        `Stored data under "${key}" does not match its schema:`,
+        z.prettifyError(validation.error),
+      )
+      throw new CorruptStoredDataError(
+        `Stored extension data under "${key}" could not be read. It has been left untouched.`,
+      )
+    }
+
+    // The stored value, not zod's copy: a newer extension version may have
+    // persisted extra keys that have to survive a read/write round trip.
+    return stored as T
   }
 
   public async wipeStorage(): Promise<void> {
