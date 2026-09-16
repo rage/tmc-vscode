@@ -123,11 +123,14 @@ export class Logger {
     if (p instanceof Error) {
       return formatError(p, this._level)
     }
+    if (typeof p === "function") {
+      return `[Function ${p.name || "anonymous"}]`
+    }
     if (typeof p !== "object") {
       return String(p)
     }
-    if (p !== null && p instanceof Uri) {
-      return `Uri(${(p as Uri).toString(true)})`
+    if (p instanceof Uri) {
+      return `Uri(${p.toString(true)})`
     }
 
     try {
@@ -155,19 +158,19 @@ export class Logger {
       // in debug mode, we log to console with the appropriate level
       const loggableParams = this._toLoggableParams(params)
       switch (level) {
-        case "DEBUG": {
+        case ConsoleLogLevel.Debug: {
           console.debug(this._timestamp, channel, loggableParams)
           break
         }
-        case "INFO": {
+        case ConsoleLogLevel.Info: {
           console.info(this._timestamp, channel, loggableParams)
           break
         }
-        case "WARN": {
+        case ConsoleLogLevel.Warn: {
           console.warn(this._timestamp, channel, loggableParams)
           break
         }
-        case "ERROR": {
+        case ConsoleLogLevel.Error: {
           console.error(this._timestamp, channel, loggableParams)
           break
         }
@@ -223,7 +226,10 @@ export class Logger {
   }
 }
 
-function formatError(error: Error, level: LogLevel): string {
+// A cause chain can be cyclic; `BaseError` copies whatever it was handed.
+const MAX_CAUSE_DEPTH = 8
+
+function formatError(error: Error, level: LogLevel, depth = 0): string {
   if (error instanceof BaseError) {
     let errorMessage = ""
     if (error.errno) {
@@ -245,8 +251,10 @@ function formatError(error: Error, level: LogLevel): string {
     if (error.cause) {
       if (typeof error.cause === "string") {
         errorMessage += ` ${error.cause}.`
+      } else if (depth >= MAX_CAUSE_DEPTH) {
+        errorMessage += " Caused by: {...}."
       } else {
-        const cause = formatError(error.cause, level)
+        const cause = formatError(error.cause, level, depth + 1)
         errorMessage += ` Caused by: {${cause}}.`
       }
     }
