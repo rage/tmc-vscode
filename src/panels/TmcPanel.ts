@@ -131,12 +131,23 @@ export class TmcPanel {
   // sends a message to the main and side panels
   public static async postMessage(...messages: ExtensionToWebview[]): Promise<void> {
     for (const message of messages) {
-      TmcPanel.mainPanel?._postMessage(message, "Main webview")
-      TmcPanel.sidePanel?._postMessage(message, "Side webview")
+      TmcPanel.mainPanel?._postMessage(message)
+      TmcPanel.sidePanel?._postMessage(message)
     }
   }
 
-  private _postMessage(message: ExtensionToWebview, context: string): void {
+  /** Tells the two panels' log lines apart. */
+  private get _webviewName(): string {
+    return this._isMain ? "Main webview" : "Side webview"
+  }
+
+  /**
+   * Sends `message` to this panel's webview alone, buffering it for a reload.
+   *
+   * Every reply to a request this webview made goes through here; {@link postMessage}
+   * is for messages every open panel should see.
+   */
+  private _postMessage(message: ExtensionToWebview): void {
     // Only id-carrying targets are buffered. A broadcast target has no id, and the
     // delta messages that use one (setUpdateables, setNewExercises) are posted once
     // per course, so they would all collapse onto one key and only the last would
@@ -144,7 +155,7 @@ export class TmcPanel {
     if ("id" in message.target && message.target.id === this._lastPanel?.id) {
       this._messageBuffer.set(`${message.target.id}:${message.type}`, message)
     }
-    postMessageToWebview(this._panel.webview, message, context)
+    postMessageToWebview(this._panel.webview, message, this._webviewName)
   }
 
   // renders the `panel` in the main panel
@@ -363,9 +374,8 @@ export class TmcPanel {
               // `moocLogin` again, which interrupts the now-unreachable CLI process.
               // not this._renderPanel(), which would clear the buffer we're about to resend
               await renderPanel(this._lastPanel, webview)
-              const context = this._isMain ? "Main webview" : "Side webview"
               for (const buffered of this._messageBuffer.values()) {
-                postMessageToWebview(webview, buffered, context)
+                postMessageToWebview(webview, buffered, this._webviewName)
               }
             }
             break
@@ -382,7 +392,7 @@ export class TmcPanel {
               return
             }
             const course = courseResult.val
-            postMessageToWebview(webview, {
+            this._postMessage({
               type: "setCourseData",
               target: message.sourcePanel,
               courseData: course,
@@ -391,14 +401,14 @@ export class TmcPanel {
             // spawns several CLI processes, so it is answered from what was last posted.
             // Targeted at the requesting panel although the schema is a broadcast one --
             // `setCourseDisabledStatus` below does the same.
-            postMessageToWebview(webview, {
+            this._postMessage({
               type: "setUpdateables",
               target: message.sourcePanel,
               courseId: message.sourcePanel.courseId,
               exerciseIds: updateablesRegistry.get(message.sourcePanel.courseId),
             })
 
-            postMessageToWebview(webview, {
+            this._postMessage({
               type: "setCourseDisabledStatus",
               target: message.sourcePanel,
               courseId: LocalCourseData.getCourseId(course),
@@ -413,7 +423,7 @@ export class TmcPanel {
                 new Date(),
               )
             const view = buildView(false)
-            postMessageToWebview(webview, {
+            this._postMessage({
               type: "setExerciseStatuses",
               target: message.sourcePanel,
               courseId: LocalCourseData.getCourseId(course),
@@ -424,7 +434,7 @@ export class TmcPanel {
                 ],
               ),
             })
-            postMessageToWebview(webview, {
+            this._postMessage({
               type: "setCourseGroups",
               target: message.sourcePanel,
               offlineMode: false,
@@ -438,7 +448,7 @@ export class TmcPanel {
             // deadlines as good as they were.
             langs.val.getCourseDetails(message.sourcePanel.courseId).then((apiCourse) => {
               if (apiCourse.err && apiCourse.val instanceof ConnectionError) {
-                postMessageToWebview(webview, {
+                this._postMessage({
                   type: "setCourseGroups",
                   target: message.sourcePanel,
                   offlineMode: true,
@@ -468,18 +478,18 @@ export class TmcPanel {
               return
             }
 
-            postMessageToWebview(webview, {
+            this._postMessage({
               type: "setMyCourses",
               target: message.sourcePanel,
               courses: userData.val.getCourses(),
             })
-            postMessageToWebview(webview, {
+            this._postMessage({
               type: "setTmcDataPath",
               target: message.sourcePanel,
               tmcDataPath: resources.val.projectsDirectory,
             })
             getFolderSize.loose(resources.val.projectsDirectory).then((size) =>
-              postMessageToWebview(webview, {
+              this._postMessage({
                 type: "setTmcDataSize",
                 target: message.sourcePanel,
                 tmcDataSize: formatSizeInBytes(size),
@@ -495,7 +505,7 @@ export class TmcPanel {
             }
 
             const version = resources.val.extensionVersion
-            postMessageToWebview(webview, {
+            this._postMessage({
               type: "setWelcomeData",
               target: message.sourcePanel,
               version,
@@ -716,6 +726,8 @@ export class TmcPanel {
               if (!moocLoginRegistry.isCurrent(invocationId)) {
                 return
               }
+              // Unbuffered: a reload restarts the device flow, so resending this would
+              // show the code of the attempt that reload abandoned.
               postMessageToWebview(webview, {
                 type: "moocDeviceCode",
                 target: moocLoginPanel,
@@ -737,6 +749,7 @@ export class TmcPanel {
             }
             moocLoginRegistry.finish(invocationId)
             if (loginResult.err) {
+              // Unbuffered, for the reason given above the device-code post.
               postMessageToWebview(webview, {
                 type: "moocLoginError",
                 target: moocLoginPanel,

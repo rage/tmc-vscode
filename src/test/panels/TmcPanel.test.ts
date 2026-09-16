@@ -781,6 +781,40 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
     expect(groups[1]).toMatchObject({ offlineMode: true })
   })
 
+  test("resends the course-details reply after the webview reloads", async () => {
+    // A reload loses everything the panel was told; only what the host buffered
+    // comes back, and a reply the host did not buffer is gone for good.
+    const actionContext = contextProbing(vi.fn().mockResolvedValue(Ok({})))
+    TmcPanel.sidePanel?.dispose()
+    TmcPanel.sidePanel = undefined
+    const { panel, getMessageListener } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const courseDetails = {
+      id: randomPanelId(),
+      type: "CourseDetails" as const,
+      courseId: COURSE_ID,
+      exerciseStatuses: { tmc: {}, mooc: {} },
+    }
+    await TmcPanel.renderSide(
+      vscode.Uri.file("/ext"),
+      createMockContext(),
+      actionContext,
+      courseDetails,
+    )
+    const listener = getMessageListener()
+    await listener({ type: "requestCourseDetailsData", sourcePanel: courseDetails })
+    vi.mocked(panel.webview.postMessage).mockClear()
+
+    await listener({ type: "ready" })
+
+    const types = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([m]) => (m as { type: string }).type)
+    expect(types).toContain("setPanel")
+    expect(types).toContain("setCourseData")
+    expect(types).toContain("setCourseGroups")
+  })
+
   test("leaves the deadlines standing when the backend answers with a failure", async () => {
     // Only an unreachable backend makes the stored deadlines untrustworthy; a reachable
     // one refusing the request says nothing about them.
