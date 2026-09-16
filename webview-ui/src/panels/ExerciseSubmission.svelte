@@ -120,14 +120,18 @@
   </Button>
 </div>
 
-{#if isMooc}
+{#if submissionError !== undefined}
+  <!-- The error is the last message either backend posts, so it replaces the screen.
+       role="alert", not "status": an unrequested failure must interrupt, not queue. -->
+  <div role="alert">
+    <h1>Submission failed</h1>
+    <div class="error-message">{submissionError.message}</div>
+  </div>
+{:else if isMooc}
   <!-- Reduced mooc result: overall grading progress, score, feedback text.
        Mooc grading has no per-test breakdown or feedback questions. -->
   <div role="status">
-    {#if submissionError !== undefined}
-      <h1>Submission failed</h1>
-      <div class="feedback-text">{submissionError.message}</div>
-    {:else if moocResult === undefined}
+    {#if moocResult === undefined}
       <h1>Processing submission…</h1>
       <div class="progress-bar">
         <ProgressBar label={"Waiting for grading"} value={progressPercent} max={100} />
@@ -154,7 +158,7 @@
     {/if}
   </div>
 
-  {#if submissionError === undefined && !moocGradingIsTerminal}
+  {#if !moocGradingIsTerminal}
     <!-- Stays visible through every non-terminal state, including "PendingManual" which can
          still take a while, hiding only once grading is truly done. -->
     <div class="background-button">
@@ -249,6 +253,7 @@
   .mooc-score {
     margin-bottom: 0.4rem;
   }
+  .error-message,
   .feedback-text {
     white-space: pre-wrap;
     margin-top: 0.4rem;

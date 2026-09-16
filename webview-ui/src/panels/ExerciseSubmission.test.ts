@@ -25,6 +25,19 @@ const moocPanel: ExerciseSubmissionPanel = {
   exercise: moocLocalExercise(),
 }
 
+// Posts the error that ends a failed submission on either backend.
+function postSubmissionError(panelId: number, error: Error): void {
+  window.dispatchEvent(
+    new MessageEvent("message", {
+      data: {
+        type: "submissionStatusError",
+        target: { type: "ExerciseSubmission", id: panelId },
+        error,
+      },
+    }),
+  )
+}
+
 // Posts a mooc grading result to the panel.
 function postMoocResult(result: unknown): void {
   window.dispatchEvent(
@@ -61,6 +74,18 @@ suite("ExerciseSubmission panel", () => {
       }),
     )
     expect(await screen.findByText("Compiling on the server")).toBeInTheDocument()
+  })
+
+  test("replaces the progress view with the failure when the submission errors", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    postSubmissionError(panel.id, new Error("Failed to submit: connection reset"))
+
+    expect(await screen.findByRole("heading", { name: "Submission failed" })).toBeInTheDocument()
+    expect(screen.getByRole("alert")).toHaveTextContent("Failed to submit: connection reset")
+    expect(
+      screen.queryByRole("heading", { name: "Processing submission…" }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
   })
 
   test("closing the panel posts closeSidePanel", () => {
@@ -156,6 +181,15 @@ suite("ExerciseSubmission panel (mooc reduced results)", () => {
       },
     })
     await screen.findByRole("heading", { name: "Exercise graded" })
+    expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
+  })
+
+  test('shows the failure and hides "Run in background" when the submission errors', async () => {
+    render(ExerciseSubmission, { props: { panel: moocPanel } })
+    postSubmissionError(moocPanel.id, new Error("Grading could not be requested"))
+
+    expect(await screen.findByRole("heading", { name: "Submission failed" })).toBeInTheDocument()
+    expect(screen.getByRole("alert")).toHaveTextContent("Grading could not be requested")
     expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
   })
 
