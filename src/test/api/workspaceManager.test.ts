@@ -1,3 +1,5 @@
+import * as fs from "fs"
+import * as os from "os"
 import * as path from "path"
 
 import type { Mock } from "vitest"
@@ -12,6 +14,7 @@ import {
   workspaceFileName,
 } from "../../config/constants"
 import Resources from "../../config/resources"
+import { Logger } from "../../utilities"
 
 // `Resources` reads `vscode.env.appName` to tell Code from VSCodium, and the
 // mock ships no `env`.
@@ -257,6 +260,80 @@ suite("WorkspaceManager class", function () {
 
       const written = update.mock.calls.find(([section]) => section === "files.exclude")?.[1]
       expect(written).toEqual({ "**/legacy": true, ...HIDE_META_FILES })
+    })
+  })
+
+  suite("addWorkspaceRecommendation", function () {
+    const courseSlug = "test-python-course"
+    let workspaceFileFolder: string
+    let workspaceFile: string
+    let manager: WorkspaceManager
+
+    beforeEach(function () {
+      workspaceFileFolder = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-manager-"))
+      resources = new Resources(
+        "/css",
+        "1.0.0",
+        "/html",
+        "/media",
+        workspaceFileFolder,
+        PROJECTS_DIRECTORY,
+      )
+      workspaceFile = resources.getWorkspaceFilePath(courseSlug, "tmc")
+      manager = new WorkspaceManager(resources)
+    })
+
+    afterEach(function () {
+      fs.rmSync(workspaceFileFolder, { recursive: true, force: true })
+    })
+
+    test("warns instead of throwing when the workspace file is unreadable", function () {
+      const warn = vi.spyOn(Logger, "warn").mockImplementation(() => undefined)
+
+      expect(() =>
+        manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"]),
+      ).not.toThrow()
+      expect(warn).toHaveBeenCalledOnce()
+
+      warn.mockRestore()
+    })
+
+    test("leaves the file untouched when every extension is already recommended", function () {
+      const contents = JSON.stringify(
+        { folders: [], extensions: { recommendations: ["ms-python.python"] } },
+        null,
+        2,
+      )
+      fs.writeFileSync(workspaceFile, contents)
+
+      manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
+
+      expect(fs.readFileSync(workspaceFile, "utf-8")).toBe(contents)
+    })
+
+    test("merges a new extension into the recommendations already there", function () {
+      fs.writeFileSync(
+        workspaceFile,
+        JSON.stringify({ folders: [], extensions: { recommendations: ["ikuyadeu.r"] } }),
+      )
+
+      manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
+
+      const written = fs.readFileSync(workspaceFile, "utf-8")
+      expect(JSON.parse(written)).toEqual({
+        folders: [],
+        extensions: { recommendations: ["ikuyadeu.r", "ms-python.python"] },
+      })
+      expect(written).toContain("\n")
+    })
+
+    test("recommends into a workspace file that lists none yet", function () {
+      fs.writeFileSync(workspaceFile, JSON.stringify({ folders: [] }))
+
+      manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
+
+      const written = JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))
+      expect(written.extensions.recommendations).toEqual(["ms-python.python"])
     })
   })
 

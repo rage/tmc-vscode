@@ -254,19 +254,27 @@ export default class WorkspaceManager implements vscode.Disposable {
     backend: "tmc" | "mooc",
     extensions: string[],
   ): void {
-    const pathToWorkspace = path.join(this._resources.getWorkspaceFilePath(workspace, backend))
-    const workspaceData = JSON.parse(fs.readFileSync(pathToWorkspace, "utf-8"))
-    let recommendations: string[] | undefined = workspaceData.extensions?.recommendations
-    if (recommendations) {
-      Logger.debug("Current workspace recommendations", recommendations)
-      recommendations = _.union(recommendations, extensions)
+    const pathToWorkspace = this._resources.getWorkspaceFilePath(workspace, backend)
+    let workspaceData: { extensions?: { recommendations?: string[] } }
+    try {
+      workspaceData = JSON.parse(fs.readFileSync(pathToWorkspace, "utf-8"))
+    } catch (e) {
+      // Called from the document-open handler, where a recommendation the
+      // student can add by hand is not worth failing the open over.
+      Logger.warn(`Could not read workspace file ${pathToWorkspace}.`, e)
+      return
     }
-    const workspaceDataRecommend = {
-      ...workspaceData,
-      extensions: { recommendations: recommendations ?? extensions },
+
+    const current = workspaceData.extensions?.recommendations ?? []
+    const recommendations = _.union(current, extensions)
+    if (_.isEqual(recommendations, current)) {
+      return
     }
-    Logger.debug("New workspace data", workspaceDataRecommend)
-    fs.writeFileSync(pathToWorkspace, JSON.stringify(workspaceDataRecommend))
+
+    fs.writeFileSync(
+      pathToWorkspace,
+      JSON.stringify({ ...workspaceData, extensions: { recommendations } }, null, 2),
+    )
   }
 
   public createWorkspaceFile(courseName: string, backend: "tmc" | "mooc"): void {
