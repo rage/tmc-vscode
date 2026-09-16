@@ -35,7 +35,8 @@ suite("MoocLogin panel", () => {
     render(MoocLogin, { props: { panel } })
     dispatch(deviceCodeMessage)
     await waitFor(() => {
-      expect(screen.getByText("WXYZ-1234")).toBeInTheDocument()
+      // a real button, so it is reachable by keyboard and activates on Enter/Space only
+      expect(screen.getByRole("button", { name: "WXYZ-1234" })).toBeInTheDocument()
       expect(getButton("Open in browser")).toBeInTheDocument()
     })
   })

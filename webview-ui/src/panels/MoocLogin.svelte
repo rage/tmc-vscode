@@ -139,16 +139,9 @@
         continues automatically once you approve.
       </p>
 
-      <div
-        class="user-code"
-        role="button"
-        tabindex="0"
-        title="Click to copy"
-        onclick={copyUserCode}
-        onkeypress={copyUserCode}
-      >
+      <button type="button" class="user-code" title="Click to copy" onclick={copyUserCode}>
         {device.userCode}
-      </div>
+      </button>
       {#if copyStatus === "copied"}
         <div class="copy-status">Copied to clipboard</div>
       {:else if copyStatus === "failed"}
@@ -180,6 +173,10 @@
     margin-bottom: 0.5rem;
   }
   .user-code {
+    appearance: none;
+    background: none;
+    color: inherit;
+    text-align: left;
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 2rem;
     letter-spacing: 0.25rem;
