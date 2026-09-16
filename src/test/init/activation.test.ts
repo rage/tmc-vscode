@@ -339,6 +339,35 @@ suite("shutdown", function () {
   })
 })
 
+suite("notifications from the CLI", function () {
+  beforeEach(function () {
+    resetActivationRecording()
+    vi.spyOn(vscode.window, "showWarningMessage").mockResolvedValue(undefined)
+  })
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  // The CLI is the only thing that knows a student's toolchain is too old to run
+  // their tests, and it says so through this event.
+  test("shows a CLI warning to the user", async function () {
+    await activate(createContext())
+
+    const onNotification = langsStub.handlers.get("notification")
+    expect(onNotification).toBeDefined()
+    onNotification?.({
+      message: "Your Python is out of date.",
+      "notification-kind": "warning",
+    } as never)
+
+    expect(vi.mocked(vscode.window.showWarningMessage).mock.calls[0]?.[0]).toContain(
+      "Your Python is out of date.",
+    )
+  })
+})
+
 suite("activation in a workspace the migration cannot use in place", function () {
   const workspaceName = "python-course.code-workspace"
 
