@@ -19,4 +19,16 @@ suite("ProgressBar component", () => {
     const background = container.querySelector<HTMLElement>(".background")
     expect(background?.style.getPropertyValue("--bar-width")).toBe("0")
   })
+
+  test("clamps the width to the track when the value overshoots the maximum", () => {
+    const { container } = render(ProgressBar, { props: { label: "p", value: 7, max: 4 } })
+    const background = container.querySelector<HTMLElement>(".background")
+    expect(background?.style.getPropertyValue("--bar-width")).toBe("1")
+  })
+
+  test("clamps a negative value to 0", () => {
+    const { container } = render(ProgressBar, { props: { label: "p", value: -2, max: 4 } })
+    const background = container.querySelector<HTMLElement>(".background")
+    expect(background?.style.getPropertyValue("--bar-width")).toBe("0")
+  })
 })
