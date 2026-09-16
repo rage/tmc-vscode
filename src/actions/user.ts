@@ -145,50 +145,56 @@ export async function testExercise(
         testInterrupts.set(testRunId, [testInterrupt, validationInterrupt])
         const exerciseName = exercise.exerciseSlug
 
-        Logger.info(`Running local tests and validations for ${exerciseName}`)
-        const testResults = await testRunner
-        Logger.info(`Tests finished for ${exerciseName}`)
+        try {
+          Logger.info(`Running local tests and validations for ${exerciseName}`)
+          const testResults = await testRunner
+          Logger.info(`Tests finished for ${exerciseName}`)
 
-        if (testResults.err) {
+          if (testResults.err) {
+            TmcPanel.postMessage({
+              type: "testError",
+              target: panel,
+              error: testResults.val,
+            })
+            return Ok.EMPTY
+          }
+
+          const validationResults = await validationRunner
+          Logger.info(`Validations finished for ${exerciseName}`)
+
+          if (validationResults.err) {
+            TmcPanel.postMessage({
+              type: "testError",
+              target: panel,
+              error: validationResults.val,
+            })
+            return Ok.EMPTY
+          }
+
+          const data: TestResultData = {
+            testResult: testResults.val,
+            id: LocalCourseExercise.getId(courseExercise),
+            courseSlug: LocalCourseData.getCourseName(course),
+            exerciseName,
+            tmcLogs: testResults.val.logs,
+            disabled: course.data.disabled,
+            styleValidationResult: validationResults.val,
+          }
+
+          if (TmcPanel.sidePanel === undefined) {
+            // user closed panel, re-render
+            await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+          }
           TmcPanel.postMessage({
-            type: "testError",
+            type: "testResults",
             target: panel,
-            error: testResults.val,
+            testResults: data,
           })
-          return Ok.EMPTY
+        } finally {
+          // Only an explicit cancel removes this otherwise, so every other exit from the
+          // run would keep both interrupt closures — and the dead pids they hold — alive.
+          testInterrupts.delete(testRunId)
         }
-
-        const validationResults = await validationRunner
-        Logger.info(`Validations finished for ${exerciseName}`)
-
-        if (validationResults.err) {
-          TmcPanel.postMessage({
-            type: "testError",
-            target: panel,
-            error: validationResults.val,
-          })
-          return Ok.EMPTY
-        }
-
-        const data: TestResultData = {
-          testResult: testResults.val,
-          id: LocalCourseExercise.getId(courseExercise),
-          courseSlug: LocalCourseData.getCourseName(course),
-          exerciseName,
-          tmcLogs: testResults.val.logs,
-          disabled: course.data.disabled,
-          styleValidationResult: validationResults.val,
-        }
-
-        if (TmcPanel.sidePanel === undefined) {
-          // user closed panel, re-render
-          await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
-        }
-        TmcPanel.postMessage({
-          type: "testResults",
-          target: panel,
-          testResults: data,
-        })
       } else {
         // exam
         TmcPanel.postMessage({

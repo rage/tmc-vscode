@@ -26,6 +26,7 @@ import {
   ObsoleteClientError,
   RuntimeError,
   SpawnError,
+  TimeoutError,
   UnknownUploadError,
   UploadExpiredError,
 } from "../errors"
@@ -106,8 +107,8 @@ interface LangsProcessArgs {
   onInterruptHandle?: ((interrupt: () => void) => void) | undefined
   /**
    * Registers the process with {@link Langs.killAllProcesses}. Only set for commands with no
-   * partial-write failure mode (network-only submit/paste) -- a killed download or settings
-   * write can corrupt state.
+   * partial-write failure mode (network-only submit/paste, local test runs) -- a killed
+   * download or settings write can corrupt state.
    */
   interruptOnDeactivate?: boolean | undefined
 }
@@ -147,6 +148,34 @@ const organizationsRemapper: CacheConfig["remapper"] = (res) => {
 
 /** Ample for the failure diagnostics stderr feeds; a test run can write orders of magnitude more. */
 const MAX_RETAINED_STDERR_BYTES = 64 * 1024
+
+/** POSIX has process groups, so a child spawned `detached` can be signalled as a whole tree. */
+const HAS_PROCESS_GROUPS = process.platform !== "win32"
+
+/**
+ * Kills the CLI process and everything it spawned, doing nothing if it never started.
+ *
+ * On POSIX the child leads its own process group (see the `detached` spawn option), so one
+ * synchronous signal reaches the whole tree and has taken effect before this returns --
+ * which is what lets a synchronous `deactivate` stop a submit in flight. Windows has no
+ * process groups, so `tree-kill` walks the tree asynchronously there instead.
+ */
+function killProcessTree(cprocess: cp.ChildProcess): void {
+  const pid = cprocess.pid
+  // Undefined until the spawn succeeds, and `tree-kill` throws on a non-numeric pid.
+  if (pid === undefined) {
+    return
+  }
+  if (!HAS_PROCESS_GROUPS) {
+    kill(pid)
+    return
+  }
+  try {
+    process.kill(-pid, "SIGKILL")
+  } catch {
+    // ESRCH: the group is already gone, which is the outcome asked for.
+  }
+}
 
 /**
  * The tail of a CLI process's stderr, kept for the error details a failure attaches.
@@ -224,9 +253,12 @@ export default class Langs {
   }
 
   /**
-   * Kills every CLI process opted in via `interruptOnDeactivate` (submit and paste);
-   * downloads, extraction, and settings/credentials writes are left running so a window
-   * reload can't leave them half-written.
+   * Kills every CLI process opted in via `interruptOnDeactivate` (submit, paste and local
+   * test runs); downloads, extraction, and settings/credentials writes are left running so a
+   * window reload can't leave them half-written.
+   *
+   * Safe to call from a synchronous `deactivate`: each kill is a single syscall that has
+   * taken effect by the time it returns.
    */
   public killAllProcesses(): void {
     const interrupts = Array.from(this._activeInterrupts)
@@ -495,6 +527,7 @@ export default class Langs {
       onStdout: (data) => progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
       onNotification: (notification) => this._showNotification(notification),
       processTimeout: CLI_PROCESS_TIMEOUT,
+      interruptOnDeactivate: true,
     })
     if (process.err) {
       return { process: Promise.resolve(process), interrupt: (): void => {} }
@@ -521,6 +554,7 @@ export default class Langs {
       onStdout: (data) => progressCallback?.(100 * data["percent-done"], data.message ?? undefined),
       onNotification: (notification) => this._showNotification(notification),
       processTimeout: CLI_PROCESS_TIMEOUT,
+      interruptOnDeactivate: true,
     })
     if (process.err) {
       return { process: Promise.resolve(process), interrupt: (): void => {} }
@@ -1556,10 +1590,8 @@ export default class Langs {
     langsArgs.onInterruptHandle?.(process.val.interrupt)
     // Attribute a lost-session error to the command's backend so the right logout event fires.
     const authEventTarget = langsArgs.suppressAuthEvents ? undefined : langsArgs.backend
-    const { interrupt, result, getStderr } = process.val
-    const res = langsArgs.interruptOnDeactivate
-      ? await this._trackInterrupt(interrupt, result)
-      : await result
+    const { result, getStderr } = process.val
+    const res = await result
     return res
       .andThen((x) => this._checkLangsResponse(x, outputDataKind, authEventTarget, getStderr()))
       .andThen((x) => {
@@ -1571,16 +1603,6 @@ export default class Langs {
         }
         return Ok(x)
       })
-  }
-
-  /** Keeps `interrupt` reachable from {@link killAllProcesses} for as long as the process runs. */
-  private async _trackInterrupt<T>(interrupt: () => void, result: Promise<T>): Promise<T> {
-    this._activeInterrupts.add(interrupt)
-    try {
-      return await result
-    } finally {
-      this._activeInterrupts.delete(interrupt)
-    }
   }
 
   /**
@@ -1711,7 +1733,16 @@ export default class Langs {
   private _spawnLangsProcess(
     commandArgs: LangsProcessArgs,
   ): Result<LangsProcessRunner, InitializationError | SpawnError> {
-    const { args, env, obfuscate, onStdout, onNotification, stdin, processTimeout } = commandArgs
+    const {
+      args,
+      env,
+      obfuscate,
+      onStdout,
+      onNotification,
+      stdin,
+      processTimeout,
+      interruptOnDeactivate,
+    } = commandArgs
 
     let theResult: OutputData | undefined
     let stdoutBuffer = ""
@@ -1756,6 +1787,9 @@ export default class Langs {
     const startTime = Date.now()
     try {
       cprocess = cp.spawn(this.cliPath, args, {
+        // Gives the child its own process group, so {@link killProcessTree} can reach the
+        // plugins it spawns (Maven, pytest) with one signal. No-op on Windows.
+        detached: HAS_PROCESS_GROUPS,
         env: {
           ...process.env,
           ...env,
@@ -1787,11 +1821,14 @@ export default class Langs {
       const timeout =
         processTimeout &&
         setTimeout(() => {
-          kill(cprocess.pid as number)
-          reject("Process didn't seem to finish or was taking a really long time.")
+          killProcessTree(cprocess)
+          reject(
+            new TimeoutError("Process didn't seem to finish or was taking a really long time."),
+          )
         }, processTimeout)
 
       cprocess.on("error", (error) => {
+        active = false
         if (timeout) {
           clearTimeout(timeout)
         }
@@ -1820,6 +1857,9 @@ ${error.message}`
         }
       })
       cprocess.on("exit", (code) => {
+        // The pid is free for the OS to reuse from here on, so a retained `interrupt`
+        // closure must not signal it.
+        active = false
         resultCode = code ?? 0
         Logger.info(
           `Process exited with code ${resultCode} after ${Date.now() - startTime}ms: ${loggableCommand}`,
@@ -1879,6 +1919,9 @@ ${error.message}`
           // `activate` gates its antivirus-exception advice on this class.
           return Err(new SpawnError(spawnFailure, stderr.text()))
         }
+        if (error instanceof TimeoutError) {
+          return Err(new TimeoutError(error.message, stderr.text()))
+        }
         return Err(new RuntimeError(error as string, stderr.text()))
       }
 
@@ -1911,11 +1954,14 @@ ${error.message}`
       if (active) {
         active = false
         interrupted = true
-        kill(cprocess.pid as number)
+        killProcessTree(cprocess)
       }
     }
-    const res = { interrupt, result, getStderr: (): string => stderr.text() }
-    return Ok(res)
+    if (interruptOnDeactivate) {
+      this._activeInterrupts.add(interrupt)
+      void result.finally(() => this._activeInterrupts.delete(interrupt))
+    }
+    return Ok({ interrupt, result, getStderr: (): string => stderr.text() })
   }
 }
 
