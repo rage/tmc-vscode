@@ -10,8 +10,6 @@ import {
   HIDE_META_FILES,
   SHOW_META_FILES,
   WATCHER_EXCLUDE,
-  WORKSPACE_ROOT_FILE_NAME,
-  WORKSPACE_ROOT_FILE_TEXT,
   WORKSPACE_ROOT_FOLDER_NAME,
   WORKSPACE_SETTINGS,
   workspaceFileName,
@@ -49,7 +47,6 @@ interface ConfigurationProperties {
 export default class WorkspaceManager implements vscode.Disposable {
   private _exercises: WorkspaceExercise[]
   private readonly _resources: Resources
-  private readonly _watcher: vscode.FileSystemWatcher | undefined
   private readonly _disposables: vscode.Disposable[]
 
   /**
@@ -59,16 +56,6 @@ export default class WorkspaceManager implements vscode.Disposable {
   public constructor(resources: Resources, exercises?: WorkspaceExercise[]) {
     this._exercises = exercises ?? []
     this._resources = resources
-    const projectsDirectory = this._resources.projectsDirectory
-    if (projectsDirectory) {
-      this._watcher = vscode.workspace.createFileSystemWatcher(
-        projectsDirectory + "/**",
-        true,
-        true,
-        false,
-      )
-      this._watcher.onDidDelete((x) => this._fileDeleteAction(x.fsPath, projectsDirectory))
-    }
     this._disposables = [
       vscode.workspace.onDidChangeWorkspaceFolders((e) => this._onDidChangeWorkspaceFolders(e)),
       vscode.workspace.onDidOpenTextDocument((e) => this._onDidOpenTextDocument(e)),
@@ -280,9 +267,6 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   public dispose(): void {
-    if (this._watcher) {
-      this._watcher.dispose()
-    }
     this._disposables.forEach((x) => x.dispose())
   }
 
@@ -366,24 +350,6 @@ export default class WorkspaceManager implements vscode.Disposable {
           await this.updateWorkspaceSetting(key, codeSettings?.defaultValue)
         }
       }
-    }
-  }
-
-  /**
-   * Event listener function for workspace watcher delete.
-   * @param targetPath Path to deleted item
-   */
-  private _fileDeleteAction(targetPath: string, projectsDirectory: string): void {
-    const basedir = projectsDirectory
-    const rootFilePath = this._resources.workspaceRootFolder.fsPath
-    Logger.debug("Target path deleted", targetPath)
-    if (path.relative(rootFilePath, targetPath) === "") {
-      Logger.info(`Root file deleted ${targetPath}, fixing issue.`)
-      if (!fs.existsSync(path.join(basedir, WORKSPACE_ROOT_FILE_NAME))) {
-        fs.mkdirSync(path.join(basedir, WORKSPACE_ROOT_FILE_NAME), { recursive: true })
-      }
-
-      fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" })
     }
   }
 

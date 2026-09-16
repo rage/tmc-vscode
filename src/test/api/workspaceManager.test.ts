@@ -24,7 +24,6 @@ interface WorkspaceStubs {
   workspaceFile: vscode.Uri | undefined
   name: string | undefined
   workspaceFolders: vscode.WorkspaceFolder[] | undefined
-  createFileSystemWatcher: () => Pick<vscode.FileSystemWatcher, "onDidDelete" | "dispose">
   onDidChangeWorkspaceFolders: () => vscode.Disposable
   onDidOpenTextDocument: () => vscode.Disposable
   updateWorkspaceFolders: (
@@ -91,10 +90,6 @@ suite("WorkspaceManager class", function () {
     stubWorkspace("workspaceFile", undefined)
     stubWorkspace("name", undefined)
     stubWorkspace("workspaceFolders", [rootFolder])
-    stubWorkspace(
-      "createFileSystemWatcher",
-      vi.fn(() => ({ onDidDelete: vi.fn(), dispose: vi.fn() })),
-    )
     stubWorkspace(
       "onDidChangeWorkspaceFolders",
       vi.fn(() => ({ dispose: vi.fn() })),
