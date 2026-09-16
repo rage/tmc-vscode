@@ -596,6 +596,7 @@ suite("tmc langs cli spec", function () {
       // The mock requires a bearer, and the CLI only attaches one to localhost
       // because suiteSetup trusts it -- so every case here goes through the same
       // authenticated path a real session does.
+      clearMoocCredentials(configDir)
       writeMoocCredentials(configDir, { accessToken: SEEDED_ACCESS_TOKEN })
       const projectsDir = path.join(testDir, "tmcdata")
       deleteSync(projectsDir, { force: true })
@@ -665,6 +666,7 @@ suite("tmc langs cli spec", function () {
         expect(newest, "the submit must be listed").to.not.be.undefined
         const download = await fetch(
           `http://localhost:4001/api/v0/exercise-services/client/submissions/${newest!.id}/download`,
+          { headers: { authorization: `Bearer ${SEEDED_ACCESS_TOKEN}` } },
         )
         expect(download.status).to.equal(200)
         const body = (await download.json()) as { data_files: { name: string; mime: string }[] }
@@ -986,6 +988,11 @@ suite("tmc langs cli spec", function () {
       // rather than leaving the suite order-dependent.
       await fetch(`${AUTH_BASE}/mooc-mock/reset`, { method: "POST" })
       configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME)
+      // test-artifacts survives between runs, and langs prefers the per-host
+      // credentials file it adopted last time over the shared name each case
+      // seeds -- so without this a case silently refreshes a previous run's
+      // rotated token instead of its own.
+      clearMoocCredentials(configDir)
       const projectsDir = path.join(testDir, "tmcdata")
       deleteSync(projectsDir, { force: true })
       setupProjectsDir(configDir, projectsDir)
