@@ -166,12 +166,7 @@ export class TmcPanel {
       // otherwise a hidden-then-revealed panel reloads and drops messages posted
       // before the reveal
       retainContextWhenHidden: true,
-      localResourceRoots: [
-        Uri.joinPath(extensionUri, "out"),
-        Uri.joinPath(extensionUri, "webview-ui/public/build"),
-        Uri.joinPath(extensionUri, "media"),
-        Uri.joinPath(extensionUri, "resources"),
-      ],
+      localResourceRoots: [Uri.joinPath(extensionUri, "webview-ui/public/build")],
     })
     const currentPanel = new TmcPanel(
       webviewPanel,

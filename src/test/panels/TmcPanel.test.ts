@@ -575,4 +575,15 @@ suite("TmcPanel webview document", () => {
       expect(tag).toContain(`nonce="${nonce}"`)
     }
   })
+
+  test("is granted only the directory the three files it loads live in", async () => {
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+    createWebviewPanel.mockClear()
+    await mountedWebviewHtml()
+
+    const roots = createWebviewPanel.mock.calls[0]?.[3]?.localResourceRoots
+    expect(roots?.map(String)).toEqual([
+      String(vscode.Uri.joinPath(vscode.Uri.file("/ext"), "webview-ui/public/build")),
+    ])
+  })
 })
