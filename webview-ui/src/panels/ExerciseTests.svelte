@@ -114,6 +114,12 @@
   }
 </script>
 
+<div class="close-button">
+  <Button secondary aria-label="Close" onclick={closePanel}>
+    <vscode-icon name="close" aria-hidden="true"></vscode-icon>
+  </Button>
+</div>
+
 {#if !tryingToRunTestsForExam && !testError}
   <h1 class="exercise-heading">{exercise.name}</h1>
   <div role="status">
@@ -135,12 +141,6 @@
     {#if validationsFailed}
       <h2>Code quality checks failed</h2>
     {/if}
-  </div>
-
-  <div class="close-button">
-    <Button secondary aria-label="Close" onclick={closePanel}>
-      <vscode-icon name="close" aria-hidden="true"></vscode-icon>
-    </Button>
   </div>
 
   {#if testResults === undefined}
@@ -186,15 +186,19 @@
   <h1 class="exercise-heading">{exercise.name}</h1>
 
   {#if testError}
-    <div role="status">
+    <div role="alert">
       <h2>Error while trying to run tests</h2>
       <code>
         {testError.details}
       </code>
     </div>
+    <div>
+      The tests could not be run locally. You can still submit your answer to the server, or close
+      this panel and try again.
+    </div>
+  {:else}
+    <div>You can submit your answer with the button below.</div>
   {/if}
-
-  <div>You can submit your answer with the button below.</div>
   <div class="exam-submission-button-container">
     <Button onclick={submit} disabled={submitting}>Submit to server</Button>
   </div>

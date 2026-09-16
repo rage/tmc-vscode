@@ -18,6 +18,19 @@ const panel: ExerciseTestsPanel = {
   testRunId: 1,
 }
 
+// Posts the error that ends a failed test run, through the same JSON serialization the
+// webview bridge applies -- a live `Error` would arrive without its `message`.
+function postTestError(error: { message: string; details?: string }): void {
+  const message = {
+    type: "testError",
+    target: { type: "ExerciseTests", id: panel.id },
+    error,
+  }
+  window.dispatchEvent(
+    new MessageEvent("message", { data: JSON.parse(JSON.stringify(message)) as unknown }),
+  )
+}
+
 suite("ExerciseTests panel", () => {
   test("requests its data on mount and shows the running-tests state", () => {
     render(ExerciseTests, { props: { panel } })
@@ -115,6 +128,19 @@ suite("ExerciseTests panel", () => {
       exercise: panel.exercise,
       exerciseUri,
     })
+  })
+
+  test("a failed test run shows the failure, the choice and a working Close button", async () => {
+    render(ExerciseTests, { props: { panel } })
+    postTestError({ message: "Failed to run tests", details: "no compiler on PATH" })
+
+    const alert = await screen.findByRole("alert")
+    expect(alert).toHaveTextContent("no compiler on PATH")
+    expect(screen.getByText(/You can still submit your answer to the server/)).toBeInTheDocument()
+
+    postedMessages.mockClear()
+    getButton("Close").click()
+    expect(postedMessages).toHaveBeenCalledWith({ type: "closeSidePanel" })
   })
 
   test("testError re-enables submitting", async () => {
