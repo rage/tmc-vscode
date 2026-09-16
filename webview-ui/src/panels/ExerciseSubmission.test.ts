@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/svelte"
 
 import type { ExerciseSubmissionPanel } from "../shared/shared"
+import { BaseError, toWebviewError } from "../shared/shared"
 import { getButton } from "../test/dom"
 import {
   moocLocalCourse,
@@ -25,16 +26,17 @@ const moocPanel: ExerciseSubmissionPanel = {
   exercise: moocLocalExercise(),
 }
 
-// Posts the error that ends a failed submission on either backend.
+// Posts the error that ends a failed submission on either backend, through the
+// same JSON serialization the webview bridge applies -- a live `Error` would
+// arrive as `{}`, so the panel must be sent a flattened one.
 function postSubmissionError(panelId: number, error: Error): void {
+  const message = {
+    type: "submissionStatusError",
+    target: { type: "ExerciseSubmission", id: panelId },
+    error: toWebviewError(error),
+  }
   window.dispatchEvent(
-    new MessageEvent("message", {
-      data: {
-        type: "submissionStatusError",
-        target: { type: "ExerciseSubmission", id: panelId },
-        error,
-      },
-    }),
+    new MessageEvent("message", { data: JSON.parse(JSON.stringify(message)) as unknown }),
   )
 }
 
@@ -78,10 +80,11 @@ suite("ExerciseSubmission panel", () => {
 
   test("replaces the progress view with the failure when the submission errors", async () => {
     render(ExerciseSubmission, { props: { panel } })
-    postSubmissionError(panel.id, new Error("Failed to submit: connection reset"))
+    postSubmissionError(panel.id, new BaseError("Failed to submit: connection reset", "ECONNRESET"))
 
     expect(await screen.findByRole("heading", { name: "Submission failed" })).toBeInTheDocument()
     expect(screen.getByRole("alert")).toHaveTextContent("Failed to submit: connection reset")
+    expect(screen.getByRole("alert")).toHaveTextContent("ECONNRESET")
     expect(
       screen.queryByRole("heading", { name: "Processing submission…" }),
     ).not.toBeInTheDocument()

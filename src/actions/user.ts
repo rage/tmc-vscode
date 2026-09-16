@@ -23,7 +23,12 @@ import {
 import { InitializationError } from "../errors"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../shared/shared"
-import { CourseIdentifier, LocalCourseData, LocalCourseExercise } from "../shared/shared"
+import {
+  CourseIdentifier,
+  LocalCourseData,
+  LocalCourseExercise,
+  toWebviewError,
+} from "../shared/shared"
 import { Logger, parseFeedbackQuestion, runSingleFlight } from "../utilities/"
 import { getActiveEditorExecutablePath } from "../window"
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse"
@@ -277,7 +282,7 @@ export async function submitTmcExercise(
         TmcPanel.postMessage({
           type: "submissionStatusError",
           target: panel,
-          error: submissionResult.val,
+          error: toWebviewError(submissionResult.val),
         })
         return submissionResult
       }
@@ -395,7 +400,7 @@ export async function submitMoocExercise(
         TmcPanel.postMessage({
           type: "submissionStatusError",
           target: panel,
-          error: submissionResult.val,
+          error: toWebviewError(submissionResult.val),
         })
         return submissionResult
       }

@@ -279,7 +279,26 @@ suite("submitMoocExercise action", () => {
       expect.objectContaining({ type: "moocSubmissionResult" }),
     )
     expect(TmcPanel.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "submissionStatusError", error }),
+      expect.objectContaining({
+        type: "submissionStatusError",
+        error: { message: "You are submitting too fast, try again later." },
+      }),
     )
+  })
+
+  test("the failure survives the webview boundary with its message intact", async () => {
+    // The panel reads `error.message`, and the webview bridge serializes the
+    // message as JSON -- which drops a live Error's non-enumerable `message`.
+    const { actionContext } = contextWithErr(new Error("Connection reset by peer"))
+
+    await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+
+    const posted = vi
+      .mocked(TmcPanel.postMessage)
+      .mock.calls.flat()
+      .find((message) => message.type === "submissionStatusError")
+    expect(posted).toBeDefined()
+    const delivered = JSON.parse(JSON.stringify(posted)) as { error: { message: string } }
+    expect(delivered.error.message).toBe("Connection reset by peer")
   })
 })

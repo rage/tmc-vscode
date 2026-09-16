@@ -6,7 +6,7 @@
   import ProgressBar from "../components/ProgressBar.svelte"
   import TestResults from "../components/TestResults.svelte"
   import { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
-  import type { ExerciseSubmissionPanel } from "../shared/shared"
+  import type { ExerciseSubmissionPanel, WebviewError } from "../shared/shared"
   import { assertUnreachable, unwrap } from "../shared/shared"
   import { addMessageListener } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
@@ -24,7 +24,7 @@
   let submissionStatusUrl = $state<string | undefined>(undefined)
   let progressPercent = $state<number>(0)
   let progressMessages = $state<Array<string>>([])
-  let submissionError = $state<Error | undefined>(undefined)
+  let submissionError = $state<WebviewError | undefined>(undefined)
   let submissionResult = $state<SubmissionFinished | undefined>(undefined)
   let pasteResult = $state<string | undefined>(undefined)
   let pasteError = $state<string | undefined>(undefined)
@@ -124,6 +124,9 @@
   <div role="alert">
     <h1>Submission failed</h1>
     <div class="error-message">{submissionError.message}</div>
+    {#if submissionError.details}
+      <div class="error-message">{submissionError.details}</div>
+    {/if}
   </div>
 {:else if isMooc}
   <!-- Reduced mooc result: overall grading progress, score, feedback text.

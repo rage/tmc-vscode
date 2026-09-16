@@ -651,6 +651,30 @@ export type State = z.infer<typeof StateSchema>
  * ======== messages to webview ========
  */
 
+/**
+ * A failure flattened for display in a webview.
+ *
+ * The host-to-webview bridge serializes a message as JSON and `Error.message` is
+ * non-enumerable, so a live `Error` arrives as `{}`. Build one with
+ * {@link toWebviewError} at the send site.
+ */
+export const WebviewErrorSchema = z.object({
+  message: z.string(),
+  details: z.string().optional(),
+})
+
+export type WebviewError = z.infer<typeof WebviewErrorSchema>
+
+/** Flattens anything thrown into a {@link WebviewError}. */
+export function toWebviewError(error: unknown): WebviewError {
+  const base = error instanceof BaseError ? error : undefined
+  const message = error instanceof Error ? error.message : String(error)
+  return {
+    message: message || "Unknown error",
+    ...(base?.details ? { details: base.details } : {}),
+  }
+}
+
 const initializationErrorSchema = z
   .object({
     error: z.string(),
@@ -774,7 +798,7 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("submissionStatusError"),
     target: targetPanelSchema("ExerciseSubmission"),
-    error: z.custom<Error>(),
+    error: WebviewErrorSchema,
   }),
   z.object({
     type: z.literal("setNewExercises"),
