@@ -34,4 +34,16 @@ describe("mooc fixture public_spec shape", () => {
       }
     }
   }
+
+  test("the fixtures cover both spec types", () => {
+    // The two types take different paths through the CLI -- only an editor task is
+    // downloadable and submittable -- so a fixture set carrying one of them leaves
+    // the other's branches untested wherever the mock is the backend.
+    const types = new Set(
+      courses.flatMap(({ exercises }) =>
+        exercises.flatMap(({ slide }) => slide.tasks.map((task) => task.public_spec.type)),
+      ),
+    )
+    assert.deepEqual([...types].toSorted(), ["browser", "editor"])
+  })
 })

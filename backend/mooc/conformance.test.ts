@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto"
 import fs from "node:fs"
 import type { Server } from "node:http"
 import path from "node:path"
-import { after, before, describe, test } from "node:test"
+import { after, before, beforeEach, describe, test } from "node:test"
 import { zstdDecompressSync } from "node:zlib"
 
 import type { Express } from "express"
@@ -11,14 +11,22 @@ import type { Express } from "express"
 import { API_ERRORS, type ApiErrorMessageKey } from "./apiErrors"
 import type { MoocExerciseFixture } from "./fixtures"
 import {
+  browserExercise,
   extraCourse,
   failingExercise,
+  futureDeadlineExercise,
+  limitedTriesExercise,
+  mixedTaskExercise,
   nonexistentExerciseId,
+  notClientCapableExercise,
+  notEnrolledCourse,
   notEnrolledExerciseId,
   passingExercise,
+  pastDeadlineExercise,
   pendingManualExercise,
   pythonCourse,
   TMC_ARCHIVE_MIME,
+  variantsCourse,
 } from "./fixtures"
 import { MOCK_SEEDED_ACCESS_TOKEN, MOCK_SEEDED_NOSCOPE_ACCESS_TOKEN } from "./oauth"
 import type { MoocMockControls } from "./router"
@@ -78,13 +86,15 @@ describe("mooc mock conformance", () => {
 
   const api = (p: string): string => `${base}/api/v0/exercise-services/client${p}`
 
-  test("GET courses returns the enrolled courses", async () => {
+  test("GET courses returns the enrolled courses and only those", async () => {
     const res = await authFetch(api("/courses"))
     assert.equal(res.status, 200)
     const body = (await res.json()) as { id: string; name: string }[]
-    assert.equal(body.length, 2)
+    assert.equal(body.length, 3)
     assert.ok(body.some((c) => c.id === pythonCourse.id && c.name === pythonCourse.name))
     assert.ok(body.some((c) => c.id === extraCourse.id))
+    assert.ok(body.some((c) => c.id === variantsCourse.id))
+    assert.ok(!body.some((c) => c.id === notEnrolledCourse.id))
   })
 
   test("GET courses/{id} returns a single course", async () => {
@@ -910,6 +920,267 @@ describe("mooc mock instance isolation", () => {
   })
 })
 
+// The refusals a student meets before their answer is ever graded, and the shapes
+// a native client has to cope with. Every case below is reachable because a
+// fixture carries the state the host reads for it -- an enrollment, a deadline, a
+// try limit, a service slug -- and for no other reason.
+// The status is read off the transcribed contract rather than passed in, so a case
+// cannot assert a status the host would not answer with for that message key.
+const assertRefused = async (
+  res: Response,
+  messageKey: ApiErrorMessageKey,
+  message: string,
+): Promise<void> => {
+  const body = (await res.json()) as { message_key: string; message: string }
+  assert.equal(res.status, API_ERRORS[messageKey].status)
+  assert.equal(body.message_key, messageKey)
+  assert.equal(body.message, message)
+}
+
+describe("mooc mock enrollment, answerability and ownership", () => {
+  let server: Server
+  let base: string
+  let mock: MoocMockControls
+
+  before(async () => {
+    ;({ server, base, mock } = await listen(createMoocApp()))
+  })
+
+  after(() => {
+    server.close()
+  })
+
+  beforeEach(() => {
+    mock.reset()
+  })
+
+  const api = (p: string): string => `${base}/api/v0/exercise-services/client${p}`
+
+  // Uploads one archive for an exercise and returns the response, so a caller can
+  // assert on a refusal as easily as on the file id.
+  const postUpload = (exerciseId: string): Promise<Response> => {
+    const form = new FormData()
+    form.append(
+      randomUUID(),
+      new Blob([new Uint8Array([1, 2, 3])], { type: TMC_ARCHIVE_MIME }),
+      "submission.tar.zst",
+    )
+    return authFetch(api(`/exercises/${exerciseId}/files`), { method: "POST", body: form })
+  }
+
+  const uploadFor = async (exerciseId: string): Promise<string> => {
+    const res = await postUpload(exerciseId)
+    assert.equal(res.status, 200)
+    const { data_files } = (await res.json()) as { data_files: { id: string }[] }
+    return data_files[0]!.id
+  }
+
+  const postSubmit = (
+    exercise: MoocExerciseFixture,
+    fileIds: string[],
+    taskId = exercise.slide.tasks[0]!.task_id,
+  ): Promise<Response> =>
+    authFetch(api(`/exercises/${exercise.slide.exercise_id}/submit`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        exercise_slide_id: exercise.slide.slide_id,
+        exercise_task_id: taskId,
+        answer_kind: "file",
+        data_files: fileIds,
+      }),
+    })
+
+  test("an upload to an exercise whose course the student left is refused", async () => {
+    await assertRefused(
+      await postUpload(notEnrolledExerciseId),
+      "not_enrolled",
+      "User is not enrolled to this exercise's course",
+    )
+  })
+
+  test("a task belonging to a service this client cannot be served is invisible", async () => {
+    const slides = (await (
+      await authFetch(api(`/courses/${variantsCourse.id}/exercises`))
+    ).json()) as { exercise_id: string }[]
+    const listed = new Set(slides.map((slide) => slide.exercise_id))
+    assert.ok(listed.has(browserExercise.slide.exercise_id))
+    // Its only task is a quizzes task, so the whole slide drops out rather than
+    // being listed with an empty task array.
+    assert.ok(!listed.has(notClientCapableExercise.slide.exercise_id))
+  })
+
+  test("fetching an exercise with no servable task is a 404, not a 422", async () => {
+    const res = await authFetch(api(`/exercises/${notClientCapableExercise.slide.exercise_id}`))
+    await assertRefused(res, "not_found", "No task of this exercise can be served to this client")
+  })
+
+  test("submitting to a task this client cannot be served is refused", async () => {
+    const task = notClientCapableExercise.slide.tasks[0]!
+    const fileId = await uploadFor(notClientCapableExercise.slide.exercise_id)
+    await assertRefused(
+      await postSubmit(notClientCapableExercise, [fileId]),
+      "validation_error",
+      `Exercise task ${task.task_id} belongs to the exercise service '${task.exercise_service_slug}', which cannot be served to this client`,
+    )
+  })
+
+  test("a browser exercise carries a browser spec and no downloadable task", async () => {
+    const slide = (await (
+      await authFetch(api(`/exercises/${browserExercise.slide.exercise_id}`))
+    ).json()) as { tasks: { public_spec: { type: string; browser_test?: unknown } }[] }
+    assert.equal(slide.tasks.length, 1)
+    assert.equal(slide.tasks[0]!.public_spec.type, "browser")
+    assert.deepEqual(slide.tasks[0]!.public_spec.browser_test, {
+      runtime: "python",
+      script: "print('hello')",
+    })
+  })
+
+  test("a slide can carry more than one task, only one of them submittable", async () => {
+    const slide = (await (
+      await authFetch(api(`/exercises/${mixedTaskExercise.slide.exercise_id}`))
+    ).json()) as { tasks: { order_number: number; public_spec: { type: string } }[] }
+    assert.deepEqual(
+      slide.tasks.map((task) => [task.order_number, task.public_spec.type]),
+      [
+        [0, "browser"],
+        [1, "editor"],
+      ],
+    )
+  })
+
+  test("an upload to an exercise past its deadline is refused", async () => {
+    await assertRefused(
+      await postUpload(pastDeadlineExercise.slide.exercise_id),
+      "validation_error",
+      "Exercise deadline passed.",
+    )
+  })
+
+  test("a deadline that has not passed refuses nothing", async () => {
+    const fileId = await uploadFor(futureDeadlineExercise.slide.exercise_id)
+    const res = await postSubmit(futureDeadlineExercise, [fileId])
+    assert.equal(res.status, 200)
+  })
+
+  test("the deadline is checked after the answer itself, as the host checks it", async () => {
+    // The host enforces it inside grading, so a submit that never gets that far is
+    // refused for its own reason. A mock that checked the deadline first would
+    // report a different rule than production does for the same request.
+    const res = await authFetch(
+      api(`/exercises/${pastDeadlineExercise.slide.exercise_id}/submit`),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          exercise_slide_id: pastDeadlineExercise.slide.slide_id,
+          exercise_task_id: pastDeadlineExercise.slide.tasks[0]!.task_id,
+        }),
+      },
+    )
+    await assertRefused(
+      res,
+      "validation_error",
+      "The tmc exercise service cannot grade an answer that names no files.",
+    )
+  })
+
+  test("a submit past the slide's try limit is refused", async () => {
+    // Both uploads happen while a try remains, because the upload route is gated
+    // on the same limit -- which is the only way the submit-side check is reached.
+    const first = await uploadFor(limitedTriesExercise.slide.exercise_id)
+    const second = await uploadFor(limitedTriesExercise.slide.exercise_id)
+    assert.equal((await postSubmit(limitedTriesExercise, [first])).status, 200)
+    await assertRefused(
+      await postSubmit(limitedTriesExercise, [second]),
+      "validation_error",
+      "You've ran out of tries.",
+    )
+  })
+
+  test("using up the tries reveals the model solution however the try scored", async () => {
+    // The host's reveal rule counts submissions, not points, on this half, and the
+    // fixture grades as failing -- so a mock that only modelled the full-points
+    // half would still withhold the solution from a student who can no longer try.
+    const fileId = await uploadFor(limitedTriesExercise.slide.exercise_id)
+    assert.equal((await postSubmit(limitedTriesExercise, [fileId])).status, 200)
+    const slide = (await (
+      await authFetch(api(`/exercises/${limitedTriesExercise.slide.exercise_id}`))
+    ).json()) as { tasks: { model_solution_spec: unknown }[] }
+    assert.deepEqual(slide.tasks[0]!.model_solution_spec, {
+      type: "editor",
+      solution_download_url: `${base}/mooc-archives/${limitedTriesExercise.archiveSlug}.tar.zst`,
+    })
+  })
+
+  test("an upload is refused once no slide of the exercise has a try left", async () => {
+    const fileId = await uploadFor(limitedTriesExercise.slide.exercise_id)
+    assert.equal((await postSubmit(limitedTriesExercise, [fileId])).status, 200)
+    await assertRefused(
+      await postUpload(limitedTriesExercise.slide.exercise_id),
+      "validation_error",
+      "You've ran out of tries.",
+    )
+  })
+
+  test("another student's submission is refused on grading, download and share", async () => {
+    const exerciseId = passingExercise.slide.exercise_id
+    const seeded = mock.seedForeignSubmission(exerciseId)
+    assert.ok(seeded)
+    await assertRefused(
+      await authFetch(api(`/submissions/${seeded.taskSubmissionId}/grading`)),
+      "forbidden",
+      "Cannot view another user's submission grading",
+    )
+    await assertRefused(
+      await authFetch(api(`/submissions/${seeded.slideSubmissionId}/download`)),
+      "forbidden",
+      "Cannot download another user's submission",
+    )
+    await assertRefused(
+      await authFetch(api(`/submissions/${seeded.slideSubmissionId}/share`), { method: "POST" }),
+      "forbidden",
+      "Cannot share another user's submission",
+    )
+  })
+
+  test("another student's submission is in no listing of this student's work", async () => {
+    const exerciseId = passingExercise.slide.exercise_id
+    assert.ok(mock.seedForeignSubmission(exerciseId))
+    const listed = (await (
+      await authFetch(api(`/exercises/${exerciseId}/submissions`))
+    ).json()) as unknown[]
+    assert.equal(listed.length, 0)
+    const progress = (await (
+      await authFetch(api(`/courses/${pythonCourse.id}/progress`))
+    ).json()) as { exercises: { attempted: boolean }[] }
+    assert.equal(progress.exercises[0]!.attempted, false)
+  })
+
+  test("a foreign submission seeds and refuses the same way from outside the process", async () => {
+    const seed = await fetch(`${base}/mooc-mock/seed-foreign-submission`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ exercise_id: passingExercise.slide.exercise_id }),
+    })
+    assert.equal(seed.status, 200)
+    const { slide_submission_id } = (await seed.json()) as { slide_submission_id: string }
+    const res = await authFetch(api(`/submissions/${slide_submission_id}/download`))
+    assert.equal(res.status, 403)
+  })
+
+  test("seeding a foreign submission for an unknown exercise is a 404", async () => {
+    const res = await fetch(`${base}/mooc-mock/seed-foreign-submission`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ exercise_id: nonexistentExerciseId }),
+    })
+    assert.equal(res.status, 404)
+    assert.equal(mock.seedForeignSubmission(nonexistentExerciseId), undefined)
+  })
+})
+
 interface ErrorResponse {
   status: number
   body: Record<string, unknown>
@@ -1040,6 +1311,19 @@ describe("mooc mock error envelopes", () => {
       name: "grading of an unknown submission",
       messageKey: "not_found",
       run: async () => read(await authFetch(api(`/submissions/${nonexistentExerciseId}/grading`))),
+    },
+    {
+      name: "sharing another student's submission",
+      messageKey: "forbidden",
+      run: async () => {
+        const seeded = mock.seedForeignSubmission(passingExercise.slide.exercise_id)
+        assert.ok(seeded)
+        return read(
+          await authFetch(api(`/submissions/${seeded.slideSubmissionId}/share`), {
+            method: "POST",
+          }),
+        )
+      },
     },
     {
       name: "download of an unknown submission",
