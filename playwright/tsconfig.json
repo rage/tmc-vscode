@@ -3,7 +3,9 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ESNext"],
-    "types": ["node"]
+    "types": ["node"],
+    // migration-gate.ts reads the pinned CLI version from ../config.js
+    "allowJs": true
   },
   "include": ["**/*", "../playwright.config.ts"]
 }

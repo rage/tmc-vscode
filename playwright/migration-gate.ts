@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process"
-import { readdirSync } from "node:fs"
+import { existsSync } from "node:fs"
 import { join, resolve } from "node:path"
 
+import { productionApi } from "../config"
+import { getLangsCLIForPlatform, getPlatform } from "../src/utilities/env"
 import { semVerCompare } from "../src/utilities/semanticVersion"
 import { vsCodeTest } from "./fixtures"
 
@@ -18,30 +20,59 @@ import { vsCodeTest } from "./fixtures"
 // fix cannot silently switch these on.
 const MOOC_CONTRACT_VERSION = "0.40.0"
 
-function cliVersion(): string | undefined {
-  const cliDir = resolve(__dirname, "..", "backend", "cli")
-  try {
-    const binary = readdirSync(cliDir).find(
-      (name) => name.startsWith("tmc-langs-cli-") && !name.endsWith(".sha256"),
-    )
-    if (!binary) {
-      return undefined
-    }
-    return execFileSync(join(cliDir, binary), ["--version"], { encoding: "utf-8" })
-  } catch {
-    return undefined
+// The pinned filename, not whatever the directory happens to hold: a stale
+// binary left beside the current one would otherwise be picked at random.
+const CLI_PATH = join(
+  resolve(__dirname, "..", "backend", "cli"),
+  getLangsCLIForPlatform(getPlatform(), productionApi.__TMC_LANGS_VERSION__.replaceAll('"', "")),
+)
+
+/**
+ * What the tmc-langs CLI under `backend/cli` reports about itself.
+ *
+ * `broken` -- present but unrunnable, or printing no version -- is deliberately
+ * distinct from `absent`: skipping on it would report a broken harness as "the
+ * pinned CLI is too old", which is how a suite stays green while testing
+ * nothing.
+ */
+type CliProbe =
+  | { kind: "version"; version: string; carriesMoocContract: boolean }
+  | { kind: "absent" }
+  | { kind: "broken"; cause: string }
+
+function probeCli(): CliProbe {
+  if (!existsSync(CLI_PATH)) {
+    return { kind: "absent" }
   }
+  let reported: string
+  try {
+    reported = execFileSync(CLI_PATH, ["--version"], { encoding: "utf-8" }).trim()
+  } catch (error) {
+    return { kind: "broken", cause: String(error) }
+  }
+  // `--version` prints `tmc-langs-cli <version>`, so the version is embedded in
+  // the line rather than being the whole of it; semVerCompare matches unanchored.
+  const comparison = semVerCompare(reported, MOOC_CONTRACT_VERSION, "patch")
+  if (comparison === undefined) {
+    return { kind: "broken", cause: `\`--version\` printed ${JSON.stringify(reported)}` }
+  }
+  return { kind: "version", version: reported, carriesMoocContract: comparison >= 0 }
 }
 
-const version = cliVersion()
-const cmp =
-  version === undefined ? undefined : semVerCompare(version, MOOC_CONTRACT_VERSION, "patch")
-const cliSupportsMoocContract = cmp !== undefined && cmp >= 0
+const probe = probeCli()
+if (probe.kind === "broken") {
+  throw new Error(`Could not read a version from the tmc-langs CLI at ${CLI_PATH}: ${probe.cause}`)
+}
+
+const cliSupportsMoocContract = probe.kind === "version" && probe.carriesMoocContract
 
 if (!cliSupportsMoocContract) {
+  const reason =
+    probe.kind === "absent"
+      ? `no CLI at ${CLI_PATH} (run \`pnpm --dir backend run setup\`)`
+      : `backend/cli reports ${probe.version}, which does not implement the mooc CLI contract`
   console.warn(
-    `Skipping the mooc e2e specs: backend/cli reports ${version?.trim() ?? "no version"}, ` +
-      `which does not implement the mooc CLI contract (needs >= ${MOOC_CONTRACT_VERSION}). ` +
+    `Skipping the mooc e2e specs: ${reason} (needs >= ${MOOC_CONTRACT_VERSION}). ` +
       "Install a migration-branch build with bin/useLocalLangs.bash to run them.",
   )
 }
