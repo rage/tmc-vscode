@@ -634,3 +634,88 @@ suite("TmcPanel webview document", () => {
     ])
   })
 })
+
+function courseWith(exerciseCount: number) {
+  return makeTmcKind({
+    id: 42,
+    name: "python-course",
+    title: "Python Course",
+    description: "",
+    organization: "mooc",
+    exercises: Array.from({ length: exerciseCount }, (_, index) => ({
+      id: index + 1,
+      availablePoints: 1,
+      awardedPoints: 0,
+      name: `part01-${String(index).padStart(3, "0")}_exercise`,
+      deadline: null,
+      passed: false,
+      softDeadline: null,
+    })),
+    availablePoints: exerciseCount,
+    awardedPoints: 0,
+    perhapsExamMode: false,
+    newExercises: [],
+    notifyAfter: 0,
+    disabled: false,
+    materialUrl: null,
+  })
+}
+
+suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
+  const COURSE_ID = CourseIdentifier.from(42)
+  // Large enough that one message per exercise would be obvious in the count.
+  const EXERCISE_COUNT = 150
+
+  async function openCourseDetails(exerciseCount: number): Promise<{
+    posted: { type: string }[]
+  }> {
+    const course = courseWith(exerciseCount)
+    const actionContext = {
+      ...createMockActionContext(),
+      langs: Ok({
+        getCourseDetails: vi.fn().mockResolvedValue(Ok({})),
+      } as unknown as Langs),
+      userData: Ok({ getCourse: () => Ok(course) }),
+      workspaceManager: Ok({ getExercises: () => [] }),
+    } as unknown as ReturnType<typeof createMockActionContext>
+
+    const { panel, listener } = await mountSidePanel(actionContext)
+    await listener({
+      type: "requestCourseDetailsData",
+      sourcePanel: {
+        id: 5,
+        type: "CourseDetails",
+        courseId: COURSE_ID,
+        exerciseStatuses: { tmc: {}, mooc: {} },
+      },
+    })
+    // The connectivity probe resolves on a later tick; let its continuation run.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+
+    return {
+      posted: vi.mocked(panel.webview.postMessage).mock.calls.map(([m]) => m as { type: string }),
+    }
+  }
+
+  test("costs the same number of messages however many exercises the course has", async () => {
+    const small = await openCourseDetails(1)
+    const large = await openCourseDetails(EXERCISE_COUNT)
+
+    expect(large.posted).toHaveLength(small.posted.length)
+    expect(large.posted.filter((m) => m.type === "exerciseStatusChange")).toHaveLength(0)
+  })
+
+  test("reports every exercise's status in one message", async () => {
+    const { posted } = await openCourseDetails(EXERCISE_COUNT)
+
+    const statuses = posted.filter((m) => m.type === "setExerciseStatuses")
+    expect(statuses).toHaveLength(1)
+    expect(statuses[0]).toMatchObject({
+      courseId: COURSE_ID,
+      statuses: expect.any(Array),
+    })
+    expect((statuses[0] as { statuses: unknown[] }).statuses).toHaveLength(EXERCISE_COUNT)
+  })
+})

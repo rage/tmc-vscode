@@ -1,7 +1,7 @@
 import { ExerciseStatus } from "../api/workspaceManager"
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise } from "../shared/shared"
-import type { ExerciseGroup } from "../shared/shared"
+import { LocalCourseData, LocalCourseExercise } from "../shared/shared"
+import type { ExerciseGroup, ExerciseIdentifier } from "../shared/shared"
 import type * as UITypes from "../ui/types"
 import { dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utilities"
 
@@ -63,12 +63,7 @@ export function buildCourseDetailsView(
     const entry: UITypes.CourseDetailsExercise = {
       id: exerciseId,
       name,
-      passed:
-        LocalCourseData.getExercises(course).find(
-          (ce) =>
-            ExerciseIdentifier.toString(LocalCourseExercise.getId(ce)) ===
-            ExerciseIdentifier.toString(exerciseId),
-        )?.data.passed || false,
+      passed: ex.data.passed,
       softDeadline,
       softDeadlineString: softDeadline ? dateToString(softDeadline) : "-",
       hardDeadline,

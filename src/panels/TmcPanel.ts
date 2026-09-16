@@ -11,6 +11,7 @@ import { InitializationError } from "../errors"
 import type {
   CourseIdentifier,
   ExerciseIdentifier,
+  ExerciseStatus,
   ExtensionToWebview,
   Panel,
   WebviewToExtension,
@@ -412,15 +413,17 @@ export class TmcPanel {
                 offlineMode,
                 new Date(),
               )
-              for (const { exerciseId, status } of view.exerciseStatuses) {
-                postMessageToWebview(webview, {
-                  type: "exerciseStatusChange",
-                  target: message.sourcePanel,
-                  courseId: LocalCourseData.getCourseId(course),
-                  exerciseId,
-                  status,
-                })
-              }
+              postMessageToWebview(webview, {
+                type: "setExerciseStatuses",
+                target: message.sourcePanel,
+                courseId: LocalCourseData.getCourseId(course),
+                statuses: view.exerciseStatuses.map(
+                  ({ exerciseId, status }): [ExerciseIdentifier, ExerciseStatus] => [
+                    exerciseId,
+                    status,
+                  ],
+                ),
+              })
               postMessageToWebview(webview, {
                 type: "setCourseGroups",
                 target: message.sourcePanel,
