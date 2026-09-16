@@ -11,6 +11,8 @@ import {
   HIDE_META_FILES,
   SHOW_META_FILES,
   WATCHER_EXCLUDE,
+  WORKSPACE_ROOT_FILE_NAME,
+  WORKSPACE_ROOT_FILE_TEXT,
   WORKSPACE_ROOT_FOLDER_NAME,
   WORKSPACE_SETTINGS,
   workspaceFileName,
@@ -40,6 +42,43 @@ interface ConfigurationProperties {
   scope?: string
   enum?: string[]
   enumDescriptions?: string[]
+}
+
+/**
+ * Creates a course's `.code-workspace` file at `workspaceFilePath`, leaving an
+ * existing one untouched.
+ *
+ * A free function rather than a method because activation writes workspace files
+ * before `WorkspaceManager` is constructed.
+ */
+export async function ensureCourseWorkspaceFile(workspaceFilePath: string): Promise<void> {
+  await fs.ensureDir(path.dirname(workspaceFilePath))
+  try {
+    await fs.writeFile(workspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS), { flag: "wx" })
+    Logger.info("Created course workspace file at", workspaceFilePath)
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EEXIST") {
+      throw e
+    }
+  }
+}
+
+/**
+ * Creates the `.tmc` folder every course workspace opens at its root, and the
+ * readme inside it.
+ *
+ * The readme ships with the extension, so an upgrade has to replace an older
+ * copy; an unchanged one is left alone rather than rewritten on every startup.
+ */
+export async function ensureWorkspaceRootFile(workspaceFileFolder: string): Promise<void> {
+  const rootFolder = path.join(workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME)
+  await fs.ensureDir(rootFolder)
+
+  const rootFile = path.join(rootFolder, WORKSPACE_ROOT_FILE_NAME)
+  const stored = await fs.readFile(rootFile, "utf-8").catch(() => undefined)
+  if (stored !== WORKSPACE_ROOT_FILE_TEXT) {
+    await fs.writeFile(rootFile, WORKSPACE_ROOT_FILE_TEXT)
+  }
 }
 
 /**
@@ -264,11 +303,17 @@ export default class WorkspaceManager implements vscode.Disposable {
     )
   }
 
+  /**
+   * Creates the course's `.code-workspace` file unless it is already there.
+   *
+   * Synchronous because its callers open the file in the next statement; the
+   * activation path uses {@link ensureCourseWorkspaceFile} instead.
+   */
   public createWorkspaceFile(courseName: string, backend: "tmc" | "mooc"): void {
-    const tmcWorkspaceFilePath = this._resources.getWorkspaceFilePath(courseName, backend)
-    if (!fs.existsSync(tmcWorkspaceFilePath)) {
-      fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS))
-      Logger.info("Created tmc workspace file at", tmcWorkspaceFilePath)
+    const workspaceFilePath = this._resources.getWorkspaceFilePath(courseName, backend)
+    if (!fs.existsSync(workspaceFilePath)) {
+      fs.writeFileSync(workspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS))
+      Logger.info("Created course workspace file at", workspaceFilePath)
     }
   }
 

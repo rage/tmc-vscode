@@ -7,10 +7,17 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../../api/workspaceManager"
-import WorkspaceManager, { ExerciseStatus } from "../../api/workspaceManager"
+import WorkspaceManager, {
+  ensureCourseWorkspaceFile,
+  ensureWorkspaceRootFile,
+  ExerciseStatus,
+} from "../../api/workspaceManager"
 import {
   HIDE_META_FILES,
+  WORKSPACE_ROOT_FILE_NAME,
+  WORKSPACE_ROOT_FILE_TEXT,
   WORKSPACE_ROOT_FOLDER_NAME,
+  WORKSPACE_SETTINGS,
   workspaceFileName,
 } from "../../config/constants"
 import Resources from "../../config/resources"
@@ -389,5 +396,73 @@ suite("WorkspaceManager class", function () {
         { uri: tmcExercise.uri },
       )
     })
+  })
+})
+
+suite("workspace file creation", function () {
+  let workspaceFileFolder: string
+
+  beforeEach(function () {
+    workspaceFileFolder = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-files-"))
+  })
+
+  afterEach(function () {
+    fs.rmSync(workspaceFileFolder, { recursive: true, force: true })
+  })
+
+  test("writes a course workspace file with the extension's settings", async function () {
+    const workspaceFile = path.join(workspaceFileFolder, workspaceFileName("a course", "mooc"))
+
+    await ensureCourseWorkspaceFile(workspaceFile)
+
+    expect(JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))).toEqual(WORKSPACE_SETTINGS)
+  })
+
+  // The file carries the student's own folder list and per-workspace settings.
+  test("leaves an existing course workspace file untouched", async function () {
+    const workspaceFile = path.join(workspaceFileFolder, workspaceFileName("a course", "tmc"))
+    fs.writeFileSync(workspaceFile, '{"folders":[{"path":"kept"}]}')
+
+    await ensureCourseWorkspaceFile(workspaceFile)
+
+    expect(fs.readFileSync(workspaceFile, "utf-8")).toBe('{"folders":[{"path":"kept"}]}')
+  })
+
+  test("creates the workspace folder a course file is asked for", async function () {
+    const workspaceFile = path.join(
+      workspaceFileFolder,
+      "not yet there",
+      workspaceFileName("a course", "tmc"),
+    )
+
+    await ensureCourseWorkspaceFile(workspaceFile)
+
+    expect(fs.existsSync(workspaceFile)).toBe(true)
+  })
+
+  test("writes the readme into the workspace root folder", async function () {
+    await ensureWorkspaceRootFile(workspaceFileFolder)
+
+    const rootFile = path.join(
+      workspaceFileFolder,
+      WORKSPACE_ROOT_FOLDER_NAME,
+      WORKSPACE_ROOT_FILE_NAME,
+    )
+    expect(fs.readFileSync(rootFile, "utf-8")).toBe(WORKSPACE_ROOT_FILE_TEXT)
+  })
+
+  // It ships with the extension, so an upgrade has to replace the copy on disk.
+  test("replaces a readme left by an older version", async function () {
+    const rootFile = path.join(
+      workspaceFileFolder,
+      WORKSPACE_ROOT_FOLDER_NAME,
+      WORKSPACE_ROOT_FILE_NAME,
+    )
+    fs.mkdirSync(path.dirname(rootFile), { recursive: true })
+    fs.writeFileSync(rootFile, "an older FAQ")
+
+    await ensureWorkspaceRootFile(workspaceFileFolder)
+
+    expect(fs.readFileSync(rootFile, "utf-8")).toBe(WORKSPACE_ROOT_FILE_TEXT)
   })
 })

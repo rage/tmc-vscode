@@ -5,13 +5,31 @@ import * as tmp from "tmp"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
+import { workspaceFileName } from "../../config/constants"
 import { CorruptStoredDataError, FileSystemError } from "../../errors"
 import { resourceInitialization } from "../../init/resources"
 import Storage from "../../storage"
 import { v3 } from "../../storage/data"
+import type { MoocLocalCourseData } from "../../storage/data"
 import { Logger, LogLevel } from "../../utilities"
 import * as userData from "../fixtures/userData"
 import { createMockContext } from "../mocks/vscode"
+
+const moocCourse: MoocLocalCourseData = {
+  id: "8bd5a0d6-8ba0-4b2a-a2e0-0dd1ba7f2af5",
+  name: "a-mooc-course",
+  title: "A courses.mooc.fi course",
+  description: null,
+  organization: "mooc",
+  exercises: [],
+  availablePoints: 0,
+  awardedPoints: 0,
+  perhapsExamMode: false,
+  newExercises: [],
+  notifyAfter: 0,
+  disabled: false,
+  materialUrl: null,
+}
 
 // jest-mock-vscode ships no `env` namespace, and `Resources` reads `env.appName`.
 vi.mock("vscode", async (importOriginal) => ({
@@ -45,6 +63,30 @@ suite("resourceInitialization", function () {
 
     expect(result.ok).toBe(true)
     expect(fs.existsSync(path.join(workspaceFileFolder, ".tmc"))).toBe(true)
+    expect(
+      fs.existsSync(path.join(workspaceFileFolder, workspaceFileName("test-python-course", "tmc"))),
+    ).toBe(true)
+  })
+
+  test("creates the workspace files for a stored mooc course", async function () {
+    await context.globalState.update(v3.USER_DATA_KEY, {
+      courses: [],
+      mooc_courses: [moocCourse],
+    })
+    const workspaceFileFolder = path.join(temporaryRoot, "workspaces")
+
+    const result = await resourceInitialization(
+      context,
+      storage,
+      "3.0.0",
+      undefined,
+      workspaceFileFolder,
+    )
+
+    expect(result.ok).toBe(true)
+    expect(
+      fs.existsSync(path.join(workspaceFileFolder, workspaceFileName("a-mooc-course", "mooc"))),
+    ).toBe(true)
   })
 
   // The whole degraded mode -- the tree view's recovery entries, the
