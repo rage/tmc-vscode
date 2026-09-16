@@ -16,7 +16,7 @@ import type {
 import {
   CLI_PROCESS_TIMEOUT,
   closedExercisesSettingKey,
-  EXAM_TEST_RESULT,
+  EXERCISE_CHECK_INTERVAL,
   NOTIFICATION_DELAY,
   SUBMIT_PROCESS_TIMEOUT,
 } from "../config/constants"
@@ -134,13 +134,6 @@ export async function testExercise(
       }
       await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
 
-      let data: TestResultData = {
-        ...EXAM_TEST_RESULT,
-        id: LocalCourseExercise.getId(courseExercise),
-        disabled: course.data.disabled,
-        courseSlug: LocalCourseData.getCourseName(course),
-      }
-
       if (!course.data.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext)
         const { process: testRunner, interrupt: testInterrupt } = langs.val.runTests(
@@ -177,7 +170,7 @@ export async function testExercise(
           return Ok.EMPTY
         }
 
-        data = {
+        const data: TestResultData = {
           testResult: testResults.val,
           id: LocalCourseExercise.getId(courseExercise),
           courseSlug: LocalCourseData.getCourseName(course),
@@ -321,8 +314,7 @@ export async function submitTmcExercise(
   }
 
   const courseId = LocalCourseData.getCourseId(course)
-  await checkForCourseUpdates(actionContext, courseId)
-  vscode.commands.executeCommand("tmc.updateExercises", "silent")
+  await refreshEverything(actionContext, { silent: true, courseId })
 
   return Ok.EMPTY
 }
@@ -445,8 +437,7 @@ export async function submitMoocExercise(
   // `getMoocCourseProgress` via `updateCourse`, so without this refresh the
   // CourseDetails/MyCourses totals stay stale until the user refreshes by hand.
   const courseId = LocalCourseData.getCourseId(course)
-  await checkForCourseUpdates(actionContext, courseId)
-  vscode.commands.executeCommand("tmc.updateExercises", "silent")
+  await refreshEverything(actionContext, { silent: true, courseId })
 
   return Ok.EMPTY
 }
@@ -550,25 +541,35 @@ export async function pasteMoocExercise(
   )
 }
 
+export interface CourseUpdateOptions {
+  /** Refresh only this course instead of every added one. */
+  courseId?: CourseIdentifier | undefined
+  /** Called as each course finishes, for a progress indicator. */
+  onProgress?: ((done: number, total: number) => void) | undefined
+}
+
 /**
- * Check for course updates.
- * @param courseId If given, check only updates for that course.
+ * Re-fetches each added course's data, then offers to download whatever new
+ * exercises turned up.
+ *
+ * One course failing does not stop the rest; the returned `Err` names every
+ * course that could not be refreshed. Nothing is reported here — the caller
+ * decides whether a background failure is worth a notification.
  */
 export async function checkForCourseUpdates(
   actionContext: ActionContext,
-  courseId?: CourseIdentifier,
-): Promise<void> {
+  options: CourseUpdateOptions = {},
+): Promise<Result<void, Error>> {
   const { dialog, userData } = actionContext
+  const { courseId, onProgress } = options
   if (userData.err) {
-    Logger.error("Extension was not initialized properly")
-    return
+    return Err(new InitializationError("Extension was not initialized properly"))
   }
   let courses: LocalCourseData[]
   if (courseId) {
     const courseResult = userData.val.getCourse(courseId)
     if (courseResult.err) {
-      dialog.errorNotification("Failed to check for course updates.", courseResult.val)
-      return
+      return courseResult
     }
     courses = [courseResult.val]
   } else {
@@ -576,16 +577,29 @@ export async function checkForCourseUpdates(
   }
 
   Logger.info(`Checking for course updates for courses`)
-  const updatedCourses: LocalCourseData[] = []
-  for (const course of courses) {
-    const id = LocalCourseData.getCourseId(course)
-    await updateCourse(actionContext, id)
-    const updated = userData.val.getCourse(id)
-    if (updated.err) {
-      dialog.errorNotification("Failed to check for course updates.", updated.val)
-      return
-    }
-    updatedCourses.push(updated.val)
+  let done = 0
+  onProgress?.(done, courses.length)
+  // Courses hold disjoint records and `UserData` serializes its own writes, so
+  // these run together rather than one course's CLI round trips after another's.
+  const refreshed = await Promise.all(
+    courses.map(async (course) => {
+      const id = LocalCourseData.getCourseId(course)
+      const updateResult = await updateCourse(actionContext, id)
+      onProgress?.(++done, courses.length)
+      const reread = userData.val.getCourse(id)
+      return {
+        name: LocalCourseData.getCourseName(course),
+        error: updateResult.err ? updateResult.val : reread.err ? reread.val : undefined,
+        updated: reread.ok ? reread.val : undefined,
+      }
+    }),
+  )
+  const updatedCourses = refreshed
+    .map((x) => x.updated)
+    .filter((x): x is LocalCourseData => x !== undefined)
+  const failures = refreshed.filter((x) => x.error !== undefined)
+  for (const failure of failures) {
+    Logger.warn(`Failed to update course ${failure.name}`, failure.error)
   }
 
   const handleDownload = async (course: LocalCourseData): Promise<void> => {
@@ -599,9 +613,9 @@ export async function checkForCourseUpdates(
     }
   }
 
-  // `notifyAfter` throttles this toast only. The refresh above has to run
-  // regardless, or one "Remind me later" click freezes course metadata and point
-  // totals for the whole delay, including the refresh each submit asks for.
+  // `notifyAfter` throttles this toast only: gating the refresh above on it too
+  // would freeze course metadata and point totals for the whole delay, including
+  // the refresh each submit asks for.
   const now = Date.now()
   for (const course of updatedCourses) {
     const newExercises = LocalCourseData.getNewExercises(course)
@@ -635,6 +649,59 @@ export async function checkForCourseUpdates(
       )
     }
   }
+
+  if (failures.length > 0) {
+    const names = failures.map((x) => x.name).join(", ")
+    const firstMessage = failures[0]?.error?.message ?? "unknown error"
+    return Err(new Error(`Failed to fetch updates for ${names}: ${firstMessage}`))
+  }
+  return Ok.EMPTY
+}
+
+/**
+ * The extension's one background refresh: course data first, then the exercise
+ * update check.
+ *
+ * Activation, the maintenance poll, the tree view's refresh button and the tail
+ * of each submit all want this, and two passes overlapping would interleave
+ * writes to `UserData` and prompt twice about the same exercises. They share one
+ * key, so a call made while another is running comes back as a
+ * `BottleneckError` rather than queueing.
+ *
+ * @param courseId Refresh only that course's data; the exercise update check
+ * always covers every course.
+ * @param silent Downgrades both the "already refreshing" notice and a failed
+ * course refresh from a notification to a log line, and runs the exercise
+ * update check quietly.
+ */
+export async function refreshEverything(
+  actionContext: ActionContext,
+  options: { silent: boolean } & CourseUpdateOptions,
+): Promise<Result<void, Error>> {
+  const { dialog } = actionContext
+  const { silent, courseId, onProgress } = options
+  return runSingleFlight(
+    {
+      key: "refresh:all",
+      // A wedged refresh releases the key by the time the next poll wants it.
+      maxHoldMs: EXERCISE_CHECK_INTERVAL,
+      busyMessage: "A refresh is already in progress.",
+      onBusy: silent ? (): void => {} : (message): void => void dialog.notification(message),
+    },
+    async () => {
+      const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
+      if (refreshed.err) {
+        if (silent) {
+          Logger.warn("Failed to check for course updates.", refreshed.val)
+        } else {
+          dialog.errorNotification("Failed to check for course updates.", refreshed.val)
+        }
+      }
+      // Through the command, so `actions` doesn't have to import `commands`.
+      await vscode.commands.executeCommand("tmc.updateExercises", silent ? "silent" : "loud")
+      return refreshed
+    },
+  )
 }
 
 /**

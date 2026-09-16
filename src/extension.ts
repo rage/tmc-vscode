@@ -4,7 +4,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { checkForCourseUpdates, refreshLocalExercises } from "./actions"
+import { refreshEverything, refreshLocalExercises } from "./actions"
 import type { ActionContext } from "./actions/types"
 import Dialog from "./api/dialog"
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider"
@@ -206,12 +206,8 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   }
   // Both backends are authenticated by the same courses.mooc.fi credential, so
   // either one expiring is fixed by the same device-flow login.
-  const sessionExpiredWarning = (backend: "tmc" | "mooc"): void => {
-    const message =
-      backend === "tmc"
-        ? "Your session has expired, please log in."
-        : "Your courses.mooc.fi session has expired, please log in."
-    dialog.warningNotification(message, [
+  const sessionExpiredWarning = (): void => {
+    dialog.warningNotification("Your session has expired, please log in.", [
       "Log in",
       (): void => {
         vscode.commands.executeCommand("tmc.showMoocLogin")
@@ -344,8 +340,9 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   }
 
   if (authenticated) {
-    vscode.commands.executeCommand("tmc.updateExercises", "silent")
-    checkForCourseUpdates(actionContext)
+    void refreshEverything(actionContext, { silent: true }).catch((e) =>
+      Logger.error("Background refresh failed", e),
+    )
   }
 
   if (maintenanceInterval) {
@@ -369,8 +366,9 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     sessionExpiry.onAuthChecked("tmc", authStatus.tmc)
     sessionExpiry.onAuthChecked("mooc", authStatus.mooc)
     if (authStatus.tmc || authStatus.mooc) {
-      vscode.commands.executeCommand("tmc.updateExercises", "silent")
-      checkForCourseUpdates(actionContext)
+      void refreshEverything(actionContext, { silent: true }).catch((e) =>
+        Logger.error("Background refresh failed", e),
+      )
     }
     await applyAuthContext()
   }, EXERCISE_CHECK_INTERVAL)

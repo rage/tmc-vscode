@@ -25,8 +25,7 @@
   let errorMessage = $state<string | null>(null)
   let copyStatus = $state<"idle" | "copied" | "failed">("idle")
 
-  // The outcome is a transient hint next to a code that stays on screen for minutes,
-  // so it clears itself; the cleanup keeps the timer from outliving the component.
+  // The code itself stays on screen for minutes, so the copy outcome beside it expires.
   $effect(() => {
     if (copyStatus === "idle") {
       return

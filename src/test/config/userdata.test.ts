@@ -552,6 +552,38 @@ suite("UserData setExerciseAsPassed", function () {
   })
 })
 
+suite("UserData concurrent writes", function () {
+  test("chains overlapping writes instead of letting them interleave", async function () {
+    const [userData, store] = await makeUserData({
+      courses: [tmcCourse({ id: 0 })],
+      mooc_courses: [],
+    })
+    const events: string[] = []
+    let writeCount = 0
+    vi.spyOn(store, "updateUserData").mockImplementation(async () => {
+      const write = ++writeCount
+      events.push(`start${write}`)
+      // The first write is the slower one, so an unserialized second write
+      // would finish inside it.
+      await new Promise((resolve) => {
+        setTimeout(resolve, write === 1 ? 10 : 0)
+      })
+      events.push(`end${write}`)
+    })
+
+    await Promise.all([
+      userData.setNewExerciseNotifyAfter(CourseIdentifier.from(0), 111),
+      userData.setNewExerciseNotifyAfter(CourseIdentifier.from(0), 222),
+    ])
+
+    expect(events).toEqual(["start1", "end1", "start2", "end2"])
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+})
+
 suite("UserData write failures", function () {
   /** A `UserData` whose every persistence write rejects. */
   async function withFailingWrites(

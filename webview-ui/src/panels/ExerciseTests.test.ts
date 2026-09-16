@@ -3,8 +3,8 @@ import { tick } from "svelte"
 import type { Uri } from "vscode"
 
 import type { ExerciseTestsPanel } from "../shared/shared"
-import { getButton } from "../test/dom"
-import { testResultData, tmcLocalCourse, tmcLocalExercise } from "../test/fixtures"
+import { findButton, getButton } from "../test/dom"
+import { testResult, testResultData, tmcLocalCourse, tmcLocalExercise } from "../test/fixtures"
 import { postedMessages } from "../test/setup"
 import ExerciseTests from "./ExerciseTests.svelte"
 
@@ -128,6 +128,38 @@ suite("ExerciseTests panel", () => {
       exercise: panel.exercise,
       exerciseUri,
     })
+  })
+
+  test("offers paste help only when a test failed", async () => {
+    render(ExerciseTests, { props: { panel } })
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: "testResults",
+          target: { type: "ExerciseTests", id: panel.id },
+          testResults: testResultData(),
+        },
+      }),
+    )
+    expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
+    expect(screen.queryByText("Need help?")).not.toBeInTheDocument()
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: "testResults",
+          target: { type: "ExerciseTests", id: panel.id },
+          testResults: testResultData({
+            testResult: {
+              logs: {},
+              status: "TESTS_FAILED",
+              testResults: [testResult({ successful: false, message: "boom" })],
+            },
+          }),
+        },
+      }),
+    )
+    expect(await findButton("Need help?")).toBeInTheDocument()
   })
 
   test("a failed test run shows the failure, the choice and a working Close button", async () => {

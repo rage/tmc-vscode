@@ -47,13 +47,12 @@ export function createSessionExpiryTracker(
       warnedExpired[backend] = false
     },
     onLogout(backend, expected) {
-      if (!expected) {
+      if (!expected && hadSession[backend]) {
         warnOnce(backend)
-      } else {
-        // Explicit, intentional logout: a later poll observing "not
-        // authenticated" must not treat this as an expired session.
-        hadSession[backend] = false
       }
+      // The session is gone either way, so a later poll observing "not
+      // authenticated" must not treat it as a fresh expiry.
+      hadSession[backend] = false
     },
     reset(backend) {
       hadSession[backend] = false

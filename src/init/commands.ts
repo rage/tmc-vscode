@@ -1,7 +1,6 @@
 import * as vscode from "vscode"
 
 import * as actions from "../actions"
-import { checkForCourseUpdates } from "../actions"
 import type { ActionContext } from "../actions/types"
 import * as commands from "../commands"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
@@ -20,8 +19,14 @@ export function registerCommands(
   context.subscriptions.push(
     vscode.commands.registerCommand("tmcView.activateEntry", ui.createUiActionHandler()),
     vscode.commands.registerCommand("tmcTreeView.refreshCourses", async () => {
-      await checkForCourseUpdates(actionContext)
-      await commands.updateExercises(actionContext, "loud")
+      await dialog.progressNotification("Fetching course updates...", async (progress) => {
+        await actions.refreshEverything(actionContext, {
+          silent: false,
+          onProgress: (done, total) => {
+            progress.report({ percent: total === 0 ? 1 : done / total })
+          },
+        })
+      })
     }),
 
     // Commands shown to user in Command Palette / TMC Action menu

@@ -56,7 +56,7 @@ suite("moveExtensionDataPath action", function () {
 
   test("should change extension data path", async function () {
     const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
-    expect(result).toBe(Ok.EMPTY)
+    expect(result.val).toBe(emptyFolder(root).fsPath)
     expect(tmcMock.moveProjectsDirectory).toHaveBeenCalledExactlyOnceWith(
       emptyFolder(root).fsPath,
       undefined,
@@ -65,9 +65,17 @@ suite("moveExtensionDataPath action", function () {
 
   test("should append tmcdata to path if target is not empty", async function () {
     const result = await moveExtensionDataPath(actionContext(), nonEmptyFolder(root))
-    expect(result).toBe(Ok.EMPTY)
     const expected = path.join(nonEmptyFolder(root).fsPath, "tmcdata")
+    expect(result.val).toBe(expected)
     expect(tmcMock.moveProjectsDirectory).toHaveBeenCalledExactlyOnceWith(expected, undefined)
+  })
+
+  test("should report an unreadable target folder instead of throwing", async function () {
+    const missing = vscode.Uri.file(root + "/new/path/does-not-exist")
+    const result = await moveExtensionDataPath(actionContext(), missing)
+    expect(result.err).toBe(true)
+    expect(String(result.val)).toContain(missing.fsPath)
+    expect(tmcMock.moveProjectsDirectory).not.toHaveBeenCalled()
   })
 
   test("should set exercises again after moving", async function () {

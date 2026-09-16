@@ -11,7 +11,7 @@ function semVerCompare(
   b: string,
   level: "major" | "minor" | "patch",
 ): number | undefined {
-  const matcher = /([0-9]+).([0-9]+).([0-9]+)/
+  const matcher = /(\d+)\.(\d+)\.(\d+)/
   const matchA = a.match(matcher)
   const matchB = b.match(matcher)
   if (matchA === null || matchB === null) {

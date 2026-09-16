@@ -86,7 +86,7 @@ vi.mock("../../init/verifyCliSchema", () => ({
 }))
 
 vi.mock("../../actions", () => ({
-  checkForCourseUpdates: async (): Promise<void> => {},
+  refreshEverything: async (): Promise<unknown> => Ok.EMPTY,
   refreshLocalExercises: async (): Promise<unknown> => Ok.EMPTY,
 }))
 

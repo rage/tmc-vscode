@@ -2,6 +2,7 @@ import type { Mock } from "vitest"
 import type { OutputChannel } from "vscode"
 import { window } from "vscode"
 
+import { BaseError } from "../../shared/shared"
 import { Logger, LogLevel } from "../../utilities/logger"
 
 const TOKEN = "super-secret-refresh-token"
@@ -51,6 +52,23 @@ suite("Logger redaction", function () {
     expect(loggable).toContain("bearer")
     expect(loggable).toContain("exercise-services")
     expect(loggable).toContain("logged in")
+  })
+
+  test("a function is named, not dumped in full", function () {
+    function namedHelper(): string {
+      return TOKEN
+    }
+
+    expect(Logger.toLoggable(namedHelper)).toBe("[Function namedHelper]")
+  })
+
+  test("a cause chain that loops back on itself terminates", function () {
+    const outer = new BaseError("outer")
+    const inner = new BaseError("inner")
+    outer.cause = inner
+    inner.cause = outer
+
+    expect(Logger.toLoggable(outer)).toContain("{...}")
   })
 
   test("a value that cannot be serialized does not throw", function () {

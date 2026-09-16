@@ -2,7 +2,13 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import { checkForCourseUpdates, logout, openWorkspace, removeCourse } from "../../actions"
+import {
+  checkForCourseUpdates,
+  logout,
+  openWorkspace,
+  refreshEverything,
+  removeCourse,
+} from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
@@ -318,7 +324,8 @@ function contextWithCourses(courses: LocalCourseData[]): [ActionContext, Dialog]
 
 suite("checkForCourseUpdates action", function () {
   beforeEach(function () {
-    vi.mocked(updateCourse).mockClear()
+    vi.mocked(updateCourse).mockReset()
+    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
   })
 
   test("refreshes a course whose new-exercise reminder is postponed", async function () {
@@ -338,6 +345,37 @@ suite("checkForCourseUpdates action", function () {
     expect(dialog.notification).not.toHaveBeenCalled()
   })
 
+  test("refreshes the other courses after one fails, and names the failure", async function () {
+    vi.mocked(updateCourse).mockImplementation(async (_actionContext, id) =>
+      CourseIdentifier.toString(id) === "1" ? Err(new Error("boom")) : Ok(true),
+    )
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, []), tmcCourse(2, 0, [])])
+
+    const result = await checkForCourseUpdates(actionContext)
+
+    expect(updateCourse).toHaveBeenCalledTimes(2)
+    expect(result.err && result.val.message).toContain("course-1")
+    // The caller decides whether a background failure is worth a toast.
+    expect(dialog.errorNotification).not.toHaveBeenCalled()
+  })
+
+  test("reports progress as each course finishes", async function () {
+    const reported: [number, number][] = []
+    const [actionContext] = contextWithCourses([tmcCourse(1, 0, []), tmcCourse(2, 0, [])])
+
+    await checkForCourseUpdates(actionContext, {
+      onProgress: (done, total) => {
+        reported.push([done, total])
+      },
+    })
+
+    expect(reported).toEqual([
+      [0, 2],
+      [1, 2],
+      [2, 2],
+    ])
+  })
+
   test("refreshes and notifies for a course whose reminder is due", async function () {
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
 
@@ -350,5 +388,78 @@ suite("checkForCourseUpdates action", function () {
       expect.anything(),
       expect.anything(),
     )
+  })
+})
+
+suite("refreshEverything action", function () {
+  let executeCommand: ReturnType<typeof vi.spyOn>
+
+  beforeEach(function () {
+    vi.mocked(updateCourse).mockReset()
+    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
+    executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("refreshes course data before checking for exercise updates", async function () {
+    const order: string[] = []
+    vi.mocked(updateCourse).mockImplementation(async () => {
+      order.push("updateCourse")
+      return Ok(true)
+    })
+    executeCommand.mockImplementation(async (command: string) => {
+      order.push(command)
+      return undefined
+    })
+    const [actionContext] = contextWithCourses([tmcCourse(1, 0, [])])
+
+    const result = await refreshEverything(actionContext, { silent: true })
+
+    expect(result.ok).toBe(true)
+    expect(order).toEqual(["updateCourse", "tmc.updateExercises"])
+  })
+
+  test("rejects a second refresh started while one is still running", async function () {
+    let release!: () => void
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.mocked(updateCourse).mockImplementation(async () => {
+      await blocked
+      return Ok(true)
+    })
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
+
+    const first = refreshEverything(actionContext, { silent: false })
+    const second = await refreshEverything(actionContext, { silent: false })
+
+    expect(second.err).toBe(true)
+    expect(dialog.notification).toHaveBeenCalledWith(expect.stringContaining("already in progress"))
+    release()
+    expect((await first).ok).toBe(true)
+    expect(updateCourse).toHaveBeenCalledTimes(1)
+  })
+
+  test("says nothing when a silent refresh is the one rejected", async function () {
+    let release!: () => void
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.mocked(updateCourse).mockImplementation(async () => {
+      await blocked
+      return Ok(true)
+    })
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
+
+    const first = refreshEverything(actionContext, { silent: true })
+    const second = await refreshEverything(actionContext, { silent: true })
+
+    expect(second.err).toBe(true)
+    expect(dialog.notification).not.toHaveBeenCalled()
+    release()
+    await first
   })
 })

@@ -302,17 +302,18 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     expect(await download.json()).toEqual({ data_files: [] })
   })
 
-  test("a not-enrolled 422 body is a spec-valid ApiErrorResponse", async function () {
-    // Error bodies are the other half of the wire the reconciliation gate must
-    // cover. langsSchema has NO ApiErrorResponse schema -- it mirrors CLI stdout,
-    // and an error body is not CLI stdout -- so the reconciliation mechanism here
-    // is the mock's own response validation: the mock validates every response
-    // body (success AND error) against the vendored spec before sending, turning
-    // a spec-violating body into a loud 500. A 422 (not a 500) therefore proves
-    // the not-enrolled ApiErrorResponse body conforms to the spec.
+  test("a not-enrolled 422 body carries the message key the CLI branches on", async function () {
+    // Error bodies are the other half of the wire, and neither generated
+    // description covers them: langsSchema mirrors CLI stdout, and the vendored
+    // spec's ApiErrorResponse declares no required members, so response
+    // validation only pins the status. What the CLI actually reads is
+    // `message_key` (tmc-mooc-client lifts it into a typed error kind), so that
+    // is what is asserted here; the full envelope is pinned in
+    // backend/mooc/conformance.test.ts against the host's transcribed contract.
     const res = await fetch(api(`/exercises/${notEnrolledExerciseId}`))
     expect(res.status).toBe(422)
-    const body = (await res.json()) as { message_key?: unknown }
+    const body = (await res.json()) as { message_key?: unknown; type?: unknown }
     expect(body.message_key).toBe("not_enrolled")
+    expect(body.type).toBe("validation_error")
   })
 })
