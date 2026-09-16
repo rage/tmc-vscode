@@ -59,11 +59,17 @@ export async function downloadExercisesForUi(
     actionContext.dialog.errorNotification("Failed to refresh local exercises.", refreshResult.val)
   }
 
+  const course = userData.val.getCourse(courseId)
+  if (course.err) {
+    actionContext.dialog.errorNotification("Failed to read the course.", course.val)
+    return
+  }
+
   TmcPanel.postMessage({
     type: "setNewExercises",
     target: { type: "MyCourses" },
     courseId: courseId,
-    exerciseIds: LocalCourseData.getNewExercises(userData.val.getCourse(courseId)),
+    exerciseIds: LocalCourseData.getNewExercises(course.val),
   })
   // Per-exercise status is already posted by `downloadOrUpdateExercises` keyed by
   // the correct identifier (exercise id for both backends), so there is no need to

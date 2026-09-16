@@ -23,7 +23,11 @@ export async function downloadNewExercisesForCourse(
   if (userData.err) {
     return new Err(new InitializationError("Extension was not initialized properly"))
   }
-  const course = userData.val.getCourse(courseId)
+  const courseResult = userData.val.getCourse(courseId)
+  if (courseResult.err) {
+    return courseResult
+  }
+  const course = courseResult.val
   Logger.info("Downloading new exercises for course")
 
   const postNewExercises = async (exerciseIds: ExerciseIdentifier[]): Promise<void> =>

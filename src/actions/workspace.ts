@@ -36,7 +36,11 @@ export async function openExercises(
     return Err(new InitializationError("Extension was not initialized properly"))
   }
 
-  const course = userData.val.getCourse(courseId)
+  const courseResult = userData.val.getCourse(courseId)
+  if (courseResult.err) {
+    return courseResult
+  }
+  const course = courseResult.val
   const courseExercises = new Map(LocalCourseData.getExercises(course).map((x) => [x.data.id, x]))
   const exercisesToOpen = compact(
     exerciseIdsToOpen.map((x) => courseExercises.get(ExerciseIdentifier.unwrap(x))),
@@ -129,7 +133,11 @@ export async function downloadAndOpenExercises(
     return Err(new InitializationError("Extension was not initialized properly"))
   }
 
-  const course = userData.val.getCourse(courseId)
+  const courseResult = userData.val.getCourse(courseId)
+  if (courseResult.err) {
+    return courseResult
+  }
+  const course = courseResult.val
   // Key by a primitive: ExerciseIdentifier is a tagged-union object, so a
   // Map keyed by it would only match on reference identity and always miss
   // the deserialized ids coming from the webview.
@@ -196,7 +204,11 @@ export async function closeExercises(
     return Err(new InitializationError("Extension was not initialized properly"))
   }
 
-  const course = userData.val.getCourse(courseId)
+  const courseResult = userData.val.getCourse(courseId)
+  if (courseResult.err) {
+    return courseResult
+  }
+  const course = courseResult.val
   const exercises = new Map(LocalCourseData.getExercises(course).map((x) => [x.data.id, x]))
   const exerciseSlugs = compact(
     ids.map((x) => {

@@ -93,7 +93,11 @@ export async function testExercise(
     return new Err(new InitializationError("Extension was not initialized properly"))
   }
 
-  const course = userData.val.getCourseBySlug(exercise.backend, exercise.courseSlug)
+  const courseResult = userData.val.getCourseBySlug(exercise.backend, exercise.courseSlug)
+  if (courseResult.err) {
+    return courseResult
+  }
+  const course = courseResult.val
   const courseExercise = LocalCourseData.getExercises(course).find(
     (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
   )
@@ -215,7 +219,11 @@ export async function submitTmcExercise(
   }
   Logger.info(`Submitting exercise ${exercise.exerciseSlug} to server`)
 
-  const course = userData.val.getCourseBySlug("tmc", exercise.courseSlug)
+  const courseResult = userData.val.getCourseBySlug("tmc", exercise.courseSlug)
+  if (courseResult.err) {
+    return courseResult
+  }
+  const course = courseResult.val
   const courseExercise = LocalCourseData.getExercises(course).find(
     (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
   )
@@ -276,8 +284,16 @@ export async function submitTmcExercise(
 
       const statusData = submissionResult.val
       if (statusData.status === "ok" && statusData.all_tests_passed) {
-        await userData.val.setExerciseAsPassed("tmc", exercise.courseSlug, exercise.exerciseSlug)
-        exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
+        const passedResult = await userData.val.setExerciseAsPassed(
+          "tmc",
+          exercise.courseSlug,
+          exercise.exerciseSlug,
+        )
+        if (passedResult.err) {
+          dialog.errorNotification("Failed to record the exercise as passed.", passedResult.val)
+        } else {
+          exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
+        }
       }
       const questions = statusData.feedback_questions
         ? parseFeedbackQuestion(statusData.feedback_questions)
@@ -299,10 +315,7 @@ export async function submitTmcExercise(
     return submitted
   }
 
-  const courseData = userData.val.getCourse(
-    LocalCourseData.getCourseId(course),
-  ) as Readonly<LocalCourseData>
-  const courseId = LocalCourseData.getCourseId(courseData)
+  const courseId = LocalCourseData.getCourseId(course)
   await checkForCourseUpdates(actionContext, courseId)
   vscode.commands.executeCommand("tmc.updateExercises", "silent")
 
@@ -326,7 +339,11 @@ export async function submitMoocExercise(
   }
   Logger.info(`Submitting mooc exercise ${exercise.exerciseSlug} to server`)
 
-  const course = userData.val.getCourseBySlug("mooc", exercise.courseSlug)
+  const courseResult = userData.val.getCourseBySlug("mooc", exercise.courseSlug)
+  if (courseResult.err) {
+    return courseResult
+  }
+  const course = courseResult.val
   const courseExercise = LocalCourseData.getExercises(course).find(
     (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
   )
@@ -390,8 +407,16 @@ export async function submitMoocExercise(
         status.Grading.score_given !== null &&
         status.Grading.score_given > 0
       ) {
-        await userData.val.setExerciseAsPassed("mooc", exercise.courseSlug, exercise.exerciseSlug)
-        exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
+        const passedResult = await userData.val.setExerciseAsPassed(
+          "mooc",
+          exercise.courseSlug,
+          exercise.exerciseSlug,
+        )
+        if (passedResult.err) {
+          dialog.errorNotification("Failed to record the exercise as passed.", passedResult.val)
+        } else {
+          exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
+        }
       }
 
       if (TmcPanel.sidePanel === undefined) {
@@ -533,7 +558,17 @@ export async function checkForCourseUpdates(
     Logger.error("Extension was not initialized properly")
     return
   }
-  const courses = courseId ? [userData.val.getCourse(courseId)] : userData.val.getCourses()
+  let courses: LocalCourseData[]
+  if (courseId) {
+    const courseResult = userData.val.getCourse(courseId)
+    if (courseResult.err) {
+      dialog.errorNotification("Failed to check for course updates.", courseResult.val)
+      return
+    }
+    courses = [courseResult.val]
+  } else {
+    courses = userData.val.getCourses()
+  }
 
   const filteredCourses = courses.filter((c) => c.data.notifyAfter <= Date.now())
   Logger.info(`Checking for course updates for courses`)
@@ -541,7 +576,12 @@ export async function checkForCourseUpdates(
   for (const course of filteredCourses) {
     const id = LocalCourseData.getCourseId(course)
     await updateCourse(actionContext, id)
-    updatedCourses.push(userData.val.getCourse(id))
+    const updated = userData.val.getCourse(id)
+    if (updated.err) {
+      dialog.errorNotification("Failed to check for course updates.", updated.val)
+      return
+    }
+    updatedCourses.push(updated.val)
   }
 
   const handleDownload = async (course: LocalCourseData): Promise<void> => {
@@ -565,14 +605,20 @@ export async function checkForCourseUpdates(
         ["Download", async (): Promise<void> => handleDownload(course)],
         [
           "Remind me later",
-          (): void => {
-            userData.val.setNotifyDate(id, Date.now() + NOTIFICATION_DELAY)
+          async (): Promise<void> => {
+            const result = await userData.val.setNotifyDate(id, Date.now() + NOTIFICATION_DELAY)
+            if (result.err) {
+              dialog.errorNotification("Failed to postpone the reminder.", result.val)
+            }
           },
         ],
         [
           "Don't remind about these exercises",
-          (): void => {
-            userData.val.clearFromNewExercises(id)
+          async (): Promise<void> => {
+            const result = await userData.val.clearFromNewExercises(id)
+            if (result.err) {
+              dialog.errorNotification("Failed to dismiss the new exercises.", result.val)
+            }
           },
         ],
       )
@@ -648,7 +694,12 @@ export async function removeCourse(
     return
   }
 
-  const course = userData.val.getCourse(id)
+  const courseResult = userData.val.getCourse(id)
+  if (courseResult.err) {
+    dialog.errorNotification("Failed to remove the course.", courseResult.val)
+    return
+  }
+  const course = courseResult.val
   const courseName = LocalCourseData.getCourseName(course)
   Logger.info(`Closing exercises for ${courseName} and removing course data from userData`)
 
@@ -662,7 +713,14 @@ export async function removeCourse(
     )
   }
 
-  userData.val.deleteCourse(id)
+  const deleteResult = await userData.val.deleteCourse(id)
+  if (deleteResult.err) {
+    dialog.errorNotification(
+      `Failed to remove "${courseName}" from your courses.`,
+      deleteResult.val,
+    )
+    return
+  }
   ui.treeDP.removeChildWithId("myCourses", CourseIdentifier.toString(id))
 
   if (

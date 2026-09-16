@@ -79,15 +79,15 @@ function contextWith(submitResult: unknown): {
   submit: ReturnType<typeof vi.fn>
 } {
   const submit = vi.fn().mockResolvedValue(Ok(submitResult))
-  const setPassed = vi.fn().mockResolvedValue(undefined)
+  const setPassed = vi.fn().mockResolvedValue(Ok.EMPTY)
   const actionContext: ActionContext = {
     ...createMockActionContext(),
     langs: Ok({
       submitMoocExerciseAndWaitForResults: submit,
     }) as unknown as ActionContext["langs"],
     userData: Ok({
-      getCourseBySlug: () => makeMoocKind(moocCourse),
-      getCourse: () => makeMoocKind(moocCourse),
+      getCourseBySlug: () => Ok(makeMoocKind(moocCourse)),
+      getCourse: () => Ok(makeMoocKind(moocCourse)),
       getMoocExerciseByName: () => moocCourse.exercises[0],
       setExerciseAsPassed: setPassed,
     }) as unknown as ActionContext["userData"],
@@ -105,15 +105,15 @@ function contextWithErr(error: Error): {
   setPassed: ReturnType<typeof vi.fn>
 } {
   const submit = vi.fn().mockResolvedValue(Err(error))
-  const setPassed = vi.fn().mockResolvedValue(undefined)
+  const setPassed = vi.fn().mockResolvedValue(Ok.EMPTY)
   const actionContext: ActionContext = {
     ...createMockActionContext(),
     langs: Ok({
       submitMoocExerciseAndWaitForResults: submit,
     }) as unknown as ActionContext["langs"],
     userData: Ok({
-      getCourseBySlug: () => makeMoocKind(moocCourse),
-      getCourse: () => makeMoocKind(moocCourse),
+      getCourseBySlug: () => Ok(makeMoocKind(moocCourse)),
+      getCourse: () => Ok(makeMoocKind(moocCourse)),
       getMoocExerciseByName: () => moocCourse.exercises[0],
       setExerciseAsPassed: setPassed,
     }) as unknown as ActionContext["userData"],

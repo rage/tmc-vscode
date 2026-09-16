@@ -334,7 +334,12 @@ export class TmcPanel {
               Logger.error("Extension was not initialized properly")
               return
             }
-            const course = userData.val.getCourse(message.sourcePanel.courseId)
+            const courseResult = userData.val.getCourse(message.sourcePanel.courseId)
+            if (courseResult.err) {
+              actionContext.dialog.errorNotification("Failed to read the course.", courseResult.val)
+              return
+            }
+            const course = courseResult.val
             postMessageToWebview(webview, {
               type: "setCourseData",
               target: message.sourcePanel,
@@ -624,7 +629,15 @@ export class TmcPanel {
               return
             }
 
-            const course = userData.val.getCourse(message.id)
+            const courseResult = userData.val.getCourse(message.id)
+            if (courseResult.err) {
+              actionContext.dialog.errorNotification(
+                "Failed to remove the course.",
+                courseResult.val,
+              )
+              return
+            }
+            const course = courseResult.val
             const courseName = LocalCourseData.getCourseName(course)
             if (
               await actionContext.dialog.explicitConfirmation(
@@ -675,7 +688,13 @@ export class TmcPanel {
               return
             }
 
-            userData.val.clearFromNewExercises(message.courseId)
+            const clearResult = await userData.val.clearFromNewExercises(message.courseId)
+            if (clearResult.err) {
+              actionContext.dialog.errorNotification(
+                "Failed to dismiss the new exercises.",
+                clearResult.val,
+              )
+            }
             break
           }
           case "downloadExercises": {

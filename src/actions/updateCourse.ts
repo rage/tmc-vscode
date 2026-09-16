@@ -57,7 +57,11 @@ export async function updateCourse(
   }
   Logger.info("Updating course")
 
-  const courseData = userData.val.getCourse(courseId)
+  const storedCourse = userData.val.getCourse(courseId)
+  if (storedCourse.err) {
+    return storedCourse
+  }
+  const courseData = storedCourse.val
   const updateResult: Result<
     Enum<CombinedCourseData, [CourseInstance, TmcExerciseSlide[]]>,
     Error
@@ -74,12 +78,14 @@ export async function updateCourse(
   )
   if (updateResult.err) {
     if (updateResult.val instanceof ForbiddenError) {
-      const course = userData.val.getCourse(courseId)
-      const courseIdent = LocalCourseData.getCourseId(course)
+      const courseIdent = LocalCourseData.getCourseId(courseData)
       if (!courseData.data.disabled) {
         Logger.warn(`Failed to access information for course. Marking as disabled.`)
-        course.data.disabled = true
-        await userData.val.updateCourse(course)
+        courseData.data.disabled = true
+        const disableResult = await userData.val.updateCourse(courseData)
+        if (disableResult.err) {
+          return disableResult
+        }
         postCourseStatusMessage(courseIdent, true, [])
       } else {
         Logger.warn(`ForbiddenError above probably caused by course still being disabled`)
@@ -111,7 +117,10 @@ export async function updateCourse(
         materialUrl: settings.material_url,
         perhapsExamMode: settings.hide_submission_results,
       }
-      await userData.val.updateCourse(courseData)
+      const stored = await userData.val.updateCourse(courseData)
+      if (stored.err) {
+        return stored
+      }
 
       return await userData.val.updateExercises(
         courseId,
@@ -166,7 +175,10 @@ export async function updateCourse(
         title: moocCourse.name,
         organization: moocCourse.organization_name,
       }
-      await userData.val.updateCourse(courseData)
+      const stored = await userData.val.updateCourse(courseData)
+      if (stored.err) {
+        return stored
+      }
 
       return await userData.val.updateExercises(
         courseId,
@@ -191,11 +203,14 @@ export async function updateCourse(
   // refresh local exercises to ensure deleted exercises don't appear open etc.
   await refreshLocalExercises(actionContext)
 
-  const course = userData.val.getCourse(courseId)
+  const updatedCourse = userData.val.getCourse(courseId)
+  if (updatedCourse.err) {
+    return updatedCourse
+  }
   postCourseStatusMessage(
-    LocalCourseData.getCourseId(course),
-    course.data.disabled,
-    LocalCourseData.getNewExercises(course),
+    LocalCourseData.getCourseId(updatedCourse.val),
+    updatedCourse.val.data.disabled,
+    LocalCourseData.getNewExercises(updatedCourse.val),
   )
 
   return Ok(true)

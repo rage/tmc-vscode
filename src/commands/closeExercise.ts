@@ -41,7 +41,11 @@ export async function closeExercise(
       )))
   ) {
     const course = userData.val.getCourseBySlug(exercise.backend, exercise.courseSlug)
-    const courseId = LocalCourseData.getCourseId(course)
+    if (course.err) {
+      dialog.errorNotification("Error when closing exercise.", course.val)
+      return
+    }
+    const courseId = LocalCourseData.getCourseId(course.val)
     const result = await actions.closeExercises(actionContext, [exerciseId], courseId)
     if (result.err) {
       dialog.errorNotification("Error when closing exercise.", result.val)

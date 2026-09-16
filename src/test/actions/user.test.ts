@@ -1,10 +1,13 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
-import { logout } from "../../actions"
+import { logout, removeCourse } from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
+import type { UserData } from "../../config/userdata"
+import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
+import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 suite("logout action", function () {
@@ -112,5 +115,85 @@ suite("logout action", function () {
     )
     expect(result.err).toBe(true)
     expect(result.val).toBe(tmcError)
+  })
+})
+
+function contextWith(
+  userData: Partial<UserData>,
+): [ActionContext, Dialog, ReturnType<typeof vi.fn>] {
+  const [dialog] = createDialogMock()
+  const removeChildWithId = vi.fn()
+  return [
+    {
+      ...createMockActionContext(),
+      dialog,
+      langs: Ok({
+        unsetSetting: vi.fn(async () => Ok.EMPTY),
+      }) as unknown as ActionContext["langs"],
+      userData: Ok(userData) as unknown as ActionContext["userData"],
+      ui: { treeDP: { removeChildWithId } } as unknown as ActionContext["ui"],
+      workspaceManager: Ok({
+        activeCourse: undefined,
+        activeCourseBackend: undefined,
+      }) as unknown as ActionContext["workspaceManager"],
+    },
+    dialog,
+    removeChildWithId,
+  ]
+}
+
+suite("removeCourse action", function () {
+  const course = makeTmcKind({
+    id: 1,
+    name: "test-python-course",
+    title: "The Python Course",
+    description: "",
+    organization: "test",
+    exercises: [],
+    availablePoints: 0,
+    awardedPoints: 0,
+    perhapsExamMode: false,
+    newExercises: [],
+    notifyAfter: 0,
+    disabled: false,
+    materialUrl: null,
+  })
+
+  test("tells the user when the course cannot be looked up", async function () {
+    const deleteCourse = vi.fn(async () => Ok.EMPTY)
+    const [actionContext, dialog] = contextWith({
+      getCourse: () => Err(new Error("no such course")),
+      deleteCourse,
+    } as unknown as Partial<UserData>)
+
+    await removeCourse(actionContext, CourseIdentifier.from(1))
+
+    expect(dialog.errorNotification).toHaveBeenCalled()
+    expect(deleteCourse).not.toHaveBeenCalled()
+  })
+
+  test("tells the user when the removal could not be persisted", async function () {
+    const error = new Error("globalState is full")
+    const [actionContext, dialog, removeChildWithId] = contextWith({
+      getCourse: () => Ok(course),
+      deleteCourse: vi.fn(async () => Err(error)),
+    } as unknown as Partial<UserData>)
+
+    await removeCourse(actionContext, CourseIdentifier.from(1))
+
+    expect(dialog.errorNotification).toHaveBeenCalledWith(expect.any(String), error)
+    expect(removeChildWithId).not.toHaveBeenCalled()
+  })
+
+  test("drops the course from the tree once the removal is persisted", async function () {
+    const [actionContext, dialog, removeChildWithId] = contextWith({
+      getCourse: () => Ok(course),
+      deleteCourse: vi.fn(async () => Ok.EMPTY),
+    } as unknown as Partial<UserData>)
+
+    await removeCourse(actionContext, CourseIdentifier.from(1))
+
+    expect(dialog.errorNotification).not.toHaveBeenCalled()
+    expect(removeChildWithId).toHaveBeenCalledWith("myCourses", expect.any(String))
   })
 })
