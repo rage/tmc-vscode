@@ -14,6 +14,7 @@ import {
   WORKSPACE_ROOT_FILE_TEXT,
   WORKSPACE_ROOT_FOLDER_NAME,
   WORKSPACE_SETTINGS,
+  workspaceFileName,
 } from "../config/constants"
 import type Resources from "../config/resources"
 import { EditorKind } from "../config/resources"
@@ -75,9 +76,13 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   /**
-   * Parses the open course workspace into its course slug and backend, or
-   * `undefined` when no course workspace is open. Workspace files are named
-   * `<slug>-<backend>.code-workspace` (see `workspaceFileName`).
+   * The open course workspace's course slug and backend, or `undefined` when no
+   * course workspace is open.
+   *
+   * Resolved from the workspace file's own path and accepted only once it
+   * reproduces that path through {@link Resources.getWorkspaceFilePath}. Never
+   * from `vscode.workspace.name`: that is a display string carrying a
+   * " (Workspace)" suffix, and a course slug may itself contain spaces.
    */
   private get _activeCourseWorkspace(): { slug: string; backend: "tmc" | "mooc" } | undefined {
     const workspaceFile = vscode.workspace.workspaceFile
@@ -88,19 +93,24 @@ export default class WorkspaceManager implements vscode.Disposable {
       return undefined
     }
 
-    // Strip the "(workspace)" suffix VS Code appends to `workspace.name`.
-    const baseName = vscode.workspace.name?.split(" ")[0]
-    if (!baseName) {
-      return undefined
+    const fileName = path.basename(workspaceFile.fsPath)
+    for (const backend of ["tmc", "mooc"] as const) {
+      // What the name generator adds to an empty slug is what a tagged file ends with.
+      const tag = workspaceFileName("", backend)
+      if (fileName.length <= tag.length || !fileName.endsWith(tag)) {
+        continue
+      }
+      const slug = fileName.slice(0, -tag.length)
+      if (
+        path.relative(this._resources.getWorkspaceFilePath(slug, backend), workspaceFile.fsPath) ===
+        ""
+      ) {
+        return { slug, backend }
+      }
     }
-    if (baseName.endsWith("-mooc")) {
-      return { slug: baseName.slice(0, -"-mooc".length), backend: "mooc" }
-    }
-    if (baseName.endsWith("-tmc")) {
-      return { slug: baseName.slice(0, -"-tmc".length), backend: "tmc" }
-    }
-    // Legacy un-tagged workspace file, from before backend-namespacing; treat as tmc.
-    return { slug: baseName, backend: "tmc" }
+
+    // Workspace files written before backend namespacing carry no tag and are tmc.
+    return { slug: path.basename(fileName, path.extname(fileName)), backend: "tmc" }
   }
 
   /**
