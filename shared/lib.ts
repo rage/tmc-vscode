@@ -344,11 +344,24 @@ export namespace LocalCourseData {
     )
   }
 
+  /**
+   * The course slug: the workspace folder name, the path segment and the key for
+   * per-course settings. Use {@link getCourseTitle} for anything the user reads.
+   */
   export function getCourseName(lcd: LocalCourseData): string {
     return match(
       lcd,
       (tmc) => tmc.name,
       (mooc) => mooc.name,
+    )
+  }
+
+  /** The course's human-readable name, for every label shown to the user. */
+  export function getCourseTitle(lcd: LocalCourseData): string {
+    return match(
+      lcd,
+      (tmc) => tmc.title,
+      (mooc) => mooc.title,
     )
   }
 

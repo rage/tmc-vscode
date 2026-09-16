@@ -134,6 +134,21 @@ suite("LocalCourseExercise / LocalCourseData namespaces", function () {
     expect(LCD.getCourseId(moocCourse)).toEqual(CourseIdentifier.from("course-uuid"))
   })
 
+  test("LocalCourseData splits the slug from the title on both backends", function () {
+    const tmcCourse = makeTmcKind({
+      name: "tmc-slug",
+      title: "TMC Course",
+    }) as unknown as LocalCourseData
+    const moocCourse = makeMoocKind({
+      name: "mooc-slug",
+      title: "Mooc Course",
+    }) as unknown as LocalCourseData
+    expect(LCD.getCourseName(tmcCourse)).toBe("tmc-slug")
+    expect(LCD.getCourseName(moocCourse)).toBe("mooc-slug")
+    expect(LCD.getCourseTitle(tmcCourse)).toBe("TMC Course")
+    expect(LCD.getCourseTitle(moocCourse)).toBe("Mooc Course")
+  })
+
   test("LocalCourseData.getNewExercises maps ids to identifiers", function () {
     const tmcCourse = makeTmcKind({ newExercises: [1, 2] }) as unknown as LocalCourseData
     const moocCourse = makeMoocKind({ newExercises: ["a", "b"] }) as unknown as LocalCourseData
