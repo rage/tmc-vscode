@@ -11,7 +11,15 @@
 </script>
 
 <div class="progress-bar-label">{label}</div>
-<div style:--bar-width={progress} class="background">
+<div
+  style:--bar-width={progress}
+  class="background"
+  role="progressbar"
+  aria-label={label}
+  aria-valuemin={0}
+  aria-valuemax={max}
+  aria-valuenow={value}
+>
   <div class="bar"></div>
 </div>
 
