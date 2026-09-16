@@ -52,7 +52,8 @@ Please close the workspace and any related files before running this command aga
   }
 
   const reallyWipe = await dialog.explicitConfirmation(
-    "This action cannot be undone. This might permanently delete the extension data, exercises, settings...",
+    "This cannot be undone. Your downloaded exercises will be deleted, you will be logged out, \
+and every setting and course this extension has stored will be cleared.",
   )
   if (!reallyWipe) {
     return
@@ -62,39 +63,37 @@ Please close the workspace and any related files before running this command aga
   await vscode.commands.executeCommand("workbench.files.action.focusFilesExplorer")
 
   const message = "Removing extension data..."
+  // Deleting the exercises is the one step that cannot be recovered from, so it
+  // goes last: a failure anywhere before it leaves the student's work on disk.
   const wipeResult = await dialog.progressNotification(message, async (progress) => {
-    // Remove exercises
+    const settingsReset = await langs.val.resetSettings()
+    if (settingsReset.err) {
+      return settingsReset
+    }
+    progress.report({ message, percent: 0.25 })
+
+    // `deauthenticate` fires the logout events with `expected: true`, so the
+    // session-expiry warning stays quiet and the auth context updates itself.
+    const tmcLogout = await langs.val.deauthenticate()
+    if (tmcLogout.err) {
+      return tmcLogout
+    }
+    const moocLogout = await langs.val.deauthenticateMooc()
+    if (moocLogout.err) {
+      return moocLogout
+    }
+    progress.report({ message, percent: 0.5 })
+
+    await userData.val.wipeDataFromStorage()
+    progress.report({ message, percent: 0.75 })
+
     try {
       fs.removeSync(projectsDirectory)
     } catch (e) {
       return Err(new FileSystemError(e, "Failed to remove projects directory."))
     }
-    progress.report({ message, percent: 0.25 })
-
-    // Reset Langs settings
-    const result2 = await langs.val.resetSettings()
-    if (result2.err) {
-      return result2
-    }
-    progress.report({ message, percent: 0.5 })
-
-    // `deauthenticate` fires the logout events with `expected: true`, so the
-    // session-expiry warning stays quiet and the auth context updates itself.
-    const result3 = await langs.val.deauthenticate()
-    if (result3.err) {
-      return result3
-    }
-    const result4 = await langs.val.deauthenticateMooc()
-    if (result4.err) {
-      return result4
-    }
-    progress.report({ message, percent: 0.75 })
-
-    // Clear storage
-    await userData.val.wipeDataFromStorage()
     progress.report({ message, percent: 1 })
 
-    // All clear
     return Ok.EMPTY
   })
 
