@@ -69,16 +69,35 @@ export function combineMoocApiExerciseData(
   })
 }
 
-/** Sums per-exercise points into course totals. */
-export function sumMoocCoursePoints(exercises: MoocLocalCourseExercise[]): {
+export interface CoursePoints {
   availablePoints: number
   awardedPoints: number
-} {
+}
+
+/** Sums per-exercise points into course totals; local exercises carry the same two fields on both backends. */
+export function sumCoursePoints(exercises: readonly CoursePoints[]): CoursePoints {
   return exercises.reduce(
-    (acc, x) => ({
-      availablePoints: acc.availablePoints + x.availablePoints,
-      awardedPoints: acc.awardedPoints + x.awardedPoints,
+    (totals, exercise) => ({
+      availablePoints: totals.availablePoints + exercise.availablePoints,
+      awardedPoints: totals.awardedPoints + exercise.awardedPoints,
     }),
     { availablePoints: 0, awardedPoints: 0 },
   )
 }
+
+/**
+ * Course totals straight from the tmc points endpoint. Summing the combined local
+ * exercises instead would fold in `combineTmcApiExerciseData`'s placeholder points
+ * for exercises that endpoint does not list.
+ */
+export function sumTmcApiCoursePoints(courseExercises: CourseExercise[]): CoursePoints {
+  return sumCoursePoints(
+    courseExercises.map((x) => ({
+      availablePoints: x.available_points.length,
+      awardedPoints: x.awarded_points.length,
+    })),
+  )
+}
+
+/** @deprecated Call {@link sumCoursePoints}. */
+export const sumMoocCoursePoints = sumCoursePoints

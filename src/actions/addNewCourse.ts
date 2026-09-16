@@ -9,7 +9,8 @@ import { Logger } from "../utilities"
 import {
   combineMoocApiExerciseData,
   combineTmcApiExerciseData,
-  sumMoocCoursePoints,
+  sumCoursePoints,
+  sumTmcApiCoursePoints,
 } from "../utilities/apiData"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ActionContext } from "./types"
@@ -37,12 +38,7 @@ export async function addNewCourse(
       }
       const courseData = courseDataResult.val
 
-      let availablePoints = 0
-      let awardedPoints = 0
-      courseData.exercises.forEach((x) => {
-        availablePoints += x.available_points.length
-        awardedPoints += x.awarded_points.length
-      })
+      const { availablePoints, awardedPoints } = sumTmcApiCoursePoints(courseData.exercises)
 
       const localData: TmcLocalCourseData = {
         description: courseData.details.description || "",
@@ -51,8 +47,8 @@ export async function addNewCourse(
         name: courseData.details.name,
         title: courseData.details.title,
         organization: organizationSlug,
-        availablePoints: availablePoints,
-        awardedPoints: awardedPoints,
+        availablePoints,
+        awardedPoints,
         perhapsExamMode: courseData.settings.hide_submission_results,
         newExercises: [],
         notifyAfter: 0,
@@ -90,7 +86,7 @@ export async function addNewCourse(
         slides,
         progressRes.ok ? progressRes.val : undefined,
       )
-      const { availablePoints, awardedPoints } = sumMoocCoursePoints(exercises)
+      const { availablePoints, awardedPoints } = sumCoursePoints(exercises)
 
       const localData: MoocLocalCourseData = {
         id: moocCourse.id,
