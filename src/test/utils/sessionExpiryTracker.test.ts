@@ -1,7 +1,7 @@
 import { createSessionExpiryTracker } from "../../utilities/sessionExpiryTracker"
 
 suite("createSessionExpiryTracker", () => {
-  test("never warns for a backend that has never been logged in this session", () => {
+  test("a poll never warns for a backend that has never been logged in this session", () => {
     const onExpired = vi.fn()
     const tracker = createSessionExpiryTracker({ tmc: false, mooc: false }, onExpired)
 
@@ -10,6 +10,17 @@ suite("createSessionExpiryTracker", () => {
     tracker.onAuthChecked("tmc", false)
     tracker.onAuthChecked("tmc", false)
     tracker.onAuthChecked("mooc", false)
+
+    expect(onExpired).not.toHaveBeenCalled()
+  })
+
+  test("a logout event never warns for a backend that never had a session", () => {
+    const onExpired = vi.fn()
+    const tracker = createSessionExpiryTracker({ tmc: false, mooc: false }, onExpired)
+
+    // A command failing with "not logged in" for a backend the user never used
+    // is not an expiry, however unexpected the CLI considers it.
+    tracker.onLogout("tmc", false)
 
     expect(onExpired).not.toHaveBeenCalled()
   })

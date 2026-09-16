@@ -206,12 +206,8 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   }
   // Both backends are authenticated by the same courses.mooc.fi credential, so
   // either one expiring is fixed by the same device-flow login.
-  const sessionExpiredWarning = (backend: "tmc" | "mooc"): void => {
-    const message =
-      backend === "tmc"
-        ? "Your session has expired, please log in."
-        : "Your courses.mooc.fi session has expired, please log in."
-    dialog.warningNotification(message, [
+  const sessionExpiredWarning = (): void => {
+    dialog.warningNotification("Your session has expired, please log in.", [
       "Log in",
       (): void => {
         vscode.commands.executeCommand("tmc.showMoocLogin")
