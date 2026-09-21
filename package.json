@@ -35,11 +35,10 @@
     "generate:langs-schema": "node bin/generateLangsSchema.mjs",
     "generate:release-notes": "node bin/generateReleaseNotes.mjs",
     "install:all": "pnpm install",
-    "lint": "oxlint --fix",
-    "lint:ci": "oxlint --max-warnings=0",
+    "lint": "oxlint --max-warnings=0",
+    "lint:fix": "oxlint --fix",
     "playwright-test": "pnpm run webview:build && cross-env NODE_ENV=development BACKEND=mockBackend pnpm run build && xvfb-maybe -a -- playwright test",
     "playwright-test-debug": "pnpm run webview:build && cross-env NODE_ENV=development BACKEND=mockBackend pnpm run build && xvfb-maybe -a -- playwright test --debug",
-    "playwright-test:local": "pnpm run playwright-test",
     "prepare": "husky",
     "pretest:integration": "cross-env NODE_ENV=development BACKEND=mockBackend pnpm run build",
     "release": "./bin/publishRelease.sh",
@@ -48,7 +47,6 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:integration": "node ./bin/runIntegrationTests.js",
-    "test:playwright": "pnpm run playwright-test",
     "ci:test": "pnpm run test && pnpm run test:integration",
     "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.test.json && tsgo --noEmit -p tsconfig.integration.json && tsgo --noEmit -p webview-ui/tsconfig.json && tsgo --noEmit -p backend/tsconfig.json && tsgo --noEmit -p playwright/tsconfig.json && tsgo --noEmit -p tsconfig.node.json && pnpm run check:svelte",
     "typecheck:tsc": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.integration.json && tsc --noEmit -p webview-ui/tsconfig.json && tsc --noEmit -p backend/tsconfig.json && tsc --noEmit -p playwright/tsconfig.json && tsc --noEmit -p tsconfig.node.json && pnpm --dir webview-ui run check:tsc",
@@ -503,7 +501,7 @@
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": "24.x",
+      "version": "24.18.0",
       "onFail": "warn"
     }
   },

@@ -12,6 +12,16 @@ runs:
         NODE_VERSION="$(node -p "const v = require('./package.json').devEngines?.runtime?.version; if (!v) throw new Error('Expected devEngines.runtime.version in package.json'); v")"
         echo "version=$NODE_VERSION" >> "$GITHUB_OUTPUT"
 
+        # pnpm evaluates every dependency's `engines.node` against
+        # pnpm-workspace.yaml's `nodeVersion`, which has to be a literal. If it
+        # drifts from the version CI and contributors actually run, those checks
+        # pass or fail against a Node nobody is using.
+        WORKSPACE_NODE_VERSION="$(sed -n 's/^nodeVersion:[[:space:]]*//p' pnpm-workspace.yaml)"
+        if [ "$WORKSPACE_NODE_VERSION" != "$NODE_VERSION" ]; then
+          echo "pnpm-workspace.yaml nodeVersion is '$WORKSPACE_NODE_VERSION' but package.json devEngines.runtime.version is '$NODE_VERSION'" >&2
+          exit 1
+        fi
+
     - name: Setup Node
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:
