@@ -8,6 +8,7 @@ import * as vscode from "vscode"
  * Group of actions that respond to the user.
  * -------------------------------------------------------------------------------------------------
  */
+import type Langs from "../api/langs"
 import type {
   WorkspaceExercise,
   WorkspaceExercise as WorkspaceTmcExercise,
@@ -23,11 +24,20 @@ import { InitializationError } from "../errors"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
 import type {
   CourseIdentifier,
+  ExerciseIdentifier,
   ExerciseSubmissionPanel,
   ExerciseTestsPanel,
+  TargetedExtensionToWebview,
+  TargetPanel,
   TestResultData,
 } from "../shared/shared"
-import { LocalCourseData, LocalCourseExercise, match, toWebviewError } from "../shared/shared"
+import {
+  backendName,
+  LocalCourseData,
+  LocalCourseExercise,
+  match,
+  toWebviewError,
+} from "../shared/shared"
 import { Logger, parseFeedbackQuestion, runSingleFlight } from "../utilities/"
 import { getActiveEditorExecutablePath } from "../window"
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse"
@@ -207,11 +217,108 @@ export async function testExercise(
   )
 }
 
+/** What a backend answered a submission with, reduced to what the shared flow acts on. */
+interface SubmissionOutcome {
+  /** Whether the backend graded the submission as passed, which is then recorded locally. */
+  passed: boolean
+  /** Shows the panel what the backend answered; the two backends answer different shapes. */
+  resultMessage: TargetedExtensionToWebview<"ExerciseSubmission">
+}
+
 /**
- * Submits an exercise while keeping the user informed
- * @param tempView Existing TemporaryWebview to use if any
+ * Sends one exercise to its backend and waits for the grading, reporting progress to `target`.
+ *
+ * @param exercisePath The local exercise directory to pack and send.
  */
-export async function submitTmcExercise(
+type ExerciseSubmitter = (
+  target: TargetPanel<ExerciseSubmissionPanel>,
+  exercisePath: string,
+) => Promise<Result<SubmissionOutcome, Error>>
+
+function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
+  return async (target, exercisePath) => {
+    const submission = await langs.submitTmcExerciseAndWaitForResults(
+      exerciseId,
+      exercisePath,
+      (fraction, message) => {
+        TmcPanel.postMessage({ type: "submissionStatusUpdate", target, fraction, message })
+      },
+      (url) => {
+        TmcPanel.postMessage({ type: "submissionStatusUrl", target, url })
+      },
+    )
+    if (submission.err) {
+      return submission
+    }
+    const result = submission.val
+    const outcome: SubmissionOutcome = {
+      passed: result.status === "ok" && result.all_tests_passed === true,
+      resultMessage: {
+        type: "submissionResult",
+        target,
+        result,
+        questions: result.feedback_questions
+          ? parseFeedbackQuestion(result.feedback_questions)
+          : [],
+      },
+    }
+    return Ok(outcome)
+  }
+}
+
+/**
+ * Mooc grading has no per-test breakdown or feedback questions, so the panel shows only the
+ * overall grading progress, score and feedback text.
+ */
+function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
+  return async (target, exercisePath) => {
+    const submission = await langs.submitMoocExerciseAndWaitForResults(
+      exerciseId,
+      exercisePath,
+      (fraction, message) => {
+        TmcPanel.postMessage({ type: "submissionStatusUpdate", target, fraction, message })
+      },
+    )
+    if (submission.err) {
+      return submission
+    }
+    const status = submission.val
+    const outcome: SubmissionOutcome = {
+      passed:
+        status.status === "grading" &&
+        status.grading.grading_progress === "FullyGraded" &&
+        status.grading.score_given !== null &&
+        status.grading.score_given > 0,
+      resultMessage: { type: "moocSubmissionResult", target, result: status },
+    }
+    return Ok(outcome)
+  }
+}
+
+/**
+ * Picks the submit call for `backend`, or `undefined` when `exerciseId` is not the kind of
+ * id that backend uses, which means the stored course and the exercise disagree.
+ */
+function submitterFor(
+  langs: Langs,
+  backend: "tmc" | "mooc",
+  exerciseId: ExerciseIdentifier,
+): ExerciseSubmitter | undefined {
+  return match(
+    exerciseId,
+    (tmc) => (backend === "tmc" ? tmcSubmitter(langs, tmc.tmcExerciseId) : undefined),
+    (mooc) => (backend === "mooc" ? moocSubmitter(langs, mooc.moocExerciseId) : undefined),
+  )
+}
+
+/**
+ * Submits an exercise to the backend it belongs to and shows the grading in a side panel.
+ *
+ * Records the exercise as passed locally when the backend graded it so, then refreshes the
+ * course. A submit or paste already in flight for the same exercise makes this a
+ * `BottleneckError`.
+ */
+export async function submitExercise(
   context: vscode.ExtensionContext,
   actionContext: ActionContext,
   exercise: WorkspaceExercise,
@@ -220,9 +327,9 @@ export async function submitTmcExercise(
   if (!(langs.ok && userData.ok && exerciseDecorationProvider.ok)) {
     return new Err(new InitializationError("Extension was not initialized properly"))
   }
-  Logger.info(`Submitting exercise ${exercise.exerciseSlug} to server`)
+  Logger.info(`Submitting exercise ${exercise.exerciseSlug} to ${backendName(exercise.backend)}`)
 
-  const courseResult = userData.val.getCourseBySlug("tmc", exercise.courseSlug)
+  const courseResult = userData.val.getCourseBySlug(exercise.backend, exercise.courseSlug)
   if (courseResult.err) {
     return courseResult
   }
@@ -232,16 +339,18 @@ export async function submitTmcExercise(
   )
   if (!courseExercise) {
     return Err(
-      new Error(`ID for exercise ${exercise.exerciseSlug}/${exercise.exerciseSlug} was not found.`),
+      new Error(`ID for exercise ${exercise.courseSlug}/${exercise.exerciseSlug} was not found.`),
     )
   }
-  const exerciseId = match(
+  const submit = submitterFor(
+    langs.val,
+    exercise.backend,
     LocalCourseExercise.getId(courseExercise),
-    (tmc) => tmc.tmcExerciseId,
-    () => undefined,
   )
-  if (exerciseId === undefined) {
-    return Err(new Error(`${exercise.exerciseSlug} is not a tmc exercise.`))
+  if (!submit) {
+    return Err(
+      new Error(`${exercise.exerciseSlug} is not a ${backendName(exercise.backend)} exercise.`),
+    )
   }
 
   // Key shared with the paste actions, which must not overlap a submit of the same exercise.
@@ -263,163 +372,21 @@ export async function submitTmcExercise(
         exercise: courseExercise,
       }
       await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+      const target = { id: panel.id, type: panel.type }
 
-      const submissionResult = await langs.val.submitTmcExerciseAndWaitForResults(
-        exerciseId,
-        exercise.uri.fsPath,
-        (fraction, message) => {
-          TmcPanel.postMessage({
-            type: "submissionStatusUpdate",
-            target: panel,
-            fraction,
-            message,
-          })
-        },
-        (url) => {
-          TmcPanel.postMessage({
-            type: "submissionStatusUrl",
-            target: panel,
-            url,
-          })
-        },
-      )
-
-      if (submissionResult.err) {
+      const outcome = await submit(target, exercisePath)
+      if (outcome.err) {
         TmcPanel.postMessage({
           type: "submissionStatusError",
-          target: panel,
-          error: toWebviewError(submissionResult.val),
+          target,
+          error: toWebviewError(outcome.val),
         })
-        return submissionResult
+        return outcome
       }
 
-      const statusData = submissionResult.val
-      if (statusData.status === "ok" && statusData.all_tests_passed) {
+      if (outcome.val.passed) {
         const passedResult = await userData.val.setExerciseAsPassed(
-          "tmc",
-          exercise.courseSlug,
-          exercise.exerciseSlug,
-        )
-        if (passedResult.err) {
-          dialog.errorNotification("Failed to record the exercise as passed.", passedResult.val)
-        } else {
-          exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
-        }
-      }
-      const questions = statusData.feedback_questions
-        ? parseFeedbackQuestion(statusData.feedback_questions)
-        : []
-      if (TmcPanel.sidePanel === undefined) {
-        await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
-      }
-      TmcPanel.postMessage({
-        type: "submissionResult",
-        target: panel,
-        result: statusData,
-        questions,
-      })
-
-      return Ok.EMPTY
-    },
-  )
-  if (submitted.err) {
-    return submitted
-  }
-
-  const courseId = LocalCourseData.getCourseId(course)
-  await refreshEverything(actionContext, { silent: true, courseId })
-
-  return Ok.EMPTY
-}
-
-/**
- * Submits a mooc exercise and shows the reduced grading result, the mooc twin
- * of {@link submitTmcExercise}. Mooc grading has no per-test breakdown or
- * feedback questions, so the panel shows only the overall grading progress,
- * score, and feedback text (posted via `moocSubmissionResult`).
- */
-export async function submitMoocExercise(
-  context: vscode.ExtensionContext,
-  actionContext: ActionContext,
-  exercise: WorkspaceExercise,
-): Promise<Result<void, Error>> {
-  const { dialog, exerciseDecorationProvider, langs, userData } = actionContext
-  if (!(langs.ok && userData.ok && exerciseDecorationProvider.ok)) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
-  Logger.info(`Submitting mooc exercise ${exercise.exerciseSlug} to server`)
-
-  const courseResult = userData.val.getCourseBySlug("mooc", exercise.courseSlug)
-  if (courseResult.err) {
-    return courseResult
-  }
-  const course = courseResult.val
-  const courseExercise = LocalCourseData.getExercises(course).find(
-    (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
-  )
-  if (!courseExercise) {
-    return Err(new Error(`ID for exercise ${exercise.exerciseSlug} was not found.`))
-  }
-  const exerciseId = match(
-    LocalCourseExercise.getId(courseExercise),
-    () => undefined,
-    (mooc) => mooc.moocExerciseId,
-  )
-  if (exerciseId === undefined) {
-    return Err(new Error(`${exercise.exerciseSlug} is not a mooc exercise.`))
-  }
-
-  // Key shared with the paste actions, which must not overlap a submit of the same exercise.
-  // Held only until the result is posted: the panel offers Paste from that point on, so
-  // covering the course-update tail below would reject a legitimate click.
-  const exercisePath = exercise.uri.fsPath
-  const submitted = await runSingleFlight(
-    {
-      key: `submit:${exercisePath}`,
-      maxHoldMs: SUBMIT_PROCESS_TIMEOUT + 30_000,
-      busyMessage: "A submission for this exercise is already in progress.",
-      onBusy: (message) => dialog.notification(message),
-    },
-    async () => {
-      const panel: ExerciseSubmissionPanel = {
-        id: randomPanelId(),
-        type: "ExerciseSubmission",
-        course,
-        exercise: courseExercise,
-      }
-      await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
-
-      const submissionResult = await langs.val.submitMoocExerciseAndWaitForResults(
-        exerciseId,
-        exercise.uri.fsPath,
-        (fraction, message) => {
-          TmcPanel.postMessage({
-            type: "submissionStatusUpdate",
-            target: panel,
-            fraction,
-            message,
-          })
-        },
-      )
-
-      if (submissionResult.err) {
-        TmcPanel.postMessage({
-          type: "submissionStatusError",
-          target: panel,
-          error: toWebviewError(submissionResult.val),
-        })
-        return submissionResult
-      }
-
-      const status = submissionResult.val
-      if (
-        status.status === "grading" &&
-        status.grading.grading_progress === "FullyGraded" &&
-        status.grading.score_given !== null &&
-        status.grading.score_given > 0
-      ) {
-        const passedResult = await userData.val.setExerciseAsPassed(
-          "mooc",
+          exercise.backend,
           exercise.courseSlug,
           exercise.exerciseSlug,
         )
@@ -433,11 +400,7 @@ export async function submitMoocExercise(
       if (TmcPanel.sidePanel === undefined) {
         await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
       }
-      TmcPanel.postMessage({
-        type: "moocSubmissionResult",
-        target: panel,
-        result: status,
-      })
+      TmcPanel.postMessage(outcome.val.resultMessage)
 
       return Ok.EMPTY
     },
@@ -446,10 +409,9 @@ export async function submitMoocExercise(
     return submitted
   }
 
-  // Mirror the tail of `submitTmcExercise`. `setExerciseAsPassed` above only
-  // flips the local per-exercise flag; course point totals come from
-  // `getMoocCourseProgress` via `updateCourse`, so without this refresh the
-  // CourseDetails/MyCourses totals stay stale until the user refreshes by hand.
+  // `setExerciseAsPassed` above only flips the local per-exercise flag; course point totals
+  // come from the backend, so without this refresh the CourseDetails and MyCourses totals
+  // stay stale until the user refreshes by hand.
   const courseId = LocalCourseData.getCourseId(course)
   await refreshEverything(actionContext, { silent: true, courseId })
 

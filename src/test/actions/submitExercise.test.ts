@@ -2,13 +2,14 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
-import { submitMoocExercise } from "../../actions"
+import { submitExercise } from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { BottleneckError } from "../../errors"
-import { makeMoocKind } from "../../shared/shared"
-import type { MoocLocalCourseData } from "../../storage/data"
+import type { LocalCourseData } from "../../shared/shared"
+import { makeMoocKind, makeTmcKind } from "../../shared/shared"
+import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
 import { createMockActionContext } from "../mocks/actionContext"
 
 // TmcPanel talks to the vscode webview API, so the whole module is mocked; the
@@ -23,7 +24,7 @@ vi.mock("../../panels/TmcPanel", () => ({
   },
 }))
 
-// `submitMoocExercise` ends by refreshing course points through
+// `submitExercise` ends by refreshing course points through
 // `checkForCourseUpdates` -> `updateCourse`, which would otherwise drive real CLI
 // calls. Stub the module so the refresh is observable without that machinery.
 vi.mock("../../actions/updateCourse", () => ({
@@ -35,7 +36,10 @@ import { TmcPanel } from "../../panels/TmcPanel"
 
 const COURSE_SLUG = "mooc-python-course"
 const EXERCISE_SLUG = "loops"
-const EXERCISE_ID = "mooc-ex-1"
+const MOOC_EXERCISE_ID = "mooc-ex-1"
+
+const TMC_COURSE_SLUG = "test-python-course"
+const TMC_EXERCISE_ID = 4321
 
 const moocCourse: MoocLocalCourseData = {
   id: "instance-uuid-1",
@@ -45,7 +49,7 @@ const moocCourse: MoocLocalCourseData = {
   organization: "mooc",
   exercises: [
     {
-      id: EXERCISE_ID,
+      id: MOOC_EXERCISE_ID,
       name: EXERCISE_SLUG,
       availablePoints: 3,
       awardedPoints: 0,
@@ -63,7 +67,33 @@ const moocCourse: MoocLocalCourseData = {
   materialUrl: null,
 }
 
-const workspaceExercise: WorkspaceExercise = {
+const tmcCourse: TmcLocalCourseData = {
+  id: 7,
+  name: TMC_COURSE_SLUG,
+  title: "Test Python",
+  description: "A tmc course",
+  organization: "test",
+  exercises: [
+    {
+      id: TMC_EXERCISE_ID,
+      name: EXERCISE_SLUG,
+      availablePoints: 2,
+      awardedPoints: 0,
+      deadline: null,
+      passed: false,
+      softDeadline: null,
+    },
+  ],
+  availablePoints: 2,
+  awardedPoints: 0,
+  perhapsExamMode: false,
+  newExercises: [],
+  notifyAfter: 0,
+  disabled: false,
+  materialUrl: null,
+}
+
+const moocExercise: WorkspaceExercise = {
   backend: "mooc",
   courseSlug: COURSE_SLUG,
   exerciseSlug: EXERCISE_SLUG,
@@ -71,50 +101,30 @@ const workspaceExercise: WorkspaceExercise = {
   uri: { fsPath: "/path/to/exercise" } as unknown as vscode.Uri,
 }
 
-const extensionContext = { extensionUri: {} } as unknown as vscode.ExtensionContext
-
-function contextWith(submitResult: unknown): {
-  actionContext: ActionContext
-  setPassed: ReturnType<typeof vi.fn>
-  submit: ReturnType<typeof vi.fn>
-} {
-  const submit = vi.fn().mockResolvedValue(Ok(submitResult))
-  const setPassed = vi.fn().mockResolvedValue(Ok.EMPTY)
-  const actionContext: ActionContext = {
-    ...createMockActionContext(),
-    langs: Ok({
-      submitMoocExerciseAndWaitForResults: submit,
-    }) as unknown as ActionContext["langs"],
-    userData: Ok({
-      getCourseBySlug: () => Ok(makeMoocKind(moocCourse)),
-      getCourse: () => Ok(makeMoocKind(moocCourse)),
-      getMoocExerciseByName: () => moocCourse.exercises[0],
-      setExerciseAsPassed: setPassed,
-    }) as unknown as ActionContext["userData"],
-    exerciseDecorationProvider: Ok({
-      updateDecorationsForExercises: vi.fn(),
-    }) as unknown as ActionContext["exerciseDecorationProvider"],
-  }
-  return { actionContext, setPassed, submit }
+const tmcExercise: WorkspaceExercise = {
+  ...moocExercise,
+  backend: "tmc",
+  courseSlug: TMC_COURSE_SLUG,
 }
 
-// Like `contextWith`, but the blocking submit resolves to an `Err` (e.g. the
-// submission-throttle BottleneckError or a submit failure).
-function contextWithErr(error: Error): {
+const extensionContext = { extensionUri: {} } as unknown as vscode.ExtensionContext
+
+// `langsMethods` holds only the backend's own submit call, so a submission routed
+// through the other backend's method fails instead of quietly passing.
+function contextFor(
+  course: LocalCourseData,
+  langsMethods: Record<string, unknown>,
+): {
   actionContext: ActionContext
   setPassed: ReturnType<typeof vi.fn>
 } {
-  const submit = vi.fn().mockResolvedValue(Err(error))
   const setPassed = vi.fn().mockResolvedValue(Ok.EMPTY)
   const actionContext: ActionContext = {
     ...createMockActionContext(),
-    langs: Ok({
-      submitMoocExerciseAndWaitForResults: submit,
-    }) as unknown as ActionContext["langs"],
+    langs: Ok(langsMethods) as unknown as ActionContext["langs"],
     userData: Ok({
-      getCourseBySlug: () => Ok(makeMoocKind(moocCourse)),
-      getCourse: () => Ok(makeMoocKind(moocCourse)),
-      getMoocExerciseByName: () => moocCourse.exercises[0],
+      getCourseBySlug: () => Ok(course),
+      getCourse: () => Ok(course),
       setExerciseAsPassed: setPassed,
     }) as unknown as ActionContext["userData"],
     exerciseDecorationProvider: Ok({
@@ -124,12 +134,135 @@ function contextWithErr(error: Error): {
   return { actionContext, setPassed }
 }
 
+function moocContextWith(submitResult: unknown): {
+  actionContext: ActionContext
+  setPassed: ReturnType<typeof vi.fn>
+  submit: ReturnType<typeof vi.fn>
+} {
+  const submit = vi.fn().mockResolvedValue(Ok(submitResult))
+  const { actionContext, setPassed } = contextFor(makeMoocKind(moocCourse), {
+    submitMoocExerciseAndWaitForResults: submit,
+  })
+  return { actionContext, setPassed, submit }
+}
+
+// Like `moocContextWith`, but the blocking submit resolves to an `Err` (e.g. the
+// submission-throttle BottleneckError or a submit failure).
+function moocContextWithErr(error: Error): {
+  actionContext: ActionContext
+  setPassed: ReturnType<typeof vi.fn>
+} {
+  return contextFor(makeMoocKind(moocCourse), {
+    submitMoocExerciseAndWaitForResults: vi.fn().mockResolvedValue(Err(error)),
+  })
+}
+
+function tmcContextWith(submitResult: unknown): {
+  actionContext: ActionContext
+  setPassed: ReturnType<typeof vi.fn>
+  submit: ReturnType<typeof vi.fn>
+} {
+  const submit = vi.fn().mockResolvedValue(Ok(submitResult))
+  const { actionContext, setPassed } = contextFor(makeTmcKind(tmcCourse), {
+    submitTmcExerciseAndWaitForResults: submit,
+  })
+  return { actionContext, setPassed, submit }
+}
+
 afterEach(() => {
   vi.mocked(TmcPanel.postMessage).mockClear()
   vi.mocked(updateCourse).mockClear()
 })
 
-suite("submitMoocExercise action", () => {
+suite("submitExercise action, tmc", () => {
+  const passingSubmission = {
+    status: "ok",
+    all_tests_passed: true,
+    points: ["01-01"],
+    test_cases: [],
+    feedback_questions: [{ id: 3, question: "How was it?", kind: "Text" }],
+  }
+
+  test("submits through the tmc call and posts the full result", async () => {
+    const { actionContext, setPassed, submit } = tmcContextWith(passingSubmission)
+
+    const result = await submitExercise(extensionContext, actionContext, tmcExercise)
+    expect(result.ok).toBe(true)
+
+    expect(submit).toHaveBeenCalledWith(
+      TMC_EXERCISE_ID,
+      "/path/to/exercise",
+      expect.any(Function),
+      expect.any(Function),
+    )
+    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "submissionResult",
+        result: passingSubmission,
+        questions: [{ id: 3, kind: "text", question: "How was it?" }],
+      }),
+    )
+    expect(setPassed).toHaveBeenCalledWith("tmc", TMC_COURSE_SLUG, EXERCISE_SLUG)
+    expect(updateCourse).toHaveBeenCalledWith(
+      actionContext,
+      expect.objectContaining({ kind: "tmc" }),
+    )
+  })
+
+  test("the submission's page on the server reaches the panel", async () => {
+    // Only the tmc backend has one, and it arrives through its own callback
+    // before the grading does, so the panel can offer it while it waits.
+    const { actionContext, submit } = tmcContextWith(passingSubmission)
+
+    await submitExercise(extensionContext, actionContext, tmcExercise)
+
+    const onSubmissionUrl = submit.mock.calls[0]?.[3] as (url: string) => void
+    onSubmissionUrl("https://tmc.mooc.fi/submissions/1")
+    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "submissionStatusUrl",
+        url: "https://tmc.mooc.fi/submissions/1",
+      }),
+    )
+  })
+
+  test("a failing submission posts the result but does not mark passed", async () => {
+    const { actionContext, setPassed } = tmcContextWith({
+      status: "ok",
+      all_tests_passed: false,
+      points: [],
+      test_cases: [],
+    })
+
+    await submitExercise(extensionContext, actionContext, tmcExercise)
+
+    expect(setPassed).not.toHaveBeenCalled()
+    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "submissionResult", questions: [] }),
+    )
+  })
+
+  test("a stored exercise id from the other backend is refused", async () => {
+    // The course says tmc but its exercise carries a mooc id, so there is nothing to
+    // submit; submitting it anyway would send the work to the wrong server.
+    const mismatched = makeTmcKind({
+      ...tmcCourse,
+      exercises: moocCourse.exercises,
+    }) as unknown as LocalCourseData
+    const submit = vi.fn()
+    const { actionContext } = contextFor(mismatched, {
+      submitTmcExerciseAndWaitForResults: submit,
+    })
+
+    const result = await submitExercise(extensionContext, actionContext, tmcExercise)
+
+    expect(result.err).toBe(true)
+    expect((result.val as Error).message).toContain("is not a TMC Server exercise")
+    expect(submit).not.toHaveBeenCalled()
+  })
+})
+
+suite("submitExercise action, mooc", () => {
   test("submits with the resolved exercise id and posts the reduced result", async () => {
     const grading = {
       status: "grading",
@@ -141,13 +274,13 @@ suite("submitMoocExercise action", () => {
         feedback_text: "All tests passed",
       },
     }
-    const { actionContext, setPassed, submit } = contextWith(grading)
+    const { actionContext, setPassed, submit } = moocContextWith(grading)
 
-    const result = await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+    const result = await submitExercise(extensionContext, actionContext, moocExercise)
     expect(result.ok).toBe(true)
 
     // submit is called with the exercise id + path (the CLI resolves slide/task)
-    expect(submit).toHaveBeenCalledWith(EXERCISE_ID, "/path/to/exercise", expect.any(Function))
+    expect(submit).toHaveBeenCalledWith(MOOC_EXERCISE_ID, "/path/to/exercise", expect.any(Function))
     // the reduced mooc result is posted to the panel
     expect(TmcPanel.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: "moocSubmissionResult", result: grading }),
@@ -173,9 +306,9 @@ suite("submitMoocExercise action", () => {
         feedback_text: "Some tests failed",
       },
     }
-    const { actionContext, setPassed } = contextWith(grading)
+    const { actionContext, setPassed } = moocContextWith(grading)
 
-    await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+    await submitExercise(extensionContext, actionContext, moocExercise)
     expect(setPassed).not.toHaveBeenCalled()
     expect(TmcPanel.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: "moocSubmissionResult", result: grading }),
@@ -196,9 +329,9 @@ suite("submitMoocExercise action", () => {
         feedback_text: "Awaiting manual grading",
       },
     }
-    const { actionContext, setPassed } = contextWith(grading)
+    const { actionContext, setPassed } = moocContextWith(grading)
 
-    const result = await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+    const result = await submitExercise(extensionContext, actionContext, moocExercise)
     expect(result.ok).toBe(true)
     expect(setPassed).not.toHaveBeenCalled()
     expect(TmcPanel.postMessage).toHaveBeenCalledWith(
@@ -220,9 +353,9 @@ suite("submitMoocExercise action", () => {
         feedback_text: null,
       },
     }
-    const { actionContext, setPassed } = contextWith(grading)
+    const { actionContext, setPassed } = moocContextWith(grading)
 
-    const result = await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+    const result = await submitExercise(extensionContext, actionContext, moocExercise)
     expect(result.ok).toBe(true)
     expect(setPassed).not.toHaveBeenCalled()
     expect(TmcPanel.postMessage).toHaveBeenCalledWith(
@@ -239,14 +372,13 @@ suite("submitMoocExercise action", () => {
         finishFirst = () => resolve(Ok({ status: "no-grading-yet" }))
       }),
     )
-    const { actionContext } = contextWith(undefined)
-    ;(
-      actionContext.langs.val as unknown as Record<string, unknown>
-    ).submitMoocExerciseAndWaitForResults = submit
+    const { actionContext } = contextFor(makeMoocKind(moocCourse), {
+      submitMoocExerciseAndWaitForResults: submit,
+    })
     const notification = vi.mocked(actionContext.dialog.notification)
 
-    const first = submitMoocExercise(extensionContext, actionContext, workspaceExercise)
-    const second = await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+    const first = submitExercise(extensionContext, actionContext, moocExercise)
+    const second = await submitExercise(extensionContext, actionContext, moocExercise)
 
     expect(second.err).toBe(true)
     expect(second.val).toBeInstanceOf(BottleneckError)
@@ -260,7 +392,7 @@ suite("submitMoocExercise action", () => {
     expect((await first).ok).toBe(true)
 
     // and the key is free again once the first submit finishes
-    const third = await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+    const third = await submitExercise(extensionContext, actionContext, moocExercise)
     expect(third.ok).toBe(true)
   })
 
@@ -269,9 +401,9 @@ suite("submitMoocExercise action", () => {
     // submission failure so the panel stops waiting; `commands/submitExercise`
     // is the one place that decides it warrants no error dialog.
     const error = new BottleneckError("You are submitting too fast, try again later.")
-    const { actionContext, setPassed } = contextWithErr(error)
+    const { actionContext, setPassed } = moocContextWithErr(error)
 
-    const result = await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+    const result = await submitExercise(extensionContext, actionContext, moocExercise)
     expect(result.err).toBe(true)
     expect(result.val).toBe(error)
     expect(setPassed).not.toHaveBeenCalled()
@@ -289,9 +421,9 @@ suite("submitMoocExercise action", () => {
   test("the failure survives the webview boundary with its message intact", async () => {
     // The panel reads `error.message`, and the webview bridge serializes the
     // message as JSON -- which drops a live Error's non-enumerable `message`.
-    const { actionContext } = contextWithErr(new Error("Connection reset by peer"))
+    const { actionContext } = moocContextWithErr(new Error("Connection reset by peer"))
 
-    await submitMoocExercise(extensionContext, actionContext, workspaceExercise)
+    await submitExercise(extensionContext, actionContext, moocExercise)
 
     const posted = vi
       .mocked(TmcPanel.postMessage)
