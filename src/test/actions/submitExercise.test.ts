@@ -31,6 +31,12 @@ vi.mock("../../actions/updateCourse", () => ({
   updateCourse: vi.fn().mockResolvedValue(Ok(true)),
 }))
 
+// The course-update pass ends by rescanning the exercises on disk, which would otherwise
+// drive real CLI calls.
+vi.mock("../../actions/refreshLocalExercises", () => ({
+  refreshLocalExercises: vi.fn(async () => Ok.EMPTY),
+}))
+
 import { updateCourse } from "../../actions/updateCourse"
 import { TmcPanel } from "../../panels/TmcPanel"
 

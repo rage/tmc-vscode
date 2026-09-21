@@ -79,6 +79,8 @@ export interface WebviewHandlers {
     courseSlug: string,
     exerciseName: string,
   ) => Promise<Result<string, Error>>
+  /** Rescans the exercises on disk, so exercises the backend dropped stop showing as open. */
+  refreshLocalExercises: (actionContext: ActionContext) => Promise<Result<void, Error>>
   removeCourse: (actionContext: ActionContext, id: CourseIdentifier) => Promise<void>
   submitExercise: (
     extensionContext: vscode.ExtensionContext,
@@ -678,6 +680,12 @@ export class TmcPanel {
             const updateResult = await handlers().updateCourse(actionContext, courseId)
             if (updateResult.err) {
               actionContext.dialog.errorNotification("Failed to update course.", updateResult.val)
+            }
+            // `updateCourse` does not rescan, and the re-render below reads the exercise
+            // statuses straight out of the workspace manager.
+            const rescanResult = await handlers().refreshLocalExercises(actionContext)
+            if (rescanResult.err) {
+              Logger.warn("Failed to rescan the local exercises", rescanResult.val)
             }
             await this._renderPanel({
               id: randomPanelId(),

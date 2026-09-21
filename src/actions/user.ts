@@ -42,6 +42,7 @@ import {
 import { Logger, parseFeedbackQuestion, runSingleFlight } from "../utilities/"
 import { getActiveEditorExecutablePath } from "../window"
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse"
+import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ActionContext } from "./types"
 import { updateCourse } from "./updateCourse"
 
@@ -564,6 +565,9 @@ export async function checkForCourseUpdates(
       }
     }),
   )
+  // Once for the whole pass, not once per course: a course update can drop exercises the
+  // backend no longer has, and only a rescan stops those still showing as open.
+  await refreshLocalExercises(actionContext)
   const updatedCourses = refreshed
     .map((x) => x.updated)
     .filter((x): x is LocalCourseData => x !== undefined)

@@ -9,6 +9,7 @@ import {
   refreshEverything,
   removeCourse,
 } from "../../actions"
+import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ActionContext } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
@@ -24,6 +25,12 @@ import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/updateCourse", () => ({
   updateCourse: vi.fn(async () => Ok(true)),
+}))
+
+// The course-update pass ends by rescanning the exercises on disk, which would otherwise
+// drive real CLI calls.
+vi.mock("../../actions/refreshLocalExercises", () => ({
+  refreshLocalExercises: vi.fn(async () => Ok.EMPTY),
 }))
 
 suite("logout action", function () {
@@ -350,6 +357,20 @@ suite("checkForCourseUpdates action", function () {
 
     expect(updateCourse).toHaveBeenCalledTimes(1)
     expect(updateCourse).toHaveBeenCalledWith(actionContext, CourseIdentifier.from(1))
+  })
+
+  test("rescans the exercises on disk once, however many courses were refreshed", async function () {
+    // `updateCourse` does not rescan, so without this pass an exercise the backend
+    // dropped keeps showing as open until something else happens to rescan.
+    vi.mocked(refreshLocalExercises).mockClear()
+    const [actionContext] = contextWithCourses([
+      tmcCourse(1, Date.now() + 60_000, [10]),
+      tmcCourse(2, Date.now() + 60_000, [20]),
+    ])
+
+    await checkForCourseUpdates(actionContext)
+
+    expect(refreshLocalExercises).toHaveBeenCalledExactlyOnceWith(actionContext)
   })
 
   test("does not notify about a course whose reminder is postponed", async function () {

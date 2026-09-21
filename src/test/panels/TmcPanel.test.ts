@@ -238,6 +238,7 @@ function stubHandlers(): { [K in keyof WebviewHandlers]: ReturnType<typeof vi.fn
     openWorkspace: vi.fn().mockResolvedValue(undefined),
     pasteMoocExercise: vi.fn().mockResolvedValue(Ok("link")),
     pasteTmcExercise: vi.fn().mockResolvedValue(Ok("link")),
+    refreshLocalExercises: vi.fn().mockResolvedValue(Ok.EMPTY),
     removeCourse: vi.fn().mockResolvedValue(undefined),
     submitExercise: vi.fn().mockResolvedValue(Ok(undefined)),
     updateCourse: vi.fn().mockResolvedValue(Ok(true)),
@@ -291,6 +292,19 @@ suite("TmcPanel handler dispatch", () => {
     await listener({ type: "cancelTests", testRunId: 7 })
 
     expect(handlers.cancelTests).toHaveBeenCalledWith(7)
+  })
+
+  test("a course refresh rescans the exercises on disk before re-rendering", async () => {
+    // `updateCourse` does not rescan, and the CourseDetails panel that renders next
+    // reads exercise statuses out of the workspace manager.
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createMockActionContext()
+    const { listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "refreshCourseDetails", id: CourseIdentifier.from(42), useCache: false })
+
+    expect(handlers.refreshLocalExercises).toHaveBeenCalledWith(actionContext)
   })
 
   const pasteMessage = {
