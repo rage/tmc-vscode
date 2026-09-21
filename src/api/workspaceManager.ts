@@ -44,6 +44,20 @@ export interface WorkspaceExercise {
  */
 export type PersistClosedExercises = (closedExerciseSlugs: string[]) => Promise<Result<void, Error>>
 
+/**
+ * Writes the durable record of which of a course's exercises are closed, for a
+ * change the manager observed rather than one it was asked to make.
+ *
+ * Must land in the same place as the {@link PersistClosedExercises} that the
+ * open and close calls pass: the manager keeps one last-written set per course
+ * and skips a write that would not change it.
+ */
+export type PersistClosedCourseExercises = (
+  backend: "tmc" | "mooc",
+  courseSlug: string,
+  closedExerciseSlugs: string[],
+) => Promise<Result<void, Error>>
+
 interface ConfigurationProperties {
   default?: unknown
   type?: string
@@ -99,14 +113,24 @@ export default class WorkspaceManager implements vscode.Disposable {
   private _exercisesByPath: Map<string, WorkspaceExercise>
   private readonly _resources: Resources
   private readonly _disposables: vscode.Disposable[]
+  private readonly _persistClosedExercises: PersistClosedCourseExercises
+  private _recordedClosedExercises: Map<string, string>
 
   /**
    * Creates a new instance of the WorkspaceManager class.
    * @param resources Resources instance for constructing the exercise path
+   * @param persistClosedExercises Writer for a closed set the manager observed
+   * @param exercises The known exercises, with the statuses already on record
    */
-  public constructor(resources: Resources, exercises?: WorkspaceExercise[]) {
+  public constructor(
+    resources: Resources,
+    persistClosedExercises: PersistClosedCourseExercises,
+    exercises?: WorkspaceExercise[],
+  ) {
     this._exercises = exercises ?? []
     this._exercisesByPath = WorkspaceManager._indexByPath(this._exercises)
+    this._persistClosedExercises = persistClosedExercises
+    this._recordedClosedExercises = WorkspaceManager._closedByCourse(this._exercises)
     this._resources = resources
     this._disposables = [
       vscode.workspace.onDidChangeWorkspaceFolders((e) => this._onDidChangeWorkspaceFolders(e)),
@@ -189,9 +213,15 @@ export default class WorkspaceManager implements vscode.Disposable {
     return workspaceFile
   }
 
+  /**
+   * Replaces the known exercises. Their statuses are what the durable record
+   * already says, so they become the last-written closed set rather than being
+   * written back to it.
+   */
   public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
     this._exercises = exercises
     this._exercisesByPath = WorkspaceManager._indexByPath(exercises)
+    this._recordedClosedExercises = WorkspaceManager._closedByCourse(exercises)
     return this._refreshActiveCourseWorkspace()
   }
 
@@ -553,6 +583,10 @@ export default class WorkspaceManager implements vscode.Disposable {
     if (persisted.err) {
       return persisted
     }
+    this._recordedClosedExercises.set(
+      WorkspaceManager._courseKey(backend, courseSlug),
+      WorkspaceManager._closedFingerprint(closedAfterwards),
+    )
 
     const matched = courseExercises.filter((x) => requested.has(x.exerciseSlug))
     for (const exercise of matched) {
@@ -561,6 +595,65 @@ export default class WorkspaceManager implements vscode.Disposable {
 
     const refreshed = await this._refreshActiveCourseWorkspace()
     return refreshed.err ? refreshed : Ok(matched)
+  }
+
+  /**
+   * Writes the course's closed set unless it already matches the last one
+   * written.
+   *
+   * {@link _refreshActiveCourseWorkspace} moves workspace folders, which
+   * re-enters the folder-change handler with the state it has just applied, so
+   * writing unconditionally would cost a second CLI call per open or close.
+   */
+  private async _recordClosedExercises(backend: "tmc" | "mooc", courseSlug: string): Promise<void> {
+    const closedExerciseSlugs = this._exercises
+      .filter(
+        (x) =>
+          x.backend === backend &&
+          x.courseSlug === courseSlug &&
+          x.status === ExerciseStatus.Closed,
+      )
+      .map((x) => x.exerciseSlug)
+    const key = WorkspaceManager._courseKey(backend, courseSlug)
+    const fingerprint = WorkspaceManager._closedFingerprint(closedExerciseSlugs)
+    if (this._recordedClosedExercises.get(key) === fingerprint) {
+      return
+    }
+
+    // Noted before the write, so two folder changes in flight do not both issue
+    // it; a failed write puts the course back in play for the next change.
+    this._recordedClosedExercises.set(key, fingerprint)
+    const persisted = await this._persistClosedExercises(backend, courseSlug, closedExerciseSlugs)
+    if (persisted.err) {
+      this._recordedClosedExercises.delete(key)
+      Logger.error(`Failed to record the closed exercises of ${courseSlug}.`, persisted.val)
+    }
+  }
+
+  private static _courseKey(backend: "tmc" | "mooc", courseSlug: string): string {
+    return `${backend}:${courseSlug}`
+  }
+
+  private static _closedFingerprint(closedExerciseSlugs: string[]): string {
+    return closedExerciseSlugs.toSorted().join("\n")
+  }
+
+  private static _closedByCourse(exercises: WorkspaceExercise[]): Map<string, string> {
+    const closedByCourse = new Map<string, string[]>()
+    for (const exercise of exercises) {
+      const key = WorkspaceManager._courseKey(exercise.backend, exercise.courseSlug)
+      const closed = closedByCourse.get(key) ?? []
+      if (exercise.status === ExerciseStatus.Closed) {
+        closed.push(exercise.exerciseSlug)
+      }
+      closedByCourse.set(key, closed)
+    }
+    return new Map(
+      [...closedByCourse].map(([key, closed]) => [
+        key,
+        WorkspaceManager._closedFingerprint(closed),
+      ]),
+    )
   }
 
   private static _indexByPath(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {
@@ -589,6 +682,10 @@ export default class WorkspaceManager implements vscode.Disposable {
         exercise.status = ExerciseStatus.Closed
       }
     })
+
+    if (activeCourseWorkspace) {
+      void this._recordClosedExercises(activeCourseWorkspace.backend, activeCourseWorkspace.slug)
+    }
 
     if (incorrectFolderAdded) {
       Logger.warn(

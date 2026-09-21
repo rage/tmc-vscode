@@ -16,6 +16,7 @@ import WorkspaceManager, {
 } from "./api/workspaceManager"
 import {
   CLIENT_NAME,
+  closedExercisesSettingKey,
   DEBUG_MODE,
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_ID,
@@ -284,7 +285,18 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   let workspaceManager: Result<WorkspaceManager, Error>
   let exerciseDecorationProvider: Result<ExerciseDecorationProvider, Error>
   if (resources.ok) {
-    workspaceManager = new Ok(new WorkspaceManager(resources.val))
+    workspaceManager = new Ok(
+      new WorkspaceManager(resources.val, (backend, courseSlug, closedExerciseSlugs) =>
+        langs.ok
+          ? langs.val.setSetting(
+              closedExercisesSettingKey(backend, courseSlug),
+              closedExerciseSlugs,
+            )
+          : Promise.resolve(
+              new Err(new InitializationError("Cannot record closed exercises without tmc-langs")),
+            ),
+      ),
+    )
     context.subscriptions.push(workspaceManager.val)
     if (workspaceManager.val.activeCourse) {
       await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true)
