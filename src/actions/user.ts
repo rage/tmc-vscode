@@ -37,6 +37,7 @@ import {
   LocalCourseData,
   LocalCourseExercise,
   match,
+  panelTarget,
   toWebviewError,
 } from "../shared/shared"
 import { Logger, parseFeedbackQuestion, runSingleFlight } from "../utilities/"
@@ -144,6 +145,7 @@ export async function testExercise(
         testRunId,
       }
       await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+      const target = panelTarget(panel)
 
       if (!course.data.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext)
@@ -164,7 +166,7 @@ export async function testExercise(
           if (testResults.err) {
             TmcPanel.postMessage({
               type: "testError",
-              target: panel,
+              target,
               error: toWebviewError(testResults.val),
             })
             return Ok.EMPTY
@@ -176,7 +178,7 @@ export async function testExercise(
           if (validationResults.err) {
             TmcPanel.postMessage({
               type: "testError",
-              target: panel,
+              target,
               error: toWebviewError(validationResults.val),
             })
             return Ok.EMPTY
@@ -198,7 +200,7 @@ export async function testExercise(
           }
           TmcPanel.postMessage({
             type: "testResults",
-            target: panel,
+            target,
             testResults: data,
           })
         } finally {
@@ -210,7 +212,7 @@ export async function testExercise(
         // exam
         TmcPanel.postMessage({
           type: "willNotRunTestsForExam",
-          target: panel,
+          target,
         })
       }
 
@@ -374,7 +376,7 @@ export async function submitExercise(
         exercise: courseExercise,
       }
       await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
-      const target = { id: panel.id, type: panel.type }
+      const target = panelTarget(panel)
 
       const outcome = await submit(target, exercisePath)
       if (outcome.err) {

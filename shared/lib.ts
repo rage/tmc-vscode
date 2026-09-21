@@ -574,6 +574,17 @@ export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"]
 // for example, a change in an exercise's status should be sent to all panels that display the status
 export type BroadcastPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "type">
 
+/**
+ * Addresses `panel` without carrying its state along.
+ *
+ * A panel object holds the whole course and its exercises; a message's `target` is read
+ * for its `id` and `type` alone, and the rest is serialized through `postMessage` on
+ * every send for nothing.
+ */
+export function panelTarget<T extends Panel>(panel: T): { id: number; type: T["type"] } {
+  return { id: panel.id, type: panel.type }
+}
+
 // schema equivalent of `TargetPanel<T>` for the given panel type(s)
 export function targetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   return z.object({
@@ -598,11 +609,10 @@ export function broadcastPanelSchema<T extends PanelType>(...types: [T, ...T[]])
 // object, which would otherwise fail with an opaque `DataCloneError` instead of
 // failing loudly.
 //
-// Deliberately NOT used for `ExtensionToWebviewSchema`'s `target` fields: some
-// existing extension-host call sites pass a whole panel object as `target`
-// (harmless there, since it's a plain object the receiving side only reads
-// `.id`/`.type` off), and tightening those schemas would reject
-// otherwise-working messages.
+// Deliberately NOT used for `ExtensionToWebviewSchema`'s `target` fields: a
+// broadcast target there may carry an `id` on top of the `type` it declares,
+// which narrows the broadcast to the one panel that asked, and the listener
+// honours it.
 function strictTargetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   return z.strictObject({
     id: z.number(),

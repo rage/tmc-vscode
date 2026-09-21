@@ -169,7 +169,7 @@ suite("TmcPanel initialization guards", () => {
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "panelDataError",
-        target: sourcePanel,
+        target: { id: sourcePanel.id, type: sourcePanel.type },
         error: { message: expect.stringContaining("did not initialize properly") },
       }),
     )
@@ -655,7 +655,7 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
 
     expect(panel.webview.postMessage).toHaveBeenCalledWith({
       type: "setUpdateables",
-      target: sourcePanel,
+      target: { id: sourcePanel.id, type: sourcePanel.type },
       courseId: COURSE_ID,
       exerciseIds: [ExerciseIdentifier.from(101)],
     })
