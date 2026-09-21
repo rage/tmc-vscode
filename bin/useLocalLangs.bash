@@ -72,6 +72,6 @@ cat <<EOF
 Done. To use it:
   - integration: pnpm run test:integration
   - playwright:  pnpm run backend:start   (in one shell)
-                 pnpm run playwright-test:local
+                 pnpm run playwright-test
 To restore the released CLI: rm -rf backend/cli && (cd backend && pnpm run setup)
 EOF

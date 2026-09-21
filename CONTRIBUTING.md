@@ -60,7 +60,7 @@ This project uses [oxfmt](https://oxc.rs/) for code formatting. You can run oxfm
 
 ## Linting
 
-This project uses [oxlint](https://oxc.rs/) for code linting. You can run oxlint across the code by calling `pnpm run lint` from a terminal, or check linting without autofixing with `pnpm run lint:ci`.
+This project uses [oxlint](https://oxc.rs/) for code linting. You can run oxlint across the code by calling `pnpm run lint:fix` from a terminal, or check linting without autofixing with `pnpm run lint`.
 
 ## Developing the extension
 
