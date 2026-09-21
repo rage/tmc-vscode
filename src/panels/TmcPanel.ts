@@ -487,12 +487,6 @@ export class TmcPanel {
               })
             break
           }
-          case "requestExerciseSubmissionData": {
-            break
-          }
-          case "requestExerciseTestsData": {
-            break
-          }
           case "requestMyCoursesData": {
             const { userData, workspaceManager, resources } = actionContext
             if (

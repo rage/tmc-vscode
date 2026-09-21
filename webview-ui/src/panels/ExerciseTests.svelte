@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte"
-
   import Button from "../components/Button.svelte"
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
   import TestResults from "../components/TestResults.svelte"
@@ -47,12 +45,6 @@
     return validationStrategy === "FAIL" && validationErrors > 0
   })
 
-  onMount(() => {
-    vscode.postMessage({
-      type: "requestExerciseTestsData",
-      sourcePanel: panel,
-    })
-  })
   // svelte-ignore state_referenced_locally -- the panel identity (id/type)
   // is fixed for the lifetime of the component, capturing the initial value is intended
   addMessageListener(panel, (message) => {

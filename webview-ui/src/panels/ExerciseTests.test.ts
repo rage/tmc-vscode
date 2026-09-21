@@ -35,12 +35,8 @@ function postTestResults(testResults: unknown): void {
 }
 
 suite("ExerciseTests panel", () => {
-  test("requests its data on mount and shows the running-tests state", () => {
+  test("shows the running-tests state until a result is pushed to it", () => {
     render(ExerciseTests, { props: { panel } })
-    expect(postedMessages).toHaveBeenCalledWith({
-      type: "requestExerciseTestsData",
-      sourcePanel: panel,
-    })
     expect(screen.getByRole("heading", { name: "Running tests" })).toBeInTheDocument()
   })
 

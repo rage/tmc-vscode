@@ -67,12 +67,8 @@ function postMoocResult(result: unknown): void {
 }
 
 suite("ExerciseSubmission panel", () => {
-  test("requests its data on mount and shows the processing state", () => {
+  test("shows the processing state until a result is pushed to it", () => {
     render(ExerciseSubmission, { props: { panel } })
-    expect(postedMessages).toHaveBeenCalledWith({
-      type: "requestExerciseSubmissionData",
-      sourcePanel: panel,
-    })
     expect(screen.getByRole("heading", { name: "Processing submission…" })).toBeInTheDocument()
   })
 

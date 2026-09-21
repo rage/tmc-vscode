@@ -920,14 +920,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     sourcePanel: CourseDetailsPanelSchema,
   }),
   z.object({
-    type: z.literal("requestExerciseSubmissionData"),
-    sourcePanel: ExerciseSubmissionPanelSchema,
-  }),
-  z.object({
-    type: z.literal("requestExerciseTestsData"),
-    sourcePanel: ExerciseTestsPanelSchema,
-  }),
-  z.object({
     type: z.literal("requestMyCoursesData"),
     sourcePanel: MyCoursesPanelSchema,
   }),
