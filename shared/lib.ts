@@ -190,6 +190,14 @@ export function backendName(kind: "tmc" | "mooc"): string {
   return kind === "tmc" ? "TMC Server" : "courses.mooc.fi"
 }
 
+/**
+ * The name to show the user for a backend's paste service, where an exercise can be shared
+ * for help. Derived from {@link backendName} so the two never disagree.
+ */
+export function pasteServiceName(kind: "tmc" | "mooc"): string {
+  return `${backendName(kind)} paste`
+}
+
 export function matchOption<A, B, T extends Enum<A, B> | undefined>(
   data: T,
   tmc: (x: T & TmcKind) => A,
@@ -566,6 +574,17 @@ export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"]
 // for example, a change in an exercise's status should be sent to all panels that display the status
 export type BroadcastPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "type">
 
+/**
+ * Addresses `panel` without carrying its state along.
+ *
+ * A panel object holds the whole course and its exercises; a message's `target` is read
+ * for its `id` and `type` alone, and the rest is serialized through `postMessage` on
+ * every send for nothing.
+ */
+export function panelTarget<T extends Panel>(panel: T): { id: number; type: T["type"] } {
+  return { id: panel.id, type: panel.type }
+}
+
 // schema equivalent of `TargetPanel<T>` for the given panel type(s)
 export function targetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   return z.object({
@@ -590,11 +609,10 @@ export function broadcastPanelSchema<T extends PanelType>(...types: [T, ...T[]])
 // object, which would otherwise fail with an opaque `DataCloneError` instead of
 // failing loudly.
 //
-// Deliberately NOT used for `ExtensionToWebviewSchema`'s `target` fields: some
-// existing extension-host call sites pass a whole panel object as `target`
-// (harmless there, since it's a plain object the receiving side only reads
-// `.id`/`.type` off), and tightening those schemas would reject
-// otherwise-working messages.
+// Deliberately NOT used for `ExtensionToWebviewSchema`'s `target` fields: a
+// broadcast target there may carry an `id` on top of the `type` it declares,
+// which narrows the broadcast to the one panel that asked, and the listener
+// honours it.
 function strictTargetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   return z.strictObject({
     id: z.number(),
@@ -920,14 +938,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     sourcePanel: CourseDetailsPanelSchema,
   }),
   z.object({
-    type: z.literal("requestExerciseSubmissionData"),
-    sourcePanel: ExerciseSubmissionPanelSchema,
-  }),
-  z.object({
-    type: z.literal("requestExerciseTestsData"),
-    sourcePanel: ExerciseTestsPanelSchema,
-  }),
-  z.object({
     type: z.literal("requestMyCoursesData"),
     sourcePanel: MyCoursesPanelSchema,
   }),
@@ -941,10 +951,9 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("openCourseWorkspace"),
-    courseName: z.string(),
-    // Workspace files are namespaced by backend (`<slug>-<backend>.code-workspace`);
-    // a bare slug is ambiguous if a tmc and mooc course share a name.
-    backend: z.enum(["tmc", "mooc"]),
+    // The id, not the slug: the slug names a file the extension writes and opens, so
+    // the webview must not be the one choosing it.
+    courseId: CourseIdentifierSchema,
   }),
   z.object({
     type: z.literal("downloadExercises"),
@@ -1005,7 +1014,9 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("openLinkInBrowser"),
-    url: z.string(),
+    // Most senders carry a backend-supplied string; the handler additionally restricts
+    // the scheme, which this does not.
+    url: z.url(),
   }),
   z.object({
     type: z.literal("requestInitializationErrors"),

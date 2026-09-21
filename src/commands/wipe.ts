@@ -10,7 +10,7 @@ export async function wipe(
   actionContext: ActionContext,
   context: vscode.ExtensionContext,
 ): Promise<void> {
-  const { dialog, resources, langs, userData, workspaceManager } = actionContext
+  const { authState, dialog, resources, langs, userData, workspaceManager } = actionContext
   Logger.info("Wiping")
   if (
     !(
@@ -107,7 +107,7 @@ and every setting and course this extension has stored will be cleared.",
     return
   }
 
-  await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", undefined)
+  await authState.clear()
   await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", undefined)
 
   for (const sub of context.subscriptions) {

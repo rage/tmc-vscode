@@ -11,15 +11,8 @@ import { Logger } from "../utilities/"
  * Call once per activation.
  */
 export function registerUiActions(actionContext: ActionContext): void {
-  const {
-    ui,
-    visibilityGroups,
-    userData,
-    langs,
-    resources,
-    exerciseDecorationProvider,
-    workspaceManager,
-  } = actionContext
+  const { ui, userData, langs, resources, exerciseDecorationProvider, workspaceManager } =
+    actionContext
   Logger.info("Initializing UI Actions")
 
   if (
@@ -34,7 +27,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.treeDP.registerAction({
       label: "View initialization error help",
       id: "tmc.viewInitializationErrorHelp",
-      groups: [],
+      visible: "always",
       command: {
         command: "tmc.viewInitializationErrorHelp",
         title: "Open help message for the extension initialization error",
@@ -44,7 +37,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.treeDP.registerAction({
       label: "Restart extension host",
       id: "workbench.action.restartExtensionHost",
-      groups: [],
+      visible: "always",
       command: {
         command: "workbench.action.restartExtensionHost",
         title: "Restart extension host",
@@ -57,7 +50,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.treeDP.registerAction({
       label: "Log in",
       id: "logIn",
-      groups: [visibilityGroups.loggedIn.not],
+      visible: "loggedOut",
       command: {
         command: "tmc.showMoocLogin",
         title: "",
@@ -71,7 +64,7 @@ export function registerUiActions(actionContext: ActionContext): void {
     ui.treeDP.registerAction({
       label: "My Courses",
       id: "myCourses",
-      groups: [visibilityGroups.loggedIn],
+      visible: "loggedIn",
       command: {
         command: "tmc.myCourses",
         title: "Go to My Courses",
@@ -93,7 +86,7 @@ export function registerUiActions(actionContext: ActionContext): void {
   ui.treeDP.registerAction({
     label: "Settings",
     id: "settings",
-    groups: [],
+    visible: "always",
     command: {
       command: "tmc.settings",
       title: "Open TestMyCode settings",
@@ -104,7 +97,7 @@ export function registerUiActions(actionContext: ActionContext): void {
   ui.treeDP.registerAction({
     label: "Open Exercises Folder",
     id: "tmcDataFolder",
-    groups: [],
+    visible: "always",
     command: {
       command: "tmc.openTMCExercisesFolder",
       title: "Open Exercises Folder",
@@ -114,7 +107,7 @@ export function registerUiActions(actionContext: ActionContext): void {
   ui.treeDP.registerAction({
     label: "Show Extension Logs",
     id: "logs",
-    groups: [],
+    visible: "always",
     command: {
       command: "tmc.logs",
       title: "Show Extension Logs",
@@ -124,7 +117,7 @@ export function registerUiActions(actionContext: ActionContext): void {
   ui.treeDP.registerAction({
     label: "Log out",
     id: "logOut",
-    groups: [visibilityGroups.loggedIn],
+    visible: "loggedIn",
     command: {
       command: "tmc.logout",
       title: "Log out",

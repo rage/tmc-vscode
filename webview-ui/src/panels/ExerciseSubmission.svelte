@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte"
-
   import Button from "../components/Button.svelte"
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
   import ProgressBar from "../components/ProgressBar.svelte"
@@ -40,12 +38,6 @@
     moocGrading?.grading_progress === "FullyGraded" || moocGrading?.grading_progress === "Failed",
   )
 
-  onMount(() => {
-    vscode.postMessage({
-      type: "requestExerciseSubmissionData",
-      sourcePanel: panel,
-    })
-  })
   // svelte-ignore state_referenced_locally -- the panel identity (id/type)
   // is fixed for the lifetime of the component, capturing the initial value is intended
   addMessageListener(panel, (message) => {

@@ -7,8 +7,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ESNext"],
-    "types": ["node", "vscode", "vitest/globals"],
-    "sourceMap": true
+    "types": ["node", "vscode", "vitest/globals"]
   },
   "include": ["src/test/**/*"]
 }

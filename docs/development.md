@@ -227,7 +227,7 @@ those skip gracefully. `backend/cli` is gitignored — the local build is never
 committed.
 
 - Integration: `pnpm run test:integration`
-- Playwright: `pnpm run playwright-test:local` (builds with the `mockBackend`
+- Playwright: `pnpm run playwright-test` (builds with the `mockBackend`
   profile and starts the mock backend itself, or reuses one already on 4001)
 
 To restore the released CLI: `rm -rf backend/cli && (cd backend && pnpm run setup)`.

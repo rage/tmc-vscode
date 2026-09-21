@@ -4,14 +4,10 @@ import type { MyCoursesPanel } from "../shared/shared"
 import { makeTmcKind } from "../shared/shared"
 import { findButton } from "../test/dom"
 import { moocLocalCourse, tmcLocalCourse } from "../test/fixtures"
-import { postedMessages } from "../test/setup"
+import { dispatchToWebview as dispatch, postedMessages } from "../test/setup"
 import MyCourses from "./MyCourses.svelte"
 
 const panel: MyCoursesPanel = { id: 7, type: "MyCourses", courseDeadlines: {} }
-
-function dispatch(data: unknown) {
-  window.dispatchEvent(new MessageEvent("message", { data }))
-}
 
 suite("MyCourses panel", () => {
   // Adding a course is the extension host's quick pick, so the button asks for the
@@ -103,6 +99,26 @@ suite("MyCourses panel", () => {
     })
 
     expect(await screen.findByText(/This course has been disabled/)).toBeInTheDocument()
+  })
+
+  test("asks for a course workspace by id, leaving the slug to the extension", async () => {
+    // The slug names a file the extension writes and opens, so it is resolved from
+    // stored data rather than chosen here.
+    render(MyCourses, { props: { panel } })
+    dispatch({
+      type: "setMyCourses",
+      target: { id: panel.id, type: "MyCourses" },
+      courses: [tmcLocalCourse()],
+    })
+
+    const open = await findButton("Open workspace")
+    postedMessages.mockClear()
+    open.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openCourseWorkspace",
+      courseId: makeTmcKind({ courseId: 42 }),
+    })
   })
 
   test("shows why the courses could not be loaded, and offers to ask again", async () => {

@@ -8,7 +8,12 @@ import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import type { WebviewHandlers } from "../../panels/TmcPanel"
 import { randomPanelId, registerWebviewHandlers, TmcPanel } from "../../panels/TmcPanel"
 import { updateablesRegistry } from "../../panels/updateablesRegistry"
-import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
+import {
+  CourseIdentifier,
+  ExerciseIdentifier,
+  ExerciseSchema,
+  makeTmcKind,
+} from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
 
@@ -164,7 +169,7 @@ suite("TmcPanel initialization guards", () => {
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "panelDataError",
-        target: sourcePanel,
+        target: { id: sourcePanel.id, type: sourcePanel.type },
         error: { message: expect.stringContaining("did not initialize properly") },
       }),
     )
@@ -233,6 +238,7 @@ function stubHandlers(): { [K in keyof WebviewHandlers]: ReturnType<typeof vi.fn
     openWorkspace: vi.fn().mockResolvedValue(undefined),
     pasteMoocExercise: vi.fn().mockResolvedValue(Ok("link")),
     pasteTmcExercise: vi.fn().mockResolvedValue(Ok("link")),
+    refreshLocalExercises: vi.fn().mockResolvedValue(Ok.EMPTY),
     removeCourse: vi.fn().mockResolvedValue(undefined),
     submitExercise: vi.fn().mockResolvedValue(Ok(undefined)),
     updateCourse: vi.fn().mockResolvedValue(Ok(true)),
@@ -286,6 +292,157 @@ suite("TmcPanel handler dispatch", () => {
     await listener({ type: "cancelTests", testRunId: 7 })
 
     expect(handlers.cancelTests).toHaveBeenCalledWith(7)
+  })
+
+  test("a course refresh rescans the exercises on disk before re-rendering", async () => {
+    // `updateCourse` does not rescan, and the CourseDetails panel that renders next
+    // reads exercise statuses out of the workspace manager.
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createMockActionContext()
+    const { listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "refreshCourseDetails", id: CourseIdentifier.from(42), useCache: false })
+
+    expect(handlers.refreshLocalExercises).toHaveBeenCalledWith(actionContext)
+  })
+
+  const pasteMessage = {
+    type: "pasteExercise",
+    course: makeTmcKind({
+      id: 42,
+      name: "python-course",
+      title: "Python Course",
+      description: "",
+      organization: "mooc",
+      exercises: [],
+      availablePoints: 0,
+      awardedPoints: 0,
+      perhapsExamMode: false,
+      newExercises: [],
+      notifyAfter: 0,
+      disabled: false,
+      materialUrl: null,
+    }),
+    exercise: makeTmcKind({
+      id: 101,
+      name: "loops",
+      availablePoints: 1,
+      awardedPoints: 0,
+      deadline: null,
+      passed: false,
+      softDeadline: null,
+    }),
+    requestingPanel: { id: 5, type: "ExerciseTests" },
+  }
+
+  test("a paste link goes back to the panel that asked for it", async () => {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const { panel, listener } = await mountSidePanel(createMockActionContext())
+
+    await listener(pasteMessage)
+
+    expect(handlers.pasteTmcExercise).toHaveBeenCalledWith(
+      expect.anything(),
+      "python-course",
+      "loops",
+    )
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "pasteResult", pasteLink: "link" }),
+    )
+  })
+
+  test("a failed paste is reported in the panel, and not also as a notification", async () => {
+    // The panel that asked is on screen and renders the failure itself, so a toast
+    // would be the second report of one failure.
+    const handlers = stubHandlers()
+    handlers.pasteTmcExercise.mockResolvedValue(Err(new Error("paste service is down")))
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener(pasteMessage)
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "pasteError", error: "paste service is down" }),
+    )
+    expect(actionContext.dialog.errorNotification).not.toHaveBeenCalled()
+  })
+})
+
+suite("TmcPanel inbound message guard", () => {
+  // The webview is a separate document; its messages are the extension's one untrusted
+  // input, and nothing downstream re-checks them.
+  async function drive(message: unknown): Promise<{
+    handlers: ReturnType<typeof stubHandlers>
+    posted: ReturnType<typeof vi.fn>
+  }> {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const { panel, listener } = await mountSidePanel(createMockActionContext())
+    await listener(message)
+    return { handlers, posted: vi.mocked(panel.webview.postMessage) }
+  }
+
+  test("ignores a message whose type it does not know", async () => {
+    const { handlers, posted } = await drive({ type: "notAKnownMessage", testRunId: 7 })
+
+    expect(handlers.cancelTests).not.toHaveBeenCalled()
+    expect(posted).not.toHaveBeenCalled()
+  })
+
+  test("ignores a known message that is missing a required field", async () => {
+    const { handlers, posted } = await drive({ type: "cancelTests" })
+
+    expect(handlers.cancelTests).not.toHaveBeenCalled()
+    expect(posted).not.toHaveBeenCalled()
+  })
+
+  test("acts on the same message once it carries the field", async () => {
+    const { handlers } = await drive({ type: "cancelTests", testRunId: 7 })
+
+    expect(handlers.cancelTests).toHaveBeenCalledWith(7)
+  })
+})
+
+suite("TmcPanel webview-supplied paths and links", () => {
+  test("resolves the workspace slug from storage rather than from the message", async () => {
+    // The slug becomes a `.code-workspace` path the extension writes and opens, so a
+    // name the webview chose must never reach it.
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = {
+      ...createMockActionContext(),
+      userData: Ok({ getCourse: () => Ok(courseWith(0)) }),
+    } as unknown as ReturnType<typeof createMockActionContext>
+    const { listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "openCourseWorkspace", courseId: CourseIdentifier.from(42) })
+
+    expect(handlers.openWorkspace).toHaveBeenCalledWith(actionContext, "python-course", "tmc")
+  })
+
+  test("opens an https link the webview asks for", async () => {
+    const openExternal = stubOpenExternal()
+    const { listener } = await mountSidePanel(createMockActionContext())
+
+    await listener({ type: "openLinkInBrowser", url: "https://tmc.mooc.fi/paste/abc" })
+
+    expect(openExternal).toHaveBeenCalledWith(
+      expect.objectContaining({ scheme: "https", authority: "tmc.mooc.fi" }),
+    )
+  })
+
+  test("refuses a link that is not http or https", async () => {
+    // `Uri.parse` in its default mode invents a `file` scheme for anything without one,
+    // so an unrestricted link would reach the OS handler as a local path.
+    const openExternal = stubOpenExternal()
+    const { listener } = await mountSidePanel(createMockActionContext())
+
+    await listener({ type: "openLinkInBrowser", url: "file:///etc/passwd" })
+
+    expect(openExternal).not.toHaveBeenCalled()
   })
 })
 
@@ -498,7 +655,7 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
 
     expect(panel.webview.postMessage).toHaveBeenCalledWith({
       type: "setUpdateables",
-      target: sourcePanel,
+      target: { id: sourcePanel.id, type: sourcePanel.type },
       courseId: COURSE_ID,
       exerciseIds: [ExerciseIdentifier.from(101)],
     })
@@ -521,6 +678,16 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
     )
   })
 })
+
+// `jest-mock-vscode` ships no `env` namespace, so the tests that drive link opening
+// install one on the mock the `vscode` alias resolves to.
+const vscodeMock = vscode as unknown as { env: { openExternal: (uri: vscode.Uri) => void } }
+
+function stubOpenExternal(): ReturnType<typeof vi.fn> {
+  const openExternal = vi.fn()
+  vscodeMock.env = { openExternal }
+  return openExternal
+}
 
 // Discards whatever panels a previous test left mounted.
 function resetPanels(): void {
@@ -699,7 +866,7 @@ suite("TmcPanel webview document", () => {
   })
 })
 
-function courseWith(exerciseCount: number) {
+function courseWith(exerciseCount: number, deadline: string | null = null) {
   return makeTmcKind({
     id: 42,
     name: "python-course",
@@ -711,9 +878,9 @@ function courseWith(exerciseCount: number) {
       availablePoints: 1,
       awardedPoints: 0,
       name: `part01-${String(index).padStart(3, "0")}_exercise`,
-      deadline: null,
+      deadline,
       passed: false,
-      softDeadline: null,
+      softDeadline: deadline,
     })),
     availablePoints: exerciseCount,
     awardedPoints: 0,
@@ -730,10 +897,13 @@ suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
   // Large enough that one message per exercise would be obvious in the count.
   const EXERCISE_COUNT = 150
 
-  async function openCourseDetails(exerciseCount: number): Promise<{
+  async function openCourseDetails(
+    exerciseCount: number,
+    deadline: string | null = null,
+  ): Promise<{
     posted: { type: string }[]
   }> {
-    const course = courseWith(exerciseCount)
+    const course = courseWith(exerciseCount, deadline)
     const actionContext = {
       ...createMockActionContext(),
       langs: Ok({
@@ -769,6 +939,22 @@ suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
 
     expect(large.posted).toHaveLength(small.posted.length)
     expect(large.posted.filter((m) => m.type === "exerciseStatusChange")).toHaveLength(0)
+  })
+
+  test("ships only the fields the exercise contract declares", async () => {
+    // The view model's rows also carry parsed `Date` deadlines it needs internally.
+    // Those are not part of the message contract, and a `Date` has no business
+    // crossing a `postMessage`.
+    const { posted } = await openCourseDetails(1, "2030-01-01T00:00:00.000Z")
+
+    const groups = posted.find((m) => m.type === "setCourseGroups") as unknown as {
+      exerciseGroups: { exercises: Record<string, unknown>[] }[]
+    }
+    const exercise = groups.exerciseGroups[0]?.exercises[0]
+    expect(exercise).toBeDefined()
+    expect(Object.keys(exercise ?? {}).toSorted()).toEqual(
+      Object.keys(ExerciseSchema.shape).toSorted(),
+    )
   })
 
   test("reports every exercise's status in one message", async () => {

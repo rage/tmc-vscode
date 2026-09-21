@@ -31,6 +31,7 @@ export function registerCommands(
     openWorkspace: actions.openWorkspace,
     pasteMoocExercise: actions.pasteMoocExercise,
     pasteTmcExercise: actions.pasteTmcExercise,
+    refreshLocalExercises: actions.refreshLocalExercises,
     removeCourse: actions.removeCourse,
     submitExercise: commands.submitExercise,
     updateCourse: actions.updateCourse,

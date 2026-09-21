@@ -20,7 +20,6 @@ import {
   sumCoursePoints,
   sumTmcApiCoursePoints,
 } from "../utilities/apiData"
-import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ActionContext } from "./types"
 
 const postCourseStatusMessage = (
@@ -72,6 +71,9 @@ function reportInsufficientScope(dialog: Dialog, error: InsufficientScopeError):
 /**
  * Updates the given course by re-fetching all data from the server. Handles authorization and
  * connection errors as successful operations where the data was not actually updated.
+ *
+ * Local exercises are **not** rescanned; the caller runs `refreshLocalExercises` once it has
+ * updated every course it means to, so a rescan does not repeat per course.
  *
  * @param courseId ID of the course to update.
  * @returns Boolean value representing whether the data from server was successfully received.
@@ -173,7 +175,9 @@ export async function updateCourse(
       }
       // Non-fatal: on a failed fetch, previous local progress is carried over
       // per exercise id so a refresh never wipes known points or passed flags.
-      const progressRes = await langs.val.getMoocCourseProgress(courseData.data.id)
+      const progressRes = await langs.val.getMoocCourseProgress(courseData.data.id, {
+        forceRefresh: true,
+      })
       if (progressRes.err) {
         Logger.warn("Failed to fetch mooc course progress", progressRes.val)
       }
@@ -233,9 +237,6 @@ export async function updateCourse(
       ...workspaceManager.val.getExercisesByCourseSlug(courseData.kind, courseName),
     )
   }
-
-  // refresh local exercises to ensure deleted exercises don't appear open etc.
-  await refreshLocalExercises(actionContext)
 
   // Reading the course back would hand out this same object: `userData` stores the
   // value given to `updateCourse`, and `updateExercises` mutates it in place.

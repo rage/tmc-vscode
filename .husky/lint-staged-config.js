@@ -1,5 +1,5 @@
 // Pre-commit tier: fast, autofix-only, never blocks a commit.
-// The failing gates (lint:ci, format:check, typecheck) run in CI.
+// The failing gates (lint, format:check, typecheck) run in CI.
 module.exports = {
   "*.{js,mjs,cjs,jsx,ts,tsx,svelte}": [
     "./bin/oxlint-autofix",

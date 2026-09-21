@@ -101,6 +101,17 @@ suite("downloadNewExercisesForCourse action", function () {
     expect(announcedNewExercises()).toEqual([ExerciseIdentifier.from(2)])
   })
 
+  test("restores the announcement when the download throws", async function () {
+    vi.mocked(downloadOrUpdateExercises).mockRejectedValue(new Error("boom"))
+
+    await expect(downloadNewExercisesForCourse(actionContext(), COURSE_ID)).rejects.toThrow("boom")
+
+    expect(announcedNewExercises()).toEqual([
+      ExerciseIdentifier.from(1),
+      ExerciseIdentifier.from(2),
+    ])
+  })
+
   test("restores the announcement when the download fails outright", async function () {
     vi.mocked(downloadOrUpdateExercises).mockResolvedValue(Err(new Error("boom")))
 

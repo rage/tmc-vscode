@@ -41,6 +41,7 @@ export interface TMCMockValues {
   listLocalExercises: Result<LocalExercise[], Error>
   getSettingClosedExercises: Result<string[], Error>
   getSettingProjectsDir: Result<string, Error>
+  listSettings: Result<Record<string, unknown>, Error>
   migrateExercise: Result<void, Error>
   moveProjectsDirectory: Result<void, Error>
   setSettingClosedExercises: Result<void, Error>
@@ -65,6 +66,10 @@ export function createTMCMock(): [Langs, TMCMockValues] {
     listLocalExercises: Ok(localExercises),
     getSettingClosedExercises: Ok(closedExercisesPythonCourse),
     getSettingProjectsDir: Ok("/langs/path/to/exercises"),
+    listSettings: Ok({
+      projects_dir: "/langs/path/to/exercises",
+      "closed-exercises-for:tmc:test-python-course": closedExercisesPythonCourse,
+    }),
     migrateExercise: Ok.EMPTY,
     moveProjectsDirectory: Ok.EMPTY,
     setSettingClosedExercises: Ok.EMPTY,
@@ -92,6 +97,7 @@ export function createFailingTMCMock(): [Langs, TMCMockValues] {
     listLocalExercises: error,
     getSettingClosedExercises: error,
     getSettingProjectsDir: error,
+    listSettings: error,
     migrateExercise: error,
     moveProjectsDirectory: error,
     setSettingClosedExercises: error,
@@ -120,6 +126,7 @@ function setupMockValues(values: TMCMockValues): Langs {
         ? values.getSettingClosedExercises
         : NOT_MOCKED_ERROR,
     ),
+    listSettings: vi.fn(async () => values.listSettings),
     setSetting: vi.fn(async (key: string, _value: unknown) =>
       key === "closed-exercises-for:tmc:test-python-course"
         ? values.setSettingClosedExercises

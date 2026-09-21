@@ -11,6 +11,7 @@ import { ConnectionError, InitializationError } from "../errors"
 import type {
   CourseDetailsPanel,
   CourseIdentifier,
+  ExerciseGroup,
   ExerciseIdentifier,
   ExerciseStatus,
   ExtensionToWebview,
@@ -23,6 +24,7 @@ import {
   LocalCourseData,
   LocalCourseExercise,
   match,
+  panelTarget,
   toWebviewError,
   WebviewToExtensionSchema,
 } from "../shared/shared"
@@ -78,6 +80,8 @@ export interface WebviewHandlers {
     courseSlug: string,
     exerciseName: string,
   ) => Promise<Result<string, Error>>
+  /** Rescans the exercises on disk, so exercises the backend dropped stop showing as open. */
+  refreshLocalExercises: (actionContext: ActionContext) => Promise<Result<void, Error>>
   removeCourse: (actionContext: ActionContext, id: CourseIdentifier) => Promise<void>
   submitExercise: (
     extensionContext: vscode.ExtensionContext,
@@ -399,23 +403,21 @@ export class TmcPanel {
           }
           case "requestCourseDetailsData": {
             const { langs, userData, workspaceManager } = actionContext
+            const target = panelTarget(message.sourcePanel)
             if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-              this._postPanelDataError(
-                message.sourcePanel,
-                reportNotInitialized(actionContext.dialog),
-              )
+              this._postPanelDataError(target, reportNotInitialized(actionContext.dialog))
               return
             }
             const courseResult = userData.val.getCourse(message.sourcePanel.courseId)
             if (courseResult.err) {
               actionContext.dialog.errorNotification("Failed to read the course.", courseResult.val)
-              this._postPanelDataError(message.sourcePanel, courseResult.val)
+              this._postPanelDataError(target, courseResult.val)
               return
             }
             const course = courseResult.val
             this._postMessage({
               type: "setCourseData",
-              target: message.sourcePanel,
+              target,
               courseData: course,
             })
             // Deriving this here would mean re-running `checkForExerciseUpdates`, which
@@ -424,14 +426,14 @@ export class TmcPanel {
             // `setCourseDisabledStatus` below does the same.
             this._postMessage({
               type: "setUpdateables",
-              target: message.sourcePanel,
+              target,
               courseId: message.sourcePanel.courseId,
               exerciseIds: updateablesRegistry.get(message.sourcePanel.courseId),
             })
 
             this._postMessage({
               type: "setCourseDisabledStatus",
-              target: message.sourcePanel,
+              target,
               courseId: LocalCourseData.getCourseId(course),
               disabled: course.data.disabled,
             })
@@ -446,7 +448,7 @@ export class TmcPanel {
             const view = buildView(false)
             this._postMessage({
               type: "setExerciseStatuses",
-              target: message.sourcePanel,
+              target,
               courseId: LocalCourseData.getCourseId(course),
               statuses: view.exerciseStatuses.map(
                 ({ exerciseId, status }): [ExerciseIdentifier, ExerciseStatus] => [
@@ -457,9 +459,9 @@ export class TmcPanel {
             })
             this._postMessage({
               type: "setCourseGroups",
-              target: message.sourcePanel,
+              target,
               offlineMode: false,
-              exerciseGroups: view.exerciseGroups,
+              exerciseGroups: toMessageGroups(view.exerciseGroups),
             })
 
             // Everything above comes from stored data, so the panel is rendered by now.
@@ -473,9 +475,9 @@ export class TmcPanel {
                 if (apiCourse.err && apiCourse.val instanceof ConnectionError) {
                   this._postMessage({
                     type: "setCourseGroups",
-                    target: message.sourcePanel,
+                    target,
                     offlineMode: true,
-                    exerciseGroups: buildView(true).exerciseGroups,
+                    exerciseGroups: toMessageGroups(buildView(true).exerciseGroups),
                   })
                 }
               })
@@ -486,14 +488,9 @@ export class TmcPanel {
               })
             break
           }
-          case "requestExerciseSubmissionData": {
-            break
-          }
-          case "requestExerciseTestsData": {
-            break
-          }
           case "requestMyCoursesData": {
             const { userData, workspaceManager, resources } = actionContext
+            const target = panelTarget(message.sourcePanel)
             if (
               !(
                 userData.ok &&
@@ -502,21 +499,18 @@ export class TmcPanel {
                 resources.val.projectsDirectory
               )
             ) {
-              this._postPanelDataError(
-                message.sourcePanel,
-                reportNotInitialized(actionContext.dialog),
-              )
+              this._postPanelDataError(target, reportNotInitialized(actionContext.dialog))
               return
             }
 
             this._postMessage({
               type: "setMyCourses",
-              target: message.sourcePanel,
+              target,
               courses: userData.val.getCourses(),
             })
             this._postMessage({
               type: "setTmcDataPath",
-              target: message.sourcePanel,
+              target,
               tmcDataPath: resources.val.projectsDirectory,
             })
             getFolderSize
@@ -524,7 +518,7 @@ export class TmcPanel {
               .then((size) =>
                 this._postMessage({
                   type: "setTmcDataSize",
-                  target: message.sourcePanel,
+                  target,
                   tmcDataSize: formatSizeInBytes(size),
                 }),
               )
@@ -532,7 +526,7 @@ export class TmcPanel {
                 Logger.error("Failed to measure the exercise directory", error)
                 this._postMessage({
                   type: "setTmcDataSize",
-                  target: message.sourcePanel,
+                  target,
                   tmcDataSize: "unknown",
                 })
               })
@@ -548,7 +542,7 @@ export class TmcPanel {
             const version = resources.val.extensionVersion
             this._postMessage({
               type: "setWelcomeData",
-              target: message.sourcePanel,
+              target: panelTarget(message.sourcePanel),
               version,
             })
             break
@@ -596,7 +590,22 @@ export class TmcPanel {
             break
           }
           case "openCourseWorkspace": {
-            handlers().openWorkspace(actionContext, message.courseName, message.backend)
+            const { userData } = actionContext
+            if (!userData.ok) {
+              reportNotInitialized(actionContext.dialog)
+              return
+            }
+
+            const courseResult = userData.val.getCourse(message.courseId)
+            if (courseResult.err) {
+              actionContext.dialog.errorNotification("Failed to read the course.", courseResult.val)
+              return
+            }
+            handlers().openWorkspace(
+              actionContext,
+              LocalCourseData.getCourseName(courseResult.val),
+              message.courseId.kind,
+            )
             break
           }
           case "addNewCourse": {
@@ -669,6 +678,12 @@ export class TmcPanel {
             if (updateResult.err) {
               actionContext.dialog.errorNotification("Failed to update course.", updateResult.val)
             }
+            // `updateCourse` does not rescan, and the re-render below reads the exercise
+            // statuses straight out of the workspace manager.
+            const rescanResult = await handlers().refreshLocalExercises(actionContext)
+            if (rescanResult.err) {
+              Logger.warn("Failed to rescan the local exercises", rescanResult.val)
+            }
             await this._renderPanel({
               id: randomPanelId(),
               type: "CourseDetails",
@@ -724,32 +739,38 @@ export class TmcPanel {
                 ),
             )
             if (pasteResult.err) {
-              const pasteService = match(
-                message.course,
-                () => "TMC Paste",
-                () => "the courses.mooc.fi paste service",
-              )
-              actionContext.dialog.errorNotification(
-                `Failed to send to ${pasteService}.`,
-                pasteResult.val,
-              )
+              // No notification: the panel that asked is on screen and renders this
+              // itself, so a toast on top of it would report the same failure twice.
               TmcPanel.postMessage({
                 type: "pasteError",
                 target: message.requestingPanel,
                 error: pasteResult.val.message,
               })
             } else {
-              const value = pasteResult.val || "Link not provided by server."
               TmcPanel.postMessage({
                 type: "pasteResult",
                 target: message.requestingPanel,
-                pasteLink: value,
+                pasteLink: pasteResult.val,
               })
             }
             break
           }
           case "openLinkInBrowser": {
-            vscode.env.openExternal(vscode.Uri.parse(message.url))
+            // Non-strict `Uri.parse` never throws and invents a `file` scheme for a string
+            // without one, so a link from the webview has to be parsed strictly and its
+            // scheme checked before it reaches the OS handler.
+            let link
+            try {
+              link = vscode.Uri.parse(message.url, true)
+            } catch (error) {
+              Logger.error("Refusing to open an unparseable link from the webview", error)
+              break
+            }
+            if (link.scheme !== "http" && link.scheme !== "https") {
+              Logger.error(`Refusing to open a "${link.scheme}" link from the webview`, message.url)
+              break
+            }
+            vscode.env.openExternal(link)
             break
           }
           case "moocLogin": {
@@ -841,6 +862,29 @@ export class TmcPanel {
       this._disposables,
     )
   }
+}
+
+/**
+ * Narrows the view model's rows to the fields `ExerciseSchema` declares.
+ *
+ * `buildCourseDetailsView` assembles its groups out of `CourseDetailsExercise` rows,
+ * which also carry the parsed `Date` deadlines it needs to sort and compare; the
+ * message contract declares only their rendered strings, and a `Date` has no place
+ * on the far side of a `postMessage`.
+ */
+function toMessageGroups(groups: ExerciseGroup[]): ExerciseGroup[] {
+  return groups.map(({ name, nextDeadlineString, exercises }) => ({
+    name,
+    nextDeadlineString,
+    exercises: exercises.map((exercise) => ({
+      id: exercise.id,
+      name: exercise.name,
+      isHard: exercise.isHard,
+      hardDeadlineString: exercise.hardDeadlineString,
+      softDeadlineString: exercise.softDeadlineString,
+      passed: exercise.passed,
+    })),
+  }))
 }
 
 const NOT_INITIALIZED_MESSAGE =

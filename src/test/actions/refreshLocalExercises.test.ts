@@ -52,12 +52,33 @@ suite("refreshLocalExercises action", function () {
     expect(result).toBe(Ok.EMPTY)
   })
 
-  test("should default to open when the closed-exercise setting is unreadable", async function () {
-    tmcMockValues.getSettingClosedExercises = Err(new Error())
+  test("should default to open when the settings are unreadable", async function () {
+    tmcMockValues.listSettings = Err(new Error())
     const result = await refreshLocalExercises(actionContext())
     expect(result).toBe(Ok.EMPTY)
     expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ status: ExerciseStatus.Open })]),
+    )
+  })
+
+  test("should default to open when a closed-exercise setting is malformed", async function () {
+    tmcMockValues.listSettings = Ok({
+      "closed-exercises-for:tmc:test-python-course": { notAnArray: true },
+    })
+    const result = await refreshLocalExercises(actionContext())
+    expect(result).toBe(Ok.EMPTY)
+    expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ status: ExerciseStatus.Open })]),
+    )
+  })
+
+  test("should close the exercises the settings list as closed", async function () {
+    const result = await refreshLocalExercises(actionContext())
+    expect(result).toBe(Ok.EMPTY)
+    expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ exerciseSlug: "other_world", status: ExerciseStatus.Closed }),
+      ]),
     )
   })
 
@@ -121,5 +142,11 @@ suite("refreshLocalExercises action", function () {
   test("should list every course's exercises in one call", async function () {
     await refreshLocalExercises(actionContext())
     expect(tmcMock.listLocalExercises).toHaveBeenCalledTimes(1)
+  })
+
+  test("should read every course's closed exercises in one call", async function () {
+    await refreshLocalExercises(actionContext())
+    expect(tmcMock.listSettings).toHaveBeenCalledTimes(1)
+    expect(tmcMock.getSetting).not.toHaveBeenCalled()
   })
 })

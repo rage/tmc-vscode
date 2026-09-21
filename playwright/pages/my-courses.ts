@@ -52,6 +52,9 @@ export class MyCoursesPage extends TmcPage {
     // The webview fixture resolves to the last ready frame, which is a side panel
     // while one is closing; waiting for a My Courses control pins it to the right one.
     await this.webview.getByRole("button", { name: "Add new course" }).first().waitFor()
-    await this.webview.getByRole("heading", { name }).first().click()
+    // The heading stretches across the panel but only its button is clickable, so
+    // clicking the heading itself lands on dead space at panel widths where the
+    // title is short relative to the panel.
+    await this.webview.getByRole("heading", { name }).first().getByRole("button").click()
   }
 }

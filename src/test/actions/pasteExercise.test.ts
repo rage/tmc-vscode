@@ -2,64 +2,73 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
-import { pasteMoocExercise } from "../../actions"
+import { pasteMoocExercise, pasteTmcExercise } from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import { BottleneckError } from "../../errors"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const COURSE_SLUG = "mooc-python-course"
 const EXERCISE_SLUG = "loops"
-const EXERCISE_ID = "mooc-ex-1"
+const MOOC_EXERCISE_ID = "mooc-ex-1"
+const TMC_EXERCISE_ID = 4321
 const EXERCISE_PATH = "/path/to/exercise"
 
-function contextWith(submitResult: unknown): {
-  actionContext: ActionContext
-  submit: ReturnType<typeof vi.fn>
-} {
-  const submit = vi.fn().mockResolvedValue(Ok(submitResult))
-  const actionContext: ActionContext = {
+// `langsMethods` holds only the backend's own paste call, so an exercise routed through
+// the other backend's method fails instead of quietly passing.
+function contextFor(
+  langsMethods: Record<string, unknown>,
+  userDataMethods: Record<string, unknown>,
+): ActionContext {
+  return {
     ...createMockActionContext(),
-    langs: Ok({
-      submitMoocExerciseToPaste: submit,
-    }) as unknown as ActionContext["langs"],
-    userData: Ok({
-      getMoocExerciseByName: () => ({ id: EXERCISE_ID }),
-    }) as unknown as ActionContext["userData"],
+    langs: Ok(langsMethods) as unknown as ActionContext["langs"],
+    userData: Ok(userDataMethods) as unknown as ActionContext["userData"],
     workspaceManager: Ok({
       getExerciseBySlug: () => ({ uri: { fsPath: EXERCISE_PATH } as unknown as vscode.Uri }),
     }) as unknown as ActionContext["workspaceManager"],
   }
-  return { actionContext, submit }
 }
 
-// Like `contextWith`, but the paste submission resolves to an `Err`.
-function contextWithErr(error: Error): {
+function moocContextWith(pasteResult: unknown): {
   actionContext: ActionContext
   submit: ReturnType<typeof vi.fn>
 } {
-  const submit = vi.fn().mockResolvedValue(Err(error))
-  const actionContext: ActionContext = {
-    ...createMockActionContext(),
-    langs: Ok({
-      submitMoocExerciseToPaste: submit,
-    }) as unknown as ActionContext["langs"],
-    userData: Ok({
-      getMoocExerciseByName: () => ({ id: EXERCISE_ID }),
-    }) as unknown as ActionContext["userData"],
-    workspaceManager: Ok({
-      getExerciseBySlug: () => ({ uri: { fsPath: EXERCISE_PATH } as unknown as vscode.Uri }),
-    }) as unknown as ActionContext["workspaceManager"],
-  }
+  const submit = vi.fn().mockResolvedValue(pasteResult)
+  const actionContext = contextFor(
+    { submitMoocExerciseToPaste: submit },
+    { getMoocExerciseByName: () => ({ id: MOOC_EXERCISE_ID }) },
+  )
   return { actionContext, submit }
 }
 
-suite("pasteMoocExercise action", () => {
-  test("resolves the exercise id and path, and returns the paste link", async () => {
-    const { actionContext, submit } = contextWith("https://paste.example/abc123")
+function tmcContextWith(pasteResult: unknown): {
+  actionContext: ActionContext
+  submit: ReturnType<typeof vi.fn>
+} {
+  const submit = vi.fn().mockResolvedValue(pasteResult)
+  const actionContext = contextFor(
+    { submitTmcExerciseToPaste: submit },
+    { getTmcExerciseByName: () => ({ id: TMC_EXERCISE_ID }) },
+  )
+  return { actionContext, submit }
+}
+
+suite("paste actions", () => {
+  test("a tmc exercise goes to the tmc paste service with its numeric id", async () => {
+    const { actionContext, submit } = tmcContextWith(Ok("https://tmc.mooc.fi/paste/abc123"))
+
+    const result = await pasteTmcExercise(actionContext, COURSE_SLUG, EXERCISE_SLUG)
+
+    expect(submit).toHaveBeenCalledWith(TMC_EXERCISE_ID, EXERCISE_PATH)
+    expect(result.val).toBe("https://tmc.mooc.fi/paste/abc123")
+  })
+
+  test("a mooc exercise goes to the mooc paste service with its uuid", async () => {
+    const { actionContext, submit } = moocContextWith(Ok("https://paste.example/abc123"))
 
     const result = await pasteMoocExercise(actionContext, COURSE_SLUG, EXERCISE_SLUG)
 
-    expect(submit).toHaveBeenCalledWith(EXERCISE_ID, EXERCISE_PATH)
+    expect(submit).toHaveBeenCalledWith(MOOC_EXERCISE_ID, EXERCISE_PATH)
     expect(result.ok).toBe(true)
     expect(result.val).toBe("https://paste.example/abc123")
   })
@@ -68,7 +77,7 @@ suite("pasteMoocExercise action", () => {
     // Paste and submit deliberately share one key: both drive the CLI against the
     // same exercise directory, so they must not overlap.
     let finish!: () => void
-    const { actionContext } = contextWith(undefined)
+    const { actionContext } = moocContextWith(undefined)
     ;(actionContext.langs.val as unknown as Record<string, unknown>).submitMoocExerciseToPaste = vi
       .fn()
       .mockReturnValue(
@@ -91,29 +100,26 @@ suite("pasteMoocExercise action", () => {
     expect((await first).val).toBe("link")
   })
 
-  test("on a CLI/backend error, shows an error notification and returns the error", async () => {
+  test("a CLI or backend failure is returned unreported", async () => {
+    // Both callers report it themselves, in the place the user asked from; a
+    // notification here would make every failed paste two of them.
     const error = new Error("backend unreachable")
-    const { actionContext } = contextWithErr(error)
+    const { actionContext } = moocContextWith(Err(error))
 
     const result = await pasteMoocExercise(actionContext, COURSE_SLUG, EXERCISE_SLUG)
 
-    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to send exercise to the courses.mooc.fi paste service"),
-      error,
-    )
     expect(result.err).toBe(true)
     expect(result.val).toBe(error)
+    expect(actionContext.dialog.errorNotification).not.toHaveBeenCalled()
   })
 
   test("an empty paste link from the server is its own error case", async () => {
-    const { actionContext } = contextWith("")
+    const { actionContext } = moocContextWith(Ok(""))
 
     const result = await pasteMoocExercise(actionContext, COURSE_SLUG, EXERCISE_SLUG)
 
     expect(result.err).toBe(true)
-    expect(result.val).toBeInstanceOf(Error)
-    expect((result.val as Error).message).toContain("Didn't receive paste link from server.")
-    // this failure path never has a "backend error" to show as a notification
+    expect((result.val as Error).message).toContain("did not answer with a paste link")
     expect(actionContext.dialog.errorNotification).not.toHaveBeenCalled()
   })
 })

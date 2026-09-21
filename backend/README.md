@@ -1,8 +1,11 @@
 Mock backends for testing. One Express app (`index.ts`, port 4001) hosts both:
 
-- **Legacy TMC mock** (`tmc.mooc.fi`, REST API v8) — the original hand-written
-  mock the extension has always tested against. Start it with
-  `pnpm run backend:start`; point langs at it with `TMC_LANGS_TMC_ROOT_URL`.
+- **Legacy TMC mock** (`tmc.mooc.fi`, REST API v8) — under `controllers/v8.ts`,
+  mounted by `registerV8Routes`. Start it with `pnpm run backend:start`; point
+  langs at it with `TMC_LANGS_TMC_ROOT_URL`. Bearer auth is required by default;
+  opt out with `TMC_MOCK_REQUIRE_AUTH=0` or `requireAuth: false`. `/tmc-mock/reset`
+  clears its submissions. `controllers/v8.test.ts` validates every response
+  against `shared/bindings.schema.json`, the contract the CLI actually parses.
 
 - **Mooc mock** (`courses.mooc.fi`, the `/api/v0/exercise-services/client` API) —
   under `mooc/`, mounted by `registerMoocRoutes`. Point langs at it with
@@ -63,4 +66,4 @@ attaches no bearer to a localhost URL, so every authenticated mooc call 401s.
 - **Playwright E2E** (`playwright/tests/add-new-mooc-course.spec.ts`): both mock
   backends run in this one process (`pnpm run backend:start`), and
   `playwright/fixtures.ts` sets `TMC_LANGS_MOOC_ROOT_URL` at it. Run with
-  `pnpm run playwright-test:local`.
+  `pnpm run playwright-test`.

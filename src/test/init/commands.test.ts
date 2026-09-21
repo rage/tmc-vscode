@@ -190,9 +190,15 @@ suite("registerCommands", function () {
   // A `when` naming a key nothing ever sets is never true, so the entry it
   // gates silently disappears from the UI instead of failing anywhere.
   test("every context key the manifest gates on is one the extension sets", function () {
-    const source = fs.readFileSync(path.join(__dirname, "..", "..", "extension.ts"), "utf8")
+    const sourceRoot = path.join(__dirname, "..", "..")
     const settable = new Set(
-      [...source.matchAll(/"(test-my-code:\w+)"/g)].flatMap((match) => match[1] ?? []),
+      fs
+        .readdirSync(sourceRoot, { recursive: true, encoding: "utf8" })
+        .filter((file) => file.endsWith(".ts") && !file.startsWith("test"))
+        .flatMap((file) => [
+          ...fs.readFileSync(path.join(sourceRoot, file), "utf8").matchAll(/"(test-my-code:\w+)"/g),
+        ])
+        .flatMap((match) => match[1] ?? []),
     )
     const { menus, keybindings = [] } = packageJson().contributes
     const gated = [...Object.values(menus).flat(), ...keybindings]

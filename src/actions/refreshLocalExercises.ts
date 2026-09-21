@@ -14,8 +14,14 @@ import type { ActionContext } from "./types"
 
 const closedExercisesSettingSchema = z.array(z.string()).nullable()
 
-const isClosedExercisesSetting = (object: unknown): object is string[] | null =>
-  closedExercisesSettingSchema.safeParse(object).success
+function readClosedExercises(settings: Record<string, unknown>, key: string): string[] {
+  const parsed = closedExercisesSettingSchema.safeParse(settings[key] ?? null)
+  if (!parsed.success) {
+    Logger.warn(`Ignoring a malformed ${key} setting; its exercises default to open.`)
+    return []
+  }
+  return parsed.data ?? []
+}
 
 /**
  * Asks for all local exercises from TMC-Langs and passes them to WorkspaceManager.
@@ -29,10 +35,21 @@ export async function refreshLocalExercises(
   }
   Logger.info("Refreshing local exercises")
 
-  const localExercisesResult = await langs.val.listLocalExercises()
+  const [localExercisesResult, settingsResult] = await Promise.all([
+    langs.val.listLocalExercises(),
+    langs.val.listSettings(),
+  ])
   if (localExercisesResult.err) {
     return localExercisesResult
   }
+  if (settingsResult.err) {
+    Logger.warn(
+      "Failed to determine closed status for exercises, defaulting to open.",
+      settingsResult.val,
+    )
+  }
+  const settings = settingsResult.ok ? settingsResult.val : {}
+
   // Keyed the way the user's catalogue identifies a course: TMC by slug, mooc by id,
   // since a mooc course's on-disk slug is derived locally and need not match its name.
   const localExercisesByCourse = new Map<string, LocalExercise[]>()
@@ -60,16 +77,9 @@ export async function refreshLocalExercises(
       continue
     }
 
-    const closedExercisesResult = (
-      await langs.val.getSetting(
-        closedExercisesSettingKey(course.kind, courseSlug),
-        isClosedExercisesSetting,
-      )
-    ).mapErr((e) => {
-      Logger.warn("Failed to determine closed status for exercises, defaulting to open.", e)
-      return []
-    })
-    const closedExercises = new Set(closedExercisesResult.val ?? [])
+    const closedExercises = new Set(
+      readClosedExercises(settings, closedExercisesSettingKey(course.kind, courseSlug)),
+    )
 
     workspaceExercises.push(
       ...localExercises.map<WorkspaceExercise>((x) => ({

@@ -11,7 +11,7 @@ import {
   tmcExerciseGroup,
   tmcLocalCourse,
 } from "../test/fixtures"
-import { postedMessages } from "../test/setup"
+import { dispatchToWebview as dispatch, postedMessages } from "../test/setup"
 import CourseDetails from "./CourseDetails.svelte"
 
 // vscode-checkbox is inert under jsdom, so set `.checked` and dispatch `change` directly;
@@ -51,10 +51,6 @@ function moocPanel(): CourseDetailsPanel {
     courseId: makeMoocKind({ instanceId: MOOC_INSTANCE_ID }),
     exerciseStatuses: { tmc: {}, mooc: {} },
   }
-}
-
-function dispatch(data: unknown) {
-  window.dispatchEvent(new MessageEvent("message", { data }))
 }
 
 suite("CourseDetails panel", () => {
@@ -289,7 +285,9 @@ suite("CourseDetails panel", () => {
     )
   })
 
-  test("opens the workspace under the course's own backend", async () => {
+  test("asks for its own course by id, leaving the slug to the extension", async () => {
+    // The slug names a file the extension writes and opens, so it is resolved from
+    // stored data rather than chosen here.
     const panel = moocPanel()
     render(CourseDetails, { props: { panel } })
     dispatch({
@@ -305,8 +303,7 @@ suite("CourseDetails panel", () => {
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "openCourseWorkspace",
-      courseName: "mooc-python",
-      backend: "mooc",
+      courseId: makeMoocKind({ instanceId: MOOC_INSTANCE_ID }),
     })
   })
 

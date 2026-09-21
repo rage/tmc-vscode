@@ -12,6 +12,7 @@ import type {
 } from "@playwright/test"
 import { downloadAndUnzipVSCode } from "@vscode/test-electron"
 
+import { MOCK_TMC_ACCESS_TOKEN } from "../backend/controllers/accessToken"
 import { VSCODE_TEST_VERSION } from "../config"
 
 const rootPath = resolve(__dirname, "..")
@@ -98,15 +99,31 @@ const CLIENT_CONFIG_DIR_NAME = "tmc-vscode_plugin"
 // the courses.mooc.fi device flow, which needs a CLI carrying the mooc contract
 // (see migration-gate.ts). Seeding a tmc token instead is the "existing
 // credentials keep working" path, and it is what lets the tmc specs start from a
-// logged-in extension against the pinned released CLI. The mock backend accepts
-// any token (backend/controllers).
+// logged-in extension against the pinned released CLI.
 function seedTmcCredentials(configDir: string): void {
   const clientConfigDir = join(configDir, CLIENT_CONFIG_DIR_NAME)
   fs.mkdirSync(clientConfigDir, { recursive: true })
   fs.writeFileSync(
     join(clientConfigDir, "credentials.json"),
-    '{"access_token":"1234","token_type":"bearer","scope":"public"}',
+    JSON.stringify({
+      access_token: MOCK_TMC_ACCESS_TOKEN,
+      token_type: "bearer",
+      scope: "public",
+    }),
   )
+}
+
+// The mock backend is a long-lived process shared across specs, so both of its
+// mocks carry in-memory state from one test into the next; reset them the same
+// way the per-test config/projects dirs isolate on-disk state.
+async function resetMockBackend(mock: string): Promise<void> {
+  const reset = await fetch(`http://localhost:4001/${mock}-mock/reset`, { method: "POST" })
+  if (!reset.ok) {
+    throw new Error(
+      `Could not reset the ${mock} mock state: ${reset.status} ${reset.statusText}. ` +
+        "The test would have run against the previous test's state.",
+    )
+  }
 }
 
 interface CustomTestFixtures {
@@ -136,17 +153,8 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
     if (shouldSeedTmcCredentials) {
       seedTmcCredentials(configDir)
     }
-    // The mock backend is a long-lived process shared across specs, so its
-    // in-memory mooc state leaks between tests; reset it here the same way the
-    // per-test config/projects dirs isolate on-disk state. A reset that did not
-    // happen leaves this test running against the previous one's state.
-    const reset = await fetch("http://localhost:4001/mooc-mock/reset", { method: "POST" })
-    if (!reset.ok) {
-      throw new Error(
-        `Could not reset the mooc mock state: ${reset.status} ${reset.statusText}. ` +
-          "The test would have run against the previous test's state.",
-      )
-    }
+    await resetMockBackend("mooc")
+    await resetMockBackend("tmc")
     const electronApp = await electron.launch({
       executablePath: await downloadAndUnzipVSCode(VSCODE_TEST_VERSION),
       args: launchArgs(userDataDir),
@@ -173,12 +181,9 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
 
     await run(electronApp)
 
-    let tracePath = undefined
-    if (testInfo.status !== "passed") {
-      // a non-undefined tracepath causes the trace to be saved
-      // we'll do this only when the test hasn't passed
-      tracePath = `./test-results/${testInfo.title.split(" ").join("-")}_trace.zip`
-    }
+    // outputPath sanitises the title and scopes the file to this test, so two
+    // titles cannot collide on one trace.
+    const tracePath = testInfo.status === "passed" ? undefined : testInfo.outputPath("trace.zip")
     await electronApp.context().tracing.stop(tracePath ? { path: tracePath } : {})
 
     await closeElectron(electronApp)

@@ -2,7 +2,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
-import Langs from "../../api/langs"
+import Langs, { decodeLangsStdout } from "../../api/langs"
 import {
   AuthorizationError,
   BottleneckError,
@@ -94,6 +94,16 @@ function dataOutput(kind: string, data: unknown): OutputData {
  * An output that carries no data: an `executed-command` with nothing to report
  * (e.g. `reset-exercise`), or one of the login-state results.
  */
+// The `tmc-config` payload keeps its settings in a flattened table the contract does not
+// declare, so `cliOutput` would validate the line and drop them. Feeding the line through
+// the decoder `_spawnLangsProcess` uses keeps the fixture honest about what a caller gets.
+function decodedOutput(line: unknown): OutputData {
+  const { events } = decodeLangsStdout("", JSON.stringify(line) + "\n")
+  const output = events.flatMap((event) => (event.kind === "output-data" ? [event.output] : []))
+  expect(output).toHaveLength(1)
+  return output[0] as OutputData
+}
+
 function nullOutput(message = "ok", result: OutputResult = "executed-command"): OutputData {
   return cliOutput({
     "output-kind": "output-data",
@@ -171,6 +181,36 @@ suite("Langs class arg building", function () {
       Buffer.from('["part01-01","part01-02"]').toString("base64"),
       "--base64",
     ])
+  })
+
+  test("listSettings reads the whole settings file in one command", async function () {
+    const langs = newLangs()
+    const calls = spyOnSpawn(langs)
+    await langs.listSettings()
+    expect(calls[0]?.args).toEqual(["settings", "--client-name", "test-client", "list"])
+  })
+
+  test("listSettings returns the keys the contract leaves undeclared", async function () {
+    const langs = newLangs()
+    const settings = {
+      projects_dir: "/projects",
+      "closed-exercises-for:tmc:python": ["part01-01"],
+      "closed-exercises-for:mooc:course-uuid": [],
+    }
+    stubSpawn(langs, () =>
+      Ok(
+        decodedOutput({
+          "output-kind": "output-data",
+          status: "finished",
+          message: "retrieved settings",
+          result: "executed-command",
+          data: { "output-data-kind": "tmc-config", "output-data": settings },
+        }),
+      ),
+    )
+    const result = await langs.listSettings()
+    expect(result.ok).toBe(true)
+    expect(result.unwrap()).toEqual(settings)
   })
 
   test("getEnrolledMoocCourseInstances de-duplicates courses by id", async function () {
@@ -283,6 +323,19 @@ suite("Langs class arg building", function () {
     ])
     expect(result.ok).toBe(true)
     expect(result.unwrap()).toEqual(progress)
+  })
+
+  test("getMoocCourseProgress caches per course until a refresh is forced", async function () {
+    const langs = newLangs()
+    const progress = { course_id: uuid(1), exercises: [] }
+    const calls = stubSpawn(langs, () => Ok(dataOutput("mooc-course-progress", progress)))
+    await langs.getMoocCourseProgress(uuid(1))
+    await langs.getMoocCourseProgress(uuid(1))
+    expect(calls).toHaveLength(1)
+    await langs.getMoocCourseProgress(uuid(2))
+    expect(calls).toHaveLength(2)
+    await langs.getMoocCourseProgress(uuid(1), { forceRefresh: true })
+    expect(calls).toHaveLength(3)
   })
 
   test("submitMoocExerciseToPaste", async function () {

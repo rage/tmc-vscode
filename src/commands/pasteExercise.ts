@@ -2,7 +2,7 @@ import * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
-import { matchBackend } from "../shared/shared"
+import { matchBackend, pasteServiceName } from "../shared/shared"
 import { failure, runForExercise } from "./runForExercise"
 
 export async function pasteExercise(
@@ -23,13 +23,10 @@ export async function pasteExercise(
       if (result.ok) {
         return result
       }
-
-      const pasteService = matchBackend(
-        exercise,
-        () => "TMC Paste",
-        () => "courses.mooc.fi paste",
+      return failure(
+        `Failed to send the exercise to ${pasteServiceName(exercise.backend)}.`,
+        result.val,
       )
-      return failure(`Failed to send the exercise to ${pasteService}.`, result.val)
     },
   )
   if (pasteResult.err) {

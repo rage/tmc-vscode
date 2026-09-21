@@ -690,6 +690,24 @@ export default class Langs {
   }
 
   /**
+   * Reads the whole settings file in one call. Uses TMC-langs `settings list` command
+   * internally.
+   *
+   * Values arrive unchecked and keyed by setting name, so a caller validates the shape of
+   * each key it reads, as it would pass a checker to {@link getSetting}. Prefer this
+   * whenever more than one key is wanted: {@link getSetting} costs a CLI process per key.
+   */
+  public async listSettings(): Promise<Result<Record<string, unknown>, Error>> {
+    const res = await this._executeLangsCommand(
+      {
+        args: this._settingsCmd("list"),
+      },
+      "tmc-config",
+    )
+    return res.map((x) => x.data["output-data"])
+  }
+
+  /**
    * Sets a value for given key in stored settings. Uses TMC-langs `settings set` command
    * internally.
    */
@@ -1107,10 +1125,17 @@ export default class Langs {
    *
    * @param courseId The course UUID.
    */
-  public async getMoocCourseProgress(courseId: string): Promise<Result<MoocCourseProgress, Error>> {
+  public async getMoocCourseProgress(
+    courseId: string,
+    options?: CacheOptions,
+  ): Promise<Result<MoocCourseProgress, Error>> {
     const res = await this._executeLangsCommand(
       { backend: "mooc", args: this._moocCmd("course-progress", "--course-id", courseId) },
       "mooc-course-progress",
+      {
+        forceRefresh: options?.forceRefresh,
+        key: cacheKey("mooc", "course-progress", courseId),
+      },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -2188,6 +2213,32 @@ function schemaMismatch(
 }
 
 /**
+ * Puts the settings a `tmc-config` payload carries back into it.
+ *
+ * tmc-langs keeps every setting in a serde-flattened TOML table its exported schema
+ * omits, so the contract describes `projects_dir` alone and validation drops the
+ * settings themselves. They are taken back off the raw line; callers still check the
+ * shape of each key they read, so nothing reaches them unvalidated.
+ */
+function withFlattenedSettings(output: CliOutputData, parsed: unknown): CliOutputData {
+  const data = output.data
+  if (data?.["output-data-kind"] !== "tmc-config") {
+    return output
+  }
+  const rawData = (parsed as { data?: { "output-data"?: unknown } }).data?.["output-data"]
+  if (rawData === null || typeof rawData !== "object") {
+    return output
+  }
+  return {
+    ...output,
+    data: {
+      ...data,
+      "output-data": { ...(rawData as Record<string, unknown>), ...data["output-data"] },
+    },
+  }
+}
+
+/**
  * Validates one parsed stdout line against the single contract branch its `output-kind`
  * names, so a `status-update` is never first measured against the 44-way `output-data`
  * payload union, and a rejection names one branch rather than all three.
@@ -2198,7 +2249,7 @@ function classifyCliOutputLine(parsed: unknown): LangsStdoutEvent {
     case "output-data": {
       const validation = CliOutputData.safeParse(parsed)
       return validation.success
-        ? { kind: "output-data", output: validation.data }
+        ? { kind: "output-data", output: withFlattenedSettings(validation.data, parsed) }
         : schemaMismatch(parsed, outputKind, z.prettifyError(validation.error))
     }
     case "status-update": {

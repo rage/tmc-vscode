@@ -5,8 +5,6 @@ import * as path from "path"
 import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
-import type { Response } from "undici"
-import { fetch } from "undici"
 import type { ExtensionContext } from "vscode"
 
 import type { FeedbackQuestion } from "../actions/types"
@@ -79,6 +77,9 @@ export async function downloadFile(
     let response: Response
     try {
       restartStallTimer()
+      // The extension host's fetch, never a bundled HTTP client: VS Code patches this
+      // one for proxy handling, and undici needs a newer Node than the Electron in the
+      // oldest VS Code `engines.vscode` allows.
       response = await fetch(url, { method: "get", signal })
     } catch (error) {
       return new Err(new ConnectionError(signal.aborted ? signal.reason : error))

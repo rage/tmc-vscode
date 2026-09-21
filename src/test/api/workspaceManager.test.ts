@@ -2,12 +2,17 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 
+import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import type { Mock } from "vitest"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import type { PersistClosedExercises, WorkspaceExercise } from "../../api/workspaceManager"
+import type {
+  PersistClosedCourseExercises,
+  PersistClosedExercises,
+  WorkspaceExercise,
+} from "../../api/workspaceManager"
 import WorkspaceManager, {
   ensureCourseWorkspaceFile,
   ensureWorkspaceRootFile,
@@ -23,7 +28,7 @@ import {
   workspaceFileName,
 } from "../../config/constants"
 import Resources from "../../config/resources"
-import { Logger } from "../../utilities"
+import { Logger, LogLevel } from "../../utilities"
 
 // `Resources` reads `vscode.env.appName` to tell Code from VSCodium, and the
 // mock ships no `env`.
@@ -94,6 +99,7 @@ function folderOf(uri: vscode.Uri, name: string): vscode.WorkspaceFolder {
 }
 
 const persist: PersistClosedExercises = async () => Ok.EMPTY
+const persistForCourse: PersistClosedCourseExercises = async () => Ok.EMPTY
 
 /**
  * Opens `fileName` as the window's workspace file, together with the display
@@ -153,28 +159,28 @@ suite("WorkspaceManager class", function () {
   suite("active course workspace", function () {
     test("reads the course and backend of a tmc workspace file", function () {
       openWorkspaceFile(workspaceFileName("test-python-course", "tmc"))
-      const manager = new WorkspaceManager(resources)
+      const manager = new WorkspaceManager(resources, persistForCourse)
       expect(manager.activeCourse).toBe("test-python-course")
       expect(manager.activeCourseBackend).toBe("tmc")
     })
 
     test("reads the course and backend of a mooc workspace file", function () {
       openWorkspaceFile(workspaceFileName("test-python-course", "mooc"))
-      const manager = new WorkspaceManager(resources)
+      const manager = new WorkspaceManager(resources, persistForCourse)
       expect(manager.activeCourse).toBe("test-python-course")
       expect(manager.activeCourseBackend).toBe("mooc")
     })
 
     test("treats an untagged workspace file as a tmc course", function () {
       openWorkspaceFile("test-python-course.code-workspace")
-      const manager = new WorkspaceManager(resources)
+      const manager = new WorkspaceManager(resources, persistForCourse)
       expect(manager.activeCourse).toBe("test-python-course")
       expect(manager.activeCourseBackend).toBe("tmc")
     })
 
     test("reads a course slug containing a space", function () {
       openWorkspaceFile(workspaceFileName("my python course", "mooc"))
-      const manager = new WorkspaceManager(resources)
+      const manager = new WorkspaceManager(resources, persistForCourse)
       expect(manager.activeCourse).toBe("my python course")
       expect(manager.activeCourseBackend).toBe("mooc")
     })
@@ -182,7 +188,7 @@ suite("WorkspaceManager class", function () {
     test("has no active course when the open workspace is not a course workspace", function () {
       stubWorkspace("workspaceFile", vscode.Uri.file("/elsewhere/some-project.code-workspace"))
       stubWorkspace("name", "some-project (Workspace)")
-      const manager = new WorkspaceManager(resources)
+      const manager = new WorkspaceManager(resources, persistForCourse)
       expect(manager.activeCourse).toBeUndefined()
       expect(manager.activeCourseBackend).toBeUndefined()
     })
@@ -192,7 +198,7 @@ suite("WorkspaceManager class", function () {
       openWorkspaceFile(workspaceFileName("my python course", "mooc"))
       stubWorkspace("workspaceFolders", [rootFolder, folderOf(open.uri, open.exerciseSlug)])
 
-      const manager = new WorkspaceManager(resources)
+      const manager = new WorkspaceManager(resources, persistForCourse)
       const result = await manager.setExercises([open])
 
       expect(result.ok).toBe(true)
@@ -205,7 +211,7 @@ suite("WorkspaceManager class", function () {
     let manager: WorkspaceManager
 
     beforeEach(function () {
-      manager = new WorkspaceManager(resources, [helloWorld])
+      manager = new WorkspaceManager(resources, persistForCourse, [helloWorld])
     })
 
     test("finds the exercise by its own folder", function () {
@@ -251,7 +257,7 @@ suite("WorkspaceManager class", function () {
       closed = exercise("tmc", courseSlug, "part02-01_greeting", ExerciseStatus.Closed)
       openWorkspaceFile(workspaceFileName(courseSlug, "tmc"))
       stubWorkspace("workspaceFolders", [rootFolder, folderOf(open.uri, open.exerciseSlug)])
-      manager = new WorkspaceManager(resources, [open, closed])
+      manager = new WorkspaceManager(resources, persistForCourse, [open, closed])
     })
 
     test("records the whole closed set, not only the exercises the caller named", async function () {
@@ -296,6 +302,111 @@ suite("WorkspaceManager class", function () {
     })
   })
 
+  // VS Code reports a folder change the extension itself made, so the handler
+  // that records it runs again on the state it has just applied.
+  suite("recording folders the workspace itself gained or lost", function () {
+    const courseSlug = "test-python-course"
+    let open: WorkspaceExercise
+    let closed: WorkspaceExercise
+    let notifyFolderChange: ((e: vscode.WorkspaceFoldersChangeEvent) => void) | undefined
+    let write: Mock<PersistClosedCourseExercises>
+    let manager: WorkspaceManager
+
+    const persistThrough = (closedExerciseSlugs: string[]): Promise<Result<void, Error>> =>
+      write("tmc", courseSlug, closedExerciseSlugs)
+
+    beforeEach(function () {
+      Logger.configure(LogLevel.None)
+      open = exercise("tmc", courseSlug, "hello_world", ExerciseStatus.Open)
+      closed = exercise("tmc", courseSlug, "part02-01_greeting", ExerciseStatus.Closed)
+      openWorkspaceFile(workspaceFileName(courseSlug, "tmc"))
+      stubWorkspace("workspaceFolders", [rootFolder, folderOf(open.uri, open.exerciseSlug)])
+
+      notifyFolderChange = undefined
+      stubWorkspace("onDidChangeWorkspaceFolders", ((
+        listener: (e: vscode.WorkspaceFoldersChangeEvent) => void,
+      ) => {
+        notifyFolderChange = listener
+        return { dispose: vi.fn() }
+      }) as unknown as WorkspaceStubs["onDidChangeWorkspaceFolders"])
+      stubWorkspace("updateWorkspaceFolders", ((
+        start: number,
+        deleteCount: number,
+        ...folders: { uri: vscode.Uri }[]
+      ) => {
+        const previous = vscode.workspace.workspaceFolders ?? []
+        const next = [
+          ...previous.slice(0, start),
+          ...folders.map((folder) => folderOf(folder.uri, path.basename(folder.uri.fsPath))),
+          ...previous.slice(start + deleteCount),
+        ]
+        stubWorkspace("workspaceFolders", next)
+        // VS Code diffs the two lists, so a folder the replacement keeps is
+        // reported as neither added nor removed.
+        const previousPaths = new Set(previous.map((folder) => folder.uri.fsPath))
+        const nextPaths = new Set(next.map((folder) => folder.uri.fsPath))
+        notifyFolderChange?.({
+          added: next.filter((folder) => !previousPaths.has(folder.uri.fsPath)),
+          removed: previous.filter((folder) => !nextPaths.has(folder.uri.fsPath)),
+        })
+        return true
+      }) as unknown as WorkspaceStubs["updateWorkspaceFolders"])
+
+      write = vi.fn<PersistClosedCourseExercises>(async () => Ok.EMPTY)
+      manager = new WorkspaceManager(resources, write, [open, closed])
+    })
+
+    test("a folder the user removed by hand is recorded as closed", async function () {
+      notifyFolderChange?.({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
+      await Promise.resolve()
+
+      expect(write).toHaveBeenCalledExactlyOnceWith("tmc", courseSlug, [
+        "hello_world",
+        "part02-01_greeting",
+      ])
+      expect(open.status).toBe(ExerciseStatus.Closed)
+    })
+
+    // The workspace move each call makes re-enters the handler, so an
+    // unconditional write here would double every CLI call the user's clicks cost.
+    test("an open-then-close cycle writes once per change, not once per folder move", async function () {
+      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug], persistThrough)
+      await manager.openCourseExercises("tmc", courseSlug, [open.exerciseSlug], persistThrough)
+
+      expect(write.mock.calls).toEqual([
+        ["tmc", courseSlug, ["hello_world", "part02-01_greeting"]],
+        ["tmc", courseSlug, ["part02-01_greeting"]],
+      ])
+    })
+
+    test("the closed set a refresh was built from is not written back", async function () {
+      stubWorkspace("workspaceFolders", [
+        rootFolder,
+        folderOf(open.uri, open.exerciseSlug),
+        folderOf(closed.uri, closed.exerciseSlug),
+      ])
+
+      const result = await manager.setExercises([open, closed])
+
+      expect(result.ok).toBe(true)
+      expect(write).not.toHaveBeenCalled()
+    })
+
+    test("a failed write is retried on the next folder change", async function () {
+      write.mockResolvedValueOnce(Err(new Error("settings are read-only")))
+      const error = vi.spyOn(Logger, "error").mockImplementation(() => undefined)
+
+      notifyFolderChange?.({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
+      await Promise.resolve()
+      notifyFolderChange?.({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
+      await Promise.resolve()
+
+      expect(write).toHaveBeenCalledTimes(2)
+      expect(error).toHaveBeenCalledOnce()
+      error.mockRestore()
+    })
+  })
+
   suite("workspace settings integrity", function () {
     const alreadyCorrect: Record<string, unknown> = {
       "files.exclude": HIDE_META_FILES,
@@ -319,7 +430,7 @@ suite("WorkspaceManager class", function () {
       stubExtensions(() => undefined)
       stubWorkspace("getConfiguration", () => configurationStub(update))
 
-      await new WorkspaceManager(resources).verifyWorkspaceSettingsIntegrity()
+      await new WorkspaceManager(resources, persistForCourse).verifyWorkspaceSettingsIntegrity()
 
       expect(sectionsWritten()).toEqual(
         expect.arrayContaining([
@@ -336,7 +447,7 @@ suite("WorkspaceManager class", function () {
         configurationStub(update, () => ({ "**/legacy": true })),
       )
 
-      await new WorkspaceManager(resources).verifyWorkspaceSettingsIntegrity()
+      await new WorkspaceManager(resources, persistForCourse).verifyWorkspaceSettingsIntegrity()
 
       const written = update.mock.calls.find(([section]) => section === "files.exclude")?.[1]
       expect(written).toEqual({ "**/legacy": true, ...HIDE_META_FILES })
@@ -350,7 +461,7 @@ suite("WorkspaceManager class", function () {
         configurationStub(update, (section) => alreadyCorrect[section]),
       )
 
-      await new WorkspaceManager(resources).verifyWorkspaceSettingsIntegrity()
+      await new WorkspaceManager(resources, persistForCourse).verifyWorkspaceSettingsIntegrity()
 
       expect(update).not.toHaveBeenCalled()
     })
@@ -363,7 +474,7 @@ suite("WorkspaceManager class", function () {
         ),
       )
 
-      await new WorkspaceManager(resources).verifyWorkspaceSettingsIntegrity()
+      await new WorkspaceManager(resources, persistForCourse).verifyWorkspaceSettingsIntegrity()
 
       expect(update).toHaveBeenCalledExactlyOnceWith(
         "problems.decorations.enabled",
@@ -390,7 +501,7 @@ suite("WorkspaceManager class", function () {
         PROJECTS_DIRECTORY,
       )
       workspaceFile = resources.getWorkspaceFilePath(courseSlug, "tmc")
-      manager = new WorkspaceManager(resources)
+      manager = new WorkspaceManager(resources, persistForCourse)
     })
 
     afterEach(function () {
@@ -504,7 +615,7 @@ suite("WorkspaceManager class", function () {
       tmcExercise = exercise("tmc", courseSlug, "hello_world", ExerciseStatus.Closed)
       moocExercise = exercise("mooc", courseSlug, "hello_world", ExerciseStatus.Closed)
       openWorkspaceFile(workspaceFileName(courseSlug, "tmc"))
-      manager = new WorkspaceManager(resources, [tmcExercise, moocExercise])
+      manager = new WorkspaceManager(resources, persistForCourse, [tmcExercise, moocExercise])
     })
 
     test("lists only the requested backend's exercises", function () {

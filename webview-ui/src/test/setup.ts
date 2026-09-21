@@ -1,6 +1,9 @@
 import "@testing-library/jest-dom/vitest"
 import { cleanup } from "@testing-library/svelte"
 import { afterEach, vi } from "vitest"
+import { z } from "zod"
+
+import { ExtensionToWebviewSchema } from "../shared/shared"
 
 // The webview wrapper (src/utilities/vscode.ts) calls the global
 // `acquireVsCodeApi()` in its constructor. jsdom has no such global, so stub a
@@ -84,6 +87,25 @@ if (typeof document !== "undefined" && !document.querySelector("#vscode-codicon-
 
 /** The messages the component under test has posted back to the extension host. */
 export const postedMessages = vsCodeApi.postMessage
+
+/**
+ * Delivers a message to the component under test the way the extension host does.
+ *
+ * Both halves of the real boundary are enforced here: the message is checked against
+ * `ExtensionToWebviewSchema`, which the webview listener also applies and silently drops
+ * what fails, and it is `structuredClone`d, which is what VS Code does to it. A fixture
+ * that has drifted from the contract therefore fails in the test that sent it rather than
+ * quietly delivering nothing.
+ */
+export function dispatchToWebview(message: unknown): void {
+  const validationResult = ExtensionToWebviewSchema.safeParse(message)
+  if (!validationResult.success) {
+    throw new Error(
+      `Message does not match ExtensionToWebviewSchema: ${z.prettifyError(validationResult.error)}`,
+    )
+  }
+  window.dispatchEvent(new MessageEvent("message", { data: structuredClone(message) }))
+}
 
 afterEach(() => {
   cleanup()

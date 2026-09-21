@@ -25,7 +25,7 @@ export async function checkForExerciseUpdates(
   actionContext: ActionContext,
   options?: Options,
 ): Promise<Result<OutdatedExercise[], Error>> {
-  const { langs, userData } = actionContext
+  const { authState, langs, userData } = actionContext
   if (!(langs.ok && userData.ok)) {
     return new Err(new InitializationError("Extension was not initialized properly"))
   }
@@ -44,10 +44,9 @@ export async function checkForExerciseUpdates(
     Logger.warn("Skipping tmc.mooc.fi exercise update check; it failed:", tmcCheckUpdatesResult.val)
   }
 
-  // Skipped entirely (via a cheap local check, no backend call) when not
-  // authenticated, so a tmc-only user pays no network cost on every background run.
-  const moocAuthenticated = await langs.val.isMoocAuthenticated()
-  if (moocAuthenticated.ok && moocAuthenticated.val) {
+  // Skipped entirely when courses.mooc.fi has no session, so a tmc-only user pays
+  // no network cost on every background run.
+  if (authState.mooc) {
     const moocCheckUpdatesResult = await langs.val.checkExerciseUpdates("mooc", { forceRefresh })
     if (moocCheckUpdatesResult.ok) {
       for (const exerciseId of moocCheckUpdatesResult.val) {
@@ -60,10 +59,7 @@ export async function checkForExerciseUpdates(
       )
     }
   } else {
-    Logger.debug(
-      "Skipping courses.mooc.fi exercise update check; not authenticated.",
-      moocAuthenticated.err ? moocAuthenticated.val : undefined,
-    )
+    Logger.debug("Skipping courses.mooc.fi exercise update check; not authenticated.")
   }
 
   const outdatedExercisesByCourse = userData.val.getCourses().map<OutdatedExercise[]>((course) => {

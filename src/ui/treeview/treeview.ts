@@ -1,8 +1,6 @@
 import * as vscode from "vscode"
 
-import type { VisibilityGroup, VisibilityGroupNegated } from "../types"
 import { TmcTreeNode } from "./treenode"
-import { Visibility } from "./visibility"
 
 /** A leaf under a tree entry, such as one course under "My Courses". */
 export interface TreeEntryChild {
@@ -11,13 +9,19 @@ export interface TreeEntryChild {
   command: vscode.Command
 }
 
+/**
+ * When an entry shows. `"loggedIn"` and `"loggedOut"` are the two halves of
+ * {@link TmcMenuTree.setLoggedIn}: an entry that needs a session, and the entry
+ * that stands in its place without one.
+ */
+export type TreeEntryVisibility = "always" | "loggedIn" | "loggedOut"
+
 export interface TreeEntry {
   label: string
   /** Unique across the tree; registering the same id twice throws. */
   id: string
   command: vscode.Command
-  /** Visibility groups that must all hold for the entry to show; empty means always. */
-  groups: (VisibilityGroup | VisibilityGroupNegated)[]
+  visible: TreeEntryVisibility
   /**
    * Called on every render, so the children track their source without a separate
    * update path; call `refresh` once that source changes. A leaf entry omits it.
@@ -32,7 +36,6 @@ export interface TreeEntry {
 export default class TmcMenuTree {
   private readonly _treeDP: TmcMenuTreeDataProvider
   private readonly _treeView: vscode.TreeView<TmcTreeNode>
-  private readonly _visibility: Visibility
 
   /**
    * Creates and registers a new instance of TMCMenuTree with given viewId.
@@ -41,8 +44,6 @@ export default class TmcMenuTree {
   public constructor(viewId: string) {
     this._treeDP = new TmcMenuTreeDataProvider()
     this._treeView = vscode.window.createTreeView(viewId, { treeDataProvider: this._treeDP })
-
-    this._visibility = new Visibility()
   }
 
   public dispose(): void {
@@ -56,8 +57,7 @@ export default class TmcMenuTree {
    * @throws if `entry.id` is already registered.
    */
   public registerAction(entry: TreeEntry): void {
-    this._visibility.registerAction(entry.id, entry.groups)
-    this._treeDP.registerAction(entry, this._visibility.getVisible(entry.id))
+    this._treeDP.registerAction(entry)
   }
 
   /** Re-renders the tree, picking up whatever the entries' `children` now yield. */
@@ -66,40 +66,11 @@ export default class TmcMenuTree {
   }
 
   /**
-   * Register a visibility group for the action treeview
-   * @param visible Whether the group should start as active or not
+   * Swaps the entries that need a session for the ones that stand in without
+   * one. Entries registered afterwards pick up the state that was last set.
    */
-  public createVisibilityGroup(visible?: boolean): VisibilityGroup {
-    // Use internal class
-    return this._visibility.createGroup(visible ? visible : false)
-  }
-
-  /**
-   * Update the visibility status of a list of groups
-   * @param groups The groups to be updated, prepend an exclamation mark to disable
-   */
-  public updateVisibility(groups: (VisibilityGroup | VisibilityGroupNegated)[]): void {
-    if (
-      new Set(groups.map((group) => (group.id.startsWith("!") ? group.id.slice(1) : group.id)))
-        .size !== groups.length
-    ) {
-      throw new Error("Visibility group list contains duplicates and/or conflicts")
-    }
-
-    let changes: [string, boolean][] = []
-
-    // Collect changes from each update
-    groups.forEach((group) => {
-      changes = changes.concat(this._visibility.setGroupVisible(group))
-    })
-
-    // Apply changes
-    changes.forEach(([id, isVisible]) => this._treeDP.setVisibility(id, isVisible))
-
-    // Refresh if necessary
-    if (changes.length > 0) {
-      this._treeDP.refresh()
-    }
+  public setLoggedIn(loggedIn: boolean): void {
+    this._treeDP.setLoggedIn(loggedIn)
   }
 }
 
@@ -117,7 +88,8 @@ export class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeN
    */
   private readonly _refreshEventEmitter: vscode.EventEmitter<TmcTreeNode | undefined>
 
-  private _entries: Map<string, { entry: TreeEntry; visible: boolean }>
+  private _entries: Map<string, TreeEntry>
+  private _loggedIn = false
 
   /**
    * Creates new instance of TMC treeview.
@@ -125,7 +97,7 @@ export class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeN
   public constructor() {
     this._refreshEventEmitter = new vscode.EventEmitter<TmcTreeNode | undefined>()
     this.onDidChangeTreeData = this._refreshEventEmitter.event
-    this._entries = new Map<string, { entry: TreeEntry; visible: boolean }>()
+    this._entries = new Map<string, TreeEntry>()
   }
 
   public dispose(): void {
@@ -138,17 +110,17 @@ export class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeN
   public getChildren(element?: TmcTreeNode): Thenable<TmcTreeNode[]> {
     if (element) {
       const parent = this._entries.get(element.id)
-      if (!parent?.visible) {
+      if (!parent || !this._isVisible(parent)) {
         return Promise.resolve([])
       }
-      const children = parent.entry.children?.() ?? []
+      const children = parent.children?.() ?? []
       return Promise.resolve(
         children.map((child) => new TmcTreeNode(child.label, child.id, child.command, "child")),
       )
     }
     const roots = [...this._entries.values()]
-      .filter(({ visible }) => visible)
-      .map(({ entry }) => TmcMenuTreeDataProvider._rootNode(entry))
+      .filter((entry) => this._isVisible(entry))
+      .map((entry) => TmcMenuTreeDataProvider._rootNode(entry))
     return Promise.resolve(roots)
   }
 
@@ -166,28 +138,20 @@ export class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeN
     return undefined
   }
 
-  /**
-   * Internal logic for TmcMenuTree.registerAction
-   */
-  public registerAction(entry: TreeEntry, visible: boolean): void {
-    if (this._entries.get(entry.id) !== undefined) {
+  public registerAction(entry: TreeEntry): void {
+    if (this._entries.has(entry.id)) {
       throw new Error(`Action "${entry.id}" already registered`)
     }
-    this._entries.set(entry.id, { entry, visible })
+    this._entries.set(entry.id, entry)
     this.refresh()
   }
 
-  /**
-   * Internal logic for TmcMenuTree.updateVisibility
-   */
-  public setVisibility(id: string, visible: boolean): void {
-    const entry = this._entries.get(id)
-
-    if (entry) {
-      entry.visible = visible
-    } else {
-      throw new Error("Visibility logic very badly broken.")
+  public setLoggedIn(loggedIn: boolean): void {
+    if (loggedIn === this._loggedIn) {
+      return
     }
+    this._loggedIn = loggedIn
+    this.refresh()
   }
 
   /**
@@ -195,6 +159,17 @@ export class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeN
    */
   public refresh(): void {
     this._refreshEventEmitter.fire(undefined)
+  }
+
+  private _isVisible(entry: TreeEntry): boolean {
+    switch (entry.visible) {
+      case "always":
+        return true
+      case "loggedIn":
+        return this._loggedIn
+      case "loggedOut":
+        return !this._loggedIn
+    }
   }
 
   private static _rootNode(entry: TreeEntry): TmcTreeNode {

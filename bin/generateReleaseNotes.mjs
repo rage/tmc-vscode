@@ -8,7 +8,10 @@
 // committed, and `--check` fails when it has drifted from CHANGELOG.md.
 import { execFileSync } from "node:child_process"
 import fs from "node:fs"
+import { createRequire } from "node:module"
 import path from "node:path"
+
+const require = createRequire(import.meta.url)
 
 // How many changelog sections the panel shows. The rest are a click away on the
 // linked full changelog.
@@ -65,8 +68,17 @@ function render(releases) {
 
 // Formatted through oxfmt so the committed file passes `format:check` whatever
 // the changelog's wording does to line lengths.
+//
+// oxfmt is spawned directly rather than through `pnpm exec`: pnpm writes its own
+// notices (engine mismatch, update notifier) to stdout, and this stdout becomes
+// the generated file.
 function format(source) {
-  return execFileSync("pnpm", ["exec", "oxfmt", `--stdin-filepath=${outPath}`], {
+  const oxfmtManifest = require.resolve("oxfmt/package.json")
+  const oxfmtBin = path.resolve(
+    path.dirname(oxfmtManifest),
+    JSON.parse(fs.readFileSync(oxfmtManifest, "utf8")).bin.oxfmt,
+  )
+  return execFileSync(process.execPath, [oxfmtBin, `--stdin-filepath=${outPath}`], {
     cwd: repoRoot,
     input: source,
     encoding: "utf8",

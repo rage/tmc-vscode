@@ -9,10 +9,16 @@ import { first } from "lodash"
 import kill from "tree-kill"
 import type { Result } from "ts-results"
 
+import { MOCK_TMC_ACCESS_TOKEN } from "../../backend/controllers/accessToken"
 import { TMC_ARCHIVE_MIME } from "../../backend/mooc/fixtures"
 import Langs from "../api/langs"
 import type { SubmissionFeedback } from "../api/types"
-import { CLIENT_NAME, MINIMUM_SUBMISSION_INTERVAL, TMC_LANGS_VERSION } from "../config/constants"
+import {
+  CLIENT_NAME,
+  MIGRATION_CONTRACT_VERSION,
+  MINIMUM_SUBMISSION_INTERVAL,
+  TMC_LANGS_VERSION,
+} from "../config/constants"
 import { AuthorizationError, BottleneckError, RuntimeError } from "../errors"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { getLangsCLIForPlatform, getPlatform, semVerCompare } from "../utilities/"
@@ -41,9 +47,7 @@ const isString = (object: unknown): object is string => typeof object === "strin
 //
 // Anchored to the first release that will carry the contract rather than to
 // whatever is pinned today, so bumping TMC_LANGS_RUST_VERSION for an unrelated
-// fix cannot silently switch these on. Keep in step with
-// `SCHEMA_SUBCOMMAND_VERSION` in src/init/verifyCliSchema.ts.
-const MIGRATION_CONTRACT_VERSION = "0.40.0"
+// fix cannot silently switch these on.
 const cliSupportsMigrationContract = ((): boolean => {
   try {
     const version = cp.execFileSync(CLI_FILE, ["--version"], { encoding: "utf-8" })
@@ -466,8 +470,9 @@ suite("tmc langs cli spec", function () {
       expect(result.tmcError).to.be.instanceOf(RuntimeError)
     })
 
-    // The mock backend doesn't enforce auth, so unauthenticated calls surface as
-    // the CLI's generic errors (RuntimeError), not backend authorization errors.
+    // None of these reaches the mock: the CLI refuses a tmc command it holds no
+    // token for before it makes a request. What the case pins is that none of
+    // them quietly succeeds.
     migrationTest("should not get existing api data in general", async function () {
       const dataResult = await tmc.getTmcCourseData(0)
       expect(dataResult.val).to.be.instanceOf(RuntimeError)
@@ -1122,13 +1127,15 @@ suite("tmc langs cli spec", function () {
   })
 })
 
-function writeCredentials(configDir: string): void {
+// Defaults to the token the tmc mock issues and accepts; pass another to make
+// the backend reject the session.
+function writeCredentials(configDir: string, accessToken = MOCK_TMC_ACCESS_TOKEN): void {
   if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true })
   }
   fs.writeFileSync(
     path.join(configDir, "credentials.json"),
-    '{"access_token":"1234","token_type":"bearer","scope":"public"}',
+    JSON.stringify({ access_token: accessToken, token_type: "bearer", scope: "public" }),
   )
 }
 

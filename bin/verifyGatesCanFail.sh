@@ -23,6 +23,7 @@ brokeBackendPackage=0
 brokeMockSuite=0
 stubbedIntegrationBundle=0
 brokeVendoredSchema=0
+brokeReleaseNotes=0
 addedLintProbe=0
 
 PROBE_SPEC="playwright/tests/gateProbe.spec.ts"
@@ -54,6 +55,10 @@ restoreAll() {
     cp "$scratch/bindings.schema.json" shared/bindings.schema.json
     brokeVendoredSchema=0
   fi
+  if [ "$brokeReleaseNotes" = 1 ]; then
+    cp "$scratch/releaseNotes.ts" webview-ui/src/generated/releaseNotes.ts
+    brokeReleaseNotes=0
+  fi
   if [ "$addedLintProbe" = 1 ]; then
     rm -f "$PROBE_SPEC"
     addedLintProbe=0
@@ -83,7 +88,8 @@ expectGateFailure() {
 
 for tracked in backend/package.json backend/mooc/conformance.test.ts \
   shared/bindings.schema.json shared/generated/langs/zod.gen.ts \
-  shared/generated/langs/index.ts dist/integration.spec.js; do
+  shared/generated/langs/index.ts dist/integration.spec.js \
+  webview-ui/src/generated/releaseNotes.ts; do
   recordOriginal "$tracked"
 done
 
@@ -132,6 +138,14 @@ expectGateFailure "vendored artifact stamp / a hand-edited schema" \
   pnpm run vendor:langs-schema -- --check-stamp
 restoreAll
 
+cp webview-ui/src/generated/releaseNotes.ts "$scratch/releaseNotes.ts"
+brokeReleaseNotes=1
+printf '\n// hand-edited\n' >> webview-ui/src/generated/releaseNotes.ts
+expectGateFailure "release notes drift / a hand-edited generated file" \
+  "DRIFT: webview-ui/src/generated/releaseNotes.ts" \
+  node bin/generateReleaseNotes.mjs --check
+restoreAll
+
 addedLintProbe=1
 cat > "$PROBE_SPEC" << 'EOF'
 import { expect, test } from "@playwright/test"
@@ -142,7 +156,7 @@ test("the playwright lint rules are loaded", async ({ page }) => {
 EOF
 expectGateFailure "playwright lint rules / an un-awaited expect" \
   "playwright(missing-playwright-await)" \
-  pnpm run lint:ci
+  pnpm run lint
 restoreAll
 
 while read -r sha path; do

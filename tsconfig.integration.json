@@ -7,8 +7,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ESNext"],
-    "types": ["node", "vscode", "mocha"],
-    "sourceMap": true
+    "types": ["node", "vscode", "mocha"]
   },
   "include": ["src/test-integration/**/*"]
 }
