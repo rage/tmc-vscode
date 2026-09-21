@@ -9,7 +9,11 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
-  reporter: "html",
+  // The html reporter writes a report nobody opens in CI, and on its own it
+  // prints no per-test output, so a failing run's log says only that the report
+  // was written. `list` puts the failures in the log; `open: never` stops the
+  // html reporter launching a browser on a local run.
+  reporter: [["list"], ["html", { open: "never" }]],
 
   timeout: 60 * 1000,
   expect: {

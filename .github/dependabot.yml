@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # The workflows pin every action to a commit SHA, which no human is going to
+  # re-resolve by hand. Dependabot reads the tag from the trailing comment and
+  # rewrites both, so the pins stay current instead of freezing.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # One entry covers every workspace package: Dependabot reads
+  # pnpm-workspace.yaml and updates webview-ui and backend from the root.
+  #
+  # `cooldown` mirrors pnpm-workspace.yaml's `minimumReleaseAge`: without it
+  # Dependabot proposes releases the install would then refuse.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        patterns: ["*"]
