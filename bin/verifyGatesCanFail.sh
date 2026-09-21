@@ -142,7 +142,7 @@ test("the playwright lint rules are loaded", async ({ page }) => {
 EOF
 expectGateFailure "playwright lint rules / an un-awaited expect" \
   "playwright(missing-playwright-await)" \
-  pnpm run lint:ci
+  pnpm run lint
 restoreAll
 
 while read -r sha path; do

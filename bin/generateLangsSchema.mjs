@@ -32,8 +32,11 @@
 //      are validated as plain strings instead.
 import { execFileSync } from "node:child_process"
 import fs from "node:fs"
+import { createRequire } from "node:module"
 import os from "node:os"
 import path from "node:path"
+
+const require = createRequire(import.meta.url)
 
 const repoRoot = path.resolve(import.meta.dirname, "..")
 const schemaPath = path.join(repoRoot, "shared", "bindings.schema.json")
@@ -141,9 +144,17 @@ const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "langs-openapi-"))
 const openapiPath = path.join(tmpDir, "langs.openapi.json")
 fs.writeFileSync(openapiPath, JSON.stringify(doc, null, 2) + "\n")
 
-const openapiTsBin = path.join(repoRoot, "node_modules", ".bin", "openapi-ts")
+// The package's own entry point, run through this Node, rather than the
+// node_modules/.bin shim: on Windows that shim is a `.cmd`/`.ps1` pair that
+// execFileSync cannot spawn. Only package.json is exported, so the bin path
+// comes from the manifest instead of being spelled out here.
+const openapiTsManifest = require.resolve("@hey-api/openapi-ts/package.json")
+const openapiTsBin = path.resolve(
+  path.dirname(openapiTsManifest),
+  JSON.parse(fs.readFileSync(openapiTsManifest, "utf8")).bin["openapi-ts"],
+)
 try {
-  execFileSync(openapiTsBin, ["-i", openapiPath, "-o", outDir, "-p", "zod"], {
+  execFileSync(process.execPath, [openapiTsBin, "-i", openapiPath, "-o", outDir, "-p", "zod"], {
     stdio: "inherit",
     cwd: repoRoot,
   })

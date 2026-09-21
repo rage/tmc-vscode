@@ -1,11 +1,12 @@
+// @ts-check
+// Extension-host bundler.
+//
+// esbuild does NOT type-check (it strips types); `pnpm run typecheck` gates on
+// types separately. Build-profile constants are injected via `define` (see
+// config.js).
 import { createRequire } from "node:module"
 import path from "node:path"
 
-// Extension-host bundler.
-//
-// esbuild does NOT type-check (it strips types); run `pnpm run tsc` (tsc
-// --noEmit) separately to gate on types. Build-profile constants are
-// injected via `define` (see config.js).
 import * as esbuild from "esbuild"
 import { globSync } from "glob"
 
@@ -44,6 +45,7 @@ const define = {
 // other platforms; stub both to an empty module so the bundle resolves
 // cleanly instead of leaving an unresolved runtime `require` in the CJS
 // bundle.
+/** @type {import("esbuild").Plugin} */
 const stubOptionalNativeAddon = {
   name: "stub-optional-native-addon",
   setup(build) {
@@ -60,6 +62,7 @@ const stubOptionalNativeAddon = {
 
 // Emits markers/diagnostics the VS Code task problem-matcher understands (see
 // the `esbuildWatch` task in .vscode/tasks.json).
+/** @type {import("esbuild").Plugin} */
 const problemMatcherPlugin = {
   name: "esbuild-problem-matcher",
   setup(build) {
@@ -110,6 +113,10 @@ const common = {
 // Bundles every matching spec file into a single test output via a generated
 // in-memory entry point. An empty match would bundle nothing and the tier
 // would then run zero tests and report success, so it is a build failure.
+/**
+ * @param {string} globPattern
+ * @returns {import("esbuild").StdinOptions}
+ */
 function aggregateEntry(globPattern) {
   const files = globSync(globPattern, { cwd: __dirname })
   if (files.length === 0) {
