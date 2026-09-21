@@ -190,6 +190,14 @@ export function backendName(kind: "tmc" | "mooc"): string {
   return kind === "tmc" ? "TMC Server" : "courses.mooc.fi"
 }
 
+/**
+ * The name to show the user for a backend's paste service, where an exercise can be shared
+ * for help. Derived from {@link backendName} so the two never disagree.
+ */
+export function pasteServiceName(kind: "tmc" | "mooc"): string {
+  return `${backendName(kind)} paste`
+}
+
 export function matchOption<A, B, T extends Enum<A, B> | undefined>(
   data: T,
   tmc: (x: T & TmcKind) => A,

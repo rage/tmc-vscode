@@ -292,6 +292,69 @@ suite("TmcPanel handler dispatch", () => {
 
     expect(handlers.cancelTests).toHaveBeenCalledWith(7)
   })
+
+  const pasteMessage = {
+    type: "pasteExercise",
+    course: makeTmcKind({
+      id: 42,
+      name: "python-course",
+      title: "Python Course",
+      description: "",
+      organization: "mooc",
+      exercises: [],
+      availablePoints: 0,
+      awardedPoints: 0,
+      perhapsExamMode: false,
+      newExercises: [],
+      notifyAfter: 0,
+      disabled: false,
+      materialUrl: null,
+    }),
+    exercise: makeTmcKind({
+      id: 101,
+      name: "loops",
+      availablePoints: 1,
+      awardedPoints: 0,
+      deadline: null,
+      passed: false,
+      softDeadline: null,
+    }),
+    requestingPanel: { id: 5, type: "ExerciseTests" },
+  }
+
+  test("a paste link goes back to the panel that asked for it", async () => {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const { panel, listener } = await mountSidePanel(createMockActionContext())
+
+    await listener(pasteMessage)
+
+    expect(handlers.pasteTmcExercise).toHaveBeenCalledWith(
+      expect.anything(),
+      "python-course",
+      "loops",
+    )
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "pasteResult", pasteLink: "link" }),
+    )
+  })
+
+  test("a failed paste is reported in the panel, and not also as a notification", async () => {
+    // The panel that asked is on screen and renders the failure itself, so a toast
+    // would be the second report of one failure.
+    const handlers = stubHandlers()
+    handlers.pasteTmcExercise.mockResolvedValue(Err(new Error("paste service is down")))
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener(pasteMessage)
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "pasteError", error: "paste service is down" }),
+    )
+    expect(actionContext.dialog.errorNotification).not.toHaveBeenCalled()
+  })
 })
 
 suite("TmcPanel inbound message guard", () => {

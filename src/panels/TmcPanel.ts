@@ -734,26 +734,18 @@ export class TmcPanel {
                 ),
             )
             if (pasteResult.err) {
-              const pasteService = match(
-                message.course,
-                () => "TMC Paste",
-                () => "the courses.mooc.fi paste service",
-              )
-              actionContext.dialog.errorNotification(
-                `Failed to send to ${pasteService}.`,
-                pasteResult.val,
-              )
+              // No notification: the panel that asked is on screen and renders this
+              // itself, so a toast on top of it would report the same failure twice.
               TmcPanel.postMessage({
                 type: "pasteError",
                 target: message.requestingPanel,
                 error: pasteResult.val.message,
               })
             } else {
-              const value = pasteResult.val || "Link not provided by server."
               TmcPanel.postMessage({
                 type: "pasteResult",
                 target: message.requestingPanel,
-                pasteLink: value,
+                pasteLink: pasteResult.val,
               })
             }
             break

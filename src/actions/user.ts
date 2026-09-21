@@ -20,6 +20,7 @@ import {
   NOTIFICATION_DELAY,
   SUBMIT_PROCESS_TIMEOUT,
 } from "../config/constants"
+import type { UserData } from "../config/userdata"
 import { InitializationError } from "../errors"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
 import type {
@@ -418,103 +419,96 @@ export async function submitExercise(
   return Ok.EMPTY
 }
 
+/** Sends the exercise directory `exercisePath` to one backend's paste service. */
+type ExercisePaster = (exercisePath: string) => Promise<Result<string, Error>>
+
 /**
- * Sends the exercise to the TMC Paste server.
- * @param id Exercise ID
- * @returns TMC Paste link if the action was successful.
+ * Builds the paste call for `backend`, or `undefined` when that backend has no exercise
+ * by this name.
  */
+function pasterFor(
+  langs: Langs,
+  userData: UserData,
+  backend: "tmc" | "mooc",
+  courseSlug: string,
+  exerciseName: string,
+): ExercisePaster | undefined {
+  if (backend === "tmc") {
+    const exerciseId = userData.getTmcExerciseByName(courseSlug, exerciseName)?.id
+    return exerciseId
+      ? (exercisePath): Promise<Result<string, Error>> =>
+          langs.submitTmcExerciseToPaste(exerciseId, exercisePath)
+      : undefined
+  }
+  const exerciseId = userData.getMoocExerciseByName(courseSlug, exerciseName)?.id
+  return exerciseId
+    ? (exercisePath): Promise<Result<string, Error>> =>
+        langs.submitMoocExerciseToPaste(exerciseId, exercisePath)
+    : undefined
+}
+
+/**
+ * Sends an exercise to a backend's paste service and answers with the link to it.
+ *
+ * Nothing is reported here: the caller shows the failure, once, in the place the user
+ * asked from. A paste that comes back without a link is an error rather than an empty
+ * `Ok`, so no caller has to check for one.
+ */
+async function pasteExercise(
+  actionContext: ActionContext,
+  backend: "tmc" | "mooc",
+  courseSlug: string,
+  exerciseName: string,
+): Promise<Result<string, Error>> {
+  const { langs, userData, workspaceManager, dialog } = actionContext
+  if (!(langs.ok && userData.ok && workspaceManager.ok)) {
+    return new Err(new InitializationError("Extension was not initialized properly"))
+  }
+
+  const paste = pasterFor(langs.val, userData.val, backend, courseSlug, exerciseName)
+  const exercisePath = workspaceManager.val.getExerciseBySlug(backend, courseSlug, exerciseName)
+    ?.uri.fsPath
+  if (!paste || !exercisePath) {
+    return Err(new Error("Failed to resolve exercise id"))
+  }
+
+  // key shared with the submit actions, which must not overlap a paste of the same exercise
+  return runSingleFlight(
+    {
+      key: `submit:${exercisePath}`,
+      maxHoldMs: CLI_PROCESS_TIMEOUT + 30_000,
+      busyMessage: "A submission for this exercise is already in progress.",
+      onBusy: (message) => dialog.notification(message),
+    },
+    async () => {
+      const pasteResult = await paste(exercisePath)
+      if (pasteResult.err) {
+        return pasteResult
+      }
+      if (pasteResult.val === "") {
+        return new Err(new Error("The server did not answer with a paste link."))
+      }
+      return pasteResult
+    },
+  )
+}
+
+/** Sends a tmc exercise to its paste service. The mooc twin is {@link pasteMoocExercise}. */
 export async function pasteTmcExercise(
   actionContext: ActionContext,
   courseSlug: string,
   exerciseName: string,
 ): Promise<Result<string, Error>> {
-  const { langs, userData, workspaceManager, dialog } = actionContext
-  if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
-
-  const exerciseId = userData.val.getTmcExerciseByName(courseSlug, exerciseName)?.id
-  const exercisePath = workspaceManager.val.getExerciseBySlug("tmc", courseSlug, exerciseName)?.uri
-    .fsPath
-  if (!exerciseId || !exercisePath) {
-    return Err(new Error("Failed to resolve exercise id"))
-  }
-
-  // key shared with the submit actions, which must not overlap a paste of the same exercise
-  return runSingleFlight(
-    {
-      key: `submit:${exercisePath}`,
-      maxHoldMs: CLI_PROCESS_TIMEOUT + 30_000,
-      busyMessage: "A submission for this exercise is already in progress.",
-      onBusy: (message) => dialog.notification(message),
-    },
-    async () => {
-      const pasteResult = await langs.val.submitTmcExerciseToPaste(exerciseId, exercisePath)
-      if (pasteResult.err) {
-        dialog.errorNotification(
-          `Failed to send exercise to TMC Paste: ${pasteResult.val.message}.`,
-          pasteResult.val,
-        )
-        return pasteResult
-      }
-
-      const pasteLink = pasteResult.val
-      if (pasteLink === "") {
-        const message = "Didn't receive paste link from server."
-        return new Err(new Error(`Failed to send exercise to TMC Paste: ${message}`))
-      }
-
-      return new Ok(pasteLink)
-    },
-  )
+  return pasteExercise(actionContext, "tmc", courseSlug, exerciseName)
 }
 
+/** Sends a mooc exercise to its paste service. The tmc twin is {@link pasteTmcExercise}. */
 export async function pasteMoocExercise(
   actionContext: ActionContext,
   courseSlug: string,
   exerciseName: string,
 ): Promise<Result<string, Error>> {
-  const { langs, userData, workspaceManager, dialog } = actionContext
-  if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
-
-  const exerciseId = userData.val.getMoocExerciseByName(courseSlug, exerciseName)?.id
-  const exercisePath = workspaceManager.val.getExerciseBySlug("mooc", courseSlug, exerciseName)?.uri
-    .fsPath
-  if (!exerciseId || !exercisePath) {
-    return Err(new Error("Failed to resolve exercise id"))
-  }
-
-  // key shared with the submit actions, which must not overlap a paste of the same exercise
-  return runSingleFlight(
-    {
-      key: `submit:${exercisePath}`,
-      maxHoldMs: CLI_PROCESS_TIMEOUT + 30_000,
-      busyMessage: "A submission for this exercise is already in progress.",
-      onBusy: (message) => dialog.notification(message),
-    },
-    async () => {
-      const pasteResult = await langs.val.submitMoocExerciseToPaste(exerciseId, exercisePath)
-      if (pasteResult.err) {
-        dialog.errorNotification(
-          `Failed to send exercise to the courses.mooc.fi paste service: ${pasteResult.val.message}`,
-          pasteResult.val,
-        )
-        return pasteResult
-      }
-
-      const pasteLink = pasteResult.val
-      if (pasteLink === "") {
-        const message = "Didn't receive paste link from server."
-        return new Err(
-          new Error(`Failed to send exercise to the courses.mooc.fi paste service: ${message}`),
-        )
-      }
-
-      return new Ok(pasteLink)
-    },
-  )
+  return pasteExercise(actionContext, "mooc", courseSlug, exerciseName)
 }
 
 export interface CourseUpdateOptions {
