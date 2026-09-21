@@ -125,7 +125,7 @@ jobs:
           if-no-files-found: ignore
 
   mock_backend_tests:
-    name: Mooc mock backend tests
+    name: Mock backend tests
     permissions:
       contents: read
     env:
@@ -141,12 +141,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # These node:test suites check the mooc mock in `backend/mooc` against the
-      # vendored OpenAPI spec, so they are what stops it drifting from the real
-      # courses.mooc.fi API that every other mooc test tier trusts it to imitate.
-      # They talk to nothing but themselves: no submodules, no `backend` setup,
-      # no VS Code download, no xvfb. The script enforces the pass-count floor
-      # that stops the suite vanishing silently.
+      # These node:test suites check the two mocks against the contracts they
+      # imitate -- `backend/mooc` against the vendored OpenAPI spec, the legacy
+      # `backend/controllers` API v8 surface against tmc-langs' own bindings --
+      # so they are what stops either drifting from the server every other test
+      # tier trusts it to stand in for. They talk to nothing but themselves: no
+      # submodules, no `backend` setup, no VS Code download, no xvfb. The script
+      # enforces the pass-count floor that stops the suite vanishing silently.
       - name: Mock backend tests (node:test)
         run: bash bin/runMockBackendTests.sh
 

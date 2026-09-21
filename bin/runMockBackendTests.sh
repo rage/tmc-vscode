@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runs the mooc mock backend's node:test suites and fails unless at least
+# Runs the mock backend's node:test suites and fails unless at least
 # MINIMUM_PASSING of them passed.
 #
 # Both ways this suite can disappear exit 0 on their own: `pnpm --filter <name>
@@ -11,7 +11,7 @@
 # still fails.
 set -euo pipefail
 
-MINIMUM_PASSING=148
+MINIMUM_PASSING=200
 
 cd "$(dirname "$0")/../backend"
 

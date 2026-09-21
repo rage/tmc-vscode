@@ -9,6 +9,7 @@ import { first } from "lodash"
 import kill from "tree-kill"
 import type { Result } from "ts-results"
 
+import { MOCK_TMC_ACCESS_TOKEN } from "../../backend/controllers/accessToken"
 import { TMC_ARCHIVE_MIME } from "../../backend/mooc/fixtures"
 import Langs from "../api/langs"
 import type { SubmissionFeedback } from "../api/types"
@@ -18,7 +19,7 @@ import {
   MINIMUM_SUBMISSION_INTERVAL,
   TMC_LANGS_VERSION,
 } from "../config/constants"
-import { AuthorizationError, BottleneckError, RuntimeError } from "../errors"
+import { AuthorizationError, BottleneckError, InvalidTokenError, RuntimeError } from "../errors"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { getLangsCLIForPlatform, getPlatform, semVerCompare } from "../utilities/"
 
@@ -144,6 +145,18 @@ suite("tmc langs cli spec", function () {
 
       const result = await unwrapResult(tmc.isAuthenticated())
       expect(result).to.be.false
+    })
+
+    // The other way a session ends: the backend rejects a stored token instead
+    // of the user asking to log out. The CLI deletes the credential it was
+    // holding, so the extension has to be told the session is gone.
+    test("reports a logout when the backend rejects the stored token", async function () {
+      writeCredentials(configDir, "no-longer-accepted")
+
+      const result = await tmc.getCourseSettings(1)
+      expect(result.val).to.be.instanceOf(InvalidTokenError)
+      expect(onLoggedOutCalls).to.be.equal(1)
+      expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
     })
 
     test("should be able to read and change settings", async function () {
@@ -469,8 +482,9 @@ suite("tmc langs cli spec", function () {
       expect(result.tmcError).to.be.instanceOf(RuntimeError)
     })
 
-    // The mock backend doesn't enforce auth, so unauthenticated calls surface as
-    // the CLI's generic errors (RuntimeError), not backend authorization errors.
+    // None of these reaches the mock: the CLI refuses a tmc command it holds no
+    // token for before it makes a request. What the case pins is that none of
+    // them quietly succeeds.
     migrationTest("should not get existing api data in general", async function () {
       const dataResult = await tmc.getTmcCourseData(0)
       expect(dataResult.val).to.be.instanceOf(RuntimeError)
@@ -1125,13 +1139,15 @@ suite("tmc langs cli spec", function () {
   })
 })
 
-function writeCredentials(configDir: string): void {
+// Defaults to the token the tmc mock issues and accepts; pass another to make
+// the backend reject the session.
+function writeCredentials(configDir: string, accessToken = MOCK_TMC_ACCESS_TOKEN): void {
   if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true })
   }
   fs.writeFileSync(
     path.join(configDir, "credentials.json"),
-    '{"access_token":"1234","token_type":"bearer","scope":"public"}',
+    JSON.stringify({ access_token: accessToken, token_type: "bearer", scope: "public" }),
   )
 }
 
