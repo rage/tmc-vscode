@@ -1,12 +1,12 @@
 import * as vscode from "vscode"
 
-import type { TreeEntryChild } from "../../ui/treeview/treeview"
+import type { TreeEntry, TreeEntryChild } from "../../ui/treeview/treeview"
 import TmcMenuTree, { TmcMenuTreeDataProvider } from "../../ui/treeview/treeview"
 
 const command: vscode.Command = { command: "tmc.noop", title: "" }
 
-function leaf(id: string): { label: string; id: string; command: vscode.Command; groups: [] } {
-  return { label: id, id, command, groups: [] }
+function leaf(id: string): TreeEntry {
+  return { label: id, id, command, visible: "always" }
 }
 
 suite("TmcMenuTree", function () {
@@ -93,27 +93,36 @@ suite("TmcMenuTree", function () {
     expect(refreshed).toEqual([])
   })
 
-  test("an entry is rendered only while its visibility groups hold", async function () {
-    const loggedIn = tree.createVisibilityGroup(false)
-    tree.registerAction({ ...leaf("logOut"), groups: [loggedIn] as never })
-    tree.registerAction({ ...leaf("logIn"), groups: [loggedIn.not] as never })
+  test("the login state decides which of the two halves is rendered", async function () {
+    tree.registerAction({ ...leaf("logOut"), visible: "loggedIn" })
+    tree.registerAction({ ...leaf("logIn"), visible: "loggedOut" })
     expect(((await dataProvider.getChildren()) ?? []).map((root) => root.id)).toEqual(["logIn"])
-    tree.updateVisibility([loggedIn])
+    tree.setLoggedIn(true)
     expect(((await dataProvider.getChildren()) ?? []).map((root) => root.id)).toEqual(["logOut"])
+  })
+
+  // Activation learns the login state before it has any entries to register.
+  test("an entry registered after the login state picks it up", async function () {
+    tree.setLoggedIn(true)
+    tree.registerAction({ ...leaf("myCourses"), visible: "loggedIn" })
+
+    expect(((await dataProvider.getChildren()) ?? []).map((root) => root.id)).toEqual(["myCourses"])
   })
 })
 
 suite("TmcMenuTreeDataProvider", function () {
   test("a hidden entry yields no children even when asked for them directly", async function () {
     const dataProvider = new TmcMenuTreeDataProvider()
-    dataProvider.registerAction(
-      { ...leaf("myCourses"), children: () => [{ label: "The Python Course", id: "1", command }] },
-      true,
-    )
+    dataProvider.registerAction({
+      ...leaf("myCourses"),
+      visible: "loggedIn",
+      children: () => [{ label: "The Python Course", id: "1", command }],
+    })
+    dataProvider.setLoggedIn(true)
     const [myCourses] = await dataProvider.getChildren()
     expect(await dataProvider.getChildren(myCourses)).toHaveLength(1)
 
-    dataProvider.setVisibility("myCourses", false)
+    dataProvider.setLoggedIn(false)
 
     expect(await dataProvider.getChildren()).toEqual([])
     expect(await dataProvider.getChildren(myCourses)).toEqual([])
@@ -124,10 +133,10 @@ suite("TmcMenuTreeDataProvider", function () {
   // on the id: a check on the label lets a second entry silently replace the first.
   test("a repeated id is rejected rather than replacing the entry already there", async function () {
     const dataProvider = new TmcMenuTreeDataProvider()
-    dataProvider.registerAction({ ...leaf("myCourses"), label: "My Courses" }, true)
+    dataProvider.registerAction({ ...leaf("myCourses"), label: "My Courses" })
 
     expect(() =>
-      dataProvider.registerAction({ ...leaf("myCourses"), label: "Other courses" }, true),
+      dataProvider.registerAction({ ...leaf("myCourses"), label: "Other courses" }),
     ).toThrow()
 
     const roots = await dataProvider.getChildren()

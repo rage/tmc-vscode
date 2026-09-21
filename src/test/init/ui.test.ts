@@ -22,13 +22,11 @@ function registerAndCollect(overrides: Partial<ActionContext> = {}): TreeEntry[]
     entries.push(entry)
   })
   const ui = { treeDP: { registerAction } } as unknown as UI
-  const loggedIn = { id: 1, not: { id: 1, negated: true } }
 
   registerUiActions({
     ...createMockActionContext(),
     ui,
     ...healthyResults,
-    visibilityGroups: { loggedIn } as never,
     ...overrides,
   })
   return entries
@@ -47,8 +45,8 @@ suite("registerUiActions", function () {
     const entries = registerAndCollect()
     const logIn = entries.find((entry) => entry.id === "logIn")
     const logOut = entries.find((entry) => entry.id === "logOut")
-    expect(logIn?.groups).toEqual([{ id: 1, negated: true }])
-    expect(logOut?.groups).toEqual([{ id: 1, not: { id: 1, negated: true } }])
+    expect(logIn?.visible).toBe("loggedOut")
+    expect(logOut?.visible).toBe("loggedIn")
   })
 
   // The tree is the one place a course is labelled, and it shows the title: the slug
@@ -105,7 +103,7 @@ suite("registerUiActions", function () {
     expect(ids).not.toContain("workbench.action.restartExtensionHost")
   })
 
-  // `Visibility.registerAction` throws on a repeated id, which aborts activation
+  // `TmcMenuTree.registerAction` throws on a repeated id, which aborts activation
   // outright -- so no combination of initialization results may reach one twice.
   test("no entry is registered twice in any combination of initialization results", function () {
     const fields = Object.keys(healthyResults) as (keyof typeof healthyResults)[]

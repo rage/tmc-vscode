@@ -1,31 +1,8 @@
 import type { FeedbackQuestion } from "../actions/types"
-import type Langs from "../api/langs"
 import type { Course, Organization } from "../api/types"
 import type { SubmissionFinished } from "../shared/langsSchema"
 import type { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../shared/shared"
-import type Storage from "../storage"
 import type { LogLevel } from "../utilities/logger"
-import type UI from "./ui"
-
-export interface HandlerContext {
-  tmc: Langs
-  storage: Storage
-  ui: UI
-  visibilityGroups: VisibilityGroups
-}
-
-export interface VisibilityGroups {
-  loggedIn: VisibilityGroup
-}
-
-export interface VisibilityGroup {
-  id: string
-  not: VisibilityGroupNegated
-}
-
-export interface VisibilityGroupNegated {
-  id: string
-}
 
 export interface CourseDetailsData {
   course: LocalCourseData

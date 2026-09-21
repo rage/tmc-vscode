@@ -107,6 +107,8 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   await vscode.commands.executeCommand("setContext", "test-my-code:DebugMode", DEBUG_MODE)
 
   const dialog = new Dialog()
+  const ui = new UI()
+  context.subscriptions.push(ui)
   const cliFolderPath = cliFolder(context)
   const cliPathResult = await init.ensureLangsUpdated(
     cliFolderPath,
@@ -152,6 +154,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   }
   const authenticated = authStatus.tmc || authStatus.mooc
   await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", authenticated)
+  ui.treeDP.setLoggedIn(authenticated)
 
   const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
 
@@ -211,13 +214,6 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     initializationError(dialog, "resource initialization", resources.val, cliFolderPath)
   }
 
-  const ui = new UI()
-  context.subscriptions.push(ui)
-  const loggedIn = ui.treeDP.createVisibilityGroup(authenticated)
-  const visibilityGroups = {
-    loggedIn,
-  }
-
   // Armed only while logged in: each round is two cold CLI starts, and a session can only
   // drop silently for someone who has one. `applyAuthContext` sees every transition.
   let maintenancePoll: NodeJS.Timeout | undefined
@@ -244,9 +240,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     }
     lastAppliedLoggedIn = loggedInNow
     await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", loggedInNow)
-    ui.treeDP.updateVisibility([
-      loggedInNow ? visibilityGroups.loggedIn : visibilityGroups.loggedIn.not,
-    ])
+    ui.treeDP.setLoggedIn(loggedInNow)
   }
   // Both backends are authenticated by the same courses.mooc.fi credential, so
   // either one expiring is fixed by the same device-flow login.
@@ -373,7 +367,6 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     ui,
     userData,
     workspaceManager,
-    visibilityGroups,
   }
 
   const refreshResult = await refreshLocalExercises(actionContext)

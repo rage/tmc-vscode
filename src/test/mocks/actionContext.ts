@@ -8,7 +8,6 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type Resources from "../../config/resources"
 import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
-import type { VisibilityGroups } from "../../ui/types"
 import type UI from "../../ui/ui"
 import { autoMock, errResult, okResult } from "../support/mock"
 
@@ -44,6 +43,5 @@ export function createMockActionContext(options: MockActionContextOptions = {}):
     ui: autoMock<UI>(),
     userData: service<UserData>("userData"),
     workspaceManager: service<WorkspaceManager>("workspaceManager"),
-    visibilityGroups: autoMock<VisibilityGroups>(),
   }
 }

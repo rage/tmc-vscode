@@ -14,6 +14,7 @@ import { createMockMemento } from "../mocks/vscode"
 
 const recorded = vi.hoisted(() => ({
   treeEntryIds: [] as string[],
+  treeLoggedIn: [] as boolean[],
   panelTypes: [] as string[],
   uiDisposals: 0,
 }))
@@ -70,8 +71,9 @@ vi.mock("../../ui/ui", () => ({
       registerAction: ({ id }: { id: string }): void => {
         recorded.treeEntryIds.push(id)
       },
-      createVisibilityGroup: (): unknown => ({ id: "_0", not: { id: "!_0" } }),
-      updateVisibility: (): void => {},
+      setLoggedIn: (loggedIn: boolean): void => {
+        recorded.treeLoggedIn.push(loggedIn)
+      },
     }
     public createUiActionHandler = (): unknown => (): void => {}
     public dispose = (): void => {
@@ -189,6 +191,7 @@ function createContextWithBlockedStorage(): vscode.ExtensionContext {
 function resetActivationRecording(): void {
   Logger.configure(LogLevel.None)
   recorded.treeEntryIds.length = 0
+  recorded.treeLoggedIn.length = 0
   recorded.panelTypes.length = 0
   recorded.uiDisposals = 0
   storedUserData.read = (): unknown => undefined
