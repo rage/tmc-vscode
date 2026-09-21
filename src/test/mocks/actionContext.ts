@@ -1,6 +1,9 @@
 import type { Result } from "ts-results"
+import { Ok } from "ts-results"
+import { vi } from "vitest"
 
 import type { ActionContext } from "../../actions/types"
+import type { AuthState } from "../../api/authState"
 import type Dialog from "../../api/dialog"
 import type ExerciseDecorationProvider from "../../api/exerciseDecorationProvider"
 import type Langs from "../../api/langs"
@@ -20,6 +23,25 @@ export interface MockActionContextOptions {
   resources?: ServiceOutcome
   userData?: ServiceOutcome
   workspaceManager?: ServiceOutcome
+  /** Which backends hold a session; both do unless said otherwise. */
+  authenticated?: { tmc?: boolean; mooc?: boolean }
+}
+
+/** An auth state stuck at a fixed login status, with no CLI behind it. */
+export function createMockAuthState(
+  authenticated: { tmc?: boolean; mooc?: boolean } = {},
+): AuthState {
+  const tmc = authenticated.tmc ?? true
+  const mooc = authenticated.mooc ?? true
+  return {
+    tmc,
+    mooc,
+    loggedIn: tmc || mooc,
+    refresh: vi.fn(async () => ({ tmc: Ok(tmc), mooc: Ok(mooc) })),
+    set: vi.fn(async () => {}),
+    clear: vi.fn(async () => {}),
+    subscribe: vi.fn(),
+  }
 }
 
 /**
@@ -35,6 +57,7 @@ export function createMockActionContext(options: MockActionContextOptions = {}):
     options[name] === "err" ? errResult<T>(`${name} failed to initialize`) : okResult<T>()
 
   return {
+    authState: createMockAuthState(options.authenticated),
     dialog: autoMock<Dialog>(),
     exerciseDecorationProvider: service<ExerciseDecorationProvider>("exerciseDecorationProvider"),
     resources: service<Resources>("resources"),

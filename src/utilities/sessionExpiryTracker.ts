@@ -1,4 +1,4 @@
-export type Backend = "tmc" | "mooc"
+import type { Backend } from "../api/authState"
 
 export interface SessionExpiryTracker {
   /** Call after each background auth check. Warns once if a previously-authenticated backend is now not, until the next login. */

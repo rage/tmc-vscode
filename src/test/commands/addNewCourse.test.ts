@@ -9,7 +9,7 @@ import { addNewCourse } from "../../commands/addNewCourse"
 import type { UserData } from "../../config/userdata"
 import { TmcPanel } from "../../panels/TmcPanel"
 import type { LocalCourseData } from "../../shared/shared"
-import { createMockActionContext } from "../mocks/actionContext"
+import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
 
 vi.mock("../../actions/addNewCourse", () => ({
   addNewCourse: vi.fn(async () => Ok.EMPTY),
@@ -57,11 +57,12 @@ interface Harness {
   context: ActionContext
   picks: Pick[]
   errors: string[]
+  isMoocAuthenticated: ReturnType<typeof vi.fn>
 }
 
 function harness(options: {
   organizations?: ReturnType<typeof Ok> | ReturnType<typeof Err>
-  moocAuthenticated?: ReturnType<typeof Ok> | ReturnType<typeof Err>
+  moocAuthenticated?: boolean
   moocCourses?: ReturnType<typeof Ok> | ReturnType<typeof Err>
   addedCourses?: LocalCourseData[]
   /** Label to select at each prompt, in order. `undefined` dismisses the pick. */
@@ -72,11 +73,12 @@ function harness(options: {
   const errors: string[] = []
   const select = options.select ?? []
 
+  const isMoocAuthenticated = vi.fn()
   const langs = {
     getTmcOrganizations: vi.fn(async () => options.organizations ?? Ok(organizations)),
     getCourses: vi.fn(async () => Ok(tmcCourses)),
-    isMoocAuthenticated: vi.fn(async () => options.moocAuthenticated ?? Ok(true)),
     getEnrolledMoocCourseInstances: vi.fn(async () => options.moocCourses ?? Ok(moocCourses)),
+    isMoocAuthenticated,
   } as unknown as Langs
 
   const dialog = {
@@ -100,7 +102,14 @@ function harness(options: {
   const courses = options.addedCourses ?? storedCourses
   const userData = new Ok({ getCourses: () => courses } as unknown as UserData)
 
-  return { context: { ...base, dialog, langs: new Ok(langs), userData }, picks, errors }
+  const authState = createMockAuthState({ mooc: options.moocAuthenticated ?? true })
+
+  return {
+    context: { ...base, authState, dialog, langs: new Ok(langs), userData },
+    picks,
+    errors,
+    isMoocAuthenticated,
+  }
 }
 
 suite("Add new course command", function () {
@@ -204,12 +213,14 @@ suite("Add new course command", function () {
   // The "Log In" command is hidden while a TMC credential still satisfies the
   // LoggedIn context key, so this entry is those users' only way to the device flow.
   test("offers the courses.mooc.fi login when that backend has no session", async function () {
-    const { context, picks, errors } = harness({
-      moocAuthenticated: Ok(false),
+    const { context, picks, errors, isMoocAuthenticated } = harness({
+      moocAuthenticated: false,
       select: [undefined],
     })
     await addNewCourse(context)
 
+    // The shared auth state answers this; a check here would be a cold CLI start.
+    expect(isMoocAuthenticated).not.toHaveBeenCalled()
     expect(errors).toEqual([])
     expect(picks[0]?.items.map((item) => item[0])).toEqual([
       "MOOC",
@@ -224,7 +235,7 @@ suite("Add new course command", function () {
 
   test("picking the login entry starts the device flow and adds no course", async function () {
     const { context } = harness({
-      moocAuthenticated: Ok(false),
+      moocAuthenticated: false,
       select: ["Log in to courses.mooc.fi"],
     })
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)

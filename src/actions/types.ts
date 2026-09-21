@@ -1,5 +1,6 @@
 import type { Result } from "ts-results"
 
+import type { AuthState } from "../api/authState"
 import type Dialog from "../api/dialog"
 import type ExerciseDecorationProvider from "../api/exerciseDecorationProvider"
 import type Langs from "../api/langs"
@@ -11,6 +12,7 @@ import type UI from "../ui/ui"
 
 // fields may be undefined if something went wrong during initialization
 export interface ActionContext {
+  authState: AuthState
   dialog: Dialog
   exerciseDecorationProvider: Result<ExerciseDecorationProvider, Error>
   resources: Result<Resources, Error>

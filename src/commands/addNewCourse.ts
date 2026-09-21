@@ -44,16 +44,13 @@ function courseKey(id: CourseIdentifier): string {
 
 async function enrolledMoocCourses(
   langs: Langs,
+  authenticated: boolean,
 ): Promise<Result<CourseInstance[], Error> | typeof MOOC_LOGIN> {
-  const authenticated = await langs.isMoocAuthenticated()
-  if (authenticated.err) {
-    return authenticated
-  }
-  return authenticated.val ? langs.getEnrolledMoocCourseInstances() : MOOC_LOGIN
+  return authenticated ? langs.getEnrolledMoocCourseInstances() : MOOC_LOGIN
 }
 
 export async function addNewCourse(actionContext: ActionContext): Promise<void> {
-  const { dialog, langs, userData } = actionContext
+  const { authState, dialog, langs, userData } = actionContext
   Logger.info("Adding new course")
   if (langs.err) {
     Logger.error("Extension was not initialized properly")
@@ -62,7 +59,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
 
   const [organizations, moocCourses] = await Promise.all([
     langs.val.getTmcOrganizations(),
-    enrolledMoocCourses(langs.val),
+    enrolledMoocCourses(langs.val, authState.mooc),
   ])
 
   // Courses the user already has are dimmed rather than hidden: a student

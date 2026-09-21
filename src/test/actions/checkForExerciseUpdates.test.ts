@@ -7,7 +7,7 @@ import type { UserData } from "../../config/userdata"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
 import type { MoocLocalCourseData } from "../../storage/data"
-import { createMockActionContext } from "../mocks/actionContext"
+import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
 import type { UserDataMockValues } from "../mocks/userdata"
@@ -61,8 +61,9 @@ suite("checkForExerciseUpdates action", function () {
   let userDataMock: UserData
   let userDataMockValues: UserDataMockValues
 
-  const actionContext = (): ActionContext => ({
+  const actionContext = (authenticated?: { tmc?: boolean; mooc?: boolean }): ActionContext => ({
     ...stubContext,
+    authState: createMockAuthState(authenticated),
     langs: new Ok(tmcMock),
     userData: new Ok(userDataMock),
   })
@@ -139,23 +140,17 @@ suite("checkForExerciseUpdates action", function () {
     expect(result.val).toEqual([tmcOutdated])
   })
 
+  // The shared auth state is the only thing asked; a check here would be a second
+  // cold CLI start for a fact the extension already holds.
   test("should skip the mooc check entirely when not authenticated", async function () {
     userDataMockValues.getCourses = [
       ...userDataMockValues.getCourses,
       makeMoocKind(moocCourse) as LocalCourseData,
     ]
-    tmcMockValues.isMoocAuthenticated = Ok(false)
     tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
-    const result = await checkForExerciseUpdates(actionContext())
+    const result = await checkForExerciseUpdates(actionContext({ mooc: false }))
     expect(result.val).toEqual([tmcOutdated])
     expect(tmcMock.checkExerciseUpdates).not.toHaveBeenCalledWith("mooc", expect.anything())
-  })
-
-  test("should not error when the mooc auth check itself fails", async function () {
-    tmcMockValues.isMoocAuthenticated = Err(new Error())
-    const result = await checkForExerciseUpdates(actionContext())
-    expect(result.ok).toBe(true)
-    expect(result.val).toEqual([tmcOutdated])
-    expect(tmcMock.checkExerciseUpdates).not.toHaveBeenCalledWith("mooc", expect.anything())
+    expect(tmcMock.isMoocAuthenticated).not.toHaveBeenCalled()
   })
 })
