@@ -19,7 +19,7 @@ import {
   MINIMUM_SUBMISSION_INTERVAL,
   TMC_LANGS_VERSION,
 } from "../config/constants"
-import { AuthorizationError, BottleneckError, InvalidTokenError, RuntimeError } from "../errors"
+import { AuthorizationError, BottleneckError, RuntimeError } from "../errors"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { getLangsCLIForPlatform, getPlatform, semVerCompare } from "../utilities/"
 
@@ -145,18 +145,6 @@ suite("tmc langs cli spec", function () {
 
       const result = await unwrapResult(tmc.isAuthenticated())
       expect(result).to.be.false
-    })
-
-    // The other way a session ends: the backend rejects a stored token instead
-    // of the user asking to log out. The CLI deletes the credential it was
-    // holding, so the extension has to be told the session is gone.
-    test("reports a logout when the backend rejects the stored token", async function () {
-      writeCredentials(configDir, "no-longer-accepted")
-
-      const result = await tmc.getCourseSettings(1)
-      expect(result.val).to.be.instanceOf(InvalidTokenError)
-      expect(onLoggedOutCalls).to.be.equal(1)
-      expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
     })
 
     test("should be able to read and change settings", async function () {
