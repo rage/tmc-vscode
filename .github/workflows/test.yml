@@ -55,6 +55,12 @@ jobs:
       - name: Langs schema drift (generate:langs-schema)
         run: bash bin/checkLangsSchemaDrift.sh
 
+      # Only `webview:build` regenerates the release notes the Welcome panel
+      # renders, so a changelog edit that skips a build ships an upgrade screen
+      # that disagrees with CHANGELOG.md.
+      - name: Release notes drift (generate:release-notes)
+        run: node bin/generateReleaseNotes.mjs --check
+
       # The two vendored artifacts are copied from sibling checkouts CI does not
       # have, so it cannot re-vendor them. It asserts instead that each still
       # matches the sha256 its provenance stamp recorded at vendoring time, which
