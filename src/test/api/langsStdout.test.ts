@@ -161,6 +161,31 @@ suite("Langs stdout decoding", function () {
     }
   })
 
+  test("a decoded settings listing keeps the settings the contract omits", function () {
+    const settingsLine = JSON.stringify({
+      "output-kind": "output-data",
+      status: "finished",
+      message: "retrieved settings",
+      result: "executed-command",
+      data: {
+        "output-data-kind": "tmc-config",
+        "output-data": {
+          projects_dir: "/projects",
+          "closed-exercises-for:tmc:python": ["part01-01"],
+        },
+      },
+    })
+    const { events } = decodeAll(`${settingsLine}\n`)
+    const event = events[0]
+    expect(event?.kind).toBe("output-data")
+    if (event?.kind === "output-data") {
+      expect(event.output.data?.["output-data"]).toEqual({
+        projects_dir: "/projects",
+        "closed-exercises-for:tmc:python": ["part01-01"],
+      })
+    }
+  })
+
   test("a decoded status update keeps the payload the caller needs", function () {
     const { events } = decodeAll(`${statusUpdateLine}\n`)
     const update = events[0]
