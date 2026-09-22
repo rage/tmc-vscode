@@ -30,10 +30,10 @@ import { UserData } from "./config/userdata"
 import { EmptyLangsResponseError, FileSystemError, InitializationError, SpawnError } from "./errors"
 import * as init from "./init"
 import { randomPanelId, TmcPanel } from "./panels/TmcPanel"
+import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
 import UI from "./ui/ui"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
-import { createSessionExpiryTracker } from "./utilities/sessionExpiryTracker"
 
 function initializationError(
   dialog: Dialog,

@@ -1,8 +1,8 @@
 import type { Webview } from "vscode"
 
+import { postMessageToWebview } from "../../panels/panel"
 import type { ExtensionToWebview } from "../../shared/shared"
 import { CourseIdentifier } from "../../shared/shared"
-import { postMessageToWebview } from "../../utilities/panel"
 
 function fakeWebview(): { webview: Webview; postMessage: ReturnType<typeof vi.fn> } {
   const postMessage = vi.fn(() => Promise.resolve(true))

@@ -29,12 +29,12 @@ import {
   WebviewToExtensionSchema,
 } from "../shared/shared"
 import { cliFolder, formatSizeInBytes, Logger } from "../utilities"
-import { getNonce } from "../utilities/getNonce"
-import { getUri } from "../utilities/getUri"
-import { postMessageToWebview, renderPanel } from "../utilities/panel"
 import { buildCourseDetailsView } from "./courseDetailsViewModel"
 import type { CourseDetailsView } from "./courseDetailsViewModel"
+import { getNonce } from "./getNonce"
+import { getUri } from "./getUri"
 import { moocLoginRegistry } from "./moocLoginRegistry"
+import { postMessageToWebview, renderPanel } from "./panel"
 import { updateablesRegistry } from "./updateablesRegistry"
 
 /**
