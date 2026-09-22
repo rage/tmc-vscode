@@ -5,7 +5,7 @@ import { TmcPanel } from "../panels/TmcPanel"
 import { updateablesRegistry } from "../panels/updateablesRegistry"
 import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { LocalCourseData } from "../shared/shared"
-import { Logger } from "../utilities/"
+import { Logger } from "../utilities"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ActionContext } from "./types"
@@ -35,12 +35,12 @@ export async function downloadExercisesForUi(
       async (): Promise<ExerciseIdentifier[] | undefined> => {
         const downloadResult = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
         if (downloadResult.err) {
-          dialog.errorNotification("Failed to update exercises.", downloadResult.val)
+          dialog.reportError("Failed to update exercises.", downloadResult.val, courseId.kind)
           return undefined
         }
         const refreshResult = await refreshLocalExercises(actionContext)
         if (refreshResult.err) {
-          dialog.errorNotification("Failed to refresh local exercises.", refreshResult.val)
+          dialog.reportError("Failed to refresh local exercises.", refreshResult.val, courseId.kind)
         }
         return downloadResult.val.failed
       },
@@ -63,7 +63,7 @@ export async function downloadExercisesForUi(
   const postRemainingNewExercises = (): void => {
     const course = userData.val.getCourse(courseId)
     if (course.err) {
-      dialog.errorNotification("Failed to read the course.", course.val)
+      dialog.reportError("Failed to read the course.", course.val, courseId.kind)
       return
     }
     postNewExercises(LocalCourseData.getNewExercises(course.val))
@@ -74,7 +74,7 @@ export async function downloadExercisesForUi(
     async () => {
       const downloadResult = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
       if (downloadResult.err) {
-        dialog.errorNotification("Failed to download new exercises.", downloadResult.val)
+        dialog.reportError("Failed to download new exercises.", downloadResult.val, courseId.kind)
         return
       }
 
@@ -83,7 +83,7 @@ export async function downloadExercisesForUi(
         await refreshLocalExercises(actionContext),
       )
       if (refreshResult.err) {
-        dialog.errorNotification("Failed to refresh local exercises.", refreshResult.val)
+        dialog.reportError("Failed to refresh local exercises.", refreshResult.val, courseId.kind)
       }
     },
     postRemainingNewExercises,

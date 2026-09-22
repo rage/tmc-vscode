@@ -92,9 +92,10 @@ suite("downloadExercisesForUi, updating exercises", function () {
     // student there is nothing left to update.
     expect(updateablesPosted()).toEqual([[], [101, 102]])
     expect(updateablesRegistry.get(COURSE_ID)).toEqual(requested)
-    expect(dialog.errorNotification).toHaveBeenCalledWith(
+    expect(dialog.reportError).toHaveBeenCalledWith(
       "Failed to update exercises.",
       expect.any(Error),
+      "tmc",
     )
   })
 
@@ -129,9 +130,10 @@ suite("downloadExercisesForUi, updating exercises", function () {
     await downloadExercisesForUi(actionContext, "update", COURSE_ID, requested)
 
     expect(refreshLocalExercises).toHaveBeenCalledTimes(1)
-    expect(dialog.errorNotification).toHaveBeenCalledWith(
+    expect(dialog.reportError).toHaveBeenCalledWith(
       "Failed to refresh local exercises.",
       expect.any(Error),
+      "tmc",
     )
   })
 })
@@ -146,9 +148,10 @@ suite("downloadExercisesForUi, downloading new exercises", function () {
     await downloadExercisesForUi(actionContext, "download", COURSE_ID, requested)
 
     expect(newExercisesPosted()).toEqual([[], [201, 202]])
-    expect(dialog.errorNotification).toHaveBeenCalledWith(
+    expect(dialog.reportError).toHaveBeenCalledWith(
       "Failed to download new exercises.",
       expect.any(Error),
+      "tmc",
     )
   })
 
