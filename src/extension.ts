@@ -41,18 +41,15 @@ function initializationError(
   error: Error,
   langsFolder: string,
 ): void {
-  Logger.errorWithDialog(
-    dialog,
-    `Initialization error during ${step}:`,
+  void dialog.reportError(
+    `Initialization error during ${step}. If this issue is not resolved, the extension may` +
+      " not function properly.",
     error,
-    "If this issue is not resolved, the extension may not function properly.",
   )
   if (error instanceof EmptyLangsResponseError || error instanceof SpawnError) {
-    Logger.errorWithDialog(
-      dialog,
+    void dialog.errorNotification(
       "This error may have been caused by an interfering antivirus program. " +
-        "Please try adding an exception for the following folder:",
-      langsFolder,
+        `Please try adding an exception for the following folder: ${langsFolder}`,
     )
   }
 }
