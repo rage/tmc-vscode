@@ -19,11 +19,13 @@ import {
   type MoocFixtures,
 } from "./fixtures"
 import {
+  createMoocOAuthState,
   EXERCISE_SERVICES_SCOPE,
   expireMoocAccessToken,
+  type MoocOAuthState,
   registerMoocOAuthRoutes,
-  resetMoocOAuthState,
   scopesForBearer,
+  setDeviceFlowClock,
 } from "./oauth"
 
 // Spec-validated mock of the courses.mooc.fi exercise-services client API
@@ -52,8 +54,9 @@ const SPEC_PATH = path.join(__dirname, "exercise-services-client.openapi.generat
 //
 // Every mutable binding below belongs to ONE mock, built by registerMoocRoutes
 // and closed over by that mock's handlers. Two mocks in one process -- the
-// suites run several -- therefore share no submissions, uploads or auth
-// observations, and each hands out URLs naming the address it serves on.
+// suites run several -- therefore share no submissions, uploads, auth
+// observations or OAuth tokens, and each hands out URLs naming the address it
+// serves on.
 
 // The real backend uses TWO distinct submission id spaces, and this mock mirrors
 // the split so the flows exercise the right ids:
@@ -142,6 +145,8 @@ interface MoocMockState {
   // prove the CLI actually attached the bearer it expects.
   lastAuthorization: string | undefined
   authenticatedRequestCount: number
+  /** This instance's isolated device-flow + issued-token state; see oauth.ts. */
+  oauth: MoocOAuthState
 }
 
 /** The half of a mock's state that is derived from its base URL. */
@@ -196,6 +201,7 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   failNextByOperation: new Map(),
   lastAuthorization: undefined,
   authenticatedRequestCount: 0,
+  oauth: createMoocOAuthState(),
 })
 
 /**
@@ -221,7 +227,10 @@ type FailNextRejection = "unknown-operation" | "unsupported-status"
  * {@link moocMockOf} on the app the mock was mounted on.
  */
 export interface MoocMockControls {
-  /** Discards submissions, uploads and the auth observation; fixtures and base URL survive. */
+  /**
+   * Discards submissions, uploads, the auth observation and every OAuth token
+   * this instance has minted or seeded; fixtures and base URL survive.
+   */
   reset: () => void
   /**
    * Soft-deletes an upload, modelling the host's reaper. Returns false for an
@@ -261,6 +270,12 @@ export interface MoocMockControls {
   ) => { taskSubmissionId: string; slideSubmissionId: string } | undefined
   /** Points every URL this mock hands out at `baseUrl`. */
   rebase: (baseUrl: string) => void
+  /**
+   * Drives this instance's device-flow clock, so a test can cross a poll
+   * interval or a token lifetime without a real sleep. Pass nothing to restore
+   * real wall time.
+   */
+  setOAuthClock: (clock?: () => number) => void
 }
 
 /** Records one submission under both of its id spaces and against its exercise. */
@@ -301,6 +316,7 @@ const createMoocMockControls = (
     state.failNextByOperation.clear()
     state.lastAuthorization = undefined
     state.authenticatedRequestCount = 0
+    state.oauth.reset()
   },
   expireUpload: (fileId) => {
     const upload = state.uploadsById.get(fileId)
@@ -344,6 +360,7 @@ const createMoocMockControls = (
     return { taskSubmissionId, slideSubmissionId }
   },
   rebase: (baseUrl) => void Object.assign(state, indexFixtures(baseUrl)),
+  setOAuthClock: (clock) => setDeviceFlowClock(state.oauth, clock),
 })
 
 // ---- response envelope threaded through the postResponseHandler ----
@@ -1379,7 +1396,6 @@ export const registerMoocRoutes = (
   // long-lived mock (notably the Playwright fixtures) isolate each test.
   app.post("/mooc-mock/reset", (_req, res) => {
     controls.reset()
-    resetMoocOAuthState()
     res.status(204).end()
   })
 
@@ -1458,7 +1474,7 @@ export const registerMoocRoutes = (
       res.status(400).json({ error: "access_token must be a string" })
       return
     }
-    if (!expireMoocAccessToken(accessToken)) {
+    if (!expireMoocAccessToken(state.oauth, accessToken)) {
       res.status(404).json({ error: `no such access token: ${accessToken}` })
       return
     }
@@ -1488,7 +1504,7 @@ export const registerMoocRoutes = (
         send(res, apiError("unauthorized", "Missing bearer token"))
         return
       }
-      const scopes = scopesForBearer(token)
+      const scopes = scopesForBearer(state.oauth, token)
       if (!scopes) {
         send(res, apiError("unauthorized", "The access token is missing, invalid, or expired."))
         return
@@ -1558,7 +1574,7 @@ export const registerMoocRoutes = (
 
   // Device-flow OAuth endpoints. Registered separately and deliberately NOT
   // spec-validated (they are not part of the exercise-services client spec).
-  registerMoocOAuthRoutes(app, () => state.baseUrl)
+  registerMoocOAuthRoutes(app, state.oauth, () => state.baseUrl)
 
   return controls
 }

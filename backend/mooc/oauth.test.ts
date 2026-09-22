@@ -13,8 +13,6 @@ import {
   MOCK_SEEDED_REFRESH_TOKEN,
   MOCK_USER_CODE,
   REAL_VSCODE_CLIENT_ID,
-  resetMoocOAuthState,
-  setDeviceFlowClock,
 } from "./oauth"
 import type { MoocMockControls } from "./router"
 import { createMoocApp, moocMockOf } from "./router"
@@ -34,20 +32,21 @@ const listen = (app: Express): Promise<{ server: Server; base: string; mock: Moo
     })
   })
 
-// Drives the injectable device-flow clock deterministically. The advertised
-// interval is 5s, so advancing by 6000ms crosses exactly one interval.
-const useClock = (start = 1_000_000): { advance: (ms: number) => void } => {
+// Drives `mock`'s injectable device-flow clock deterministically. The
+// advertised interval is 5s, so advancing by 6000ms crosses exactly one interval.
+const useClock = (mock: MoocMockControls, start = 1_000_000): { advance: (ms: number) => void } => {
   let t = start
-  setDeviceFlowClock(() => t)
+  mock.setOAuthClock(() => t)
   return { advance: (ms: number) => void (t += ms) }
 }
 
 describe("mooc device-flow oauth mock", () => {
   let server: Server
   let base: string
+  let mock: MoocMockControls
 
   before(async () => {
-    ;({ server, base } = await listen(createMoocApp()))
+    ;({ server, base, mock } = await listen(createMoocApp()))
   })
 
   after(() => {
@@ -55,7 +54,7 @@ describe("mooc device-flow oauth mock", () => {
   })
 
   afterEach(() => {
-    resetMoocOAuthState()
+    mock.reset()
   })
 
   const oauth = (p: string): string => `${base}/api/v0/main-frontend/oauth${p}`
@@ -91,7 +90,7 @@ describe("mooc device-flow oauth mock", () => {
 
   test("default client: pending before the interval elapses, then an approved token pair", async () => {
     const client = REAL_VSCODE_CLIENT_ID
-    const clock = useClock()
+    const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(client)).json()) as { device_code: string }
 
     // before one poll interval of wall-clock time has elapsed -> still pending
@@ -133,7 +132,7 @@ describe("mooc device-flow oauth mock", () => {
 
   test("never client: always authorization_pending", async () => {
     const client = MOCK_OAUTH_CLIENT_IDS.never
-    const clock = useClock()
+    const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(client)).json()) as { device_code: string }
     for (let i = 0; i < 3; i++) {
       const res = await pollToken(auth.device_code, client)
@@ -146,7 +145,7 @@ describe("mooc device-flow oauth mock", () => {
 
   test("slow_down client: slow_down, then pending, then approved (wall-clock)", async () => {
     const client = MOCK_OAUTH_CLIENT_IDS.slowDown
-    const clock = useClock()
+    const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(client)).json()) as { device_code: string }
 
     // within the first interval -> slow_down (polled too soon)
@@ -167,7 +166,7 @@ describe("mooc device-flow oauth mock", () => {
 
   test("an issued device code past its lifetime is rejected as expired_token", async () => {
     const client = REAL_VSCODE_CLIENT_ID
-    const clock = useClock()
+    const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(client)).json()) as {
       device_code: string
       expires_in: number
@@ -188,7 +187,7 @@ describe("mooc device-flow oauth mock", () => {
 
   test("an approved device code is consumed: a second redemption is invalid_grant", async () => {
     const client = REAL_VSCODE_CLIENT_ID
-    const clock = useClock()
+    const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(client)).json()) as { device_code: string }
     clock.advance(6000)
     assert.equal((await pollToken(auth.device_code, client)).status, 200)
@@ -200,7 +199,7 @@ describe("mooc device-flow oauth mock", () => {
   })
 
   test("a device code issued to one client cannot be redeemed by another", async () => {
-    const clock = useClock()
+    const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(REAL_VSCODE_CLIENT_ID)).json()) as {
       device_code: string
     }
@@ -212,7 +211,7 @@ describe("mooc device-flow oauth mock", () => {
 
   test("polling faster than the advertised interval earns slow_down", async () => {
     const client = REAL_VSCODE_CLIENT_ID
-    const clock = useClock()
+    const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(client)).json()) as { device_code: string }
     // First poll sets the baseline; nothing to be too fast relative to yet.
     assert.equal(
@@ -228,7 +227,7 @@ describe("mooc device-flow oauth mock", () => {
     // The client that polled too fast must still get its token once the user has
     // authorized -- otherwise a fast poller could never finish the flow.
     const client = REAL_VSCODE_CLIENT_ID
-    const clock = useClock()
+    const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(client)).json()) as { device_code: string }
     await pollToken(auth.device_code, client)
     clock.advance(6000)
@@ -269,7 +268,7 @@ describe("mooc device-flow oauth mock", () => {
   const login = async (
     client = REAL_VSCODE_CLIENT_ID,
   ): Promise<{ access_token: string; refresh_token: string }> => {
-    const clock = useClock()
+    const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(client)).json()) as { device_code: string }
     clock.advance(6000)
     return (await (await pollToken(auth.device_code, client)).json()) as {
@@ -327,7 +326,7 @@ describe("mooc device-flow oauth mock", () => {
   })
 
   test("a minted access token stops working once its lifetime has elapsed", async () => {
-    const clock = useClock()
+    const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(REAL_VSCODE_CLIENT_ID)).json()) as {
       device_code: string
     }
@@ -386,7 +385,6 @@ describe("mooc resource-endpoint bearer auth mode", () => {
       server.close()
     })
     afterEach(() => {
-      resetMoocOAuthState()
       mock.reset()
     })
 
@@ -431,7 +429,7 @@ describe("mooc resource-endpoint bearer auth mode", () => {
         })
       const client = REAL_VSCODE_CLIENT_ID
       let t = 1_000_000
-      setDeviceFlowClock(() => t)
+      mock.setOAuthClock(() => t)
       const auth = (await (
         await oauth("/device_authorization", { client_id: client, scope: "exercise-services" })
       ).json()) as { device_code: string }
@@ -483,6 +481,49 @@ describe("mooc resource-endpoint bearer auth mode", () => {
       }
       assert.equal(state.lastAuthorization, `Bearer ${MOCK_SEEDED_ACCESS_TOKEN}`)
       assert.ok(state.authenticatedRequestCount > 0)
+    })
+  })
+
+  describe("OAuth state is per mock instance", () => {
+    let serverA: Server
+    let baseA: string
+    let mockA: MoocMockControls
+    let serverB: Server
+    let mockB: MoocMockControls
+
+    before(async () => {
+      ;({ server: serverA, base: baseA, mock: mockA } = await listen(createMoocApp()))
+      ;({ server: serverB, mock: mockB } = await listen(createMoocApp()))
+    })
+    after(() => {
+      serverA.close()
+      serverB.close()
+    })
+
+    test("resetting one instance leaves a token minted on another still valid", async () => {
+      const clock = useClock(mockA)
+      const oauthA = (p: string, fields: Record<string, string>): Promise<Response> =>
+        fetch(`${baseA}/api/v0/main-frontend/oauth${p}`, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams(fields).toString(),
+        })
+      const client = REAL_VSCODE_CLIENT_ID
+      const auth = (await (
+        await oauthA("/device_authorization", { client_id: client, scope: "exercise-services" })
+      ).json()) as { device_code: string }
+      clock.advance(6000)
+      const minted = (await (
+        await oauthA("/token", {
+          grant_type: DEVICE_GRANT_TYPE,
+          device_code: auth.device_code,
+          client_id: client,
+        })
+      ).json()) as { access_token: string }
+
+      mockB.reset()
+
+      assert.equal((await get(baseA, minted.access_token)).status, 200)
     })
   })
 

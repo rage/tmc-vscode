@@ -110,16 +110,6 @@ interface DeviceCodeState {
   /** ms timestamp of the previous poll; polling again sooner earns `slow_down`. */
   lastPolledAt?: number
 }
-const deviceCodeState = new Map<string, DeviceCodeState>()
-
-// Injectable clock (ms); tests override via setDeviceFlowClock for
-// deterministic progression without real sleeps or timer mocking.
-let now: () => number = () => Date.now()
-
-/** Overrides the device-flow clock. Pass nothing to restore real wall time. */
-export const setDeviceFlowClock = (clock?: () => number): void => {
-  now = clock ?? (() => Date.now())
-}
 
 /** Advertised poll interval (s); matches the real server's 5s default. */
 const DEVICE_INTERVAL_SECONDS = 5
@@ -147,79 +137,104 @@ interface RefreshTokenRecord {
   redeemed: boolean
 }
 
-// Tokens the mock has minted or seeded; consulted by the auth-mode resource
-// router only when `requireAuth` is on.
-const issuedAccessTokens = new Map<string, AccessTokenRecord>()
-const issuedRefreshTokens = new Map<string, RefreshTokenRecord>()
+/**
+ * One mock instance's device-flow + token state. Built by {@link createMoocOAuthState}
+ * and owned by that instance alone -- two mocks in one process (the suites run several)
+ * therefore mint, expire and reset tokens independently.
+ */
+export interface MoocOAuthState {
+  deviceCodeState: Map<string, DeviceCodeState>
+  /** Tokens this instance has minted or seeded; consulted only when `requireAuth` is on. */
+  issuedAccessTokens: Map<string, AccessTokenRecord>
+  issuedRefreshTokens: Map<string, RefreshTokenRecord>
+  /** Injectable clock (ms); tests override via setDeviceFlowClock for deterministic
+   * progression without real sleeps or timer mocking. */
+  now: () => number
+  /** Clears device-flow + issued-token state and the injected clock, for test isolation. */
+  reset: () => void
+}
 
-const seedWellKnownTokens = (): void => {
-  issuedAccessTokens.set(MOCK_SEEDED_ACCESS_TOKEN, {
+const seedWellKnownTokens = (state: MoocOAuthState): void => {
+  state.issuedAccessTokens.set(MOCK_SEEDED_ACCESS_TOKEN, {
     scopes: [EXERCISE_SERVICES_SCOPE],
     expiresAt: Number.POSITIVE_INFINITY,
   })
-  issuedAccessTokens.set(MOCK_SEEDED_NOSCOPE_ACCESS_TOKEN, {
+  state.issuedAccessTokens.set(MOCK_SEEDED_NOSCOPE_ACCESS_TOKEN, {
     scopes: [],
     expiresAt: Number.POSITIVE_INFINITY,
   })
 }
-seedWellKnownTokens()
+
+/** Builds one mock instance's isolated OAuth device-flow + token state. */
+export const createMoocOAuthState = (): MoocOAuthState => {
+  const state: MoocOAuthState = {
+    deviceCodeState: new Map(),
+    issuedAccessTokens: new Map(),
+    issuedRefreshTokens: new Map(),
+    now: () => Date.now(),
+    reset: () => {
+      state.deviceCodeState.clear()
+      state.issuedAccessTokens.clear()
+      state.issuedRefreshTokens.clear()
+      seedWellKnownTokens(state)
+      state.now = () => Date.now()
+    },
+  }
+  seedWellKnownTokens(state)
+  return state
+}
+
+/** Overrides `state`'s device-flow clock. Pass nothing to restore real wall time. */
+export const setDeviceFlowClock = (state: MoocOAuthState, clock?: () => number): void => {
+  state.now = clock ?? (() => Date.now())
+}
 
 /**
- * Scopes a bearer carries, or `undefined` if the mock doesn't recognise it or it
+ * Scopes a bearer carries, or `undefined` if `state` doesn't recognise it or it
  * has expired (-> 401). A recognised token with a scope set lacking the required
  * scope is valid but insufficient (-> 403). Consulted by the auth-mode router in
  * router.ts.
  */
-export const scopesForBearer = (token: string): string[] | undefined => {
-  const record = issuedAccessTokens.get(token)
-  if (!record || now() >= record.expiresAt) {
+export const scopesForBearer = (state: MoocOAuthState, token: string): string[] | undefined => {
+  const record = state.issuedAccessTokens.get(token)
+  if (!record || state.now() >= record.expiresAt) {
     return undefined
   }
   return record.scopes
 }
 
 /**
- * Expires `token`, or every access token the mock currently honours when given
- * none, so a test can make the next resource call 401 without waiting out a
- * lifetime. Returns false only for a token the mock never issued.
+ * Expires `token` in `state`, or every access token it currently honours when
+ * given none, so a test can make the next resource call 401 without waiting out
+ * a lifetime. Returns false only for a token `state` never issued.
  */
-export const expireMoocAccessToken = (token?: string): boolean => {
+export const expireMoocAccessToken = (state: MoocOAuthState, token?: string): boolean => {
   if (token === undefined) {
-    for (const record of issuedAccessTokens.values()) {
-      record.expiresAt = now()
+    for (const record of state.issuedAccessTokens.values()) {
+      record.expiresAt = state.now()
     }
     return true
   }
-  const record = issuedAccessTokens.get(token)
+  const record = state.issuedAccessTokens.get(token)
   if (!record) {
     return false
   }
-  record.expiresAt = now()
+  record.expiresAt = state.now()
   return true
-}
-
-/** Clears in-memory device-flow + issued-token state (for test isolation). */
-export const resetMoocOAuthState = (): void => {
-  deviceCodeState.clear()
-  issuedAccessTokens.clear()
-  issuedRefreshTokens.clear()
-  seedWellKnownTokens()
-  // Drop any test-injected clock so a later run starts on real wall time.
-  setDeviceFlowClock()
 }
 
 const deviceCodeFor = (scenario: Scenario): string => `mock-device-${scenario}`
 
 /** Drops every token of a rotation chain, as reuse detection requires. */
-const revokeFamily = (familyId: string): void => {
-  for (const [token, record] of issuedAccessTokens) {
+const revokeFamily = (state: MoocOAuthState, familyId: string): void => {
+  for (const [token, record] of state.issuedAccessTokens) {
     if (record.familyId === familyId) {
-      issuedAccessTokens.delete(token)
+      state.issuedAccessTokens.delete(token)
     }
   }
-  for (const [token, record] of issuedRefreshTokens) {
+  for (const [token, record] of state.issuedRefreshTokens) {
     if (record.familyId === familyId) {
-      issuedRefreshTokens.delete(token)
+      state.issuedRefreshTokens.delete(token)
     }
   }
 }
@@ -233,18 +248,19 @@ const revokeFamily = (familyId: string): void => {
  * started, so reuse of any link revokes the whole chain.
  */
 const issueToken = (
+  state: MoocOAuthState,
   clientId: string,
   scopes: string[],
   familyId: string = randomUUID(),
 ): Record<string, unknown> => {
   const accessToken = `mock-access-${randomUUID()}`
   const refreshToken = `mock-refresh-${randomUUID()}`
-  issuedAccessTokens.set(accessToken, {
+  state.issuedAccessTokens.set(accessToken, {
     scopes,
-    expiresAt: now() + ACCESS_TOKEN_LIFETIME_SECONDS * 1000,
+    expiresAt: state.now() + ACCESS_TOKEN_LIFETIME_SECONDS * 1000,
     familyId,
   })
-  issuedRefreshTokens.set(refreshToken, { clientId, scopes, familyId, redeemed: false })
+  state.issuedRefreshTokens.set(refreshToken, { clientId, scopes, familyId, redeemed: false })
   return {
     access_token: accessToken,
     refresh_token: refreshToken,
@@ -277,7 +293,12 @@ const formField = (req: Request, name: string): string => {
   return typeof value === "string" ? value : ""
 }
 
-const handleDeviceAuthorization = (baseUrl: string, req: Request, res: Response): void => {
+const handleDeviceAuthorization = (
+  state: MoocOAuthState,
+  baseUrl: string,
+  req: Request,
+  res: Response,
+): void => {
   const clientId = formField(req, "client_id")
   if (!ALLOWED_CLIENT_IDS.has(clientId)) {
     res.status(400).json(oauthError("invalid_client"))
@@ -291,11 +312,11 @@ const handleDeviceAuthorization = (baseUrl: string, req: Request, res: Response)
   }
   const scenario = scenarioForClient(clientId)
   const deviceCode = deviceCodeFor(scenario)
-  deviceCodeState.set(deviceCode, {
+  state.deviceCodeState.set(deviceCode, {
     scenario,
     clientId,
     scopes: requestedScopes.length > 0 ? requestedScopes : allowedScopes,
-    issuedAt: now(),
+    issuedAt: state.now(),
     intervalSeconds: DEVICE_INTERVAL_SECONDS,
     expiresInSeconds: DEVICE_EXPIRES_IN_SECONDS,
   })
@@ -310,20 +331,20 @@ const handleDeviceAuthorization = (baseUrl: string, req: Request, res: Response)
   })
 }
 
-const handleDeviceGrant = (req: Request, res: Response): void => {
+const handleDeviceGrant = (state: MoocOAuthState, req: Request, res: Response): void => {
   const deviceCode = formField(req, "device_code")
   const clientId = formField(req, "client_id")
-  const state = deviceCodeState.get(deviceCode)
+  const deviceState = state.deviceCodeState.get(deviceCode)
   // Never issued, or already redeemed and therefore deleted: either way the
   // grant is gone, which RFC 6749 calls `invalid_grant`. `expired_token` is
   // reserved below for a code that is still on file but past its lifetime.
-  if (!state || state.clientId !== clientId) {
+  if (!deviceState || deviceState.clientId !== clientId) {
     res.status(400).json(oauthError("invalid_grant"))
     return
   }
-  const { scenario, issuedAt, intervalSeconds, expiresInSeconds, lastPolledAt } = state
-  const polledAt = now()
-  state.lastPolledAt = polledAt
+  const { scenario, issuedAt, intervalSeconds, expiresInSeconds, lastPolledAt } = deviceState
+  const polledAt = state.now()
+  deviceState.lastPolledAt = polledAt
   const elapsedMs = polledAt - issuedAt
   const intervalMs = intervalSeconds * 1000
 
@@ -352,8 +373,8 @@ const handleDeviceGrant = (req: Request, res: Response): void => {
   if (scenario !== "never" && elapsedMs >= intervalsToApprove * intervalMs) {
     // Approval outranks the poll-rate rule below: once the user has authorized,
     // a client that polled too eagerly still gets its token.
-    deviceCodeState.delete(deviceCode)
-    res.status(200).json(issueToken(state.clientId, state.scopes))
+    state.deviceCodeState.delete(deviceCode)
+    res.status(200).json(issueToken(state, deviceState.clientId, deviceState.scopes))
     return
   }
   if (scenario === "slowDown" && elapsedMs < intervalMs) {
@@ -367,7 +388,7 @@ const handleDeviceGrant = (req: Request, res: Response): void => {
   res.status(400).json(oauthError("authorization_pending"))
 }
 
-const handleRefreshGrant = (req: Request, res: Response): void => {
+const handleRefreshGrant = (state: MoocOAuthState, req: Request, res: Response): void => {
   const refreshToken = formField(req, "refresh_token")
   const clientId = formField(req, "client_id")
   // A permanent `invalid_grant` for the sentinel, driving the langs
@@ -377,10 +398,10 @@ const handleRefreshGrant = (req: Request, res: Response): void => {
     return
   }
   if (refreshToken === MOCK_SEEDED_REFRESH_TOKEN) {
-    res.status(200).json(issueToken(clientId, CLIENT_SCOPES.get(clientId) ?? []))
+    res.status(200).json(issueToken(state, clientId, CLIENT_SCOPES.get(clientId) ?? []))
     return
   }
-  const record = issuedRefreshTokens.get(refreshToken)
+  const record = state.issuedRefreshTokens.get(refreshToken)
   if (!record || record.clientId !== clientId) {
     res.status(400).json(oauthError("invalid_grant"))
     return
@@ -388,42 +409,44 @@ const handleRefreshGrant = (req: Request, res: Response): void => {
   if (record.redeemed) {
     // Replaying a rotated token is the stolen-credential signal the OAuth 2.0
     // Security BCP exists for: the whole chain goes, not just this link.
-    revokeFamily(record.familyId)
+    revokeFamily(state, record.familyId)
     res.status(400).json(oauthError("invalid_grant"))
     return
   }
   record.redeemed = true
-  res.status(200).json(issueToken(record.clientId, record.scopes, record.familyId))
+  res.status(200).json(issueToken(state, record.clientId, record.scopes, record.familyId))
 }
 
-const handleToken = (req: Request, res: Response): void => {
+const handleToken = (state: MoocOAuthState, req: Request, res: Response): void => {
   const grantType = formField(req, "grant_type")
   if (grantType === DEVICE_GRANT_TYPE) {
-    handleDeviceGrant(req, res)
+    handleDeviceGrant(state, req, res)
     return
   }
   if (grantType === "refresh_token") {
-    handleRefreshGrant(req, res)
+    handleRefreshGrant(state, req, res)
     return
   }
   res.status(400).json(oauthError("unsupported_grant_type"))
 }
 
 /**
- * Mounts the mooc device-flow OAuth mock. `baseUrl` yields the address the mock
- * is reachable at, read per request because a standalone app only learns it once
- * it binds; the verification URIs advertised to the user are built from it.
- * Parses urlencoded bodies itself so it works whether or not the host app
- * already registered a urlencoded parser (body-parser skips re-parsing an
- * already-parsed body).
+ * Mounts the mooc device-flow OAuth mock against `state`, so it shares no token
+ * or device-code with any other instance registered in the same process.
+ * `baseUrl` yields the address the mock is reachable at, read per request
+ * because a standalone app only learns it once it binds; the verification
+ * URIs advertised to the user are built from it. Parses urlencoded bodies
+ * itself so it works whether or not the host app already registered a
+ * urlencoded parser (body-parser skips re-parsing an already-parsed body).
  */
 export const registerMoocOAuthRoutes = (
   app: Express,
+  state: MoocOAuthState,
   baseUrl: () => string = () => DEFAULT_MOOC_MOCK_BASE_URL,
 ): void => {
   const form = express.urlencoded({ extended: false })
   app.post(`${OAUTH_BASE}/device_authorization`, form, (req, res) =>
-    handleDeviceAuthorization(baseUrl(), req, res),
+    handleDeviceAuthorization(state, baseUrl(), req, res),
   )
-  app.post(`${OAUTH_BASE}/token`, form, handleToken)
+  app.post(`${OAUTH_BASE}/token`, form, (req, res) => handleToken(state, req, res))
 }
