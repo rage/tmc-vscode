@@ -35,22 +35,35 @@ import Storage from "./storage"
 import UI from "./ui/ui"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
 
-function initializationError(
+/**
+ * Builds the reporter an activation uses for the initialization steps that fail.
+ *
+ * One root cause -- an unreachable CLI, say -- fails most of the steps that follow, so the
+ * reporter notifies once per distinct error and only logs the repeats. Each activation
+ * needs its own, or a later one would stay silent about a failure it shares with the first.
+ */
+function makeInitializationErrorReporter(
   dialog: Dialog,
-  step: string,
-  error: Error,
   langsFolder: string,
-): void {
-  void dialog.reportError(
-    `Initialization error during ${step}. If this issue is not resolved, the extension may` +
-      " not function properly.",
-    error,
-  )
-  if (error instanceof EmptyLangsResponseError || error instanceof SpawnError) {
-    void dialog.errorNotification(
-      "This error may have been caused by an interfering antivirus program. " +
-        `Please try adding an exception for the following folder: ${langsFolder}`,
-    )
+): (step: string, error: Error) => void {
+  const alreadyReported = new Set<string>()
+  return (step, error) => {
+    const message =
+      `Initialization error during ${step}. If this issue is not resolved, the extension may` +
+      " not function properly."
+    const signature = `${error.name}\n${error.message}`
+    if (alreadyReported.has(signature)) {
+      Logger.error(message, error)
+      return
+    }
+    alreadyReported.add(signature)
+    void dialog.reportError(message, error)
+    if (error instanceof EmptyLangsResponseError || error instanceof SpawnError) {
+      void dialog.errorNotification(
+        "This error may have been caused by an interfering antivirus program. " +
+          `Please try adding an exception for the following folder: ${langsFolder}`,
+      )
+    }
   }
 }
 
@@ -109,6 +122,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const ui = new UI()
   context.subscriptions.push(ui)
   const cliFolderPath = cliFolder(context)
+  const reportInitializationError = makeInitializationErrorReporter(dialog, cliFolderPath)
   const cliPathResult = await init.ensureLangsUpdated(
     cliFolderPath,
     dialog,
@@ -120,7 +134,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   let langs: Result<Langs, Error>
   if (cliPathResult.err) {
     langs = cliPathResult
-    initializationError(dialog, "tmc-langs setup", cliPathResult.val, cliFolderPath)
+    reportInitializationError("tmc-langs setup", cliPathResult.val)
   } else {
     // fire-and-forget: verify the CLI's output contract matches this build's schema
     void init.verifyCliSchema(cliPathResult.val, context.extensionPath)
@@ -135,7 +149,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const authState = createAuthState(langs, ui)
   const initialAuthCheck = await authState.refresh({ timeout: 15000 })
   if (initialAuthCheck.tmc.err) {
-    initializationError(dialog, "authentication check", initialAuthCheck.tmc.val, cliFolderPath)
+    reportInitializationError("authentication check", initialAuthCheck.tmc.val)
   }
   if (initialAuthCheck.mooc.err) {
     Logger.warn("Could not check mooc login status", initialAuthCheck.mooc.val)
@@ -157,9 +171,9 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
         Logger.warn("Extension expected to restart to migrate the open workspace")
         return
       }
-      initializationError(dialog, "migration", reopened.val, cliFolderPath)
+      reportInitializationError("migration", reopened.val)
     } else if (migration.kind === "failed") {
-      initializationError(dialog, "migration", migration.error, cliFolderPath)
+      reportInitializationError("migration", migration.error)
     }
   } else {
     Logger.warn("Skipped data migration")
@@ -174,15 +188,10 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     )
     if (dataPathResult.err) {
       Logger.error("Failed to define datapath:", dataPathResult.val)
-      initializationError(dialog, "finding datapath", dataPathResult.val, cliFolderPath)
+      reportInitializationError("finding datapath", dataPathResult.val)
     } else if (dataPathResult.val === undefined) {
       Logger.error("Failed to define datapath: no value found.")
-      initializationError(
-        dialog,
-        "finding datapath",
-        new Error("No value for datapath."),
-        cliFolderPath,
-      )
+      reportInitializationError("finding datapath", new Error("No value for datapath."))
     } else {
       tmcDataPath = dataPathResult.val
     }
@@ -196,7 +205,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     workspaceFileFolder,
   )
   if (resources.err) {
-    initializationError(dialog, "resource initialization", resources.val, cliFolderPath)
+    reportInitializationError("resource initialization", resources.val)
   }
 
   // Armed only while logged in: each round is two cold CLI starts, and a session can only
@@ -305,7 +314,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     } catch (e) {
       const error =
         e instanceof Error ? e : new InitializationError(e, "Could not read stored user data")
-      initializationError(dialog, "reading stored course data", error, cliFolderPath)
+      reportInitializationError("reading stored course data", error)
       userData = new Err(error)
     }
     exerciseDecorationProvider = userData.ok

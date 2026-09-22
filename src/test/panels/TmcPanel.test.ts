@@ -294,8 +294,8 @@ suite("TmcPanel handler dispatch", () => {
     await listener({ type: "closeExercises", ids, courseId })
 
     expect(handlers.closeExercises).toHaveBeenCalledWith(actionContext, ids, courseId)
-    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
-      "Errored while closing selected exercises.",
+    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
+      "Failed to close the selected exercises.",
       expect.any(Error),
     )
   })
@@ -315,7 +315,7 @@ suite("TmcPanel handler dispatch", () => {
       courseId: CourseIdentifier.from(42),
     })
 
-    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
       "Something went wrong while handling that action.",
       expect.objectContaining({ message: "handler exploded" }),
     )
@@ -404,6 +404,7 @@ suite("TmcPanel handler dispatch", () => {
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: "pasteError", error: "paste service is down" }),
     )
+    expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
     expect(actionContext.dialog.errorNotification).not.toHaveBeenCalled()
   })
 })

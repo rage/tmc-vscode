@@ -440,7 +440,7 @@ export class TmcPanel {
             }
             const courseResult = userData.val.getCourse(message.sourcePanel.courseId)
             if (courseResult.err) {
-              actionContext.dialog.errorNotification("Failed to read the course.", courseResult.val)
+              actionContext.dialog.reportError("Failed to read the course.", courseResult.val)
               this._postPanelDataFailed(target, message.requestId, courseResult.val)
               return
             }
@@ -606,10 +606,7 @@ export class TmcPanel {
 
             const courseResult = userData.val.getCourse(message.id)
             if (courseResult.err) {
-              actionContext.dialog.errorNotification(
-                "Failed to remove the course.",
-                courseResult.val,
-              )
+              actionContext.dialog.reportError("Failed to remove the course.", courseResult.val)
               return
             }
             const course = courseResult.val
@@ -639,7 +636,7 @@ export class TmcPanel {
 
             const courseResult = userData.val.getCourse(message.courseId)
             if (courseResult.err) {
-              actionContext.dialog.errorNotification("Failed to read the course.", courseResult.val)
+              actionContext.dialog.reportError("Failed to read the course.", courseResult.val)
               return
             }
             handlers().openWorkspace(
@@ -672,8 +669,8 @@ export class TmcPanel {
               message.courseId,
             )
             if (result.err) {
-              actionContext.dialog.errorNotification(
-                "Errored while closing selected exercises.",
+              actionContext.dialog.reportError(
+                "Failed to close the selected exercises.",
                 result.val,
               )
             }
@@ -688,7 +685,7 @@ export class TmcPanel {
 
             const clearResult = await userData.val.clearFromNewExercises(message.courseId)
             if (clearResult.err) {
-              actionContext.dialog.errorNotification(
+              actionContext.dialog.reportError(
                 "Failed to dismiss the new exercises.",
                 clearResult.val,
               )
@@ -717,7 +714,7 @@ export class TmcPanel {
             const courseId = message.id
             const updateResult = await handlers().updateCourse(actionContext, courseId)
             if (updateResult.err) {
-              actionContext.dialog.errorNotification("Failed to update course.", updateResult.val)
+              actionContext.dialog.reportError("Failed to update course.", updateResult.val)
             }
             // `updateCourse` does not rescan, and the re-render below reads the exercise
             // statuses straight out of the workspace manager.
@@ -962,7 +959,7 @@ function reportingFailures(
   return (message) =>
     handle(message).catch((error: unknown) => {
       Logger.error("Failed to handle a message from the webview", error)
-      dialog.errorNotification(
+      dialog.reportError(
         "Something went wrong while handling that action.",
         error instanceof Error ? error : new Error(String(error)),
       )
