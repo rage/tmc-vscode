@@ -5,9 +5,8 @@ import type { FractionProgress } from "../api/dialog"
 import type Langs from "../api/langs"
 import { ExerciseUpdateError, InitializationError } from "../errors"
 import { TmcPanel } from "../panels/TmcPanel"
-import type { CourseIdentifier, ExtensionToWebview } from "../shared/shared"
+import type { CourseIdentifier, ExerciseStatus, ExtensionToWebview } from "../shared/shared"
 import { ExerciseIdentifier, LocalCourseData, match } from "../shared/shared"
-import type { ExerciseStatus } from "../ui/types"
 import { Logger } from "../utilities"
 import type { ActionContext } from "./types"
 
@@ -167,10 +166,10 @@ export async function downloadOrUpdateExercises(
   } = downloadResult
   // Both backends were attempted independently; surface each one's failure separately.
   if (tmcError) {
-    dialog.errorNotification("Failed to download exercises from tmc.mooc.fi.", tmcError)
+    dialog.reportError("Failed to download exercises from tmc.mooc.fi.", tmcError, "tmc")
   }
   if (moocError) {
-    dialog.errorNotification("Failed to download exercises from courses.mooc.fi.", moocError)
+    dialog.reportError("Failed to download exercises from courses.mooc.fi.", moocError, "mooc")
   }
   if (tmcSkipped.length > 0) {
     Logger.warn(`${tmcSkipped.length} downloads were skipped.`)
@@ -193,16 +192,18 @@ export async function downloadOrUpdateExercises(
   postMessages(statuses, resolveCourseId)
   if (tmcFailed && tmcFailed.length > 0) {
     const failedDownloads = tmcFailed.map(([f]) => f["exercise-slug"])
-    dialog.errorNotification(
+    dialog.reportError(
       "Failed to update exercises.",
       new ExerciseUpdateError(failedDownloads.join(", ")),
+      "tmc",
     )
   }
   if (moocFailed && moocFailed.length > 0) {
     const failedDownloads = moocFailed.map(([f]) => f["exercise-id"])
-    dialog.errorNotification(
+    dialog.reportError(
       "Failed to update exercises.",
       new ExerciseUpdateError(failedDownloads.join(", ")),
+      "mooc",
     )
   }
 

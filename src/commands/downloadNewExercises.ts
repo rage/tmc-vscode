@@ -1,33 +1,24 @@
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
-import type { CourseIdentifier } from "../shared/shared"
-import { backendName, LocalCourseData } from "../shared/shared"
+import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
+import { pickCourse } from "./pickCourse"
 
 export async function downloadNewExercises(actionContext: ActionContext): Promise<void> {
   const { dialog, userData } = actionContext
   Logger.info("Downloading new exercises")
-  if (userData.err) {
-    Logger.error("Extension was not initialized properly")
-    return
-  }
 
-  const courses = userData.val.getCourses()
-  const courseId = await dialog.selectItem(
-    { title: "Download New Exercises", placeHolder: "Download new exercises for course?" },
-    ...courses.map<[string, CourseIdentifier, string]>((course) => [
-      LocalCourseData.getCourseName(course),
-      LocalCourseData.getCourseId(course),
-      backendName(course.kind),
-    ]),
-  )
-  if (!courseId) {
+  const courseId = await pickCourse(actionContext, {
+    title: "Download New Exercises",
+    placeHolder: "Download new exercises for course?",
+  })
+  if (!courseId || userData.err) {
     return
   }
 
   const courseResult = userData.val.getCourse(courseId)
   if (courseResult.err) {
-    dialog.errorNotification("Failed to read the selected course.", courseResult.val)
+    dialog.reportError("Failed to read the selected course.", courseResult.val, courseId.kind)
     return
   }
   const course = courseResult.val
@@ -40,9 +31,10 @@ export async function downloadNewExercises(actionContext: ActionContext): Promis
 
   const downloadResult = await actions.downloadNewExercisesForCourse(actionContext, courseId)
   if (downloadResult.err) {
-    dialog.errorNotification(
+    dialog.reportError(
       `Failed to download new exercises for course "${LocalCourseData.getCourseName(course)}."`,
       downloadResult.val,
+      courseId.kind,
     )
   }
 }

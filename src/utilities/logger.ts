@@ -222,16 +222,6 @@ export class Logger {
   }
 }
 
-/**
- * The error as prose for a message the user reads, with no stack trace.
- *
- * Use this and not {@link Logger.toLoggable} for anything shown in a notification: the
- * output channel takes the trace, where it can be scrolled and copied.
- */
-export function formatErrorMessage(error: Error): string {
-  return formatError(error, false)
-}
-
 // A cause chain can be cyclic; `BaseError` copies whatever it was handed.
 const MAX_CAUSE_DEPTH = 8
 

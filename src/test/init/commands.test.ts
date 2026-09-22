@@ -159,7 +159,7 @@ suite("registerCommands", function () {
 
     await expect(handlers.get("tmc.showMoocLogin")?.()).resolves.toBeUndefined()
 
-    expect(vi.mocked(actionContext.dialog.errorNotification)).toHaveBeenCalledWith(
+    expect(vi.mocked(actionContext.dialog.reportError)).toHaveBeenCalledWith(
       "Failed to run tmc.showMoocLogin.",
       expect.objectContaining({ message: "the panel could not open" }),
     )

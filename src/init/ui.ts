@@ -1,7 +1,8 @@
 import type { ActionContext } from "../actions/types"
-import { CourseIdentifier, LocalCourseData } from "../shared/shared"
+import { courseSelectionItems } from "../api/dialog"
+import { CourseIdentifier } from "../shared/shared"
 import type { TreeEntryChild } from "../ui/treeview/treeview"
-import { Logger } from "../utilities/"
+import { Logger } from "../utilities"
 
 /**
  * Fills the TestMyCode tree view with the entries the current initialization state can
@@ -70,13 +71,13 @@ export function registerUiActions(actionContext: ActionContext): void {
         title: "Go to My Courses",
       },
       children: (): TreeEntryChild[] =>
-        userData.val.getCourses().map((course) => ({
-          label: LocalCourseData.getCourseTitle(course),
-          id: CourseIdentifier.toString(LocalCourseData.getCourseId(course)),
+        courseSelectionItems(userData.val.getCourses()).map(([title, courseId, backend]) => ({
+          label: `${title} · ${backend}`,
+          id: CourseIdentifier.toString(courseId),
           command: {
             command: "tmc.courseDetails",
             title: "Go to course details",
-            arguments: [LocalCourseData.getCourseId(course)],
+            arguments: [courseId],
           },
         })),
       iconId: "book",

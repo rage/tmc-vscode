@@ -101,7 +101,7 @@ suite("Wipe command", function () {
     await wipe(context, extensionContext)
 
     expect(fs.removeSync).not.toHaveBeenCalled()
-    expect(context.dialog.errorNotification).toHaveBeenCalledOnce()
+    expect(context.dialog.reportError).toHaveBeenCalledOnce()
   })
 
   test("leaves the exercises on disk when the workspace files cannot be removed", async function () {
@@ -112,7 +112,7 @@ suite("Wipe command", function () {
     await wipe(context, extensionContext)
 
     expect(fs.removeSync).not.toHaveBeenCalled()
-    expect(context.dialog.errorNotification).toHaveBeenCalledOnce()
+    expect(context.dialog.reportError).toHaveBeenCalledOnce()
   })
 
   test("deletes nothing when initialization failed", async function () {

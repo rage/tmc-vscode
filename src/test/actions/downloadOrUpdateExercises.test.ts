@@ -11,9 +11,8 @@ import type Settings from "../../config/settings"
 import { InvalidTokenError } from "../../errors"
 import { TmcPanel } from "../../panels/TmcPanel"
 import type { TmcExerciseDownload } from "../../shared/langsSchema"
-import type { ExtensionToWebview } from "../../shared/shared"
+import type { ExerciseStatus, ExtensionToWebview } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
-import type { ExerciseStatus } from "../../ui/types"
 import type UI from "../../ui/ui"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -110,9 +109,10 @@ suite("downloadOrUpdateExercises action", function () {
     ).unwrap()
     expect(result.successful).toEqual([])
     expect(result.failed).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
-    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
+    expect(dialogMock.reportError).toHaveBeenCalledWith(
       expect.stringContaining("tmc.mooc.fi"),
       error,
+      "tmc",
     )
   })
 
@@ -233,9 +233,10 @@ suite("downloadOrUpdateExercises action", function () {
       )
     ).unwrap()
 
-    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
+    expect(dialogMock.reportError).toHaveBeenCalledWith(
       "Failed to download exercises from courses.mooc.fi.",
       moocError,
+      "mooc",
     )
     expect(result.successful).toEqual([])
     expect(result.failed).toEqual([

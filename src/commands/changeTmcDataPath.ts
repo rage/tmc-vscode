@@ -39,7 +39,7 @@ export async function changeTmcDataPath(actionContext: ActionContext): Promise<v
 so a tmcdata subfolder was used.`,
       )
     } else {
-      dialog.errorNotification(res.val.message, res.val)
+      dialog.reportError("Failed to move the projects directory.", res.val)
     }
     TmcPanel.postMessage({
       type: "setTmcDataPath",

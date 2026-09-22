@@ -69,9 +69,10 @@ suite("logout action", function () {
     expect(deauthenticateMooc).toHaveBeenCalledOnce()
     expect(result.err).toBe(true)
     expect(result.val).toBe(error)
-    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
+    expect(dialogMock.reportError).toHaveBeenCalledWith(
       expect.stringContaining("Failed to log out"),
       error,
+      "tmc",
     )
   })
 
@@ -82,9 +83,10 @@ suite("logout action", function () {
     expect(deauthenticate).toHaveBeenCalledOnce()
     expect(result.err).toBe(true)
     expect(result.val).toBe(error)
-    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
+    expect(dialogMock.reportError).toHaveBeenCalledWith(
       expect.stringContaining("courses.mooc.fi"),
       error,
+      "mooc",
     )
   })
 
@@ -99,9 +101,10 @@ suite("logout action", function () {
     expect(deauthenticateMooc).toHaveBeenCalledOnce()
     expect(result.err).toBe(true)
     expect(result.val).toBe(error)
-    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
+    expect(dialogMock.reportError).toHaveBeenCalledWith(
       expect.stringContaining("Failed to log out"),
       error,
+      "tmc",
     )
   })
 
@@ -114,9 +117,10 @@ suite("logout action", function () {
     expect(deauthenticate).toHaveBeenCalledOnce()
     expect(result.err).toBe(true)
     expect(result.val).toBe(error)
-    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
+    expect(dialogMock.reportError).toHaveBeenCalledWith(
       expect.stringContaining("courses.mooc.fi"),
       error,
+      "mooc",
     )
   })
 
@@ -128,13 +132,15 @@ suite("logout action", function () {
     const result = await logout(actionContext())
     expect(deauthenticate).toHaveBeenCalledOnce()
     expect(deauthenticateMooc).toHaveBeenCalledOnce()
-    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
+    expect(dialogMock.reportError).toHaveBeenCalledWith(
       expect.stringContaining("Failed to log out"),
       tmcError,
+      "tmc",
     )
-    expect(dialogMock.errorNotification).toHaveBeenCalledWith(
+    expect(dialogMock.reportError).toHaveBeenCalledWith(
       expect.stringContaining("courses.mooc.fi"),
       moocError,
+      "mooc",
     )
     expect(result.err).toBe(true)
     expect(result.val).toBe(tmcError)
@@ -192,7 +198,7 @@ suite("removeCourse action", function () {
 
     await removeCourse(actionContext, CourseIdentifier.from(1))
 
-    expect(dialog.errorNotification).toHaveBeenCalled()
+    expect(dialog.reportError).toHaveBeenCalled()
     expect(deleteCourse).not.toHaveBeenCalled()
   })
 
@@ -205,7 +211,7 @@ suite("removeCourse action", function () {
 
     await removeCourse(actionContext, CourseIdentifier.from(1))
 
-    expect(dialog.errorNotification).toHaveBeenCalledWith(expect.any(String), error)
+    expect(dialog.reportError).toHaveBeenCalledWith(expect.any(String), error, "tmc")
     expect(refresh).not.toHaveBeenCalled()
   })
 
@@ -217,7 +223,7 @@ suite("removeCourse action", function () {
 
     await removeCourse(actionContext, CourseIdentifier.from(1))
 
-    expect(dialog.errorNotification).not.toHaveBeenCalled()
+    expect(dialog.reportError).not.toHaveBeenCalled()
     expect(refresh).toHaveBeenCalled()
   })
 
@@ -392,7 +398,7 @@ suite("checkForCourseUpdates action", function () {
     expect(updateCourse).toHaveBeenCalledTimes(2)
     expect(result.err && result.val.message).toContain("course-1")
     // The caller decides whether a background failure is worth a toast.
-    expect(dialog.errorNotification).not.toHaveBeenCalled()
+    expect(dialog.reportError).not.toHaveBeenCalled()
   })
 
   test("reports progress as each course finishes", async function () {

@@ -1,6 +1,5 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
-import * as vscode from "vscode"
 
 import type Dialog from "../api/dialog"
 import {
@@ -60,12 +59,7 @@ function reportInsufficientScope(dialog: Dialog, error: InsufficientScopeError):
     return
   }
   insufficientScopeReported = true
-  dialog.errorNotification(error.message, error, [
-    "Log in",
-    (): void => {
-      vscode.commands.executeCommand("tmc.showMoocLogin")
-    },
-  ])
+  dialog.reportError("Failed to update course data.", error)
 }
 
 /**
@@ -182,10 +176,6 @@ export async function updateCourse(
         Logger.warn("Failed to fetch mooc course progress", progressRes.val)
       }
       const previousExercises = courseData.data.exercises
-      // One local exercise per slide, keyed by the slide's exercise id (a UUID).
-      // The bulk download/update CLI subcommand resolves `--exercise-id` against
-      // `slide.exercise_id`, so the exercise id (not the task id) is the identity
-      // the extension must carry.
       const localExercises = combineMoocApiExerciseData(
         slides,
         progressRes.ok ? progressRes.val : undefined,

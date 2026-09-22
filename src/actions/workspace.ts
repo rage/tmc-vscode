@@ -5,14 +5,9 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
-/**
- * -------------------------------------------------------------------------------------------------
- * Group for actions that modify the TMC workspace.
- * -------------------------------------------------------------------------------------------------
- */
 import { ExerciseStatus } from "../api/workspaceManager"
 import { InitializationError } from "../errors"
-import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
+import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseDetailsPanel, CourseIdentifier, ExtensionToWebview } from "../shared/shared"
 import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise, match } from "../shared/shared"
 import { Logger } from "../utilities"
@@ -80,7 +75,7 @@ export async function openExercises(
         "Open course details",
         (): void => {
           const panel: CourseDetailsPanel = {
-            id: randomPanelId(),
+            id: nextPanelId(),
             type: "CourseDetails",
             courseId,
             exerciseStatuses: {
@@ -88,7 +83,9 @@ export async function openExercises(
               mooc: {},
             },
           }
-          TmcPanel.renderMain(context.extensionUri, context, actionContext, panel)
+          void TmcPanel.renderMain(context.extensionUri, context, actionContext, panel).catch((e) =>
+            Logger.error("Failed to open course details.", e),
+          )
         },
       ],
     )
@@ -154,9 +151,10 @@ export async function downloadAndOpenExercises(
     ),
   )
   if (localCourseExercises.err) {
-    dialog.errorNotification(
+    dialog.reportError(
       "Error trying to list local exercises while opening selected exercises.",
       localCourseExercises.val,
+      courseId.kind,
     )
     return localCourseExercises
   }
@@ -180,7 +178,7 @@ export async function downloadAndOpenExercises(
   // changes back to the webview, so don't duplicate that here.
   const openResult = await openExercises(context, actionContext, exerciseIdsToOpen, courseId)
   if (openResult.err) {
-    dialog.errorNotification("Errored while opening selected exercises.", openResult.val)
+    dialog.reportError("Errored while opening selected exercises.", openResult.val, courseId.kind)
   }
   return openResult
 }

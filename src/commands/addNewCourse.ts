@@ -139,9 +139,10 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
     async (organization): Promise<[string, CourseIdentifier] | undefined> => {
       const courses = await langs.val.getCourses(organization.slug)
       if (courses.err) {
-        dialog.errorNotification(
+        dialog.reportError(
           `Failed to fetch organization courses for ${organization.name}.`,
           courses.val,
+          "tmc",
         )
         return undefined
       }
@@ -166,7 +167,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
 
   const result = await actions.addNewCourse(actionContext, picked[0], picked[1])
   if (result.err) {
-    dialog.errorNotification("Failed to add course.", result.val)
+    dialog.reportError("Failed to add course.", result.val, picked[1].kind)
     return
   }
   // A My Courses panel renders the list it was last sent, so it has to be told

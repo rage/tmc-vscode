@@ -74,9 +74,10 @@ suite("Exercise command runner", function () {
       failure("Failed to reset exercise.", cause),
     )
 
-    expect(stubContext.dialog.errorNotification).toHaveBeenCalledExactlyOnceWith(
+    expect(stubContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to reset exercise.",
       cause,
+      "mooc",
     )
   })
 

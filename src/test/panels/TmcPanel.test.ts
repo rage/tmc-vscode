@@ -6,7 +6,7 @@ import { ConnectionError, ForbiddenError } from "../../errors"
 import { postUpdateables } from "../../panels/exerciseLists"
 import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import type { WebviewHandlers } from "../../panels/TmcPanel"
-import { randomPanelId, registerWebviewHandlers, TmcPanel } from "../../panels/TmcPanel"
+import { nextPanelId, registerWebviewHandlers, TmcPanel } from "../../panels/TmcPanel"
 import { updateablesRegistry } from "../../panels/updateablesRegistry"
 import {
   CourseIdentifier,
@@ -92,7 +92,7 @@ suite("TmcPanel moocLogin handling", () => {
     actionContext.langs = Ok({ authenticateMooc } as unknown as Langs)
 
     // Render the MoocLogin panel standalone, the way `tmc.showMoocLogin` does.
-    const loginPanelId = randomPanelId()
+    const loginPanelId = nextPanelId()
     await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
       id: loginPanelId,
       type: "MoocLogin",
@@ -144,7 +144,7 @@ async function mountSidePanel(actionContext: ReturnType<typeof createMockActionC
   const extensionUri = vscode.Uri.file("/ext")
 
   await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-    id: randomPanelId(),
+    id: nextPanelId(),
     type: "MyCourses",
     courseDeadlines: {},
   })
@@ -750,13 +750,13 @@ suite("TmcPanel main panel lifecycle", () => {
     const actionContext = createMockActionContext()
 
     await TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
-      id: randomPanelId(),
+      id: nextPanelId(),
       type: "MyCourses",
       courseDeadlines: {},
     })
     vi.mocked(panel.webview.postMessage).mockClear()
     await TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
-      id: randomPanelId(),
+      id: nextPanelId(),
       type: "Welcome",
     })
 
@@ -779,20 +779,20 @@ suite("TmcPanel main panel lifecycle", () => {
 
     createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
     await TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
-      id: randomPanelId(),
+      id: nextPanelId(),
       type: "MyCourses",
       courseDeadlines: {},
     })
     const side = createFakeWebviewPanel()
     createWebviewPanel.mockReturnValue(side.panel)
     await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-      id: randomPanelId(),
+      id: nextPanelId(),
       type: "MyCourses",
       courseDeadlines: {},
     })
 
     await TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
-      id: randomPanelId(),
+      id: nextPanelId(),
       type: "Welcome",
     })
 
@@ -808,7 +808,7 @@ suite("TmcPanel main panel lifecycle", () => {
       vscode.Uri.file("/ext"),
       createMockContext(),
       createMockActionContext(),
-      { id: randomPanelId(), type: "MyCourses", courseDeadlines: {} },
+      { id: nextPanelId(), type: "MyCourses", courseDeadlines: {} },
     )
     const mainPanel = TmcPanel.mainPanel
     expect(mainPanel).toBeDefined()
@@ -830,7 +830,7 @@ async function mountedWebviewHtml(): Promise<string> {
     vscode.Uri.file("/ext"),
     createMockContext(),
     createMockActionContext(),
-    { id: randomPanelId(), type: "MyCourses", courseDeadlines: {} },
+    { id: nextPanelId(), type: "MyCourses", courseDeadlines: {} },
   )
   return panel.webview.html
 }
@@ -1086,7 +1086,7 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
     const { panel, getMessageListener } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
     const courseDetails = {
-      id: randomPanelId(),
+      id: nextPanelId(),
       type: "CourseDetails" as const,
       courseId: COURSE_ID,
       exerciseStatuses: { tmc: {}, mooc: {} },

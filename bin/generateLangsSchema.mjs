@@ -162,14 +162,12 @@ try {
   fs.rmSync(tmpDir, { recursive: true, force: true })
 }
 
-// Schemas shared/langsSchema.ts defines itself, so the alias file must leave
-// them alone: re-exporting them here too would shadow the hand-written ones
-// silently. `CliOutput` is wrapped in a preprocess step there,
-// `MoocOldSubmissionRestore` carries a caveat the Rust doc comment does not,
-// and the numbered `StatusUpdate*` are schemars' monomorphizations of the Rust
-// generic, which `zStatusUpdateData` already unions and which the shim exports
-// as a generic interface instead.
-const shimOwned = new Set([
+// shared/langsSchema.ts declares `CliOutput` wrapped in a preprocess step and
+// `MoocOldSubmissionRestore` with a caveat the Rust doc comment does not carry,
+// so an alias here would shadow the hand-written one silently. The numbered
+// `StatusUpdate*` are schemars' monomorphizations of the Rust generic that
+// `zStatusUpdateData` already unions.
+const notAliased = new Set([
   "CliOutput",
   "MoocOldSubmissionRestore",
   "StatusUpdate",
@@ -188,15 +186,15 @@ if (generated.length === 0) {
 }
 
 const generatedNames = new Set(generated.map((schema) => schema.name))
-for (const name of shimOwned) {
+for (const name of notAliased) {
   if (!generatedNames.has(name)) {
     throw new Error(
-      `z${name} is no longer generated; drop it from shimOwned in ${import.meta.filename}`,
+      `z${name} is no longer generated; drop it from notAliased in ${import.meta.filename}`,
     )
   }
 }
 
-const aliases = generated.filter((schema) => !shimOwned.has(schema.name))
+const aliases = generated.filter((schema) => !notAliased.has(schema.name))
 aliases.sort((a, b) => a.name.localeCompare(b.name))
 
 // A name exported from both files would resolve to the shim's copy under
@@ -211,7 +209,7 @@ const shadowed = aliases.map((schema) => schema.name).filter((name) => shimExpor
 if (shadowed.length > 0) {
   throw new Error(
     `shared/langsSchema.ts re-declares generated schema(s): ${shadowed.join(", ")}. ` +
-      "Remove the hand-written export, or add the name to shimOwned here.",
+      "Remove the hand-written export, or add the name to notAliased here.",
   )
 }
 

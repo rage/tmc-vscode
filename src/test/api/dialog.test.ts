@@ -1,4 +1,5 @@
 import { vi } from "vitest"
+import type { OutputChannel } from "vscode"
 import * as vscode from "vscode"
 
 import Dialog, { courseSelectionItems } from "../../api/dialog"
@@ -303,14 +304,32 @@ suite("Dialog.reportError", function () {
     expect(buttonTitles(show)).toEqual(["Show logs"])
   })
 
-  test("the notification holds no stack trace even when everything is logged", async function () {
+  test("a CLI failure's diagnostics reach the logs and not the notification", async function () {
+    const lines: string[] = []
+    Logger.output = {
+      appendLine: (line: string) => lines.push(line),
+      dispose: () => {},
+    } as unknown as OutputChannel
     Logger.configure(LogLevel.Verbose)
-    vi.spyOn(Logger, "error").mockImplementation(() => {})
     const show = stubMessage("showErrorMessage", () => undefined)
-    const boom = new RuntimeError(new Error("boom"))
+    const details = "at tmc_langs::submit\n\nthread 'main' panicked\nnote: run with RUST_BACKTRACE"
+    const boom = new RuntimeError(new Error("the CLI exited with 1"), details)
+    boom.cause = "EPIPE while writing the submission archive"
+
     await new Dialog().reportError("Could not run the tests.", boom)
 
-    expect(boom.stack).toBeTruthy()
-    expect(show.mock.calls[0]?.[0]).not.toContain("<TRACE>")
+    const notification = show.mock.calls[0]?.[0] as string
+    expect(notification).toBe(
+      "TestMyCode: Could not run the tests. Runtime Error: the CLI exited with 1.",
+    )
+    const logged = lines.join("\n")
+    for (const line of details.split("\n").filter(Boolean)) {
+      expect(notification).not.toContain(line)
+      expect(logged).toContain(line)
+    }
+    expect(notification).not.toContain("EPIPE")
+    expect(logged).toContain("EPIPE")
+    expect(notification).not.toContain("<TRACE>")
+    expect(logged).toContain("<TRACE>")
   })
 })

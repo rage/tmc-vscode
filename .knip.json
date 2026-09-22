@@ -11,18 +11,11 @@
     // no current code reads included; VS Code storage can still hold them.
     "src/storage/data/**": ["exports", "types", "enumMembers"],
 
-    // Dead code this gate found that nothing has deleted yet, suppressed so it
-    // binds on everything else meanwhile. Drop each line, and the
-    // ignoreDependencies below, with the code behind it.
-    "backend/controllers/index.ts": ["exports", "types"],
-    "shared/course.ts": ["exports", "types", "namespaceMembers"],
-    "shared/langsSchema.ts": ["types"],
-    "shared/protocol.ts": ["types"],
-    "src/actions/types.ts": ["types"],
-    "src/api/types.ts": ["types"],
-    "src/commands/showWelcome.ts": ["exports"],
-    "src/config/constants.ts": ["exports", "duplicates"],
-    "webview-ui/src/test/fixtures.ts": ["exports"]
+    // LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER is deliberately defined equal to
+    // LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER (both 1, for a placeholder passed
+    // exercise); each name is used independently at its own call sites, so this is
+    // not a real duplicate, just two constants knip's value-based check can't tell apart.
+    "src/config/constants.ts": ["duplicates"]
   },
   "workspaces": {
     ".": {
@@ -53,8 +46,7 @@
       // global.ts carries a triple-slash type reference rather than exports, so
       // nothing imports it; tsconfig's `include` is what pulls it in.
       "entry": ["src/**/*.test.ts", "src/global.ts"],
-      "project": ["src/**/*.{ts,svelte}", "!src/generated/**", "*.ts"],
-      "ignoreDependencies": ["@tsconfig/svelte", "tslib"]
+      "project": ["src/**/*.{ts,svelte}", "!src/generated/**", "*.ts"]
     },
     "backend": {
       "entry": ["**/*.test.ts"],

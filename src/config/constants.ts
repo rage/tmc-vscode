@@ -94,8 +94,6 @@ export const WORKSPACE_SETTINGS = {
   },
 }
 
-export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Security-Policy"}" content="default-src 'none';" /></head></html>`
-
 /**
  * If changed WORKSPACEROOTFILE is changed, remember to update
  * "workspaceContains:**\TMC-Readme.md", with the new name below

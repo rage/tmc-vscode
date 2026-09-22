@@ -102,7 +102,7 @@ suite("updateExercises command", function () {
       .mocked(postUpdateables)
       .mock.calls.map(([, exerciseIds]) => exerciseIds.map((x) => ExerciseIdentifierNs.unwrap(x)))
     expect(postedLists).toEqual([[], [10, 11]])
-    expect(dialog.errorNotification).toHaveBeenCalled()
+    expect(dialog.reportError).toHaveBeenCalled()
   })
 
   test("puts the updateable exercises back when the download throws", async function () {
