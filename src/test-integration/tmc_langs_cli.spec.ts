@@ -192,25 +192,12 @@ suite("tmc langs cli spec", function () {
       expect(details.id).to.be.equal(1)
       expect(details.name).to.be.equal("python-course")
 
-      const exercises = (await tmc.getCourseExercises(1)).unwrap()
-      expect(exercises.length).to.be.equal(2)
-
-      const settings = (await tmc.getCourseSettings(1)).unwrap()
-      expect(settings.name).to.be.equal("python-course")
-
       const courses = (await tmc.getCourses("test")).unwrap()
       expect(courses.length).to.be.equal(2)
       expect(courses.some((x) => x.name === "python-course")).to.be.true
 
-      const exercise = (await tmc.getExerciseDetails(1)).unwrap()
-      expect(exercise.exercise_name).to.be.equal("part01-01_passing_exercise")
-
       const submissions = (await tmc.getTmcOldSubmissions(1)).unwrap()
       expect(submissions.length).to.be.greaterThan(0)
-
-      const organization = (await tmc.getOrganization("test")).unwrap()
-      expect(organization.slug).to.be.equal("test")
-      expect(organization.name).to.be.equal("Test Organization")
 
       const organizations = (await tmc.getTmcOrganizations()).unwrap()
       expect(organizations.length).to.be.equal(1, "Expected to get one organization.")
@@ -223,23 +210,11 @@ suite("tmc langs cli spec", function () {
       const detailsResult = await tmc.getCourseDetails(CourseIdentifier.from(404))
       expect(detailsResult.val).to.be.instanceOf(RuntimeError)
 
-      const exercisesResult = await tmc.getCourseExercises(404)
-      expect(exercisesResult.val).to.be.instanceOf(RuntimeError)
-
-      const settingsResult = await tmc.getCourseSettings(404)
-      expect(settingsResult.val).to.be.instanceOf(RuntimeError)
-
       const coursesResult = await tmc.getCourses("404")
       expect(coursesResult.val).to.be.instanceOf(RuntimeError)
 
-      const exerciseResult = await tmc.getExerciseDetails(404)
-      expect(exerciseResult.val).to.be.instanceOf(RuntimeError)
-
       const submissionsResult = await tmc.getTmcOldSubmissions(404)
       expect(submissionsResult.val).to.be.instanceOf(RuntimeError)
-
-      const result = await tmc.getOrganization("404")
-      expect(result.val).to.be.instanceOf(RuntimeError)
     })
 
     test("should be able to give feedback", async function () {
@@ -480,34 +455,16 @@ suite("tmc langs cli spec", function () {
       const detailsResult = await tmc.getCourseDetails(CourseIdentifier.from(0))
       expect(detailsResult.val).to.be.instanceOf(RuntimeError)
 
-      const exercisesResult = await tmc.getCourseExercises(0)
-      expect(exercisesResult.val).to.be.instanceOf(RuntimeError)
-
-      const settingsResult = await tmc.getCourseSettings(0)
-      expect(settingsResult.val).to.be.instanceOf(RuntimeError)
-
       const coursesResult = await tmc.getCourses("test")
       expect(coursesResult.val).to.be.instanceOf(RuntimeError)
-
-      const exerciseResult = await tmc.getExerciseDetails(1)
-      expect(exerciseResult.val).to.be.instanceOf(RuntimeError)
 
       const submissionsResult = await tmc.getTmcOldSubmissions(1)
       expect(submissionsResult.val).to.be.instanceOf(RuntimeError)
     })
 
     test("should be able to get valid organization data", async function () {
-      const organization = await unwrapResult(tmc.getOrganization("test"))
-      expect(organization.slug).to.be.equal("test")
-      expect(organization.name).to.be.equal("Test Organization")
-
       const organizations = await unwrapResult(tmc.getTmcOrganizations())
       expect(organizations.length).to.be.equal(1, "Expected to get one organization.")
-    })
-
-    test("should encounter error if trying to get non-existing organization data", async function () {
-      const result = await tmc.getOrganization("404")
-      expect(result.val).to.be.instanceOf(RuntimeError)
     })
 
     migrationTest("should not be able to give feedback", async function () {

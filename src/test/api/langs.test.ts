@@ -20,13 +20,7 @@ import type { OutputData, OutputResult } from "../../shared/langsSchema"
 import { CliOutputData } from "../../shared/langsSchema"
 import type { BaseError } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
-import {
-  courseDetails,
-  exerciseDetails,
-  moocCourse,
-  organization,
-  submissionFinished,
-} from "../fixtures/cliOutput"
+import { courseDetails, moocCourse, submissionFinished } from "../fixtures/cliOutput"
 
 // `_spawnLangsProcess` is private; cast to `any` to stub it without spawning a
 // real tmc-langs-cli process.
@@ -1185,45 +1179,20 @@ suite("Langs response cache", function () {
     let detailCalls = 0
     stubSpawn(langs, () => {
       detailCalls += 1
-      return Ok(dataOutput("exercise-details", { ...exerciseDetails, exercise_id: detailCalls }))
+      return Ok(dataOutput("course-details", { ...courseDetails, id: detailCalls }))
     })
 
-    // One entry per exercise id; the cap is 128, so 129 ids push the first one out.
-    for (let exerciseId = 0; exerciseId <= 128; exerciseId++) {
-      await langs.getExerciseDetails(exerciseId)
+    // One entry per course id; the cap is 128, so 129 ids push the first one out.
+    for (let courseId = 0; courseId <= 128; courseId++) {
+      await langs.getCourseDetails(CourseIdentifier.from(courseId))
     }
     expect(detailCalls).toBe(129)
 
     // The newest is still cached, the oldest is not.
-    await langs.getExerciseDetails(128)
+    await langs.getCourseDetails(CourseIdentifier.from(128))
     expect(detailCalls).toBe(129)
-    await langs.getExerciseDetails(0)
+    await langs.getCourseDetails(CourseIdentifier.from(0))
     expect(detailCalls).toBe(130)
-  })
-
-  test("the organizations remapper populates per-organization cache entries", async function () {
-    const langs = newLangs()
-    const orgs = [
-      { ...organization, slug: "mooc", name: "MOOC" },
-      { ...organization, slug: "hy", name: "HY" },
-    ]
-    let orgListCalls = 0
-    let singleOrgCalls = 0
-    stubSpawn(langs, (_i, args) => {
-      if (args.includes("get-organizations")) {
-        orgListCalls += 1
-        return Ok(dataOutput("organizations", orgs))
-      }
-      singleOrgCalls += 1
-      return Ok(dataOutput("organization", orgs[0]))
-    })
-
-    await langs.getTmcOrganizations()
-    // getOrganization("mooc") must be served from the remapped cache entry.
-    const single = await langs.getOrganization("mooc")
-    expect(orgListCalls).toBe(1)
-    expect(singleOrgCalls).toBe(0)
-    expect(single.val).toEqual(orgs[0])
   })
 })
 

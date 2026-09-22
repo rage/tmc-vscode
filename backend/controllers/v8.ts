@@ -225,14 +225,14 @@ export const registerV8Routes = (
 
   const authenticated = requireAccessToken(options.requireAuth ?? true)
 
-  // getCourseSettings(0)
+  // getTmcCourseData(0), settings leg
   for (const course of testCourses) {
     app.get(`/api/v8/courses/${course.id}`, authenticated, (_req, res: Response<CourseSettings>) =>
       res.json(course),
     )
   }
 
-  // getCourseExercises(0)
+  // getTmcCourseData(0), exercises leg
   for (const { course, exercises } of courseExercises) {
     app.get(
       `/api/v8/courses/${course.id}/exercises`,
@@ -244,7 +244,6 @@ export const registerV8Routes = (
   // getOrganizations()
   app.get("/api/v8/org.json", (_req, res: Response<Organization[]>) => res.json(organizations))
 
-  // getOrganizations("test")
   for (const org of organizations) {
     app.get(`/api/v8/org/${org.slug}.json`, (_req, res: Response<Organization>) => {
       res.json(org)
@@ -289,7 +288,6 @@ export const registerV8Routes = (
     })
   })
 
-  // getExerciseDetails(1)
   for (const { course, exercises } of courseExercises) {
     for (const { exercise } of exercises) {
       app.get(

@@ -34,13 +34,10 @@ import {
 import type {
   CombinedCourseData,
   Course,
-  CourseData,
   CourseDetails,
-  CourseExercise,
   DataKind,
   DownloadOrUpdateMoocCourseExercisesResult,
   DownloadOrUpdateTmcCourseExercisesResult,
-  ExerciseDetails,
   ExerciseTaskSubmissionStatus,
   LocalExercise,
   LocalMoocExercise,
@@ -76,9 +73,7 @@ import type { FractionProgress } from "./dialog"
 import type { SubmissionFeedback } from "./types"
 
 interface Options {
-  apiCacheLifetime?: string | undefined
   cliConfigDir?: string | undefined
-  timeout?: number | undefined
 }
 
 interface ExecutionOptions {
@@ -94,15 +89,12 @@ interface LangsProcessArgs {
    */
   backend?: BackendKind | undefined
   env?: Record<string, string> | undefined
-  /** Which args should be obfuscated in logs. */
-  obfuscate?: number[] | undefined
   onStdout?: ((data: StatusUpdateData) => void) | undefined
   /**
    * Surfaces a CLI notification to the user. Set only for commands the user is watching,
    * so a background poll cannot toast.
    */
   onNotification?: ((notification: Notification) => void) | undefined
-  stdin?: string | undefined
   processTimeout?: number | undefined
   /** Set on login/logout commands, where an auth-flavored error is expected rather than a lost session. */
   suppressAuthEvents?: boolean | undefined
@@ -176,16 +168,6 @@ const MAX_LOGGED_ARG_LENGTH = 120
  */
 function loggableArg(arg: string): string {
   return arg.length > MAX_LOGGED_ARG_LENGTH ? `<${arg.length} characters>` : arg
-}
-
-const organizationsRemapper: CacheConfig["remapper"] = (res) => {
-  if (res.data?.["output-data-kind"] === "organizations") {
-    return res.data["output-data"].map((x) => [
-      cacheKey("tmc", "organization", x.slug),
-      { ...res, data: { "output-data-kind": "organization", "output-data": x } },
-    ])
-  }
-  return []
 }
 
 /** Ample for the failure diagnostics stderr feeds; a test run can write orders of magnitude more. */
@@ -1035,37 +1017,27 @@ export default class Langs {
    * command internally.
    *
    * @param courseId Id to the course.
-   * @returns A combination of getCourseDetails, getCourseExercises, getCourseSettings.
+   * @returns The course's details, its exercises and its settings in one response.
    */
   public async getTmcCourseData(
     courseId: number,
     options?: CacheOptions,
   ): Promise<Result<CombinedCourseData, Error>> {
+    // The combined response contains the course details `getCourseDetails` fetches on its
+    // own, so serving that entry from here saves the second call.
     const remapper: CacheConfig["remapper"] = (response) => {
       if (response.data?.["output-data-kind"] !== "combined-course-data") {
         return []
       }
-      const { details, exercises, settings } = response.data["output-data"]
       return [
         [
           cacheKey("tmc", "course-details", courseId),
           {
             ...response,
-            data: { "output-data-kind": "course-details", "output-data": details },
-          },
-        ],
-        [
-          cacheKey("tmc", "course-exercises", courseId),
-          {
-            ...response,
-            data: { "output-data-kind": "course-exercises", "output-data": exercises },
-          },
-        ],
-        [
-          cacheKey("tmc", "course-settings", courseId),
-          {
-            ...response,
-            data: { "output-data-kind": "course-data", "output-data": settings },
+            data: {
+              "output-data-kind": "course-details",
+              "output-data": response.data["output-data"].details,
+            },
           },
         ],
       ]
@@ -1187,72 +1159,6 @@ export default class Langs {
   }
 
   /**
-   * Gets exercises of the given course. Each exercise includes information about available and
-   * awarded points. Uses TMC-langs `get-course-exercises` core command internally.
-   *
-   * @param courseId Id of the course.
-   * @returns Array of the course's exercises.
-   */
-  public async getCourseExercises(
-    courseId: number,
-    options?: CacheOptions,
-  ): Promise<Result<CourseExercise[], Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        backend: "tmc",
-        args: this._tmcCmd("get-course-exercises", "--course-id", courseId.toString()),
-      },
-      "course-exercises",
-      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "course-exercises", courseId) },
-    )
-    return res.map((x) => x.data["output-data"])
-  }
-
-  /**
-   * Gets general course info of the given course. Uses TMC-langs `get-course-settings` core
-   * command internally.
-   *
-   * @param courseId Id of the course.
-   * @returns Info of the course.
-   */
-  public async getCourseSettings(
-    courseId: number,
-    options?: CacheOptions,
-  ): Promise<Result<CourseData, Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        backend: "tmc",
-        args: this._tmcCmd("get-course-settings", "--course-id", courseId.toString()),
-      },
-      "course-data",
-      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "course-settings", courseId) },
-    )
-    return res.map((x) => x.data["output-data"])
-  }
-
-  /**
-   * Gets details of the given exercise. Uses TMC-langs `get-exercise-details` core command
-   * internally.
-   *
-   * @param exerciseId Id of the exercise.
-   * @returns Details of the exercise.
-   */
-  public async getExerciseDetails(
-    exerciseId: number,
-    options?: CacheOptions,
-  ): Promise<Result<ExerciseDetails, Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        backend: "tmc",
-        args: this._tmcCmd("get-exercise-details", "--exercise-id", exerciseId.toString()),
-      },
-      "exercise-details",
-      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "exercise-details", exerciseId) },
-    )
-    return res.map((x) => x.data["output-data"])
-  }
-
-  /**
    * Gets user's old submissions for the given exercise. Uses TMC-langs `get-exercise-submissions`
    * core command internally.
    *
@@ -1284,31 +1190,6 @@ export default class Langs {
   }
 
   /**
-   * Gets data of the given organization. Uses TMC-langs `get-organization` core command
-   * internally.
-   *
-   * @param organizationSlug Slug of the organization.
-   * @returns Organization matching the given slug.
-   */
-  public async getOrganization(
-    organizationSlug: string,
-    options?: CacheOptions,
-  ): Promise<Result<Organization, Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        backend: "tmc",
-        args: this._tmcCmd("get-organization", "--organization", organizationSlug),
-      },
-      "organization",
-      {
-        forceRefresh: options?.forceRefresh,
-        key: cacheKey("tmc", "organization", organizationSlug),
-      },
-    )
-    return res.map((x) => x.data["output-data"])
-  }
-
-  /**
    * Gets all organizations. Uses TMC-langs `get-organizations` core command internally.
    *
    * @returns A list of organizations.
@@ -1320,11 +1201,7 @@ export default class Langs {
         args: this._tmcCmd("get-organizations"),
       },
       "organizations",
-      {
-        forceRefresh: options?.forceRefresh,
-        key: cacheKey("tmc", "organizations"),
-        remapper: organizationsRemapper,
-      },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "organizations") },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -1862,16 +1739,8 @@ export default class Langs {
   private _spawnLangsProcess(
     commandArgs: LangsProcessArgs,
   ): Result<LangsProcessRunner, InitializationError | SpawnError> {
-    const {
-      args,
-      env,
-      obfuscate,
-      onStdout,
-      onNotification,
-      stdin,
-      processTimeout,
-      interruptOnDeactivate,
-    } = commandArgs
+    const { args, env, onStdout, onNotification, processTimeout, interruptOnDeactivate } =
+      commandArgs
 
     let theResult: OutputData | undefined
     let stdoutBuffer = ""
@@ -1880,7 +1749,7 @@ export default class Langs {
     let lastSchemaFailure: LangsSchemaFailure | undefined
 
     const loggableCommand = [this.cliPath]
-      .concat(args.map((x, i) => (obfuscate?.includes(i) ? "***" : loggableArg(x))))
+      .concat(args.map((arg) => loggableArg(arg)))
       .map((x) => JSON.stringify(x))
       .join(" ")
 
@@ -1937,12 +1806,6 @@ export default class Langs {
     // the stream makes Node hold an incomplete sequence until the rest of it arrives.
     cprocess.stdout.setEncoding("utf8")
     cprocess.stderr.setEncoding("utf8")
-    if (stdin) {
-      // A CLI reading stdin blocks until EOF, so the write has to be closed. The listener
-      // keeps an EPIPE from a child that exited early off the unhandled-error path.
-      cprocess.stdin.on("error", (error) => Logger.warn("Failed to write to langs stdin", error))
-      cprocess.stdin.end(stdin + "\n")
-    }
 
     const stderr = new BoundedStderr()
     const processResult = new Promise<number | null>((resolve, reject) => {
