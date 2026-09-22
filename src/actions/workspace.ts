@@ -80,9 +80,7 @@ export async function openExercises(
               mooc: {},
             },
           }
-          void TmcPanel.renderMain(context.extensionUri, context, actionContext, panel).catch((e) =>
-            Logger.error("Failed to open course details.", e),
-          )
+          TmcPanel.renderMain(context.extensionUri, context, actionContext, panel)
         },
       ],
     )

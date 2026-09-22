@@ -95,7 +95,7 @@ suite("TmcPanel moocLogin handling", () => {
 
     // Render the MoocLogin panel standalone, the way `tmc.showMoocLogin` does.
     const loginPanelId = nextPanelId()
-    await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
+    TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
       id: loginPanelId,
       type: "MoocLogin",
     })
@@ -147,7 +147,7 @@ async function mountSidePanel(
 
   const extensionUri = vscode.Uri.file("/ext")
 
-  await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
+  TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
     id: nextPanelId(),
     type: "MyCourses",
     courseDeadlines: {},
@@ -1036,13 +1036,13 @@ suite("TmcPanel main panel lifecycle", () => {
     const extensionUri = vscode.Uri.file("/ext")
     const actionContext = createMockActionContext()
 
-    await TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
+    TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
       type: "MyCourses",
       courseDeadlines: {},
     })
     vi.mocked(panel.webview.postMessage).mockClear()
-    await TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
+    TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
       type: "Welcome",
     })
@@ -1065,20 +1065,20 @@ suite("TmcPanel main panel lifecycle", () => {
     const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
 
     createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
-    await TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
+    TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
       type: "MyCourses",
       courseDeadlines: {},
     })
     const side = createFakeWebviewPanel()
     createWebviewPanel.mockReturnValue(side.panel)
-    await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
+    TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
       type: "MyCourses",
       courseDeadlines: {},
     })
 
-    await TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
+    TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
       type: "Welcome",
     })
@@ -1091,12 +1091,11 @@ suite("TmcPanel main panel lifecycle", () => {
     const { panel, dispose } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
 
-    await TmcPanel.renderMain(
-      vscode.Uri.file("/ext"),
-      createMockContext(),
-      createMockActionContext(),
-      { id: nextPanelId(), type: "MyCourses", courseDeadlines: {} },
-    )
+    TmcPanel.renderMain(vscode.Uri.file("/ext"), createMockContext(), createMockActionContext(), {
+      id: nextPanelId(),
+      type: "MyCourses",
+      courseDeadlines: {},
+    })
     const mainPanel = TmcPanel.mainPanel
     expect(mainPanel).toBeDefined()
 
@@ -1113,12 +1112,11 @@ async function mountedWebviewHtml(): Promise<string> {
   const { panel } = createFakeWebviewPanel()
   vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
 
-  await TmcPanel.renderMain(
-    vscode.Uri.file("/ext"),
-    createMockContext(),
-    createMockActionContext(),
-    { id: nextPanelId(), type: "MyCourses", courseDeadlines: {} },
-  )
+  TmcPanel.renderMain(vscode.Uri.file("/ext"), createMockContext(), createMockActionContext(), {
+    id: nextPanelId(),
+    type: "MyCourses",
+    courseDeadlines: {},
+  })
   return panel.webview.html
 }
 
@@ -1380,12 +1378,7 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
       courseId: COURSE_ID,
       exerciseStatuses: { tmc: {}, mooc: {} },
     }
-    await TmcPanel.renderSide(
-      vscode.Uri.file("/ext"),
-      createMockContext(),
-      actionContext,
-      courseDetails,
-    )
+    TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, courseDetails)
     const listener = getMessageListener()
     await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel: courseDetails })
     vi.mocked(panel.webview.postMessage).mockClear()

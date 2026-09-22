@@ -202,18 +202,18 @@ export class TmcPanel {
   }
 
   // renders the `panel` in the main panel
-  public static async renderMain(
+  public static renderMain(
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     panel: Panel,
-  ): Promise<void> {
+  ): void {
     if (TmcPanel.mainPanel !== undefined) {
       Logger.info(`Revealing existing main panel for "${panel.type}"`)
       TmcPanel.mainPanel._renderPanel(panel)
       TmcPanel.mainPanel._panel.reveal(ViewColumn.One, false)
     } else {
-      TmcPanel.mainPanel = await TmcPanel.renderNew(
+      TmcPanel.mainPanel = TmcPanel.renderNew(
         extensionUri,
         extensionContext,
         actionContext,
@@ -224,12 +224,12 @@ export class TmcPanel {
   }
 
   // renders the `panel` in the side panel
-  public static async renderSide(
+  public static renderSide(
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     panel: Panel,
-  ): Promise<void> {
+  ): void {
     const column = ViewColumn.Two
     // Navigating away from an in-flight mooc login abandons it, so kill its CLI
     // process. Exempt for re-entering MoocLogin: the new `moocLogin` handler
@@ -242,7 +242,7 @@ export class TmcPanel {
       TmcPanel.sidePanel._renderPanel(panel)
       TmcPanel.sidePanel._panel.reveal(column, false)
     } else {
-      const currentPanel = await TmcPanel.renderNew(
+      const currentPanel = TmcPanel.renderNew(
         extensionUri,
         extensionContext,
         actionContext,
@@ -255,13 +255,13 @@ export class TmcPanel {
 
   // convenience function for rendering a main/side panel when no main/side panel exists yet
   // otherwise the panel can simply be "revealed" with `panel.reveal`
-  public static async renderNew(
+  public static renderNew(
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     panel: Panel,
     isMain: boolean,
-  ): Promise<TmcPanel> {
+  ): TmcPanel {
     let panelViewType
     let column
     if (isMain) {

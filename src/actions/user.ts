@@ -128,7 +128,7 @@ export async function testExercise(
         exerciseUri: exercise.uri,
         testRunId,
       }
-      await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+      TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
       const target = panelTarget(panel)
 
       if (!course.data.perhapsExamMode) {
@@ -181,7 +181,7 @@ export async function testExercise(
 
           if (TmcPanel.sidePanel === undefined) {
             // user closed panel, re-render
-            await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+            TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
           }
           TmcPanel.postMessage({
             type: "testResults",
@@ -354,7 +354,7 @@ export async function submitExercise(
         course,
         exercise: courseExercise,
       }
-      await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+      TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
       const target = panelTarget(panel)
 
       const outcome = await submit(target, exercisePath)
@@ -385,7 +385,7 @@ export async function submitExercise(
       }
 
       if (TmcPanel.sidePanel === undefined) {
-        await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+        TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
       }
       TmcPanel.postMessage(outcome.val.resultMessage)
 

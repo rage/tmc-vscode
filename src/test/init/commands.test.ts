@@ -205,7 +205,7 @@ suite("registerCommands", function () {
   })
 
   test("the login command opens the courses.mooc.fi device flow", async function () {
-    const renderSide = vi.spyOn(TmcPanel, "renderSide").mockResolvedValue(undefined)
+    const renderSide = vi.spyOn(TmcPanel, "renderSide").mockReturnValue(undefined)
     const { handlers } = registerAndCollect()
 
     await handlers.get("tmc.showMoocLogin")?.()
@@ -217,7 +217,9 @@ suite("registerCommands", function () {
   // VS Code discards a rejected handler promise, so a command that throws would
   // otherwise leave the user staring at an unchanged screen.
   test("a failing command reports instead of rejecting", async function () {
-    vi.spyOn(TmcPanel, "renderSide").mockRejectedValue(new Error("the panel could not open"))
+    vi.spyOn(TmcPanel, "renderSide").mockImplementation(() => {
+      throw new Error("the panel could not open")
+    })
     const { handlers, actionContext } = registerAndCollect()
 
     await expect(handlers.get("tmc.showMoocLogin")?.()).resolves.toBeUndefined()
@@ -338,7 +340,7 @@ suite("registered command handlers", function () {
   })
 
   test("tmc.viewInitializationErrorHelp opens the recovery panel even when degraded", async function () {
-    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockResolvedValue(undefined)
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
     const { handlers, context, actionContext } = registerAndCollect(createDegradedContext())
 
     await handlers.get("tmc.viewInitializationErrorHelp")?.()
@@ -464,7 +466,7 @@ suite("registered command handlers", function () {
   })
 
   test("tmc.myCourses opens the courses panel", async function () {
-    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockResolvedValue(undefined)
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
     const { handlers, context, actionContext } = registerAndCollect()
 
     await handlers.get("tmc.myCourses")?.()
@@ -478,7 +480,7 @@ suite("registered command handlers", function () {
   })
 
   test("tmc.showWelcome opens the welcome panel", async function () {
-    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockResolvedValue(undefined)
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
     const { handlers, context, actionContext } = registerAndCollect()
 
     await handlers.get("tmc.showWelcome")?.()
@@ -493,7 +495,7 @@ suite("registered command handlers", function () {
 
   test("tmc.courseDetails opens the given course without asking to pick one", async function () {
     const pickCourse = vi.spyOn(commands, "pickCourse").mockResolvedValue(undefined)
-    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockResolvedValue(undefined)
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
     const { handlers, context, actionContext } = registerAndCollect()
     const courseId = CourseIdentifier.from(7)
 
@@ -511,7 +513,7 @@ suite("registered command handlers", function () {
   test("tmc.courseDetails asks the user to pick a course when none is given", async function () {
     const courseId = CourseIdentifier.from("course-uuid")
     vi.spyOn(commands, "pickCourse").mockResolvedValue(courseId)
-    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockResolvedValue(undefined)
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
     const { handlers, context, actionContext } = registerAndCollect()
 
     await handlers.get("tmc.courseDetails")?.(undefined)
@@ -526,7 +528,7 @@ suite("registered command handlers", function () {
 
   test("tmc.courseDetails opens nothing when the pick is dismissed", async function () {
     vi.spyOn(commands, "pickCourse").mockResolvedValue(undefined)
-    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockResolvedValue(undefined)
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
     const { handlers } = registerAndCollect()
 
     await handlers.get("tmc.courseDetails")?.(undefined)

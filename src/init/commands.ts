@@ -116,8 +116,8 @@ export function registerCommands(
 
   const register = commandRegistrar(context, dialog)
 
-  register("tmc.viewInitializationErrorHelp", async () => {
-    await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+  register("tmc.viewInitializationErrorHelp", () => {
+    TmcPanel.renderMain(context.extensionUri, context, actionContext, {
       id: nextPanelId(),
       type: "InitializationErrorHelp",
     })
@@ -158,7 +158,7 @@ export function registerCommands(
       placeHolder: "Which course page do you want to open?",
     })
     if (courseId) {
-      await TmcPanel.renderMain(context.extensionUri, context, readyContext, {
+      TmcPanel.renderMain(context.extensionUri, context, readyContext, {
         id: nextPanelId(),
         type: "CourseDetails",
         courseId,
@@ -175,8 +175,8 @@ export function registerCommands(
 
   register("tmc.logout", async () => commands.logout(readyContext))
 
-  register("tmc.myCourses", async () => {
-    await TmcPanel.renderMain(context.extensionUri, context, readyContext, {
+  register("tmc.myCourses", () => {
+    TmcPanel.renderMain(context.extensionUri, context, readyContext, {
       id: nextPanelId(),
       type: "MyCourses",
       courseDeadlines: {},
@@ -204,16 +204,16 @@ export function registerCommands(
     commands.resetExercise(readyContext, resource),
   )
 
-  register("tmc.showWelcome", async () => {
-    await TmcPanel.renderMain(context.extensionUri, context, readyContext, {
+  register("tmc.showWelcome", () => {
+    TmcPanel.renderMain(context.extensionUri, context, readyContext, {
       id: nextPanelId(),
       type: "Welcome",
     })
   })
 
   // The extension's only login: the courses.mooc.fi device flow.
-  register("tmc.showMoocLogin", async () => {
-    await TmcPanel.renderSide(context.extensionUri, context, readyContext, {
+  register("tmc.showMoocLogin", () => {
+    TmcPanel.renderSide(context.extensionUri, context, readyContext, {
       id: nextPanelId(),
       type: "MoocLogin",
     })
