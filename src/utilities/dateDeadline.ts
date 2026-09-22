@@ -1,16 +1,13 @@
 import { Logger } from "./logger"
 
 /**
- * Parses a timestamp as a backend spells it into a date.
- *
- * An unparseable string yields an `Invalid Date`, which is truthy and compares `false`
- * against every other date. Everything below rejects one rather than let it win a
- * comparison or reach the panel, so callers outside this module should do the same.
+ * Parses a timestamp as a backend spells it into a date, or `null` if it cannot be parsed.
  */
-export function parseDate(dateAsString: string): Date {
+export function parseDate(dateAsString: string): Date | null {
   const date = new Date(Date.parse(dateAsString))
   if (!isRealDate(date)) {
     Logger.warn(`Unparseable timestamp from the backend: ${dateAsString}`)
+    return null
   }
   return date
 }

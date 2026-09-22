@@ -84,9 +84,9 @@ suite("Date utils", () => {
 
   test("an unparseable deadline neither renders nor hides a real one", () => {
     const invalid = parseDate("whenever")
-    expect(Number.isNaN(invalid.getTime()), "Test needs a string Date cannot parse.").toBe(true)
+    expect(invalid, "An unparseable timestamp must not become a date.").toBeNull()
 
-    expect(dateToString(invalid), "An unrenderable date must not render as text.").toBe("")
+    expect(dateToString(new Date(NaN)), "An unrenderable date must not render as text.").toBe("")
     expect(
       parseNextDeadlineAfter(CURRENT_TIME, [{ date: invalid, active: true }]),
       "A lone unparseable deadline is no deadline.",
