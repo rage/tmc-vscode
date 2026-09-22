@@ -597,6 +597,25 @@ const validCliOutputFixtures: CliOutputFixture[] = [
       },
     }),
   },
+  {
+    name: "mooc-combined-course-data",
+    value: outputData("mooc-combined-course-data", {
+      course: moocCourse,
+      progress: {
+        course_id: UUID_A,
+        exercises: [
+          {
+            exercise_id: UUID_B,
+            score_given: 1.5,
+            score_maximum: 2,
+            completed: false,
+            attempted: true,
+          },
+        ],
+      },
+      slides: [moocExerciseSlide],
+    }),
+  },
   { name: "mooc-course", value: outputData("mooc-course", moocCourse) },
   { name: "mooc-courses", value: outputData("mooc-courses", [moocCourse]) },
   {
