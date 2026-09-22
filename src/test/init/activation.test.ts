@@ -9,6 +9,7 @@ import * as vscode from "vscode"
 import { EXERCISE_CHECK_INTERVAL } from "../../config/constants"
 import { CorruptStoredDataError } from "../../errors"
 import { activate } from "../../extension"
+import type { BackendKind } from "../../shared/shared"
 import { Logger, LogLevel } from "../../utilities"
 import { createMockMemento } from "../mocks/vscode"
 
@@ -36,7 +37,7 @@ const langsStub = vi.hoisted(() => ({
 const workspaceManagerStub = vi.hoisted(() => ({
   persistClosedExercises: undefined as
     | ((
-        backend: "tmc" | "mooc",
+        backend: BackendKind,
         courseSlug: string,
         closedExerciseSlugs: string[],
       ) => Promise<unknown>)

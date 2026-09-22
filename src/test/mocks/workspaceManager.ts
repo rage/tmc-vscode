@@ -5,13 +5,14 @@ import type * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import type WorkspaceManager from "../../api/workspaceManager"
+import type { BackendKind } from "../../shared/shared"
 import { workspaceExercises } from "../fixtures/workspaceManager"
 
 const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."))
 
 export interface WorkspaceManagerMockValues {
   activeCourse?: string | undefined
-  activeCourseBackend?: "tmc" | "mooc" | undefined
+  activeCourseBackend?: BackendKind | undefined
   activeExercise?: Readonly<WorkspaceExercise> | undefined
   closeExercises: Result<WorkspaceExercise[], Error>
   getExerciseByPath: Readonly<WorkspaceExercise> | undefined

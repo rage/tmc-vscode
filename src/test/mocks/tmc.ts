@@ -12,7 +12,7 @@ import type {
   MoocCourseProgress,
   TmcExerciseSlide,
 } from "../../shared/langsSchema"
-import type { ExerciseIdentifier } from "../../shared/shared"
+import type { BackendKind, ExerciseIdentifier } from "../../shared/shared"
 import {
   closedExercisesPythonCourse,
   listLocalCourseExercisesPythonCourse,
@@ -134,7 +134,7 @@ function setupMockValues(values: TMCMockValues): Langs {
     ),
     migrateExercise: vi.fn(async () => values.migrateExercise),
     moveProjectsDirectory: vi.fn(async () => values.moveProjectsDirectory),
-    checkExerciseUpdates: vi.fn(async (backend: "tmc" | "mooc") =>
+    checkExerciseUpdates: vi.fn(async (backend: BackendKind) =>
       backend === "tmc" ? values.tmcExerciseUpdates : values.moocExerciseUpdates,
     ),
     isMoocAuthenticated: vi.fn(async () => values.isMoocAuthenticated),
