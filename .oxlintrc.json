@@ -22,8 +22,6 @@
     "**/test-resources/**",
     "**/submodules/**",
     "shared/generated/**",
-    "src/shared/**",
-    "webview-ui/src/shared/**",
     "webview-ui/public/build/**",
     "backend/cli/**",
     "backend/resources/**"
