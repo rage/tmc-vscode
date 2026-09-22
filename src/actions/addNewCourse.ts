@@ -78,10 +78,6 @@ export async function addNewCourse(
         Logger.warn("Failed to fetch mooc course progress", progressRes.val)
       }
 
-      // One local exercise per slide, keyed by the slide's exercise id (a UUID).
-      // The bulk download/update CLI subcommand resolves `--exercise-id` against
-      // `slide.exercise_id`, so the exercise id (not the task id) is the identity
-      // the extension must carry.
       const exercises = combineMoocApiExerciseData(
         slides,
         progressRes.ok ? progressRes.val : undefined,
