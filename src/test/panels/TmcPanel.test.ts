@@ -127,6 +127,41 @@ suite("TmcPanel moocLogin handling", () => {
     expect(executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
     executeCommand.mockRestore()
   })
+
+  const loginPanel = { id: 9, type: "MoocLogin" }
+
+  test("answers the waiting panel when the extension is not initialized", async () => {
+    const actionContext = createDegradedContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "moocLogin", sourcePanel: loginPanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "moocLoginError", target: loginPanel }),
+    )
+  })
+
+  test("answers the waiting panel when the login rejects", async () => {
+    const actionContext = createMockActionContext()
+    actionContext.startup.langs = {
+      authenticateMooc: () => ({
+        result: Promise.reject(new Error("the CLI crashed")),
+        interrupt: vi.fn(),
+      }),
+    } as unknown as Langs
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "moocLogin", sourcePanel: loginPanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "moocLoginError",
+        target: loginPanel,
+        error: "the CLI crashed",
+      }),
+    )
+    expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
+  })
 })
 
 // Mounts a fresh side panel (resetting any panel state a previous test left

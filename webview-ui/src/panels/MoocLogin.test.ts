@@ -144,6 +144,39 @@ suite("MoocLogin panel", () => {
     expect(Object.getOwnPropertyDescriptor(navigator, "clipboard")).toEqual(clipboardBeforeStub)
   })
 
+  test("gives up on a login that never produces a device code", async () => {
+    vi.useFakeTimers()
+    try {
+      render(MoocLogin, { props: { panel } })
+      postedMessages.mockClear()
+      await vi.advanceTimersByTimeAsync(60_000)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("no sign-in code arrived in time")
+    expect(getButton("Try again")).toBeInTheDocument()
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "cancelMoocLogin",
+      sourcePanel: { id: panel.id, type: panel.type },
+    })
+  })
+
+  test("waits for approval for as long as it takes", async () => {
+    vi.useFakeTimers()
+    try {
+      render(MoocLogin, { props: { panel } })
+      dispatchToWebview(deviceCodeMessage)
+      postedMessages.mockClear()
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(await screen.findByText("Waiting for approval…")).toBeInTheDocument()
+    expect(postedMessages).not.toHaveBeenCalled()
+  })
+
   test("shows the error state on a moocLoginError message", async () => {
     render(MoocLogin, { props: { panel } })
     dispatchToWebview({

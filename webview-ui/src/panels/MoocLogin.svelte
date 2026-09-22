@@ -36,6 +36,22 @@
     return () => clearTimeout(clear)
   })
 
+  // Outlasts tmc-langs' 30 s auth request timeout, so it fires only when no answer is coming
+  // at all. "awaiting" has no bound: approving in the browser can take minutes.
+  const STARTING_TIMEOUT_MS = 60_000
+
+  $effect(() => {
+    if (status !== "starting") {
+      return
+    }
+    const watchdog = setTimeout(() => {
+      abandonLogin()
+      errorMessage = "no sign-in code arrived in time."
+      status = "error"
+    }, STARTING_TIMEOUT_MS)
+    return () => clearTimeout(watchdog)
+  })
+
   function startLogin() {
     status = "starting"
     device = null
@@ -109,13 +125,18 @@
     }
   }
 
-  function cancel() {
-    status = "cancelled"
+  // Kills the host's CLI process; a cancelled attempt posts nothing more.
+  function abandonLogin() {
     // Post only the panel identity: `cancelMoocLogin`'s strict target schema rejects extra keys.
     vscode.postMessage({
       type: "cancelMoocLogin",
       sourcePanel: { id: panel.id, type: panel.type },
     })
+  }
+
+  function cancel() {
+    status = "cancelled"
+    abandonLogin()
   }
 </script>
 

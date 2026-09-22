@@ -1,5 +1,6 @@
 import getFolderSize from "get-folder-size"
 import type { Result } from "ts-results"
+import { Err } from "ts-results"
 import type { Disposable, Webview, WebviewPanel } from "vscode"
 import { Uri, ViewColumn, window } from "vscode"
 import * as vscode from "vscode"
@@ -831,12 +832,18 @@ export class TmcPanel {
             break
           }
           case "moocLogin": {
+            const moocLoginPanel = message.sourcePanel
             if (!isReady(actionContext)) {
               reportNotInitialized(actionContext.dialog)
+              // The panel shows "starting" until it hears back.
+              postMessageToWebview(webview, {
+                type: "moocLoginError",
+                target: moocLoginPanel,
+                error: NOT_INITIALIZED_MESSAGE,
+              })
               return
             }
             const { langs } = actionContext.startup
-            const moocLoginPanel = message.sourcePanel
             // Set below, after `authenticateMooc` returns; the callback fires
             // asynchronously so it always sees the real id.
             let invocationId = 0
@@ -860,7 +867,10 @@ export class TmcPanel {
             // Interrupt-and-replaces any login already in flight, so two `mooc
             // login` processes never race on the credentials file.
             invocationId = moocLoginRegistry.start(moocLoginPanel.id, interrupt)
-            const loginResult = await result
+            // Caught here rather than by `reportingFailures`, which would leave the panel waiting.
+            const loginResult = await result.catch((error: unknown) =>
+              Err(error instanceof Error ? error : new Error(String(error))),
+            )
             if (!moocLoginRegistry.isCurrent(invocationId)) {
               // Superseded or cancelled while polling; leave the live attempt's
               // registry entry untouched.
