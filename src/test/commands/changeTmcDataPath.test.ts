@@ -30,7 +30,7 @@ function harness(): Harness {
   dialog.notification = vi.fn(async (message: string) => {
     notifications.push(message)
   })
-  dialog.errorNotification = vi.fn(async (message: string) => {
+  dialog.reportError = vi.fn(async (message: string) => {
     errors.push(message)
   })
   return {
@@ -88,6 +88,6 @@ suite("Change TMC data path command", function () {
     await changeTmcDataPath(context)
 
     expect(notifications).toEqual([])
-    expect(errors).toEqual(["Failed to read the folder"])
+    expect(errors).toEqual(["Failed to move the projects directory."])
   })
 })

@@ -58,11 +58,14 @@ export async function runForExercise<T>(
     const error = result.val
     // A headline `failure` added hides the error it wraps, so report the cause as the
     // detail — and read a cancellation through the wrapper, or it turns into a popup.
-    const cause = error.cause instanceof Error ? error.cause : error
-    if (cause instanceof BottleneckError) {
-      Logger.warn(`${label} was cancelled.`, cause)
+    const cause = error.cause instanceof Error ? error.cause : undefined
+    const headline = error.message || `${label} failed.`
+    if (cause instanceof BottleneckError || error instanceof BottleneckError) {
+      Logger.warn(`${label} was cancelled.`, cause ?? error)
+    } else if (cause) {
+      dialog.reportError(headline, cause, exercise.backend)
     } else {
-      dialog.errorNotification(error.message || `${label} failed.`, cause)
+      dialog.errorNotification(headline, error)
     }
   }
   return result

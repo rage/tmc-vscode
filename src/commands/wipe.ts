@@ -31,7 +31,7 @@ export async function wipe(
 
   if (workspaceManager.val.activeCourse) {
     dialog.warningNotification(
-      "Extension data can't be wiped now because a TMC Workspace is open. \
+      "Extension data can't be wiped now because a course workspace is open. \
 Please close the workspace and any related files before running this command again.",
       [
         "Close workspace",
@@ -103,7 +103,7 @@ and every setting and course this extension has stored will be cleared.",
   })
 
   if (wipeResult.err) {
-    dialog.errorNotification("Failed to wipe extension data.", wipeResult.val)
+    dialog.reportError("Failed to wipe extension data.", wipeResult.val)
     return
   }
 

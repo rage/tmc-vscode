@@ -30,7 +30,7 @@ export async function updateExercises(
   if (updateablesResult.err) {
     Logger.warn("Failed to check for exercise updates.", updateablesResult.val)
     if (!silent) {
-      dialog.errorNotification("Failed to check for exercise updates.")
+      dialog.reportError("Failed to check for exercise updates.", updateablesResult.val)
     }
     return
   }
@@ -79,7 +79,7 @@ export async function updateExercises(
           exercisesToUpdate.map((x) => x.exerciseId),
         )
         if (downloadResult.err) {
-          dialog.errorNotification("Failed to update exercises.", downloadResult.val)
+          dialog.reportError("Failed to update exercises.", downloadResult.val)
           return undefined
         }
         return downloadResult.val.failed
@@ -102,7 +102,7 @@ export async function updateExercises(
         for (const courseId of coursesToUpdate.values()) {
           const result = await userData.val.setNewExerciseNotifyAfter(courseId, notifyAfter)
           if (result.err) {
-            dialog.errorNotification("Failed to postpone the reminder.", result.val)
+            dialog.reportError("Failed to postpone the reminder.", result.val)
             return
           }
         }
