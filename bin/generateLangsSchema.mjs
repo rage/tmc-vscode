@@ -162,13 +162,12 @@ try {
   fs.rmSync(tmpDir, { recursive: true, force: true })
 }
 
-// Schemas shared/langsSchema.ts defines itself, so the alias file must leave
-// them alone: re-exporting them here too would shadow the hand-written ones
-// silently. `CliOutput` is wrapped in a preprocess step there,
-// `MoocOldSubmissionRestore` carries a caveat the Rust doc comment does not,
-// and the numbered `StatusUpdate*` are schemars' monomorphizations of the Rust
-// generic, which `zStatusUpdateData` already unions and which the shim exports
-// as a generic interface instead.
+// Names the alias file must not export. shared/langsSchema.ts declares
+// `CliOutput` wrapped in a preprocess step and `MoocOldSubmissionRestore` with a
+// caveat the Rust doc comment does not carry, so re-exporting either here would
+// shadow the hand-written one silently. The numbered `StatusUpdate*` are
+// schemars' monomorphizations of the Rust generic that `zStatusUpdateData`
+// already unions.
 const shimOwned = new Set([
   "CliOutput",
   "MoocOldSubmissionRestore",
