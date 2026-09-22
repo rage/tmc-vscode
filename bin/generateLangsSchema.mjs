@@ -162,13 +162,12 @@ try {
   fs.rmSync(tmpDir, { recursive: true, force: true })
 }
 
-// Names the alias file must not export. shared/langsSchema.ts declares
-// `CliOutput` wrapped in a preprocess step and `MoocOldSubmissionRestore` with a
-// caveat the Rust doc comment does not carry, so re-exporting either here would
-// shadow the hand-written one silently. The numbered `StatusUpdate*` are
-// schemars' monomorphizations of the Rust generic that `zStatusUpdateData`
-// already unions.
-const shimOwned = new Set([
+// shared/langsSchema.ts declares `CliOutput` wrapped in a preprocess step and
+// `MoocOldSubmissionRestore` with a caveat the Rust doc comment does not carry,
+// so an alias here would shadow the hand-written one silently. The numbered
+// `StatusUpdate*` are schemars' monomorphizations of the Rust generic that
+// `zStatusUpdateData` already unions.
+const notAliased = new Set([
   "CliOutput",
   "MoocOldSubmissionRestore",
   "StatusUpdate",
@@ -187,15 +186,15 @@ if (generated.length === 0) {
 }
 
 const generatedNames = new Set(generated.map((schema) => schema.name))
-for (const name of shimOwned) {
+for (const name of notAliased) {
   if (!generatedNames.has(name)) {
     throw new Error(
-      `z${name} is no longer generated; drop it from shimOwned in ${import.meta.filename}`,
+      `z${name} is no longer generated; drop it from notAliased in ${import.meta.filename}`,
     )
   }
 }
 
-const aliases = generated.filter((schema) => !shimOwned.has(schema.name))
+const aliases = generated.filter((schema) => !notAliased.has(schema.name))
 aliases.sort((a, b) => a.name.localeCompare(b.name))
 
 // A name exported from both files would resolve to the shim's copy under
@@ -210,7 +209,7 @@ const shadowed = aliases.map((schema) => schema.name).filter((name) => shimExpor
 if (shadowed.length > 0) {
   throw new Error(
     `shared/langsSchema.ts re-declares generated schema(s): ${shadowed.join(", ")}. ` +
-      "Remove the hand-written export, or add the name to shimOwned here.",
+      "Remove the hand-written export, or add the name to notAliased here.",
   )
 }
 
