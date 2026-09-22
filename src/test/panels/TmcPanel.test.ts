@@ -13,6 +13,7 @@ import {
   CourseIdentifier,
   ExerciseIdentifier,
   ExerciseSchema,
+  makeMoocKind,
   makeTmcKind,
 } from "../../shared/shared"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
@@ -373,8 +374,7 @@ function stubHandlers(): { [K in keyof WebviewHandlers]: ReturnType<typeof vi.fn
     downloadAndOpenExercises: vi.fn().mockResolvedValue(Ok([])),
     downloadExercisesForUi: vi.fn().mockResolvedValue(undefined),
     openWorkspace: vi.fn().mockResolvedValue(undefined),
-    pasteMoocExercise: vi.fn().mockResolvedValue(Ok("link")),
-    pasteTmcExercise: vi.fn().mockResolvedValue(Ok("link")),
+    pasteExercise: vi.fn().mockResolvedValue(Ok("link")),
     refreshLocalExercises: vi.fn().mockResolvedValue(Ok.EMPTY),
     removeCourse: vi.fn().mockResolvedValue(undefined),
     submitExercise: vi.fn().mockResolvedValue(Ok(undefined)),
@@ -480,8 +480,9 @@ suite("TmcPanel handler dispatch", () => {
 
     await listener(pasteMessage)
 
-    expect(handlers.pasteTmcExercise).toHaveBeenCalledWith(
+    expect(handlers.pasteExercise).toHaveBeenCalledWith(
       expect.anything(),
+      "tmc",
       "python-course",
       "loops",
     )
@@ -490,11 +491,30 @@ suite("TmcPanel handler dispatch", () => {
     )
   })
 
+  test("a mooc course's exercise is pasted through the mooc backend", async () => {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const { listener } = await mountSidePanel(createMockActionContext())
+
+    await listener({
+      ...pasteMessage,
+      course: makeMoocKind({ ...pasteMessage.course.data, id: "course-uuid" }),
+      exercise: makeMoocKind({ ...pasteMessage.exercise.data, id: "exercise-uuid" }),
+    })
+
+    expect(handlers.pasteExercise).toHaveBeenCalledWith(
+      expect.anything(),
+      "mooc",
+      "python-course",
+      "loops",
+    )
+  })
+
   test("a failed paste is reported in the panel, and not also as a notification", async () => {
     // The panel that asked is on screen and renders the failure itself, so a toast
     // would be the second report of one failure.
     const handlers = stubHandlers()
-    handlers.pasteTmcExercise.mockResolvedValue(Err(new Error("paste service is down")))
+    handlers.pasteExercise.mockResolvedValue(Err(new Error("paste service is down")))
     registerWebviewHandlers(handlers as unknown as WebviewHandlers)
     const actionContext = createMockActionContext()
     const { panel, listener } = await mountSidePanel(actionContext)
@@ -664,8 +684,7 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
 
     await listener(pasteMessage)
 
-    expect(handlers.pasteTmcExercise).not.toHaveBeenCalled()
-    expect(handlers.pasteMoocExercise).not.toHaveBeenCalled()
+    expect(handlers.pasteExercise).not.toHaveBeenCalled()
     expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
       NOT_INITIALIZED_MESSAGE,
       expect.any(Error),

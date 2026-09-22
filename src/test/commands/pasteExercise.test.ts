@@ -13,8 +13,9 @@ import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions", () => ({
-  pasteTmcExercise: vi.fn(async () => Ok("https://pastebin.example/tmc")),
-  pasteMoocExercise: vi.fn(async () => Ok("https://pastebin.example/mooc")),
+  pasteExercise: vi.fn(async (_context: unknown, backend: BackendKind) =>
+    Ok(`https://pastebin.example/${backend}`),
+  ),
 }))
 
 // jest-mock-vscode ships no `env` namespace, so the link-opening assertions
@@ -60,34 +61,38 @@ function harness(backend: BackendKind): Harness {
 
 suite("Paste exercise command", function () {
   beforeEach(function () {
-    vi.mocked(actions.pasteTmcExercise).mockClear()
-    vi.mocked(actions.pasteTmcExercise).mockResolvedValue(Ok("https://pastebin.example/tmc"))
-    vi.mocked(actions.pasteMoocExercise).mockClear()
-    vi.mocked(actions.pasteMoocExercise).mockResolvedValue(Ok("https://pastebin.example/mooc"))
+    vi.mocked(actions.pasteExercise).mockClear()
+    vi.mocked(actions.pasteExercise).mockImplementation(async (_context, backend) =>
+      Ok(`https://pastebin.example/${backend}`),
+    )
     vscodeMock.env = { openExternal: vi.fn() }
   })
 
-  test("pastes a tmc exercise through the tmc action and offers its link", async function () {
+  test("pastes a tmc exercise through the tmc backend and offers its link", async function () {
     const { context, notifications } = harness("tmc")
 
     await pasteExercise(context, undefined)
 
-    expect(actions.pasteTmcExercise).toHaveBeenCalledExactlyOnceWith(context, "tmc-course", "ex-1")
-    expect(actions.pasteMoocExercise).not.toHaveBeenCalled()
+    expect(actions.pasteExercise).toHaveBeenCalledExactlyOnceWith(
+      context,
+      "tmc",
+      "tmc-course",
+      "ex-1",
+    )
     expect(notifications[0]?.[0]).toBe("Paste link: https://pastebin.example/tmc")
   })
 
-  test("pastes a mooc exercise through the mooc action", async function () {
+  test("pastes a mooc exercise through the mooc backend", async function () {
     const { context, notifications } = harness("mooc")
 
     await pasteExercise(context, undefined)
 
-    expect(actions.pasteMoocExercise).toHaveBeenCalledExactlyOnceWith(
+    expect(actions.pasteExercise).toHaveBeenCalledExactlyOnceWith(
       context,
+      "mooc",
       "mooc-course",
       "ex-1",
     )
-    expect(actions.pasteTmcExercise).not.toHaveBeenCalled()
     expect(notifications[0]?.[0]).toBe("Paste link: https://pastebin.example/mooc")
   })
 
@@ -105,7 +110,7 @@ suite("Paste exercise command", function () {
   })
 
   test("names the paste service on a failure, and offers no link", async function () {
-    vi.mocked(actions.pasteMoocExercise).mockResolvedValue(Err(new Error("submission rejected")))
+    vi.mocked(actions.pasteExercise).mockResolvedValue(Err(new Error("submission rejected")))
     const { context, notifications } = harness("mooc")
 
     await pasteExercise(context, undefined)

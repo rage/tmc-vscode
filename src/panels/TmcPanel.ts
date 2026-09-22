@@ -26,7 +26,6 @@ import type {
 import {
   LocalCourseData,
   LocalCourseExercise,
-  match,
   panelTarget,
   toWebviewError,
   WebviewToExtensionSchema,
@@ -73,13 +72,9 @@ export interface WebviewHandlers {
     courseName: string,
     backend: BackendKind,
   ) => Promise<void>
-  pasteMoocExercise: (
+  pasteExercise: (
     actionContext: ReadyActionContext,
-    courseSlug: string,
-    exerciseName: string,
-  ) => Promise<Result<string, Error>>
-  pasteTmcExercise: (
-    actionContext: ReadyActionContext,
+    backend: BackendKind,
     courseSlug: string,
     exerciseName: string,
   ) => Promise<Result<string, Error>>
@@ -794,20 +789,11 @@ export class TmcPanel {
               })
               return
             }
-            const pasteResult = await match(
-              message.course,
-              () =>
-                handlers().pasteTmcExercise(
-                  readyContext,
-                  LocalCourseData.getCourseName(message.course),
-                  LocalCourseExercise.getSlug(message.exercise),
-                ),
-              () =>
-                handlers().pasteMoocExercise(
-                  readyContext,
-                  LocalCourseData.getCourseName(message.course),
-                  LocalCourseExercise.getSlug(message.exercise),
-                ),
+            const pasteResult = await handlers().pasteExercise(
+              readyContext,
+              message.course.kind,
+              LocalCourseData.getCourseName(message.course),
+              LocalCourseExercise.getSlug(message.exercise),
             )
             if (pasteResult.err) {
               // No notification: the panel that asked is on screen and renders this

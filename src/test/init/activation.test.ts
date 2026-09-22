@@ -193,8 +193,7 @@ vi.mock("../../actions", () => ({
   downloadAndOpenExercises: async (): Promise<unknown> => Ok.EMPTY,
   downloadExercisesForUi: async (): Promise<void> => {},
   openWorkspace: async (): Promise<void> => {},
-  pasteMoocExercise: async (): Promise<unknown> => Ok.EMPTY,
-  pasteTmcExercise: async (): Promise<unknown> => Ok.EMPTY,
+  pasteExercise: async (): Promise<unknown> => Ok.EMPTY,
   removeCourse: async (): Promise<void> => {},
   updateCourse: async (): Promise<unknown> => Ok.EMPTY,
 }))

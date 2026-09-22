@@ -440,7 +440,7 @@ function pasterFor(
  * asked from. A paste that comes back without a link is an error rather than an empty
  * `Ok`, so no caller has to check for one.
  */
-async function pasteExercise(
+export async function pasteExercise(
   actionContext: ReadyActionContext,
   backend: BackendKind,
   courseSlug: string,
@@ -475,24 +475,6 @@ async function pasteExercise(
       return pasteResult
     },
   )
-}
-
-/** Sends a tmc exercise to its paste service. The mooc twin is {@link pasteMoocExercise}. */
-export async function pasteTmcExercise(
-  actionContext: ReadyActionContext,
-  courseSlug: string,
-  exerciseName: string,
-): Promise<Result<string, Error>> {
-  return pasteExercise(actionContext, "tmc", courseSlug, exerciseName)
-}
-
-/** Sends a mooc exercise to its paste service. The tmc twin is {@link pasteTmcExercise}. */
-export async function pasteMoocExercise(
-  actionContext: ReadyActionContext,
-  courseSlug: string,
-  exerciseName: string,
-): Promise<Result<string, Error>> {
-  return pasteExercise(actionContext, "mooc", courseSlug, exerciseName)
 }
 
 export interface CourseUpdateOptions {
