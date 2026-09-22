@@ -1489,15 +1489,14 @@ export default class Langs {
   }
 
   /**
-   * Submits given exercise to TMC Paste and provides a link to it. Uses TMC-langs `paste` core
-   * command internally.
+   * Submits the given exercise to the TMC Server paste service and returns a link to it.
    *
    * Throttled to one call per `MINIMUM_SUBMISSION_INTERVAL` shared with every other tmc call
    * that submits — submit, and `--save-old-state` on reset and restore — and errs with a
    * `BottleneckError` over that rate rather than waiting.
    *
    * @param exerciseId Id of the exercise.
-   * @returns TMC paste link.
+   * @returns The paste link.
    */
   public async submitTmcExerciseToPaste(
     exerciseId: number,
