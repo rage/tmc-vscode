@@ -46,12 +46,24 @@ A panel asks for its data in `onMount` and receives it through
 `addMessageListener`:
 
 ```ts
+const panelData = createPanelDataRequester()
+
+let dataError = $state<WebviewError | undefined>(undefined)
+
+async function requestData() {
+  dataError = undefined
+  dataError = await panelData.request((requestId) =>
+    vscode.postMessage({
+      type: "requestMyCoursesData",
+      requestId,
+      // `panel` is a `$state` proxy once a message has reassigned it
+      sourcePanel: $state.snapshot(panel),
+    }),
+  )
+}
+
 onMount(() => {
-  vscode.postMessage({
-    type: "requestMyCoursesData",
-    // `panel` is a `$state` proxy once a message has reassigned it
-    sourcePanel: $state.snapshot(panel),
-  })
+  void requestData()
 })
 
 addMessageListener(panel, (message) => {
@@ -60,15 +72,26 @@ addMessageListener(panel, (message) => {
       panel = { ...panel, courses: message.courses }
       break
     }
+    case "panelDataResult": {
+      panelData.answer(message)
+      break
+    }
     default:
       assertUnreachable(message)
   }
 })
 ```
 
-`addMessageListener` must be called during component initialization, like any
-other Svelte lifecycle function; it removes its `window` listener in `onDestroy`
-so a recreated component does not leave a stale one behind.
+`addMessageListener` and `createPanelDataRequester` must both be called during
+component initialization, like any other Svelte lifecycle function; they remove
+their `window` listener and clear their pending timers in `onDestroy`, so a
+recreated component leaves nothing behind.
+
+The host answers every `request*Data` message with one `panelDataResult` quoting
+the request's `requestId`, whether or not it could assemble the data. A request
+that goes unanswered — a crashed host, a dropped message, a handler that returns
+without sending one — resolves as a timeout instead, so a panel shows why it has
+no data rather than a spinner that never stops.
 
 Which messages reach a listener is decided by the `target` on the message. A
 target of `{type, id}` reaches only that instance — an exercise's test results

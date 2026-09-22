@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/svelte"
+import { tick } from "svelte"
 
 import type { MyCoursesPanel } from "../shared/shared"
 import { makeTmcKind } from "../shared/shared"
@@ -8,6 +9,16 @@ import { dispatchToWebview as dispatch, postedMessages } from "../test/setup"
 import MyCourses from "./MyCourses.svelte"
 
 const panel: MyCoursesPanel = { id: 7, type: "MyCourses", courseDeadlines: {} }
+
+/** The id the panel's mount-time data request carries; its answer has to quote it. */
+function dataRequestId(): number {
+  const request = postedMessages.mock.calls[0]?.[0] as { requestId: number }
+  return request.requestId
+}
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 suite("MyCourses panel", () => {
   // Adding a course is the extension host's quick pick, so the button asks for the
@@ -126,8 +137,9 @@ suite("MyCourses panel", () => {
     expect(screen.getByLabelText("Loading")).toBeInTheDocument()
 
     dispatch({
-      type: "panelDataError",
+      type: "panelDataResult",
       target: { id: panel.id, type: "MyCourses" },
+      requestId: dataRequestId(),
       error: { message: "Storage is unavailable" },
     })
 
@@ -139,8 +151,58 @@ suite("MyCourses panel", () => {
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "requestMyCoursesData",
+      requestId: expect.any(Number),
       sourcePanel: panel,
     })
+  })
+
+  // A host that crashes, drops the message or returns without answering sends nothing at
+  // all, so the panel has to give up on its own rather than spin for the whole session.
+  test("gives up when the extension host never answers", async () => {
+    vi.useFakeTimers()
+    render(MyCourses, { props: { panel } })
+    expect(screen.getByLabelText("Loading")).toBeInTheDocument()
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    await tick()
+
+    expect(screen.getByText("The extension did not answer in time.")).toBeInTheDocument()
+    expect(screen.queryByLabelText("Loading")).not.toBeInTheDocument()
+  })
+
+  // Without the id, the answer to a request the panel has already given up on would
+  // replace what it is showing.
+  test("takes only the answer naming its own request", async () => {
+    render(MyCourses, { props: { panel } })
+    const requestId = dataRequestId()
+
+    dispatch({
+      type: "panelDataResult",
+      target: { id: panel.id, type: "MyCourses" },
+      requestId: requestId + 1000,
+      error: { message: "Answer to someone else's request" },
+    })
+    dispatch({
+      type: "panelDataResult",
+      target: { id: panel.id, type: "MyCourses" },
+      requestId,
+      error: { message: "Storage is unavailable" },
+    })
+
+    expect(await screen.findByText("Storage is unavailable")).toBeInTheDocument()
+    expect(screen.queryByText("Answer to someone else's request")).not.toBeInTheDocument()
+  })
+
+  // Navigating away recreates the panel through `{#key}`, so a timer left behind would
+  // outlive every panel that ever asked for data.
+  test("leaves no timer running once the panel is destroyed", () => {
+    vi.useFakeTimers()
+    const { unmount } = render(MyCourses, { props: { panel } })
+    expect(vi.getTimerCount()).toBe(1)
+
+    unmount()
+
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   // The announcement is a change inside a region the screen reader already knows, so the

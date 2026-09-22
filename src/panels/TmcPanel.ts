@@ -19,6 +19,7 @@ import type {
   Panel,
   TargetPanel,
   WebviewToExtension,
+  WelcomePanel,
 } from "../shared/shared"
 import {
   LocalCourseData,
@@ -108,6 +109,11 @@ function handlers(): WebviewHandlers {
   return registeredHandlers
 }
 
+type PanelDataTarget =
+  | TargetPanel<WelcomePanel>
+  | TargetPanel<MyCoursesPanel>
+  | TargetPanel<CourseDetailsPanel>
+
 /**
  * Manages the rendering of the extension webview panels.
  */
@@ -160,23 +166,42 @@ export class TmcPanel {
     // delta messages that use one (setUpdateables, setNewExercises) are posted once
     // per course, so they would all collapse onto one key and only the last would
     // survive; those are restored from the extension's own state instead.
-    if ("id" in message.target && message.target.id === this._lastPanel?.id) {
+    // `panelDataResult` is left out on top of that: the reloaded webview asks again and
+    // its request ids restart from the beginning, so a replayed answer could settle a
+    // request it does not belong to.
+    if (
+      message.type !== "panelDataResult" &&
+      "id" in message.target &&
+      message.target.id === this._lastPanel?.id
+    ) {
       this._messageBuffer.set(`${message.target.id}:${message.type}`, message)
     }
     postMessageToWebview(this._panel.webview, message, this._webviewName)
   }
 
   /**
-   * Tells a panel waiting on data that it is not coming, so it stops waiting.
+   * Tells the panel that asked for `requestId` that its data has been sent.
    *
-   * Every early return from a `request*Data` handler needs this: the panel has no
-   * timeout and would otherwise show its spinner for the rest of the session.
+   * Goes out after the messages the panel needs to render, not before. Whatever a handler
+   * still has in flight by then only refines what the panel is already showing.
    */
-  private _postPanelDataError(
-    target: TargetPanel<CourseDetailsPanel> | TargetPanel<MyCoursesPanel>,
-    error: unknown,
-  ): void {
-    this._postMessage({ type: "panelDataError", target, error: toWebviewError(error) })
+  private _postPanelDataSent(target: PanelDataTarget, requestId: number): void {
+    this._postMessage({ type: "panelDataResult", target, requestId })
+  }
+
+  /**
+   * Tells the panel that asked for `requestId` that its data is not coming.
+   *
+   * Every path out of a `request*Data` handler needs one of these two: a request the
+   * panel never sees answered only stops on the panel's own timeout, seconds later.
+   */
+  private _postPanelDataFailed(target: PanelDataTarget, requestId: number, error: unknown): void {
+    this._postMessage({
+      type: "panelDataResult",
+      target,
+      requestId,
+      error: toWebviewError(error),
+    })
   }
 
   // renders the `panel` in the main panel
@@ -405,13 +430,17 @@ export class TmcPanel {
             const { langs, userData, workspaceManager } = actionContext
             const target = panelTarget(message.sourcePanel)
             if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-              this._postPanelDataError(target, reportNotInitialized(actionContext.dialog))
+              this._postPanelDataFailed(
+                target,
+                message.requestId,
+                reportNotInitialized(actionContext.dialog),
+              )
               return
             }
             const courseResult = userData.val.getCourse(message.sourcePanel.courseId)
             if (courseResult.err) {
               actionContext.dialog.errorNotification("Failed to read the course.", courseResult.val)
-              this._postPanelDataError(target, courseResult.val)
+              this._postPanelDataFailed(target, message.requestId, courseResult.val)
               return
             }
             const course = courseResult.val
@@ -463,6 +492,7 @@ export class TmcPanel {
               offlineMode: false,
               exerciseGroups: toMessageGroups(view.exerciseGroups),
             })
+            this._postPanelDataSent(target, message.requestId)
 
             // Everything above comes from stored data, so the panel is rendered by now.
             // The backend is reached only to find out whether the deadlines just posted
@@ -499,7 +529,11 @@ export class TmcPanel {
                 resources.val.projectsDirectory
               )
             ) {
-              this._postPanelDataError(target, reportNotInitialized(actionContext.dialog))
+              this._postPanelDataFailed(
+                target,
+                message.requestId,
+                reportNotInitialized(actionContext.dialog),
+              )
               return
             }
 
@@ -513,6 +547,7 @@ export class TmcPanel {
               target,
               tmcDataPath: resources.val.projectsDirectory,
             })
+            this._postPanelDataSent(target, message.requestId)
             getFolderSize
               .loose(resources.val.projectsDirectory)
               .then((size) =>
@@ -534,17 +569,22 @@ export class TmcPanel {
           }
           case "requestWelcomeData": {
             const { resources } = actionContext
+            const target = panelTarget(message.sourcePanel)
             if (!resources.ok) {
-              reportNotInitialized(actionContext.dialog)
+              this._postPanelDataFailed(
+                target,
+                message.requestId,
+                reportNotInitialized(actionContext.dialog),
+              )
               return
             }
 
-            const version = resources.val.extensionVersion
             this._postMessage({
               type: "setWelcomeData",
-              target: panelTarget(message.sourcePanel),
-              version,
+              target,
+              version: resources.val.extensionVersion,
             })
+            this._postPanelDataSent(target, message.requestId)
             break
           }
           case "openCourseDetails": {

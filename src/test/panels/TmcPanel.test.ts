@@ -164,12 +164,13 @@ suite("TmcPanel initialization guards", () => {
     const { panel, listener } = await mountSidePanel(actionContext)
     const sourcePanel = { id: 5, type: "MyCourses" as const, courseDeadlines: {} }
 
-    await listener({ type: "requestMyCoursesData", sourcePanel })
+    await listener({ type: "requestMyCoursesData", requestId: 1, sourcePanel })
 
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: "panelDataError",
+        type: "panelDataResult",
         target: { id: sourcePanel.id, type: sourcePanel.type },
+        requestId: 1,
         error: { message: expect.stringContaining("did not initialize properly") },
       }),
     )
@@ -188,14 +189,50 @@ suite("TmcPanel initialization guards", () => {
       exerciseStatuses: { tmc: {}, mooc: {} },
     }
 
-    await listener({ type: "requestCourseDetailsData", sourcePanel })
+    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
 
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: "panelDataError",
+        type: "panelDataResult",
+        requestId: 1,
         error: { message: "no such course" },
       }),
     )
+  })
+
+  test("the welcome panel is told when its data is not coming", async () => {
+    const actionContext = createMockActionContext({ resources: "err" })
+    const { panel, listener } = await mountSidePanel(actionContext)
+    const sourcePanel = { id: 9, type: "Welcome" as const }
+
+    await listener({ type: "requestWelcomeData", requestId: 4, sourcePanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "panelDataResult",
+        target: { id: sourcePanel.id, type: sourcePanel.type },
+        requestId: 4,
+        error: { message: expect.stringContaining("did not initialize properly") },
+      }),
+    )
+  })
+
+  test("a request served from stored data is answered without an error", async () => {
+    const actionContext = {
+      ...createMockActionContext(),
+      userData: Ok({ getCourses: () => [] }),
+      resources: Ok({ projectsDirectory: "/tmc" }),
+    } as unknown as ReturnType<typeof createMockActionContext>
+    const { panel, listener } = await mountSidePanel(actionContext)
+    const sourcePanel = { id: 5, type: "MyCourses" as const, courseDeadlines: {} }
+
+    await listener({ type: "requestMyCoursesData", requestId: 7, sourcePanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith({
+      type: "panelDataResult",
+      target: { id: sourcePanel.id, type: sourcePanel.type },
+      requestId: 7,
+    })
   })
 
   test("a click that cannot be served is reported, with a route to the help panel", async () => {
@@ -651,7 +688,7 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
       exerciseStatuses: { tmc: {}, mooc: {} },
     }
 
-    await listener({ type: "requestCourseDetailsData", sourcePanel })
+    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
 
     expect(panel.webview.postMessage).toHaveBeenCalledWith({
       type: "setUpdateables",
@@ -671,7 +708,7 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
       exerciseStatuses: { tmc: {}, mooc: {} },
     }
 
-    await listener({ type: "requestCourseDetailsData", sourcePanel })
+    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
 
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: "setUpdateables", exerciseIds: [] }),
@@ -916,6 +953,7 @@ suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
     const { panel, listener } = await mountSidePanel(actionContext)
     await listener({
       type: "requestCourseDetailsData",
+      requestId: 1,
       sourcePanel: {
         id: 5,
         type: "CourseDetails",
@@ -996,7 +1034,7 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
     const actionContext = contextProbing(vi.fn().mockReturnValue(new Promise(() => {})))
     const { panel, listener } = await mountSidePanel(actionContext)
 
-    await listener({ type: "requestCourseDetailsData", sourcePanel })
+    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
 
     const posted = vi
       .mocked(panel.webview.postMessage)
@@ -1007,8 +1045,16 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
       "setCourseDisabledStatus",
       "setExerciseStatuses",
       "setCourseGroups",
+      "panelDataResult",
     ])
-    expect(posted.at(-1)).toMatchObject({ offlineMode: false })
+    expect(posted.at(-2)).toMatchObject({ offlineMode: false })
+    // The answer goes out after the data the panel renders, and carries no error, so the
+    // panel stops waiting on a request that was served rather than on its own timeout.
+    expect(posted.at(-1)).toEqual({
+      type: "panelDataResult",
+      target: { id: sourcePanel.id, type: sourcePanel.type },
+      requestId: 1,
+    })
   })
 
   test("corrects the view with one message when the backend is unreachable", async () => {
@@ -1017,7 +1063,7 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
     )
     const { panel, listener } = await mountSidePanel(actionContext)
 
-    await listener({ type: "requestCourseDetailsData", sourcePanel })
+    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
     await new Promise((resolve) => {
       setTimeout(resolve, 0)
     })
@@ -1051,7 +1097,7 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
       courseDetails,
     )
     const listener = getMessageListener()
-    await listener({ type: "requestCourseDetailsData", sourcePanel: courseDetails })
+    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel: courseDetails })
     vi.mocked(panel.webview.postMessage).mockClear()
 
     await listener({ type: "ready" })
@@ -1062,6 +1108,9 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
     expect(types).toContain("setPanel")
     expect(types).toContain("setCourseData")
     expect(types).toContain("setCourseGroups")
+    // The reloaded webview asks again and its request ids start over, so an answer kept
+    // from before the reload could settle a request it does not belong to.
+    expect(types).not.toContain("panelDataResult")
   })
 
   test("leaves the deadlines standing when the backend answers with a failure", async () => {
@@ -1070,7 +1119,7 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
     const actionContext = contextProbing(vi.fn().mockResolvedValue(Err(new ForbiddenError("no"))))
     const { panel, listener } = await mountSidePanel(actionContext)
 
-    await listener({ type: "requestCourseDetailsData", sourcePanel })
+    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
     await new Promise((resolve) => {
       setTimeout(resolve, 0)
     })
