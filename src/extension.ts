@@ -382,13 +382,6 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     // is named nowhere else.
     Logger.warn(`Activation degraded, missing: ${Object.keys(startup.failures).join(", ")}`)
   }
-  // Hides the palette entries whose commands the registration below leaves out.
-  await vscode.commands.executeCommand(
-    "setContext",
-    "test-my-code:Initialized",
-    startup.kind === "ready",
-  )
-
   const actionContext: ActionContext = { authState, dialog, settings, startup, ui }
   const readyContext = isReady(actionContext) ? actionContext : undefined
 
@@ -404,6 +397,14 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
   }
+
+  // The palette and the explorer menus uncover their entries on this key, and VS Code
+  // rejects a command it cannot find: nothing may set it before the registration above.
+  await vscode.commands.executeCommand(
+    "setContext",
+    "test-my-code:Initialized",
+    startup.kind === "ready",
+  )
 
   if (exerciseDecorationProvider.ok) {
     context.subscriptions.push(

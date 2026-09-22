@@ -277,6 +277,26 @@ async function unregisteredCommandsRun(context: vscode.ExtensionContext): Promis
     .filter((id) => id.startsWith("tmc.") && !registered.has(id))
 }
 
+/** What activation had registered by the time it set the context key `key`. */
+async function commandsRegisteredWhenContextSet(
+  context: vscode.ExtensionContext,
+  key: string,
+): Promise<string[] | undefined> {
+  let registered: string[] | undefined
+  vi.spyOn(vscode.commands, "executeCommand")
+    .mockReset()
+    .mockImplementation(async (command: string, ...args: unknown[]) => {
+      if (command === "setContext" && args[0] === key) {
+        registered = [...recorded.registeredCommandIds]
+      }
+      return undefined
+    })
+
+  await activate(context)
+
+  return registered
+}
+
 suite("activation with unusable storage", function () {
   beforeEach(resetActivationRecording)
 
@@ -382,6 +402,19 @@ suite("activation with usable storage", function () {
 
     expect(recorded.treeEntryIds).not.toContain("tmc.viewInitializationErrorHelp")
     expect(recorded.panelTypes).toEqual([])
+  })
+
+  // VS Code rejects a command it cannot find, so an entry this key uncovers before its
+  // command exists errors the moment the user picks it.
+  test("registers the commands this key uncovers before setting it", async function () {
+    const registered = await commandsRegisteredWhenContextSet(
+      createContext(),
+      "test-my-code:Initialized",
+    )
+
+    expect(registered).toBeDefined()
+    expect(registered).toContain("tmc.addNewCourse")
+    expect(registered).toContain("tmc.testExercise")
   })
 
   test("runs no command it left unregistered", async function () {
