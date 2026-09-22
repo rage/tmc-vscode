@@ -104,8 +104,9 @@ export default class Dialog {
    * Reports a failed operation: `message` says what was being done, and `error` supplies
    * the rest of the sentence and any buttons its class prescribes.
    *
-   * The notification carries no stack trace — {@link Logger} writes the full error, trace
-   * included, to the output channel, which the "Show logs" button reveals.
+   * The notification carries the sentence and nothing else: the error's diagnostics —
+   * details, cause chain and stack — go to the output channel behind the "Show logs"
+   * button, which {@link Logger} writes in full.
    *
    * @param backend The backend the operation ran against, where the caller knows it; it
    * lets the sentence name the site for errors either backend can raise.

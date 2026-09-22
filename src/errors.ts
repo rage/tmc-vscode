@@ -1,6 +1,5 @@
 import type { BackendKind } from "./shared/shared"
 import { backendName, BaseError } from "./shared/shared"
-import { formatErrorMessage } from "./utilities/logger"
 
 export class AuthorizationError extends BaseError {
   public override readonly name = "Authorization Error"
@@ -110,20 +109,33 @@ export interface ErrorPresentation {
 }
 
 /**
+ * The error as one sentence for the user: its class and its message, and nothing else.
+ *
+ * Deliberately not the logger's formatter, which also appends `details` — on a CLI failure
+ * that is the process's backtrace and the tail of its stderr — the `cause` chain, and the
+ * stack. Those diagnose a failure rather than describe it, and a notification is the one
+ * place they cannot be scrolled or copied. The logger still writes all of them to the
+ * output channel, which the "Show logs" button reveals.
+ */
+function userSentence(error: Error): string {
+  return `${error.name}: ${error.message}.`
+}
+
+/**
  * How to show `error` to the user.
  *
  * Every class whose remedy follows from the class itself states that remedy here, so no
  * call site spells one out and the same failure reads the same way wherever it surfaces.
  * A class with no entry shows its own message and no buttons, which is the right answer
- * for a failure the user cannot act on. The message never carries a stack trace; the
- * output channel takes that.
+ * for a failure the user cannot act on. No message carries diagnostics; see
+ * {@link userSentence}.
  *
  * @param backend Names the backend in the sentence, for the errors either backend can
  * raise. Omit it where the caller does not know which one, and the sentence stays
  * backend-neutral.
  */
 export function presentationFor(error: Error, backend?: BackendKind): ErrorPresentation {
-  const reported = formatErrorMessage(error)
+  const reported = userSentence(error)
   if (error instanceof InsufficientScopeError) {
     return {
       message:
@@ -142,6 +154,8 @@ export function presentationFor(error: Error, backend?: BackendKind): ErrorPrese
     }
   }
   if (error instanceof UploadExpiredError) {
+    // tmc-langs uploads and submits within one invocation and has already retried the
+    // upload itself, so submitting afresh is the only step left to suggest.
     return {
       message:
         `${reported} The submission's files expired on the server before the submission` +

@@ -42,11 +42,24 @@ suite("presentationFor", function () {
     expect(presentationFor(new ObsoleteClientError("too old")).message).toContain("out of date")
   })
 
-  test("the sentence carries no stack trace even when everything is logged", function () {
+  test("the sentence holds none of a CLI failure's diagnostics", function () {
     Logger.configure(LogLevel.Verbose)
-    const error = new RuntimeError(new Error("boom"))
+    // What a langs failure attaches: the CLI's own backtrace, then the tail of the
+    // process's stderr, which a long test run measures in kilobytes.
+    const details = ["at tmc_langs::submit", "", "thread 'main' panicked", "note: run with…"].join(
+      "\n",
+    )
+    const error = new RuntimeError(new Error("the CLI exited with 1"), details)
+    error.cause = "EPIPE while writing the submission archive"
+
+    const { message } = presentationFor(error)
 
     expect(error.stack).toBeTruthy()
-    expect(presentationFor(error).message).not.toContain("<TRACE>")
+    expect(message).toBe("Runtime Error: the CLI exited with 1.")
+    for (const line of details.split("\n").filter(Boolean)) {
+      expect(message).not.toContain(line)
+    }
+    expect(message).not.toContain("EPIPE")
+    expect(message).not.toContain("<TRACE>")
   })
 })
