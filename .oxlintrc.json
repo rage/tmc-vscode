@@ -271,6 +271,94 @@
         "suiteSetup": "readonly",
         "suiteTeardown": "readonly"
       }
+    },
+    {
+      "files": ["shared/**/*"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/src", "**/src/**"],
+                "message": "shared/ is consumed by the extension host and the webview alike, so it cannot depend on src/."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/api/**/*", "src/config/**/*", "src/storage/**/*", "src/utilities/**/*"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/actions",
+                  "**/actions/**",
+                  "**/commands",
+                  "**/commands/**",
+                  "**/panels",
+                  "**/panels/**",
+                  "**/ui",
+                  "**/ui/**",
+                  "**/extension"
+                ],
+                "message": "The service layer cannot depend on what orchestrates it. Invert the dependency, or move the shared piece down."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/commands/**/*"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/panels", "**/panels/**"],
+                "message": "Commands and panels are peers. Route between them through src/actions."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/panels/**/*"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/commands", "**/commands/**"],
+                "message": "Commands and panels are peers. Route between them through src/actions."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      // Shrink list, never grow list: each of these still imports across a layer the rule
+      // above forbids. Delete the entry when the import goes, not the rule.
+      "files": [
+        "src/api/authState.ts",
+        "src/commands/addNewCourse.ts",
+        "src/commands/changeTmcDataPath.ts",
+        "src/commands/showWelcome.ts",
+        "src/commands/updateExercises.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
     }
   ]
 }
